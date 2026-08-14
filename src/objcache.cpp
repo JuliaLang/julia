@@ -256,6 +256,7 @@ static ObjCache::Hash hashModule(const llvm::Module &M) JL_NOTSAFEPOINT
 
     Hasher.update(LLVM_VERSION_STRING);
     Hasher.update(JL_CODEGEN_SRC_HASH);
+    Hasher.update(jl_gc_image_abi());
     Hasher.update({(uint8_t *)&ModHash[0], sizeof ModHash});
     return Hasher.final();
 }

@@ -5360,8 +5360,6 @@ f(x) = yt(x)
                    (let ((val (make-ssavalue)))
                     (emit `(= ,val ,(cond ((not name)
                                            `(call (core define_method) (thismodule) (false) ,sig ,lam))
-                                          ((globalref? name)
-                                           `(call (core define_method) ,(cadr name) ,name ,sig ,lam))
                                           ((symbol? name)
                                            `(call (core define_method) (thismodule) (inert ,name) ,sig ,lam))
                                           (else

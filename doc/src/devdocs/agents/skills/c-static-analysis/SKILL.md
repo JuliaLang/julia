@@ -25,7 +25,8 @@ Run static analysis checks:
   Add `--output-sync` when your `make` supports it to keep parallel output
   grouped; otherwise omit it.
 - Checks can also be rerun individually with `clang-sa-<file-stem>`,
-  `clang-sagc-<file-stem>` or `clang-tidy-<file-stem>`.
+  `clang-sagc-<file-stem>`, `clang-safety-<file-stem>` or
+  `clang-tidy-<file-stem>`.
 
 ## Fixing the GC-rooting checker (clang-sagc)
 

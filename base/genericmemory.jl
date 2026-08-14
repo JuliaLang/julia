@@ -153,9 +153,6 @@ unsetindex!(A::Union{Array, Memory}, i::Integer) = unsetindex!(A, to_index(i))
 
 Same as `unsetindex!(::MemoryRef)`, but the index is atomically unset with the
 atomic memory ordering set by `ordering`.
-Currently, `ordering` may be `:unordered`, `:monotonic`, `:release`,
-or `:sequentially_consistent`. See the manual on atomics for the meaning of these
-orderings.
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
@@ -171,9 +168,6 @@ end
 
 Same as `unsetindex!(::Memory, ::Integer)`, but the index is atomically unset with the
 atomic memory ordering set by `ordering`.
-Currently, `ordering` may be `:unordered`, `:monotonic`, `:release`,
-or `:sequentially_consistent`. See the manual on atomics for the meaning of these
-orderings.
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.

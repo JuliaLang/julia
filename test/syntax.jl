@@ -4469,6 +4469,16 @@ end
 @test_throws TypeError Core.define_method(@__MODULE__, :invalid_method, nothing, nothing)
 @test_throws ErrorException Core.define_method(@__MODULE__, :invalid_method, Core.svec(), nothing)
 
+# A method defined through a GlobalRef name records the evaluating module,
+# not the GlobalRef's module
+module GlobalRefMethodModule62320
+function no_methods_yet end
+end
+let f = GlobalRefMethodModule62320.no_methods_yet
+    Core.eval(@__MODULE__, Expr(:function, Expr(:call, GlobalRef(GlobalRefMethodModule62320, :no_methods_yet)), nothing))
+    @test only(methods(f)).module === @__MODULE__
+end
+
 # Capturing a @nospecialize argument should result in an Any field in the closure
 module NoSpecClosure
     K(@nospecialize(x)) = y -> x

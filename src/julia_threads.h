@@ -105,6 +105,55 @@ typedef struct {
 #endif
 } jl_ucontext_t;
 
+// The context published while a task is inside an asynchronously
+// interruptible region (`jl_task_t.reset_ctx`): established by a compiled
+// cancellation point (see llvm-cancellation-lowering.cpp), `mctx` holds a
+// setjmp context and `sp` identifies the establishing frame (nonzero for
+// this reset flavor; the discriminator leaves room for other context
+// flavors to be published through the same mechanism). The runtime may
+// deliver a pending cancellation to a running task by abandoning the
+// interrupted register state and longjmping to the reset point, whose
+// re-executed check observes the cancellation and throws (see the SIGUSR2
+// request-5 delivery in signals-unix.c and the suspend-based delivery in
+// signals-win.c).
+//
+// `gcstack` and `eh` record the task's GC-frame chain head and innermost
+// exception handler at establishment. The interrupt may land inside a
+// reset-safe *callee* that has pushed frames of its own onto either chain;
+// those frames die with the abandoned stack region, so delivery restores
+// both saved values before the longjmp (the same pair an exceptional unwind
+// restores through `jl_eh_restore_state`).
+//
+// Delivery is gated on the cancellation of the task's bound token source
+// (`jl_task_t.bound_cancel_token`), which is coherent with the published
+// region by construction: everything that temporarily takes over the task
+// and may rebind it - exception handlers, the finalizer bracket in
+// gc-common.c - saves and restores the (region, token) pair together.
+typedef struct _jl_reset_ctx_t {
+    uintptr_t sp;
+    struct _jl_gcframe_t *gcstack;
+    struct _jl_handler_t *eh;
+    jl_jmp_buf mctx;
+} jl_reset_ctx_t;
+
+// A foreign-call cancellation handler and state argument, published in
+// `jl_task_t.cancel_handler_ctx` for exactly the duration of a foreign call
+// annotated `@ccall cancel_handler=(fn, state) ...`. Delivery is signal-handler
+// like.
+typedef struct _jl_cancel_handler_ctx_t {
+    void (*fn)(void *state, uint8_t sev);
+    void *state;
+} jl_cancel_handler_ctx_t;
+
+// The handler and its arguments, stashed across a cancellation-handler
+// delivery on the suspend-based platforms (Windows and mach): the sender
+// records them here for the trampoline the hijacked thread is redirected
+// to.
+typedef struct {
+    void (*fn)(void *state, uint8_t sev);
+    void *state;
+    uint8_t sev;
+} jl_cancel_handler_save_t;
 
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
@@ -164,6 +213,38 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
+    // Task-abandonment handshake (see jl_abandon_task in task.c). One
+    // requester at a time owns the slot; delivery validates the victim's
+    // state at the point the thread is actually stopped and commits or
+    // refuses; a timed-out requester withdraws by CAS, arbitrating against
+    // a late delivery. `abandon_victim` and `abandon_to` are GC roots
+    // (thread scan) while the slot is active.
+#define JL_ABANDON_IDLE     0 // slot free
+#define JL_ABANDON_SETUP    1 // requester is writing the request
+#define JL_ABANDON_PENDING  2 // request published, delivery may take it
+#define JL_ABANDON_TAKEN    3 // delivery is validating
+#define JL_ABANDON_DONE     4 // committed; the callback is consuming the slot
+#define JL_ABANDON_REFUSED  5 // victim not abandonable; requester settles
+#define JL_ABANDON_FINISHED 6 // callback consumed the slot; requester settles
+    _Atomic(uint8_t) abandon_state;
+    struct _jl_task_t *abandon_victim;
+    // Target task for task abandonment
+    struct _jl_task_t *abandon_to;
+    // Result value staged for the abandoned task (GC root while the slot is
+    // active): written into the victim's `result` by the delivery callback
+    // (raw - this slot carries the reference until the requester's
+    // write-barrier settle) - never into a still-running task.
+    struct _jl_value_t *abandon_result;
+    // Requester's wakeup handle (may be NULL for polling requesters), staged
+    // with the request and pinged by the delivery paths when the request
+    // settles. uv_async_send is async-signal-safe, and its latched
+    // trigger is consumed by exactly one waiter - the slot's single
+    // requester. The handle's lifetime is the requester's problem: it
+    // outlives the request (the slot state machine brackets every ping).
+    uv_async_t *abandon_notify;
+    // Set while this thread is inside ctx_switch with the outgoing context
+    // only partially saved; abandonment delivery refuses such a thread.
+    volatile sig_atomic_t in_task_switch;
     struct _jl_timing_block_t *timing_stack;
     // This is the location of our copy_stack
     void *stackbase;
@@ -177,9 +258,16 @@ typedef struct _jl_tls_states_t {
     struct _jl_bt_element_t *profiling_bt_buffer;
     // Atomically set by the sender, reset by the handler.
     volatile _Atomic(sig_atomic_t) signal_request; // TODO: no actual reason for this to be _Atomic
-    // Allow the sigint to be raised asynchronously
-    // this is limited to the few places we do synchronous IO
-    // we can make this more general (similar to defer_signal) if necessary
+    // Fire-and-forget delivery requests, as a bitmask so that concurrent
+    // senders (and the suspend handshake occupying `signal_request`) can
+    // never coalesce a request away: the handler consumes and services
+    // every set bit on each delivery, so a single signal suffices.
+#define JL_SIGNAL_REQ_CANCEL  0x01
+#define JL_SIGNAL_REQ_PREEMPT 0x02
+#define JL_SIGNAL_REQ_ABANDON 0x04
+    _Atomic(uint8_t) signal_request_flags;
+    // (vestigial: this let the old sigint force-throw be raised
+    // asynchronously during synchronous IO; nothing reads it anymore)
     volatile sig_atomic_t io_wait;
 #ifdef _OS_WINDOWS_
     int needs_resetstkoflw;
@@ -194,6 +282,8 @@ typedef struct _jl_tls_states_t {
     void (*signal_ctx_fptr)(void);
     uintptr_t signal_ctx_arg;
 #endif
+    jl_cancel_handler_save_t cancel_handler_save;
+    sig_atomic_t cancel_handler_armed;
     jl_thread_t system_id;
     _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
@@ -283,12 +373,36 @@ struct _jl_cancel_source_t {
     // Weak (spliced by the GC): most recently attached live child;
     // `jl_nothing`-terminated. Union{Nothing, CancellationTokenSource}.
     _Atomic(jl_value_t*) child_head;
+    // Parked waiters: a lock-free intrusive singly-linked LIFO of wait
+    // entries (any kind, linked through their source slot), where the
+    // cancellation walk finds tasks blocked under this source. Strong
+    // references (the GC's special-cased marking traces the head).
+    // Registration CAS-pushes here; entries are never unlinked on the wake
+    // path (they stay registered across parks and are collected by walks) -
+    // interior links are rewritten only under `walk_lock`. See the
+    // registration protocol in base/cancellation.jl.
+    _Atomic(jl_value_t*) waiters_head;   // Union{Nothing, Base.WaitEntry}
+    // Serializes walks (cancellation delivery, pruning, owner-side
+    // unregistration) against each other; never taken on park/wake paths.
+    // A sleeping lock (Union{Nothing, Base.ReentrantLock}, strong),
+    // installed lazily by the first walker.
+    _Atomic(jl_value_t*) walk_lock;
     // 0x00 = uncancelled; otherwise the (nonzero) severity at which the
     // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL).
     // Monotonic (CAS-max).
     _Atomic(uint8_t) state;
     // Number of parent links following the fixed fields. Const.
     uint16_t nparents;
+    // Dead registrations on the waiter list (retired entries and entries of
+    // completed tasks), counted at retirement/task teardown; crossing the
+    // threshold triggers a pruning walk. Approximate (relaxed); walks reset
+    // it.
+    _Atomic(uint32_t) dead_count;
+    // Approximate length of the waiter list: incremented per registration
+    // push, resynced to the surviving count by each walk. The pruning
+    // threshold scales with it (a fixed threshold makes a mass fan-out's
+    // prune walks quadratic in the number of parked waiters).
+    _Atomic(uint32_t) reg_count;
     // jl_cancel_parent_link_t links[nparents];  (see jl_cancel_source_links)
 };
 
@@ -298,6 +412,49 @@ static inline jl_cancel_parent_link_t *jl_cancel_source_links(jl_cancel_source_t
 {
     // The struct size is already pointer-aligned on all supported platforms.
     return (jl_cancel_parent_link_t*)((char*)src + sizeof(jl_cancel_source_t));
+}
+
+// A wait registration slot: `owner` is the waitable this slot registers on
+// (a condition/waitee, a cancellation source, ...) and doubles as the
+// membership witness (`jl_nothing` = free); `next` is the intrusive link of
+// the owner's waiter list (links point at whole entries - a traversal finds
+// its slot in each entry by scanning for its own identity); `aux` carries
+// per-registration payload (e.g. the minimum delivery severity of a
+// cancellation-source slot). Both object slots are strong references.
+// `owner` is atomic, accessed relaxed: scans read every slot's owner from
+// threads that do not hold that slot's protecting lock, tolerating stale
+// values (any ordering an owner read needs is supplied by the surrounding
+// protocol). `next` and `aux` stay plain under their owner's discipline
+// (the waitee's lock, the source's registration protocol/walk lock, or the
+// owning task) - see base/cancellation.jl.
+typedef struct {
+    _Atomic(jl_value_t*) owner;
+    jl_value_t *next;
+    uint64_t aux;
+} jl_wait_slot_t;
+
+// The variable-sized "many" wait-entry kind (Core.WaitEntryN): `nslots`
+// slots follow the fixed fields. The 1- and 2-slot kinds are ordinary Julia
+// structs (Base.WaitEntry1/WaitEntry2) with the same slot semantics; this
+// kind serves wait-any over arbitrarily many waitables (waitany/waitall).
+// Only the fixed fields are exposed to the Julia field system; slots are
+// reached through the jl_wait_entry_slot_* accessors. Like the slot
+// `owner`s, `task` is atomic, accessed relaxed: walkers read (and scrub) it
+// without holding any of the entry owner's locks, tolerating staleness (a
+// wake claim is validated by the task's `waiting_on` CAS, never by the
+// `task` read alone). `next` and `aux` stay plain under their owner's
+// discipline.
+typedef struct {
+    JL_DATA_TYPE
+    _Atomic(jl_value_t*) task;   // Union{Nothing, Task}; nothing marks a retired entry
+    uint32_t nslots;    // const
+    // uint32_t padding
+    // jl_wait_slot_t slots[nslots];  (see jl_wait_entry_slots)
+} jl_wait_entry_t;
+
+static inline jl_wait_slot_t *jl_wait_entry_slots(jl_wait_entry_t *w) JL_NOTSAFEPOINT
+{
+    return (jl_wait_slot_t*)((char*)w + sizeof(jl_wait_entry_t));
 }
 
 // The link entry connecting `child` to `parent` (which must be one of its
@@ -327,7 +484,11 @@ typedef struct _jl_task_t {
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint16_t priority;
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
-    uint8_t pad0[3];
+    // Level-triggered cooperative-yield request, honored (and cleared) at
+    // the task's next cancellation point; a preempt shootdown sets it and
+    // kicks the task out of any published reset region.
+    _Atomic(uint8_t) preempt_request;
+    uint8_t pad0[2];
     // === 64 bytes (cache line)
     uint64_t rngState[JL_RNG_SIZE];
     // flag indicating whether or not to record timing metrics for this task
@@ -346,12 +507,30 @@ typedef struct _jl_task_t {
     // This task's current registration on a wait queue (a `Base.WaitEntry`),
     // or `nothing`. Doubles as the wake-claim word: whoever atomically clears
     // it (notify via CAS against the specific entry, an interrupter via swap)
-    // owns waking the task. See the wake-claim protocol in base/condition.jl.
+    // owns waking the task. See the wake-claim protocol in base/cancellation.jl.
     _Atomic(jl_value_t*) waiting_on;
-    // A `Base.WaitEntry` cached for reuse across parks (or `nothing`), so the
-    // common single-registration park does not allocate. Owned by this task.
+    // The wait entries cached for reuse across this task's parks (or
+    // `nothing`), so the common park does not allocate. Owned by this task.
+    // Plain (shielded) and cancellable parks arm *distinct* entries: the
+    // cancellation walk's expected-entry claim CAS is its only sound
+    // eligibility gate, so an entry registered on a source must never be
+    // armed for a wait that is not cancellable under it (see the wake-claim
+    // protocol in base/cancellation.jl).
+    // The `Base.WaitEntry1` for plain parks - never registered on a source.
     jl_value_t *cached_wait_entry;
+    // The `Base.WaitEntry2` for cancellable parks. Its cancellation-source
+    // slot is sticky - the entry stays on the source's waiter list across
+    // parks, so only the first cancellable park under a source pays a
+    // registration.
+    jl_value_t *cached_cancel_entry;
     jl_value_t *invoked; // Method/CodeInstance/tuple Type for optimized task invocation
+    // The cancellation token source last published by a cancellation point on
+    // this task ("the token governing the compute currently running here").
+    // `nothing`, or a `Core.CancellationTokenSource`. Read by cancellers
+    // scanning for running computations governed by a cancelled subtree; may
+    // be stale between cancellation points (benign: level-triggered recovery
+    // at the next check).
+    _Atomic(jl_value_t *) bound_cancel_token;
 
 // hidden state:
 
@@ -381,6 +560,19 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved thread state
     jl_ucontext_t ctx; // pointer into stkbuf, if suspended
+    // The published reset (sp != 0) context of the current compiled
+    // cancellation region, NULL outside such regions. Only ever consumed
+    // for the thread's *current* task.
+    _Atomic(jl_reset_ctx_t *) reset_ctx;
+    // The published handler context of the current foreign call carrying a
+    // cancellation handler (`@ccall cancel_handler=(fn, state)`), NULL
+    // outside such calls. May be active *at the same time* as a reset
+    // region, and takes delivery priority while published: the handler's
+    // span (e.g. a protected allocator) is exactly where a longjmp must not
+    // land, and the handler can defer the cancellation and chain into the
+    // reset on region exit. Like reset_ctx, only ever consumed for the
+    // thread's *current* task.
+    _Atomic(jl_cancel_handler_ctx_t *) cancel_handler_ctx;
 } jl_task_t;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void);

@@ -714,6 +714,16 @@ precompile_test_harness(false) do dir
         @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
     end
 
+    # Declaring an already-existing generic function of a closed module is a
+    # no-op and must not error during precompilation
+    FooBar3b_file = joinpath(dir, "FooBar3b.jl")
+    write(FooBar3b_file, """
+    module FooBar3b
+    Core.eval(Main, Expr(:function, GlobalRef(Base, :length)))
+    end
+    """)
+    @test Base.require(Main, :FooBar3b) isa Module
+
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")
     write(FooBarT_file,
@@ -907,25 +917,35 @@ precompile_test_harness("code caching") do dir
         MA = getfield(@__MODULE__, RootA)
         MB = getfield(@__MODULE__, RootB)
         M = getfield(MA, RootModule)
+        function backedge_callers(mi::Core.MethodInstance)
+            callers = Any[]
+            i = 1
+            while i <= length(mi.backedges)
+                mi.backedges[i] isa Type && (i += 1)
+                caller = mi.backedges[i]
+                @assert caller isa Union{Core.MethodInstance,Core.CodeInstance}
+                push!(callers, caller)
+                i += 1
+            end
+            return callers
+        end
+        caller_method(caller::Core.MethodInstance) = caller.def::Method
+        caller_method(caller::Core.CodeInstance) = caller_method(caller.def)
         m = which(M.f, (Any,))
         for mi in Base.specializations(m)
             mi === nothing && continue
             mi = mi::Core.MethodInstance
             if mi.specTypes.parameters[2] === Int8
                 # external callers
-                mods = Module[]
-                for be in mi.backedges
-                    push!(mods, ((be.def::Core.MethodInstance).def::Method).module) # XXX
-                end
+                mods = Set(caller_method(caller).module
+                    for caller in backedge_callers(mi))
                 @test MA ∈ mods
                 @test MB ∈ mods
                 @test length(mods) == 2
             elseif mi.specTypes.parameters[2] === Int16
                 # internal callers
-                meths = Method[]
-                for be in mi.backedges
-                    push!(meths, (be.def::Method).def) # XXX
-                end
+                meths = Set(caller_method(caller)
+                    for caller in backedge_callers(mi))
                 @test which(M.g1, ()) ∈ meths
                 @test which(M.g2, ()) ∈ meths
                 @test length(meths) == 2
@@ -1117,13 +1137,19 @@ precompile_test_harness("code caching") do dir
 
         idxb = findfirst(x -> x isa Core.Binding, invalidations)
         @test invalidations[idxb+1] == "insert_backedges_callee"
-        idxv = findnext(==("verify_methods"), invalidations, idxb)
-        if invalidations[idxv-1].def.def.name === :getproperty
-            idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        # Proof flattening may change the path from the binding to `flbi`, but the
+        # downstream `useflbi` invalidation must still identify `flbi` as its cause.
+        useflbi_method = only(methods(MB.useflbi))
+        flbi_method = only(methods(MA.flbi))
+        idxv = findfirst(eachindex(invalidations)) do i
+            1 < i < length(invalidations) || return false
+            invalidations[i] == "verify_methods" || return false
+            caller = invalidations[i-1]
+            cause = invalidations[i+1]
+            return caller isa Core.CodeInstance && cause isa Core.CodeInstance &&
+                caller.def.def === useflbi_method && cause.def.def === flbi_method
         end
-        idxv = findnext(==(invalidations[idxv-1]), invalidations, idxv+1)
-        @test invalidations[idxv-1] == "verify_methods"
-        @test invalidations[idxv-2].def.def.name === :useflbi
+        @test idxv !== nothing
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -1166,6 +1192,38 @@ precompile_test_harness("precompiletools") do dir
             success += sig.parameters[3] === Vector{M.MyType}
         end
         @test success == 1
+    end
+end
+
+precompile_test_harness("dispatch edge") do dir
+    KindDispatch = :KindDispatch_0x5e0bd2a4c1f7
+    write(joinpath(dir, "$KindDispatch.jl"),
+        """
+        module $KindDispatch
+            # Inference through a kind (`Type{T}`) reaches calls that match several
+            # methods, and no cached source is available for them, so the optimizer has to
+            # synthesize the call target. The dispatch edge recorded for it must not claim
+            # that the target's signature has a single fully-covering match: nothing about
+            # dispatch changes between precompiling this and loading it, so `f` must stay
+            # valid.
+            f(v::Vector{Any}) = Base.aligned_sizeof(v[1]::Type{<:Real})
+            precompile(f, (Vector{Any},))
+        end
+        """
+    )
+    pkgid = Base.PkgId(string(KindDispatch))
+    Base.compilecache(pkgid)
+    @eval using $KindDispatch
+    M = invokelatest(getglobal, @__MODULE__, KindDispatch)
+    invokelatest() do
+        world = Base.get_world_counter()
+        mi = only(Base.specializations(only(methods(M.f))))
+        @test mi.specTypes === Tuple{typeof(M.f), Vector{Any}}
+        ci = mi.cache
+        while ci.max_world < world && isdefined(ci, :next)
+            ci = ci.next
+        end
+        @test ci.max_world == typemax(UInt)
     end
 end
 
@@ -1955,8 +2013,8 @@ precompile_test_harness("PkgCacheInspector") do load_path
         local depmodnames
         io = open(cachefile, "r")
         try
-            # isvalid_cache_header returns checksum id or zero
-            Base.isvalid_cache_header(io) == 0 && throw(ArgumentError("Invalid header in cache file $cachefile."))
+            # isvalid_cache_header returns checksum id or nothing
+            Base.isvalid_cache_header(io) === nothing && throw(ArgumentError("Invalid header in cache file $cachefile."))
             depmodnames = Base.parse_cache_header(io, cachefile)[3]
             Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
         finally

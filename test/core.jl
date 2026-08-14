@@ -48,7 +48,7 @@ for (T, c) in (
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
-        (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at, :waiting_on]),
+        (Task, [:_state, :preempt_request, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at, :waiting_on, :bound_cancel_token]),
         (Core.BindingPartition, [:min_world, :max_world, :next]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
@@ -9282,3 +9282,11 @@ end
     return freed[]
 end
 @test issue52533_beside(Ref(false))
+
+# `jl_new_method_uninit` must satisfy Method's min-initialized invariant:
+# fields in the initialized prefix (e.g. `sig`, `name`) are assumed non-null
+# by codegen, which omits undef checks when loading them.
+let m = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), @__MODULE__)
+    @test m.sig === Union{}
+    @test m.name === Symbol("")
+end

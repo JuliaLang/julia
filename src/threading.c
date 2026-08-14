@@ -802,7 +802,7 @@ void jl_init_threading(void)
                 jl_n_sweepthreads = (int)nsweepthreads;
             }
         }
-        else {
+        else if (strstr(jl_gc_active_impl(), "stock")) {
             // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
             // set the number of mark threads to the number of compute threads
             // and number of sweep threads to 0
@@ -814,6 +814,8 @@ void jl_init_threading(void)
                 jl_n_markthreads = cpu - 1;
             }
         }
+        // else: leave -1 as a sentinel to non-stock GCs (MMTk)
+        // so that they can do their own default sizing
     }
     // warn the user if they try to run with a number
     // of GC threads which is larger than the number

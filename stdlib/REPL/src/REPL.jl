@@ -333,7 +333,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
         try
             Base.sigatomic_end()
             if lasterr !== nothing
-                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
+                # REPL machinery: reporting the result must work even when
+                # the evaluation's epoch was cancelled
+                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true); cancel=nothing)
             else
                 backend.in_eval = true
                 for xf in backend.ast_transforms
@@ -342,7 +344,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
-                put!(backend.response_channel, Pair{Any, Bool}(value, false))
+                put!(backend.response_channel, Pair{Any, Bool}(value, false); cancel=nothing)
             end
             break
         catch err
@@ -446,45 +448,63 @@ function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x ->
 end
 
 function repl_backend_loop(backend::REPLBackend, get_module::Function)
-    # include looks at this to determine the relative include path
-    # nothing means cwd
-    while true
-        tls = task_local_storage()
-        tls[:SOURCE_PATH] = nothing
-        # Fetch without consuming, then retry removal so an interrupt cannot lose
-        # or duplicate a request.
-        request = try
-            fetch(backend.repl_channel)
-        catch e
-            e isa InterruptException && continue
-            rethrow()
-        end
-        while isready(backend.repl_channel)
-            try
-                take!(backend.repl_channel)
+    try
+        # include looks at this to determine the relative include path
+        # nothing means cwd
+        while true
+            tls = task_local_storage()
+            tls[:SOURCE_PATH] = nothing
+            # Control is back with the REPL: close the previous work item's ^C
+            # episode, making a ^C at the idle prompt (or one that raced the end
+            # of the previous evaluation, issue #58689) a no-op. The idle wait
+            # itself is not cancellable.
+            Base.sigint_close_episode!()
+            ast_or_func, show_value = try
+                take!(backend.repl_channel; cancel=nothing)
             catch e
-                e isa InterruptException || rethrow()
+                # ^C never lands here as an exception (the idle wait is not
+                # cancellable), but a stray InterruptException injected into the
+                # backend task by a package or user code must not tear down the
+                # REPL session.
+                e isa InterruptException && continue
+                rethrow()
+            end
+            if show_value == -1
+                # exit flag
+                break
+            end
+            # Re-arm ^C: install a fresh episode source (detaching any work
+            # still unwinding from the previous epoch) and run this request in
+            # its scope, so that ^C cancels exactly this epoch and everything it
+            # spawns. The episode source is an *evaluation* source - a child of
+            # the session source (see the session tree in base/client.jl) - so
+            # the double-^C prompt gesture can sweep evaluation leftovers by
+            # cancelling the session source.
+            tok = Base.sigint_new_episode!(Base.new_evaluation_cancel_source!())
+            # Mark this task as the foreground task while running user work, so that
+            # components like the precompile keyboard menu know who owns interactive stdin.
+            Base.ScopedValues.@with Base.CANCEL_TOKEN => tok begin
+                Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
+                    f = ast_or_func
+                    try
+                        ret = f()
+                        # REPL machinery: reporting the result must work even
+                        # when the evaluation's epoch was cancelled
+                        put!(backend.response_channel, Pair{Any, Bool}(ret, false); cancel=nothing)
+                    catch
+                        put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true); cancel=nothing)
+                    end
+                else
+                    ast = ast_or_func
+                    eval_user_input(ast, backend, get_module())
+                end
             end
         end
-        ast_or_func, show_value = request
-        if show_value == -1
-            # exit flag
-            break
-        end
-        # Mark this task as the foreground task while running user work, so that
-        # components like the precompile keyboard menu know who owns interactive stdin.
-        Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
-            f = ast_or_func
-            try
-                ret = f()
-                put!(backend.response_channel, Pair{Any, Bool}(ret, false))
-            catch
-                put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
-            end
-        else
-            ast = ast_or_func
-            eval_user_input(ast, backend, get_module())
-        end
+    finally
+        # A throwing evaluation hook or response write must not leave a
+        # stale episode installed (with the C mirror pointing at dead
+        # work); closing an already-closed episode is a no-op.
+        Base.sigint_close_episode!()
     end
     return nothing
 end
@@ -659,9 +679,19 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
         while true
             try
                 Base.sigatomic_end() # allow stacktrace printing to be interrupted
-                val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                __repl_entry_display_error(errio, val)
+                # The frontend renders the error outside the (already closed)
+                # evaluation epoch - run it in a display epoch of its own so a
+                # blocking or looping `showerror` can still be ^C'd.
+                tok = Base.sigint_new_episode!(Base.new_evaluation_cancel_source!())
+                try
+                    Base.ScopedValues.@with Base.CANCEL_TOKEN => tok begin
+                        val = Base.scrub_repl_backtrace(val)
+                        Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
+                        __repl_entry_display_error(errio, val)
+                    end
+                finally
+                    Base.sigint_close_episode!()
+                end
                 break
             catch ex
                 println(errio) # an error during printing is likely to leave us mid-line
@@ -694,24 +724,27 @@ end
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
     get_module = () -> Base.active_module(repl)
-    cleanup_task(backend_ref, t) = @task try
+    # REPL teardown is cleanup: shield it from any scope cancellation
+    cleanup_task(backend_ref, t) = Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+        @task try
             destroy(backend_ref, t)
         catch e
             Core.print(Core.stderr, "\nINTERNAL ERROR: ")
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
+    end
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
-        Base._wait2(t, cleanup)
+        Base.schedule_on_notify!(t, cleanup)
         start_repl_backend(backend, consumer; get_module)
     else
         t = @async start_repl_backend(backend, consumer; get_module)
         cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
-        Base._wait2(t, cleanup)
+        Base.schedule_on_notify!(t, cleanup)
         run_frontend(repl, backend_ref)
     end
     return backend
@@ -913,7 +946,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     mode_mapping::Dict{Symbol,Prompt}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(HistoryFile(), 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(HistoryFile(), 1, 1, -1, IOBuffer(),
                         nothing, mode_mapping)
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
@@ -1034,7 +1067,7 @@ end
 
 history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_prev(s, hist, hist.cur_idx - 1 -
-                 (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
+                 (hist.cur_idx > hist.start_idx ? hist.start_idx-1 : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_next(s, hist, length(update!(hist.history)) - hist.cur_idx + 1)
@@ -1269,7 +1302,7 @@ function mode_keymap(julia_prompt::Prompt)
     end)
 end
 
-repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx, 1))]"
+repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx+1, 1))]"
 repl_filename(repl, hp) = "REPL"
 
 const JL_PROMPT_PASTE = Ref(true)
@@ -1901,7 +1934,7 @@ using ..REPL
 __current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
 function repl_eval_counter(hp)
-    return length(hp.history) - hp.start_idx
+    return length(hp.history) - hp.start_idx + 1
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})

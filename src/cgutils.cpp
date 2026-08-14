@@ -2272,6 +2272,26 @@ static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
 #endif
 }
 
+// Bounds checking for the explicit `boundscheck` argument of the memoryref
+// intrinsics. Unlike `Expr(:boundscheck)` (which is how `@inbounds` reaches
+// codegen, and which `--check-bounds=yes` must override), a literal `false`
+// here is an assertion by the caller that the index was already validated --
+// e.g. `Base.getindex(::Array, ::Int)` does `@boundscheck checkbounds(A, i)`
+// and then passes `false` to `memoryrefnew`. Forcing that check back on under
+// `--check-bounds=yes` adds no safety, it just emits a second, redundant
+// bounds check per access.
+static bool memoryref_bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
+#if CHECK_BOUNDS==1
+    if (inbounds == jl_false)
+        return 0;
+    if (jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_OFF)
+        return 0;
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck) JL_CANSAFEPOINT
 {
     Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
@@ -2681,8 +2701,12 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (parent == NULL || !tracked_pointers)
             return;
         if (isboxed) {
+            // Insertion-barrier optimization: skip when the new value is perm-allocated.
+            // Invalid under SATB (ConcurrentImmix), which must snapshot the old value.
+#ifndef MMTK_PLAN_CONCURRENTIMMIX
             if (type_is_permalloc(rhs.typ))
                 return;
+#endif
             assert(r != nullptr);
             emit_write_barrier(ctx, parent, r);
         }
@@ -4407,8 +4431,12 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg
                                     jl_value_t *jltype)
 {
     SmallVector<unsigned,4> perm_offsets;
+    // Insertion-barrier optimization: drop perm-allocated inline fields. Invalid under
+    // SATB (ConcurrentImmix), which must snapshot the overwritten old inline values.
+#ifndef MMTK_PLAN_CONCURRENTIMMIX
     if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
+#endif
     auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets);
     emit_write_barrier(ctx, parent, ptrs);
 }
@@ -4990,7 +5018,7 @@ static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem
         return jl_cgval_t();
     Value *i = emit_unbox(ctx, ctx.types().T_size, idx);
     Value *idx0 = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
-    bool bc = bounds_check_enabled(ctx, inbounds);
+    bool bc = memoryref_bounds_check_enabled(ctx, inbounds);
     if (bc) {
         BasicBlock *failBB, *endBB;
         failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
@@ -5068,7 +5096,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
     Value *offset = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
     setName(ctx.emission_context, offset, "memoryref_offset");
     Value *elsz = emit_genericmemoryelsize(ctx, mem, ref.typ, false);
-    bool bc = bounds_check_enabled(ctx, inbounds);
+    bool bc = memoryref_bounds_check_enabled(ctx, inbounds);
 #if 1
     Value *ovflw = nullptr;
 #endif

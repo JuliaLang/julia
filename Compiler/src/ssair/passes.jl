@@ -1398,7 +1398,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         elseif is_known_call(stmt, Core.finalizer, compact)
             3 <= length(stmt.args) <= 5 || continue
             info = compact[SSAValue(idx)][:info]
-            if isa(info, IndirectCallInfo)
+            if isa(info, FinalizerInfo)
                 is_finalizer_inlineable(info.effects) || continue
             else
                 # Inlining performs legality checks on the finalizer to determine
@@ -1785,7 +1785,7 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
 
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flag = isa(info, IndirectCallInfo) ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    flag = isa(info, FinalizerInfo) ? flags_for_effects(info.effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing

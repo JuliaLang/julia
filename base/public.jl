@@ -60,6 +60,7 @@ public
     get_extension,
     isambiguous,
     isexpr,
+    isfieldatomic,
     isidentifier,
     issingletontype,
     identify_package,

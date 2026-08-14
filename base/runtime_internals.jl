@@ -221,8 +221,9 @@ macro __FUNCTION__()
     Expr(:thisfunction)
 end
 
-# TODO: this is vaguely broken because it only works for explicit calls to
-# `Base.deprecate`, not the @deprecated macro:
+# Reflects binding-partition deprecation (as set by `Base.deprecate` / `Base.@deprecate_binding`),
+# including a binding reached through an implicit `using`, transparently through reexports.
+# `@deprecate` deprecates a method rather than the binding, so it is intentionally not reported here.
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 
 function binding_module(m::Module, s::Symbol)
