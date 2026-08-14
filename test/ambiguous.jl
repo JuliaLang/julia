@@ -807,7 +807,7 @@ let ambig = Ref{Int32}(0)
 end
 @test !isempty(detect_ambiguities(AmbigCycle3Reorder))
 
-# A method is selected only when it is more specific than *every* other
+# A method is selected only when it is more specific than every other
 # applicable method, so a match that is itself dominated can still make a call
 # ambiguous by blocking the would-be winner. Here 3 ≻ 2, 2 ≻ 1 and 3 is unordered
 # with 1: nothing beats both others, so the call is ambiguous, and method 1 has to
@@ -850,7 +850,7 @@ end
 # method, and the new method is one more thing to beat. That is what lets the
 # method table backedges skip invalidation here, so a caller compiled while the
 # call was ambiguous (and therefore inferred to always throw) stays valid. n.b.
-# the converse direction is not covered: a new method can turn a *resolved* call
+# the converse direction is not covered: a new method can turn a resolved call
 # ambiguous without `is_replacing` noticing, which is a pre-existing hole.
 module AmbigResolveByExclusion
 abstract type Top end

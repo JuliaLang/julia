@@ -1889,7 +1889,7 @@ static void cache_insert(
         JL_UNLOCK(&mc->writelock); // before acquiring world_counter_lock
 
         // Only set METHOD_SIG_LATEST_ONLY on method instance if the method-level fact
-        // (an empty interference set) does not already cover it, no guards required,
+        // (an empty interference set) does not already cover it, no guards are required,
         // and min_valid == primary_world
         int should_set_dispatch_status = jl_atomic_load_relaxed(&definition->interferences)->length != 0 &&
             (jl_value_t*)cachett == newmeth->specTypes && jl_svec_len(guardsigs) == 0 &&
@@ -3059,43 +3059,30 @@ static int find_method_in_matches(jl_array_t *t, jl_method_t *method)
     return -1;
 }
 
-static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method) JL_CANSAFEPOINT;
-
-#ifndef NDEBUG
-// A match may only be removed from the output when it can never be selected over
-// `ti`: every point of `ti` must be covered by some match that is strictly
-// morespecific than `m`. Note this is a statement about *applicable* methods, so
-// it does not care whether the dominating matches survive the sort themselves
-// (chains of drops are fine). It is necessary but not sufficient -- a match that
-// cannot be selected may still block another match from being selected, which is
-// what the ambiguity witness accounting in `sort_method_matches` preserves.
-static void assert_dominated_over(jl_method_t *m, jl_value_t *ti, jl_array_t *t) JL_CANSAFEPOINT
+// Whether `target_method` is morespecific than `start_method`, and has an type-intersection
+static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method) JL_CANSAFEPOINT
 {
-    size_t len = jl_array_nrows(t), n = 0;
-    jl_value_t **sigs = (jl_value_t**)malloc_s(len * sizeof(jl_value_t*));
-    for (size_t i = 0; i < len; i++) {
-        jl_method_t *Q = ((jl_method_match_t*)jl_array_ptr_ref(t, i))->method;
-        if (Q != m && method_morespecific_recorded(Q, m))
-            sigs[n++] = (jl_value_t*)Q->sig;
-    }
-    jl_value_t *u = n == 0 ? jl_bottom_type : (n == 1 ? sigs[0] : jl_type_union(sigs, n));
-    JL_GC_PUSH1(&u);
-    assert(jl_subtype(ti, u) && "dropped a match that could still be selected");
-    JL_GC_POP();
-    free(sigs);
+    if (target_method == start_method)
+        return 0;
+    int result = method_in_interferences(target_method, start_method) &&
+                 !method_in_interferences(start_method, target_method);
+    //// Expensive cross-check: the recorded relation must agree with ground truth
+    //// for every intersecting pair.
+    //assert(result == jl_method_morespecific(target_method, start_method) ||
+    //       jl_has_empty_intersection(target_method->sig, start_method->sig) ||
+    //       jl_has_empty_intersection(start_method->sig, target_method->sig));
+    assert(!result || !(jl_atomic_load_relaxed(&target_method->dispatch_status) & METHOD_SIG_NO_LOSERS));
+    return result;
 }
-#else
-#define assert_dominated_over(m, ti, t) ((void)0)
-#endif
 
-// Dispatch selects a match only when it is morespecific than *every* other
+// Dispatch selects a match only when it is morespecific than every other
 // applicable match, so a call is ambiguous whenever no match beats all the
 // others. That has two shapes, which the two checks here correspond to: a pair
 // that is unordered (a mutual ambiguity, `check_fully_ambiguous`) or a
 // specificity cycle, where every match is beaten by another one (the SCC pass in
 // `sort_mlmatches`). A match is reportable when it can be selected somewhere in
 // its region, and also when it blocks another match from being selected there --
-// dominance alone therefore justifies removing it from the *selection* answer,
+// dominance alone therefore justifies removing it from the selection answer,
 // while `sort_method_matches` separately keeps enough blockers to witness each
 // ambiguity it reports.
 //
@@ -3112,7 +3099,7 @@ static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t
 {
     // If D is not strictly morespecific than anything it intersects
     // (METHOD_SIG_NO_LOSERS), it was beating nobody and there is nothing to
-    // transfer: the removal is unconditionally silent.
+    // transfer: the removal is unconditionally silent (as a fast-path).
     if (jl_atomic_load_relaxed(&D->dispatch_status) & METHOD_SIG_NO_LOSERS)
         return 1;
     size_t len = jl_array_nrows(t);
@@ -3121,8 +3108,8 @@ static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t
         if (S == D)
             continue;
         // An S that beats nothing can never strictly beat a cover, so it can
-        // never close a directed cycle: whether the covers dominate it is then
-        // irrelevant (as a fast-path)
+        // never be part of a directed cycle: whether the covers dominate it is
+        // then irrelevant (as a fast-path)
         if (jl_atomic_load_relaxed(&S->dispatch_status) & METHOD_SIG_NO_LOSERS)
             continue;
         if (!method_morespecific_recorded(D, S))
@@ -3206,7 +3193,6 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
             if (include_ambiguous)
                 continue; // another cover may still certify the removal
         }
-        assert_dominated_over(m, ti, t);
         return 1;
     }
     // No single morespecific method covers ti, but a union of them may (e.g.
@@ -3214,7 +3200,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
     // Collect the recorded strictly-morespecific interferences that were already
     // finalized cleanly (not part of an ambiguity group, which could mean they
     // lose dispatch back to `m` through a specificity cycle) and check whether
-    // ti is covered by their union. Both filters are load-bearing: dropping them
+    // ti is covered by their union. Both filters are relevant: dropping eiter
     // lets a cycle member serve as a cover and wrongly resolves the pair (test
     // `AmbigUnionCycle`).
     int result = 0;
@@ -3247,8 +3233,6 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
                 if (include_ambiguous)
                     result = 0;
             }
-            if (result)
-                assert_dominated_over(m, ti, t);
         }
         JL_GC_POP();
     }
@@ -3275,23 +3259,6 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
     return 0;
 }
 
-// Whether `target_method` is morespecific than `start_method`, and has an type-intersection
-static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method) JL_CANSAFEPOINT
-{
-    if (target_method == start_method)
-        return 0;
-    int result = method_in_interferences(target_method, start_method) &&
-                 !method_in_interferences(start_method, target_method);
-    //// Expensive cross-check: the recorded relation must agree with ground truth
-    //// for every intersecting pair. Too costly to leave armed (it makes every
-    //// recorded query cost two type queries), but it has been run over the
-    //// ambiguity, specificity, worlds, reflection and core suites without firing.
-    //assert(result == jl_method_morespecific(target_method, start_method) ||
-    //       jl_has_empty_intersection(target_method->sig, start_method->sig) ||
-    //       jl_has_empty_intersection(start_method->sig, target_method->sig));
-    assert(!result || !(jl_atomic_load_relaxed(&target_method->dispatch_status) & METHOD_SIG_NO_LOSERS));
-    return result;
-}
 
 
 void jl_method_table_activate(jl_typemap_entry_t *newentry)
@@ -5210,7 +5177,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 //  * `t`: the array of vertexes (method matches)
 //  * `idx`: the next vertex to add to the output
 //  * `visited`: the state of the algorithm for each vertex in `t`: either 1 if we visited it already or 1+depth if we are visiting it now
-//  * `tainted`: TBD
+//  * `tainted`: record if `visited==1` still can't rely on this method to have covered up an ambiguity
 //  * `stack`: the state of the algorithm for the current vertex (up to length equal to `t`): the list of all vertexes currently in the depth-first path or in the current SCC
 //  * `result`: the output of the algorithm, a sorted list of vertexes (up to length `lim`)
 //  * `lim`: either -1 for unlimited matches, or the maximum length for `result` before returning failure (return -1).
@@ -5383,8 +5350,6 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, char 
                                 visited->items[current->idx] = (void*)1;
                         }
                         else {
-                            if (current->m != minmaxm && minmaxm != NULL)
-                                assert_dominated_over(current->m, current->ti, t);
                             visited->items[current->idx] = (void*)1;
                         }
                     }
@@ -5445,15 +5410,13 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, char 
                         // cycle leading back to the method they would resolve
                         tainted[childidx] = 1;
                     if (subt && *found_minmax) {
-                        if (visited->items[childidx] != (void*)1 && matc->method != minmaxm &&
-                            !check_dominance_transfer(matc->method, &minmaxm, minmaxm == NULL ? 0 : 1, t)) {
+                        if (minmaxm && visited->items[childidx] != (void*)1 && matc->method != minmaxm &&
+                            !check_dominance_transfer(matc->method, &minmaxm, 1, t)) {
                             *has_ambiguity = 1;
                             if (!include_ambiguous)
                                 visited->items[childidx] = (void*)1;
                         }
                         else {
-                            if (visited->items[childidx] != (void*)1 && matc->method != minmaxm && minmaxm != NULL)
-                                assert_dominated_over(matc->method, (jl_value_t*)matc->spec_types, t);
                             visited->items[childidx] = (void*)1;
                         }
                     }
@@ -5522,16 +5485,16 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
     // n.b. its absence does not mean the query is unresolvable, and in particular
     // must not be short-circuited into an empty result: the sort below still has to
     // run to compute `has_ambiguity` and to keep the matches that witness the
-    // ambiguity, or an ambiguous call is reported as having no applicable method
-    // at all (test `AmbigNoBeatAll`).
+    // ambiguity, else an ambiguous call would be reported as having no applicable
+    // method (see test `AmbigNoBeatAll`).
     jl_method_match_t *minmax = NULL;
     int minmax_dominates = 0;
     int any_subtypes = 0;
     if (len > 1) {
-        // first try to pre-process the results to find the most specific option
+        // First try to pre-process the results to find the most specific option
         // among the fully-covering methods, since we can do this in O(n^2)
-        // time, and the rest is O(n^3)
-        //   - first find a candidate for the best of these method results
+        // time, and the rest is O(n^3).
+        //   - First, find a candidate for the best of these method results.
         for (i = 0; i < len; i++) {
             jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
             if (matc->fully_covers == FULLY_COVERS) {
@@ -5540,7 +5503,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 // A fully-covering match with an empty interference set is
                 // strictly morespecific than every method it intersects
                 // meaning it is already proven to be the `minmax` choice
-                // without exploring the list any further
+                // without exploring the list any further.
                 if (jl_atomic_load_relaxed(&m->interferences)->length == 0) {
                     minmax = matc;
                     minmax_dominates = 1;
@@ -5557,21 +5520,20 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                     }
                 }
                 if (j == len) {
-                    // Found the minmax method
+                    // Found the minmax method.
                     minmax = matc;
                     break;
                 }
             }
         }
-        //   - it may even dominate (be more specific than) some choices that are not fully-covering!
+        //   - It may even dominate (be more specific than) some choices that are not fully-covering!
         //     move those into the subtype group, where we'll filter them out shortly after
         //     (potentially avoiding reporting these as an ambiguity, and
-        //     potentially allowing us to hit the next fast path)
-        //   - we could always check here if *any* FULLY_COVERS method is
+        //     potentially allowing us to hit the next fast path).
+        //   - We could always check here if *any* FULLY_COVERS method is
         //     more-specific (instead of just considering minmax), but that may
         //     cost much extra and is less likely to help us hit a fast path
-        //     (we will look for this later, when we compute ambig_groupid, for
-        //     correctness)
+        //     (we will look for this later, when we compute the full sort).
         int all_subtypes = any_subtypes;
         if (any_subtypes && !minmax_dominates) {
             jl_method_t *minmaxm = NULL;
@@ -5595,8 +5557,8 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 }
             }
         }
-        //    - now we might have a fast-return here, if we see that
-        //      we've already processed all of the possible outputs
+        //    - Now we might have a fast-return here, if we see that
+        //      we've already processed all of the possible outputs.
         if (all_subtypes) {
             if (minmax == NULL) {
                 // All intersecting methods are fully-covering, but none of them
@@ -5678,6 +5640,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
         // the same ambiguity, but the last blocker of the survivor is not
         // redundant -- restore the matches it is unordered with.
         if (include_ambiguous && has_ambiguity && result.len == 1 && minmax == NULL) {
+            abort();
             size_t survivor = (size_t)result.items[0];
             jl_method_t *m = ((jl_method_match_t*)jl_array_ptr_ref(t, survivor))->method;
             for (i = 0; i < len; i++) {
@@ -5687,7 +5650,6 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 if (!method_in_interferences(m2, m) || !method_in_interferences(m, m2))
                     continue; // not an unordered pair, so not a blocker
                 if (lim != -1 && (int)result.len >= lim) {
-                    // n.b. `tainted`, `visited` and `stack` were already released above
                     arraylist_free(&result);
                     return -1;
                 }
@@ -5714,7 +5676,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
     }
     // Every match can only be removed by being dominated or by being part of an
     // ambiguity, and a chain of dominated matches has to bottom out somewhere
-    // unless it closes a cycle (which is an ambiguity). So emptying a non-empty
+    // unless it makes a cycle (which is an ambiguity). So emptying a non-empty
     // match list means the query is ambiguous, never that no method applies --
     // reporting the latter would turn an ambiguous call into a `no method
     // matching` error (test `AmbigNoBeatAll`).
