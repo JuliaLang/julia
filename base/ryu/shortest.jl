@@ -336,7 +336,7 @@ function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
                            compact ?  5 :
                       T == Float32 ?  7 :
                       T == Float64 ? 15 : -4) &&
-        !(pt >= olength && abs(mod(x + 0.05, 10^(pt - olength)) - 0.05) > 0.05)
+        !(pt >= olength && abs(mod(x + 0.05, Int64(10)^(pt - olength)) - 0.05) > 0.05)
         exp_form = false
         if pt <= 0
             @inbounds buf[pos] = UInt8('0')
