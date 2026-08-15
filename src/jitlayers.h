@@ -845,10 +845,9 @@ public:
 
     void publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait=false) JL_CANSAFEPOINT;
 
+    // Remove any mapping left at a newly allocated CodeInstance's address.
     void registerCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
-    // When a CodeInstance is garbage collected, we must remove any existing
-    // entries in CISymbols, to prevent invokes to a new CodeInstance with the
-    // same address from being linked to old symbol.
+    // Remove a mapping before a CodeInstance becomes unreachable.
     void unregisterCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
@@ -945,9 +944,7 @@ private:
 
     // LinkerMutex protects CISymbols, Names
     std::mutex LinkerMutex;
-    // CISymbols maps CodeInstance pointers to their ORC symbols.  If a
-    // CodeInstance is eligible for garbage collection, it must be removed from
-    // this map first, with unregisterCI.
+    // Maps CodeInstance pointers to their ORC symbols.
     CISymbolMap CISymbols;
     jl_name_counter_t Names;
 

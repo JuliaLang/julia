@@ -2106,10 +2106,8 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
 
 void JuliaOJIT::registerCI(jl_code_instance_t *CI)
 {
-#ifndef JL_NDEBUG
     std::unique_lock Lock{LinkerMutex};
-    assert(!CISymbols.contains(CI));
-#endif
+    CISymbols.erase(CI);
 }
 
 void JuliaOJIT::unregisterCI(jl_code_instance_t *CI)
