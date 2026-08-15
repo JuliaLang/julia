@@ -1064,7 +1064,7 @@ JL_DLLEXPORT int jl_ptr_demangle_available(void) JL_NOTSAFEPOINT
 #endif
 }
 
-JL_UNUSED static uintptr_t ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
+JL_DLLEXPORT uintptr_t jl_ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
 {
 #if defined(LONG_JMP_SP_ENV_SLOT)
     assert(jl_atomic_load_relaxed(&julia_longjmp_state) > 0);
@@ -1280,8 +1280,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_ESP] = (*_ctx)[4];
     mc->gregs[REG_EIP] = (*_ctx)[5];
     // ifdef PTR_DEMANGLE ?
-    mc->gregs[REG_ESP] = ptr_demangle(mc->gregs[REG_ESP]);
-    mc->gregs[REG_EIP] = ptr_demangle(mc->gregs[REG_EIP]);
+    mc->gregs[REG_ESP] = jl_ptr_demangle(mc->gregs[REG_ESP]);
+    mc->gregs[REG_EIP] = jl_ptr_demangle(mc->gregs[REG_EIP]);
     mc->gregs[REG_EAX] = val;
     // The simulated longjmp resumes code that expects the i386 ABI's
     // function-boundary FPU state (an empty x87 register stack), but the
@@ -1307,9 +1307,9 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_RSP] = (*_ctx)[6];
     mc->gregs[REG_RIP] = (*_ctx)[7];
     // ifdef PTR_DEMANGLE ?
-    mc->gregs[REG_RBP] = ptr_demangle(mc->gregs[REG_RBP]);
-    mc->gregs[REG_RSP] = ptr_demangle(mc->gregs[REG_RSP]);
-    mc->gregs[REG_RIP] = ptr_demangle(mc->gregs[REG_RIP]);
+    mc->gregs[REG_RBP] = jl_ptr_demangle(mc->gregs[REG_RBP]);
+    mc->gregs[REG_RSP] = jl_ptr_demangle(mc->gregs[REG_RSP]);
+    mc->gregs[REG_RIP] = jl_ptr_demangle(mc->gregs[REG_RIP]);
     mc->gregs[REG_RAX] = val;
     return valid_longjmp_target(mc->gregs[REG_RSP], mc->gregs[REG_RIP]);
     #elif defined(_CPU_ARM_)
@@ -1327,8 +1327,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->arm_r10 = (*_ctx)[8]; // aka v7 aka sl
     mc->arm_fp = (*_ctx)[10]; // aka v8 aka r11
     // ifdef PTR_DEMANGLE ?
-    mc->arm_sp = ptr_demangle(mc->arm_sp);
-    mc->arm_lr = ptr_demangle(mc->arm_lr);
+    mc->arm_sp = jl_ptr_demangle(mc->arm_sp);
+    mc->arm_lr = jl_ptr_demangle(mc->arm_lr);
     mc->arm_pc = mc->arm_lr;
     mc->arm_r0 = val;
     return valid_longjmp_target(mc->arm_sp, mc->arm_pc);
@@ -1361,8 +1361,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mcfp->vregs[13] = (*_ctx)[20]; // aka d14
     mcfp->vregs[14] = (*_ctx)[21]; // aka d15
     // ifdef PTR_DEMANGLE ?
-    mc->sp = ptr_demangle(mc->sp);
-    mc->regs[30] = ptr_demangle(mc->regs[30]);
+    mc->sp = jl_ptr_demangle(mc->sp);
+    mc->regs[30] = jl_ptr_demangle(mc->regs[30]);
     mc->pc = mc->regs[30];
     mc->regs[0] = val;
     return valid_longjmp_target(mc->sp, mc->pc);
@@ -1398,8 +1398,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->__fpregs.__d.__f[27] = (unsigned long long) (*_ctx)->__fpregs[11]; // fs11
     #endif
     // ifdef PTR_DEMANGLE ?
-    mc->__gregs[REG_SP] = ptr_demangle(mc->__gregs[REG_SP]);
-    mc->__gregs[REG_RA] = ptr_demangle(mc->__gregs[REG_RA]);
+    mc->__gregs[REG_SP] = jl_ptr_demangle(mc->__gregs[REG_SP]);
+    mc->__gregs[REG_RA] = jl_ptr_demangle(mc->__gregs[REG_RA]);
     mc->__gregs[REG_PC] = mc->__gregs[REG_RA];
     mc->__gregs[REG_A0] = val;
     return valid_longjmp_target(mc->__gregs[REG_SP], mc->__gregs[REG_PC]);
