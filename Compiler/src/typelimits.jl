@@ -355,7 +355,7 @@ end
         end
         for i = 1:length(typea.fields)
             ai = unwrapva(typea.fields[i])
-            bi = fieldtype(aty, i)
+            bi = fieldtype_widened(aty, i)
             is_lattice_equal(𝕃, ai, bi) && continue
             tni = _typename(widenconst(ai))
             if tni isa Const
@@ -625,7 +625,7 @@ end
         for i = 1:nflds
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
-            ft = fieldtype(aty, i)
+            ft = fieldtype_widened(aty, i)
             if is_lattice_equal(𝕃, ai, bi) || is_lattice_equal(𝕃, ai, ft)
                 # Since ai===bi, the given type has no restrictions on complexity.
                 # and can be used to refine ft

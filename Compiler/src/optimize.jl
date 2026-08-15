@@ -378,6 +378,7 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     for fidx in 1:(length(args) - 1)
         farg = args[fidx + 1]
         eT = argextype(farg, src)
+        is_computed_fieldtype(typ, fidx) && return (false, false, false)
         fT = fieldtype(typ, fidx)
         if !isexact && has_free_typevars(fT)
             if pattern_match !== nothing && pattern_match(src, typ, fidx, Targ, farg)

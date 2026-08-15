@@ -463,7 +463,7 @@ end
                         return Const(!aundefᵢ)
                     end
                 end
-            elseif !isvatuple(a1)
+            elseif !isvatuple(a1) && !is_computed_fieldtype(a1, idx)
                 fieldT = fieldtype(a1, idx)
                 if isa(fieldT, DataType) && isbitstype(fieldT)
                     return Const(true)
@@ -1119,6 +1119,7 @@ end
         isfieldatomic(s, field) && return false # TODO: currently we're only testing for ordering === :not_atomic
         field <= datatype_min_ninitialized(s) && return true
         # `try_compute_fieldidx` already check for field index bound.
+        is_computed_fieldtype(s, field) && return false
         !isvatuple(s) && isbitstype(fieldtype(s0, field)) && return true
     end
 
@@ -1300,6 +1301,11 @@ end
         return _getfield_tfunc(𝕃, _ts, name, setfield)
     end
     ftypes = datatype_fieldtypes(s)
+    if has_computedfield_marker(ftypes)
+        # non-concrete instantiation of a type with computed field types:
+        # the actual field types are unknown here
+        return Any
+    end
     nf = length(ftypes)
     # If no value has this type, then this statement should be unreachable.
     # Bail quickly now.
@@ -1396,6 +1402,7 @@ end
         # `try_compute_fieldidx` already check for field index bound.
         isconst(s, field) && return false
         isfieldatomic(s, field) && return false # TODO: currently we're only testing for ordering === :not_atomic
+        is_computed_fieldtype(s, field) && return false
         v_expected = fieldtype(s0, field)
         ⊑ = partialorder(𝕃)
         return v ⊑ v_expected
@@ -1580,6 +1587,7 @@ function _fieldtype_nothrow(@nospecialize(s), exact::Bool, egal::Bool, name::Con
     end
     isa(fld, Int) || return false
     ftypes = datatype_fieldtypes(u)
+    has_computedfield_marker(ftypes) && return false # runtime `fieldtype` throws for computed slots
     nf = length(ftypes)
     fld >= 1 || return false
     if u.name === Tuple.name && nf > 0 && isvarargtype(ftypes[nf])
@@ -1668,6 +1676,11 @@ end
         return Union{Type, TypeVar}
     end
     ftypes = datatype_fieldtypes(u)
+    if has_computedfield_marker(ftypes)
+        # non-concrete instantiation of a type with computed field types: for
+        # concrete subtypes `fieldtype` returns some type, unknowable here
+        return Any
+    end
     if isempty(ftypes)
         return Bottom
     end

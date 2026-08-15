@@ -2949,7 +2949,7 @@ static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *s
         pi = jl_svecref(p, i);
         JL_TRY {
             pi = inst_type_w_(pi, env, stack, 1, 0, dcache);
-            if (!jl_is_type(pi) && !jl_is_typevar(pi)) {
+            if (!jl_is_type(pi) && !jl_is_typevar(pi) && !jl_is_computedfieldtype(pi)) {
                 pi = jl_bottom_type;
             }
         }
@@ -3371,53 +3371,69 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
 // (declared above), letting self-referential computed field types find the
 // in-flight type (mirroring `lookup_type_stack` for substitution-based fields).
 
+// Call tn's field generator on the given parameter values, through the
+// world-age-detached CodeInstance when one has been recorded. Anything the
+// generator throws propagates to the caller.
+JL_DLLEXPORT jl_value_t *jl_call_fieldtype_generator(jl_typename_t *tn, jl_svec_t *params) JL_CANSAFEPOINT
+{
+    size_t np = jl_svec_len(params);
+    jl_value_t **args;
+    // root fg (and through it the generator and CodeInstance): tn->fieldgen is
+    // a mutable field, so reachability through it is not stable across
+    // safepoints (e.g. if the generator is re-installed)
+    JL_GC_PUSHARGS(args, np + 2);
+    jl_value_t *fg = jl_atomic_load_relaxed(&tn->fieldgen);
+    if (fg == NULL || fg == jl_nothing)
+        jl_errorf("field generator for %s has not been installed yet",
+                  jl_symbol_name(tn->name));
+    args[np + 1] = fg;
+    args[0] = jl_svecref(fg, 0);
+    for (size_t i = 0; i < np; i++)
+        args[i + 1] = jl_svecref(params, i);
+    jl_code_instance_t *ci = jl_svec_len(fg) < 2 ? NULL : (jl_code_instance_t*)jl_svecref(fg, 1);
+    jl_callptr_t invoke = NULL;
+    if (ci != NULL) {
+        invoke = jl_atomic_load_acquire(&ci->invoke);
+        if (invoke == NULL) {
+            // freshly created or loaded from an image: detached code is
+            // executed by the interpreter (TODO: native compilation)
+            jl_value_t *inf = jl_atomic_load_relaxed(&ci->inferred);
+            if (inf != NULL && jl_is_code_info(inf)) {
+                jl_atomic_store_release(&ci->invoke, jl_fptr_interpret_call);
+                invoke = jl_fptr_interpret_call;
+            }
+        }
+    }
+    jl_value_t *res;
+    if (invoke != NULL) {
+        // world-age-independent detached CodeInstance
+        res = invoke(args[0], &args[1], (uint32_t)np, ci);
+    }
+    else {
+        // dynamic call in the current world (pre-detachment fallback)
+        res = jl_apply(args, np + 1);
+    }
+    JL_GC_POP();
+    return res;
+}
+
 // Invoke the field generator of st->name on st's (fully concrete) parameters.
 // A generator that throws — or returns anything other than closed field types —
 // degrades every field type to Union{}, making the type uninstantiable while
 // keeping type-system internals (intersection, instantiation) throw-free.
-static jl_svec_t *invoke_fieldtype_generator(jl_datatype_t *st JL_PROPAGATES_ROOT, jl_value_t *genfn, jl_typestack_t *stack) JL_CANSAFEPOINT
+static jl_svec_t *invoke_fieldtype_generator(jl_datatype_t *st JL_PROPAGATES_ROOT, jl_typestack_t *stack) JL_CANSAFEPOINT
 {
     size_t nf = jl_svec_len(st->name->names);
-    size_t np = jl_svec_len(st->parameters);
     jl_svec_t *ftypes = NULL;
     jl_value_t *res = NULL;
-    // root ci: tn->fieldgen is a mutable field, so reachability through it is
-    // not stable across safepoints (e.g. if the generator is re-installed)
-    jl_code_instance_t *ci = (jl_code_instance_t*)jl_typename_fieldgen_ci(st->name);
-    JL_GC_PUSH3(&ftypes, &res, &ci);
+    JL_GC_PUSH2(&ftypes, &res);
     jl_typestack_t top;
     top.tt = st;
     top.prev = stack != NULL ? stack : fieldgen_typestack;
     jl_typestack_t *prev_tls = fieldgen_typestack;
     fieldgen_typestack = &top;
     JL_TRY {
-        jl_value_t **args;
-        JL_GC_PUSHARGS(args, np + 1);
-        args[0] = genfn;
-        for (size_t i = 0; i < np; i++)
-            args[i + 1] = jl_svecref(st->parameters, i);
-        jl_callptr_t invoke = NULL;
-        if (ci != NULL) {
-            invoke = jl_atomic_load_acquire(&ci->invoke);
-            if (invoke == NULL) {
-                // freshly created or loaded from an image: detached code is
-                // executed by the interpreter (TODO: native compilation)
-                jl_value_t *inf = jl_atomic_load_relaxed(&ci->inferred);
-                if (inf != NULL && jl_is_code_info(inf)) {
-                    jl_atomic_store_release(&ci->invoke, jl_fptr_interpret_call);
-                    invoke = jl_fptr_interpret_call;
-                }
-            }
-        }
-        if (invoke != NULL) {
-            // world-age-independent detached CodeInstance
-            res = invoke(args[0], &args[1], (uint32_t)np, ci);
-        }
-        else {
-            // dynamic call in the current world (pre-detachment fallback)
-            res = jl_apply(args, np + 1);
-        }
-        JL_GC_POP();
+        res = jl_call_fieldtype_generator(st->name, st->parameters);
     }
     JL_CATCH {
         res = NULL;
@@ -3450,41 +3466,22 @@ static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void
     if (wt->types == NULL)
         jl_errorf("cannot determine field types of incomplete type %s",
                   jl_symbol_name(st->name->name));
-    jl_svec_t *decl = wt->types;
-    jl_value_t *genfn = NULL;
-    JL_GC_PUSH2(&decl, &genfn);
-    if (jl_svec_has_computedfields(decl)) {
-        if (!st->hasfreetypevars) {
-            // root genfn: tn->fieldgen is mutable, so reachability through it
-            // is not stable across safepoints
-            genfn = jl_typename_fieldgen_func(st->name);
-            if (genfn == NULL)
-                jl_errorf("field generator for %s has not been installed yet",
-                          jl_symbol_name(st->name->name));
-            jl_gc_write(st, st->types, jl_svec_t, invoke_fieldtype_generator(st, genfn, (jl_typestack_t*)stack));
-            // Instantiations created before the generator was installed (e.g.
-            // self-references during definition) compute types lazily; give
-            // them their layout as well now that the field types are known.
-            if (st->isconcretetype && st->layout == NULL)
-                jl_compute_field_offsets(st);
-            JL_GC_POP();
-            return st->types;
-        }
-        // Partial instantiation: a computed field type is unknown until the
-        // parameters are fully concrete; widen each computed slot to a fresh
-        // unbounded TypeVar (analogous to `fieldtype(Ref, 1) === T`), which
-        // downstream consumers already treat conservatively.
-        size_t nf = jl_svec_len(decl);
-        jl_svec_t *tmp = jl_alloc_svec(nf);
-        decl = tmp;
-        for (i = 0; i < nf; i++) {
-            jl_value_t *ft = jl_svecref(wt->types, i);
-            if (jl_is_computedfieldtype(ft))
-                ft = (jl_value_t*)jl_new_typevar(jl_symbol("#computed#"), jl_bottom_type,
-                                                 (jl_value_t*)jl_any_type);
-            jl_svecset(decl, i, ft);
-        }
+    if (jl_svec_has_computedfields(wt->types) && !st->hasfreetypevars) {
+        if (jl_typename_fieldgen_func(st->name) == NULL)
+            jl_errorf("field generator for %s has not been installed yet",
+                      jl_symbol_name(st->name->name));
+        jl_gc_write(st, st->types, jl_svec_t, invoke_fieldtype_generator(st, (jl_typestack_t*)stack));
+        // Instantiations created before the generator was installed (e.g.
+        // self-references during definition) compute types lazily; give
+        // them their layout as well now that the field types are known.
+        if (st->isconcretetype && st->layout == NULL)
+            jl_compute_field_offsets(st);
+        return st->types;
     }
+    // n.b. for partial instantiations of types with computed field types, the
+    // ComputedFieldType markers pass through the substitution unchanged: the
+    // computed slots remain symbolic (deliberately *not* represented in the
+    // type system; see the partial application support in Base).
     jl_typeenv_t *env = (jl_typeenv_t*)alloca(n * sizeof(jl_typeenv_t));
     for (i = 0; i < n; i++) {
         env[i].var = (jl_tvar_t*)jl_svecref(wt->parameters, i);
@@ -3494,8 +3491,7 @@ static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void
     jl_typestack_t top;
     top.tt = st;
     top.prev = (jl_typestack_t*)stack;
-    jl_gc_write(st, st->types, jl_svec_t, inst_ftypes(decl, &env[n - 1], &top, cacheable, dcache));
-    JL_GC_POP();
+    jl_gc_write(st, st->types, jl_svec_t, inst_ftypes(wt->types, &env[n - 1], &top, cacheable, dcache));
     return st->types;
 }
 

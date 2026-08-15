@@ -401,6 +401,7 @@
     XX(jl_resolve_definition_effects_in_ir) \
     XX(jl_resolve_typegroup) \
     XX(jl_set_fieldtype_generator) \
+    XX(jl_call_fieldtype_generator) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \

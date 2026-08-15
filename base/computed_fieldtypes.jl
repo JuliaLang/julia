@@ -28,6 +28,99 @@
 
 const _fieldgen_detached_owner = :computed_fieldtypes
 
+"""
+    FieldtypeGenerator
+
+The partially applied field generator of a type with computed field types, as
+returned by [`fieldtype_generator`](@ref). This is a plain reflection object —
+deliberately *not* part of the type system: it cannot appear in field types or
+method signatures and does not participate in subtyping. Calling it with the
+values of the type's remaining free parameters (left-to-right) returns the
+tuple of field types, evaluated with the definition-time (world-age-detached)
+semantics.
+"""
+struct FieldtypeGenerator
+    ty::Type
+    global function _unsafe_fieldtype_generator(@nospecialize(ty::Type))
+        return new(ty)
+    end
+end
+
+"""
+    fieldtype_generator(T::Type) -> FieldtypeGenerator
+
+For a (possibly partially applied) type `T` whose field types are computed from
+the values of its type parameters, return the partially applied field
+generator. Calling the result with the values of `T`'s remaining free
+parameters yields the tuple of field types:
+
+```julia
+struct StaticMatrix{R,C,T}
+    data::NTuple{(R::Int)*(C::Int), T}
+end
+
+g = Base.fieldtype_generator(StaticMatrix{2})
+g(3, Float64)  # === (NTuple{6, Float64},)
+```
+
+Unlike `fieldtype`, errors thrown by the field type expressions propagate.
+"""
+function fieldtype_generator(@nospecialize(ty::Type))
+    dt = unwrap_unionall(ty)
+    dt isa DataType ||
+        throw(ArgumentError("expected a (partially applied) struct type"))
+    tn = dt.name
+    fg = isdefined(tn, :fieldgen, :monotonic) ? (@atomic :monotonic tn.fieldgen) : nothing
+    fg isa SimpleVector ||
+        throw(ArgumentError("$(tn.name) does not have computed field types"))
+    return _unsafe_fieldtype_generator(ty)
+end
+
+function show(io::IO, g::FieldtypeGenerator)
+    print(io, "Base.fieldtype_generator(")
+    show(io, g.ty)
+    print(io, ")")
+end
+
+# substitute `v => val` into the type parameter expression `p`
+function _fieldgen_apply_param(@nospecialize(p), v::TypeVar, @nospecialize(val))
+    p === v && return val
+    if p isa Type && has_typevar(p, v)
+        return (UnionAll(v, p)){val}
+    end
+    return p
+end
+
+function (g::FieldtypeGenerator)(@nospecialize args...)
+    # collect the UnionAll-bound parameters, in order
+    vars = TypeVar[]
+    ty = g.ty
+    while ty isa UnionAll
+        push!(vars, ty.var)
+        ty = ty.body
+    end
+    dt = ty::DataType
+    nfree = length(vars)
+    length(args) == nfree ||
+        throw(ArgumentError("expected $(nfree) type parameter values, got $(length(args))"))
+    params = Any[p for p in dt.parameters]
+    for (i, v) in enumerate(vars)
+        for j = 1:length(params)
+            params[j] = _fieldgen_apply_param(params[j], v, args[i])
+        end
+    end
+    for p in params
+        if p isa TypeVar || (p isa Type && has_free_typevars(p))
+            throw(ArgumentError("type parameters of $(g.ty) are not fully specified by the given values"))
+        end
+    end
+    res = ccall(:jl_call_fieldtype_generator, Any, (Any, Any), dt.name, Core.svec(params...))
+    nf = length(dt.name.names)
+    (res isa Tuple && nfields(res) == nf) ||
+        error("field generator for ", dt.name.name, " returned an invalid result")
+    return res
+end
+
 _fieldgen_error(tn::Core.TypeName, msg...) =
     error("invalid computed field types for ", tn.name, ": ", msg...)
 
