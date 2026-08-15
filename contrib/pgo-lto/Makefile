@@ -56,7 +56,10 @@ stage0: | $(STAGE0_BUILD)
 $(STAGE1_BUILD): stage0
 stage1: | $(STAGE1_BUILD)
 	@echo "--- Build Julia Stage 1 - with instrumentation"
-	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE1_FLAGS) $(MAKE) -C $(STAGE1_BUILD) $(COMMON_FLAGS) && touch $@
+	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE1_FLAGS) $(MAKE) -C $(STAGE1_BUILD) $(COMMON_FLAGS)
+	# Remove the empty profile emitted by the instrumented launcher.
+	rm -f $(JULIA_ROOT)/base/default.profraw
+	touch $@
 	@echo $(AFTER_STAGE1_MESSAGE)
 
 stage2: $(PROFILE_FILE) | $(STAGE2_BUILD)

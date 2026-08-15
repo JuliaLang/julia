@@ -102,7 +102,10 @@ stage1: PGO_CXXFLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR) -Xclang -mllvm -Xcla
 stage1: PGO_LDFLAGS:=-flto=thin -fprofile-generate=$(PGO_PROFILE_DIR)
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
-	$(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) && touch $@
+	$(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS)
+	# Remove the empty profile emitted by the instrumented launcher.
+	rm -f $(JULIA_ROOT)/base/default.profraw
+	touch $@
 	@echo $(AFTER_STAGE1_MESSAGE)
 
 stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
