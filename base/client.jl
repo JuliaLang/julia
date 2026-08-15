@@ -322,6 +322,19 @@ function exec_options(opts)
             MainInclude.Distributed = Distributed
             Core.eval(Main, :(using Base.MainInclude.Distributed))
             invokelatest(Distributed.process_opts, opts)
+            # Drop worker caches after they connect so their startup path does not
+            # need to be recompiled with coverage instrumentation.
+            if opts.code_coverage == 2
+                for p in invokelatest(Distributed.workers)
+                    invokelatest(Distributed.remotecall_fetch, drop_all_caches, p)
+
+                    # Warm the fire-and-forget path used to stop the worker. Without
+                    # this, short-lived workers can exceed the graceful-exit timeout.
+                    ready = invokelatest(Distributed.RemoteChannel)
+                    invokelatest(Distributed.remote_do, put!, p, ready, nothing)
+                    invokelatest(take!, ready)
+                end
+            end
         end
     end
 
