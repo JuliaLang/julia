@@ -1265,6 +1265,19 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
     return data;
 }
 
+// Accounts for the allocation without ever safepointing; see the GMP hooks
+// in gc-common.c for why.
+JL_DLLEXPORT void *jl_gc_counted_malloc_nosafepoint(size_t sz)
+{
+    jl_gcframe_t **pgcstack = jl_get_pgcstack();
+    jl_task_t *ct = jl_current_task;
+    void *data = malloc(sz);
+    if (data != NULL && pgcstack != NULL && ct->world_age) {
+        jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz);
+    }
+    return data;
+}
+
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
@@ -1295,6 +1308,20 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     if (pgcstack && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, sz);
+        if (sz < old)
+            jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, old - sz);
+        else
+            jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
+    }
+    return realloc(p, sz);
+}
+
+// see jl_gc_counted_malloc_nosafepoint
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size_nosafepoint(void *p, size_t old, size_t sz)
+{
+    jl_gcframe_t **pgcstack = jl_get_pgcstack();
+    jl_task_t *ct = jl_current_task;
+    if (pgcstack && ct->world_age) {
         if (sz < old)
             jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, old - sz);
         else

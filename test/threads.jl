@@ -651,6 +651,39 @@ close(proc.in)
     end
 end
 
+# https://github.com/JuliaLang/julia/issues/62753
+@testset "no deadlock between GC and MPFR's shared constant cache" begin
+    script = "threads_mpfr_gc_exec.jl"
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -t8 $script`
+    cmd = ignorestatus(setenv(cmd; dir = @__DIR__))
+    cmd = pipeline(cmd; stdout = stderr, stderr)
+    proc = run(cmd; wait = false)
+    # a passing run takes a few seconds; the timeout only fires on deadlock
+    timeout = false
+    timer = Timer(120) do t
+        timeout = true
+        # SIGTERM is not honored when deadlocked in the GC, go straight to
+        # the backtrace-dumping and then killing signals
+        for sig in (Base.SIGQUIT, Base.SIGKILL)
+            for _ in 1:3
+                process_running(proc) || return
+                kill(proc, sig)
+                sleep(1)
+            end
+        end
+    end
+    try
+        wait(proc)
+    finally
+        close(timer)
+    end
+    if !success(proc) || timeout
+        @error "The MPFR/GC deadlock test failed" proc.exitcode proc.termsignal timeout
+    end
+    @test success(proc)
+    @test !timeout
+end
+
 @testset "bad arguments to @threads" begin
     @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
