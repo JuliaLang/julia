@@ -436,18 +436,19 @@ static bool isTrackedValue(Value *V) {
     return PT && PT->getAddressSpace() == AddressSpace::Tracked;
 }
 
-static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src, ArrayRef<unsigned> perm_offsets={}) {
+// `offsets`, if given, receives the byte offset of each returned pointer within `Src`, so a
+// caller storing `Src` at a known address can name the slot of each pointer it contains.
+static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src, ArrayRef<unsigned> perm_offsets={}, SmallVectorImpl<unsigned> *offsets=nullptr) {
     Type *STy = Src->getType();
+    const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     auto Tracked = TrackCompositeType(STy);
     SmallVector<Value*, 0> Ptrs;
     unsigned perm_idx = 0;
-    auto ignore_field = [&] (ArrayRef<unsigned> Idxs) {
+    auto ignore_field = [&] (unsigned offset) {
         if (perm_idx >= perm_offsets.size())
             return false;
         // Assume the indices returned from `TrackCompositeType` is ordered and do a
         // single pass over `perm_offsets`.
-        auto offset = getFieldOffset(ctx.builder.GetInsertBlock()->getModule()->getDataLayout(),
-                                     STy, Idxs);
         do {
             auto perm_offset = perm_offsets[perm_idx];
             if (perm_offset > offset)
@@ -461,11 +462,15 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
     };
     for (unsigned i = 0; i < Tracked.size(); ++i) {
         auto Idxs = ArrayRef<unsigned>(Tracked[i]);
-        if (ignore_field(Idxs))
+        unsigned offset = getFieldOffset(DL, STy, Idxs);
+        if (ignore_field(offset))
             continue;
         Value *Elem = ExtractScalar(ctx, Src, STy, Idxs);
-        if (isTrackedValue(Elem)) // ignore addrspace Loaded when it appears
+        if (isTrackedValue(Elem)) { // ignore addrspace Loaded when it appears
             Ptrs.push_back(Elem);
+            if (offsets)
+                offsets->push_back(offset);
+        }
     }
     return Ptrs;
 }
@@ -2338,9 +2343,8 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
     return im1;
 }
 
-static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*, ArrayRef<Value*>);
-static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*) JL_CANSAFEPOINT;
+static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*, Value*) JL_CANSAFEPOINT;
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x) JL_CANSAFEPOINT;
 
 SmallVector<unsigned, 0> first_ptr(Type *T)
@@ -2725,7 +2729,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 // pointer-exposing type
                 wbval = emit_unbox(ctx, intcast_eltyp, rhs);
             }
-            emit_write_multibarrier(ctx, parent, wbval, rhs.typ);
+            emit_write_multibarrier(ctx, parent, wbval, rhs.typ, ptr);
         }
         else {
             assert(!isboxed);
@@ -4409,15 +4413,10 @@ static Value *emit_new_bits(jl_codectx_t &ctx, Value *jt, Value *pval)
     return call;
 }
 
-// if ptr is NULL this emits a write barrier _back_
-static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ptr)
-{
-    emit_write_barrier(ctx, parent, nullptr, ArrayRef<Value*>(ptr));
-}
-
-// `slot`, if non-null, is the address of the single field being written. Pass null
-// when the store cannot be attributed to one field; plans with a field-granularity
-// barrier then fall back to treating the whole parent as modified.
+// `slot` is the address of the field being written, or null where the store cannot be
+// attributed to one field; a plan with a field-granularity barrier then falls back to
+// treating the whole parent as modified. If `ptrs` is a single null value this emits a
+// write barrier _back_.
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *slot, ArrayRef<Value*> ptrs)
 {
     ++EmittedWriteBarriers;
@@ -4443,10 +4442,12 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *slot, Ar
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), args);
 }
 
-// An inline composite can hold several references at different offsets within itself, so no
-// single slot describes the store; it takes the whole-parent barrier.
+// `dest` is the address `agg` is being stored to. An inline composite can hold several
+// references at different offsets within itself, so no one slot describes the store; each
+// reference does have a slot though, at `dest + its offset`, so emit one barrier apiece.
+// `CleanupWriteBarriers` merges them back for plans that only want the parent.
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,
-                                    jl_value_t *jltype)
+                                    jl_value_t *jltype, Value *dest)
 {
     SmallVector<unsigned,4> perm_offsets;
     // Insertion-barrier optimization: drop perm-allocated inline fields. Invalid for
@@ -4455,8 +4456,11 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg
     if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
 #endif
-    auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets);
-    emit_write_barrier(ctx, parent, nullptr, ptrs);
+    SmallVector<unsigned,4> offsets;
+    auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets, &offsets);
+    assert(ptrs.size() == offsets.size());
+    for (size_t i = 0; i < ptrs.size(); ++i)
+        emit_write_barrier(ctx, parent, emit_ptrgep(ctx, dest, offsets[i]), ArrayRef<Value*>(ptrs[i]));
 }
 
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x)
