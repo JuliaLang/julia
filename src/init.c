@@ -790,9 +790,15 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
         // enable before creating the root task so it gets timings too.
         jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
     }
-    // Initialize constant objects
-    jl_nothing = jl_gc_permobj(ptls, 0, jl_nothing_type, 0);
-    jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_OLD_MARKED);
+    // Initialize constant objects, preferring to adopt the ones the system
+    // image provides at build-time-known addresses (the in-image `nothing`
+    // and symbol table; see jl_adopt_image_specials). This must happen before
+    // the root task is created (its fields reference `nothing`) and before
+    // the first jl_symbol() call, so that only one copy of each ever exists.
+    if (!jl_adopt_image_specials(&sysimage)) {
+        jl_nothing = jl_gc_permobj(ptls, 0, jl_nothing_type, 0);
+        jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_OLD_MARKED);
+    }
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     jl_init_box_caches();

@@ -2133,6 +2133,8 @@ JL_DLLEXPORT void jl_write_coverage_data(const char*) JL_NOTSAFEPOINT;
 
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
+void jl_adopt_symbol_table(jl_sym_t *root) JL_NOTSAFEPOINT;
+int jl_adopt_image_specials(jl_image_buf_t *buf);
 
 // This prevents `ct` from returning via error handlers or other unintentional
 // means by destroying some old state before we start destroying that state in atexit hooks.

@@ -2374,6 +2374,9 @@ typedef struct {
     uint64_t base;
     uint32_t heap_checksum;
     bool_t is_split;
+    // whether jl_adopt_image_specials adopted this image's in-image `nothing`
+    // and symbol table (required before restoring a precomposed image)
+    bool_t specials_adopted;
 } jl_image_buf_t;
 
 struct _jl_image_t;

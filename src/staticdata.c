@@ -396,27 +396,44 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 #define NBOX_C 1024
 
+// When writing an image with a preferred load address, symbols, `nothing` and
+// the small int/uint8 box caches are serialized as ordinary in-image objects
+// instead of using their special runtime-resolved relocation representations
+// (SymbolRef/TagRef), so that references to them can be precomposed. The
+// runtime then adopts `nothing` and the symbol table from the image at early
+// init (see jl_adopt_image_specials); the box caches need no adoption since
+// numbers are egal by value. The root task is always runtime-created.
+static int inimage_specials;
+// The in-image symbol-table search tree (edges chosen by
+// build_inimage_symtab, mirroring symtab_lookup's ordering).
+static jl_sym_t *inimage_symtab_root;
+static htable_t inimage_symtab_left;
+static htable_t inimage_symtab_right;
+
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
         return 0;
 
-    if (v == NULL || jl_is_symbol(v) || v == jl_nothing) {
+    if (v == NULL) {
         return 0;
+    }
+    else if (jl_is_symbol(v) || v == jl_nothing) {
+        return inimage_specials;
     }
     else if (jl_typetagis(v, jl_int64_tag << 4)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
-            return 0;
+            return inimage_specials;
     }
     else if (jl_typetagis(v, jl_int32_tag << 4)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
-            return 0;
+            return inimage_specials;
     }
     else if (jl_typetagis(v, jl_uint8_tag << 4)) {
-        return 0;
+        return inimage_specials;
     }
     else if (v == (jl_value_t*)s->ptls->root_task) {
         return 0;
@@ -638,6 +655,12 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
     const jl_datatype_layout_t *layout = t->layout;
+
+    // Symbols (serialized only for images with in-image specials) are opaque
+    // to the generic field walk; their search-tree edges are assigned by
+    // build_inimage_symtab and connect only serialized symbols.
+    if (jl_is_symbol(v))
+        goto done_fields;
 
     if (!recursive)
         goto done_fields;
@@ -1176,39 +1199,44 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_GC_DISABLED JL_CANSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
-    if (jl_is_symbol(v)) {
-        void **pidx = ptrhash_bp(&symbol_table, v);
-        void *idx = *pidx;
-        if (idx == HT_NOTFOUND) {
-            size_t l = strlen(jl_symbol_name((jl_sym_t*)v));
-            write_uint32(s->symbols, l);
-            ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), l + 1);
-            size_t offset = ++nsym_tag;
-            assert(offset < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many symbols");
-            idx = to_seroder_entry(offset - 1);
-            *pidx = idx;
-        }
-        return ((uintptr_t)SymbolRef << RELOC_TAG_OFFSET) + from_seroder_entry(idx);
-    }
-    else if (v == (jl_value_t*)s->ptls->root_task) {
+    if (v == (jl_value_t*)s->ptls->root_task) {
         return (uintptr_t)TagRef << RELOC_TAG_OFFSET;
     }
+    else if (jl_is_symbol(v)) {
+        if (!inimage_specials) {
+            void **pidx = ptrhash_bp(&symbol_table, v);
+            void *idx = *pidx;
+            if (idx == HT_NOTFOUND) {
+                size_t l = strlen(jl_symbol_name((jl_sym_t*)v));
+                write_uint32(s->symbols, l);
+                ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), l + 1);
+                size_t offset = ++nsym_tag;
+                assert(offset < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many symbols");
+                idx = to_seroder_entry(offset - 1);
+                *pidx = idx;
+            }
+            return ((uintptr_t)SymbolRef << RELOC_TAG_OFFSET) + from_seroder_entry(idx);
+        }
+    }
     else if (v == jl_nothing) {
-        return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + 1;
+        if (!inimage_specials)
+            return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + 1;
     }
     else if (jl_typetagis(v, jl_int64_tag << 4)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
-        if ((uint64_t)i64 < NBOX_C)
+        if ((uint64_t)i64 < NBOX_C && !inimage_specials)
             return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i64 + 2;
     }
     else if (jl_typetagis(v, jl_int32_tag << 4)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
-        if ((uint32_t)i32 < NBOX_C)
+        if ((uint32_t)i32 < NBOX_C && !inimage_specials)
             return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i32 + 2 + NBOX_C;
     }
     else if (jl_typetagis(v, jl_uint8_tag << 4)) {
-        uint8_t u8 = *(uint8_t*)v;
-        return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
+        if (!inimage_specials) {
+            uint8_t u8 = *(uint8_t*)v;
+            return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
+        }
     }
     if (s->incremental && jl_object_in_image(v)) {
         assert(link_ids);
@@ -1437,7 +1465,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         assert((!jl_is_datatype_singleton(t) || t->instance == v) && "detected singleton construction corruption");
         int mutabl = t->name->mutabl;
         ios_t *f = s->s;
-        if (t->smalltag) {
+        // n.b. symbols carry search-tree pointers (and an opaque layout), so
+        // they must stay in the mutable data section
+        if (t->smalltag && !jl_is_symbol(v)) {
             if (t->layout->npointers == 0 || t == jl_string_type) {
                 if (jl_datatype_nfields(t) == 0 || mutabl == 0 || t == jl_string_type) {
                     f = s->const_data;
@@ -1506,7 +1536,32 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         }
 
         // write data
-        if (jl_is_array(v)) {
+        if (jl_is_symbol(v)) {
+            assert(f == s->s && inimage_specials);
+            jl_sym_t *sym = (jl_sym_t*)v;
+            size_t len = strlen(jl_symbol_name(sym));
+            // copy the header (hash), but replace the runtime symbol table's
+            // tree edges with the in-image tree built by build_inimage_symtab
+            ios_write(f, (char*)v, sizeof(jl_sym_t));
+            jl_sym_t *newsym = (jl_sym_t*)&f->buf[reloc_offset];
+            jl_atomic_store_relaxed(&newsym->left, NULL);
+            jl_atomic_store_relaxed(&newsym->right, NULL);
+            jl_sym_t *left = (jl_sym_t*)ptrhash_get(&inimage_symtab_left, v);
+            if (left != HT_NOTFOUND) {
+                arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_sym_t, left)));
+                arraylist_push(&s->relocs_list, (void*)backref_id(s, left, s->link_ids_relocs));
+            }
+            jl_sym_t *right = (jl_sym_t*)ptrhash_get(&inimage_symtab_right, v);
+            if (right != HT_NOTFOUND) {
+                arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_sym_t, right)));
+                arraylist_push(&s->relocs_list, (void*)backref_id(s, right, s->link_ids_relocs));
+            }
+            ios_write(f, jl_symbol_name(sym), len + 1);
+            // round the object size up to pointer alignment, like mk_symbol
+            uintptr_t nb = (sizeof(jl_sym_t) + len + 1 + 7) & -8;
+            write_padding(f, nb - sizeof(jl_sym_t) - (len + 1));
+        }
+        else if (jl_is_array(v)) {
             assert(f == s->s);
             // Internal data for types in julia.h with `jl_array_t` field(s)
             jl_array_t *ar = (jl_array_t*)v;
@@ -2345,22 +2400,24 @@ static void jl_read_memreflist(jl_serializer_state *s)
 
 // Read a list of relocations whose values were precomposed for a preferred
 // load address, adding `slide` (actual base - preferred base) to each pointer.
-// With a zero slide the pointers are already correct and the image pages are
-// not touched at all.
-static void jl_read_slidelist(jl_serializer_state *s, intptr_t slide) JL_NOTSAFEPOINT
+// With a zero slide the pointers are already correct, the image pages are not
+// touched at all, and this only advances the relocs stream past the list.
+// These take raw buffers rather than a jl_serializer_state because they also
+// run during early startup (jl_adopt_image_specials), before any runtime
+// state exists.
+static void jl_read_slidelist(char *image_base, ios_t *relocs, intptr_t slide) JL_NOTSAFEPOINT
 {
-    uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
-    uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
+    uint8_t *current = (uint8_t *)(relocs->buf + relocs->bpos);
     while (1) {
         // Read the offset of the next object
         size_t pos_diff = 0;
         size_t cnt = 0;
         while (1) {
-            assert(s->relocs->bpos <= s->relocs->size);
-            assert((char *)current <= (char *)(s->relocs->buf + s->relocs->size));
+            assert(relocs->bpos <= relocs->size);
+            assert((char *)current <= (char *)(relocs->buf + relocs->size));
             int8_t c = *current++;
-            s->relocs->bpos += 1;
+            relocs->bpos += 1;
 
             pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
             if ((c >> 7) == 0)
@@ -2372,7 +2429,7 @@ static void jl_read_slidelist(jl_serializer_state *s, intptr_t slide) JL_NOTSAFE
         uintptr_t pos = last_pos + pos_diff;
         last_pos = pos;
         if (slide != 0) {
-            uintptr_t *pv = (uintptr_t *)(base + pos);
+            uintptr_t *pv = (uintptr_t *)(image_base + pos);
             *pv += (uintptr_t)slide;
         }
     }
@@ -2380,20 +2437,19 @@ static void jl_read_slidelist(jl_serializer_state *s, intptr_t slide) JL_NOTSAFE
 
 // Precomposed counterpart of jl_read_memreflist (the stored ptr_or_offset is
 // already a final pointer for the preferred base, so only a slide is needed)
-static void jl_read_memreflist_slide(jl_serializer_state *s, intptr_t slide) JL_NOTSAFEPOINT
+static void jl_read_memreflist_slide(char *image_base, ios_t *relocs, intptr_t slide) JL_NOTSAFEPOINT
 {
-    uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
-    uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
+    uint8_t *current = (uint8_t *)(relocs->buf + relocs->bpos);
     while (1) {
         // Read the offset of the next object
         size_t pos_diff = 0;
         size_t cnt = 0;
         while (1) {
-            assert(s->relocs->bpos <= s->relocs->size);
-            assert((char *)current <= (char *)(s->relocs->buf + s->relocs->size));
+            assert(relocs->bpos <= relocs->size);
+            assert((char *)current <= (char *)(relocs->buf + relocs->size));
             int8_t c = *current++;
-            s->relocs->bpos += 1;
+            relocs->bpos += 1;
 
             pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
             if ((c >> 7) == 0)
@@ -2405,7 +2461,7 @@ static void jl_read_memreflist_slide(jl_serializer_state *s, intptr_t slide) JL_
         uintptr_t pos = last_pos + pos_diff;
         last_pos = pos;
         if (slide != 0) {
-            jl_genericmemoryref_t *pv = (jl_genericmemoryref_t*)(base + pos);
+            jl_genericmemoryref_t *pv = (jl_genericmemoryref_t*)(image_base + pos);
             pv->ptr_or_offset = (void*)((char*)pv->ptr_or_offset + slide);
         }
     }
@@ -3101,14 +3157,81 @@ static int jl_prune_internal_mtable(jl_methtable_t *mt, void *env)
     return 1;
 }
 
+// Insert `sym` into the in-image symbol-table search tree. This mirrors the
+// navigation logic of symtab_lookup in symbol.c exactly (major key: signed
+// difference of hashes; minor key: strncmp with the prefix-goes-right rule) --
+// keep the two in sync, or lookups in the adopted table will miss.
+static void inimage_symtab_insert(jl_sym_t *sym)
+{
+    if (inimage_symtab_root == NULL) {
+        inimage_symtab_root = sym;
+        return;
+    }
+    const char *str = jl_symbol_name(sym);
+    size_t len = strlen(str);
+    uintptr_t h = sym->hash;
+    jl_sym_t *node = inimage_symtab_root;
+    while (1) {
+        intptr_t x = (intptr_t)(h - node->hash);
+        if (x == 0) {
+            x = strncmp(str, jl_symbol_name(node), len);
+            if (x == 0 && jl_symbol_name(node)[len] == 0)
+                return; // already present (the queue is deduplicated, so unreachable)
+        }
+        htable_t *edges = x < 0 ? &inimage_symtab_left : &inimage_symtab_right;
+        void **slot = ptrhash_bp(edges, node);
+        if (*slot == HT_NOTFOUND) {
+            *slot = (void*)sym;
+            return;
+        }
+        node = (jl_sym_t*)*slot;
+    }
+}
+
+// Build the search tree over every serialized symbol, in serialization
+// (discovery) order. Discovery order is deterministic but uncorrelated with
+// the hash-based tree ordering, so this gives the expected O(log n) depth of
+// randomized BST insertion. Note that a balanced tree cannot be built by
+// sorting: the hash comparison above is circular (signed difference), not a
+// total order, so the tree must be grown by the same navigation that lookups
+// use.
+static void build_inimage_symtab(void)
+{
+    for (size_t i = 0; i < serialization_queue.len; i++) {
+        jl_value_t *v = (jl_value_t*)serialization_queue.items[i];
+        if (jl_is_symbol(v))
+            inimage_symtab_insert((jl_sym_t*)v);
+    }
+}
+
+// Payload-relative byte offset at which `v` was serialized (usable as an
+// adoption offset in the .ji header)
+static uint64_t inimage_payload_offset(jl_serializer_state *s, jl_value_t *v, size_t const_data_offset)
+{
+    uintptr_t reloc = get_reloc_for_item(backref_id(s, v, NULL), 0);
+    enum RefTags tag = (enum RefTags)(reloc >> RELOC_TAG_OFFSET);
+    uintptr_t offset = reloc & (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1);
+    if (tag == ConstDataRef)
+        return const_data_offset + offset * sizeof(void*);
+    assert(tag == DataRef);
+    return offset;
+}
+
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
                                            jl_array_t *new_ext, jl_query_cache *query_cache,
-                                           uint64_t preferred_base) JL_CANSAFEPOINT
+                                           uint64_t preferred_base,
+                                           uint64_t *adopt_nothing, uint64_t *adopt_symtab) JL_CANSAFEPOINT
 {
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
+    // Images with a preferred base serialize symbols, `nothing` and the box
+    // caches as in-image objects, so references to them can be precomposed
+    inimage_specials = (preferred_base != 0);
+    inimage_symtab_root = NULL;
+    htable_new(&inimage_symtab_left, 0);
+    htable_new(&inimage_symtab_right, 0);
     if (worklist)
         jl_foreach_reachable_mtable(jl_prune_internal_mtable, mod_array, NULL);
     // strip metadata and IR when requested
@@ -3381,6 +3504,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
     uint32_t external_fns_begin = 0;
     { // step 2: build all the sysimg sections
+        // the serialized-symbol set is final now; assign the search-tree
+        // edges that jl_write_values will store
+        if (inimage_specials)
+            build_inimage_symtab();
         write_padding(&sysimg, sizeof(uintptr_t));
         jl_write_values(&s);
         external_fns_begin = write_gvars(&s, &gvars, &external_fns);
@@ -3440,6 +3567,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     // Prepare and write the relocations sections, now that the rest of the image is laid out
     char *base = &f->buf[0];
     if (preferred_base) {
+        // record where the adoptable objects live (see jl_adopt_image_specials)
+        assert(inimage_symtab_root != NULL);
+        *adopt_nothing = inimage_payload_offset(&s, jl_nothing, const_data_offset);
+        *adopt_symtab = inimage_payload_offset(&s, (jl_value_t*)inimage_symtab_root, const_data_offset);
         // The image was assigned a preferred load address: precompose all
         // internal (DataRef/ConstDataRef) relocations to their final pointer
         // values for that address, so that a loader mapping the image there
@@ -3580,6 +3711,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_free(&symbol_table);
     htable_free(&fptr_to_id);
     htable_free(&new_methtables);
+    htable_free(&inimage_symtab_left);
+    htable_free(&inimage_symtab_right);
+    inimage_symtab_root = NULL;
+    inimage_specials = 0;
     nsym_tag = 0;
 
     jl_gc_enable(en);
@@ -3658,7 +3793,9 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
         h = jl_crc32c(h, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING));
         const char *commit = jl_git_commit();
         h = jl_crc32c(h, commit, strlen(commit));
-        preferred_base = 0x200000000000ull + ((uint64_t)h << 16);
+        // 28 bits of hash, so the result stays within [32TB, 48TB) -- safely
+        // inside the ~47-bit user address space common to 64-bit platforms
+        preferred_base = 0x200000000000ull + (((uint64_t)h & 0x0FFFFFFF) << 16);
     }
 #endif
 
@@ -3735,7 +3872,9 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
     jl_finalize_precompile_inferred(worklist != NULL && _native_data != NULL && jl_options.outputo != NULL);
-    jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, new_ext, &query_cache, preferred_base);
+    uint64_t adopt_nothing = 0, adopt_symtab = 0;
+    jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, new_ext, &query_cache, preferred_base,
+                                   &adopt_nothing, &adopt_symtab);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -3765,6 +3904,9 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     write_uint32(f, checksum);
     write_uint64(f, datastartpos);
     write_uint64(f, dataendpos);
+    write_uint64(f, preferred_base);
+    write_uint64(f, adopt_nothing);
+    write_uint64(f, adopt_symtab);
     ios_seek(f, dataendpos);
 
     destroy_query_cache(&query_cache);
@@ -3906,9 +4048,10 @@ static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len) J
     if (image->is_split && checksum != image->heap_checksum)
         jl_error("Image checksum mismatch: the heap image (.ji) was not "
                  "compiled for use with this native image.");
-    // jl_read_verify_header leaves the stream just past the preferred_base
-    // field, which immediately follows the dataendpos field
-    int64_t dataendpos_fieldpos = ios_pos(&f) - 2 * sizeof(uint64_t);
+    // jl_read_verify_header leaves the stream just past the adoption-offset
+    // fields; dataendpos is three uint64 fields before that (preferred_base
+    // and the two adoption offsets follow it)
+    int64_t dataendpos_fieldpos = ios_pos(&f) - 4 * sizeof(uint64_t);
 
     char *comp_data = data + datastartpos;
     size_t comp_len = dataendpos - datastartpos;
@@ -3976,6 +4119,85 @@ static uint64_t jl_image_preferred_base(char *data, size_t len) JL_CANSAFEPOINT
     return preferred_base;
 }
 #endif
+
+// Re-read the adoption-offset header fields (jl_read_verify_header leaves the
+// stream positioned just past them)
+static void jl_read_adoption_fields(ios_t *f, uint64_t *adopt_nothing, uint64_t *adopt_symtab) JL_NOTSAFEPOINT
+{
+    int64_t pos = ios_pos(f);
+    ios_seek(f, pos - 2 * sizeof(uint64_t));
+    *adopt_nothing = read_uint64(f);
+    *adopt_symtab = read_uint64(f);
+    assert(ios_pos(f) == pos);
+}
+
+// Apply the constant slide to every precomposed pointer of an image that was
+// mapped away from its preferred address. Mirrors the section walk in
+// jl_restore_system_image_from_stream_, but runs during early startup (before
+// the runtime exists), so it operates on raw buffers only.
+static void jl_early_fixup_image(char *payload, intptr_t slide) JL_NOTSAFEPOINT
+{
+    uintptr_t val;
+    size_t pos = 0;
+#define READ_SIZE_FIELD() (memcpy(&val, payload + pos, sizeof(val)), pos += sizeof(val), val)
+    uintptr_t sizeof_sysdata = READ_SIZE_FIELD();
+    pos += sizeof_sysdata;
+    uintptr_t sizeof_constdata = READ_SIZE_FIELD();
+    pos = LLT_ALIGN(pos, JL_CACHE_BYTE_ALIGNMENT);
+    pos += sizeof_constdata;
+    uintptr_t sizeof_symbols = READ_SIZE_FIELD();
+    pos = LLT_ALIGN(pos, 8);
+    pos += sizeof_symbols;
+    uintptr_t sizeof_relocations = READ_SIZE_FIELD();
+    pos = LLT_ALIGN(pos, 8);
+#undef READ_SIZE_FIELD
+    ios_t relocs;
+    ios_static_buffer(&relocs, payload + pos, sizeof_relocations);
+    jl_read_slidelist(payload, &relocs, slide); // internal gctags
+    jl_read_slidelist(payload, &relocs, slide); // internal general relocs
+    jl_read_slidelist(payload, &relocs, 0);     // external gctags (resolved at restore)
+    jl_read_slidelist(payload, &relocs, 0);     // external general relocs (resolved at restore)
+    jl_read_memreflist_slide(payload, &relocs, slide); // memowner_list
+    jl_read_memreflist_slide(payload, &relocs, slide); // memref_list
+    ios_close(&relocs);
+}
+
+// If the system image provides objects at build-time-known addresses (the
+// in-image `nothing` instance and symbol table), adopt them as the runtime's
+// canonical copies. This must run before the runtime creates its own
+// `nothing` and before the first jl_symbol() call, so that exactly one copy
+// of each ever exists in the process (C code compares these by pointer).
+// It is also the point where an image that was mapped away from its preferred
+// address gets its precomposed pointers slid, since the adopted objects must
+// be valid immediately.
+// Returns 1 if adoption happened (the caller then skips creating `nothing`).
+int jl_adopt_image_specials(jl_image_buf_t *buf)
+{
+    if (buf->kind == JL_IMAGE_KIND_NONE || buf->data == NULL)
+        return 0;
+    ios_t f;
+    ios_static_buffer(&f, (char*)buf->data, buf->size);
+    uint32_t flags = 0, checksum = 0;
+    int64_t datastartpos = 0, dataendpos = 0;
+    uint64_t preferred_base = 0, adopt_nothing = 0, adopt_symtab = 0;
+    int err = jl_read_verify_header(&f, &flags, &checksum, &dataendpos, &datastartpos, &preferred_base);
+    if (err == 0)
+        jl_read_adoption_fields(&f, &adopt_nothing, &adopt_symtab);
+    ios_close(&f);
+    // on a bad header, fall back: the full validation in
+    // jl_restore_system_image produces the proper error later
+    if (err != 0 || preferred_base == 0 || adopt_nothing == 0 || adopt_symtab == 0)
+        return 0;
+    char *payload = (char*)buf->data + datastartpos;
+    intptr_t slide = (intptr_t)((uintptr_t)buf->data - (uintptr_t)preferred_base);
+    if (slide != 0)
+        jl_early_fixup_image(payload, slide);
+    jl_nothing = (jl_value_t*)(payload + adopt_nothing);
+    assert(jl_typetagof(jl_nothing) == jl_nothing_tag << 4);
+    jl_adopt_symbol_table((jl_sym_t*)(payload + adopt_symtab));
+    buf->specials_adopted = 1;
+    return 1;
+}
 
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
 {
@@ -4263,7 +4485,7 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t *depmods, uint32_t checksum,
-                                                 uintptr_t preferred_payload_base,
+                                                 int precomposed,
                                 /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **init_order JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
@@ -4421,18 +4643,19 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 
     s.s = &sysimg;
     size_t sizeof_tags = 0; // only meaningful for pkgimages, which never take the precomposed path
-    if (preferred_payload_base) {
+    if (precomposed) {
         // This image's internal relocations were precomposed for a preferred
-        // load address: they only need a constant slide (nothing at all when
-        // we were mapped at that address), and only the external relocations
-        // (symbols, tags, function pointers) go through the usual resolution.
-        intptr_t slide = (intptr_t)((uintptr_t)image_base - preferred_payload_base);
-        jl_read_slidelist(&s, slide); // internal gctags
-        jl_read_slidelist(&s, slide); // internal general relocs
+        // load address, and any slide needed (when the image was mapped
+        // elsewhere) was already applied by jl_adopt_image_specials before
+        // the runtime started. Walk past the internal lists without touching
+        // the image pages; only the external relocations (runtime-created
+        // tags, function pointers) go through the usual resolution.
+        jl_read_slidelist(image_base, &relocs, 0); // internal gctags
+        jl_read_slidelist(image_base, &relocs, 0); // internal general relocs
         jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE); // external gctags
         jl_read_reloclist(&s, s.link_ids_relocs, 0); // external general relocs
-        jl_read_memreflist_slide(&s, slide); // memowner_list relocs
-        jl_read_memreflist_slide(&s, slide); // memref_list relocs
+        jl_read_memreflist_slide(image_base, &relocs, 0); // memowner_list relocs
+        jl_read_memreflist_slide(image_base, &relocs, 0); // memref_list relocs
     }
     else {
         jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE); // gctags
@@ -4860,6 +5083,13 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
                                  depmods ? "pkgimage" : "system image",
                                  flags & JI_FLAG_PKGIMAGE ? "pkgimage" : "system image");
 
+    // only system images may carry precomposed pointers (pkgimage heaps can be
+    // copied to arbitrary buffers, and precomposition requires the early-init
+    // adoption that only the system image gets)
+    if (depmods && preferred_base && *preferred_base != 0)
+        return jl_get_exceptionf(jl_errorexception_type,
+                                 "Pkgimage unexpectedly has a preferred load address");
+
     if (is_split && *checksum != expect_checksum) {
         return jl_get_exceptionf(jl_errorexception_type,
                                  "Image checksum mismatch: the heap image (.ji) was not "
@@ -4935,9 +5165,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 ios_close(f);
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
-            // (pkgimages are never written with a preferred base, so this is always the classic path)
-            uintptr_t preferred_payload_base = preferred_base ? (uintptr_t)preferred_base + (uintptr_t)datastartpos : 0;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, preferred_payload_base, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes);
+            // pkgimages never have a preferred base (jl_validate_cache_file rejects them)
+            assert(preferred_base == 0);
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, 0, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes);
             JL_SIGATOMIC_END();
 
             // Add roots to methods
@@ -4997,7 +5227,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     return restored;
 }
 
-static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_CANSAFEPOINT
+static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, int specials_adopted) JL_CANSAFEPOINT
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
     uint32_t checksum;
@@ -5008,15 +5238,16 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
                                &dataendpos, &datastartpos, &preferred_base);
     if (exc)
         jl_throw(exc);
+    // Precomposed images had their slide applied, and their `nothing` and
+    // symbol table adopted, by jl_adopt_image_specials during early init;
+    // loading one through a path that skipped that would leave the image
+    // relocated wrong (and its symbols duplicated), so refuse.
+    if (preferred_base && !specials_adopted)
+        jl_error("A system image with precomposed pointers can only be loaded during jl_init.");
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
-    // If the image's internal pointers were precomposed for a preferred load
-    // address, the restore only needs to slide them by the difference between
-    // that address and where the payload actually ended up (no work at all if
-    // the loader managed to map the image at its preferred address).
-    uintptr_t preferred_payload_base = preferred_base ? (uintptr_t)preferred_base + (uintptr_t)datastartpos : 0;
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum, preferred_payload_base, NULL, NULL, NULL, NULL, NULL, NULL);
+                                         checksum, preferred_base != 0, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT
@@ -5054,7 +5285,7 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
     JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char *)buf.data, buf.size);
 
-    jl_restore_system_image_from_stream(&f, image);
+    jl_restore_system_image_from_stream(&f, image, buf.specials_adopted);
 
     ios_close(&f);
     JL_SIGATOMIC_END();

@@ -70,11 +70,15 @@ Compiler/Runtime improvements
 
 * Split system images (a `.ji` heap image next to the native-code shared library) are now
   built with a preferred load address, with their internal heap pointers stored in final,
-  precomposed form. When the loader succeeds in mapping the `.ji` at that address — the
-  common case — the pointer relocation pass over the heap image is skipped entirely, so
-  its pages stay clean, shared between processes, and evictable; at any other address only
-  a constant slide is added. Set `JULIA_IMAGE_IGNORE_PREFERRED_BASE` to disable the
-  fixed-address mapping.
+  precomposed form. Symbols, `nothing`, and the small-integer box caches are serialized
+  into such images as ordinary objects (the runtime adopts the image's `nothing` and
+  symbol table at startup instead of creating its own), so references to them precompose
+  too — leaving native-code function pointers as the only relocations resolved at load
+  time (~0.2% of the total). When the loader succeeds in mapping the `.ji` at its
+  preferred address — the common case — the relocation pass over the heap image is
+  skipped almost entirely, so most of its pages stay clean, shared between processes, and
+  evictable; at any other address only a constant slide is added. Set
+  `JULIA_IMAGE_IGNORE_PREFERRED_BASE` to disable the fixed-address mapping.
 
 * Type inference now refines field types through conditional checks and call signatures.
   For example, after `if !isnothing(x.field)`, inference knows `x.field` is not `nothing` within the branch.

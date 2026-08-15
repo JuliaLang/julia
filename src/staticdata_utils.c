@@ -713,7 +713,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 16;
+static const int JI_FORMAT_VERSION = 17;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
@@ -747,6 +747,11 @@ static int64_t write_header(ios_t *s, uint32_t flags, uint64_t preferred_base) J
     // precomposed for, or 0 if the heap image contains no precomposed pointers
     // and must always be relocated the classic way.
     write_uint64(s, preferred_base);
+    // Payload-relative offsets of the in-image `nothing` instance and the root
+    // of the in-image symbol table (see jl_adopt_image_specials), or 0 when the
+    // image does not carry them. Backpatched alongside the checksum.
+    write_uint64(s, 0);
+    write_uint64(s, 0);
     return checksumpos;
 }
 
@@ -1056,6 +1061,11 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *chec
     uint64_t pb = read_uint64(s);
     if (preferred_base)
         *preferred_base = pb;
+    // consume the adoption offsets (jl_read_adoption_fields re-reads them for
+    // the few callers that need them), leaving the stream at the end of the
+    // fixed-size header for the Julia-side parser
+    (void)read_uint64(s);
+    (void)read_uint64(s);
 
     return 0;
 }

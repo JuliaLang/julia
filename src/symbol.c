@@ -123,6 +123,18 @@ JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void)
     return jl_atomic_load_relaxed(&symtab);
 }
 
+// Adopt a pre-built symbol table (the system image's in-image search tree,
+// see jl_adopt_image_specials in staticdata.c). Only valid before any symbol
+// has been interned: the table must start empty, or the process could end up
+// with two jl_sym_t objects for one name, breaking pointer-identity of
+// symbols. New symbols insert into the adopted tree's leaves as usual.
+void jl_adopt_symbol_table(jl_sym_t *root) JL_NOTSAFEPOINT
+{
+    assert(jl_atomic_load_relaxed(&symtab) == NULL &&
+           "symbol table adoption requires an empty table");
+    jl_atomic_store_release(&symtab, root);
+}
+
 static _Atomic(uint32_t) gs_ctr = 0;  // TODO: per-module?
 uint32_t jl_get_gs_ctr(void) { return jl_atomic_load_relaxed(&gs_ctr); }
 void jl_set_gs_ctr(uint32_t ctr) { jl_atomic_store_relaxed(&gs_ctr, ctr); }
