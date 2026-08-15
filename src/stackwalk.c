@@ -1050,7 +1050,7 @@ static int derive_longjmp_mangling(void) JL_NOTSAFEPOINT
 
 // Keep lazy initialization lock-free because the first probe may run in a
 // signal handler. Racing probes derive the same process-wide values.
-JL_UNUSED static int ptr_demangle_available(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_ptr_demangle_available(void) JL_NOTSAFEPOINT
 {
 #if defined(LONG_JMP_SP_ENV_SLOT)
     int state = jl_atomic_load_acquire(&julia_longjmp_state);
@@ -1259,7 +1259,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     #error Windows is currently only supported on x86 and x86_64
     #endif
 #elif defined(_OS_LINUX_) && defined(__GLIBC__)
-    if (!ptr_demangle_available())
+    if (!jl_ptr_demangle_available())
         return 0;
     __jmp_buf *_ctx = &mctx->__jmpbuf;
     #if defined(_CPU_AARCH64_)
