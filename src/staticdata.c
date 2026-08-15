@@ -1456,8 +1456,28 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
     arraylist_grow(&layout_table, l * 2);
     memset(layout_table.items, 0, l * 2 * sizeof(void*));
 
-    // Serialize all entries
-    for (size_t item = 0; item < l; item++) {
+    // Serialize all entries. For precomposed images, write CodeInstances
+    // first: they carry the only relocations that must still be resolved at
+    // load time (native function pointers, see FunctionRef), and they are the
+    // objects jl_update_all_fptrs writes into, so packing them at the front of
+    // the image concentrates the load-time stores on a small number of pages
+    // while the rest of a fixed-address mapping stays clean. The write order
+    // is free to differ from the queue order: every cross-reference goes
+    // through layout_table, which is indexed by the queue id.
+    size_t *order = NULL;
+    if (!s->incremental && inimage_specials) {
+        order = (size_t*)malloc_s(l * sizeof(size_t));
+        size_t n = 0;
+        for (size_t item = 0; item < l; item++)
+            if (jl_is_code_instance((jl_value_t*)serialization_queue.items[item]))
+                order[n++] = item;
+        for (size_t item = 0; item < l; item++)
+            if (!jl_is_code_instance((jl_value_t*)serialization_queue.items[item]))
+                order[n++] = item;
+        assert(n == l);
+    }
+    for (size_t qi = 0; qi < l; qi++) {
+        size_t item = order ? order[qi] : qi;
         jl_value_t *v = (jl_value_t*)serialization_queue.items[item];           // the object
         JL_GC_PROMISE_ROOTED(v);
         assert(!(s->incremental && jl_object_in_image(v)));
@@ -2048,6 +2068,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             }
         }
     }
+    free(order);
     assert(s->uniquing_super.len == 0);
 }
 

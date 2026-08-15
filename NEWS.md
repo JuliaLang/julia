@@ -74,11 +74,13 @@ Compiler/Runtime improvements
   into such images as ordinary objects (the runtime adopts the image's `nothing` and
   symbol table at startup instead of creating its own), so references to them precompose
   too — leaving native-code function pointers as the only relocations resolved at load
-  time (~0.2% of the total). When the loader succeeds in mapping the `.ji` at its
-  preferred address — the common case — the relocation pass over the heap image is
-  skipped almost entirely, so most of its pages stay clean, shared between processes, and
-  evictable; at any other address only a constant slide is added. Set
-  `JULIA_IMAGE_IGNORE_PREFERRED_BASE` to disable the fixed-address mapping.
+  time (~0.2% of the total). Those live only in CodeInstances, which are packed at the
+  front of the image so the load-time stores stay off the rest of it. When the loader
+  succeeds in mapping the `.ji` at its preferred address — the common case — the
+  relocation pass over the heap image is skipped almost entirely and nearly all of its
+  pages stay clean, shared between processes, and evictable; at any other address only a
+  constant slide is added. Set `JULIA_IMAGE_IGNORE_PREFERRED_BASE` to disable the
+  fixed-address mapping.
 
 * Type inference now refines field types through conditional checks and call signatures.
   For example, after `if !isnothing(x.field)`, inference knows `x.field` is not `nothing` within the branch.
