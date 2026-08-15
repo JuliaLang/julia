@@ -122,6 +122,42 @@ end
 widen_call_result(::AbstractInterpreter, si::StmtInfo, state::CallInferenceState, ::AbsIntState) =
     call_result_unused(si) && !(state.rettype === Bottom)
 
+# By default, inference may rely on a callee's current method table without risking
+# invalidation from ordinary method definition. `Base.Experimental.@extension_point` sets
+# this bit to declare a function whose method set is expected to grow.
+const TYPENAME_EXTENSION_POINT_FLAG = 0x08
+
+is_extension_point_typename(tn::Core.TypeName) = (tn.flags & TYPENAME_EXTENSION_POINT_FLAG) !== 0x00
+
+function is_extension_point_callee(@nospecialize ft)
+    if isType(ft)
+        T = unwrap_unionall(type_parameter(ft))
+        return isa(T, DataType) && is_extension_point_typename(T.name)
+    end
+    ft = unwrap_unionall(ft)
+    isa(ft, DataType) || return false
+    return is_extension_point_typename(ft.name)
+end
+
+# In a `--trim` build the world is closed by construction (the trim verifier rejects
+# runtime method definition), so assuming method-table completeness is sound there.
+world_splitting_enabled() = BuildSettings.WORLD_SPLITTING || JLOptions().trim != 0
+
+function requires_world_splitting(argtypes::Vector{Any}, matches::Union{MethodMatches,UnionSplitMethodMatches})
+    ft = widenconst(argtypes[1])
+    if ft === typeof(Core.kwcall) && length(argtypes) >= 3
+        # kwcall transparently forwards to the callee in the third slot
+        ft = widenconst(argtypes[3])
+    end
+    is_extension_point_callee(ft) || return false
+    fully_covering(matches) || return true
+    any_ambig(matches) && return true
+    for target in matches.applicable
+        isdispatchtuple(target.match.spec_types) || return true
+    end
+    return false
+end
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(func),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   vtypes::Union{VarTable,Nothing}, sv::AbsIntState, max_methods::Int)
@@ -136,6 +172,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
+        return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    end
+
+    if !world_splitting_enabled() && requires_world_splitting(argtypes, matches)
+        add_remark!(interp, sv, "World splitting disabled: refusing to optimize a call to an extension point with non-concrete signature")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
 

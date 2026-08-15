@@ -141,10 +141,13 @@ something(x::Any, y...) = x
 ############
 
 baremodule BuildSettings
-using Core: ARGS, include, Int, ===
+using Core: ARGS, include, Int, Bool, ===
 using ..Compiler: >, getindex, length
 
 global MAX_METHODS::Int = 3
+# when true, inference may assume method-table completeness even for callees marked
+# `Base.Experimental.@extension_point` (the historical behavior); see `world_splitting_enabled`
+global WORLD_SPLITTING::Bool = false
 
 if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
     include(BuildSettings, ARGS[3])
