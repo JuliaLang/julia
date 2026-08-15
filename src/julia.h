@@ -2448,6 +2448,9 @@ typedef struct {
     uint32_t heap_checksum;
     bool_t is_split;
     const void *coverage; // jl_image_coverage_t *, if built with coverage counters
+    // whether jl_adopt_image_specials adopted this image's in-image `nothing`
+    // and symbol table (required before restoring a precomposed image)
+    bool_t specials_adopted;
 } jl_image_buf_t;
 
 struct _jl_image_t;
