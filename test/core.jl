@@ -9290,3 +9290,11 @@ let m = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), @__MODULE__)
     @test m.sig === Union{}
     @test m.name === Symbol("")
 end
+
+# an array reached through a Union-typed value is tagged `jtbaa_value`, which must
+# still alias the `jtbaa_arrayptr` stores that initialize its header; otherwise DSE
+# deletes them and the reshaped array is left with a null `MemoryRef`
+mkunion_arrayheader(b::Bool) = b ? fill(1.0, 1, 1) : fill(1.0 + 0im, 1, 1)
+sum_reshaped_arrayheader(b::Bool, D::Int) = sum(reshape(mkunion_arrayheader(b)[:, end], D, D))
+@test sum_reshaped_arrayheader(true, 1) === 1.0
+@test sum_reshaped_arrayheader(false, 1) === 1.0 + 0.0im

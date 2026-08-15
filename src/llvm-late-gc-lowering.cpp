@@ -838,40 +838,6 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
     }
 }
 
-static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset)
-{
-    if (!TBAA)
-        return false;
-    while (TBAA->getNumOperands() > 1) {
-        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
-        auto str = cast<MDString>(TBAA->getOperand(0))->getString();
-        for (auto str2 : strset) {
-            if (str == str2) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-// Check if this is a load from an immutable value. The easiest
-// way to do so is to look at the tbaa and see if it derives from
-// jtbaa_immut.
-static bool isLoadFromImmut(LoadInst *LI)
-{
-    if (LI->getMetadata(LLVMContext::MD_invariant_load))
-        return true;
-    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
-        return true;
-    return false;
-}
-
-static bool isConstGV(GlobalVariable *gv)
-{
-    return gv->isConstant() || gv->getMetadata("julia.constgv");
-}
-
 typedef llvm::SmallPtrSet<PHINode*, 1> PhiSet;
 
 static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen = nullptr);
@@ -1909,7 +1875,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     LI->setMetadata(LLVMContext::MD_invariant_load, NULL);
             }
             if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
-                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memoryptr", "jtbaa_memorylen", "tbaa_memoryown"})) {
+                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memory"})) {
                     MDNode *MutableTBAA = createMutableTBAAAccessTag(TBAA);
                     if (MutableTBAA != TBAA)
                         I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
