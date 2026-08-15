@@ -861,7 +861,7 @@ enum jl_partition_kind {
 };
 
 static const uint8_t PARTITION_MASK_KIND = 0x0f;
-static const uint8_t PARTITION_MASK_FLAG = 0xf0;
+static const uint16_t PARTITION_MASK_FLAG = 0x1f0;
 
 //// These are flags that get anded into the above
 //
@@ -878,6 +878,11 @@ static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 // _IMPLICITLY_EXPORTED: This binding partition is implicitly exported via @reexport. Unlike _EXPORTED,
 // this flag is set during implicit resolution and can be removed if the resolution changes.
 static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
+// _IMPLICITLY_DEPRECATED: The _DEPRECATED/_DEPWARN flags on this partition were set by
+// implicit resolution from the imported binding, rather than set explicitly on this binding.
+// Like _IMPLICITLY_EXPORTED, it is recomputed on re-resolution, and it does not survive
+// replacement of the partition by a definition or an explicit import.
+static const uint16_t PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100;
 
 #if defined(_COMPILER_MICROSOFT_)
 #define JL_ALIGNED_ATTR(alignment) \
