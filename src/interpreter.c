@@ -136,6 +136,12 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     jl_value_t *c = args[0];
     assert(jl_is_code_instance(c) || jl_is_method_instance(c));
     jl_value_t *result = NULL;
+    if (argv[0] == BUILTIN(_apply_iterate)) {
+        // `ci` selects codegen's flattened target; the interpreter executes plain apply.
+        result = jl_f__apply_iterate(NULL, &argv[1], nargs - 2);
+        JL_GC_POP();
+        return result;
+    }
     if (jl_is_code_instance(c)) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)c;
         assert(jl_atomic_load_relaxed(&codeinst->min_world) <= jl_current_task->world_age &&

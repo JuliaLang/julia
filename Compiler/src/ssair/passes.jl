@@ -935,20 +935,7 @@ function lift_apply_args!(compact::IncrementalCompact, idx::Int, stmt::Expr)
                     svec_args = copy(arg_stmt.args)
                 end
             end
-            if svec_args === nothing
-                # Fallback path: generate getfield calls for tuple elements
-                tuple_length = length(arg_type.parameters)
-                if tuple_length > 0 && !isvarargtype(arg_type.parameters[tuple_length])
-                    svec_args = Vector{Any}(undef, tuple_length + 1)
-                    for j in 1:tuple_length
-                        getfield_call = Expr(:call, GlobalRef(Core, :getfield), arg, j)
-                        getfield_type = arg_type.parameters[j]
-                        inst = compact[SSAValue(idx)]
-                        getfield_ssa = insert_node!(compact, SSAValue(idx), NewInstruction(getfield_call, getfield_type, NoCallInfo(), inst[:line], inst[:flag]))
-                        svec_args[j + 1] = getfield_ssa
-                    end
-                end
-            end
+            # Preserve incoming tuples rather than repacking them into svecs.
             if svec_args !== nothing
                 svec_args[1] = GlobalRef(Core, :svec)
                 new_svec_call = Expr(:call)

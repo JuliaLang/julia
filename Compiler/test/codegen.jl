@@ -435,6 +435,17 @@ let io = IOBuffer()
     @test !occursin("__apply", String(take!(io)))
 end
 
+# Invoke-apply codegen flattens every concrete tuple container.
+@noinline invoke_apply_codegen_target(xs...) = (xs[1], xs[end], length(xs))
+invoke_apply_codegen_prefix(t::NTuple{33,Float32}) =
+    invoke_apply_codegen_target(0.0f0, t...)
+invoke_apply_codegen_multiple(a::NTuple{33,Float32}, b::NTuple{33,Float32}) =
+    invoke_apply_codegen_target(a..., b...)
+let t = ntuple(Float32, 33)
+    @test invoke_apply_codegen_prefix(t) === (0.0f0, 33.0f0, 34)
+    @test invoke_apply_codegen_multiple(t, t) === (1.0f0, 33.0f0, 66)
+end
+
 function f1_30093(r)
     while r[]>0
         try
