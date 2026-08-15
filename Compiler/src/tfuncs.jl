@@ -1931,7 +1931,16 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
         # `Union{T}` to a bare `TypeVar`
         return type_parameter(headtypetype) == Union ? Union{Type, TypeVar} : Type
     else
+        if headtypetype isa Type && headtypetype <: Core.FieldtypeGenerator
+            # applied like a partially applied UnionAll (see
+            # Base.fieldtype_generator): yields another FieldtypeGenerator or,
+            # when fully applied, the tuple of field types
+            return Union{Core.FieldtypeGenerator, Tuple}
+        end
         return Any
+    end
+    if isa(headtype, Core.FieldtypeGenerator)
+        return Union{Core.FieldtypeGenerator, Tuple}
     end
     largs = length(argtypes)
     if largs > 1 && isvarargtype(argtypes[end])

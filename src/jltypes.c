@@ -3417,6 +3417,63 @@ JL_DLLEXPORT jl_value_t *jl_call_fieldtype_generator(jl_typename_t *tn, jl_svec_
     return res;
 }
 
+// Application of a Core.FieldtypeGenerator, with the same shape as applying a
+// partially applied UnionAll: applying some of the remaining type parameters
+// yields another FieldtypeGenerator; applying all of them yields the tuple of
+// field types (computed through the world-age-detached generator, with errors
+// propagating rather than degrading to Union{}, and without instantiating the
+// type as a side effect).
+jl_value_t *jl_apply_fieldtype_generator(jl_value_t *ftg, jl_value_t **args, size_t nargs)
+{
+    jl_value_t *ty = ((jl_fieldtypegenerator_t*)ftg)->ty;
+    size_t nfree = 0;
+    jl_value_t *t = ty;
+    while (jl_is_unionall(t)) {
+        nfree++;
+        t = ((jl_unionall_t*)t)->body;
+    }
+    if (!jl_is_datatype(t) || nargs > nfree)
+        jl_errorf("too many parameters for field generator of %s (%zd remaining, %zd given)",
+                  jl_is_datatype(t) ? jl_symbol_name(((jl_datatype_t*)t)->name->name) : "?",
+                  nfree, nargs);
+    if (nargs == 0)
+        jl_error("field generator application requires at least one parameter");
+    if (nargs < nfree) {
+        // partial application: apply to the underlying type (which remains
+        // non-concrete, so this does not run the generator)
+        jl_value_t *newty = NULL;
+        JL_GC_PUSH1(&newty);
+        newty = jl_apply_type(ty, args, nargs);
+        newty = jl_new_struct(jl_fieldtypegenerator_type, newty);
+        JL_GC_POP();
+        return newty;
+    }
+    // full application: substitute the parameter values and invoke the
+    // generator directly
+    jl_value_t *cur = NULL;
+    jl_svec_t *params = NULL;
+    JL_GC_PUSH2(&cur, &params);
+    cur = nargs > 1 ? jl_apply_type(ty, args, nargs - 1) : ty;
+    assert(jl_is_unionall(cur));
+    jl_unionall_t *ua = (jl_unionall_t*)cur;
+    jl_value_t *last = args[nargs - 1];
+    jl_datatype_t *body = (jl_datatype_t*)ua->body;
+    assert(jl_is_datatype(body));
+    size_t np = jl_svec_len(body->parameters);
+    params = jl_alloc_svec(np);
+    for (size_t i = 0; i < np; i++) {
+        jl_value_t *p = jl_svecref(body->parameters, i);
+        p = jl_substitute_var(p, ua->var, last);
+        if (jl_has_free_typevars(p))
+            jl_errorf("field generator of %s applied to parameters that are not fully specified",
+                      jl_symbol_name(body->name->name));
+        jl_svecset(params, i, p);
+    }
+    jl_value_t *res = jl_call_fieldtype_generator(body->name, params);
+    JL_GC_POP();
+    return res;
+}
+
 // Invoke the field generator of st->name on st's (fully concrete) parameters.
 // A generator that throws — or returns anything other than closed field types —
 // degrades every field type to Union{}, making the type uninstantiable while
@@ -4735,6 +4792,7 @@ void post_boot_hooks(void)
     jl_typeapp_type = (jl_datatype_t*)core("TypeApp");
     // Marker for computed field types (field generators)
     jl_computedfieldtype_type = (jl_datatype_t*)core("ComputedFieldType");
+    jl_fieldtypegenerator_type = (jl_datatype_t*)core("FieldtypeGenerator");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

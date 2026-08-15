@@ -39,7 +39,7 @@ end
     # non-Int parameters degrade too (typeassert throws)
     @test fieldtype(Neg{:sym}, 1) === Union{}
     # through the partial-application reflection API the error propagates instead
-    @test_throws Exception Base.fieldtype_generator(Neg)(0)
+    @test_throws Exception Base.fieldtype_generator(Neg){0}
     # and types without computed field types have no generator
     @test_throws ArgumentError Base.fieldtype_generator(Some{Int})
 end
@@ -53,13 +53,17 @@ end
     dt = Base.unwrap_unionall(StaticMatrix)
     marker = dt.types[1]
     @test marker isa Core.ComputedFieldType
-    # partially applied field generator (reflection-level, not a type)
+    # partially applied field generator (reflection-level, not a type),
+    # applied with apply_type like a partially applied UnionAll
     g = Base.fieldtype_generator(StaticMatrix{2})
-    @test g(3, Float64) === (NTuple{6,Float64},)
-    @test Base.fieldtype_generator(StaticMatrix)(2, 3, Float64) === (NTuple{6,Float64},)
-    # fully applied is allowed too
-    @test Base.fieldtype_generator(StaticMatrix{2,3,Float64})() === (NTuple{6,Float64},)
-    @test_throws ArgumentError g(3)  # too few parameters
+    @test g{3, Float64} === (NTuple{6,Float64},)
+    g2 = g{3}
+    @test g2 isa Core.FieldtypeGenerator
+    @test g2{Float64} === (NTuple{6,Float64},)
+    @test Base.fieldtype_generator(StaticMatrix){2, 3, Float64} === (NTuple{6,Float64},)
+    # a type with no remaining free parameters yields the tuple directly
+    @test Base.fieldtype_generator(StaticMatrix{2,3,Float64}) === (NTuple{6,Float64},)
+    @test_throws ErrorException g{3, Float64, Int}  # too many parameters
     # inference of code that manipulates partial instantiations must not crash
     mk(f, ::Type{StaticMatrix{R,C,T}}) where {R,C,T} = StaticMatrix{R,C,T}(ntuple(f, R*C))
     @test Base.infer_return_type(mk, (Function, Type{<:StaticMatrix})) isa Type

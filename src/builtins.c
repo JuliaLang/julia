@@ -1894,6 +1894,11 @@ JL_CALLABLE(jl_f_apply_type)
             return (jl_value_t*)jl_wrap_vararg(vm->T, args[1], 1, 0);
         }
     }
+    else if (jl_is_fieldtypegenerator(args[0])) {
+        // partially applied field generator: applied like a partially applied
+        // UnionAll (see Base.fieldtype_generator)
+        return jl_apply_fieldtype_generator(args[0], &args[1], nargs - 1);
+    }
     else if (jl_is_unionall(args[0])) {
         for(i=1; i < nargs; i++) {
             jl_value_t *pi = args[i];

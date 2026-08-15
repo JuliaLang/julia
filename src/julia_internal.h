@@ -1360,6 +1360,17 @@ STATIC_INLINE int jl_is_computedfieldtype(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_computedfieldtype_type != NULL && jl_typeis(v, jl_computedfieldtype_type);
 }
+// Core.FieldtypeGenerator: partially applied field generator (reflection
+// object; applied via `apply_type` like a partially applied UnionAll)
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *ty; // the partially applied type (UnionAll over the wrapper)
+} jl_fieldtypegenerator_t;
+STATIC_INLINE int jl_is_fieldtypegenerator(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_fieldtypegenerator_type != NULL && jl_typeis(v, jl_fieldtypegenerator_type);
+}
+jl_value_t *jl_apply_fieldtype_generator(jl_value_t *ftg, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 // Return the field-generator function for tn, or NULL if tn has no computed field types.
 STATIC_INLINE jl_value_t *jl_typename_fieldgen_func(jl_typename_t *tn) JL_NOTSAFEPOINT
 {
