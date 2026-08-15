@@ -86,6 +86,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
+    tn->extension_point = 0;
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
@@ -95,6 +96,11 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->constprop_heustic = 0;
     tn->concrete_only = 0;
     return tn;
+}
+
+JL_DLLEXPORT void jl_typename_set_extension_point(jl_typename_t *tn, int isext)
+{
+    tn->extension_point = !!isext;
 }
 
 // allocating DataTypes -----------------------------------------------------------

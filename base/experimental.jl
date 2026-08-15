@@ -188,6 +188,118 @@ macro max_methods(n::Int, fdef::Expr)
 end
 
 """
+    Experimental.@extension_point f
+    Experimental.@extension_point SomeType
+
+Declare a function (or a type's constructors and callable instances) an extension
+point: other packages are expected to add methods to it, typically for their own
+types. By default the method set of every function is considered closed
+outside its owning package, which lets the compiler optimize calls whose argument
+types are not fully known against the current set of methods. Marking a function as
+an extension point turns that off: such calls use dynamic dispatch, so that later method
+definitions never invalidate compiled code, and callers regain devirtualization
+by constraining their argument types until dispatch is decided by the types alone.
+
+Extending a function that is not marked as an extension point remains legal and behaves
+correctly (dependent compiled code is invalidated as usual). Every such
+cross-package extension is recorded and can be inspected with
+[`Experimental.undeclared_extensions`](@ref). Set the environment variable
+`JULIA_WARN_EXTENSION` to also report them as they happen: `all` warns on every
+one, `piracy` only on methods whose definer owns neither the function nor any
+argument type, a comma-separated list of package names warns only for functions
+owned by those packages, and `error` makes every such extension an error
+(useful in package CI).
+"""
+macro extension_point(ex)
+    return quote
+        let x = $(esc(ex))
+            t = x isa Type ? Base.unwrap_unionall(x) : typeof(x)
+            t isa DataType || error("@extension_point requires a function or a type")
+            ccall(:jl_typename_set_extension_point, Cvoid, (Any, Cint), t.name, 1)
+            x
+        end
+    end
+end
+
+const UNDECLARED_EXTENSION_LOG = Any[]
+
+function extension_parent(m::Module)
+    name = nameof(m)
+    for pkg in values(Base.loaded_modules)
+        pkg === m && continue
+        Base.get_extension(pkg, name) === m && return pkg
+    end
+    return nothing
+end
+
+function type_rooted_in(@nospecialize(t), root::Module)
+    t = Base.unwrap_unionall(t)
+    if t isa Union
+        return type_rooted_in(t.a, root) || type_rooted_in(t.b, root)
+    elseif t isa Core.TypeofVararg
+        return isdefined(t, :T) && type_rooted_in(t.T, root)
+    elseif t isa DataType
+        if Base.isType(t) || Base.isTypeEq(t) || Base.isTypeEgal(t)
+            return type_rooted_in(Base.type_parameter(t), root)
+        end
+        return Base.moduleroot(t.name.module) === root
+    end
+    return false
+end
+
+function slot_typename(@nospecialize t)
+    t = Base.unwrap_unionall(t)
+    if t isa DataType && (Base.isType(t) || Base.isTypeEq(t) || Base.isTypeEgal(t))
+        p = Base.unwrap_unionall(Base.type_parameter(t))
+        p isa DataType && return p.name
+    end
+    return t isa DataType ? t.name : nothing
+end
+
+function extended_typename(m::Method)
+    sig = Base.unwrap_unionall(m.sig)
+    sig isa DataType || return nothing
+    tn = slot_typename(sig.parameters[1])
+    if tn === typeof(Core.kwcall).name && length(sig.parameters) > 2
+        tn = slot_typename(sig.parameters[3])
+    end
+    return tn
+end
+
+"""
+    Experimental.undeclared_extensions()
+
+Return a vector of `(; method, owns_argument_type)` named tuples, one for every
+method defined in this session that extends a function owned by another package
+without it being declared an [`Experimental.@extension_point`](@ref). Methods defined by
+a package extension are attributed to the extension's parent package, so glue
+methods on the parent's own functions do not appear. `owns_argument_type` is
+`false` when the defining package owns neither the function nor any type in the
+method's signature (type piracy). Methods loaded from precompiled package images
+are not currently recorded.
+"""
+function undeclared_extensions()
+    log = UNDECLARED_EXTENSION_LOG
+    entries = @NamedTuple{method::Method, owns_argument_type::Bool}[]
+    for i in 1:2:length(log)
+        m = log[i]::Method
+        tn = extended_typename(m)
+        tn === nothing && continue
+        defroot = Base.moduleroot(m.module)
+        parent = extension_parent(defroot)
+        parent === nothing || (defroot = Base.moduleroot(parent))
+        Base.moduleroot(tn.module) === defroot && continue
+        owns = log[i+1]::Bool
+        if !owns && parent !== nothing
+            sig = Base.unwrap_unionall(m.sig)
+            owns = any(p -> type_rooted_in(p, defroot), sig.parameters[2:end])
+        end
+        push!(entries, (; method = m, owns_argument_type = owns))
+    end
+    return entries
+end
+
+"""
     Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={true,false} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
