@@ -205,6 +205,40 @@ include("precompile.jl")
 include("reflection_interface.jl")
 include("opaque_closure.jl")
 
+# Mark the AbstractInterpreter/lattice extension interface used by external compiler
+# plugins (JET, Cthulhu, GPUCompiler, ...) as extension points: these are the Compiler's
+# declared extension points. Any other function's method set is assumed complete at
+# uncertain call sites; an omission here only
+# deoptimizes/invalidates the plugin's calls, never breaks them.
+let extension_interface = [
+        # interpreter configuration & identity
+        :InferenceParams, :OptimizationParams, :InferenceState, :NativeInterpreter,
+        :get_inference_cache, :get_inference_world, :cache_owner, :method_table,
+        :typeinf_lattice, :ipo_lattice, :optimizer_lattice,
+        # abstract interpretation entry points plugins overload on their interpreter type
+        :typeinf, :finish!, :transform_result_for_cache, :add_remark!,
+        :abstract_call_gf_by_type, :abstract_call_known, :abstract_call_method,
+        :abstract_call_method_with_const_args, :abstract_call_opaque_closure,
+        :abstract_eval_special_value, :abstract_eval_value, :abstract_eval_statement_expr,
+        :abstract_eval_globalref_type, :builtin_tfunction, :return_type_tfunc,
+        :concrete_eval_eligible, :const_prop_entry_heuristic, :collect_limitations!,
+        :bail_out_toplevel_call, :bail_out_call, :bail_out_apply, :add_call_backedges!,
+        :may_optimize, :may_compress, :may_discard_trees, :verbose_stmt_info,
+        :src_inlining_policy, :optimize, :ipo_dataflow_analysis!,
+        # lattice extension points (custom lattices and lattice elements)
+        :tmerge, :tmeet, :⊑, :⊏, :⋤, :is_lattice_equal, :has_nontrivial_extended_info,
+        :widenlattice, :is_valid_lattice_norec, :widenconst, :widenreturn,
+        :is_forwardable_argtype, :is_const_prop_profitable_arg,
+    ]
+    for name in extension_interface
+        isdefined(Compiler, name) || continue
+        f = getglobal(Compiler, name)
+        t = f isa Type ? unwrap_unionall(f) : typeof(f)
+        t isa DataType || continue
+        ccall(:jl_typename_set_extension_point, Cvoid, (Any, Cint), t.name, 1)
+    end
+end
+
 baremodule ReinferUtils end
 include(ReinferUtils, "reinfer.jl")
 include(ReinferUtils, "bindinginvalidations.jl")
