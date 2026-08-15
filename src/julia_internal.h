@@ -1565,6 +1565,7 @@ typedef struct {
 
 JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos, jl_svec_t *old_types) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_set_fieldtype_generator(jl_value_t *ty, jl_value_t *fieldgen) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_call_fieldtype_generator(jl_typename_t *tn, jl_svec_t *params) JL_CANSAFEPOINT;
 // Type predicate for TypeApp (inline: called per type node on hot type-query paths)
 STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
 {

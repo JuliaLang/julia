@@ -38,16 +38,31 @@ end
     @test_throws Exception Neg{0}((1,))
     # non-Int parameters degrade too (typeassert throws)
     @test fieldtype(Neg{:sym}, 1) === Union{}
+    # through the partial-application reflection API the error propagates instead
+    @test_throws Exception Base.fieldtype_generator(Neg)(0)
+    # and types without computed field types have no generator
+    @test_throws ArgumentError Base.fieldtype_generator(Some{Int})
 end
 
 @testset "partial instantiation" begin
-    # computed slots widen to a fresh unbounded TypeVar
-    ft = fieldtype(StaticMatrix{2}, 1)
-    @test ft isa TypeVar
+    # computed field types are not part of the type system: `fieldtype` on a
+    # non-concrete instantiation throws
+    @test_throws ErrorException fieldtype(StaticMatrix{2}, 1)
+    @test_throws ErrorException fieldtype(StaticMatrix, 1)
     # the declared slot records the source AST
     dt = Base.unwrap_unionall(StaticMatrix)
     marker = dt.types[1]
     @test marker isa Core.ComputedFieldType
+    # partially applied field generator (reflection-level, not a type)
+    g = Base.fieldtype_generator(StaticMatrix{2})
+    @test g(3, Float64) === (NTuple{6,Float64},)
+    @test Base.fieldtype_generator(StaticMatrix)(2, 3, Float64) === (NTuple{6,Float64},)
+    # fully applied is allowed too
+    @test Base.fieldtype_generator(StaticMatrix{2,3,Float64})() === (NTuple{6,Float64},)
+    @test_throws ArgumentError g(3)  # too few parameters
+    # inference of code that manipulates partial instantiations must not crash
+    mk(f, ::Type{StaticMatrix{R,C,T}}) where {R,C,T} = StaticMatrix{R,C,T}(ntuple(f, R*C))
+    @test Base.infer_return_type(mk, (Function, Type{<:StaticMatrix})) isa Type
 end
 
 struct MixedFields{N,T}

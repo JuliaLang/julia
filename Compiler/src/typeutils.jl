@@ -480,3 +480,32 @@ property when there is access to mutation-free global object.
 is_mutation_free_argtype(@nospecialize(argtype)) =
     is_mutation_free_type(widenconst(ignorelimited(argtype)))
 is_mutation_free_type(@nospecialize ty) = ismutationfree(ty)
+
+# Computed field types: a non-concrete instantiation of a type with computed
+# field types keeps `Core.ComputedFieldType` markers in its (lazily computed)
+# field-type slots. Such a slot has no field type until the parameters are
+# fully concrete (the runtime `fieldtype` throws for it), so inference must
+# treat it as unknown. The markers are deliberately not part of the type
+# system; `Base.fieldtype_generator` provides the partially applied form.
+function has_computedfield_marker(ftypes::SimpleVector)
+    for ft in ftypes
+        isa(ft, Core.ComputedFieldType) && return true
+    end
+    return false
+end
+
+function is_computed_fieldtype(s::DataType, i::Int)
+    isconcretetype(s) && return false
+    ftypes = datatype_fieldtypes(s)
+    return 1 ≤ i ≤ length(ftypes) && isa(ftypes[i], Core.ComputedFieldType)
+end
+
+# `fieldtype`, but yields `Any` for a computed field type slot of a
+# non-concrete type instead of throwing
+function fieldtype_widened(@nospecialize(t), i::Int)
+    u = unwrap_unionall(t)
+    if isa(u, DataType) && is_computed_fieldtype(u, i)
+        return Any
+    end
+    return fieldtype(t, i)
+end
