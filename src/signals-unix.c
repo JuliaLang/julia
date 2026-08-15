@@ -1501,7 +1501,7 @@ static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf, int val)
     sigemptyset(&sset);
     sigaddset(&sset, sig);
     pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
-    jl_longjmp(jmpbuf, 1);
+    jl_longjmp(jmpbuf, val);
 #endif
 }
 
