@@ -972,11 +972,13 @@ void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_entry) JL_NOTSAFEP
 // https://sourceware.org/git/?p=glibc.git;a=commit;h=78f1f0e39cd41d28ae771eb3498bc33780c85cfd
 // The probe follows the approach used by LLVM's aarch64 TSAN runtime:
 // https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
-#if defined(__GLIBC__) && (defined(_CPU_AARCH64_) || defined(_CPU_X86_64_) || \
-                           defined(_CPU_X86_))
+#if defined(__GLIBC__) && (defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || \
+                           defined(_CPU_X86_64_) || defined(_CPU_X86_))
 // Index of the mangled SP within glibc's jmp_buf.
 #if defined(_CPU_AARCH64_)
 #define LONG_JMP_SP_ENV_SLOT 13
+#elif defined(_CPU_ARM_)
+#define LONG_JMP_SP_ENV_SLOT 0
 #elif defined(_CPU_X86_64_)
 #define LONG_JMP_SP_ENV_SLOT 6
 #else
@@ -1003,7 +1005,7 @@ static NOINLINE uintptr_t probe_mangled_sp(uintptr_t *sp) JL_NOTSAFEPOINT
 {
     jmp_buf env;
     _setjmp(env);
-#if defined(_CPU_AARCH64_)
+#if defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
     asm volatile ("mov %0, sp" : "=r" (*sp));
 #elif defined(_CPU_X86_64_)
     asm volatile ("movq %%rsp, %0" : "=r" (*sp));
@@ -1070,9 +1072,6 @@ JL_DLLEXPORT uintptr_t jl_ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
     assert(jl_atomic_load_relaxed(&julia_longjmp_state) > 0);
     p = rotate_right(p, jl_atomic_load_relaxed(&julia_longjmp_rotate))
         ^ jl_atomic_load_relaxed(&julia_longjmp_xor_key);
-#elif defined(__GLIBC__) && defined(_CPU_ARM_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/arm/sysdep.h
-    ; // nothing to do
 #endif
     return p;
 }
