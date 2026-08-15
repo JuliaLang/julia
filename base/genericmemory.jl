@@ -174,7 +174,7 @@ atomic memory ordering set by `ordering`.
 """
 function unsetindex_atomic!(A::AtomicMemory, order::Symbol, i::Int)
     @_propagate_inbounds_meta
-    unsetindex!(memoryref(A, i), order)
+    unsetindex_atomic!(memoryref(A, i), order)
     return A
 end
 
