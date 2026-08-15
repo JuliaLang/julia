@@ -246,9 +246,9 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         destdata = (char*)dest->ptr + elsz*(size_t)destdata;
     }
     if (layout->first_ptr != -1) {
-        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
         jl_value_t *owner = jl_genericmemory_owner(dest);
         jl_gc_wb_genericmemory_copy_ptr(owner, src, src_p, n, dt);
+        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
     }
     else {
         memmove(destdata, srcdata, n * elsz);
