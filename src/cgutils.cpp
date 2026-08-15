@@ -488,11 +488,12 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
     return Ptrs;
 }
 
-// whether memory in this region cannot be accessed concurrently, so that
+// whether memory in this region cannot be written concurrently, so that
 // non-atomic (rather than unordered) loads and stores are permitted
 static bool region_is_private(jl_aliasinfo_t::Region r)
 {
-    return r == jl_aliasinfo_t::Region::stack || r == jl_aliasinfo_t::Region::gcframe ||
+    return r == jl_aliasinfo_t::Region::stack ||
+           r == jl_aliasinfo_t::Region::gcframe ||
            r == jl_aliasinfo_t::Region::constant;
 }
 
@@ -501,11 +502,11 @@ static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *da
     SmallVector<Value*,0> gcroots(npointers);
     if (npointers) {
         Type *T_prjlvalue = ctx.types().T_prjlvalue;
-        bool isstack = isa<AllocaInst>(data_pointer->stripInBoundsOffsets()) || region_is_private(roots_ai.region);
+        bool isprivatemem = isa<AllocaInst>(data_pointer->stripInBoundsOffsets()) || region_is_private(roots_ai.region);
         for (size_t i = 0; i < npointers; i++) {
             Value *field_ptr = emit_ptrgep(ctx, data_pointer, jl_ptr_offset(typ, i) * sizeof(jl_value_t*));
             LoadInst *root = ctx.builder.CreateAlignedLoad(T_prjlvalue, field_ptr, Align(sizeof(void*)), isVolatile);
-            if (!isstack)
+            if (!isprivatemem)
                 root->setOrdering(AtomicOrdering::Unordered);
             roots_ai.decorateInst(root);
             gcroots[i] = root;
@@ -528,12 +529,12 @@ static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, const jl_
             Type *T_prjlvalue = ctx.types().T_prjlvalue;
             const jl_aliasinfo_t &roots_ai = val.aliasinfo;
             Value *p = maybe_decay_tracked(ctx, data_pointer(ctx, val));
-            bool isstack = isa<AllocaInst>(p->stripInBoundsOffsets()) || region_is_private(roots_ai.region);
+            bool isprivatemem = isa<AllocaInst>(p->stripInBoundsOffsets()) || region_is_private(roots_ai.region);
             gcroots.resize(npointers, nullptr);
             for (size_t i = 0; i < npointers; i++) {
                 Value *field_ptr = emit_ptrgep(ctx, p, jl_ptr_offset((jl_datatype_t*)val.typ, i) * sizeof(jl_value_t*));
                 LoadInst *root = ctx.builder.CreateAlignedLoad(T_prjlvalue, field_ptr, Align(sizeof(void*)));
-                if (!isstack)
+                if (!isprivatemem)
                     root->setOrdering(AtomicOrdering::Unordered);
                 roots_ai.decorateInst(root);
                 gcroots[i] = root;
@@ -1293,7 +1294,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         return;
     Value *src;
     std::tie(src, src_ai) = data_pointer_ai(ctx, value_to_pointer(ctx, x));
-    bool isstack = isa<AllocaInst>(src->stripInBoundsOffsets()) || src_ai.region == jl_aliasinfo_t::Region::stack;
+    bool isprivatemem = isa<AllocaInst>(src->stripInBoundsOffsets()) || region_is_private(src_ai.region);
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
     size_t shrunken_size = split_value_size(typ).first;
@@ -1316,7 +1317,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         if (last)
             break;
         auto *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, emit_ptrgep(ctx, src, ptr), Align(sizeof(void*)));
-        if (!isstack)
+        if (!isprivatemem)
             load->setOrdering(AtomicOrdering::Unordered);
         src_ai.decorateInst(load);
         roots_ai.decorateInst(ctx.builder.CreateAlignedStore(load, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(void*)), Align(sizeof(void*)), isVolatileStore));
@@ -1449,7 +1450,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
     jl_aliasinfo_t src_ai = x.aliasinfo;
     size_t npointers = typ->layout->npointers;
     size_t shrunken_size = split_value_size(typ).first;
-    bool isstack = isa<AllocaInst>(dst->stripInBoundsOffsets()) || dst_ai.region == jl_aliasinfo_t::Region::stack;
+    bool isprivatemem = isa<AllocaInst>(dst->stripInBoundsOffsets()) || dst_ai.region == jl_aliasinfo_t::Region::stack;
     size_t off = 0;
     for (size_t i = 0; true; i++) {
         bool last = i == npointers;
@@ -1470,7 +1471,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
             break;
         auto *root = inline_roots.get(ctx, i);
         auto *store = ctx.builder.CreateAlignedStore(root, emit_ptrgep(ctx, dst, ptr), Align(sizeof(void*)), isVolatileStore);
-        if (!isstack)
+        if (!isprivatemem)
             store->setOrdering(AtomicOrdering::Unordered);
         dst_ai.decorateInst(store);
         align_dst = align_src = Align(sizeof(void*));
@@ -4497,11 +4498,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             ssize_t promotion_ssa = -1;
             Value *strct;
             // This stack object is a write-once copy of an immutable holding no
-            // pointers (those are split into inline_roots), so it keeps the type's
-            // layout tag with the stack region, like its heap counterpart. The
-            // selector bytes below take this same alias info: they overlap the
-            // object, so info unrelated to the object's would let the two be
-            // reordered.
+            // pointers (those are split into inline_roots).
             const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty).withRegion(ctx, jl_aliasinfo_t::Region::stack);
             SmallVector<Value*,0> inline_roots;
             if (type_is_ghost(lt)) {

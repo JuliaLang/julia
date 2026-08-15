@@ -271,32 +271,27 @@ extern void _chkstk(void);
 // types
 namespace {
 struct jl_typecache_t {
-    PointerType *T_ptr;
-    Type *T_size;
-    Type *T_jlvalue;
-    PointerType *T_pjlvalue;
-    PointerType *T_prjlvalue;
-    PointerType *T_ppjlvalue;
-    PointerType *T_pprjlvalue;
-    StructType *T_jlgenericmemory;
-    StructType *T_jlarray;
-    PointerType *T_pjlarray;
-    FunctionType *T_jlfunc;
-    FunctionType *T_jlfuncparams;
+    PointerType *T_ptr = nullptr;
+    Type *T_size = nullptr;
+    Type *T_jlvalue = nullptr;
+    PointerType *T_pjlvalue = nullptr;
+    PointerType *T_prjlvalue = nullptr;
+    PointerType *T_ppjlvalue = nullptr;
+    PointerType *T_pprjlvalue = nullptr;
+    StructType *T_jlgenericmemory = nullptr;
+    StructType *T_jlarray = nullptr;
+    PointerType *T_pjlarray = nullptr;
+    FunctionType *T_jlfunc = nullptr;
+    FunctionType *T_jlfuncparams = nullptr;
 
-    IntegerType *T_sigatomic;
+    IntegerType *T_sigatomic = nullptr;
 
-    unsigned sizeof_ptr;
+    unsigned sizeof_ptr = -1u;
     Align alignof_ptr;
 
-    bool initialized;
+    bool initialized = false;
 
-    jl_typecache_t() :
-        T_ptr(nullptr), T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
-        T_ppjlvalue(nullptr), T_pprjlvalue(nullptr),
-        T_jlgenericmemory(nullptr), T_jlarray(nullptr), T_pjlarray(nullptr),
-        T_jlfunc(nullptr), T_jlfuncparams(nullptr), T_sigatomic(nullptr),
-        initialized(false) {}
+    jl_typecache_t() = default;
 
     void initialize(LLVMContext &context, const DataLayout &DL) {
         if (initialized) {
@@ -334,39 +329,30 @@ struct jl_typecache_t {
 namespace {
 struct jl_tbaacache_t {
     // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
-    MDNode *tbaa_root;     // Everything
-    MDNode *tbaa_gcframe;    // GC frame
+    MDNode *tbaa_root = nullptr;     // Everything
+    MDNode *tbaa_gcframe = nullptr;    // GC frame
     // LLVM should have enough info for alias analysis of non-gcframe stack slot
-    MDNode *tbaa_stack;      // untyped stack slot (reused slots, union blobs); write-once
-                             // copies of typed data instead keep the type's layout tag
-                             // with Region::stack
-    MDNode *tbaa_data;       // Any user data that `pointerset/ref` are allowed to alias
-    MDNode *tbaa_binding;        // jl_binding_t::value
-    MDNode *tbaa_value;          // jl_value_t of statically unknown type; parent of the tags below
-    MDNode *tbaa_mutab;              // mutable type
-    MDNode *tbaa_datatype;               // datatype
-    MDNode *tbaa_immut;              // immutable type
-    MDNode *tbaa_ptrarraybuf;    // Data in an array of boxed values
-    MDNode *tbaa_arraybuf;       // Data in an array of POD
-    MDNode *tbaa_array;          // jl_array_t header, mutable: resized in place by the runtime
-    MDNode *tbaa_arrayptr;       // The pointer inside a jl_array_t (to a memoryref)
-    MDNode *tbaa_arraysize;      // A size in a jl_array_t
-    MDNode *tbaa_arrayselbyte;   // a selector byte in a isbits Union jl_genericmemory_t
-    MDNode *tbaa_memory;         // jl_genericmemory_t header, never mutated after construction
-    MDNode *tbaa_memoryptr;      // The pointer inside a jl_genericmemory_t
-    MDNode *tbaa_memorylen;      // The length in a jl_genericmemory_t
-    MDNode *tbaa_memoryown;      // The owner in a foreign jl_genericmemory_t
-    MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
-    bool initialized;
+    MDNode *tbaa_stack = nullptr;      // untyped stack slot which aren't julia data
+    MDNode *tbaa_data = nullptr;       // Any user data that `pointerset/ref` are allowed to alias
+    MDNode *tbaa_binding = nullptr;        // jl_binding_t::value
+    MDNode *tbaa_value = nullptr;          // jl_value_t of statically unknown type; parent of the tags below
+    MDNode *tbaa_mutab = nullptr;              // mutable type
+    MDNode *tbaa_array = nullptr;                  // jl_array_t header, mutable
+    MDNode *tbaa_arrayptr = nullptr;                 // The pointer inside a jl_array_t (to a memoryref)
+    MDNode *tbaa_arraysize = nullptr;                // A size in a jl_array_t
+    MDNode *tbaa_datatype = nullptr;               // datatype
+    MDNode *tbaa_immut = nullptr;              // immutable type
+    MDNode *tbaa_memory = nullptr;             // jl_genericmemory_t header, never mutated after construction
+    MDNode *tbaa_memoryptr = nullptr;             // The pointer inside a jl_genericmemory_t
+    MDNode *tbaa_memorylen = nullptr;             // The length in a jl_genericmemory_t
+    MDNode *tbaa_memoryown = nullptr;             // The owner in a foreign jl_genericmemory_t
+    MDNode *tbaa_ptrarraybuf = nullptr;    // Data in an array of boxed values
+    MDNode *tbaa_arraybuf = nullptr;       // Data in an array of POD
+    MDNode *tbaa_arrayselbyte = nullptr;   // a selector byte in a isbits Union jl_genericmemory_t
+    MDNode *tbaa_const = nullptr;      // Memory that is immutable by the time LLVM can see it
+    bool initialized = false;
 
-    jl_tbaacache_t(): tbaa_root(nullptr), tbaa_gcframe(nullptr), tbaa_stack(nullptr),
-                    tbaa_data(nullptr), tbaa_binding(nullptr),
-                    tbaa_value(nullptr), tbaa_mutab(nullptr), tbaa_datatype(nullptr),
-                    tbaa_immut(nullptr), tbaa_ptrarraybuf(nullptr), tbaa_arraybuf(nullptr),
-                    tbaa_array(nullptr), tbaa_arrayptr(nullptr), tbaa_arraysize(nullptr),
-                    tbaa_arrayselbyte(nullptr), tbaa_memory(nullptr),
-                    tbaa_memoryptr(nullptr), tbaa_memorylen(nullptr), tbaa_memoryown(nullptr),
-                    tbaa_const(nullptr), initialized(false) {}
+    jl_tbaacache_t() = default;
 
     auto tbaa_make_child(MDBuilder &mbuilder, const char *name, MDNode *parent = nullptr, bool isConstant = false) {
         MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent ? parent : tbaa_root);
@@ -428,12 +414,12 @@ struct jl_noaliascache_t {
 
     // memory regions domain
     struct jl_regions_t {
-        MDNode *gcframe;        // GC frame
-        MDNode *stack;          // Stack slot
-        MDNode *data;           // Any user data that `pointerset/ref` are allowed to alias
-        MDNode *constant;       // Memory that is immutable by the time LLVM can see it
+        MDNode *gcframe = nullptr;        // GC frame
+        MDNode *stack = nullptr;          // Stack slot
+        MDNode *data = nullptr;           // Any user data that `pointerset/ref` are allowed to alias
+        MDNode *constant = nullptr;       // Memory that is immutable by the time LLVM can see it
 
-        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), constant(nullptr) {}
+        jl_regions_t() = default;
 
         void initialize(llvm::LLVMContext &context) {
             MDBuilder mbuilder(context);
@@ -448,9 +434,9 @@ struct jl_noaliascache_t {
 
     // `@aliasscope` domain
     struct jl_aliasscope_t {
-        MDNode *current;
+        MDNode *current = nullptr;
 
-        jl_aliasscope_t(): current(nullptr) {}
+        jl_aliasscope_t() = default;
 
         // No init required, this->current is only used to store the currently active aliasscope
         void initialize(llvm::LLVMContext &context) {}
@@ -475,16 +461,13 @@ struct jl_noaliascache_t {
 namespace {
 struct jl_debugcache_t {
     // Basic DITypes
-    DIDerivedType *jl_pvalue_dillvmt;
-    DIDerivedType *jl_ppvalue_dillvmt;
-    DISubroutineType *jl_di_func_sig;
-    DISubroutineType *jl_di_func_null_sig;
-    bool initialized;
+    DIDerivedType *jl_pvalue_dillvmt = nullptr;
+    DIDerivedType *jl_ppvalue_dillvmt = nullptr;
+    DISubroutineType *jl_di_func_sig = nullptr;
+    DISubroutineType *jl_di_func_null_sig = nullptr;
+    bool initialized = false;
 
-    jl_debugcache_t()
-    : jl_pvalue_dillvmt(nullptr), jl_ppvalue_dillvmt(nullptr),
-    jl_di_func_sig(nullptr), jl_di_func_null_sig(nullptr), initialized(false) {}
-
+    jl_debugcache_t() = default;
     void initialize(Module *m);
 };
 }  // anonymous namespace
@@ -1707,15 +1690,11 @@ static void union_alloca_type(jl_uniontype_t *ut,
 //
 // This combines the two orthogonal pieces of alias information codegen tracks
 // for a memory location:
-//  - the memory *region* it lives in (gcframe / stack / heap data / constant),
+//  - the memory region it lives in (gcframe / stack / heap data / constant),
 //    expressed as '!alias.scope' + '!noalias' metadata derived from
 //    jl_noaliascache_t::jl_regions_t, and
-//  - the *layout/type* of the data stored there, expressed as struct-path
+//  - the layout/type of the data stored there, expressed as struct-path
 //    '!tbaa' metadata from the jl_tbaacache_t tree.
-// The region is declared explicitly at the construction site (where it is
-// known), rather than being re-derived from the shape of the TBAA tree at each
-// use. Prefer the prebuilt combinations in jl_aliascache_t (`ctx.alias()`), or
-// construct with `jl_aliasinfo_t(ctx, region, tbaa)` for unusual pairings.
 namespace {
 struct jl_aliasinfo_t {
     enum class Region { unknown, gcframe, stack, data, constant }; // See jl_regions_t
@@ -1735,10 +1714,8 @@ struct jl_aliasinfo_t {
     jl_aliasinfo_t(const jl_aliasinfo_t &) = default;
     jl_aliasinfo_t &operator=(const jl_aliasinfo_t &) = default;
 
-    // Whether this carries any alias information. A default-constructed
-    // (empty) value annotates an access with no metadata; `jl_cgval_t` relies
-    // on this to mean "holds an address" (its constructor requires a non-empty
-    // value for addresses).
+    // Whether this carries any alias information. `jl_cgval_t` relies
+    // on this to mean "holds an address".
     explicit operator bool() const {
         return tbaa != nullptr;
     }
@@ -1785,15 +1762,13 @@ struct jl_aliasinfo_t {
     }
 };
 
-// Pre-combined alias info for the standard memory locations referenced by
-// codegen, pairing each layout tag from jl_tbaacache_t with its canonical
-// memory region. Access lazily via `ctx.alias()`.
+// Pre-combined alias info for common memory locations referenced by
+// codegen. Access lazily via `ctx.alias()`.
 struct jl_aliascache_t {
     // Region::gcframe
     jl_aliasinfo_t gcframe;       // GC frame
     // Region::stack
-    jl_aliasinfo_t stack;         // untyped stack slot (typed stack copies pair the
-                                  // type's layout tag with Region::stack instead)
+    jl_aliasinfo_t stack;         // untyped stack slot
     // Region::data
     jl_aliasinfo_t data;          // Any user data that `pointerset/ref` are allowed to alias
     jl_aliasinfo_t binding;       // jl_binding_t::value
@@ -2294,14 +2269,9 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
 static jl_aliasinfo_t best_aliasinfo(jl_codectx_t &ctx, jl_value_t *jt);
 static jl_aliasinfo_t sret_aliasinfo(jl_codectx_t &ctx, jl_value_t *jlretty, bool all_roots)
 {
-    // An `all_roots` buffer *is* the static-roots array: its zero-init and the
-    // callee's `store_all_roots` write it as `jtbaa_gcframe`, and a layout tag on a
-    // load of a tracked pointer out of an alloca would tell `LateLowerGCFrame` the
-    // pointer is rooted through an enclosing heap object, which an alloca is not.
     if (all_roots)
         return ctx.alias().gcframe;
-    // A union return's payload pointer is a select of the buffer and a box, so it
-    // has to keep a region valid for heap memory too.
+    // A union return's payload pointer is a select of the buffer and a box.
     if (!jl_is_concrete_type(jlretty))
         return best_aliasinfo(ctx, jlretty);
     // Otherwise the buffer holds no tracked pointers (those travel in the separate
@@ -2311,15 +2281,7 @@ static jl_aliasinfo_t sret_aliasinfo(jl_codectx_t &ctx, jl_value_t *jlretty, boo
 }
 
 // Alias info for a private, write-once stack copy of data described by `src_ai`.
-// The copy keeps the source's layout tag, so that every access to the copy stays
-// consistent with it and the join of the two sides of the copy stays a precise tag
-// rather than the root. `jtbaa_const` cannot be the tag of a written copy, though
-// -- it also labels caller-written argument buffers, and a const-tagged copy claims
-// its own initializing writes cannot happen (pointsToConstantMemory) -- so such a
-// copy takes the layout tag of its type instead. Either way the region becomes
-// `Region::stack`: the copy is a fresh alloca, disjoint from heap data, from the
-// gcframe, and from constant memory.
-static jl_aliasinfo_t best_aliasinfo(jl_codectx_t &ctx, jl_value_t *jt);
+// The copy keeps the source's layout tag, but is also known to move to the stack.
 static jl_aliasinfo_t stack_copy_aliasinfo(jl_codectx_t &ctx, const jl_aliasinfo_t &src_ai, jl_value_t *typ)
 {
     return (src_ai && src_ai.region != jl_aliasinfo_t::Region::constant ? src_ai : best_aliasinfo(ctx, typ))
@@ -2619,14 +2581,15 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
     Value *loc;
     v = zext_struct(ctx, v);
     Align align(julia_alignment(typ));
-    // This write-once copy of pointer-free typed data keeps the type's layout
-    // tag; only the region records that it is not heap memory. (Pointer-containing
-    // and union copies keep the untyped stack tag: the layout tags of their heap
-    // counterparts are what the GC lowering uses to recognize loads of pointers
-    // that are rooted through an enclosing heap object, which an alloca is not.)
-    jl_aliasinfo_t ai = tindex == nullptr && jl_is_pointerfree(typ) ?
-        best_aliasinfo(ctx, typ).withRegion(ctx, jl_aliasinfo_t::Region::stack) :
-        ctx.alias().stack;
+    // This write-once copy of pointer-free typed data keeps the type's prior layout tag.
+    // However, there is a subtlety for pointer-containing copies: llvm-late-gc-lowering
+    // does not correctly check for dominator for alloca when using it as root, so it could
+    // use it as a refinement base past the time the alloca has already been reused. Since
+    // this is pretty much the only time that should matter, we currently hack around that
+    // here rather than fixing it correctly for now.
+    jl_aliasinfo_t ai = (tindex == nullptr && jl_is_pointerfree(typ) ?
+            best_aliasinfo(ctx, typ) : ctx.alias().value)
+        .withRegion(ctx, jl_aliasinfo_t::Region::stack);
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
         assert(jl_is_concrete_type(typ)); // not legal to have an unboxed abstract type
         loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), align, "_j_const", *jl_Module);
@@ -5888,7 +5851,6 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             break;
         case jl_returninfo_t::SRet:
             assert(result);
-            // must match the callee's alias info for its stores into the buffer
             retval = mark_julia_slot(result,
                                      jlretty,
                                      NULL,
