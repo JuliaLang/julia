@@ -1180,12 +1180,19 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 
 // Reject values that cannot be user-space longjmp targets. A wrong mangling
 // scheme otherwise turns both values into effectively random addresses.
+#if defined(_CPU_X86_64_) || defined(_CPU_RISCV64_)
+#define JL_VA_USER_BITS 47
+#elif defined(_CPU_AARCH64_)
+// AArch64 uses its full unsigned VA range, including bit 47 on 48-bit kernels,
+// and supports a 52-bit userspace range with LVA.
+#define JL_VA_USER_BITS 52
+#endif
 JL_UNUSED static int valid_longjmp_target(uintptr_t sp, uintptr_t pc) JL_NOTSAFEPOINT
 {
     if (sp == 0 || pc == 0 || sp % sizeof(void*) != 0)
         return 0;
-#if defined(_CPU_X86_64_) || defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_)
-    if ((sp >> 47) != 0 || (pc >> 47) != 0) // outside the user-space canonical half
+#ifdef JL_VA_USER_BITS
+    if ((sp >> JL_VA_USER_BITS) != 0 || (pc >> JL_VA_USER_BITS) != 0)
         return 0;
 #endif
     return 1;
