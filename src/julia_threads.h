@@ -126,9 +126,8 @@ typedef struct {
 //
 // Delivery is gated on the cancellation of the task's bound token source
 // (`jl_task_t.bound_cancel_token`), which is coherent with the published
-// region by construction: everything that temporarily takes over the task
-// and may rebind it - exception handlers, the finalizer bracket in
-// gc-common.c - saves and restores the (region, token) pair together.
+// region by construction: exception handlers save and restore the (region,
+// token) pair together, and finalizers only run with the region unpublished.
 typedef struct _jl_reset_ctx_t {
     uintptr_t sp;
     struct _jl_gcframe_t *gcstack;

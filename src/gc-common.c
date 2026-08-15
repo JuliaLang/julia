@@ -166,10 +166,6 @@ void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 1);
 }
 
-// see their definitions in the reset-safe allocation section below
-STATIC_INLINE jl_reset_ctx_t *reset_region_unpublish(jl_task_t *ct) JL_NOTSAFEPOINT;
-STATIC_INLINE void reset_region_republish(jl_task_t *ct, jl_reset_ctx_t *reset_ctx);
-
 void run_finalizer(jl_task_t *ct, void *o, void *ff)
 {
     int ptr_finalizer = gc_ptr_tag(o, GC_FIN_CFUNC_TAG);
@@ -256,19 +252,16 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOI
 
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
 // to be held for the current thread and will release the lock when the
-// function returns. The caller must republish the returned reset context
-// after restoring any state saved around the finalizer run.
-static jl_reset_ctx_t *jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE_WITH_CANSAFEPOINT
+// function returns.
+static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE_WITH_CANSAFEPOINT
 {
+    // Finalizer bookkeeping is not reset-safe. Allocation entry points that
+    // can preserve a reset region must unpublish it before reaching here.
+    assert(jl_atomic_load_relaxed(&ct->reset_ctx) == NULL);
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
     uint8_t sticky = ct->sticky;
-    // Finalizers hijack the current task, so like `sticky` and the RNG its
-    // cancellation state is bracketed: unpublish the reset region (finalizer
-    // frames must not be abandoned into it) and stash the token binding,
-    // which the finalizers' own cancellation points may rebind. Both are
-    // restored below.
-    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    // Finalizers hijack the current task, so preserve its token binding.
     jl_value_t *bound_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
     JL_GC_PUSH1(&bound_token);
     // empty out the first two entries for the GC frame
@@ -289,7 +282,6 @@ static jl_reset_ctx_t *jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *
     jl_atomic_store_relaxed(&ct->bound_cancel_token, bound_token);
     jl_gc_wb_current_task(ct, bound_token);
     JL_GC_POP(); // matches the JL_GC_PUSH1 above
-    return reset_ctx;
 }
 
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
@@ -333,7 +325,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
     ct->ptls->in_finalizer = !finalizers_thread;
-    jl_reset_ctx_t *reset_ctx = jl_gc_run_finalizers_in_list(ct, &copied_list);
+    jl_gc_run_finalizers_in_list(ct, &copied_list);
     ct->ptls->in_finalizer = was_in_finalizer;
     arraylist_free(&copied_list);
 
@@ -342,7 +334,6 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     SetLastError(last_error);
 #endif
     errno = last_errno;
-    reset_region_republish(ct, reset_ctx);
 }
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
@@ -524,14 +515,12 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
     finalize_object(&finalizer_list_marked, o, &copied_list, 0);
     if (copied_list.len > 0) {
         // This releases the finalizers lock.
-        jl_reset_ctx_t *reset_ctx = jl_gc_run_finalizers_in_list(ct, &copied_list);
-        arraylist_free(&copied_list);
-        reset_region_republish(ct, reset_ctx);
+        jl_gc_run_finalizers_in_list(ct, &copied_list);
     }
     else {
         JL_UNLOCK_NOGC(&finalizers_lock);
-        arraylist_free(&copied_list);
     }
+    arraylist_free(&copied_list);
 }
 
 JL_DLLEXPORT void jl_finalize(jl_value_t *o)
@@ -666,60 +655,18 @@ JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 }
 
 // === GMP allocation hooks ===================================================
-// These are special reset-safe versions of GMP's allocations functions. GMP is
-// generally reset-safe, but our allocators are not, so we must protect ourselves
-// from a stray reset inside the allocator.
-
-static void jl_gmp_defer_note(void *state, uint8_t sev)
-{
-    (void)sev;
-    *(volatile sig_atomic_t*)state = 1;
-}
-
-// These guards NEST: an allocation hook may trigger a collection whose
-// finalizers run __gmpz_clear, re-entering the free hook inside the outer
-// guard. Enter therefore saves the previously published context and leave
-// restores it (never bare NULL - clearing would strip the outer hook's
-// protection for the remainder of its libc call, letting a reset longjmp
-// land mid-malloc with the arena lock held).
-STATIC_INLINE jl_cancel_handler_ctx_t *jl_gmp_guard_enter(jl_task_t *ct,
-                                                          jl_cancel_handler_ctx_t *hctx,
-                                                          volatile sig_atomic_t *deferred) JL_NOTSAFEPOINT
-{
-    jl_cancel_handler_ctx_t *prev = jl_atomic_load_relaxed(&ct->cancel_handler_ctx);
-    hctx->fn = &jl_gmp_defer_note;
-    hctx->state = (void*)deferred;
-    jl_signal_fence(); // contents before publication (same-thread signal)
-    jl_atomic_store_release(&ct->cancel_handler_ctx, hctx);
-    jl_signal_fence();
-    return prev;
-}
-
-STATIC_INLINE void jl_gmp_guard_leave(jl_task_t *ct, volatile sig_atomic_t *deferred,
-                                      jl_cancel_handler_ctx_t *prev)
-{
-    jl_signal_fence();
-    jl_atomic_store_release(&ct->cancel_handler_ctx, prev);
-    jl_signal_fence();
-    if (*deferred && prev == NULL && !ct->ptls->in_finalizer) {
-        // A reset was requested while we were inside the critical region,
-        // deliver it now.
-        reset_region_deliver_pending(ct);
-    }
-}
+// These are special reset-safe versions of GMP's allocation functions. GMP is
+// generally reset-safe, but our allocators are not, so unpublish the reset
+// region around them as the *_reset_safe entry points above do.
 
 JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
 {
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL || ct->ptls == NULL)
         return jl_gc_counted_malloc(sz);
-    volatile sig_atomic_t deferred = 0;
-    jl_cancel_handler_ctx_t hctx;
-    jl_cancel_handler_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
     void *data = jl_gc_counted_malloc(sz);
-    // may longjmp; `data` then leaks, like the aborted operation's other
-    // in-flight temporaries (its output is discarded by the unwind anyway)
-    jl_gmp_guard_leave(ct, &deferred, prev);
+    reset_region_republish(ct, reset_ctx); // may longjmp
     return data;
 }
 
@@ -728,11 +675,9 @@ JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, siz
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL || ct->ptls == NULL)
         return jl_gc_counted_realloc_with_old_size(p, old, sz);
-    volatile sig_atomic_t deferred = 0;
-    jl_cancel_handler_ctx_t hctx;
-    jl_cancel_handler_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
     void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
-    jl_gmp_guard_leave(ct, &deferred, prev);
+    reset_region_republish(ct, reset_ctx); // may longjmp
     return data;
 }
 
@@ -743,11 +688,9 @@ JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz)
         jl_gc_counted_free_with_size(p, sz);
         return;
     }
-    volatile sig_atomic_t deferred = 0;
-    jl_cancel_handler_ctx_t hctx;
-    jl_cancel_handler_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
     jl_gc_counted_free_with_size(p, sz);
-    jl_gmp_guard_leave(ct, &deferred, prev);
+    reset_region_republish(ct, reset_ctx); // may longjmp
 }
 
 //_unchecked_calloc does not check for potential overflow of nm*sz
