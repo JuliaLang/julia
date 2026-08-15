@@ -1,5 +1,8 @@
 .PHONY: clean clean_profiles restore_originals
 
+# Abort recipes on the first failed command, including inside loops.
+.SHELLFLAGS := -ec
+
 # See the makefiles in contrib/bolt and contrib/pgo-lto for more information.
 
 # Settings taken from https://github.com/rust-lang/rust/blob/master/src/tools/opt-dist/src/bolt.rs
@@ -56,8 +59,9 @@ LLVM_PROFDATA:=$(STAGE0_TOOLS)llvm-profdata
 LLVM_OBJCOPY:=$(STAGE0_TOOLS)llvm-objcopy
 
 # If you add new files to optimize, you need to add BOLT_LDFLAGS and BOLT_CFLAGS to the build of your new file.
+# The symlinks do not exist before stage 1.
 SYMLINKS_TO_OPTIMIZE := libLLVM.so libjulia-internal.so libjulia-codegen.so
-FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE1_BUILD)/usr/lib/$$file; done)
+FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE1_BUILD)/usr/lib/$$file || :; done)
 
 AFTER_INSTRUMENT_MESSAGE:='Run `make finish_stage2` to finish off the build. $\
 	You can now optionally collect more profiling data by running Julia with an appropriate workload, $\
@@ -90,10 +94,10 @@ $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 
 stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
+	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-BOLT
 	# Turn [cd]tors into init/fini_array sections in libclang_rt, since lld
 	# doesn't do that, and otherwise the profile constructor is not executed
-	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-BOLT && \
-	find $< -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} + && \
+	find $< -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
 	touch $@
 
 $(STAGE1_BUILD): stage0
@@ -108,20 +112,21 @@ stage1: | $(STAGE1_BUILD)
 	touch $@
 	@echo $(AFTER_STAGE1_MESSAGE)
 
-stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
-stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
+# Emit bitcode and ensure configure checks link it with lld.
+stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld
+stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld
 stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
 stage2: export USE_BINARYBUILDER_LLVM=0
 stage2: $(PGO_PROFILE_FILE) | $(STAGE2_BUILD)
 	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) julia-src-release julia-symlink julia-libccalltest \
-								julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest && \
+								julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest
 	touch $@
 
 copy_originals: stage2
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
 		cp -a $$abs_file "$$abs_file.original"; \
-	done && \
+	done
 	touch $@
 
 # I don't think there's any particular reason to have -no-huge-pages here, perhaps slightly more accurate profile data
@@ -134,21 +139,23 @@ bolt_instrument: copy_originals
 		mkdir -p $$(dirname "$(BOLT_PROFILE_DIR)/$$file-prof"); \
 		touch -r "$$abs_file.original" $$abs_file; \
 		printf "\n"; \
-	done && \
+	done
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
-finish_stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
-finish_stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
+finish_stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld
+finish_stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld
 finish_stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
 finish_stage2: stage2
-	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS)
+	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry
+	# --emit-relocs, or the later BOLT rewrite of it fails.
+	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS)
 
 merge_data: bolt_instrument
 	for file in $(FILES_TO_OPTIMIZE); do \
 		profiles=$(BOLT_PROFILE_DIR)/$$file-prof.*.fdata; \
 		$(LLVM_MERGEFDATA) $$profiles > "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata"; \
-	done && \
+	done
 	touch $@
 
 # The --use-old-text saves about 16 MiB of libLLVM.so size.
@@ -159,11 +166,11 @@ merge_data: bolt_instrument
 # We reset the mtime of the files to prevent make from rebuilding targets depending on them.
 bolt: merge_data
 	for file in $(FILES_TO_OPTIMIZE); do \
-        abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
+		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$(if [ "$$file" != $(shell readlink $(STAGE2_BUILD)/usr/lib/libjulia-internal.so) ]; then echo "--use-old-text -split-strategy=cdsplit"; fi); \
 		touch -r "$$abs_file.original" $$abs_file; \
-    done && \
-    touch $@
+	done
+	touch $@
 
 clean_profiles:
 	rm -rf $(PGO_PROFILE_DIR) $(BOLT_PROFILE_DIR)

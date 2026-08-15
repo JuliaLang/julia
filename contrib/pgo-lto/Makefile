@@ -28,9 +28,10 @@ AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for us
 STAGE1_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile-generate=$(PROFILE_DIR)" $\
 			CFLAGS="-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)" $\
 			CXXFLAGS="-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)"
+# Emit bitcode and ensure configure checks link it with lld.
 STAGE2_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile-use=$(PROFILE_FILE) -Wl,--icf=safe" $\
-			CFLAGS="-fprofile-use=$(PROFILE_FILE)" $\
-			CXXFLAGS="-fprofile-use=$(PROFILE_FILE)"
+			CFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin -fuse-ld=lld" $\
+			CXXFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin -fuse-ld=lld"
 
 COMMON_FLAGS = $\
 	"CC=$(STAGE0_TOOLS)clang" $\
