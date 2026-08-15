@@ -434,6 +434,18 @@ struct ComputedFieldType
     end
 end
 
+# The partially applied field generator of a type with computed field types
+# (see `Base.fieldtype_generator`). A plain reflection object, deliberately
+# not part of the type system. Applied with `apply_type` like a partially
+# applied UnionAll: applying some of the remaining parameters yields another
+# FieldtypeGenerator, applying all of them yields the tuple of field types.
+struct FieldtypeGenerator
+    ty::Type
+    function FieldtypeGenerator(@nospecialize(ty::Type))
+        return new(ty)
+    end
+end
+
 # Check if a value contains a TypeApp anywhere in its structure
 function _contains_typeapp(@nospecialize(x))
     if x isa TypeApp
