@@ -20,7 +20,7 @@ BOLT_ARGS += -jump-tables=move
 # Use regular size pages for code alignment
 BOLT_ARGS += -no-huge-pages
 # Fold functions with identical code
-BOLT_ARGS += -icf=1
+BOLT_ARGS += -icf=all
 # Split using best available strategy (three-way splitting, Cache-Directed Sort)
 # Disabled for libjulia-internal till https://github.com/llvm/llvm-project/issues/89508 is fixed
 # BOLT_ARGS += -split-strategy=cdsplit
