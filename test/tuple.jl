@@ -162,6 +162,13 @@ end
     # @test_throws ArgumentError size((1,2), 2)
 end
 
+@testset "front on long tuples" begin
+    # this used to hit a quadratic recursion
+    @test @inferred(Base.front(ntuple(identity, 100))) === ntuple(identity, 99)
+    @test @inferred(Base.front((1, "a", ntuple(identity, 50)...))) === (1, "a", ntuple(identity, 49)...)
+    @test Base.infer_return_type(Base.front, Tuple{Tuple{Int,Vararg{Int}}}) == Tuple{Vararg{Int}}
+end
+
 @testset "indexing" begin
     @test getindex((1,), 1) === 1
     @test getindex((1,2), 2) === 2
