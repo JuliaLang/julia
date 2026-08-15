@@ -2174,6 +2174,22 @@ let src = code_typed1(foosvalconstprop, ())
     @test count(is_constfield_load, src.code) == 0
 end
 
+# JuliaLang/julia#58330: fold scoped value reads after setting the same key
+const sval58330 = ScopedValue(1)
+let (ir, _) = only(Base.code_ircode(()) do
+        @with sval58330 => 2 sval58330[]
+    end)
+    ret = only(filter(isreturn, ir.stmts.stmt))
+    @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+end
+let (ir, _) = only(Base.code_ircode(()) do
+        with(sval58330 => 2) do
+            sval58330[]
+        end
+    end)
+    ret = only(filter(isreturn, ir.stmts.stmt))
+    @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+end
 # JuliaLang/julia #59548
 # Rewrite `Core._apply_iterate` to use `Core.svec` instead of `tuple` to better match
 # the codegen ABI
