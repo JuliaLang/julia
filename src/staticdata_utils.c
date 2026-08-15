@@ -727,7 +727,7 @@ static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
 // This .ji must be loaded from the associated native image (.so/.dylib/.dll).
 static const uint32_t JI_FLAG_SPLIT = 1 << 1;
 
-static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
+static int64_t write_header(ios_t *s, uint32_t flags, uint64_t preferred_base) JL_CANSAFEPOINT
 {
     ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
     write_uint16(s, JI_FORMAT_VERSION);
@@ -748,6 +748,10 @@ static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
     write_uint32(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
     write_uint64(s, 0); // eventually will hold datastartpos
     write_uint64(s, 0); // eventually will hold dataendpos
+    // Address (of the start of this file) that internal heap-image pointers were
+    // precomposed for, or 0 if the heap image contains no precomposed pointers
+    // and must always be relocated the classic way.
+    write_uint64(s, preferred_base);
     return checksumpos;
 }
 
@@ -1032,7 +1036,7 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
+JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos, uint64_t *preferred_base) JL_CANSAFEPOINT
 {
     uint16_t bom;
     if (!(readstr_verify(s, JI_MAGIC, 0) &&
@@ -1054,6 +1058,9 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *chec
     *checksum = read_uint32(s);
     *datastartpos = (int64_t)read_uint64(s);
     *dataendpos = (int64_t)read_uint64(s);
+    uint64_t pb = read_uint64(s);
+    if (preferred_base)
+        *preferred_base = pb;
 
     return 0;
 }
