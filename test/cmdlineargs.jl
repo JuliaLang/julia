@@ -1738,7 +1738,7 @@ end
             checksum = Ref{UInt32}()
             dataendpos = Ref{Int64}()
             datastartpos = Ref{Int64}()
-            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), io.ios, flags, checksum, dataendpos, datastartpos)
+            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}, Ptr{UInt64}), io.ios, flags, checksum, dataendpos, datastartpos, Ref{UInt64}())
             @test err == 0
             @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
             @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native

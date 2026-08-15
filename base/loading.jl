@@ -3808,7 +3808,7 @@ const JI_FLAG_SPLIT::UInt32 = 1 << 1
 function isvalid_cache_header(f::IOStream)
     flags = Ref{UInt32}()
     checksum = Ref{UInt32}()
-    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}())
+    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}, Ptr{UInt64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}(), Ref{UInt64}())
 
     if err == 0 && (flags[] & JI_FLAG_PKGIMAGE == 0)
         @debug "Cache header was for a system image"

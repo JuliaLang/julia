@@ -420,6 +420,15 @@ threads for a single worker and does not affect the total thread limit.
 
 A boolean value that determines if detailed timing information is printed during image compilation. Defaults to 0.
 
+### [`JULIA_IMAGE_IGNORE_PREFERRED_BASE`](@id JULIA_IMAGE_IGNORE_PREFERRED_BASE)
+
+If set, Julia does not attempt to load system images at the preferred address
+recorded in them at build time, and instead relocates their heap pointers by a
+constant offset from wherever they were mapped. This disables an optimization
+(skipping heap-image pointer relocations entirely, keeping the mapped image
+pages clean and shared) and exists as an escape hatch for address-space
+conflicts and for testing.
+
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
