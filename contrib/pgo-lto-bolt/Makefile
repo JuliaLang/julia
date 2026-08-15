@@ -112,9 +112,12 @@ stage1: | $(STAGE1_BUILD)
 	touch $@
 	@echo $(AFTER_STAGE1_MESSAGE)
 
-# Emit bitcode and ensure configure checks link it with lld.
-stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld
-stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld
+# Emit bitcode and ensure configure checks link it with lld. -fuse-ld=lld is
+# a link-only flag, so compile-only invocations need -Qunused-arguments or
+# -Werror'd compile probes fail (e.g. LLVM's -fPIC check, which would silently
+# disable PIC and break the libLLVM link).
+stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments
+stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments
 stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
 stage2: export USE_BINARYBUILDER_LLVM=0
 stage2: $(PGO_PROFILE_FILE) | $(STAGE2_BUILD)
@@ -143,8 +146,8 @@ bolt_instrument: copy_originals
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
-finish_stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld
-finish_stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld
+finish_stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments
+finish_stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments
 finish_stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
 finish_stage2: stage2
 	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry

@@ -28,10 +28,13 @@ AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for us
 STAGE1_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile-generate=$(PROFILE_DIR)" $\
 			CFLAGS="-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)" $\
 			CXXFLAGS="-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)"
-# Emit bitcode and ensure configure checks link it with lld.
+# Emit bitcode and ensure configure checks link it with lld. -fuse-ld=lld is
+# a link-only flag, so compile-only invocations need -Qunused-arguments or
+# -Werror'd compile probes fail (e.g. LLVM's -fPIC check, which would silently
+# disable PIC and break the libLLVM link).
 STAGE2_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile-use=$(PROFILE_FILE) -Wl,--icf=safe" $\
-			CFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin -fuse-ld=lld" $\
-			CXXFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin -fuse-ld=lld"
+			CFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments" $\
+			CXXFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments"
 
 COMMON_FLAGS = $\
 	"CC=$(STAGE0_TOOLS)clang" $\
