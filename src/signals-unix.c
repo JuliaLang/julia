@@ -1501,7 +1501,7 @@ static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf, int val)
     sigemptyset(&sset);
     sigaddset(&sset, sig);
     pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
-    jl_longjmp(jmpbuf, 1);
+    jl_longjmp(jmpbuf, val);
 #endif
 }
 
@@ -1525,6 +1525,9 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEP
 
 void jl_install_default_signal_handlers(void)
 {
+#ifdef _OS_LINUX_
+    (void)jl_ptr_demangle_available();
+#endif
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
