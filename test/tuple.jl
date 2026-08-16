@@ -160,6 +160,14 @@ end
     # @test_throws ArgumentError size((), 2)
     # @test_throws ArgumentError size((1,), 2)
     # @test_throws ArgumentError size((1,2), 2)
+    @test_throws ArgumentError Base.front(())
+    @test Base.front((1,)) === ()
+    @test Base.front((1, 2, 3)) === (1, 2)
+    @test Base.front((1, 2.0, "three", :four)) === (1, 2.0, "three")
+
+    let t = ntuple(identity, Val(40))
+        @test @inferred(Base.front(t)) === ntuple(identity, Val(39))
+    end
 end
 
 @testset "indexing" begin

@@ -341,15 +341,12 @@ julia> Base.front(())
 ERROR: ArgumentError: Cannot call front on an empty tuple.
 ```
 """
-function front(t::Tuple)
+front(::Tuple{}) = throw(ArgumentError("Cannot call front on an empty tuple."))
+
+function front(t::Tuple{Any,Vararg{Any,N}}) where {N}
     @inline
-    _front(t...)
-end
-_front() = throw(ArgumentError("Cannot call front on an empty tuple."))
-_front(v) = ()
-function _front(v, t...)
-    @inline
-    (v, _front(t...)...)
+    r = ntuple(i -> getfield(t, i), Val(N))
+    return r::Tuple{Vararg{eltype(typeof(t))}}
 end
 
 ## mapping ##
