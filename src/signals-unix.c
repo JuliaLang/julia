@@ -816,9 +816,9 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
         // task's bound token source: level-triggered, so a request racing a
         // region's teardown is simply dropped and recovered at the task's
         // next cancellation point. bound_cancel_token is coherent with the
-        // published regions: everything that may rebind it while a region
-        // is live (exception handlers, the finalizer bracket) saves and
-        // restores the pair together. A preempt shootdown checks no source:
+        // published regions: exception handlers restore the pair together,
+        // and finalizers only run with the region unpublished. A preempt
+        // shootdown checks no source:
         // the reset point's re-execution observes the setjmp return code
         // and yields.
         jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
@@ -1501,7 +1501,7 @@ static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf, int val)
     sigemptyset(&sset);
     sigaddset(&sset, sig);
     pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
-    jl_longjmp(jmpbuf, 1);
+    jl_longjmp(jmpbuf, val);
 #endif
 }
 
@@ -1525,6 +1525,9 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEP
 
 void jl_install_default_signal_handlers(void)
 {
+#ifdef _OS_LINUX_
+    (void)jl_ptr_demangle_available();
+#endif
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);

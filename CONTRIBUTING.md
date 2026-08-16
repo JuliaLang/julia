@@ -69,7 +69,7 @@ Similarly to other types of contribution, AI-assisted review is allowed so long 
 
 * Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
-* If your pull request contains substantive contributions from a generative AI tool, please disclose so with details, and review all changes before opening. The "Tool assistance" section of the pull request template has checkboxes for this. Open the pull request yourself once you have reviewed it, rather than having a tool open it on your behalf.
+* If your pull request contains substantive contributions from a generative AI tool, please disclose so with details, and review all changes before opening. Open the pull request yourself once you have reviewed it, rather than having a tool open it on your behalf.
 
 * Relax and have fun!
 
