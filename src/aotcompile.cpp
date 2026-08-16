@@ -6,6 +6,7 @@
 // target support
 #include <llvm/TargetParser/Triple.h>
 #include "llvm/Support/CodeGen.h"
+#include <llvm/ADT/MapVector.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
@@ -352,7 +353,7 @@ struct jl_compiled_function_t {
    orc::ThreadSafeModule TSM;
    jl_llvm_functions_t decls;
 };
-typedef DenseMap<jl_code_instance_t*, jl_compiled_function_t> jl_compiled_functions_t;
+typedef MapVector<jl_code_instance_t*, jl_compiled_function_t> jl_compiled_functions_t;
 
 static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi)
 {
