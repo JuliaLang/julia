@@ -1838,8 +1838,7 @@ end
     # it through the annotated MPZ entry points - either their own
     # cancellation point, an asynchronous reset landing inside audited
     # libgmp compute (the reset region stays published across the annotated
-    # call), or the deferring allocation hooks chaining into the reset on
-    # exit.
+    # call), or the allocation hooks republishing the region on exit.
     function bigmul_loop(nbits)
         b = big(3)^(nbits ÷ 2)
         m = big(10)^(nbits ÷ 8)
@@ -1859,10 +1858,10 @@ end
         @test string(big(2)^128) == "340282366920938463463374607431768211456"
 
         # Allocation-churn storm: small, allocation-dominated BigInt work
-        # hammered by cancellation. Deliveries frequently land inside the
-        # deferring jl_gmp_counted_* hooks (the handler region), exercising
-        # the defer-and-chain path; correctness is "no crash, no corruption,
-        # clean arithmetic afterwards".
+        # hammered by cancellation. Deliveries frequently race the
+        # jl_gmp_counted_* hooks, exercising their unpublish/republish path;
+        # correctness is "no crash, no corruption, clean arithmetic
+        # afterwards".
         deadline = time() + 8
         rounds = 0
         while time() < deadline
@@ -2590,9 +2589,9 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     # delivery could (corrupting the heap - issue #56545): the loop is
     # deliberately checkless, so delivery lands on an MPZ entry point's own
     # cancellation point, inside audited libgmp compute (unwound via the
-    # published reset region), or inside the allocation hooks (deferred and
-    # chained into the reset on exit) - and BigInt arithmetic in the
-    # session works correctly afterwards
+    # published reset region), or when an allocation hook republishes the
+    # region on exit - and BigInt arithmetic in the session works correctly
+    # afterwards
     sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
     expect("EVAL-6")
     sleep(0.5)

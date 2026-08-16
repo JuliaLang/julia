@@ -816,9 +816,9 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
         // task's bound token source: level-triggered, so a request racing a
         // region's teardown is simply dropped and recovered at the task's
         // next cancellation point. bound_cancel_token is coherent with the
-        // published regions: everything that may rebind it while a region
-        // is live (exception handlers, the finalizer bracket) saves and
-        // restores the pair together. A preempt shootdown checks no source:
+        // published regions: exception handlers restore the pair together,
+        // and finalizers only run with the region unpublished. A preempt
+        // shootdown checks no source:
         // the reset point's re-execution observes the setjmp return code
         // and yields.
         jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
