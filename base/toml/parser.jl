@@ -32,6 +32,9 @@ const TOMLDict  = Dict{String, Any}
 ############
 
 # The empty path identifies the root table.
+# TODO: Formatting choices (e.g. which tables print inline, indentation) could
+# be retained for full round-tripping the same way as comments: captured into a
+# sibling side-channel keyed by these item paths and passed back to `print`.
 const CommentPath = Tuple{Vararg{String}}
 
 # Text excludes `#`; `nothing` means no inline comment and `""` a bare `#`.
