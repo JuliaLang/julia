@@ -100,7 +100,10 @@ close(s); finalize(m); m=nothing; GC.gc()
 # See https://github.com/JuliaLang/julia/issues/32155
 # On PPC we receive `SEGV_MAPERR` instead of `SEGV_ACCERR` and
 # can thus not turn the segmentation fault into an exception.
-if !(Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le)
+# On FreeBSD AArch64, we can't currently access ESR to determine
+# whether the segfault is a write fault, so we similarly can't
+# turn the segfault into an exception.
+if !(Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le) && !(Sys.isfreebsd() && Sys.ARCH === :aarch64)
     s = open(file, "r")
     m = mmap(s)
     @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
@@ -339,18 +342,7 @@ end
 
 @static if Sys.islinux()
 
-    function has_open_fd(name)
-        for fd in readdir("/proc/self/fd")
-            try
-                basename(name) == basename(Base.Filesystem.readlink("/proc/self/fd/$fd")) && return true
-            catch
-                # fd may close between listing and reading the link
-            end
-        end
-        return false
-    end
-
-    function has_open_fd(pid::Integer, name)
+    function has_open_fd(pid, name)
         for fd in readdir("/proc/$pid/fd")
             try
                 basename(name) == basename(Base.Filesystem.readlink("/proc/$pid/fd/$fd")) && return true
@@ -361,17 +353,29 @@ end
         return false
     end
 
+    named_mapping_open(name) = has_open_fd("self", name)
+
 elseif Sys.iswindows()
 
-function named_mapping_open(segname)
-    try
-        io = open(Mmap.SharedMemory, segname, 1; readonly=true, create=false)
-        close(io)
-        return true
-    catch
+    function named_mapping_open(segname)
+        try
+            io = open(Mmap.SharedMemory, segname, 1; readonly=true, create=false)
+            close(io)
+            return true
+        catch
+            return false
+        end
+    end
+
+elseif Sys.isfreebsd()
+
+    function named_mapping_open(name)
+        for line in Iterators.drop(eachline(`posixshmcontrol ls`), 1)
+            path = last(rsplit(line, '\t'; limit=2))
+            name == path && return true
+        end
         return false
     end
-end
 
 end
 
@@ -443,7 +447,9 @@ end
         @test_throws Base.IOError open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
         io2 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = true, create = false)
         m = mmap(io2, Vector{UInt8}, 12)
-        @test_throws ReadOnlyMemoryError m .= 1
+        if !(Sys.isfreebsd() && Sys.ARCH === :aarch64)
+            @test_throws ReadOnlyMemoryError m .= 1
+        end
         close(io1); close(io2); finalize(m); m = nothing; GC.gc()
     end
 
@@ -504,20 +510,7 @@ end
     @testset "Resource cleanup" begin
         name = "/jlsharedsegment"
 
-        @static if Sys.islinux()
-
-            io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
-            @test has_open_fd(name)
-            close(io)
-            @test !has_open_fd(name)
-
-            io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
-            @test has_open_fd(name)
-            finalize(io)
-            @test !has_open_fd(name)
-            io = nothing; GC.gc()
-
-        elseif Sys.iswindows()
+        @static if !Sys.isapple()
 
             io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
             @test named_mapping_open(name)
@@ -530,7 +523,7 @@ end
             @test !named_mapping_open(name)
             io = nothing; GC.gc()
 
-        else # other Unix, tests TODO
+        else # macOS, tests TODO
 
         end
     end
@@ -554,7 +547,7 @@ end
                 wait(child)
             end
 
-        elseif Sys.iswindows()
+        elseif Sys.iswindows() || Sys.isfreebsd()
 
             # If the handle were inherited (bInheritHandle=true), the still-running child
             # would keep the kernel object alive after we close our own handle, and
@@ -571,7 +564,7 @@ end
                 wait(child)
             end
 
-        else # other Unix, tests TODO
+        else # macOS, tests TODO
 
         end
     end

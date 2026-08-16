@@ -28,6 +28,11 @@ LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs)
 
 DEBUGFLAGS += -g
 
+# Avoid an explosion of nullability warnings from Clang
+ifneq (,$(findstring clang,$(shell $(CC) --version)))
+CFLAGS_ADD += -Wno-nullability-completeness
+endif
+
 #=============================================================================
 
 release: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE)
