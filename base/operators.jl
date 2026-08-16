@@ -1344,6 +1344,7 @@ julia> my_add((1,2,3))
 ```
 """
 splat(f) = Splat(f)
+unsplat(f) = args -> f(args...)
 
 """
     Base.Splat{F} <: Function
