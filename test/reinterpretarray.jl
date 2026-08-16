@@ -53,7 +53,7 @@ end
                               " The resulting array would have a non-integral first dimension.") reinterpret(Tuple{Int,Int}, [1,2,3,4,5])
 
 @test_throws ArgumentError("`reinterpret(reshape, Complex{Int64}, a)` where `eltype(a)` is Int64 requires that `axes(a, 1)` (got Base.OneTo(4)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Complex{Int64}, A)
-@test_throws ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got 24) and `sizeof(eltype(a))` (got 16) be an integer multiple of the other") reinterpret(reshape, NTuple{3, Int64}, B)
+@test_throws ArgumentError("`reinterpret(reshape, T, a)` requires that one of `Base.elsize(Array{T})` (got 24) and `Base.elsize(Array{eltype(a)})` (got 16) be an integer multiple of the other") reinterpret(reshape, NTuple{3, Int64}, B)
 @test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(reshape, Vector{Int64}, Ars)
 @test_throws ArgumentError("cannot reinterpret a zero-dimensional `UInt8` array to `UInt16` which is of a larger size") reinterpret(reshape, UInt16, reshape([0x01]))
 
@@ -395,7 +395,7 @@ test_many_wrappers((A1, A2), (identity, wrapper)) do (A1_, A2_)
         reinterpret(S2, deepcopy(A1_)),
         reinterpret(S2, deepcopy(A1_)),
         [S2(1, 2)],
-        (a, b) -> parent(a) == parent(b),
+        (a, b) -> @test(parent(a) == parent(b)),
     )
     reinterpret(S2, A1)[1] = S2(1, 2)
     @test A1[1] == S1(1, 2)
@@ -754,7 +754,7 @@ end
     end
 end
 
-@testset "elsize for ReinterpretArray with aligned types" begin
+@testset "ReinterpretArray with non power of two primitive types" begin
     primitive type RInt24 24 end
     primitive type RAlsoInt24 24 end
     RInt24(x::Int) = Core.Intrinsics.trunc_int(RInt24, x)
@@ -762,111 +762,101 @@ end
     Base.zero(::Type{RInt24}) = RInt24(0)
     Base.zero(::Type{RAlsoInt24}) = RAlsoInt24(0)
 
-    # sizeof(T) == sizeof(S): elsize delegates through parent chain
+    # sizeof(T) == sizeof(S):
     a = zeros(RInt24, 3)
     b = reinterpret(RAlsoInt24, a)
-    @test Base.elsize(b) == Base.elsize(a) == 4
+    @test Base.elsize(b)*stride(b, 1) == Base.elsize(a)*stride(a, 1) == 4
+    @test length(a) == length(b)
 
-    # View-wrapped parent: delegates through SubArray to Array
+    # View-wrapped parent:
     v = view(a, 1:2)
     c = reinterpret(RAlsoInt24, v)
-    @test Base.elsize(c) == 4
+    @test Base.elsize(c)*stride(c, 1) == 4
+    @test length(c) == 2
 
-    # Reshape-variant with packed parent: sizeof(T) != sizeof(S) → sizeof(T)
+    # Reshape-variant:
     d = reinterpret(reshape, UInt8, zeros(RInt24, 6))
-    @test Base.elsize(d) == sizeof(UInt8)
+    @test Base.elsize(d)*stride(d, 1) == sizeof(UInt8)
+    @test size(d) == (4, 6)
 
-    # sizeof(T) != sizeof(S) flat reinterpret
-    e = reinterpret(UInt8, zeros(Int32, 5))
-    @test Base.elsize(e) == sizeof(UInt8)
-    f = reinterpret(Int32, zeros(UInt8, 20))
-    @test Base.elsize(f) == sizeof(Int32)
-end
+    # Array and Memory backing: elementwise path writes to correct data bytes
+    @testset "$T backing: elementwise path writes to correct data bytes" for T in (Array, Memory)
+        local a = T{RInt24}(undef, 2)
+        a[1] = RInt24(0); a[2] = RInt24(0)
+        local b = reinterpret(UInt8, a)
+        @test_throws Base.PaddingError b[1]
+        @test length(b) == 8
+        b[2] = 0xab                     # byte 2 = second data byte of element 1
+        @test a[1] === RInt24(0xab00 % Int)
+        @test a[2] === RInt24(0)
+        b[5] = 0xcd                     # byte 5 = first data byte of element 2
+        @test a[2] === RInt24(0xcd % Int)
+    end
 
-@testset "ReinterpretArray with Memory parent and aligned types" begin
-    primitive type NInt24 24 end
-    primitive type NAlsoInt24 24 end
-    NInt24(x::Int) = Core.Intrinsics.trunc_int(NInt24, x)
-    NAlsoInt24(x::Int) = Core.Intrinsics.trunc_int(NAlsoInt24, x)
-    Base.zero(::Type{NInt24}) = NInt24(0)
-    Base.zero(::Type{NAlsoInt24}) = NAlsoInt24(0)
+    # check the strided array interface
+    a = reinterpret(RInt24, collect(UInt8, 1:12))
+    @test length(a) == 3
+    z = reinterpret(RInt24, zeros(UInt8, 12))
+    check_strided_get(a)
+    b = collect(a)
+    @test b == a
+    check_strided_get(b)
+    c = reinterpret(RAlsoInt24, b)
+    check_strided_get(c)
+    for N in 1:4
+        local d = reinterpret(NTuple{N,UInt8}, b)
+        # b has padding that should not be exposed
+        @test_throws Base.PaddingError d[1]
+        check_strided_set(
+            deepcopy(d),
+            deepcopy(d),
+            rand(NTuple{N,UInt8}, length(d)),
+            (a, b) -> @test(parent(a) == parent(b)),
+        )
+        check_strided_set(
+            deepcopy(d),
+            deepcopy(d),
+            fill(ntuple(Returns(0x00), N), length(d)),
+            (a, b) -> @test(parent(a) == parent(b) == z),
+        )
+    end
 
-    mem = Memory{NInt24}(undef, 3)
-    mem[1] = NInt24(10); mem[2] = NInt24(20); mem[3] = NInt24(30)
-    b = reinterpret(NAlsoInt24, mem)
+    a = zeros(RInt24, 3)
+    a[1] = RInt24(10)
+    a[2] = RInt24(20)
+    a[3] = RInt24(30)
+    b = reinterpret(RAlsoInt24, a)
 
-    @test Base.elsize(b) == Base.elsize(mem) == 4
-    @test b[1] == reinterpret(NAlsoInt24, NInt24(10))
-    @test b[2] == reinterpret(NAlsoInt24, NInt24(20))
-    @test b[3] == reinterpret(NAlsoInt24, NInt24(30))
+    @test b[1] == reinterpret(RAlsoInt24, RInt24(10))
+    @test b[2] == reinterpret(RAlsoInt24, RInt24(20))
+    @test b[3] == reinterpret(RAlsoInt24, RInt24(30))
 
-    b[2] = reinterpret(NAlsoInt24, NInt24(99))
-    @test b[2] == reinterpret(NAlsoInt24, NInt24(99))
-    @test b[1] == reinterpret(NAlsoInt24, NInt24(10))
-    @test b[3] == reinterpret(NAlsoInt24, NInt24(30))
-end
+    b[2] = reinterpret(RAlsoInt24, RInt24(99))
+    @test b[2] == reinterpret(RAlsoInt24, RInt24(99))
+    @test b[1] == reinterpret(RAlsoInt24, RInt24(10))
+    @test b[3] == reinterpret(RAlsoInt24, RInt24(30))
 
-@testset "ReinterpretArray over non-DenseArray parents" begin
-    # elsize should throw MethodError for non-Dense parents
-    r = reinterpret(UInt, 1:6)
-    @test_throws MethodError Base.elsize(r)
+    # Zero dim edge case
+    @test reinterpret(RInt24, fill(Int32(1)))[] === RInt24(1)
+    @test reinterpret(RInt24, fill(RAlsoInt24(1)))[] === RInt24(1)
+    @test_throws Base.PaddingError reinterpret(Int32, fill(RInt24(1)))[]
+    a = fill(RInt24(1))
+    b = reinterpret(Int32, a)
+    b[] = Int32(2)
+    @test a[] === RInt24(2)
+    c = reinterpret(RAlsoInt24, a)
+    c[] = RAlsoInt24(3)
+    @test a[] === RInt24(3)
 
-    # But indexing should still work via _getindex_ra
-    @test r[2] == 2
-    @test length(r) == 6
-    @test collect(r) == UInt[1, 2, 3, 4, 5, 6]
-
-    # Reshape wrapping a non-Dense parent must also work
-    rr = reinterpret(UInt, reshape(1:6, 2, 3))
-    @test rr[2] == 2
-    @test rr[4] == 4
-end
-
-@testset "Padded-parent write routes to data byte, not padding byte" begin
-    primitive type PadInt24 24 end
-    PadInt24(x::Int) = Core.Intrinsics.trunc_int(PadInt24, x)
-    Base.zero(::Type{PadInt24}) = PadInt24(0)
-
-    # Array backing: elementwise path writes to correct data bytes
-    a = zeros(PadInt24, 2)
-    b = reinterpret(UInt8, a)
-    b[2] = 0xab                     # packed byte 2 = second data byte of element 1
-    @test a[1] === PadInt24(0xab00 % Int)
-    @test a[2] === PadInt24(0)
-    b[4] = 0xcd                     # packed byte 4 = first data byte of element 2
-    @test a[2] === PadInt24(0xcd % Int)
-
-    # Memory backing: same-size reinterpret also takes elementwise path
-    mem = Memory{PadInt24}(undef, 2)
-    mem[1] = PadInt24(0); mem[2] = PadInt24(0)
-    b = reinterpret(UInt8, mem)
-    b[2] = 0xab
-    @test mem[1] === PadInt24(0xab00 % Int)
-    @test mem[2] === PadInt24(0)
-    b[4] = 0xcd
-    @test mem[2] === PadInt24(0xcd % Int)
-end
-
-@testset "getindex/setindex! pointer path with aligned types" begin
-    primitive type PInt24 24 end
-    primitive type PAlsoInt24 24 end
-    PInt24(x::Int) = Core.Intrinsics.trunc_int(PInt24, x)
-    PAlsoInt24(x::Int) = Core.Intrinsics.trunc_int(PAlsoInt24, x)
-    Base.zero(::Type{PInt24}) = PInt24(0)
-    Base.zero(::Type{PAlsoInt24}) = PAlsoInt24(0)
-
-    a = zeros(PInt24, 3)
-    a[1] = PInt24(10)
-    a[2] = PInt24(20)
-    a[3] = PInt24(30)
-    b = reinterpret(PAlsoInt24, a)
-
-    @test b[1] == reinterpret(PAlsoInt24, PInt24(10))
-    @test b[2] == reinterpret(PAlsoInt24, PInt24(20))
-    @test b[3] == reinterpret(PAlsoInt24, PInt24(30))
-
-    b[2] = reinterpret(PAlsoInt24, PInt24(99))
-    @test b[2] == reinterpret(PAlsoInt24, PInt24(99))
-    @test b[1] == reinterpret(PAlsoInt24, PInt24(10))
-    @test b[3] == reinterpret(PAlsoInt24, PInt24(30))
+    # The padding bytes of Tuple{RInt24,RInt24} coincide with the padding bytes of
+    # RInt24, so these reinterprets should be readable and writable, but an offset
+    # convention inconsistency between `padding` and `CyclePadding` makes
+    # `array_subpadding` conservatively return false.
+    a = [(RInt24(1), RInt24(2)), (RInt24(3), RInt24(4))]
+    b = reinterpret(RInt24, a)
+    @test length(b) == 4
+    @test_broken b[1] === RInt24(1)
+    @test_broken (b[1] = RInt24(5); a[1][1] === RInt24(5))
+    @test_broken Base.array_subpadding(RInt24, Tuple{RInt24, RInt24})
+    @test_broken Base.array_subpadding(Tuple{RInt24, RInt24}, RInt24)
 end
