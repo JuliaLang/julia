@@ -108,6 +108,8 @@ get_finalizers_inhibited() = ccall(:jl_gc_get_finalizers_inhibited, Int32, (Ptr{
 
 # lock / unlock
 let l = ReentrantLock()
+    # The cancellation-aware overload must preserve the closure's result type.
+    @test @inferred(lock(() -> 42, l)) === 42
     @test lock(l) === nothing
     @test islocked(l)
     success = Ref(false)
