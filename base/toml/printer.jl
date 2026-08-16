@@ -228,6 +228,35 @@ end
 has_comments(comments::Comments, path::CommentPath) =
     haskey(comments.items, path) || haskey(comments.floating, path)
 
+# Comments associated with items inside a table that is printed inline have no
+# line of their own to be printed on; hoist them above the entry that owns the
+# inline table. This matches how comments inside an inline table value are
+# associated with the owning entry when parsing, so they keep this position
+# on subsequent round trips.
+function print_hoisted_inline_comments(io::IO, comments::Comments, a::AbstractDict,
+                                       path::CommentPath, indentstr::String, sorted::Bool)
+    floating = get(comments.floating, path, nothing)
+    if floating !== nothing
+        for line in floating
+            print_comment_line(io, indentstr, line)
+        end
+    end
+    vkeys = collect(keys(a))
+    sorted && sort!(vkeys)
+    for k in vkeys
+        kpath = (path..., String(k))
+        block = get(comments.items, kpath, nothing)
+        if block !== nothing
+            for line in block.above
+                print_comment_line(io, indentstr, line)
+            end
+            block.inline === nothing || print_comment_line(io, indentstr, block.inline)
+        end
+        v = a[k]
+        v isa AbstractDict && print_hoisted_inline_comments(io, comments, v, kpath, indentstr, sorted)
+    end
+end
+
 # Returns whether any floating comment lines were printed
 function print_comments_floating(io::IO, comments::Comments, path::CommentPath, indentstr::String)
     lines = get(comments.floating, path, nothing)
@@ -288,7 +317,11 @@ function print_table(f::Function, io::IO, a::AbstractDict,
         end
 
         if comments !== nothing
-            print_comments_above(io, comments, (ks..., String(key)), entry_indentstr)
+            entry_path = (ks..., String(key))
+            print_comments_above(io, comments, entry_path, entry_indentstr)
+            if value isa AbstractDict && value in inline_tables
+                print_hoisted_inline_comments(io, comments, value, entry_path, entry_indentstr, sorted)
+            end
         end
         Base.print(io, entry_indentstr)
         printkey(io, [String(key)])

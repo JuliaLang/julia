@@ -276,6 +276,39 @@ end
     @test sprint_with_comments(data2, comments2) == out
 end
 
+@testset "comments in tables printed inline are hoisted" begin
+    # A table printed via `inline_tables` has no lines for its entries'
+    # comments; they are hoisted above the entry that owns the inline table,
+    # which is where a reparse of the output associates them
+    str = """
+    [deps]
+    Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+
+    # above the sources entry
+    [sources.Example]
+    # local checkout
+    path = "../Example" # trailing
+    """
+    data, comments = parse_with_comments(str)
+    inline_tables = Base.IdSet{Dict{String, Any}}()
+    push!(inline_tables, data["sources"]["Example"])
+    out = sprint_with_comments(data, comments; inline_tables, sorted = true)
+    @test occursin("# above the sources entry", out)
+    @test occursin("# local checkout", out)
+    @test occursin("# trailing", out)
+    @test occursin("Example = {path = \"../Example\"}", out)
+    data2, comments2 = parse_with_comments(out)
+    @test data2 == data
+    @test comments2.items[("sources", "Example")].above ==
+        [" above the sources entry", " local checkout", " trailing"]
+    @test !haskey(comments2.items, ("sources", "Example", "path"))
+    # stable from the second print onwards
+    inline_tables2 = Base.IdSet{Dict{String, Any}}()
+    push!(inline_tables2, data2["sources"]["Example"])
+    out2 = sprint_with_comments(data2, comments2; inline_tables = inline_tables2, sorted = true)
+    @test out2 == out
+end
+
 @testset "Comments is emptied on reuse" begin
     comments = TOML.Comments()
     TOML.parse("# hi\na = 1"; comments)
