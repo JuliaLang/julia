@@ -133,9 +133,9 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     size_t i;
     for (i = 1; i < nargs; i++)
         argv[i-1] = eval_value(args[i], s);
-    if (argv[0] == BUILTIN(_apply_iterate)) {
-        // `ci` selects codegen's flattened target; the interpreter executes plain apply.
-        jl_value_t *result = jl_f__apply_iterate(NULL, &argv[1], nargs - 2);
+    if (argv[0] == BUILTIN(_apply_iterate) && jl_is_code_instance(args[0])) {
+        // `args[0]` is the flattened `f(args...)` target: flatten, then invoke it.
+        jl_value_t *result = jl_apply_iterate_codeinst(args[0], &argv[1], nargs - 2);
         JL_GC_POP();
         return result;
     }

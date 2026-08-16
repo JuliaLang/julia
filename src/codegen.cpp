@@ -1048,6 +1048,11 @@ static const auto jlinvokemodify_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto japplyiterateci_func = new JuliaFunction<>{
+    XSTR(jl_apply_iterate_codeinst),
+    get_func_sig,
+    get_func_attrs,
+};
 static const auto jlinvokeoc_func = new JuliaFunction<>{
     XSTR(jl_invoke_oc),
     get_func2_sig,
@@ -6473,7 +6478,13 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt) 
             }
             return emit_invoke(ctx, lival, flat, flat.size(), rt, false);
         }
-        // Never pass unflattened arguments to `ci`; fall back to dynamic apply.
+        // Never pass unflattened arguments to `ci`; flatten at runtime instead,
+        // preserving `ci` as the call target.
+        if (lival.constant && jl_is_code_instance(lival.constant)) {
+            Value *r = emit_jlcall(ctx, japplyiterateci_func, boxed(ctx, lival),
+                                   ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
+            return mark_julia_type(ctx, r, true, rt);
+        }
         Value *r = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
         return mark_julia_type(ctx, r, true, rt);
     }
@@ -11539,6 +11550,7 @@ static void init_jit_functions(void)
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jlinvokemodify_func, &jl_invoke_modify);
     add_named_global(jlinvoketarget_func, &jl_invoke_target);
+    add_named_global(japplyiterateci_func, &jl_apply_iterate_codeinst);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);
