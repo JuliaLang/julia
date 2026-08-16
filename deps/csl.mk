@@ -80,6 +80,7 @@ $(eval $(call copy_csl,$(call versioned_libname,libgfortran,5)))
 $(eval $(call copy_csl,$(call versioned_libname,libquadmath,0)))
 $(eval $(call copy_csl,$(call versioned_libname,libstdc++,6)))
 $(eval $(call copy_csl,$(call versioned_libname,libatomic,1)))
+$(eval $(call copy_csl,libatomic.$(SHLIB_EXT)))
 $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
 # Configurable either a static or dynamic library depending on the system
@@ -103,6 +104,7 @@ $(eval $(call copy_csl_static_private,libwinmm.a))
 $(eval $(call copy_csl_static_private,libdbghelp.a))
 $(eval $(call copy_csl_static_private,libuserenv.a))
 $(eval $(call copy_csl_static_private,libsecur32.a))
+$(eval $(call copy_csl_static_private,libsynchronization.a))
 $(eval $(call copy_csl_static_private,libole32.a))
 $(eval $(call copy_csl_static_private,libuuid.a))
 $(eval $(call copy_csl_static_private,libadvapi32.a))
@@ -194,6 +196,7 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libdbghelp.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libuserenv.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libsecur32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libsynchronization.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libole32.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libuuid.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libadvapi32.a $(build_private_libdir)/
@@ -239,6 +242,7 @@ uninstall-gcc-libraries:
 	-rm -f $(build_private_libdir)/libdbghelp.a
 	-rm -f $(build_private_libdir)/libuserenv.a
 	-rm -f $(build_private_libdir)/libsecur32.a
+	-rm -f $(build_private_libdir)/libsynchronization.a
 	-rm -f $(build_private_libdir)/libole32.a
 	-rm -f $(build_private_libdir)/libuuid.a
 	-rm -f $(build_private_libdir)/libadvapi32.a

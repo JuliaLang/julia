@@ -35,7 +35,16 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
         newirsv = IRInterpretationState(interp, ci, mi, argtypes, src)
         if newirsv !== nothing
             assign_parentchild!(newirsv, parent)
-            return ir_abstract_constant_propagation(interp, newirsv)
+            result = ir_abstract_constant_propagation(interp, newirsv)
+            update_valid_age!(parent, world, newirsv.valid_worlds)
+            proof_edges = Any[]
+            for info in newirsv.ir.stmts.info
+                add_edges!(proof_edges, info)
+            end
+            append!(proof_edges, newirsv.edges)
+            proof = LocalInferenceProof(newirsv.valid_worlds, Core.svec(proof_edges...))
+            add_inference_proof!(parent.edges, proof)
+            return result
         end
         return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
     end
@@ -48,10 +57,12 @@ function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instructio
         mi_cache = code_cache(interp)
         code = get(mi_cache, ci, nothing)
         code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
-        code isa InferenceResult && (code = code.ci) # COMBAK: we shouldn't discard the src so easily here, as we might not be able to get it back again
+        code = code::CodeInstance
     else
         code = ci::CodeInstance
     end
+    update_valid_age!(irsv, get_inference_world(interp), proof_worlds(code))
+    add_inference_proof!(irsv.edges, code)
     argtypes = collect_argtypes(interp, stmt.args[2:end], StatementState(nothing, false), irsv)
     argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
     return concrete_eval_invoke(interp, code, argtypes, irsv)

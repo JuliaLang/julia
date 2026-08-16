@@ -240,27 +240,82 @@ cd(@__DIR__) do
 
         Sys.iswindows() || atexit() do
             # This `atexit()` is a desperate attempt to collect .core dumps from
-            # any hung workers, if the CI test infrastructure decides to tear us
-            # down due to a timeout
+            # any hung test processes, if the CI test infrastructure decides to
+            # tear us down due to a timeout
             isempty(running_on) && return
             stuck = Int[]
-            # Send a `SIGQUIT` signal to any stuck workers so they produce
-            # a .core file and a stacktrace.
-            for (test, wrkr) in running_on
-                ospid = get(worker_ospids, wrkr, nothing)
-                ospid === nothing && continue
-                println(stderr, "Test $test is still running on worker $wrkr (pid $ospid) at teardown; sending SIGQUIT for a core dump.")
-                if ccall(:kill, Cint, (Cint, Cint), ospid, Base.SIGQUIT) == 0
-                    push!(stuck, ospid)
+            function quit!(pid)
+                if ccall(:kill, Cint, (Cint, Cint), pid, Base.SIGQUIT) == 0
+                    push!(stuck, pid)
                 end
             end
-            alive(pid) = ccall(:kill, Cint, (Cint, Cint), pid, 0) == 0
+            # Nothing here may yield to the scheduler. `jl_exit_thread0_cb` runs
+            # atexit hooks on whichever task the signal interrupted, and that
+            # task is usually registered on a wait queue, which makes scheduling
+            # it throw (`ConcurrencyViolationError`, see `enq_work`). So signal
+            # before reporting, report through `Core.stderr` (a raw write rather
+            # than `println`, which can block and yield), and sleep without
+            # yielding.
+            #
+            # Send a `SIGQUIT` to the whole process tree of every stuck test so
+            # each process produces a .core file and a stacktrace, deepest
+            # first: the subprocess a test is blocked on is usually the real
+            # hang, and killing a parent first can take a child down before it
+            # dumps.
+            for (test, wrkr) in running_on
+                # A node 1 test runs in this process: signal its subprocesses,
+                # never ourselves, as we still have to finish exiting. The
+                # workers are all gone by then, so they cannot be in our subtree.
+                ospid = wrkr == 1 ? getpid() : get(worker_ospids, wrkr, nothing)
+                ospid === nothing && continue
+                subtree = reverse!(descendant_pids(ospid))
+                wrkr == 1 && isempty(subtree) && continue
+                foreach(quit!, subtree)
+                wrkr == 1 || quit!(ospid)
+                target = (wrkr == 1 ? "" : "it and ") * "its $(length(subtree)) subprocess(es)"
+                Core.print(Core.stderr, "Test $test is still running on worker $wrkr (pid $ospid) at teardown; sending SIGQUIT to $target for core dumps.\n")
+            end
+            # A signalled process is a zombie until its parent reaps it, and
+            # `kill(pid, 0)` still succeeds for a zombie. Reaping cannot happen
+            # while we are in here, so check the process state directly: a
+            # zombie has finished dumping and must count as done, otherwise this
+            # loop always waits out the full deadline below.
+            function alive(pid)
+                if Sys.islinux()
+                    stat = try
+                        read("/proc/$pid/stat", String)
+                    catch
+                        return false    # already gone
+                    end
+                    # state is the field after the parenthesised comm
+                    state = split(stat[something(findlast(')', stat), 0)+1:end])[1]
+                    return state != "Z"
+                end
+                # Elsewhere, signal 0 cannot tell a zombie from a live process,
+                # so the loop may wait out its deadline as it did before.
+                return ccall(:kill, Cint, (Cint, Cint), pid, 0) == 0
+            end
             # This must stay comfortably below the watchdog's post-SIGTERM
             # escalation timeout (JL_KILL_TIMEOUT) so that we exit before it
             # escalates.
             deadline = time() + 300
+            # A wedged process can swallow the SIGQUIT above without dumping,
+            # so re-signal anything still alive: a repeat SIGQUIT forces a
+            # kernel core dump, and SIGABRT covers processes that ignore
+            # SIGQUIT entirely.
+            SIGABRT = 6 # !windows
+            resignal = [(30, Base.SIGQUIT), (60, SIGABRT), (90, SIGABRT)]
+            start = time()
             while time() < deadline && any(alive, stuck)
-                sleep(1)
+                Libc.systemsleep(1)
+                if !isempty(resignal) && time() - start >= resignal[1][1]
+                    (after, sig) = popfirst!(resignal)
+                    for pid in stuck
+                        alive(pid) || continue
+                        ccall(:kill, Cint, (Cint, Cint), pid, sig) == 0 || continue
+                        Core.print(Core.stderr, "Process $pid has not dumped core $(after)s after SIGQUIT; re-signalling with signal $sig to force a dump.\n")
+                    end
+                end
             end
         end
 
@@ -394,6 +449,7 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
+            running_on[t] = 1
             before = time()
             resp, duration = try
                     r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
@@ -402,6 +458,7 @@ cd(@__DIR__) do
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
                 end
+            delete!(running_on, t)
             if length(resp) == 1
                 print_testworker_errored(t, 1, resp[1])
             else
@@ -492,7 +549,7 @@ cd(@__DIR__) do
                     # deserialization errors or something similar.  Record this testset as Errored.
                     fake = Test.DefaultTestSet(testname)
                     @atomic fake.time_end = fake.time_start + duration
-                    Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = [])]), LineNumberNode(1), nothing))
+                    Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = Union{Ptr{Nothing},Base.InterpreterIP}[])]), LineNumberNode(1), nothing))
                     Test.@with_testset fake begin
                         Test.record(o_ts, fake)
                     end
@@ -501,7 +558,7 @@ cd(@__DIR__) do
             for test in all_tests
                 (test in completed_tests) && continue
                 fake = Test.DefaultTestSet(test)
-                Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(NamedTuple[(;exception = "skipped", backtrace = [])]), LineNumberNode(1), nothing))
+                Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(NamedTuple[(;exception = "skipped", backtrace = Union{Ptr{Nothing},Base.InterpreterIP}[])]), LineNumberNode(1), nothing))
                 Test.@with_testset fake begin
                     Test.record(o_ts, fake)
                 end

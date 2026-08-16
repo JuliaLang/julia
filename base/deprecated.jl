@@ -193,6 +193,7 @@ macro deprecate(old, new, export_old=true)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
         callexpr = old.head === :call ? old : old.args[1]
+        maybe_export = nothing
         if callexpr.head === :call
             fnexpr = callexpr.args[1]
             if fnexpr isa Expr && fnexpr.head === :curly
@@ -204,8 +205,6 @@ macro deprecate(old, new, export_old=true)
                 else
                     cannot_export_nonsymbol()
                 end
-            else
-                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")
@@ -319,6 +318,31 @@ end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
+"""
+    @deprecate_binding old new [export_old=true] [dep_message] [constant=true]
+
+Deprecate the binding `old`, making it an alias for `new` and printing a deprecation warning
+on access to `old` (when `julia` is run with `--depwarn=yes`). This is for deprecating a
+renamed or relocated global/constant, whereas [`@deprecate`](@ref) is for deprecating methods.
+
+`old` must be a symbol and `new` the replacement it forwards to. By default `old` is defined
+as a `const`; pass `false` for `constant` to define it as a non-constant global instead.
+
+To prevent `old` from being exported, set `export_old` to `false`. A custom `dep_message`
+string (printed after "<module>.old is deprecated") may be given.
+
+See also [`@deprecate`](@ref) and [`Base.depwarn`](@ref).
+
+# Examples
+```jldoctest
+julia> const dep_new = 42;
+
+julia> Base.@deprecate_binding dep_old dep_new false;
+
+julia> dep_old
+42
+```
+"""
 macro deprecate_binding(old, new, export_old=true, dep_message=:nothing, constant=true)
     dep_message === :nothing && (dep_message = ", use $new instead.")
     return Expr(:toplevel,
@@ -694,6 +718,20 @@ end
     end
     ss = @inbounds raw_substring(s, i + 1, j)
     SubString{T}(ss)
+end
+
+@deprecate _unsetindex!(A) Base.unsetindex!(A) false
+@deprecate _unsetindex!(A, i) Base.unsetindex!(A, i) false
+
+# `a[] = v` on a `Threads.Atomic` (the `setindex!` form) is a footgun: read-modify-write
+# expressions such as `a[] += 1` look atomic but expand to a separate non-atomic load and
+# store. Steer users to the explicit `@atomic` form. This is written by hand rather than
+# with `@deprecate` so the message can name the hazard and avoid the macro-expansion
+# artifact `@deprecate` would embed in the suggested replacement.
+# ## This is not yet enabled (deprecated) due to the need to transition a couple stdlibs to this form (or another equivalent form).
+function setindex!(x::Threads.Atomic, v)
+    # depwarn(lazy"`a[] = v` on a `Threads.Atomic` is deprecated because read-modify-write uses like `a[] += 1` are not atomic; use `@atomic a[] = v` (or `@atomic a[] += 1`, `Threads.atomic_add!`, ...) instead.", :setindex!)
+    return @atomic x[] = v
 end
 
 # END 1.14 deprecations

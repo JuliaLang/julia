@@ -1497,7 +1497,7 @@ let effects = Base.infer_effects(Core.Intrinsics.atomic_pointermodify, Tuple{Var
 end
 
 # JuliaLang/julia#57780
-let effects = Base.infer_effects(Base._unsetindex!, (MemoryRef{String},))
+let effects = Base.infer_effects(Base.unsetindex!, (MemoryRef{String},))
     @test !Compiler.is_effect_free(effects)
 end
 
@@ -1506,6 +1506,12 @@ end
 @test Base.infer_effects(Core.invoke_in_world, Tuple{Vararg{Any}}) == Compiler.Effects()
 @test Base.infer_effects(invokelatest, Tuple{Vararg{Any}}) == Compiler.Effects()
 @test Base.infer_effects(invoke, Tuple{Vararg{Any}}) == Compiler.Effects()
+
+bitsizeof_int() = Core.bitsizeof(Int)
+let effects = Base.infer_effects(bitsizeof_int)
+    @test Compiler.is_foldable_nothrow(effects)
+    @test Compiler.is_inaccessiblememonly(effects)
+end
 
 # Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
 let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
@@ -1553,6 +1559,27 @@ let f = (x) -> Core.Intrinsics.trunc_int(Int16, x)
     @test catch_error_61435(f, Int16(0)) === :caught
 end
 
+# Intrinsic width checks use logical primitive widths rather than storage sizes.
+primitive type EffectsUInt17 17 end
+primitive type EffectsUInt23 23 end
+let f = (x) -> Core.Intrinsics.bitcast(EffectsUInt17, x)
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt23,)))
+    @test Base.infer_exception_type(f, (EffectsUInt23,)) === ErrorException
+    @test !fully_eliminated((EffectsUInt23,)) do x
+        f(x)
+        return nothing
+    end
+end
+let f = (x) -> Core.Intrinsics.zext_int(EffectsUInt23, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt17,)))
+end
+let f = (x) -> Core.Intrinsics.sext_int(EffectsUInt23, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt17,)))
+end
+let f = (x) -> Core.Intrinsics.trunc_int(EffectsUInt17, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt23,)))
+end
+
 # issue #57324
 module Issue57324
 struct T <: AbstractVector{Float64}
@@ -1578,3 +1605,29 @@ end
 # issue #61590
 @test !Compiler.is_consistent(Base.infer_effects(getproperty, (Core.TypeName, Symbol)))
 @test !Compiler.is_consistent(Base.infer_effects(getfield, (Core.TypeName, Symbol)))
+
+# task_result_type effects modeling (should have !consistent effect)
+let effects = Base.infer_effects(Core.task_result_type, (Task,))
+    @test !Compiler.is_consistent(effects)  # !consistent bit should be set
+    @test Compiler.is_effect_free(effects)
+    @test Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+end
+let effects = Base.infer_effects(Core.task_result_type, (Union{Task,Int},))
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+end
+for argtypes in ((), (Int,), (Task, Task))
+    @test !Compiler.is_nothrow(Base.infer_effects(Core.task_result_type, argtypes))
+end
+
+# Core._task effects modeling: creating a task terminates and has no UB, but
+# accesses task state (scope inheritance, parent RNG split) and may throw
+let effects = Base.infer_effects(Core._task, (Function, Int))
+    @test !Compiler.is_consistent(effects)
+    @test !Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+    @test !Compiler.is_notaskstate(effects)
+    @test Compiler.is_noub(effects)
+end

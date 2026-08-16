@@ -12,15 +12,28 @@
 extern "C" {
 #endif
 
-static jl_binding_partition_t *new_binding_partition(void) JL_CANSAFEPOINT
+// A fresh partition is the last (oldest) in its chain, so its `next` field holds
+// a backreference to the owning binding rather than another partition. Callers
+// that link it ahead of another partition overwrite this.
+static jl_binding_partition_t *new_binding_partition(jl_binding_t *b) JL_CANSAFEPOINT
 {
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_gc_alloc(jl_current_task->ptls, sizeof(jl_binding_partition_t), jl_binding_partition_type);
     bpart->restriction = NULL;
     bpart->kind = (size_t)PARTITION_KIND_GUARD;
     jl_atomic_store_relaxed(&bpart->min_world, 0);
     jl_atomic_store_relaxed(&bpart->max_world, (size_t)-1);
-    jl_atomic_store_relaxed(&bpart->next, NULL);
+    jl_gc_wb_fresh(bpart, b);
+    jl_atomic_store_relaxed(&bpart->next, (jl_binding_partition_t*)b);
     return bpart;
+}
+
+// Whether `p`, a value loaded from a partition's `next` field (or a binding's
+// `partitions` field), refers to an actual partition, as opposed to NULL (an
+// empty chain) or the owning-binding backreference stored in the last partition
+// of a chain.
+STATIC_INLINE int is_some_partition(jl_binding_partition_t *p) JL_NOTSAFEPOINT
+{
+    return p != NULL && jl_is_binding_partition((jl_value_t*)p);
 }
 
 struct implicit_search_gap {
@@ -37,20 +50,22 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition__(jl_binding_t *b
 {
     // Iterate through the list of binding partitions, keeping track of where to insert a new one for an implicit
     // resolution if necessary.
-    while (gap->replace) {
+    while (is_some_partition(gap->replace)) {
         size_t replace_min_world = jl_atomic_load_relaxed(&gap->replace->min_world);
         if (world >= replace_min_world)
             break;
         gap->insert = &gap->replace->next;
         gap->max_world = replace_min_world - 1;
         gap->parent = (jl_value_t*)gap->replace;
+        // The last partition's `next` is the owning-binding backreference, so
+        // `gap->replace` becomes that binding (not a partition) at end-of-chain.
         gap->replace = jl_atomic_load_relaxed(gap->insert);
     }
-    if (gap->replace && world <= jl_atomic_load_relaxed(&gap->replace->max_world)) {
+    if (is_some_partition(gap->replace) && world <= jl_atomic_load_relaxed(&gap->replace->max_world)) {
         return gap->replace;
     }
-    gap->min_world = gap->replace ? jl_atomic_load_relaxed(&gap->replace->max_world) + 1 : 0;
-    if (gap->replace)
+    gap->min_world = is_some_partition(gap->replace) ? jl_atomic_load_relaxed(&gap->replace->max_world) + 1 : 0;
+    if (is_some_partition(gap->replace))
         gap->inherited_flags = gap->replace->kind & PARTITION_MASK_FLAG;
     else
         gap->inherited_flags = 0;
@@ -81,7 +96,17 @@ struct implicit_search_resolution {
     // If non-null, the unique binding imported. For PARTITION_KIND_IMPLICIT_GLOBAL, always matches binding_or_const.
     // Must have trust_cache = 0.
     jl_binding_t *debug_only_ultimate_binding;
+    // Deprecation flags (PARTITION_FLAG_DEPRECATED / _DEPWARN) to stamp onto the resolved
+    // partition. A deprecated constant imported through `using` resolves to IMPLICIT_CONST
+    // (its value), so -- unlike a deprecated global, whose flag lives on the leaf the depwarn
+    // walk reaches -- there is no leaf to carry the deprecation. Recording it here and OR-ing
+    // it onto the importer's partition lets the walk (and `should_depwarn`/`isdeprecated`)
+    // find it directly on the resolved partition, so access through `using` warns consistently
+    // for constants and globals. It is OR-ed together when constants unify.
+    size_t deprecation_flags;
 };
+
+static const size_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN;
 
 static size_t WORLDMAX(size_t a, size_t b) { return a > b ? a : b; }
 static size_t WORLDMIN(size_t a, size_t b) { return a > b ? b : a; }
@@ -105,12 +130,27 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     if (to_update->ultimate_kind == PARTITION_KIND_GUARD) {
         to_update->ultimate_kind = resolution.ultimate_kind;
         to_update->binding_or_const = resolution.binding_or_const;
+        to_update->deprecation_flags = resolution.deprecation_flags;
         to_update->debug_only_import_from = resolution.debug_only_import_from;
         to_update->debug_only_ultimate_binding = resolution.debug_only_ultimate_binding;
         return;
     }
-    if (resolution.ultimate_kind == to_update->ultimate_kind &&
-        resolution.binding_or_const == to_update->binding_or_const) {
+    int same;
+    if (resolution.ultimate_kind != to_update->ultimate_kind) {
+        same = 0;
+    }
+    else if (resolution.ultimate_kind == PARTITION_KIND_IMPLICIT_CONST) {
+        // Unify constants by `egal`
+        same = jl_egal(resolution.binding_or_const, to_update->binding_or_const);
+    }
+    else {
+        same = resolution.binding_or_const == to_update->binding_or_const;
+    }
+    if (same) {
+        // Deprecation is weak: unified constants are deprecated only if every contributing
+        // import was (`impstate`/`depimpstate` keep deprecated and non-deprecated resolutions
+        // apart, so this only OR-s together same-strength imports).
+        to_update->deprecation_flags |= resolution.deprecation_flags;
         if (resolution.debug_only_import_from != to_update->debug_only_import_from) {
             to_update->debug_only_import_from = NULL;
         }
@@ -121,13 +161,17 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     }
     to_update->ultimate_kind = PARTITION_KIND_FAILED;
     to_update->binding_or_const = NULL;
+    to_update->deprecation_flags = 0;
     to_update->debug_only_import_from = NULL;
     to_update->debug_only_ultimate_binding = NULL;
 }
 
 static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, struct implicit_search_gap gap, struct implicit_search_resolution resolution) JL_CANSAFEPOINT
 {
-    size_t new_kind = resolution.ultimate_kind | gap.inherited_flags;
+    // The deprecation flags come from the resolution (the imported binding), not from the
+    // importer's own inherited flags, so a stale deprecation from a prior resolution of this
+    // binding does not persist across a re-resolution (e.g. after the source is un-deprecated).
+    size_t new_kind = resolution.ultimate_kind | (gap.inherited_flags & ~DEPWARN_FLAGS) | resolution.deprecation_flags;
     // If the resolution indicates this should be reexported, add the implicit export flag
     if (resolution.should_be_reexported) {
         new_kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
@@ -153,7 +197,7 @@ retry:
                 }
                 // There remains a gap - proceed
             } else {
-                if (next) {
+                if (is_some_partition(next)) {
                     size_t next_min_world = jl_atomic_load_relaxed(&next->min_world);
                     expected_prev_min_world = new_min_world;
                     for (;;) {
@@ -165,7 +209,7 @@ retry:
                                 jl_gc_wb(prev, nextnext);
                                 if (!jl_atomic_cmpswap(&prev->next, &next, nextnext)) {
                                     // `next` may have been merged into its subsequent partition - we need to retry
-                                    assert(next);
+                                    assert(is_some_partition(next));
                                     continue;
                                 }
                                 // N.B.: This can lose modifications to next->{min_world, next}.
@@ -181,13 +225,13 @@ retry:
             }
         }
     }
-    jl_binding_partition_t *new_bpart = new_binding_partition();
+    jl_binding_partition_t *new_bpart = new_binding_partition(b);
     jl_atomic_store_relaxed(&new_bpart->max_world, new_max_world);
     new_bpart->kind = new_kind;
     jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
     new_bpart->restriction = resolution.binding_or_const;
 
-    if (next) {
+    if (is_some_partition(next)) {
         // See if we can merge the next partition into this one
         size_t next_max_world = jl_atomic_load_relaxed(&next->max_world);
         if (next_max_world == new_min_world - 1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
@@ -198,7 +242,10 @@ retry:
     }
 
     jl_atomic_store_relaxed(&new_bpart->min_world, new_min_world);
-    jl_atomic_store_relaxed(&new_bpart->next, next);
+    if (is_some_partition(next))
+        jl_atomic_store_relaxed(&new_bpart->next, next);
+    // else `new_bpart` is the last in the chain, so leave its `next` as the
+    // owning-binding backreference set by `new_binding_partition`.
     jl_gc_wb(gap.parent, new_bpart);
     if (!jl_atomic_cmpswap(gap.insert, &gap.replace, new_bpart))
         return NULL;
@@ -213,7 +260,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
         modstack_t *tmp = st;
         for (; tmp != NULL; tmp = tmp->prev) {
             if (tmp->b == b) {
-                return (struct implicit_search_resolution){ PARTITION_FAKE_KIND_CYCLE, NULL, 0, ~(size_t)0, 1, 0, NULL, NULL };
+                return (struct implicit_search_resolution){ PARTITION_FAKE_KIND_CYCLE, NULL, 0, ~(size_t)0, 1, 0, NULL, NULL, 0 };
             }
         }
     }
@@ -226,7 +273,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
     struct implicit_search_resolution depimpstate;
     size_t min_world = 0;
     size_t max_world = ~(size_t)0;
-    impstate = depimpstate = (struct implicit_search_resolution){ PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL };
+    impstate = depimpstate = (struct implicit_search_resolution){ PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL, 0 };
 
     JL_LOCK(&m->lock);
     int i = (int)module_usings_length(m) - 1;
@@ -302,7 +349,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
             comparison = &depimpstate;
         }
 
-        struct implicit_search_resolution imp_resolution = { PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL };
+        struct implicit_search_resolution imp_resolution = { PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL, 0 };
         if (!tempbpart_valid) {
             imp_resolution = jl_resolve_implicit_import(tempb, &top, world, trust_cache);
             // imp_resolution is the resolution for import into tempb (which may have been cached for tempb
@@ -313,6 +360,8 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
             imp_resolution.should_be_reexported = 0;
         } else {
             enum jl_partition_kind kind = jl_binding_kind(tempbpart);
+            // Copy the imported binding's deprecation onto the importer's partition.
+            imp_resolution.deprecation_flags = tempbpart_flags & DEPWARN_FLAGS;
             if (kind == PARTITION_KIND_IMPLICIT_GLOBAL) {
                 imp_resolution.binding_or_const = tempbpart->restriction;
                 imp_resolution.debug_only_ultimate_binding = (jl_binding_t*)tempbpart->restriction;
@@ -324,8 +373,8 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
             } else if (jl_bkind_is_defined_constant(kind)) {
                 assert(tempbpart->restriction);
                 imp_resolution.binding_or_const = tempbpart->restriction;
-                imp_resolution.debug_only_ultimate_binding = tempb;
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
+                imp_resolution.debug_only_ultimate_binding = tempb;
             } else if (kind == PARTITION_KIND_FAILED) {
                 imp_resolution.binding_or_const = NULL;
                 imp_resolution.debug_only_ultimate_binding = tempb;
@@ -364,7 +413,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_maybe_reresolve_implicit(jl_binding_t *b
         assert(bpart == jl_atomic_load_relaxed(&b->partitions));
         assert(bpart);
         struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, new_max_world+1, 0);
-        int resolution_unchanged = bpart->restriction == resolution.binding_or_const && jl_binding_kind(bpart) == resolution.ultimate_kind;
+        int resolution_unchanged = bpart->restriction == resolution.binding_or_const && jl_binding_kind(bpart) == resolution.ultimate_kind &&
+                                   (bpart->kind & DEPWARN_FLAGS) == resolution.deprecation_flags;
         size_t bpart_min_world = jl_atomic_load_relaxed(&bpart->min_world);
         if (resolution.min_world == bpart_min_world) {
             // The resolution has the same world bounds - it must be unchanged
@@ -394,7 +444,7 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     jl_gc_write(bpart, bpart->restriction, jl_value_t, resolution.binding_or_const);
-    bpart->kind = resolution.ultimate_kind;
+    bpart->kind = resolution.ultimate_kind | resolution.deprecation_flags;
 }
 
 static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world) JL_CANSAFEPOINT
@@ -411,19 +461,23 @@ static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t *
     *pbpart = bpart;
 }
 
-static void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world, int *depwarn) JL_CANSAFEPOINT
+// Walk imports to the leaf while reporting whether any partition along the way carries a
+// deprecation `flag` (`PARTITION_FLAG_DEPWARN` for the access warning, or
+// `PARTITION_FLAG_DEPRECATED` for `isdeprecated`), suppressed once an explicit import is
+// passed (the `import`/`using: x` site is what should be fixed).
+static void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world, size_t flag, int *found) JL_CANSAFEPOINT
 {
     int passed_explicit = 0;
     jl_binding_partition_t *bpart = *pbpart;
     while (1) {
         enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
-            if (!passed_explicit && depwarn)
-                *depwarn |= bpart->kind & PARTITION_FLAG_DEPWARN;
+            if (!passed_explicit && found)
+                *found |= bpart->kind & flag;
             break;
         }
-        if (!passed_explicit && depwarn)
-            *depwarn |= bpart->kind & PARTITION_FLAG_DEPWARN;
+        if (!passed_explicit && found)
+            *found |= bpart->kind & flag;
         if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
             passed_explicit = 1;
         *bnd = (jl_binding_t*)bpart->restriction;
@@ -704,7 +758,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
         // keep the flags partitioned.
         if (need_backdate) {
             jl_binding_partition_t *prev_bpart = bpart;
-            jl_binding_partition_t *backdate_bpart = new_binding_partition();
+            jl_binding_partition_t *backdate_bpart = new_binding_partition(b);
             new_prev_bpart = backdate_bpart;
             while (1) {
                 backdate_bpart->kind = (size_t)PARTITION_KIND_BACKDATED_CONST | (prev_bpart->kind & 0xf0);
@@ -715,9 +769,9 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                 jl_atomic_store_relaxed(&backdate_bpart->max_world,
                     jl_atomic_load_relaxed(&prev_bpart->max_world));
                 prev_bpart = jl_atomic_load_relaxed(&prev_bpart->next);
-                if (!prev_bpart)
+                if (!is_some_partition(prev_bpart))
                     break;
-                jl_binding_partition_t *next_prev_bpart = new_binding_partition();
+                jl_binding_partition_t *next_prev_bpart = new_binding_partition(b);
                 jl_gc_wb(backdate_bpart, next_prev_bpart);
                 jl_atomic_store_relaxed(&backdate_bpart->next, next_prev_bpart);
                 backdate_bpart = next_prev_bpart;
@@ -995,13 +1049,15 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t w
     return jl_atomic_load_relaxed(&b->value);
 }
 
-static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
+// Read a binding's value at `world`, warning if it is deprecated (unless reached through an
+// explicit import, which `jl_walk_binding_inplace_depwarn` suppresses).
+static jl_value_t *jl_get_binding_value_depwarn_(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT
 {
     assert(b); // alloc=1 parameter ensured that jl_get_module_binding returns a valid binding
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     if (jl_options.depwarn) {
         int needs_depwarn = 0;
-        jl_walk_binding_inplace_depwarn(&b, &bpart, world, &needs_depwarn);
+        jl_walk_binding_inplace_depwarn(&b, &bpart, world, PARTITION_FLAG_DEPWARN, &needs_depwarn);
         if (needs_depwarn)
             jl_binding_deprecation_warning(b);
     }
@@ -1016,23 +1072,17 @@ static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) J
         return bpart->restriction;
     }
     assert(!jl_bkind_is_some_import(kind));
-    return jl_atomic_load_relaxed(&b->value);
+    return seqcst ? jl_atomic_load(&b->value) : jl_atomic_load_relaxed(&b->value);
+}
+
+static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
+{
+    return jl_get_binding_value_depwarn_(b, world, 0);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_seqcst(jl_binding_t *b) JL_CANSAFEPOINT
 {
-    size_t world = jl_current_task->world_age;
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
-    jl_walk_binding_inplace(&b, &bpart, world);
-    enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (jl_bkind_is_some_guard(kind))
-        return NULL;
-    if (jl_bkind_is_some_constant(kind)) {
-        check_backdated_binding(b, kind);
-        return bpart->restriction;
-    }
-    assert(!jl_bkind_is_some_import(kind));
-    return jl_atomic_load(&b->value);
+    return jl_get_binding_value_depwarn_(b, jl_current_task->world_age, 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_latest_binding_value_if_const(jl_binding_t *b)
@@ -1236,6 +1286,59 @@ extern _Atomic(int) jl_lineno;
 
 static char const dep_message_prefix[] = "_dep_message_";
 
+static void jl_print_dep_message_value(jl_value_t *dep_message) JL_CANSAFEPOINT
+{
+    if (jl_is_string(dep_message))
+        jl_uv_puts(JL_STDERR, jl_string_data(dep_message), jl_string_len(dep_message));
+    else
+        jl_static_show(JL_STDERR, dep_message);
+}
+
+// A binding deprecated only through `using` imports likely has no `_dep_message_<name>` in
+// its own module: the message(s) live on the source module(s) (which do not export them).
+// Walk `m`'s usings to each exported source of `name`, resolve reexports to the defining
+// leaf, and print every deprecated source's message -- so importing the same deprecated
+// constant from several modules reports each one's guidance. Returns 1 if any message was
+// printed. `msgsym` is the `_dep_message_<name>` symbol.
+static int jl_print_using_dep_messages(jl_module_t *m, jl_sym_t *name, jl_sym_t *msgsym) JL_CANSAFEPOINT
+{
+    size_t world = jl_current_task->world_age;
+    int printed = 0;
+    JL_LOCK(&m->lock);
+    size_t usings_len = module_usings_length(m);
+    JL_UNLOCK(&m->lock);
+    for (size_t i = 0; i < usings_len; i++) {
+        JL_LOCK(&m->lock);
+        struct _jl_module_using data = *module_usings_getidx(m, i);
+        JL_UNLOCK(&m->lock);
+        if (data.min_world > world || data.max_world < world)
+            continue;
+        jl_module_t *imp = data.mod;
+        JL_GC_PROMISE_ROOTED(imp); // rooted via `m->usings`
+        jl_binding_t *tempb = jl_get_module_binding(imp, name, 0);
+        if (!tempb)
+            continue;
+        jl_binding_partition_t *tempbpart = jl_get_binding_partition(tempb, world);
+        if (!jl_bpart_is_exported(tempbpart->kind))
+            continue;
+        // Resolve reexports to the module that defines the binding (and holds the message).
+        jl_walk_binding_inplace(&tempb, &tempbpart, world);
+        if (!(tempbpart->kind & PARTITION_FLAG_DEPRECATED))
+            continue;
+        jl_binding_t *msgb = jl_get_module_binding(tempb->globalref->mod, msgsym, 0);
+        if (!msgb)
+            continue;
+        jl_value_t *msg = jl_get_binding_value(msgb);
+        if (!msg)
+            continue;
+        JL_GC_PUSH1(&msg);
+        jl_print_dep_message_value(msg);
+        JL_GC_POP();
+        printed = 1;
+    }
+    return printed;
+}
+
 static void jl_binding_dep_message(jl_binding_t *b)
 {
     jl_module_t *m = b->globalref->mod;
@@ -1246,20 +1349,18 @@ static void jl_binding_dep_message(jl_binding_t *b)
     memcpy(dep_binding_name, dep_message_prefix, prefix_len);
     memcpy(dep_binding_name + prefix_len, jl_symbol_name(name), name_len);
     dep_binding_name[prefix_len+name_len] = '\0';
-    jl_binding_t *dep_message_binding = jl_get_binding(m, jl_symbol(dep_binding_name));
+    jl_sym_t *msgsym = jl_symbol(dep_binding_name);
+    jl_binding_t *dep_message_binding = jl_get_binding(m, msgsym);
     jl_value_t *dep_message = NULL;
     if (dep_message_binding != NULL)
         dep_message = jl_get_binding_value(dep_message_binding);
     JL_GC_PUSH1(&dep_message);
     if (dep_message != NULL) {
-        if (jl_is_string(dep_message)) {
-            jl_uv_puts(JL_STDERR, jl_string_data(dep_message), jl_string_len(dep_message));
-        }
-        else {
-            jl_static_show(JL_STDERR, dep_message);
-        }
+        jl_print_dep_message_value(dep_message);
     }
-    else {
+    // No message on `m` itself: the deprecation may come through `using`, so gather the
+    // source module(s)' messages before falling back to describing the value.
+    else if (!jl_print_using_dep_messages(m, name, msgsym)) {
         jl_value_t *v = jl_get_binding_value(b);
         dep_message = v; // use as gc-root
         if (v) {
@@ -1326,7 +1427,7 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
                 deprecated Base bindings should simply export the new
                 binding */
             jl_printf(JL_STDERR,
-                        "WARNING: importing deprecated binding %s.%s into %s%s%s.\n",
+                        "WARNING: importing deprecated binding %s.%s into %s%s%s",
                         jl_symbol_name(from->name), jl_symbol_name(s),
                         jl_symbol_name(to->name),
                         asname == s ? "" : " as ",
@@ -1650,6 +1751,8 @@ static int bindingkey_eq(size_t idx, const void *var, jl_value_t *data, uint_t h
     if (idx >= jl_svec_len(data))
         return 0; // We got a OOB access, probably due to a data race
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
+    if (b == NULL || (jl_value_t*)b == jl_nothing)
+        return 0; // slot not yet published, probably due to a data race
     jl_sym_t *name = b->globalref->name;
     return var == name;
 }
@@ -1839,13 +1942,15 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     }
 
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
-    jl_binding_partition_t *new_bpart = new_binding_partition();
+    jl_binding_partition_t *new_bpart = new_binding_partition(b);
     JL_GC_PUSH1(&new_bpart);
     jl_atomic_store_relaxed(&new_bpart->min_world, new_world);
     if ((kind & PARTITION_MASK_KIND) == PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE) {
         assert(!restriction_val);
         struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, new_world, 0);
-        new_bpart->kind = resolution.ultimate_kind | (kind & PARTITION_MASK_FLAG);
+        // Deprecation comes fresh from the resolution (see `jl_implicit_import_resolved`), so
+        // mask any prior deprecation out of the carried flags before OR-ing the new one in.
+        new_bpart->kind = resolution.ultimate_kind | ((kind & PARTITION_MASK_FLAG) & ~DEPWARN_FLAGS) | resolution.deprecation_flags;
         // If the resolution indicates this should be reexported, add the implicit export flag
         if (resolution.should_be_reexported) {
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
@@ -1945,7 +2050,6 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 
 // set the deprecated flag for a binding:
 //   0=not deprecated, 1=renamed, 2=moved to another package
-static const size_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN;
 JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag) JL_CANSAFEPOINT
 {
     jl_binding_t *b = jl_get_binding(m, var);
@@ -1997,19 +2101,20 @@ JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int st
 
 static int should_depwarn(jl_binding_t *b, uint8_t flag) JL_CANSAFEPOINT
 {
-    // We consider bindings deprecated, if:
+    // We consider a binding deprecated if:
     //
     // 1. The binding itself is deprecated, or
-    // 2. We implicitly import any deprecated binding.
+    // 2. it implicitly imports (through `using`) a deprecated binding.
     //
-    // However, we do not consider the binding deprecated if the import was an explicit
-    // (`using` or `import`). The logic here is that the thing that needs to be adjusted
-    // is not the use itself, but rather the `using` or `import` (which already prints
-    // an appropriate warning).
+    // We do not consider it deprecated when reached through an explicit import (`import`/
+    // `using M: x`): the thing that should be adjusted is the import, not the use, and the
+    // import site already warned. Implicit resolution records both of these on the importer's
+    // own partition -- it stamps the deprecation flag onto the resolved partition for every
+    // implicitly-imported deprecated binding (constant or global, transparently through
+    // reexports), while explicit imports never take that path and so carry no flag. Checking
+    // the top partition therefore suffices, and matches codegen's const-fold `maybe_depwarn`.
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    if (bpart->kind & flag)
-        return 1;
-    return 0;
+    return (bpart->kind & flag) != 0;
 }
 
 JL_DLLEXPORT void jl_binding_deprecation_check(jl_binding_t *b) JL_CANSAFEPOINT
@@ -2020,9 +2125,7 @@ JL_DLLEXPORT void jl_binding_deprecation_check(jl_binding_t *b) JL_CANSAFEPOINT
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var) JL_CANSAFEPOINT
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
-    if (!b)
-        return 0;
+    jl_binding_t *b = jl_get_module_binding(m, var, 1);
     return should_depwarn(b, PARTITION_FLAG_DEPRECATED);
 }
 

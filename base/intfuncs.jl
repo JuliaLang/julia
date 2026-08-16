@@ -724,7 +724,7 @@ const powers_of_ten = [
 function bit_ndigits0z(x::Base.BitUnsigned64)
     lz = top_set_bit(x)
     nd = (1233*lz)>>12+1
-    nd -= x < powers_of_ten[nd]
+    return nd - (x < powers_of_ten[nd])
 end
 function bit_ndigits0z(x::UInt128)
     n = 0
@@ -946,7 +946,6 @@ function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
     end
     if i == 1
         @inbounds buf[pos] = UInt8('0') + rem(digits, 0xa) % UInt8
-        i -= 1
     end
     return pos + olength
 end
@@ -1139,13 +1138,15 @@ julia> bitstring(2.2)
 """
 function bitstring(x::T) where {T}
     isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
-    sz = sizeof(T) * 8
+    sz = Core.bitsizeof(T)
+    onebyte = sz == 8
+    subbyte = sz < 8
     str = _string_n(sz)
     GC.@preserve str begin
         p = pointer(str)
         i = sz
         while i >= 4
-            b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
+            b = UInt32(onebyte ? bitcast(UInt8, x) : subbyte ? zext_int(UInt8, x) : trunc_int(UInt8, x))
             d = 0x30303030 +% ((b *% 0x08040201) >> 0x3) & 0x01010101
             unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
             unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
@@ -1153,6 +1154,12 @@ function bitstring(x::T) where {T}
             unsafe_store!(p, (d >> 0x18) % UInt8, i)
             x = lshr_int(x, 4)
             i -= 4
+        end
+        while i > 0
+            b = UInt8(onebyte ? bitcast(UInt8, x) : subbyte ? zext_int(UInt8, x) : trunc_int(UInt8, x))
+            unsafe_store!(p, 0x30 + (b & 0x01), i)
+            x = lshr_int(x, 1)
+            i -= 1
         end
     end
     return str

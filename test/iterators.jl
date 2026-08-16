@@ -259,6 +259,8 @@ end
 
         f = findeach(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
         @test only(f) == 2
+
+        @test collect(findeach([true,false,true])) == [1,3]
     end
 end
 

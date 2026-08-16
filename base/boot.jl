@@ -196,7 +196,7 @@
 #    sticky::UInt8
 #    priority::UInt16
 #    @atomic _isexception::UInt8
-#    pad00::UInt8
+#    @atomic preempt_request::UInt8
 #    pad01::UInt8
 #    pad02::UInt8
 #    rngState0::UInt64
@@ -212,6 +212,11 @@
 #    @atomic last_started_running_at::UInt64
 #    @atomic running_time_ns::UInt64
 #    @atomic finished_at::UInt64
+#    @atomic waiting_on::Any
+#    cached_wait_entry::Any
+#    cached_cancel_entry::Any
+#    invoked::Any
+#    @atomic bound_cancel_token::Any
 #end
 
 export
@@ -393,6 +398,74 @@ kwftype(@nospecialize(t)) = typeof(kwcall)
 Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
 kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 
+# resolve_typegroup must be defined before any struct definition, since all structs
+# are now lowered using the typegroup mechanism (for #60919 safety).
+function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector, old_types::SimpleVector)
+    n = _svec_len(typevars)
+    if n === 0
+        return ()
+    end
+    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any, Any), mod, typevars, struct_infos, old_types)
+end
+
+# n.b. TypeApp and apply_type_or_typeapp must be defined before the first
+# struct definition, whose lowered field-type thunks may call them.
+# TypeApp: lazy type application for typegroup blocks.
+# Represents a single type application step, like UnionAll represents a single where binding.
+# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
+# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
+struct TypeApp
+    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
+    param::Any           # Single type parameter
+    function TypeApp(@nospecialize(head), @nospecialize(param))
+        return new(head, param)
+    end
+end
+
+# Check if a value contains a TypeApp anywhere in its structure
+function _contains_typeapp(@nospecialize(x))
+    if x isa TypeApp
+        return true
+    end
+    if x isa UnionAll
+        return _contains_typeapp(x.body)
+    end
+    return false
+end
+
+function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
+    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
+    if tc isa TypeVar || tc isa TypeApp
+        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
+        n = nfields(params)
+        result = tc
+        i = 1
+        while Intrinsics.sle_int(i, n)
+            result = TypeApp(result, getfield(params, i))
+            i = Intrinsics.add_int(i, 1)
+        end
+        return result
+    end
+    # Any param contains TypeApp => must defer
+    n = nfields(params)
+    i = 1
+    while Intrinsics.sle_int(i, n)
+        if _contains_typeapp(getfield(params, i))
+            # Build nested TypeApp chain for all params
+            result = tc
+            j = 1
+            while Intrinsics.sle_int(j, n)
+                result = TypeApp(result, getfield(params, j))
+                j = Intrinsics.add_int(j, 1)
+            end
+            return result
+        end
+        i = Intrinsics.add_int(i, 1)
+    end
+    # All concrete -- real apply_type
+    return apply_type(tc, params...)
+end
+
 abstract type Exception end
 struct ErrorException <: Exception
     msg::AbstractString
@@ -495,9 +568,9 @@ MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typema
 
 struct AssertionError <: Exception
     msg::AbstractString
-    AssertionError(msg::AbstractString) = new(msg)
+    AssertionError(msg::AbstractString) = (@noinline; new(msg))
 end
-AssertionError() = AssertionError("")
+AssertionError() = (@noinline; AssertionError(""))
 
 struct FieldError <: Exception
     type::DataType
@@ -612,6 +685,11 @@ struct PartialOpaque
     PartialOpaque(@nospecialize(typ::Type), @nospecialize(env), parent::MethodInstance, source) = new(typ, env, parent, source)
 end
 
+struct PartialTask
+    fetch_type
+    PartialTask(@nospecialize(fetch_type)) = new(fetch_type)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
@@ -665,10 +743,6 @@ function CodeInstance(
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
-
-function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
-    return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
-end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
@@ -1190,70 +1264,6 @@ struct Pair{A, B}
         @inline
         return new(a::A, b::B)
     end
-end
-
-# TypeApp: lazy type application for typegroup blocks.
-# Represents a single type application step, like UnionAll represents a single where binding.
-# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
-# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
-struct TypeApp
-    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
-    param::Any           # Single type parameter
-    function TypeApp(@nospecialize(head), @nospecialize(param))
-        return new(head, param)
-    end
-end
-
-# Check if a value contains a TypeApp anywhere in its structure
-function _contains_typeapp(@nospecialize(x))
-    if x isa TypeApp
-        return true
-    end
-    if x isa UnionAll
-        return _contains_typeapp(x.body)
-    end
-    return false
-end
-
-function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
-    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
-    if tc isa TypeVar || tc isa TypeApp
-        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
-        n = nfields(params)
-        result = tc
-        i = 1
-        while sle_int(i, n)
-            result = TypeApp(result, getfield(params, i))
-            i = add_int(i, 1)
-        end
-        return result
-    end
-    # Any param contains TypeApp => must defer
-    n = nfields(params)
-    i = 1
-    while sle_int(i, n)
-        if _contains_typeapp(getfield(params, i))
-            # Build nested TypeApp chain for all params
-            result = tc
-            j = 1
-            while sle_int(j, n)
-                result = TypeApp(result, getfield(params, j))
-                j = add_int(j, 1)
-            end
-            return result
-        end
-        i = add_int(i, 1)
-    end
-    # All concrete -- real apply_type
-    return apply_type(tc, params...)
-end
-
-function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector)
-    n = _svec_len(typevars)
-    if n === 0
-        return ()
-    end
-    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any), mod, typevars, struct_infos)
 end
 
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc

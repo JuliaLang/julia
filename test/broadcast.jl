@@ -418,8 +418,6 @@ StrangeType18623(x,y) = (x,y)
 let
     f(A, n) = broadcast(x -> +(x, n), A)
     @test @inferred(f([1.0], 1)) == [2.0]
-    g() = (a = 1; Broadcast.combine_eltypes(x -> x + a, (1.0,)))
-    @test @inferred(g()) === Float64
 end
 
 # Ref as 0-dimensional array for broadcast
@@ -577,8 +575,8 @@ end
 
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
 # (See issue #19641 and referenced issues and pull requests.)
-let f() = (a = 1; Broadcast.combine_eltypes((x, y) -> x + y + a, (1.0, 1.0)))
-    @test @inferred(f()) == Float64
+let f() = (a = 1; broadcast((x, y) -> x + y + a, [1.0], [1.0]))
+    @test @inferred(f()) == [3.0]
 end
 
 @testset "broadcast resulting in BitArray" begin
@@ -1266,4 +1264,85 @@ end
     f2(A, x) = A[1, :] .+= x
     rt = only(Base.return_types(f2, (Matrix{Float64}, Any)))
     @test rt <: SubArray{Float64, 1, Matrix{Float64}}
+end
+
+@testset "fused broadcast eltype through intermediate unions" begin
+    f62564(c, x, y) = sqrt.(ifelse.(c, x, y))
+    @test @inferred(f62564([true, false], [1, 4], [0.25, 0.25])) == [1.0, 0.5]
+    @test @inferred(f62564(Bool[], Int[], Float64[])) == Float64[]
+    g62564(x) = (v -> v > 0 ? v : 0).(x) .* 2.0
+    @test @inferred(g62564([1.0, -1.0])) == [2.0, 0.0]
+    h62564(x) = exp.(.-((v -> v > 0 ? v : 0).(x)))
+    @test @inferred(h62564([1.0, -1.0])) == [exp(-1.0), 1.0]
+end
+
+@testset "issue #31890" begin
+    struct Interval31890 <: Number
+        lo::Float64
+        hi::Float64
+    end
+    Base.eltype(::Interval31890) = Float64
+    in31890(i::Interval31890, x) = i.lo <= x <= i.hi
+    f31890(i, xs) = in31890.(i, xs)
+    @test @inferred(f31890(Interval31890(0.0, 0.5), [0.25, 0.75])) == [true, false]
+
+    typed_in31890(i::Interval31890, x) = in31890(i, x)
+    typed_in31890(::Float64, x) = 1.5
+    g31890(i, xs) = typed_in31890.(i, xs)
+    result = g31890(Interval31890(0.0, 0.5), [0.25, 0.75])
+    @test result isa BitVector
+    @test result == [true, false]
+end
+
+@testset "handling of invalid eltype" begin
+    struct EltypeOverride62564 <: AbstractVector{Int} end
+    Base.size(::EltypeOverride62564) = (2,)
+    Base.getindex(::EltypeOverride62564, i::Int) = 1.5
+    Base.eltype(::Type{EltypeOverride62564}) = Float64
+
+    struct WiderGetindex62564 <: AbstractVector{Float64} end
+    Base.size(::WiderGetindex62564) = (2,)
+    Base.getindex(::WiderGetindex62564, i::Int) = i == 1 ? 1.0 : 2.0f0
+
+    struct WiderGetindex0D62564 <: AbstractArray{Float64,0} end
+    Base.size(::WiderGetindex0D62564) = ()
+    Base.getindex(::WiderGetindex0D62564) = 1
+
+    struct WeakGetindexNonArray62564 end
+    Base.axes(::WeakGetindexNonArray62564) = (Base.OneTo(0),)
+    Base.ndims(::Type{WeakGetindexNonArray62564}) = 1
+    Base.eltype(::Type{WeakGetindexNonArray62564}) = Float64
+    Base.getindex(::WeakGetindexNonArray62564, i::Int) = Base.inferencebarrier(1.0)
+    Base.Broadcast.broadcastable(A::WeakGetindexNonArray62564) = A
+
+    struct IncompatGetindex62564 <: AbstractVector{Int} end
+    Base.size(::IncompatGetindex62564) = (2,)
+    Base.getindex(::IncompatGetindex62564, i::Int) = "s"
+
+    @test identity.(EltypeOverride62564()) isa Vector{Float64}
+    @test identity.(EltypeOverride62564()) == [1.5, 1.5]
+    wg62564() = identity.(WiderGetindex62564())
+    @test @inferred(wg62564()) isa Vector{Float64}
+    @test identity.(WiderGetindex62564()) == [1.0, 2.0]
+    wg0d62564() = ((x, _) -> x).(WiderGetindex0D62564(), [nothing])
+    @test @inferred(wg0d62564()) == [1.0]
+    wgnonarray62564() = identity.(WeakGetindexNonArray62564())
+    @test @inferred(wgnonarray62564()) == Float64[]
+    @test_throws MethodError identity.(IncompatGetindex62564())
+    @test (x -> 0).(IncompatGetindex62564()) == [0, 0]
+
+    struct BottomEltypeAxis62564 <: Base.AbstractOneTo{Int} end
+    Base.first(::BottomEltypeAxis62564) = 1
+    Base.last(::BottomEltypeAxis62564) = 0
+    Base.length(::BottomEltypeAxis62564) = 0
+    Base.iterate(::BottomEltypeAxis62564) = nothing
+    Base.getindex(axis::BottomEltypeAxis62564, i::Int) = throw(BoundsError(axis, i))
+    Base.eltype(::Type{BottomEltypeAxis62564}) = Union{}
+
+    struct BottomEltypeIndices62564 <: AbstractVector{Int} end
+    Base.size(::BottomEltypeIndices62564) = (0,)
+    Base.axes(::BottomEltypeIndices62564) = (BottomEltypeAxis62564(),)
+    Base.getindex(A::BottomEltypeIndices62564, i::Int) = throw(BoundsError(A, i))
+
+    @test identity.(BottomEltypeIndices62564()) == Union{}[]
 end

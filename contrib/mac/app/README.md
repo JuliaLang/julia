@@ -7,14 +7,20 @@ This builds the Julia OS X application bundle (.app folder), and stores it in a 
 The application bundle opens Terminal.app and executes the julia binary (which opens
 the REPL). All the Julia binary files and their dependencies are bundled inside this.
 
-Its double-clickable entry point is `julia-terminal`, a hardlink to the bundled julia
-binary (`Contents/Resources/julia/bin/julia-terminal`, reached via a
-`Contents/MacOS/julia-terminal` symlink). When the loader is invoked under the name
-`julia-terminal` it relaunches julia inside a new Terminal.app window rather than starting
-the REPL directly in the (windowless) bundle process. See `cli/loader_exe.c` for that
-logic. A hardlink is used rather than a symlink because LaunchServices resolves a
-symlinked `CFBundleExecutable` down to its target, discarding the `julia-terminal` name
-that the loader keys off.
+Its double-clickable entry point is `julia-terminal` (the bundle's `CFBundleExecutable`):
+a real copy of the julia loader placed directly at `Contents/MacOS/julia-terminal`. When
+the loader is invoked under that name it relaunches the REPL binary from the bundled tree
+(`Contents/Resources/julia/bin/julia`) inside a new Terminal.app window rather than
+starting the REPL directly in the (windowless) bundle process. See `cli/loader_exe.c` for
+that logic.
+
+The main executable is a real file in `Contents/MacOS/` -- not a symlink, and not inside
+`Contents/Resources/` -- because Apple's notary rejects a bundle main executable that is a
+symlink or that lives among the sealed resources. Because this copy runs from
+`Contents/MacOS/` rather than the tree's `bin/`, the loader is linked with an extra rpath
+into the bundled tree so dyld can resolve `libjulia` from there (see `cli/Makefile`);
+assembling the bundle is then a plain `cp` needing no Mach-O tools, so it runs on any
+host (CI assembles the .app on Linux).
 
 Run `make` to build.
 

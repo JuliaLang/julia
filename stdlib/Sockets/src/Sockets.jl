@@ -150,7 +150,8 @@ Accepts a connection on the given server and returns a connection to the client.
 uninitialized client stream may be provided, in which case it will be used instead of
 creating a new stream.
 """
-accept(server::TCPServer) = accept(server, TCPSocket())
+accept(server::TCPServer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    accept(server, TCPSocket(); cancel)
 
 function accept(callback, server::LibuvServer)
     task = @async try
@@ -326,8 +327,8 @@ end
 
 Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 """
-function recv(sock::UDPSocket)
-    addr, data = recvfrom(sock)
+function recv(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    addr, data = recvfrom(sock; cancel)
     return data
 end
 
@@ -343,7 +344,8 @@ Read a UDP packet from the specified socket, returning a tuple of `(host_port, d
     Prior to Julia version 1.3, the first returned value was an address (`IPAddr`).
     In version 1.3 it was changed to an `InetAddr`.
 """
-function recvfrom(sock::UDPSocket)
+function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     iolock_begin()
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
@@ -358,14 +360,35 @@ function recvfrom(sock::UDPSocket)
     end
     sock.status = StatusActive
     lock(sock.recvnotify)
+    locked = true
     iolock_end()
     try
         From = Union{InetAddr{IPv4}, InetAddr{IPv6}}
         Data = Vector{UInt8}
-        from, data = wait(sock.recvnotify)::Tuple{From, Data}
+        locked = false
+        from, data = wait(sock.recvnotify, tok)::Tuple{From, Data}
+        locked = true
         return (from, data)
+    catch
+        # A cancelled (or otherwise interrupted) wait must not leave
+        # continuous reception running with nobody waiting: a datagram
+        # arriving after this unwind would be consumed by the callback and
+        # dropped (`recvnotify` is edge-triggered), starving the next
+        # recvfrom. Mirror the callback's stop logic; the iolock must be
+        # (re)taken first - iolock before recvnotify is the callback's lock
+        # order (a wait-throw released this frame's level already).
+        locked && (unlock(sock.recvnotify); locked = false)
+        iolock_begin()
+        lock(sock.recvnotify)
+        locked = true
+        if sock.status == StatusActive && isempty(sock.recvnotify)
+            sock.status = StatusOpen
+            ccall(:uv_udp_recv_stop, Cint, (Ptr{Cvoid},), sock)
+        end
+        iolock_end()
+        rethrow()
     finally
-        unlock(sock.recvnotify)
+        locked && unlock(sock.recvnotify)
     end
 end
 
@@ -418,13 +441,21 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
     nothing
 end
 
+# completion callback for UDP sends: like Base.uv_writecb_task, but delivers
+# the raw status (a UDP send has no partial write count)
+function uv_sendcb_task(req::Ptr{Cvoid}, status::Cint)
+    t = Base._claim_uvreq_waiter(req)
+    t === nothing || schedule(t, status)
+    nothing
+end
+
 function _send_async(sock::UDPSocket, ipaddr::Union{IPv4, IPv6}, port::UInt16, buf)
     req = Libc.malloc(Base._sizeof_uv_udp_send)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     host_in = Ref(hton(ipaddr.host))
     err = ccall(:jl_udp_send, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Cvoid}, Cint),
                 req, sock, hton(port), host_in, buf, sizeof(buf),
-                @cfunction(Base.uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)),
+                @cfunction(uv_sendcb_task, Cvoid, (Ptr{Cvoid}, Cint)),
                 ipaddr isa IPv6)
     if err < 0
         Libc.free(req)
@@ -438,36 +469,20 @@ end
 
 Send `msg` over `socket` to `host:port`.
 """
-function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
+function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
+              cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     iolock_begin()
     if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
+    src = Base.cancel_source(Base.resolve_cancel_token(cancel))
+    # entry check: throw before handing anything to libuv
+    Base._iolocked_checkcancel(src)
     uvw = _send_async(sock, ipaddr, UInt16(port), msg)
-    ct = current_task()
-    preserve_handle(ct)
-    Base.sigatomic_begin()
-    uv_req_set_data(uvw, ct)
-    iolock_end()
-    status = try
-        Base.sigatomic_end()
-        wait()::Cint
-    finally
-        Base.sigatomic_end()
-        iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
-        if uv_req_data(uvw) != C_NULL
-            # uvw is still alive,
-            # so make sure we won't get spurious notifications later
-            uv_req_set_data(uvw, C_NULL)
-        else
-            # done with uvw
-            Libc.free(uvw)
-        end
-        iolock_end()
-        unpreserve_handle(ct)
-    end
+    # A UDP send request itself cannot be cancelled, so an interrupted wait
+    # detaches it, with `msg` rooted until its completion callback frees it.
+    status = Base._wait_uvreq(src, sock, uvw, false, msg)::Cint
     uv_error("send", status)
     nothing
 end
@@ -527,23 +542,28 @@ end
 
 connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
-function wait_connected(x::LibuvStream)
+function wait_connected(x::LibuvStream, tok::Base.MaybeToken=Base.default_cancel_token())
     iolock_begin()
     check_open(x)
     isopen(x) || x.readerror === nothing || throw(x.readerror)
     preserve_handle(x)
     lock(x.cond)
+    locked = true
     try
         while x.status == StatusConnecting
             iolock_end()
-            wait(x.cond)
+            locked = false
+            wait(x.cond, tok)
+            locked = true
             unlock(x.cond)
+            locked = false
             iolock_begin()
             lock(x.cond)
+            locked = true
         end
         isopen(x) || x.readerror === nothing || throw(x.readerror)
     finally
-        unlock(x.cond)
+        locked && unlock(x.cond)
         unpreserve_handle(x)
     end
     iolock_end()
@@ -557,13 +577,16 @@ end
 
 Connect to the host `host` on port `port`.
 """
-connect(sock::TCPSocket, port::Integer) = connect(sock, localhost, port)
-connect(port::Integer) = connect(localhost, port)
+connect(sock::TCPSocket, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(sock, localhost, port; cancel)
+connect(port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) = connect(localhost, port; cancel)
 
 # Valid connect signatures for TCP
-connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
-connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
-connect(addr::InetAddr) = connect(TCPSocket(), addr)
+connect(host::AbstractString, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(TCPSocket(), host, port; cancel)
+connect(addr::IPAddr, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(TCPSocket(), addr, port; cancel)
+connect(addr::InetAddr; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) = connect(TCPSocket(), addr; cancel)
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
@@ -574,9 +597,26 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     return sock
 end
 
-function connect(sock::LibuvStream, args...)
+function connect(sock::LibuvStream, args::Vararg{Any, N}; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) where {N}
+    tok = Base.check_cancel_arg(cancel)
     connect!(sock, args...)
-    wait_connected(sock)
+    wait_connected(sock, tok)
+    return sock
+end
+
+# Hostname connect performs a DNS lookup first: the operation's resolved
+# token (or explicit shield) must govern that wait too, not just the final
+# connection wait, so thread it rather than let getaddrinfo default to the
+# ambient scope.
+function connect(sock::TCPSocket, host::AbstractString, port::Integer;
+                 cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
+    if sock.status != StatusInit
+        error("TCPSocket is not in initialization state")
+    end
+    ipaddr = getaddrinfo(host; cancel=tok)
+    connect!(sock, ipaddr, port)
+    wait_connected(sock, tok)
     return sock
 end
 
@@ -696,7 +736,8 @@ function accept_nonblock(server::TCPServer)
     return client
 end
 
-function accept(server::LibuvServer, client::LibuvStream)
+function accept(server::LibuvServer, client::LibuvStream; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     iolock_begin()
     if server.status != StatusActive && server.status != StatusClosing && server.status != StatusClosed
         throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
@@ -712,10 +753,13 @@ function accept(server::LibuvServer, client::LibuvStream)
         preserve_handle(server)
         lock(server.cond)
         iolock_end()
+        locked = true
         try
-            wait(server.cond)
+            locked = false
+            wait(server.cond, tok)
+            locked = true
         finally
-            unlock(server.cond)
+            locked && unlock(server.cond)
             unpreserve_handle(server)
         end
         iolock_begin()

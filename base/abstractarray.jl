@@ -1239,6 +1239,8 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
 iterate_starting_state(A, ::IndexLinear) = firstindex(A)
 iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
+# avoid fragile edges from union-splitting these helpers for abstract arrays (#61667)
+typeof(iterate_starting_state).name.max_methods = UInt8(1)
 @inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate_abstractarray(A, state)
 @inline function _iterate_abstractarray(A::AbstractArray, state::Tuple)
     y = iterate(state...)::Union{Nothing,Tuple}
@@ -1249,6 +1251,7 @@ end
     checkbounds(Bool, A, state) || return nothing
     A[state], state + one(state)
 end
+typeof(_iterate_abstractarray).name.max_methods = UInt8(1)
 
 isempty(a::AbstractArray) = (length(a) == 0)
 
@@ -1494,7 +1497,19 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
-_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
+"""
+    unsetindex!(A::AbstractArray, i::Integer) -> A
+
+Unset the reference from `A` at index `i` to its value and return `A`.
+The value left in `A[i]`, if any, is implementation-dependent, but after
+calling this function, `A` at index `i` no longer holds any reference to a value,
+so it no longer protects any underlying resources from being freed (i.e. garbage collected,
+or finalizers run).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+function unsetindex! end
 
 """
     parent(A)
@@ -3122,6 +3137,8 @@ Return `true` when `A` is less than `B`. Vectors are first compared by
 their starting indices, and then lexicographically by their elements.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
+
+OrderStyle(::Type{<:AbstractVector{T}}) where {T} = OrderStyle(T)
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)

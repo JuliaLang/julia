@@ -221,8 +221,9 @@ macro __FUNCTION__()
     Expr(:thisfunction)
 end
 
-# TODO: this is vaguely broken because it only works for explicit calls to
-# `Base.deprecate`, not the @deprecated macro:
+# Reflects binding-partition deprecation (as set by `Base.deprecate` / `Base.@deprecate_binding`),
+# including a binding reached through an implicit `using`, transparently through reexports.
+# `@deprecate` deprecates a method rather than the binding, so it is intentionally not reported here.
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 
 function binding_module(m::Module, s::Symbol)
@@ -617,7 +618,8 @@ struct DataTypeLayout
     # arrayelem_isatomic : 1;
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
-    # padding : 8;
+    # unused_bits : 3;
+    # padding : 5;
 end
 
 function DataTypeLayout(dt::DataType)
@@ -1982,11 +1984,13 @@ function visit(f, mt::Core.MethodTable)
 end
 function visit(f, mc::Core.TypeMapLevel)
     function avisit(f, e::Memory{Any})
-        for i in 2:2:length(e)
+        # slot 1 holds the smallintset index; key/value pairs follow, so values
+        # live on the odd slots starting at 3 (see mtcache layout in src/typemap.c)
+        for i in 3:2:length(e)
             isassigned(e, i) || continue
             ei = e[i]
             if ei isa Memory{Any}
-                for j in 2:2:length(ei)
+                for j in 3:2:length(ei)
                     isassigned(ei, j) || continue
                     visit(f, ei[j])
                 end

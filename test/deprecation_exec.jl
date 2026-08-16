@@ -229,3 +229,122 @@ begin #@deprecated error message
         @eval @deprecate Foo{T} where {T <: Int} g true
     )
 end
+
+# A deprecated binding reached through `using` must warn on access,
+# consistently for constants and globals, matching a direct access and the
+# runtime `getglobal`. An explicit `import M: x` still suppresses the warning
+# (the import site is what should warn). The constant must still be
+# constant-folded despite the deprecation.
+module DeprecatedUsingTest
+    using Test
+    module Src
+        export DepC
+        const _real = 0x1234
+        Base.@deprecate_binding DepC _real false
+    end
+    using .Src
+
+    read_dep() = DepC
+    fold_dep() = DepC === 0x1234 ? true : nothing
+
+    @test (@test_warn "DepC is deprecated" read_dep()) === Src._real
+    @test (@test_warn "DepC is deprecated" getglobal(@__MODULE__, :DepC)) === Src._real
+    @test Base.infer_return_type(fold_dep, Tuple{}) === Bool
+    @test Base.isdeprecated(@__MODULE__, :DepC)
+
+    ex = :(module Consumer; import ..Src: DepC; getdep() = DepC; end)
+    @test_warn "importing deprecated binding Src.DepC into Consumer, use _real instead." eval(ex)
+    @test (@test_nowarn Consumer.getdep()) === Src._real
+    @test !Base.isdeprecated(Consumer, :DepC)
+end
+
+# Importing the same deprecated constant from two modules must unify by value, not report an
+# ambiguity, and still warn (with each source's deprecation message) on access. Constants with
+# unequal values are still ambiguous, and a non-deprecated peer still wins (no warning).
+module DeprecatedUsingUnifyTest
+    using Test
+    # Two deprecated constants with equal values.
+    module A
+        export DepC
+        const _a = 0x123456789
+        Base.@deprecate_binding DepC _a false
+    end
+    module B
+        export DepC
+        const _b = 0x123456789
+        Base.@deprecate_binding DepC _b false
+    end
+    using .A, .B
+    read2() = DepC
+    fold2() = DepC === 0x123456789 ? true : nothing
+    # The compiled/const-folded read and the dynamic read both warn, and the warning reports
+    # each contributing source module's deprecation message.
+    @test (@test_warn r"DepC is deprecated, use _a instead\., use _b instead\."s read2()) === 0x123456789
+    @test (@test_warn "DepC is deprecated, use _a instead." getglobal(@__MODULE__, :DepC)) === 0x123456789
+    @test Base.isdeprecated(@__MODULE__, :DepC)
+    # The value still const-folds through the unified resolution.
+    @test Base.infer_return_type(fold2, Tuple{}) === Bool
+
+    # Two deprecated constants with unequal values stay ambiguous.
+    module C
+        export DiffC
+        const _c = 0x0001
+        Base.@deprecate_binding DiffC _c false
+    end
+    module D
+        export DiffC
+        const _d = 0x0002
+        Base.@deprecate_binding DiffC _d false
+    end
+    using .C, .D
+    @test_throws UndefVarError getglobal(@__MODULE__, :DiffC)
+
+    # A deprecated and a non-deprecated constant naming the same value:
+    # the non-deprecated one wins, so access should not warn.
+    module E
+        export MixC
+        const _e = 0xff
+        Base.@deprecate_binding MixC _e false
+    end
+    module F
+        export MixC
+        const MixC = 0xff
+    end
+    using .E, .F
+    readmix() = MixC
+    @test (@test_nowarn readmix()) === 0xff
+    @test !Base.isdeprecated(@__MODULE__, :MixC)
+end
+
+# The deprecation is carried on the importer's partition for globals as well as constants, and
+# transparently through reexports: a `using` of a module that only reexports a deprecated
+# binding still reports it deprecated (`isdeprecated`) and warns on access, without walking to
+# the defining owner. An explicit `import` still suppresses the use-site warning.
+module DeprecatedReexportTest
+    using Test
+    module Src
+        export DepC, DepG
+        const _c = 0x1234
+        Base.@deprecate_binding DepC _c false
+        newg() = 1
+        Base.@deprecate_binding DepG newg false ", use newg instead." false
+    end
+    module Reexport
+        using ..Src
+        export DepC, DepG                                           # reexport both
+    end
+    using .Reexport
+    readc() = DepC
+    readg() = DepG
+    # Reached through `using .Reexport`; the deprecation is visible on this module's partition.
+    @test Base.isdeprecated(@__MODULE__, :DepC)
+    @test Base.isdeprecated(@__MODULE__, :DepG)
+    @test (@test_warn "DepC is deprecated" readc()) === Src._c
+    @test (@test_warn "DepG is deprecated, use newg instead." readg()) === Src.newg
+
+    # An explicit selective import of the reexported binding suppresses the use-site warning.
+    ex = :(module Consumer; import ..Reexport: DepC; getdep() = DepC; end)
+    @test_warn "importing deprecated binding" eval(ex)
+    @test (@test_nowarn Consumer.getdep()) === Src._c
+    @test !Base.isdeprecated(Consumer, :DepC)
+end

@@ -519,9 +519,7 @@ end
 
 rem(x::Real, y::Real) = rem(promote(x,y)...)
 mod(x::Real, y::Real) = mod(promote(x,y)...)
-
 mod1(x::Real, y::Real) = mod1(promote(x,y)...)
-fld1(x::Real, y::Real) = fld1(promote(x,y)...)
 
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)

@@ -8,8 +8,7 @@ Module containing the broadcasting implementation.
 module Broadcast
 
 using .Base.Cartesian
-using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, promote_typejoin_union,
-             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias, negate
+using .Base: OneTo, tail, isoperator, promote_typejoin, promote_typejoin_union, unalias, negate
 import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, BroadcastFunction
 
@@ -194,6 +193,8 @@ end
 struct AndAnd end
 const andand = AndAnd()
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
+typeof(broadcasted).name.concrete_only = true
+
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
@@ -739,6 +740,27 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
+_bc_eltype(bc::Broadcasted, i) = bc.f(_bc_eltypes(bc.args, i)...)
+# Numbers must broadcast as scalars even if they override eltype
+# Tuples may have heterogenous eltypes across indices
+_bc_eltype(x::Number, i) = _broadcast_getindex(x, i)
+_bc_eltype(x::Tuple, i) = _broadcast_getindex(x, i)
+# since this method only exists to be inferred, indexing x is never actually executed. the
+# inference barrier prevents recursion limiting, and ::eltype gives the desired result
+_bc_eltype(x, i) = _broadcast_getindex(Base.inferencebarrier(x), i)::eltype(x)
+
+_bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(tail(args), i)...)
+_bc_eltypes(::Tuple{}, i) = ()
+
+function result_eltype(bc::Broadcasted)
+    argtypes = Iterators.TupleOrBottom(typeof(bc), eltype(eachindex(bc)))
+    argtypes === Union{} && return Union{}
+    rettype = Base._return_type(_bc_eltype, argtypes)
+    return promote_typejoin_union(rettype)
+end
+
+### this machinery is now dead code in Base, but several packages
+### reach into these internals so it's retained for convenience.
 _broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
 _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
 
@@ -746,7 +768,6 @@ eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
 eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
 eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
-# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
 
 # Inferred eltype of result of broadcast(f, args...)
 function combine_eltypes(f, args::Tuple)
@@ -924,7 +945,7 @@ copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
 @inline function copy(bc::Broadcasted)
-    ElType = combine_eltypes(bc.f, bc.args)
+    ElType = result_eltype(bc)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
         return copyto!(similar(bc, ElType), bc)
@@ -1043,7 +1064,7 @@ end
         end
     end
     @inbounds if bitst != 0
-        destc[indc+=1] = remain
+        destc[indc+1] = remain
     end
     return dest
 end
