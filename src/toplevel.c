@@ -326,7 +326,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 }
                 check_safe_newbinding(gm, gs);
                 if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
-                    bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
+                    bpart->kind = new_kind | jl_carried_binding_flags(bpart);
                     jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
                     continue;
                 } else {
