@@ -26,6 +26,8 @@ todouble(sign, exp, mant) = Core.bitcast(Float64, (UInt64(sign) << 63) | (UInt64
 
     buf = fill(UInt8(0), Ryu.neededdigits(Float64))
     @test_throws InexactError Ryu.writeshortest(buf, 1, 1.0, false, false, true, typemax(UInt))
+    @test_throws MethodError Ryu.writefixed(buf, 1, 1.0)
+    @test_throws MethodError Ryu.writeexp(buf, 1, 1.0)
     @test_throws ArgumentError Ryu.writefixed(buf, 1, 1.0, -1)
     @test_throws ArgumentError Ryu.writeexp(buf, 1, 1.0, -1)
 

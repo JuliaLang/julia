@@ -1,5 +1,5 @@
 function writefixed(buf, pos, v::T,
-    precision=0, plus=false, space=false, hash=false,
+    precision, plus=false, space=false, hash=false,
     decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     pos = Int(pos)
     precision = Int(precision)

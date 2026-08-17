@@ -65,7 +65,7 @@ end
 
 """
     Ryu.writefixed(x, precision, plus=false, space=false, hash=false, decchar=UInt8('.'), trimtrailingzeros=false)
-    Ryu.writefixed(buf::AbstractVector{UInt8}, pos::Int, x, args...)
+    Ryu.writefixed(buf::AbstractVector{UInt8}, pos::Int, x, precision, args...)
 
 Convert a float value `x` into a "fixed" size decimal string of the provided precision.
 This function allows achieving the `%f` printf format.
@@ -95,7 +95,7 @@ end
 
 """
     Ryu.writeexp(x, precision, plus=false, space=false, hash=false, expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false)
-    Ryu.writeexp(buf::AbstractVector{UInt8}, pos::Int, x, args...)
+    Ryu.writeexp(buf::AbstractVector{UInt8}, pos::Int, x, precision, args...)
 
 Convert a float value `x` into a scientific notation decimal string.
 This function allows achieving the `%e` printf format.
