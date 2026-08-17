@@ -907,6 +907,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --track-allocation
     alloc_exename = `$(Base.julia_cmd()) --startup-file=no --color=no --track-allocation=none`
+    # Image code carries no allocation counters, so allocation tracking must
+    # never trust the loaded images (which would keep their code in use).
+    @test readchomp(`$alloc_exename -E "ccall(:jl_image_coverage_trusted, Cint, ())"
+        --track-allocation=all`) == "0"
+    @test readchomp(`$alloc_exename -E "ccall(:jl_image_coverage_trusted, Cint, ())"
+        --code-coverage=all --track-allocation=all`) == "0"
     @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
     @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
 

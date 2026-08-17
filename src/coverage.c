@@ -182,6 +182,10 @@ static int unmatched_image_loaded = 0;
 // making the usual invalidation of image code (Compiler.reinfer) unnecessary.
 JL_DLLEXPORT int jl_image_coverage_trusted(void) JL_NOTSAFEPOINT
 {
+    // image code carries no allocation counters, so allocation tracking
+    // always needs freshly instrumented code
+    if (jl_options.malloc_log != JL_LOG_NONE)
+        return 0;
     return sysimg_coverage_matched && !unmatched_image_loaded;
 }
 
