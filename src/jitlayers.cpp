@@ -475,6 +475,21 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         if (jl_atomic_load_relaxed(&codeinst->invoke))
             continue;
 
+        // The JIT retains raw pointers to every CodeInstance whose body it
+        // emits (CISymbols, pending linker info, the debuginfo address map),
+        // so such a CodeInstance must remain rooted for the lifetime of the
+        // process. That is normally guaranteed by its presence in the native
+        // `mi.cache` chain, but an AbstractInterpreter whose executable cache
+        // is not the integrated `InternalCodeCache` can request ABI
+        // compilation of a CodeInstance that is only reachable through
+        // GC-managed interpreter state. Pin those here, mirroring the
+        // opaque-closure promotion in jl_register_jit_object. Top-level
+        // thunks (whose `def` is a Module) stay unpinned: they are expected
+        // to be collected and jl_invoke_oneshot unregisters them explicitly.
+        if (jl_is_method(mi->def.value) && !mi->def.method->is_for_opaque_closure &&
+            !jl_mi_cache_has_ci(mi, codeinst))
+            jl_as_global_root((jl_value_t*)codeinst, 1);
+
         out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
         out.temporary_roots_set.clear();
         if (!jl_emit_codeinst(out, codeinst, src)) { // contains safepoints
