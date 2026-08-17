@@ -238,6 +238,7 @@ Standard library changes
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
+* Adding several `Period`s to a `TimeType` in one expression (e.g. `dt + Day(1) + Month(1)`) is now allocation-free and always applies the periods ordered by type from coarsest to finest, independent of how many are given or their order. This fixes incorrect results when four or more periods were combined ([#61860]).
 
 #### InteractiveUtils
 
