@@ -50,9 +50,15 @@ Julia emits two orthogonal kinds of alias metadata: LLVM's
 [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata) describes the
 layout/type of the data at a location (see `jl_tbaacache_t` in `src/codegen.cpp` for the
 inclusion relationships), while `!alias.scope`/`!noalias` metadata describes the disjoint
-memory regions (GC frame, stack, heap data, constant; see `jl_noaliascache_t`). Codegen
-tracks both together in `jl_aliasinfo_t`, with some standard pairings precomputed in
-`jl_aliascache_t`.
+memory regions (GC frame, stack, the fields of a heap object, the element data of a
+`GenericMemory`, constant; see `jl_noaliascache_t`). Codegen tracks both together in
+`jl_aliasinfo_t`, with some standard pairings precomputed in `jl_aliascache_t`.
+
+The two answer different questions: the region says *where* the memory is, so that a store to
+an array element is not confused with a store to the array header even when both carry the
+same layout tag, while the TBAA tag says only what is stored there. A region is a set, since
+an access through a raw `Ptr` (`pointerref`/`pointerset`) may address object fields and memory
+elements alike.
 
 The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 
