@@ -154,10 +154,17 @@ function fixup_stdlib_path(path::String)
     # this function is valid even in this intermediary state
     if isdefined(@__MODULE__, :Sys)
         if Sys.BUILD_STDLIB_PATH != Sys.STDLIB
-            # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+            # BUILD_STDLIB_PATH gets defined in sysinfo.jl.
+            # It may be a short relative prefix (BUILD_PATH_PREFIX_MAP), so only replace
+            # it anchored at the start and on a component boundary.
             npath = normpath(path)
-            npath′ = replace(npath, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
-            path = npath == npath′ ? path : npath′
+            nbase = normpath(Sys.BUILD_STDLIB_PATH)
+            if startswith(npath, nbase)
+                rest = SubString(npath, ncodeunits(nbase) + 1)
+                if isempty(rest) || rest[1] == '/' || rest[1] == '\\'
+                    path = string(normpath(Sys.STDLIB), rest)
+                end
+            end
         end
         if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
             compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))

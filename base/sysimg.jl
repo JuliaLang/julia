@@ -150,6 +150,27 @@ let
     empty!(DEPOT_PATH)
 end
 
+# Apply BUILD_PATH_PREFIX_MAP (no-op when unset) to the paths in pkgorigins,
+# _included_files, and docstring metadata, which would otherwise bake the build
+# directory into the sysimage.
+let remap = p -> ccall(:jl_map_build_path, Any, (Any,), p)::String
+    for origin in values(Base.pkgorigins)
+        origin.path === nothing || (origin.path = remap(origin.path))
+        origin.cachepath === nothing || (origin.cachepath = remap(origin.cachepath))
+    end
+    for (i, (mod, file)) in enumerate(Base._included_files)
+        Base._included_files[i] = (mod, remap(file))
+    end
+    for mod in Base.Docs.modules
+        for multidoc in values(Base.Docs.meta(mod))
+            for docstr in values(multidoc.docs)
+                path = get(docstr.data, :path, nothing)
+                path isa String && (docstr.data[:path] = remap(path))
+            end
+        end
+    end
+end
+
 empty!(Base.TOML_CACHE.d)
 Base.TOML.reinit!(Base.TOML_CACHE.p, "")
 @eval Base BUILDROOT = ""

@@ -8873,6 +8873,17 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq) JL_CANSAFEPO
     return (jl_datatype_t*)typ;
 }
 
+// create a DIFile, applying BUILD_PATH_PREFIX_MAP so image debug info does not
+// bake in the build directory (no-op unless generating output with the map set)
+static DIFile *mk_difile(DIBuilder &dbuilder, StringRef file)
+{
+    size_t maplen;
+    char *mapped = jl_maybe_map_build_path_cstr(file.data(), file.size(), &maplen);
+    DIFile *difile = dbuilder.createFile(mapped ? StringRef(mapped, maplen) : file, ".");
+    free(mapped);
+    return difile;
+}
+
 // Compile to LLVM IR, using a specialized signature if applicable.
 static jl_llvm_functions_t
     emit_function(
@@ -9236,7 +9247,7 @@ static jl_llvm_functions_t
     DISubprogram *SP = NULL;
     DebugLoc noDbg, topdebugloc;
     if (debug_enabled) {
-        topfile = dbuilder.createFile(ctx.file, ".");
+        topfile = mk_difile(dbuilder, ctx.file);
         DISubroutineType *subrty;
         if (ctx.emission_context.params->debug_info_level <= 1)
             subrty = debugcache.jl_di_func_null_sig;
@@ -9809,7 +9820,7 @@ static jl_llvm_functions_t
                             DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
                             DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, info.file)];
                             if (inl_SP == NULL) {
-                                DIFile *difile = dbuilder.createFile(info.file, ".");
+                                DIFile *difile = mk_difile(dbuilder, info.file);
                                 inl_SP = dbuilder.createFunction(difile
                                                              ,std::string(fname) + ";" // Name
                                                              ,fname            // LinkageName
