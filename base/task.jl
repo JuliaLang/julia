@@ -8,36 +8,67 @@ function Core.Task(@nospecialize(f), reserved_stack::Int=0)
     return task
 end
 
-# Container for a captured exception and its backtrace. Can be serialized.
+"""
+    CapturedException(ex) <: Exception
+    CapturedException(ex, bt) <: Exception
+
+Wrap an exception `ex` and its backtrace `bt` in a serializable container. `bt`
+may be a raw backtrace as returned by [`backtrace`](@ref) or
+[`catch_backtrace`](@ref), or a vector of [`StackTraces.StackFrame`](@ref)s as
+returned by [`StackTraces.stacktrace`](@ref). If omitted, the stored backtrace
+is empty.
+"""
 struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
-
-    function CapturedException(ex, bt_raw::Vector)
-        # bt_raw MUST be a vector that can be processed by StackTraces.stacktrace
-        # Typically the result of a catch_backtrace()
-
-        # Process bt_raw so that it can be safely serialized
-        bt_lines = process_backtrace(stacktrace(bt_raw))[1:min(100, end)] # Limiting this to 100 lines.
-        CapturedException(ex, bt_lines)
-    end
-
-    CapturedException(ex, processed_bt::Vector{Any}) = new(ex, processed_bt)
+    caused_by::ExceptionStack
 end
 
-function showerror(io::IO, ce::CapturedException)
-    showerror(io, ce.ex, ce.processed_bt, backtrace=true)
-end
+CapturedException(ex) = CapturedException(ex, Any[], ExceptionStack())
+
+CapturedException(ex, bt_raw::Vector) =
+    CapturedException(ex, stacktrace(bt_raw))
+
+CapturedException(ex, frames::Vector{StackFrame}) =
+    CapturedException(ex, _process_captured_bt(frames), ExceptionStack())
+
+_process_captured_bt(frames::Vector{StackFrame}, frame_limit=100) =
+    process_backtrace(frames)[1:min(frame_limit, end)]
 
 """
     capture_exception(ex, bt)::Exception
+    capture_exception(stk::ExceptionStack)::Exception
 
-Return an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
+Return an exception suitable for serialization. Defaults to returning [`CapturedException(ex, bt)`](@ref).
 
 Used in [`asyncmap`](@ref) and [`asyncmap!`](@ref) to capture exceptions thrown during
 the user-supplied function call.
 """
 capture_exception(ex, bt) = CapturedException(ex, bt)
+
+function capture_exception(stk::ExceptionStack)
+    isempty(stk) && throw(ArgumentError("cannot capture an empty exception stack"))
+    head = last(stk)
+    head_captured = capture_exception(head.exception, something(head.backtrace, StackFrame[]))
+    head_captured isa CapturedException || return head_captured
+    causes = ExceptionStack(NamedTuple{(:exception, :backtrace)}[
+        (;
+            exception = e.exception,
+            backtrace = e.backtrace === nothing ? Any[] : _process_captured_bt(stacktrace(e.backtrace))
+        )
+        for e in Iterators.take(stk, length(stk) - 1)
+    ])
+    return CapturedException(head_captured.ex, head_captured.processed_bt, causes)
+end
+
+function showerror(io::IO, ce::CapturedException)
+    showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+    for cause in Iterators.reverse(ce.caused_by)
+        println(io)
+        printstyled(io, "\ncaused by: ", color=error_color())
+        showerror(io, cause.exception, cause.backtrace, backtrace=true)
+    end
+end
 
 """
     CompositeException
