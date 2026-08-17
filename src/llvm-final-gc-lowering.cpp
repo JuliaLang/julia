@@ -19,7 +19,8 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     // Create the GC frame.
     IRBuilder<> builder(target);
     auto gcframe_alloca = builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
-    gcframe_alloca->setAlignment(Align(16));
+    // LateLowerGCFrame records any stronger alignment needed by moved allocas.
+    gcframe_alloca->setAlignment(std::max(Align(16), target->getRetAlign().valueOrOne()));
     // addrspacecast as needed for non-0 alloca addrspace
     auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
     gcframe->takeName(target);
