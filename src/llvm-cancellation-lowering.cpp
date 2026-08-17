@@ -693,6 +693,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
 } // anonymous namespace
 
 PreservedAnalyses CancellationLoweringPass::run(Function &F, FunctionAnalysisManager &AM) {
+    julia::ScopedDialects dialects(F.getContext());
     CancellationLowering CL(*F.getParent());
     if (CL.runOnFunction(F)) {
 #ifdef JL_VERIFY_PASSES
