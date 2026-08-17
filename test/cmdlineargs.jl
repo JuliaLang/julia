@@ -344,19 +344,21 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
 
     # --quiet, --banner
-    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
-        @test read(`$exename                   -e $p`, String) == "(0, -1)"
-        @test read(`$exename -q                -e $p`, String) == "(1, 0)"
-        @test read(`$exename --quiet           -e $p`, String) == "(1, 0)"
-        @test read(`$exename --banner=no       -e $p`, String) == "(0, 0)"
-        @test read(`$exename --banner=yes      -e $p`, String) == "(0, 1)"
-        @test read(`$exename --banner=short    -e $p`, String) == "(0, 2)"
-        @test read(`$exename -q --banner=no    -e $p`, String) == "(1, 0)"
-        @test read(`$exename -q --banner=yes   -e $p`, String) == "(1, 1)"
-        @test read(`$exename -q --banner=short -e $p`, String) == "(1, 2)"
-        @test read(`$exename --banner=no  -q   -e $p`, String) == "(1, 0)"
-        @test read(`$exename --banner=yes -q   -e $p`, String) == "(1, 1)"
-        @test read(`$exename --banner=short -q -e $p`, String) == "(1, 2)"
+    # Use raw executable to avoid julia_cmd() propagating -q from the parent process
+    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))",
+        rawexe = `$(joinpath(Sys.BINDIR, Base.julia_exename())) --startup-file=no --color=no`
+        @test read(`$rawexe                   -e $p`, String) == "(0, -1)"
+        @test read(`$rawexe -q                -e $p`, String) == "(1, 0)"
+        @test read(`$rawexe --quiet           -e $p`, String) == "(1, 0)"
+        @test read(`$rawexe --banner=no       -e $p`, String) == "(0, 0)"
+        @test read(`$rawexe --banner=yes      -e $p`, String) == "(0, 1)"
+        @test read(`$rawexe --banner=short    -e $p`, String) == "(0, 2)"
+        @test read(`$rawexe -q --banner=no    -e $p`, String) == "(1, 0)"
+        @test read(`$rawexe -q --banner=yes   -e $p`, String) == "(1, 1)"
+        @test read(`$rawexe -q --banner=short -e $p`, String) == "(1, 2)"
+        @test read(`$rawexe --banner=no  -q   -e $p`, String) == "(1, 0)"
+        @test read(`$rawexe --banner=yes -q   -e $p`, String) == "(1, 1)"
+        @test read(`$rawexe --banner=short -q -e $p`, String) == "(1, 2)"
     end
 
     # --home
