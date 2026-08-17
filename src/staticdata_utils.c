@@ -11,6 +11,307 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
     write_uint64(s, *((uint64_t*)&x));
 }
 
+// BUILD_PATH_PREFIX_MAP (https://reproducible-builds.org/specs/build-path-prefix-map/):
+// remap source path prefixes when writing images.
+
+typedef struct {
+    char *target;
+    size_t target_len;
+    char *source;
+    size_t source_len;
+} prefix_map_pair_t;
+
+static prefix_map_pair_t *prefix_map_pairs = NULL;
+static size_t prefix_map_npairs = 0;
+static enum {
+    PREFIX_MAP_UNPARSED = -1,
+    PREFIX_MAP_INACTIVE = 0,
+    PREFIX_MAP_ACTIVE = 1,
+    PREFIX_MAP_MALFORMED = 2,
+} prefix_map_state = PREFIX_MAP_UNPARSED;
+
+// decode `%.` `%+` `%#` escapes; NULL if invalid
+static char *prefix_map_unescape(const char *s, size_t len, size_t *outlen) JL_NOTSAFEPOINT
+{
+    char *out = (char*)malloc_s(len + 1);
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        char c = s[i];
+        if (c == '%') {
+            char e = i + 1 < len ? s[i + 1] : '\0';
+            c = e == '.' ? ':' : e == '+' ? '=' : e == '#' ? '%' : '\0';
+            if (c == '\0') {
+                free(out);
+                return NULL;
+            }
+            i++;
+        }
+        else if (c == '=' || c == ':') {
+            free(out);
+            return NULL;
+        }
+        out[j++] = c;
+    }
+    out[j] = '\0';
+    *outlen = j;
+    return out;
+}
+
+static void prefix_map_free(prefix_map_pair_t *pairs, size_t npairs) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < npairs; i++) {
+        free(pairs[i].target);
+        free(pairs[i].source);
+    }
+    free(pairs);
+}
+
+// returns 0 if malformed, which invalidates the whole map
+static int prefix_map_parse(const char *spec, prefix_map_pair_t **out_pairs, size_t *out_npairs) JL_NOTSAFEPOINT
+{
+    prefix_map_pair_t *pairs = NULL;
+    size_t n = 0, cap = 0;
+    const char *p = spec;
+    while (1) {
+        const char *end = strchr(p, ':');
+        size_t len = end ? (size_t)(end - p) : strlen(p);
+        if (len > 0) { // empty subsequences between ':' are ignored
+            const char *eq = (const char*)memchr(p, '=', len);
+            char *target = NULL, *source = NULL;
+            size_t tlen = 0, slen = 0;
+            if (eq) {
+                target = prefix_map_unescape(p, eq - p, &tlen);
+                if (target)
+                    source = prefix_map_unescape(eq + 1, p + len - (eq + 1), &slen);
+            }
+            // reject '@'-prefixed targets, which would collide with the loader's @depot aliases
+            if (!source || (target[0] == '@')) {
+                free(target);
+                free(source);
+                prefix_map_free(pairs, n);
+                return 0;
+            }
+            if (n == cap) {
+                cap = cap ? 2 * cap : 4;
+                pairs = (prefix_map_pair_t*)realloc_s(pairs, cap * sizeof(prefix_map_pair_t));
+            }
+            pairs[n].target = target;
+            pairs[n].target_len = tlen;
+            pairs[n].source = source;
+            pairs[n].source_len = slen;
+            n++;
+        }
+        if (!end)
+            break;
+        p = end + 1;
+    }
+    *out_pairs = pairs;
+    *out_npairs = n;
+    return 1;
+}
+
+static int is_path_sep(char c) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    if (c == '\\')
+        return 1;
+#endif
+    return c == '/';
+}
+
+// bytewise comparison, except on Windows '/' and '\\' count as equal
+static int prefix_bytes_eq(const char *path, const char *source, size_t n) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < n; i++) {
+        if (path[i] != source[i] && !(is_path_sep(path[i]) && is_path_sep(source[i])))
+            return 0;
+    }
+    return 1;
+}
+
+// replace a matching source prefix in `path` with its target; the rightmost pair
+// wins and the match must end on a path component boundary. Returns a malloc'd
+// string, or NULL when no pair matches.
+static char *prefix_map_apply(prefix_map_pair_t *pairs, size_t npairs,
+                              const char *path, size_t len, size_t *outlen) JL_NOTSAFEPOINT
+{
+    if (len == 0)
+        return NULL;
+    for (size_t i = npairs; i-- > 0; ) {
+        const char *source = pairs[i].source;
+        size_t slen = pairs[i].source_len;
+        while (slen > 1 && is_path_sep(source[slen - 1]))
+            slen--;
+        if (len < slen || !prefix_bytes_eq(path, source, slen))
+            continue;
+        // component-boundary check: /path/to/a must not match /path/to/aa/b
+        if (len > slen && !is_path_sep(path[slen]) && !(slen > 0 && is_path_sep(source[slen - 1])))
+            continue;
+        size_t tlen = pairs[i].target_len;
+        size_t rest = len - slen;
+        char *out = (char*)malloc_s(tlen + rest + 1);
+        memcpy(out, pairs[i].target, tlen);
+        memcpy(out + tlen, path + slen, rest);
+        out[tlen + rest] = '\0';
+        *outlen = tlen + rest;
+        return out;
+    }
+    return NULL;
+}
+
+static void prefix_map_init(void) JL_NOTSAFEPOINT
+{
+    if (prefix_map_state != PREFIX_MAP_UNPARSED)
+        return;
+    // uv_os_getenv reads the wide environment on Windows and converts to WTF-8,
+    // matching the encoding of the paths being mapped
+    size_t size = 256;
+    char *spec = (char*)malloc_s(size);
+    int r = uv_os_getenv("BUILD_PATH_PREFIX_MAP", spec, &size);
+    if (r == UV_ENOBUFS) {
+        spec = (char*)realloc_s(spec, size);
+        r = uv_os_getenv("BUILD_PATH_PREFIX_MAP", spec, &size);
+    }
+    if (r != 0 || !spec[0]) {
+        free(spec);
+        prefix_map_state = PREFIX_MAP_INACTIVE;
+        return;
+    }
+    prefix_map_state = prefix_map_parse(spec, &prefix_map_pairs, &prefix_map_npairs) ?
+        PREFIX_MAP_ACTIVE : PREFIX_MAP_MALFORMED;
+    free(spec);
+}
+
+// error on a malformed map instead of silently writing unmapped output; called
+// up front since the mapping functions themselves cannot throw
+static int prefix_map_active(void)
+{
+    prefix_map_init();
+    if (prefix_map_state == PREFIX_MAP_MALFORMED)
+        jl_error("malformed BUILD_PATH_PREFIX_MAP value");
+    return prefix_map_state == PREFIX_MAP_ACTIVE;
+}
+
+static char *maybe_map_build_path(const char *path, size_t len, size_t *outlen) JL_NOTSAFEPOINT
+{
+    if (prefix_map_state != PREFIX_MAP_ACTIVE || !jl_generating_output())
+        return NULL;
+    return prefix_map_apply(prefix_map_pairs, prefix_map_npairs, path, len, outlen);
+}
+
+// C-string variant for codegen debug info, which runs before prefix_map_active
+// has validated the map; a malformed map is simply inactive here
+JL_DLLEXPORT char *jl_maybe_map_build_path_cstr(const char *path, size_t len, size_t *outlen) JL_NOTSAFEPOINT
+{
+    prefix_map_init();
+    return maybe_map_build_path(path, len, outlen);
+}
+
+static jl_sym_t *jl_maybe_map_build_path_sym(jl_sym_t *s) JL_NOTSAFEPOINT
+{
+    if (s == NULL)
+        return s;
+    const char *name = jl_symbol_name(s);
+    size_t outlen;
+    char *mapped = maybe_map_build_path(name, strlen(name), &outlen);
+    if (!mapped)
+        return s;
+    jl_sym_t *r = jl_symbol_n(mapped, outlen);
+    free(mapped);
+    return r;
+}
+
+jl_value_t *jl_maybe_map_build_path_jlstr(jl_value_t *str) JL_CANSAFEPOINT
+{
+    size_t len = jl_string_len(str);
+    const char *data = jl_string_data(str);
+    // skip binary-packed `require` records (leading NUL) and @depot aliases
+    if (len == 0 || data[0] == '\0' || (len >= 6 && !memcmp(data, "@depot", 6)))
+        return str;
+    size_t outlen;
+    char *mapped = maybe_map_build_path(data, len, &outlen);
+    if (!mapped)
+        return str;
+    jl_value_t *r = jl_pchar_to_string(mapped, outlen);
+    free(mapped);
+    return r;
+}
+
+// remap path symbols, strings, and LineNumberNode files inside an AST literal;
+// returns NULL when nothing changed. Allocates without rooting, so the GC must
+// be disabled.
+static jl_value_t *maybe_map_build_path_in_ast(jl_value_t *v, int depth) JL_CANSAFEPOINT JL_GC_DISABLED
+{
+    if (v == NULL || depth > 100)
+        return NULL;
+    if (jl_is_symbol(v)) {
+        jl_sym_t *mapped = jl_maybe_map_build_path_sym((jl_sym_t*)v);
+        return mapped == (jl_sym_t*)v ? NULL : (jl_value_t*)mapped;
+    }
+    if (jl_is_string(v)) {
+        jl_value_t *mapped = jl_maybe_map_build_path_jlstr(v);
+        return mapped == v ? NULL : mapped;
+    }
+    if (jl_is_linenode(v)) {
+        jl_value_t *file = maybe_map_build_path_in_ast(jl_linenode_file(v), depth + 1);
+        if (file == NULL)
+            return NULL;
+        return jl_new_struct(jl_linenumbernode_type, jl_box_long(jl_linenode_line(v)), file);
+    }
+    if (jl_is_quotenode(v)) {
+        jl_value_t *val = maybe_map_build_path_in_ast(jl_quotenode_value(v), depth + 1);
+        if (val == NULL)
+            return NULL;
+        return jl_new_struct(jl_quotenode_type, val);
+    }
+    if (jl_is_expr(v)) {
+        jl_expr_t *e = (jl_expr_t*)v;
+        size_t i, n = jl_expr_nargs(e);
+        jl_expr_t *ne = NULL;
+        for (i = 0; i < n; i++) {
+            jl_value_t *mapped = maybe_map_build_path_in_ast(jl_exprarg(e, i), depth + 1);
+            if (mapped) {
+                if (ne == NULL) {
+                    ne = jl_exprn(e->head, n);
+                    for (size_t j = 0; j < n; j++)
+                        jl_exprargset(ne, j, jl_exprarg(e, j));
+                }
+                jl_exprargset(ne, i, mapped);
+            }
+        }
+        return (jl_value_t*)ne;
+    }
+    return NULL;
+}
+
+JL_DLLEXPORT jl_value_t *jl_map_build_path(jl_value_t *str) JL_CANSAFEPOINT
+{
+    JL_TYPECHK(map_build_path, string, str);
+    if (!prefix_map_active())
+        return str;
+    return jl_maybe_map_build_path_jlstr(str);
+}
+
+// test entry point that parses `map` fresh on every call, since the
+// environment value is cached per-process
+JL_DLLEXPORT jl_value_t *jl_test_map_build_path(jl_value_t *map, jl_value_t *path) JL_CANSAFEPOINT
+{
+    JL_TYPECHK(test_map_build_path, string, map);
+    JL_TYPECHK(test_map_build_path, string, path);
+    prefix_map_pair_t *pairs = NULL;
+    size_t npairs = 0;
+    if (!prefix_map_parse(jl_string_data(map), &pairs, &npairs))
+        jl_error("malformed BUILD_PATH_PREFIX_MAP value");
+    size_t outlen;
+    char *mapped = prefix_map_apply(pairs, npairs, jl_string_data(path), jl_string_len(path), &outlen);
+    prefix_map_free(pairs, npairs);
+    if (!mapped)
+        return path;
+    jl_value_t *r = jl_pchar_to_string(mapped, outlen);
+    free(mapped);
+    return r;
+}
+
 // Decide if `t` must be new, because it points to something new.
 // If it is new, the object (in particular, the super field) might not be entirely
 // valid for the cache, so we want to finish transforming it before attempting
@@ -795,7 +1096,8 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     jl_value_t *unique_func = NULL;
     jl_value_t *replace_depot_func = NULL;
     jl_value_t *normalize_depots_func = NULL;
-    JL_GC_PUSH5(&depots, &prefs_blob, &unique_func, &replace_depot_func, &normalize_depots_func);
+    jl_value_t *deppath = NULL;
+    JL_GC_PUSH6(&depots, &prefs_blob, &unique_func, &replace_depot_func, &normalize_depots_func, &deppath);
 
     jl_array_t *udeps = (jl_array_t*)jl_get_global_value(jl_base_module, jl_symbol("_require_dependencies"), ct->world_age);
     *udepsp = udeps;
@@ -828,7 +1130,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
         JL_TYPECHK(write_dependency_list, deptuple, deptuple);
-        jl_value_t *deppath = jl_fieldref_noalloc(deptuple, 1);
+        deppath = jl_fieldref_noalloc(deptuple, 1);
 
         if (replace_depot_func) {
             jl_value_t *replace_depot_args[3];
@@ -838,6 +1140,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
             deppath = (jl_value_t*)jl_apply(replace_depot_args, 3);
             JL_TYPECHK(write_dependency_list, string, deppath);
         }
+        deppath = jl_maybe_map_build_path_jlstr(deppath);
 
         size_t slen = jl_string_len(deppath);
         write_int32(s, slen);

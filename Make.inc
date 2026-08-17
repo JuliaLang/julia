@@ -2072,3 +2072,14 @@ endif # VERBOSE
 # (hardened against any special characters appearing in the output)
 print-%:
 	@printf "%s\n" $(call shell_escape,$*)=$(call shell_escape,$(subst $(newline),\n,$($*)))
+
+# Also apply BUILD_PATH_PREFIX_MAP to C/C++ debug info and __FILE__, so native
+# frames use the same mapped paths as the runtime. Each dst=src pair in the map
+# becomes -ffile-prefix-map=src=dst. (This sits at the end of Make.inc so a map
+# constructed within this file, e.g. via cygpath_w, is visible; the JCFLAGS
+# variables are recursively expanded, so the late += still lands everywhere.)
+ifneq ($(BUILD_PATH_PREFIX_MAP),)
+BUILD_PATH_PREFIX_MAP_FLAGS := $(shell printf '%s' '$(BUILD_PATH_PREFIX_MAP)' | awk 'BEGIN { RS=":" } { i = index($$0, "="); if (i == 0) next; dst = substr($$0, 1, i-1); src = substr($$0, i+1); gsub(/%\./, ":", dst); gsub(/%\+/, "=", dst); gsub(/%\#/, "%", dst); gsub(/%\./, ":", src); gsub(/%\+/, "=", src); gsub(/%\#/, "%", src); printf " -ffile-prefix-map=%s=%s", src, dst }')
+JCFLAGS_COMMON += $(BUILD_PATH_PREFIX_MAP_FLAGS)
+JCXXFLAGS_COMMON += $(BUILD_PATH_PREFIX_MAP_FLAGS)
+endif
