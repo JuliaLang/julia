@@ -301,10 +301,22 @@ endif
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT): $(SRCDIR)/ccalllazyfoo.c
-	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazyfoo.$(SHLIB_EXT)))
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -c -o $@.tmp.o)
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(WIN_LD_LIBPATHS), \
+		$(WIN_LD_DLL_CRT_START) $@.tmp.o $(COMMON_LIBPATHS) $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CC) $(LDFLAGS) -shared $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazyfoo.$(SHLIB_EXT)), \
+		$@.tmp.o))
+	@rm -f $@.tmp.o
 
 $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
-	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)) -lccalllazyfoo)
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -c -o $@.tmp.o)
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(WIN_LD_LIBPATHS), \
+		$(WIN_LD_DLL_CRT_START) $@.tmp.o $(COMMON_LIBPATHS) -lccalllazyfoo $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CC) $(LDFLAGS) -shared $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)), \
+		$@.tmp.o -lccalllazyfoo))
+	@rm -f $@.tmp.o
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(FLAGS) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -c -o $@.tmp.o)

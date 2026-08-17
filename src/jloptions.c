@@ -849,7 +849,7 @@ restart_switch:
                     case 't':
                         multiplier <<= 40;
                         break;
-                    case '%':
+                    case '%': {
                         if (value > 100)
                             jl_errorf("julia: invalid percentage specified in --heap-size-hint");
                         uint64_t mem = uv_get_total_memory();
@@ -858,6 +858,7 @@ restart_switch:
                             mem = cmem;
                         multiplier = mem/100;
                         break;
+                    }
                     default:
                         jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                         break;
