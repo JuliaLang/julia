@@ -6,8 +6,11 @@
 #define GET_DIALECT_DEFS
 #include "JuliaDialect.cpp.inc"
 
+#include "passes.h"
+
 #include <llvm/ADT/DenseMap.h>
 #include <llvm-dialects/Dialect/Dialect.h>
+#include <llvm-dialects/Dialect/Verifier.h>
 
 #include <mutex>
 
@@ -47,3 +50,14 @@ ScopedDialects::~ScopedDialects()
 }
 
 } // namespace julia
+
+PreservedAnalyses JuliaDialectsVerifierPass::run(Module &M, ModuleAnalysisManager &AM)
+{
+    julia::ScopedDialects dialects(M.getContext());
+    if (!llvm_dialects::verify(M, errs())) {
+        errs() << "Julia dialect verification failed, dumping entire module!\n\n";
+        errs() << M << "\n";
+        abort();
+    }
+    return PreservedAnalyses::all();
+}
