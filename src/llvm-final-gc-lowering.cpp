@@ -277,6 +277,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
 PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
+    julia::ScopedDialects dialects(F.getContext());
     if (FinalLowerGC().runOnFunction(F)) {
 #ifdef JL_VERIFY_PASSES
         assert(!verifyLLVMIR(F));
