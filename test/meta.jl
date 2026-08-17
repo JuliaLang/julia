@@ -154,6 +154,17 @@ function _nospec_some_args2(x, y, z)
     return 0
 end
 @test first(methods(_nospec_some_args2)).nospecialize == 3
+function _nospec_some_args3(x, y, z)
+    @nospecialize x, z
+    return 0
+end
+@test first(methods(_nospec_some_args3)).nospecialize == 5
+function _spec_some_args(x, y, z)
+    @nospecialize
+    @specialize x, z
+    return 0
+end
+@test first(methods(_spec_some_args)).nospecialize & 0b111 == 0b010
 function _nospec_with_default(@nospecialize x = 1)
     2x
 end
