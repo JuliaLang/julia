@@ -24,8 +24,7 @@ will not be reflected, unless you use `Revise`.
    not just the harness - it is what tells a later reader what actually produced the work. Do not
    use `Co-authored-by:` for tools, and do not list a tool as an author; this trailer replaces any
    co-author trailer your harness adds by default.
-2. Agents aren't permitted to post comments autonomously.
-3. Agents can only open PRs once the human user gives them explicit permission.
+2. Agents can only open PRs or post comments once the human user gives them explicit permission.
 
 ## Building Julia
 
