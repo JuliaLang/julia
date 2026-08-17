@@ -174,6 +174,9 @@ typedef struct {
     // were presented in `codeinfos`; consumed by staticdata.c to rewrite each
     // MethodInstance's `cache` field into a `next`-linked list
     SmallVector<jl_code_instance_t*, 0> jl_ci_order;
+    // coverage counters emitted into the image: (file, line, counter symbol);
+    // serialized as the `jl_image_coverage` table for registration at load time
+    SmallVector<std::tuple<std::string, int32_t, std::string>, 0> jl_coverage_entries;
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -623,6 +626,14 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
     }
 }
 
+// Coverage counters are the module-local globals `newCoverageCounter` in
+// codegen.cpp creates; they are identified by their name prefix. Keep both in
+// sync if counters ever get a metadata tag or a dedicated section instead.
+static bool isCoverageCounter(const GlobalValue &G)
+{
+    return G.getName().starts_with("jl_covctr");
+}
+
 static bool canPartition(const Function &F)
 {
     return !F.hasFnAttribute(Attribute::AlwaysInline) &&
@@ -703,6 +714,15 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
         }
         for (GlobalObject &G : M.global_objects()) {
             if (!G.isDeclaration()) {
+                if (isCoverageCounter(G)) {
+                    // Coverage counters are referenced by name from the image
+                    // coverage table in the separately-compiled metadata module,
+                    // so they must stay visible across the image's objects.
+                    G.setLinkage(GlobalValue::ExternalLinkage);
+                    G.setVisibility(GlobalValue::HiddenVisibility);
+                    G.setDSOLocal(true);
+                    continue;
+                }
                 G.setLinkage(GlobalValue::InternalLinkage);
                 G.setDSOLocal(true);
                 makeSafeName(G);
@@ -1004,6 +1024,12 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
         gv->setInitializer(Constant::getNullValue(gv->getValueType()));
         gv->setLinkage(GlobalValue::InternalLinkage);
         gv->setDSOLocal(true);
+    }
+
+    data->jl_coverage_entries.reserve(out.image_coverage_counters.size());
+    for (auto &covctr : out.image_coverage_counters) {
+        data->jl_coverage_entries.push_back({covctr.first.first, covctr.first.second,
+                                             covctr.second->getName().str()});
     }
 
     for (auto &[ci, funcs] : out.ci_funcs) {
@@ -1325,6 +1351,9 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
                     continue;
                 }
                 if (GVNames[val->getName()] != GVNames[GV.getName()]) {
+                    // coverage counters are shared across partitions by design
+                    if (isCoverageCounter(GV) || isCoverageCounter(*val))
+                        continue;
                     bad = true;
                     dbgs() << "Global " << val->getName() << " used by " << GV.getName() << ", which is in partition " << GVNames[GV.getName()] << " but " << val->getName() << " is in partition " << GVNames[val->getName()] << "\n";
                 }
@@ -1401,6 +1430,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
+        // Coverage counters are shared by commonly inlined code, so
+        // partitioning them together with their users would collapse most of
+        // the module into a single partition. Skip them here; they are
+        // assigned round-robin once the code partitions are settled.
+        if (isCoverageCounter(G))
+            continue;
         // Currently ccallable global aliases have extern linkage, we only want to make the
         // internally linked functions/global variables extern+hidden
         if (G.hasLocalLinkage()) {
@@ -1420,9 +1455,13 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         for (ConstantUses<GlobalValue> uses(partitioner.nodes[i].GV, M); !uses.done(); uses.next()) {
             auto val = uses.get_info().val;
             auto idx = partitioner.node_map.find(val);
-            // This can fail if we can't partition a global, but it uses something we can partition
-            // This should be fixed by altering canPartition to not permit partitioning this global
-            assert(idx != partitioner.node_map.end());
+            if (idx == partitioner.node_map.end()) {
+                // only coverage counters are deliberately left out of the
+                // partitioning above; anything else is a global that
+                // partitionModule failed to account for
+                assert(isCoverageCounter(*val) && "unpartitioned global that is not a coverage counter");
+                continue;
+            }
             partitioner.merge(i, idx->second);
         }
     }
@@ -1480,6 +1519,19 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
             node.weight = 0;
             node.size = partitioner.nodes[root].size;
         }
+    }
+
+    // Assign the coverage counters that were skipped above, now that the code
+    // partitions are settled. Any partition works: the counters are external
+    // hidden symbols, so cross-partition references resolve at link time.
+    for (auto &G : M.globals()) {
+        if (G.isDeclaration() || !isCoverageCounter(G))
+            continue;
+        auto &P = *pq.top();
+        pq.pop();
+        P.globals.insert({G.getName(), true});
+        P.weight += 1;
+        pq.push(&P);
     }
 
     bool verified = verify_partitioning(partitions, M, fvars, gvars);
@@ -2222,6 +2274,10 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                            const char *unpack_func, jl_emission_params_t *params,
                            Module &dataM)
 {
+    // `data` is deleted when the text outputs finish compiling, well before
+    // the metadata module is built, so take what the coverage table needs now.
+    auto coverage_entries = std::move(data->jl_coverage_entries);
+
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -2521,6 +2577,51 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
                                                        GlobalVariable::InternalLinkage,
                                                        cpu_target_data, "jl_cpu_target_string");
+
+            // Emit the coverage counter table if the image was compiled with
+            // coverage instrumentation; layouts match jl_image_coverage_t and
+            // jl_image_coverage_entry_t. The loader registers the counters so
+            // instrumented image code contributes to coverage reports. Only
+            // `--code-coverage=all` instruments image code (see `emit_function`),
+            // and only such an image can be trusted by the loader. The table is
+            // emitted even when empty (e.g. a JLL package with no compiled
+            // code): its presence marks the image as instrumented.
+            if (jl_options.code_coverage == JL_LOG_ALL) {
+                Type *T_i32 = Type::getInt32Ty(Context);
+                Type *T_i64 = Type::getInt64Ty(Context);
+                StructType *ET = StructType::get(Context, {T_ptr, T_ptr, T_i32, T_i32});
+                StringMap<GlobalVariable*> files;
+                SmallVector<Constant*, 0> entries;
+                entries.reserve(coverage_entries.size());
+                for (auto &[file, line, sym] : coverage_entries) {
+                    GlobalVariable *&fgv = files[file];
+                    if (!fgv) {
+                        auto fdata = ConstantDataArray::getString(Context, file, true);
+                        fgv = new GlobalVariable(metadataM, fdata->getType(), true,
+                                                 GlobalVariable::PrivateLinkage, fdata,
+                                                 "jl_coverage_file");
+                    }
+                    auto counter = cast<GlobalVariable>(metadataM.getOrInsertGlobal(sym, T_i64));
+                    counter->setVisibility(GlobalValue::HiddenVisibility);
+                    counter->setDSOLocal(true);
+                    entries.push_back(ConstantStruct::get(ET, {(Constant*)fgv, (Constant*)counter,
+                        ConstantInt::get(T_i32, line), ConstantInt::get(T_i32, 0)}));
+                }
+                auto entries_arr = ConstantArray::get(ArrayType::get(ET, entries.size()), entries);
+                auto entries_gv = new GlobalVariable(metadataM, entries_arr->getType(), true,
+                                                     GlobalVariable::PrivateLinkage, entries_arr,
+                                                     "jl_coverage_entries");
+                StructType *CT = StructType::get(Context, {T_i32, T_i32, T_i64, T_ptr});
+                auto cov = new GlobalVariable(metadataM, CT, true,
+                                              GlobalVariable::ExternalLinkage,
+                                              ConstantStruct::get(CT, {
+                                                  ConstantInt::get(T_i32, jl_options.code_coverage),
+                                                  ConstantInt::get(T_i32, jl_options.code_coverage_mode),
+                                                  ConstantInt::get(T_i64, entries.size()),
+                                                  (Constant*)entries_gv}),
+                                              "jl_image_coverage");
+                addComdat(cov, TheTriple);
+            }
 
             AT = ArrayType::get(T_psize, 6);
             auto pointers = new GlobalVariable(metadataM, AT, false,

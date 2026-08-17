@@ -173,6 +173,40 @@ JL_DLLEXPORT void jl_coverage_register_counter(logdata_counter_t *slot, logdata_
     uv_mutex_unlock(&coverage_lock);
 }
 
+// Whether the sysimage carries coverage counters matching the current options.
+static int sysimg_coverage_matched = 0;
+// Whether any other image was loaded without matching coverage counters.
+static int unmatched_image_loaded = 0;
+
+// Whether image code can be trusted to already collect the requested coverage,
+// making the usual invalidation of image code (Compiler.reinfer) unnecessary.
+JL_DLLEXPORT int jl_image_coverage_trusted(void) JL_NOTSAFEPOINT
+{
+    return sysimg_coverage_matched && !unmatched_image_loaded;
+}
+
+// Adopt the counters compiled into a just-loaded image. Registering a counter
+// allocates the canonical per-line slot, so instrumented-but-unreached lines
+// are still reported (with a zero count), matching JIT instrumentation.
+void jl_register_image_coverage(const void *table, int is_sysimg)
+{
+    const jl_image_coverage_t *cov = (const jl_image_coverage_t*)table;
+    int matched = cov != NULL &&
+                  jl_options.code_coverage == JL_LOG_ALL &&
+                  cov->scope == JL_LOG_ALL &&
+                  cov->mode == (uint32_t)jl_options.code_coverage_mode;
+    if (is_sysimg)
+        sysimg_coverage_matched = matched;
+    else if (!matched && jl_options.code_coverage != JL_LOG_NONE)
+        unmatched_image_loaded = 1;
+    if (!matched)
+        return;
+    for (uint64_t i = 0; i < cov->nentries; i++) {
+        const jl_image_coverage_entry_t *e = &cov->entries[i];
+        jl_coverage_register_counter(jl_coverage_data_pointer(e->file, e->line), e->counter);
+    }
+}
+
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT
 {
     // TODO: remove `len` and use C-style strings exclusively

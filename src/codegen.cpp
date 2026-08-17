@@ -2140,8 +2140,8 @@ public:
     // `AllocaInst *` used as stack temporaries. This opts in to optimization via LLVM's StackColoring pass.
     SmallVector<WeakVH, 0> stack_temporaries;
 
-    // Counters already set in each basic block. Only used in hit mode.
-    DenseSet<std::pair<BasicBlock*, _Atomic(uint64_t) *>> coverage_seen;
+    // (block, counter) pairs already instrumented in hit mode.
+    DenseSet<std::pair<BasicBlock*, void *>> coverage_seen;
 
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
@@ -3358,31 +3358,63 @@ static void visitLine(jl_codectx_t &ctx, Value *pv, Value *addend, const char *n
 
 // Code coverage
 
+// The only producer of the `jl_covctr` name prefix, which `isCoverageCounter`
+// in aotcompile.cpp relies on to recognize counters when partitioning images.
+static GlobalVariable *newCoverageCounter(jl_codectx_t &ctx)
+{
+    Type *T_i64 = getInt64Ty(ctx.builder.getContext());
+    auto counter = new GlobalVariable(ctx.emission_context.get_module(), T_i64, false,
+                                      GlobalVariable::InternalLinkage, ConstantInt::get(T_i64, 0),
+                                      ctx.emission_context.make_name("jl_covctr"));
+    counter->setAlignment(Align(8));
+    return counter;
+}
+
+// Record a line as instrumented without emitting a counter update, so that
+// unreached lines are still reported (with a zero count).
+static void coverageAllocLine(jl_codectx_t &ctx, StringRef filename, int line)
+{
+    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
+        return;
+    if (ctx.emission_context.imaging_mode) {
+        GlobalVariable *&c = ctx.emission_context.image_coverage_counters[{filename.data(), line}];
+        if (!c)
+            c = newCoverageCounter(ctx);
+        return;
+    }
+    jl_coverage_alloc_line(filename.data(), line);
+}
+
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 {
-    if (ctx.emission_context.imaging_mode)
-        return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     bool hit_only = jl_options.code_coverage_mode == JL_COVERAGE_MODE_HIT;
-    // Allocating the runtime slot marks the line as instrumented, even if the
-    // generated module is never linked or run.
-    _Atomic(uint64_t) *slot = jl_coverage_data_pointer(filename.data(), line);
+    // Unlike an absolute runtime address, a module-local global is both
+    // visible to alias analysis and stable across processes.
+    GlobalVariable *counter;
+    if (ctx.emission_context.imaging_mode) {
+        // Images allocate no runtime slots; the image records (file, line) for
+        // every counter and the loader registers them after relocation.
+        GlobalVariable *&c = ctx.emission_context.image_coverage_counters[{filename.data(), line}];
+        if (!c)
+            c = newCoverageCounter(ctx);
+        counter = c;
+    }
+    else {
+        // Allocating the runtime slot marks the line as instrumented, even if
+        // the generated module is never linked or run. The linker metadata
+        // maps the counter's final address back to `slot`.
+        _Atomic(uint64_t) *slot = jl_coverage_data_pointer(filename.data(), line);
+        GlobalVariable *&c = ctx.emission_context.coverage_counters[slot];
+        if (!c)
+            c = newCoverageCounter(ctx);
+        counter = c;
+    }
     if (hit_only) {
         // One store per block is enough to mark the line as reached.
-        if (!ctx.coverage_seen.insert({ctx.builder.GetInsertBlock(), slot}).second)
+        if (!ctx.coverage_seen.insert({ctx.builder.GetInsertBlock(), (void*)counter}).second)
             return;
-    }
-    // Unlike an absolute runtime address, a module-local global is both
-    // visible to alias analysis and stable across processes. The linker
-    // metadata maps its final address back to `slot`.
-    GlobalVariable *&counter = ctx.emission_context.coverage_counters[slot];
-    if (!counter) {
-        Type *T_i64 = getInt64Ty(ctx.builder.getContext());
-        counter = new GlobalVariable(ctx.emission_context.get_module(), T_i64, false,
-                                     GlobalVariable::InternalLinkage, ConstantInt::get(T_i64, 0),
-                                     ctx.emission_context.make_name("jl_covctr"));
-        counter->setAlignment(Align(8));
     }
     visitLine(ctx, counter, ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt", hit_only);
 }
@@ -9118,6 +9150,13 @@ static jl_llvm_functions_t
         coverage_mode = JL_LOG_NONE;
     if (!JL_FEAT_TEST(ctx, track_allocations))
         malloc_log_mode = JL_LOG_NONE;
+    // While generating an image, only the code emitted into the image itself
+    // is instrumented; the generating process's own workload is not tracked.
+    // An image is only trusted to carry coverage for `--code-coverage=all`
+    // (see `jl_register_image_coverage`), so narrower scopes do not
+    // instrument image code either.
+    if (ctx.emission_context.imaging_mode ? coverage_mode != JL_LOG_ALL : jl_generating_output())
+        coverage_mode = JL_LOG_NONE;
 
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
@@ -10112,13 +10151,10 @@ static jl_llvm_functions_t
         cursor = -1;
     };
 
-    // If a pkgimage or sysimage is being generated, disable tracking.
-    // This means sysimage build or pkgimage precompilation workloads aren't tracked.
     auto do_coverage = [&] (bool in_user_code, bool is_tracked) {
-        return (jl_generating_output() == 0 &&
-                (coverage_mode == JL_LOG_ALL ||
+        return (coverage_mode == JL_LOG_ALL ||
                 (in_user_code && coverage_mode == JL_LOG_USER) ||
-                (is_tracked && coverage_mode == JL_LOG_PATH)));
+                (is_tracked && coverage_mode == JL_LOG_PATH));
     };
     auto do_malloc_log = [&] (bool in_user_code, bool is_tracked) {
         return (jl_generating_output() == 0 &&
@@ -10173,13 +10209,13 @@ static jl_llvm_functions_t
             if (do_coverage(is_user_code, is_tracked)) {
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
-                    jl_coverage_alloc_line(file.data(), extraline);
+                    coverageAllocLine(ctx, file, extraline);
                 for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
                         break;
                     if (lineidx.loc > 0)
-                        jl_coverage_alloc_line(file.data(), lineidx.loc);
+                        coverageAllocLine(ctx, file, lineidx.loc);
                 }
             }
         };
