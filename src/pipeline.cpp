@@ -193,6 +193,7 @@ namespace {
 #ifdef JL_VERIFY_PASSES
     static inline void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
         if (!llvm_only){
+            MPM.addPass(JuliaDialectsVerifierPass());
             MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass(true)));
         }
         MPM.addPass(VerifierPass());
