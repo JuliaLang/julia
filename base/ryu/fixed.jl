@@ -1,6 +1,9 @@
 function writefixed(buf, pos, v::T,
-    precision=-1, plus=false, space=false, hash=false,
+    precision=0, plus=false, space=false, hash=false,
     decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
+    pos = Int(pos)
+    precision = Int(precision)
+    precision >= 0 || throw(ArgumentError("precision must be non-negative"))
     @assert 0 < pos <= length(buf) "invalid pos"
     startpos = pos
     x = Float64(v)

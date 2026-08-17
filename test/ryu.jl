@@ -7,6 +7,38 @@ todouble(sign, exp, mant) = Core.bitcast(Float64, (UInt64(sign) << 63) | (UInt64
 
 @testset "Ryu" begin
 
+# Ryu wrapper buffers must account for requested precision without size overflow.
+@testset "precision buffer sizing" begin
+    @test Ryu.writeshortest(1.0, false, false, true, 400) == "1." * repeat("0", 399)
+    @test Ryu.writeshortest(1.0, false, false, true, UInt(0)) ==
+        Ryu.writeshortest(1.0, false, false, true, 0)
+    @test Ryu.writefixed(1.25, UInt(2)) == "1.25"
+    @test Ryu.writeexp(1.25, big(2)) == "1.25e+00"
+
+    overflow_precision = typemax(Int)
+    @test_throws OverflowError Ryu.writeshortest(1.0, false, false, true, overflow_precision)
+    @test_throws OverflowError Ryu.writefixed(0.0, overflow_precision)
+    @test_throws OverflowError Ryu.writeexp(0.0, overflow_precision)
+
+    @test_throws ArgumentError Ryu.writeshortest(1.0, false, false, true, -2)
+    @test_throws ArgumentError Ryu.writefixed(floatmax(Float64), -1)
+    @test_throws ArgumentError Ryu.writeexp(floatmax(Float64), -1)
+
+    buf = fill(UInt8(0), Ryu.neededdigits(Float64))
+    @test_throws InexactError Ryu.writeshortest(buf, 1, 1.0, false, false, true, typemax(UInt))
+    @test_throws ArgumentError Ryu.writefixed(buf, 1, 1.0, -1)
+    @test_throws ArgumentError Ryu.writeexp(buf, 1, 1.0, -1)
+
+    for exactbuf in (zeros(UInt8, 4), Memory{UInt8}(undef, 4))
+        @test Ryu.writeshortest(exactbuf, 1, 1.25) == 5
+        @test String(Vector(exactbuf)) == "1.25"
+    end
+    canarybuf = fill(0xa5, 5)
+    canarybuf[5] = 0x5a
+    @test Ryu.writeshortest(canarybuf, 1, 1.25) == 5
+    @test canarybuf[5] == 0x5a
+end
+
 @testset "Float64" begin
 
 @testset "Basic" begin

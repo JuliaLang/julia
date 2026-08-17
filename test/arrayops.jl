@@ -93,6 +93,10 @@ using Dates
 
     @test_throws DimensionMismatch reshape(1:3, 4)
 
+    # Generic reshape must reject dimensions whose product overflows.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws ArgumentError reshape(view([1, 2], :), 3, overflow_dim)
+
     # issue #23107
     a = [1,2,3]
     @test typeof(a)(a) !== a
@@ -933,6 +937,12 @@ end
     @test isequal(cumsum(A,dims=3),A3)
     @test repeat([1,2,3,4], UInt32(1)) == [1,2,3,4]
     @test repeat([1 2], UInt32(2)) == repeat([1 2], UInt32(2), UInt32(1))
+
+    # Repeated array dimensions must be checked before allocating and filling the result.
+    overflow_count = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws OverflowError repeat([1, 2, 3], overflow_count)
+    @test_throws OverflowError repeat([1, 2, 3], inner=overflow_count)
+    @test_throws OverflowError repeat(reshape(1:9, 3, 3), overflow_count, 1)
 
     # issue 20564
     @test_throws MethodError repeat(1, 2, 3)
@@ -2364,6 +2374,12 @@ end
     @test_throws BoundsError copyto!(a,b)
     @test_throws ArgumentError copyto!(a,2:3,1:3,b,1:5,2:7)
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+
+    # Copy bounds must be validated without overflowing their end indices.
+    @test_throws BoundsError copyto!(zeros(UInt8, 2), Int8(2), ones(UInt8, 2), Int8(2), typemax(Int8))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), 2, Iterators.repeated(1, typemax(Int)))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), Int8(2), Iterators.repeated(1), 1, typemax(Int8))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), Int8(2), view(ones(Int, 2), :), Int8(2), typemax(Int8))
 end
 
 @testset "empty copyto!" begin

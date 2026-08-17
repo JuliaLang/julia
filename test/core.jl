@@ -6981,6 +6981,23 @@ for U in unboxedunions
     end
 end
 
+# Vector growth sizes must not wrap and leave logical length larger than backing storage.
+@testset "array growth overflow" begin
+    A = [1, 2]
+    popfirst!(A)
+    @test_throws OverflowError resize!(A, typemax(Int))
+    @test A == [2]
+    @test length(A.ref.mem) == 2
+
+    for (f, A) in ((A -> Base._growbeg!(A, typemax(Int)), [1]),
+                   (A -> Base._growend!(A, typemax(Int)), [1]),
+                   (A -> Base._growat!(A, 2, typemax(Int)), [1, 2]))
+        old = copy(A)
+        @test_throws OverflowError f(A)
+        @test A == old
+    end
+end
+
 @testset "array _growatend!" begin
 
 # start w/ array, set & check elements, grow it, check that elements stayed correct, set & check elements
@@ -8505,6 +8522,14 @@ end
     a, b... = x
     @test a == 1
     @test b == Core.svec(2, 3)
+end
+
+# SimpleVector allocation must reject pointer-byte size overflow before its fill loops.
+@testset "svec allocation overflow" begin
+    n = Int(typemax(UInt) ÷ UInt(sizeof(Ptr{Cvoid})) + 1)
+    @test_throws OutOfMemoryError Tuple{Vararg{Nothing,n}}
+    mem = Memory{Nothing}(undef, n)
+    @test_throws OutOfMemoryError Core.svec(mem...)
 end
 
 @testset "setproperty! on modules" begin

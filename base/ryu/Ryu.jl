@@ -55,7 +55,10 @@ function writeshortest(x::T,
         decchar::UInt8=UInt8('.'),
         typed::Bool=false,
         compact::Bool=false) where {T <: Base.IEEEFloat}
-    buf = Base.StringVector(neededdigits(T))
+    precision = Int(precision)
+    precision >= -1 || throw(ArgumentError("precision must be at least -1"))
+    bufsize = precision < 0 ? neededdigits(T) : Base.checked_add(precision, neededdigits(T))
+    buf = Base.StringVector(bufsize)
     pos = writeshortest(buf, 1, x, plus, space, hash, precision, expchar, padexp, decchar, typed, compact)
     return String(resize!(buf, pos - 1))
 end
@@ -83,7 +86,9 @@ function writefixed(x::T,
     hash::Bool=false,
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
-    buf = Base.StringVector(precision + neededdigits(T))
+    precision = Int(precision)
+    precision >= 0 || throw(ArgumentError("precision must be non-negative"))
+    buf = Base.StringVector(Base.checked_add(precision, neededdigits(T)))
     pos = writefixed(buf, 1, x, precision, plus, space, hash, decchar, trimtrailingzeros)
     return String(resize!(buf, pos - 1))
 end
@@ -113,7 +118,9 @@ function writeexp(x::T,
     expchar::UInt8=UInt8('e'),
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
-    buf = Base.StringVector(precision + neededdigits(T))
+    precision = Int(precision)
+    precision >= 0 || throw(ArgumentError("precision must be non-negative"))
+    buf = Base.StringVector(Base.checked_add(precision, neededdigits(T)))
     pos = writeexp(buf, 1, x, precision, plus, space, hash, expchar, decchar, trimtrailingzeros)
     return String(resize!(buf, pos - 1))
 end
