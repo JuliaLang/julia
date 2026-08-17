@@ -28,7 +28,7 @@ dashmap = "6.2.1"
 # - change branch
 # - change repo name
 # But other changes including adding/removing whitespaces in commented lines may break the CI
-mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "85ec5ddc06cbe45e401edc7aceab06b69031da81" }
+mmtk = { git = "https://github.com/wenyuzhao/mmtk-core.git", rev = "cb457dd5af014a571c82a44b90ca7a9b60ac7310" }
 # Uncomment the following to build locally
 # mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }

@@ -194,10 +194,10 @@ impl Scanning<JuliaVM> for VMScanning {
         }
     }
 
-    fn scan_object<SV: SlotVisitor<JuliaVMSlot>>(
+    fn scan_object(
         _tls: VMWorkerThread,
         object: ObjectReference,
-        slot_visitor: &mut SV,
+        slot_visitor: &mut impl SlotVisitor<JuliaVMSlot>,
     ) {
         process_object(object, slot_visitor);
     }
