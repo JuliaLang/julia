@@ -161,21 +161,23 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 }
 
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
-    Function *Callee = CI.getCalledFunction();
-    if (Callee && (Callee->getName() == "julia.call" ||
-                   Callee->getName() == "julia.call2" ||
-                   Callee->getName() == "julia.call3")) {
-        unsigned Fixed = CI.getFunctionType()->getNumParams();
-        for (Value *Arg : CI.args()) {
-            if (Fixed) {
-                Fixed--;
-                continue;
-            }
-            Type *Ty = Arg->getType();
-            Check(Ty->isPtrOrPtrVectorTy() &&
-                      Ty->getPointerAddressSpace() == AddressSpace::Tracked,
-                  "Invalid derived pointer in jlcall", &CI);
-        }
+    // The leading (non-vararg) arguments of the julia.call family have their
+    // own types (see JuliaDialect.td); everything passed through the varargs
+    // must be a tracked pointer.
+    unsigned Fixed;
+    if (isa<julia::JuliaCall>(CI))
+        Fixed = 2; // fptr, f
+    else if (isa<julia::JuliaCall2>(CI))
+        Fixed = 3; // fptr, arg1, f
+    else if (isa<julia::JuliaCall3>(CI))
+        Fixed = 2; // fptr, f (derived)
+    else
+        return;
+    for (Value *Arg : drop_begin(CI.args(), Fixed)) {
+        Type *Ty = Arg->getType();
+        Check(Ty->isPtrOrPtrVectorTy() &&
+                  Ty->getPointerAddressSpace() == AddressSpace::Tracked,
+              "Invalid derived pointer in jlcall", &CI);
     }
 }
 
