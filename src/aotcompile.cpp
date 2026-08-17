@@ -612,6 +612,8 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
         Module *defM = nullptr;
         StringRef func;
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+        if ((jl_value_t*)mi != jl_nothing && !jl_subtype(sigt, mi->def.method->sig))
+            mi = (jl_method_instance_t*)jl_nothing; // partially-covered: not a guaranteed dispatch
         if ((jl_value_t*)mi != jl_nothing) {
             auto it = compiled_mi.find(mi);
             if (it != compiled_mi.end()) {
@@ -2537,6 +2539,8 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
                 if (mi == jl_nothing)
                     continue;
+                if (!jl_subtype(sigt, ((jl_method_instance_t*)mi)->def.method->sig))
+                    continue; // partially-covered: not a guaranteed dispatch
                 jl_code_instance_t *codeinst = jl_type_infer((jl_method_instance_t*)mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
                 if (codeinst == nullptr || compiled_functions.count(codeinst))
                     continue;

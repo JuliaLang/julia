@@ -405,6 +405,8 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
             return f;
         }
         mi = jl_get_specialization1((jl_tupletype_t*)sigt, world, 0);
+        if (mi != jl_nothing && !jl_subtype(sigt, ((jl_method_instance_t*)mi)->def.method->sig))
+            mi = jl_nothing; // partially-covered: not a guaranteed dispatch
         if (f != nullptr) {
             if (last_ci == nullptr) {
                 if (mi == jl_nothing) {

@@ -1233,6 +1233,7 @@ precompile_test_harness("cfunction without codegen") do dir
               any_target(x::Cint) = Core.compilerbarrier(:type, x + Cint(1)) # inferred ::Any
               const_target(x::Cint) = Cint(42)                               # const-return
               unresolved_target(x::Float64) = x                              # no method for (Cint,)
+              partial_target(x::Float32) = x + Float32(1)                    # partially covers (Any,)
               function run_match(x::Cint)
                   cf = @cfunction(match_target, Cint, (Cint,))
                   ccall(cf, Cint, (Cint,), x)
@@ -1265,9 +1266,12 @@ precompile_test_harness("cfunction without codegen") do dir
                   cf = @cfunction(unresolved_target, Cint, (Cint,))
                   ccall(cf, Cint, (Cint,), x)
               end
-              function run_dispatch(x::Cint)      # abstract `Any` arg; the single (partially covering) method
-                                                  # is compiled, so the image gets an unboxing adapter to it
+              function run_dispatch(x::Cint)      # abstract `Any` arg, single partially-covering method -> dynamic-dispatch adapter
                   cf = @cfunction(box_target, Any, (Any,))
+                  ccall(cf, Any, (Any,), x)
+              end
+              function run_partial(x)             # likewise, and uncovered arguments must raise MethodError (#62246)
+                  cf = @cfunction(partial_target, Any, (Any,))
                   ccall(cf, Any, (Any,), x)
               end
               call_box(x::Cint) = box_target(x)   # ordinary caller, with a backedge to `box_target`
@@ -1285,6 +1289,9 @@ precompile_test_harness("cfunction without codegen") do dir
               precompile(run_const, (Cint,))
               precompile(run_unresolved, (Cint,))
               precompile(run_dispatch, (Cint,))
+              precompile(run_partial, (Float32,))
+              precompile(run_partial, (Cint,))
+              precompile(partial_target, (Float32,))
               precompile(llvm_version, ())
 
               # Newest CodeInstance of method `m` specialized exactly on `argtypes`.
@@ -1329,6 +1336,8 @@ precompile_test_harness("cfunction without codegen") do dir
     @test Base.invokelatest(M.run_const, Cint(3)) == Cint(42)
     @test_throws MethodError Base.invokelatest(M.run_unresolved, Cint(3))
     @test Base.invokelatest(M.run_dispatch, Cint(5)) === Cint(5)
+    @test Base.invokelatest(M.run_partial, Float32(1.5)) === Float32(2.5)
+    @test_throws MethodError Base.invokelatest(M.run_partial, Cint(3))
     if Bool(Base.JLOptions().use_pkgimages)
         # Now with codegen disabled: reuse the image adapters, retarget to an ABI-compatible
         # specptr from B's image without a JIT, and fall back to the image's dynamic-dispatch
@@ -1353,7 +1362,12 @@ precompile_test_harness("cfunction without codegen") do dir
             println("image_dispatched=", any(t -> occursin(t * ")", dispatched),
                 ("match_target", "wide_target", "nospec_target", "boxed_target", "box_target", "any_target", "const_target")))
             println("dispatch=", M.run_dispatch(Cint(5)))
+            println("partial=", M.run_partial(Float32(1.5)) === Float32(2.5))
+            println("partial_miss=", try; M.run_partial(Cint(3)); "no-error"; catch e; e isa MethodError ? "MethodError" : "other-error"; end)
             println("unresolved=", try; M.run_unresolved(Cint(3)); "no-error"; catch e; e isa MethodError ? "MethodError" : "other-error"; end)
+            # ... whereas the partially-covering sites are dynamic-dispatch adapters (#62246)
+            dispatched = read($(repr(dispatch_log)), String)
+            println("partial_dispatched=", (occursin("box_target), Int32})", dispatched), occursin("partial_target), Float32})", dispatched)))
             using CFunc61949B
             println("cross_match=", M.run_match(Cint(3)))
             println("cross_wide=", M.run_wide(Cint(3)))
@@ -1416,7 +1430,10 @@ precompile_test_harness("cfunction without codegen") do dir
         @test occursin("widen=5", out)             # image specsig-widening adapter
         @test occursin("narrow=8", out)            # image narrowing adapter
         @test occursin("const=42", out)            # image const-return adapter
-        @test occursin("dispatch=5", out)          # image unboxing adapter
+        @test occursin("dispatch=5", out)          # image dynamic-dispatch adapter
+        @test occursin("partial=true", out)        # image dynamic-dispatch adapter
+        @test occursin("partial_miss=MethodError", out)
+        @test occursin("partial_dispatched=(true, true)", out)
         @test occursin("unresolved=MethodError", out)
         @test occursin("cross_match=103", out)     # B's image specptr, matching ABI, no JIT
         @test occursin("cross_wide=103", out)      # B's specptr returns Cint, site wants Any: dynamic-dispatch adapter

@@ -268,7 +268,7 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             atype = argtypes_to_type(argtypes)
 
             mi = compileable_specialization_for_call(interp, atype)
-            if mi !== nothing
+            if mi !== nothing && atype <: (mi.def::Method).sig
                 # n.b.: Codegen may choose unpredictably to emit this `@cfunction` as a dynamic invoke or a full
                 # dynamic call, but in either case it guarantees that the required adapter(s) are emitted. All
                 # that we are required to verify here is that the callee CodeInstance is covered.
@@ -336,8 +336,11 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
                         (Any, Csize_t, Cint),
                         sig, this_world, #= mt_cache =# 0)
             asrt = Any
-            valid = if mi !== nothing
-                mi = mi::MethodInstance
+            # We intentionally reject partially-covering methods. These have a unique target
+            # CI but check for the MethodError by lowering to a dynamic dispatch. These could
+            # be supported but it would mean silently emitting a degraded ABI, so it's better
+            # to point this out to the user via an error.
+            valid = if mi isa MethodInstance && sig <: (mi.def::Method).sig
                 ci = get(caches, mi, nothing)
                 if ci isa CodeInstance
                     # TODO: should we find a way to indicate to the user that this gets called via ccallable?
