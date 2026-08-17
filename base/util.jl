@@ -708,7 +708,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THR
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
-    pathsep = Sys.iswindows() ? ";" : ":"
+    pathsep = Filesystem.path_list_separator
     ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
     ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
     ENV2["JULIA_TESTS"] = "true"
