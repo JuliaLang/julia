@@ -262,24 +262,24 @@ end
     @test p2 !== p
 end
 
-@testset "deepcopy_internal arrays" begin
-    @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
+@testset "deepcopy_impl arrays" begin
+    @test (@inferred Base.deepcopy_impl(zeros(), IdDict())) == zeros()
 end
 
-@testset "deepcopy_internal inference" begin
-    @inferred Base.deepcopy_internal(1, IdDict())
-    @inferred Base.deepcopy_internal(1.0, IdDict())
-    @inferred Base.deepcopy_internal(big(1), IdDict())
-    @inferred Base.deepcopy_internal(big(1.0), IdDict())
-    @inferred Base.deepcopy_internal('a', IdDict())
-    @inferred Base.deepcopy_internal("abc", IdDict())
-    @inferred Base.deepcopy_internal([1,2,3], IdDict())
+@testset "deepcopy_impl inference" begin
+    @inferred Base.deepcopy_impl(1, IdDict())
+    @inferred Base.deepcopy_impl(1.0, IdDict())
+    @inferred Base.deepcopy_impl(big(1), IdDict())
+    @inferred Base.deepcopy_impl(big(1.0), IdDict())
+    @inferred Base.deepcopy_impl('a', IdDict())
+    @inferred Base.deepcopy_impl("abc", IdDict())
+    @inferred Base.deepcopy_impl([1,2,3], IdDict())
 
-    # structs without custom deepcopy_internal method
+    # structs without custom deepcopy_impl method
     struct Immutable2; x::Int; end
     mutable struct Mutable2; x::Int; end
-    @inferred Base.deepcopy_internal(Immutable2(1), IdDict())
-    @inferred Base.deepcopy_internal(Mutable2(1), IdDict())
+    @inferred Base.deepcopy_impl(Immutable2(1), IdDict())
+    @inferred Base.deepcopy_impl(Mutable2(1), IdDict())
 end
 
 @testset "`copyto!`'s unaliasing" begin
