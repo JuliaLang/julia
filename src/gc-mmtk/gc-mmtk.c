@@ -732,10 +732,13 @@ JL_DLLEXPORT void jl_gc_scan_julia_exc_obj(void* obj_raw, void* closure, Process
 
     if (ta->excstack) { // inlining label `excstack` from mark_loop
 
-        // the excstack should always be a heap object
-        assert(mmtk_object_is_managed_by_mmtk(ta->excstack));
-
-        process_slot(closure, &ta->excstack);
+        if (!ta->excstack->malloced) {
+            // the excstack is a heap object: trace (and possibly move) the buffer itself.
+            // Malloc'd buffers are not GC objects: they are freed by
+            // the malloced-memory sweep and must not be traced.
+            assert(mmtk_object_is_managed_by_mmtk(ta->excstack));
+            process_slot(closure, &ta->excstack);
+        }
         jl_excstack_t *excstack = ta->excstack;
         size_t itr = ta->excstack->top;
         size_t bt_index = 0;
@@ -870,6 +873,33 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_malloced_memory(void) JL_NOTSAFEPOINT
         void **lst = ptls2->gc_tls_common.heap.mallocarrays.items;
         // filter without preserving order
         while (n < l) {
+            if ((uintptr_t)lst[n] & 2) {
+                // A task with a malloc'd exception stack buffer
+                // (see `jl_gc_track_malloced_excstack`).
+                jl_task_t *t = (jl_task_t*)((uintptr_t)lst[n] & ~3);
+                if (mmtk_is_live_object(t)) {
+                    t = (jl_task_t*)mmtk_get_possibly_forwarded(t);
+                    // Keep the entry only while the task still owns a malloc'd buffer
+                    // (it may have been replaced by a GC-allocated one).
+                    if (t->excstack && t->excstack->malloced) {
+                        lst[n] = (void*)((uintptr_t)t | 2);
+                        n++;
+                        continue;
+                    }
+                }
+                else {
+                    jl_excstack_t *s = t->excstack;
+                    if (s && s->malloced) {
+                        // NULL the field so that a duplicate entry for this task
+                        // does not free the buffer again.
+                        t->excstack = NULL;
+                        free(s);
+                    }
+                }
+                l--;
+                lst[n] = lst[l];
+                continue;
+            }
             jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[n] & ~1);
             if (mmtk_is_live_object(m)) {
                 n++;

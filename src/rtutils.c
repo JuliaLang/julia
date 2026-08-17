@@ -397,25 +397,53 @@ static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFE
 }
 
 static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
-                                size_t reserved_size) JL_CANSAFEPOINT
+                                size_t reserved_size, int use_malloc) JL_CANSAFEPOINT
 {
     jl_excstack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
         return;
     size_t bufsz = sizeof(jl_excstack_t) + sizeof(uintptr_t)*reserved_size;
-    jl_excstack_t *new_s = (jl_excstack_t*)jl_gc_alloc_buf(ct->ptls, bufsz);
+    jl_excstack_t *new_s;
+    if (use_malloc)
+        // We are throwing an OutOfMemoryError: a GC allocation here could fail
+        // and recursively throw, so allocate the buffer with malloc. The owning
+        // task is tracked in `mallocarrays` (see `jl_gc_track_malloced_excstack`)
+        // and the buffer is freed when the GC sweeps the dead task.
+        new_s = (jl_excstack_t*)malloc_s(bufsz);
+    else
+        new_s = (jl_excstack_t*)jl_gc_alloc_buf(ct->ptls, bufsz);
     new_s->top = 0;
     new_s->reserved_size = reserved_size;
+    new_s->malloced = use_malloc;
     if (s)
         jl_copy_excstack(new_s, s);
-    jl_gc_write(ct, *stack, jl_excstack_t, new_s);
+    if (use_malloc) {
+        // Track the task when it transitions from a GC-allocated (or no) buffer
+        // to a malloc'd one. If the old buffer was already malloc'd, the task is
+        // already tracked; re-tracking it would accumulate duplicate entries.
+        if (!s || !s->malloced)
+            jl_gc_track_malloced_excstack(ct);
+        // No write barrier needed: the buffer is not a GC object.
+        *stack = new_s;
+    }
+    else {
+        jl_gc_write(ct, *stack, jl_excstack_t, new_s);
+    }
+    // Free a replaced malloc'd buffer only after `*stack` points to the new one,
+    // so that a signal handler on this thread (e.g. `jlbacktrace`) never sees a
+    // freed buffer through `ct->excstack`.
+    if (s && s->malloced)
+        free(s);
 }
 
 void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
                       jl_value_t *exception JL_ROOTED_BY_ARG(1),
                       jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_reserve_excstack(ct, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
+    // Throwing OutOfMemoryError must not allocate GC memory, or the allocation
+    // could fail and throw recursively.
+    int use_malloc = (exception == jl_memory_exception);
+    jl_reserve_excstack(ct, stack, (*stack ? (*stack)->top : 0) + bt_size + 2, use_malloc);
     jl_excstack_t *s = *stack;
     jl_bt_element_t *rawstack = jl_excstack_raw(s);
     memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);

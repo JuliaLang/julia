@@ -768,6 +768,7 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 #endif
 
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
+void jl_gc_track_malloced_excstack(jl_task_t *ct) JL_NOTSAFEPOINT;
 size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 size_t memory_block_usable_size(void *mem, int isaligned) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
@@ -1676,6 +1677,10 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data,
 struct _jl_excstack_t { // typedef in julia.h
     size_t top;
     size_t reserved_size;
+    // 1 if the buffer was allocated with malloc (used when throwing OutOfMemoryError;
+    // freed by the GC's malloced-memory sweep once the owning task dies), 0 if it
+    // was allocated with the GC (reclaimed by tracing).
+    size_t malloced;
     // Pack all stack entries into a growable buffer to amortize allocation
     // across repeated exception handling.
     // Layout: [bt_data1... bt_size1 exc1  bt_data2... bt_size2 exc2  ..]
