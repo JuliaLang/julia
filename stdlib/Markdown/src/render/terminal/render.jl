@@ -45,7 +45,9 @@ end
 function term(io::IO, md::Admonition, columns)
     accent = if md.category == "danger"
         :error
-    elseif md.category in ("warning", "info", "note", "tip")
+    elseif md.category in ("info", "note")
+        :info
+    elseif md.category in ("warning", "tip")
         Symbol(md.category)
     elseif md.category == "compat"
         :bright_cyan
