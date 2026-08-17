@@ -335,6 +335,8 @@ public:
     egal_set() = default;
     void insert(jl_value_t *val)
     {
+        JL_GC_PROMISE_ROOTED(list);
+        JL_GC_PROMISE_ROOTED(keyset);
         jl_value_t *rval = jl_idset_get(list, keyset, val);
         if (rval == NULL) {
             ssize_t idx;
@@ -614,8 +616,8 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
             auto it = compiled_mi.find(mi);
             if (it != compiled_mi.end()) {
                 codeinst = it->second;
-                JL_GC_PROMISE_ROOTED(codeinst);
                 auto defs = compiled_functions.find(codeinst);
+                JL_GC_PROMISE_ROOTED(codeinst);
                 defM = defs->second.TSM.getModuleUnlocked();
                 const jl_llvm_functions_t &decls = defs->second.decls;
                 func = decls.functionObject;
@@ -821,6 +823,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
             assert(jl_is_code_info(src));
             if (compiled_functions.count(codeinst))
                 continue; // skip any duplicates that accidentally made there way in here (or make this an error?)
+            JL_GC_PROMISE_ROOTED(codeinst);
             if (jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
                 params.safepoint_on_entry = false; // ensure we don't block ExpandAtomicModifyPass from inlining this code if applicable
             orc::ThreadSafeModule result_m =
