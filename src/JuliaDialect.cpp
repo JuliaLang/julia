@@ -14,11 +14,15 @@
 #include "JuliaDialect.cpp.inc"
 
 #include "jitlayers.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Support/CBindingWrapping.h>
+
+#include <mutex>
 
 #include <llvm-dialects/Dialect/Builder.h>
 #include <llvm-dialects/Dialect/Dialect.h>
@@ -26,8 +30,54 @@
 
 using namespace llvm;
 
+namespace julia {
+
+// Per-context refcounted registry backing ScopedDialects. The entry is
+// erased when the last attachment goes away, so a context address that gets
+// reused by a later LLVMContext starts from a clean slate.
+namespace {
+struct DialectAttachment {
+    std::unique_ptr<llvm_dialects::DialectContext> dc;
+    unsigned refcount = 0;
+};
+std::mutex attachmentsLock;
+DenseMap<LLVMContext *, DialectAttachment> attachments;
+} // anonymous namespace
+
+ScopedDialects::ScopedDialects(LLVMContext &ctx) : ctx(&ctx)
+{
+    std::lock_guard<std::mutex> lock(attachmentsLock);
+    auto &attachment = attachments[&ctx];
+    if (attachment.refcount++ == 0)
+        attachment.dc = llvm_dialects::DialectContext::make<JuliaDialect>(ctx);
+}
+
+ScopedDialects::~ScopedDialects()
+{
+    if (!ctx) // moved from
+        return;
+    std::lock_guard<std::mutex> lock(attachmentsLock);
+    auto it = attachments.find(ctx);
+    assert(it != attachments.end() && it->second.refcount > 0);
+    if (--it->second.refcount == 0)
+        attachments.erase(it);
+}
+
+} // namespace julia
+
+PreservedAnalyses JuliaDialectsVerifierPass::run(Module &M, ModuleAnalysisManager &AM)
+{
+    julia::ScopedDialects dialects(M.getContext());
+    if (!llvm_dialects::verify(M, errs())) {
+        errs() << "Julia dialect verification failed, dumping entire module!\n\n";
+        errs() << M << "\n";
+        abort();
+    }
+    return PreservedAnalyses::all();
+}
+
 typedef struct JLOpaqueDialectContext *JLDialectContextRef;
-DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm_dialects::DialectContext, JLDialectContextRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(julia::ScopedDialects, JLDialectContextRef)
 
 template <typename OpT, typename... ArgTs>
 static LLVMValueRef build_op(LLVMBuilderRef B, ArgTs... args)
@@ -42,12 +92,12 @@ static LLVMValueRef build_op(LLVMBuilderRef B, ArgTs... args)
 extern "C" {
 
 // Attach the Julia dialect to a context. The returned handle must be
-// disposed with `JLDialectsDisposeContext` before the context is destroyed
-// (and before any re-attachment for a context living at the same address).
+// disposed with `JLDialectsDisposeContext` before the context is destroyed.
+// Attachments are refcounted per context, so this composes with Julia's own
+// emission and passes attaching to the same context.
 JL_DLLEXPORT_CODEGEN JLDialectContextRef JLDialectsAttachContext_impl(LLVMContextRef C)
 {
-    auto dc = llvm_dialects::DialectContext::make<julia::JuliaDialect>(*unwrap(C));
-    return wrap(dc.release());
+    return wrap(new julia::ScopedDialects(*unwrap(C)));
 }
 
 JL_DLLEXPORT_CODEGEN void JLDialectsDisposeContext_impl(JLDialectContextRef DC)
@@ -59,6 +109,7 @@ JL_DLLEXPORT_CODEGEN void JLDialectsDisposeContext_impl(JLDialectContextRef DC)
 // way. Returns 1 on success. Diagnostics are printed to stderr.
 JL_DLLEXPORT_CODEGEN LLVMBool JLDialectsVerifyModule_impl(LLVMModuleRef M)
 {
+    julia::ScopedDialects dialects(unwrap(M)->getContext());
     return llvm_dialects::verify(*unwrap(M), errs());
 }
 
