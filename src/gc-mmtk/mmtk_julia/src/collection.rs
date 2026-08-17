@@ -1,5 +1,6 @@
 use crate::SINGLETON;
 use crate::{
+    jl_gc_mmtk_block_for_gc_enter, jl_gc_mmtk_block_for_gc_leave,
     jl_gc_mmtk_defer_alloc_if_disabled, jl_gc_mmtk_resume_the_world,
     jl_gc_mmtk_run_pending_finalizers, jl_gc_mmtk_stop_the_world, jl_gc_safe_enter,
     jl_gc_safe_leave, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
@@ -49,12 +50,7 @@ impl Collection<JuliaVM> for VMCollection {
         F: FnMut(&'static mut Mutator<JuliaVM>),
     {
         // Arm the safepoint and wait for every registered mutator to reach it. mmtk-core
-        // guarantees this function has exactly one caller at a time for the current pause, so
-        // this drives the whole handshake itself rather than waiting on some mutator to have
-        // separately triggered it: unlike the busy-spin on a `WORLD_HAS_STOPPED` flag this
-        // replaces, a concurrent GC's closing pause can now complete even if no mutator is
-        // running at all (see `poll_from_last_parked_worker` on the mmtk-core side, which is
-        // what requests that pause in the same situation).
+        // guarantees this function has exactly one caller at a time for the current pause.
         unsafe { jl_gc_mmtk_stop_the_world() };
 
         assert!(
@@ -110,16 +106,10 @@ impl Collection<JuliaVM> for VMCollection {
             log::info!("Set CONCURRENT_MARKING_ACTIVE to {concurrent_marking_active}");
         }
 
+        AtomicIsize::store(&USER_TRIGGERED_GC, 0, Ordering::SeqCst);
+
         // Disarm the safepoint and let mutators run again.
         unsafe { jl_gc_mmtk_resume_the_world() };
-
-        // This pause is now fully done, regardless of whether any mutator was blocked in
-        // `block_for_gc` for it (with a concurrent GC's closing pause, there may not have been
-        // one at all). Reset the nesting depth left over from whatever user-triggered collection
-        // request, if any, led here -- `block_for_gc`, unlike the `mmtk_block_thread_for_gc` this
-        // replaces, has no single "the" blocking mutator to do this from once the pause it was
-        // waiting for actually completes.
-        AtomicIsize::store(&USER_TRIGGERED_GC, 0, Ordering::SeqCst);
 
         // `resume_mutators()` is called after every stop-the-world pause, including the pause
         // that ends a concurrent GC's background-work phase (there's no more targeted mmtk-core
@@ -144,35 +134,24 @@ impl Collection<JuliaVM> for VMCollection {
     }
 
     fn block_for_gc(_tls: VMMutatorThread) {
-        // By the time mmtk-core calls this, a pause has already been requested/scheduled --
-        // that's why it's calling this at all -- and `stop_all_mutators` above will drive it to
-        // completion on its own, regardless of what this mutator does next (it no longer needs
-        // to be the one to run the stop-the-world handshake, unlike the `jl_gc_prepare_to_collect`
-        // this used to call). So this only needs to get out of the way -- enter a GC-safe region
-        // so `stop_all_mutators`'s wait counts this mutator as already stopped without it doing
-        // anything further -- and wait for that pause to finish.
-        //
-        // Capturing the epoch here rather than earlier means a mutator preempted between its own
-        // `poll()` seeing a collection was needed and actually reaching this call may
-        // occasionally end up waiting out a *subsequent* pause instead of the one it originally
-        // observed, if that first one already finished in the meantime. That's harmless -- it
-        // never deadlocks, and by the time it returns, at least one GC has run either way -- and
-        // far simpler than threading the originally-observed epoch through mmtk-core's several
-        // `block_for_gc` call sites (`gc_poll`, `handle_user_collection_request`, the
-        // allocation-fast-path retry in `policy::space`), none of which pass one through.
+        // The pause is already scheduled and `stop_all_mutators` drives it on its own, so this
+        // mutator just needs to get out of the way (GC-safe region) and wait for it to finish.
+
         if unsafe { jl_gc_mmtk_defer_alloc_if_disabled() } != 0 {
             // Collection was disabled by the time we got here; nothing to wait for.
             return;
         }
+
+        // Get the current epoch and wait for it to advance.
         let epoch = crate::api::mmtk_gc_epoch();
+        unsafe { jl_gc_mmtk_block_for_gc_enter() };
         let gc_state = unsafe { jl_gc_safe_enter() };
         crate::api::mmtk_wait_for_new_gc_epoch(epoch);
         unsafe { jl_gc_safe_leave(gc_state) };
+        unsafe { jl_gc_mmtk_block_for_gc_leave() };
 
-        // `GC.gc()` and friends are documented/tested to have run pending finalizers by the time
-        // they return (see `jl_gc_mmtk_run_pending_finalizers`'s doc comment for why that can't
-        // be left to happen "eventually" elsewhere): run them now, on this mutator, the same way
-        // `jl_gc_prepare_to_collect` used to at the end of the pause it drove.
+        // `GC.gc()` must run pending finalizers before returning (see
+        // `jl_gc_mmtk_run_pending_finalizers`'s doc comment), so run them now.
         unsafe { jl_gc_mmtk_run_pending_finalizers() };
     }
 

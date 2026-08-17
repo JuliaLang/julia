@@ -403,6 +403,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
 // this thread is never itself one of the mutators `jl_gc_wait_for_the_world` waits on.
 JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(void)
 {
+    // FIXME: set to JL_GC_AUTO since we're calling it from a GC worker, not a mutator that knows
+    // why this GC was triggered -- same as the driver-mutator code this replaced.
+    JL_PROBE_GC_BEGIN(JL_GC_AUTO);
+
     uint64_t t0 = jl_hrtime();
     jl_safepoint_start_gc_from_gc_thread();
 
@@ -414,6 +418,7 @@ JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(void)
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
     jl_gc_wait_for_the_world(gc_all_tls_states, gc_n_threads);
+    JL_PROBE_GC_STOP_THE_WORLD();
 
     uint64_t t1 = jl_hrtime();
     uint64_t duration = t1 - t0;
@@ -429,16 +434,14 @@ JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(void)
 //
 // Note this drops the inline `run_finalizers` call that used to happen here (on whichever mutator
 // happened to have triggered the just-finished GC): a GC worker thread has no `jl_current_task`
-// to run finalizers on, and unlike before, a pause may now complete with no mutator involved at
-// all (see `poll_from_last_parked_worker` in the mmtk-core patch this pairs with). Finalizers
-// scheduled during this pause still run correctly, just slightly less eagerly, via the existing
-// `jl_gc_have_pending_finalizers` check already woven into `_jl_mutex_unlock` and exception-handler
-// restore -- the same general mechanism `GC.enable_finalizers()` already relies on.
+// to run finalizers on. `jl_gc_mmtk_run_pending_finalizers` below now runs them instead, from
+// `Collection::block_for_gc` on the mutator that's waiting for this pause.
 JL_DLLEXPORT void jl_gc_mmtk_resume_the_world(void)
 {
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     jl_safepoint_end_gc();
+    JL_PROBE_GC_END();
 }
 
 // `Collection::block_for_gc` in the mmtk_julia binding is called on the current thread's own
@@ -461,6 +464,53 @@ JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
     return 1;
 }
 
+// Thread-local save slot bridging `jl_gc_mmtk_block_for_gc_enter`/`_leave`: this mutator's own
+// errno/last-error, so nothing the GC does while it waits (on this same thread, via
+// `jl_gc_safe_enter`/`mmtk_wait_for_new_gc_epoch`/`jl_gc_safe_leave`) can clobber what its caller
+// was about to check.
+static _Thread_local int mmtk_saved_errno;
+#ifdef _OS_WINDOWS_
+static _Thread_local DWORD mmtk_saved_last_error;
+#endif
+
+// Called by `Collection::block_for_gc` right before it waits for the pause it was told is coming
+// (`jl_gc_safe_enter`/`mmtk_wait_for_new_gc_epoch`/`jl_gc_safe_leave`), mirroring what
+// `jl_gc_prepare_to_collect` used to do around the same wait when it ran on this same mutator:
+// save errno, and mark this task's own timing as suspended (e.g. under Tracy, switches this
+// thread's active fiber to "GC") so the wait isn't misattributed to whatever the task was doing
+// when its allocation triggered this.
+JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_enter(void)
+{
+    mmtk_saved_errno = errno;
+#ifdef _OS_WINDOWS_
+    mmtk_saved_last_error = GetLastError();
+#endif
+#if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
+    jl_timing_suspend_t suspend;
+    _jl_timing_suspend_ctor(&suspend, "GC", jl_current_task);
+#endif
+}
+
+// The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
+// task's own timing (switch back from the "GC" fiber) and errno, and tell mmtk-core this task has
+// resumed (needed for concurrent marking correctness, e.g. to re-scan a stack that could have
+// changed while this task looked stopped) -- same as `jl_gc_prepare_to_collect` used to via its
+// own `jl_gc_notify_task_resume(ct)` call once its wait finished.
+JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
+{
+    jl_task_t *ct = jl_current_task;
+#if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
+    jl_timing_suspend_t suspend;
+    suspend.ct = ct;
+    _jl_timing_suspend_destroy(&suspend);
+#endif
+    jl_gc_notify_task_resume(ct);
+#ifdef _OS_WINDOWS_
+    SetLastError(mmtk_saved_last_error);
+#endif
+    errno = mmtk_saved_errno;
+}
+
 // The other half of `Collection::block_for_gc`'s contract: once the pause it was waiting for has
 // completed, run this mutator's own pending finalizers before returning, exactly as
 // `jl_gc_prepare_to_collect` used to at the end of the pause it drove. `GC.gc()` and friends are
@@ -480,6 +530,7 @@ JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
         JL_TIMING(GC, GC_Finalizers);
         run_finalizers(ct, 0);
     }
+    JL_PROBE_GC_FINALIZER();
 }
 
 // ========================================================================= //
