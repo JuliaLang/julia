@@ -2073,6 +2073,20 @@ endif # VERBOSE
 print-%:
 	@printf "%s\n" $(call shell_escape,$*)=$(call shell_escape,$(subst $(newline),\n,$($*)))
 
+# DO NOT MERGE: build with BUILD_PATH_PREFIX_MAP on CI. The source prefix must
+# be %-encoded (the Windows drive colon) and must use the native Windows path
+# spelling: MSYS make's JULIAHOME is the /c/... POSIX form, which never matches
+# the C:... paths julia and gcc see.
+ifeq ($(OS), WINNT)
+BUILD_PATH_PREFIX_MAP_SRC := $(subst \,/,$(shell echo $(call cygpath_w,$(JULIAHOME))))
+else
+BUILD_PATH_PREFIX_MAP_SRC := $(JULIAHOME)
+endif
+export BUILD_PATH_PREFIX_MAP := /julia=$(subst :,%.,$(subst =,%+,$(subst %,%\#,$(BUILD_PATH_PREFIX_MAP_SRC))))
+# MSYS2 path-converts env values that look like POSIX paths when spawning native
+# binaries, which would corrupt the value; exempt it
+export MSYS2_ENV_CONV_EXCL := BUILD_PATH_PREFIX_MAP
+
 # Also apply BUILD_PATH_PREFIX_MAP to C/C++ debug info and __FILE__, so native
 # frames use the same mapped paths as the runtime. Each dst=src pair in the map
 # becomes -ffile-prefix-map=src=dst. (This sits at the end of Make.inc so a map
