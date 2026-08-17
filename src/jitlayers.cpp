@@ -270,7 +270,6 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     jl_callptr_t invoke = nullptr;
     if (codeinst != nullptr) {
         uint8_t specsigflags;
-        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
         void *specptr = nullptr;
         jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, /* waitcompile */ 1);
         if (invoke != nullptr) {
@@ -280,7 +279,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
             }
             else if (invoke == jl_fptr_args_addr) {
                 assert(specptr != nullptr);
-                if (!from_abi.specsig && jl_subtype(codeinst->rettype, from_abi.rt))
+                if (jl_specptr_matches_abi(from_abi, codeinst, specsigflags, invoke))
                     return specptr; // no adapter required
 
                 target = specptr;
@@ -288,7 +287,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
             }
             else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
                 assert(specptr != nullptr);
-                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
+                if (jl_specptr_matches_abi(from_abi, codeinst, specsigflags, invoke))
                     return specptr; // no adapter required
 
                 target = specptr;
