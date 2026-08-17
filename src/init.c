@@ -776,6 +776,11 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_init_engine();
     jl_init_threading();
     jl_init_threadinginfra();
+#ifdef JL_USE_FRAMEHOP
+    // Bring up framehop before signal handlers are installed so early crashes get
+    // native backtraces. Idempotent; thread 0 registers in jl_init_threadtls below.
+    fh_init(0);
+#endif
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
 

@@ -97,6 +97,12 @@ endif
 
 DEP_LIBS += cpufeatures
 
+# framehop-backed unwinder (opt-in via USE_FRAMEHOP=1; LibFramehopUnwind_jll by default,
+# source build with cargo via USE_BINARYBUILDER_FRAMEHOPUNWIND=0).
+ifeq ($(USE_FRAMEHOP), 1)
+DEP_LIBS += framehopunwind
+endif
+
 ifeq ($(USE_SYSTEM_LLVM), 0)
 DEP_LIBS += llvm
 endif
@@ -213,7 +219,7 @@ DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd lmdb p7zip csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
-	terminfo cpufeatures
+	terminfo cpufeatures framehopunwind
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -286,6 +292,7 @@ include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
 include $(SRCDIR)/cpufeatures.mk
+include $(SRCDIR)/framehopunwind.mk
 include $(SRCDIR)/openssl.mk
 include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/nghttp2.mk

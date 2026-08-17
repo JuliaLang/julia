@@ -271,6 +271,11 @@ JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags)
     if (filename && map)
       ForEachMappedRegion(map, __msan_unpoison);
 #endif
+#ifdef JL_USE_FRAMEHOP
+    // A newly-loaded object means new modules to unwind through; re-scan (off-signal).
+    if (hnd && !(flags & JL_RTLD_NOLOAD))
+        fh_modules_refresh();
+#endif
     return hnd;
 }
 #endif
@@ -309,7 +314,13 @@ int jl_dlclose(void *handle)
         dlerror(); /* Reset error status. */
         return -1;
     }
-    return dlclose(handle);
+    int rc = dlclose(handle);
+#ifdef JL_USE_FRAMEHOP
+    // Mirror the jl_dlopen hook so unloaded ranges are not unwound with stale info.
+    if (rc == 0)
+        fh_modules_refresh();
+#endif
+    return rc;
 #endif
 }
 
