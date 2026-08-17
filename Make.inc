@@ -2072,3 +2072,6 @@ endif # VERBOSE
 # (hardened against any special characters appearing in the output)
 print-%:
 	@printf "%s\n" $(call shell_escape,$*)=$(call shell_escape,$(subst $(newline),\n,$($*)))
+
+# DO NOT MERGE: exercise BUILD_PATH_PREFIX_MAP on CI (assumes an in-tree build)
+export BUILD_PATH_PREFIX_MAP := /julia=$(JULIAHOME)
