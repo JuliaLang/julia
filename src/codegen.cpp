@@ -10016,10 +10016,11 @@ static jl_llvm_functions_t
         cursor = -1;
     };
 
-    // If a pkgimage or sysimage is being generated, disable tracking.
-    // This means sysimage build or pkgimage precompilation workloads aren't tracked.
+    // If a pkgimage or sysimage is being generated, only code emitted into the
+    // image itself is instrumented (imaging mode); the generating process's
+    // own workload is not tracked.
     auto do_coverage = [&] (bool in_user_code, bool is_tracked) {
-        return (jl_generating_output() == 0 &&
+        return ((ctx.emission_context.imaging_mode || jl_generating_output() == 0) &&
                 (coverage_mode == JL_LOG_ALL ||
                 (in_user_code && coverage_mode == JL_LOG_USER) ||
                 (is_tracked && coverage_mode == JL_LOG_PATH)));
