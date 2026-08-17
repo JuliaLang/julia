@@ -492,9 +492,9 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
 // non-atomic (rather than unordered) loads and stores are permitted
 static bool region_is_private(jl_aliasinfo_t::Region r)
 {
-    return r == jl_aliasinfo_t::Region::stack ||
-           r == jl_aliasinfo_t::Region::gcframe ||
-           r == jl_aliasinfo_t::Region::constant;
+    // i.e. a known set of regions, none of which is shared with other threads
+    using Region = jl_aliasinfo_t::Region;
+    return r != Region::unknown && (r & Region::anydata) == Region::unknown;
 }
 
 static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *data_pointer, jl_datatype_t *typ, size_t npointers, const jl_aliasinfo_t &roots_ai, bool isVolatile=false)
@@ -3590,7 +3590,9 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             Value *tindex0 = ctx.builder.CreateExtractValue(obj, ArrayRef<unsigned>(ptindex));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
             setNameWithField(ctx.emission_context, tindex, get_objname, jt, idx, Twine(".tindex"));
-            return mark_julia_slot(lv, jfty, tindex, best_aliasinfo(ctx, jfty));
+            // `lv` is a private buffer that codegen just filled from the unboxed
+            // struct, not a pointer into the object the field came from.
+            return mark_julia_slot(lv, jfty, tindex, union_slot_aliasinfo(ctx, jfty));
         }
         else {
             unsigned st_idx;
@@ -4497,9 +4499,17 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             Instruction *promotion_point = nullptr;
             ssize_t promotion_ssa = -1;
             Value *strct;
-            // This stack object is a write-once copy of an immutable holding no
-            // pointers (those are split into inline_roots).
-            const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty).withRegion(ctx, jl_aliasinfo_t::Region::stack);
+            // This private buffer is a write-once copy of an immutable holding no
+            // pointers (those are split into inline_roots). It must not claim
+            // `Region::stack`, because `boxed` may later promote the alloca into a
+            // freshly allocated heap box: the promotion rewrites the pointer but
+            // keeps these tags on the already-emitted initializing stores, so the
+            // tag must stay truthful for the box payload. `best_aliasinfo` gives
+            // `Region::immutdata` for every type on this path (`deserves_stack`
+            // requires a concrete immutable), which is exactly that, on the same
+            // principle as `union_slot_aliasinfo`.
+            const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty);
+            assert(strct_ai.region == jl_aliasinfo_t::Region::immutdata);
             SmallVector<Value*,0> inline_roots;
             if (type_is_ghost(lt)) {
                 strct = nullptr;

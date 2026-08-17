@@ -982,7 +982,9 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
         jl_aliasinfo_t ai = best_aliasinfo(ctx, ety);
         LoadInst *load = ctx.builder.CreateAlignedLoad(loadT, thePtr, Align(nb));
         setName(ctx.emission_context, load, "atomic_pointerref");
-        ai.decorateInst(load);
+        // The source is a raw `Ptr`, which may address any heap memory, while the
+        // destination is the box we just allocated for the result.
+        ctx.alias().data.decorateInst(load);
         load->setOrdering(llvm_order);
         thePtr = strct;
         StoreInst *store = ctx.builder.CreateAlignedStore(load, thePtr, Align(julia_alignment(ety)));
