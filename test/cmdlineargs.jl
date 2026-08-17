@@ -206,29 +206,41 @@ end
     end
 end
 
-let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
+    pathsep = Sys.iswindows() ? ";" : ":"
     # tests for handling of ENV errors
-    let
-        io = IOBuffer()
-        v = writereadpipeline(
-            "println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
-            setenv(`$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
-                    "JULIA_LOAD_PATH" => "",
-                    "JULIA_DEPOT_PATH" => ";:",
-                    "HOME" => homedir());
-            stderr=io)
-        # @which is undefined
-        @test_broken v == ("false\nREPL: InteractiveUtilstrue\n", true)
-        stderr = String(take!(io))
-        @test_broken isempty(stderr)
-    end
-    let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
-                setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
-                    "JULIA_LOAD_PATH" => ";;;:::",
-                    "JULIA_DEPOT_PATH" => ";;;:::",
-                    "HOME" => homedir()))
-        # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InteractiveUtils`
-        @test v == ("REPL: 3\n", true)
+    mktempdir() do child_cwd
+        let
+            io = IOBuffer()
+            cmd = setenv(
+                `$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
+                "JULIA_LOAD_PATH" => "",
+                "JULIA_DEPOT_PATH" => pathsep,
+                "HOME" => homedir(),
+            )
+            v = writereadpipeline(
+                "println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
+                Cmd(cmd; dir=child_cwd);
+                stderr=io,
+            )
+            # @which is undefined
+            @test_broken v == ("false\nREPL: InteractiveUtilstrue\n", true)
+            stderr = String(take!(io))
+            @test_broken isempty(stderr)
+        end
+        let
+            cmd = setenv(
+                `$exename -i -e 'const InteractiveUtils = 3'`,
+                "JULIA_LOAD_PATH" => pathsep^3,
+                "JULIA_DEPOT_PATH" => pathsep^3,
+                "HOME" => homedir(),
+            )
+            v = writereadpipeline(
+                "println(\"REPL: \", InteractiveUtils)", Cmd(cmd; dir=child_cwd))
+            # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InteractiveUtils`
+            @test v == ("REPL: 3\n", true)
+        end
+        @test isempty(readdir(child_cwd))
     end
     @testset let v = readchomperrors(`$exename -i -e '
             empty!(LOAD_PATH)
@@ -484,19 +496,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             read(`$exename -t auto -e $code`, String)
         for nt in (nothing, "1")
             withenv("JULIA_NUM_GC_THREADS" => nt) do
-                @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+                @test test_read_success(`$exename --gcthreads=2 -e $code`) == "2"
             end
             withenv("JULIA_NUM_GC_THREADS" => nt) do
-                @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+                @test test_read_success(`$exename --gcthreads=2,1 -e $code`) == "3"
             end
         end
 
         withenv("JULIA_NUM_GC_THREADS" => 2) do
-            @test read(`$exename -e $code`, String) == "2"
+            @test test_read_success(`$exename -e $code`) == "2"
         end
 
         withenv("JULIA_NUM_GC_THREADS" => "2,1") do
-            @test read(`$exename -e $code`, String) == "3"
+            @test test_read_success(`$exename -e $code`) == "3"
         end
 
         # invalid JULIA_NUM_GC_THREADS values must be rejected at startup

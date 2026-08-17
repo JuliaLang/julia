@@ -1338,6 +1338,22 @@ let err = nothing
     end
 end
 
+macro capture_stack_overflow(ex)
+    return quote
+        mktemp() do _, warning_output
+            bt = redirect_stderr(warning_output) do
+                try
+                    $(esc(ex))
+                catch
+                    catch_backtrace()
+                end
+            end
+            seekstart(warning_output)
+            return bt, read(warning_output, String)
+        end
+    end
+end
+
 # issue #37587
 # TODO: enable on more platforms
 if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
@@ -1346,20 +1362,14 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
     pair_repeater_b() = pair_repeater_a()
 
     @testset "repeated stack frames" begin
-        let bt = try
-                single_repeater()
-            catch
-                catch_backtrace()
-            end
+        let (bt, warning) = @capture_stack_overflow(single_repeater())
+            @test occursin("Warning: detected a stack overflow", warning)
             bt_str = sprint(Base.show_backtrace, bt)
             @test occursin(r"repeated \d+ times", bt_str)
         end
 
-        let bt = try
-                pair_repeater_a()
-            catch
-                catch_backtrace()
-            end
+        let (bt, warning) = @capture_stack_overflow(pair_repeater_a())
+            @test occursin("Warning: detected a stack overflow", warning)
             bt_str = sprint(Base.show_backtrace, bt)
             @test occursin(r"repeated \d+ times", bt_str)
         end
