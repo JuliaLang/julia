@@ -501,6 +501,10 @@ test_toplevel_programs = [
             @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
         end
     end
+
+    # empty let block linenumbernode is accepted by lowering
+    fl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1))) == 1
+    jl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1))) == 1
 end
 
 @testset "non-ASCII operator handling" begin
