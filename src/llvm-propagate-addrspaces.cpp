@@ -86,7 +86,37 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
     SmallVector<Value *, 4> Stack;
     SmallVector<Value *, 0> Worklist;
     std::set<Value *> LocalVisited;
-    unsigned allocaAddressSpace = M->getDataLayout().getAllocaAddrSpace();
+    // The address space we lift into is dictated by the leaves of the chain:
+    // stripping the special address spaces must not change which underlying
+    // address space a pointer lives in, so all non-null leaves have to agree
+    // on it (e.g. on AMDGPU an alloca leaf lives in the alloca address space
+    // while a global constant leaf lives in address space 0, and no cast
+    // between the two is valid in general).
+    unsigned LiftAS = UINT_MAX; // not known yet
+    auto mergeLeafAS = [&](Value *Leaf) -> bool {
+        // Strip casts the same way CollapseCastsAndLift below does, so that
+        // we constrain the exact value it will substitute into the lifted
+        // instructions.
+        while (!LiftingMap.count(Leaf)) {
+            if (auto *BCI = dyn_cast<BitCastInst>(Leaf))
+                Leaf = BCI->getOperand(0);
+            else if (auto *ACI = dyn_cast<AddrSpaceCastInst>(Leaf))
+                Leaf = ACI->getOperand(0);
+            else
+                break;
+        }
+        if (isa<ConstantPointerNull>(Leaf))
+            return true; // null lifts into any address space
+        auto It = LiftingMap.find(Leaf);
+        if (It != LiftingMap.end())
+            Leaf = It->second;
+        unsigned AS = getValueAddrSpace(Leaf);
+        if (isSpecialAS(AS))
+            return false;
+        if (LiftAS == UINT_MAX)
+            LiftAS = AS;
+        return LiftAS == AS;
+    };
     Worklist.push_back(V);
     // Follow pointer casts back, see if we're based on a pointer in
     // an untracked address space, in which case we're allowed to drop
@@ -102,11 +132,16 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                 CurrentV = BCI->getOperand(0);
             else if (auto *ACI = dyn_cast<AddrSpaceCastInst>(CurrentV)) {
                 CurrentV = ACI->getOperand(0);
-                if (!isSpecialAS(getValueAddrSpace(ACI)))
+                if (!isSpecialAS(getValueAddrSpace(ACI))) {
+                    if (!mergeLeafAS(CurrentV))
+                        return nullptr;
                     break;
+                }
             }
             else if (auto *GEP = dyn_cast<GetElementPtrInst>(CurrentV)) {
                 if (LiftingMap.count(GEP)) {
+                    if (!mergeLeafAS(GEP))
+                        return nullptr;
                     break;
                 } else if (Visited.count(GEP)) {
                     return nullptr;
@@ -116,6 +151,8 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                 CurrentV = GEP->getOperand(0);
             } else if (auto *Phi = dyn_cast<PHINode>(CurrentV)) {
                 if (LiftingMap.count(Phi)) {
+                    if (!mergeLeafAS(Phi))
+                        return nullptr;
                     break;
                 }
                 for (Value *Incoming : Phi->incoming_values()) {
@@ -126,6 +163,8 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                 break;
             } else if (auto *Select = dyn_cast<SelectInst>(CurrentV)) {
                 if (LiftingMap.count(Select)) {
+                    if (!mergeLeafAS(Select))
+                        return nullptr;
                     break;
                 } else if (Visited.count(Select)) {
                     return nullptr;
@@ -151,9 +190,17 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                     PoisonValues(Worklist);
                     return nullptr;
                 }
+                if (!mergeLeafAS(CurrentV))
+                    return nullptr;
                 break;
             }
         }
+    }
+
+    if (LiftAS == UINT_MAX) {
+        // Every leaf was null; any address space works, so use the one
+        // allocas live in.
+        LiftAS = M->getDataLayout().getAllocaAddrSpace();
     }
 
     // Go through and insert lifted versions of all instructions on the list.
@@ -165,14 +212,14 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            Type *NewRetTy = PointerType::get(InstV->getContext(), allocaAddressSpace);
+            Type *NewRetTy = PointerType::get(InstV->getContext(), LiftAS);
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
         }
     }
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        PointerType *TargetType = PointerType::get(CurrentV->getContext(), allocaAddressSpace);
+        PointerType *TargetType = PointerType::get(CurrentV->getContext(), LiftAS);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
