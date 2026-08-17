@@ -86,17 +86,11 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
     SmallVector<Value *, 4> Stack;
     SmallVector<Value *, 0> Worklist;
     std::set<Value *> LocalVisited;
-    // The address space we lift into is dictated by the leaves of the chain:
-    // stripping the special address spaces must not change which underlying
-    // address space a pointer lives in, so all non-null leaves have to agree
-    // on it (e.g. on AMDGPU an alloca leaf lives in the alloca address space
-    // while a global constant leaf lives in address space 0, and no cast
-    // between the two is valid in general).
-    unsigned LiftAS = UINT_MAX; // not known yet
+    // We need to ensure all non-null leaves agree on an address space in
+    // order to lift them. This affects GPU backends where allocas might live
+    // in a different AS than global consts for example
+    unsigned LiftAS = UINT_MAX;
     auto mergeLeafAS = [&](Value *Leaf) -> bool {
-        // Strip casts the same way CollapseCastsAndLift below does, so that
-        // we constrain the exact value it will substitute into the lifted
-        // instructions.
         while (!LiftingMap.count(Leaf)) {
             if (auto *BCI = dyn_cast<BitCastInst>(Leaf))
                 Leaf = BCI->getOperand(0);
@@ -106,7 +100,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                 break;
         }
         if (isa<ConstantPointerNull>(Leaf))
-            return true; // null lifts into any address space
+            return true; // null can be lifted into any address space
         auto It = LiftingMap.find(Leaf);
         if (It != LiftingMap.end())
             Leaf = It->second;
@@ -198,8 +192,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
     }
 
     if (LiftAS == UINT_MAX) {
-        // Every leaf was null; any address space works, so use the one
-        // allocas live in.
+        // Use alloca AS if there are no non-null leaves
         LiftAS = M->getDataLayout().getAllocaAddrSpace();
     }
 
