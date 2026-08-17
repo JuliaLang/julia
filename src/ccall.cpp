@@ -1750,7 +1750,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == getVoidTy(ctx.builder.getContext()));
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
+        ctx.builder.create<julia::GCRootFlush>();
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
         return ghostValue(ctx, jl_nothing_type);
     }
@@ -1888,7 +1888,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == getVoidTy(ctx.builder.getContext()));
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
+        ctx.builder.create<julia::GCRootFlush>();
         Value *pdefer_sig = emit_defer_signal(ctx);
         setName(ctx.emission_context, pdefer_sig, "defer_signal_ptr");
         Value *defer_sig = ctx.builder.CreateLoad(ctx.types().T_sigatomic, pdefer_sig);
@@ -1904,7 +1904,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == getVoidTy(ctx.builder.getContext()));
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
+        ctx.builder.create<julia::GCRootFlush>();
         Value *pdefer_sig = emit_defer_signal(ctx);
         setName(ctx.emission_context, pdefer_sig, "defer_signal_ptr");
         Value *defer_sig = ctx.builder.CreateLoad(ctx.types().T_sigatomic, pdefer_sig);
