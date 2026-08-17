@@ -373,14 +373,6 @@ extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
 // Global *atomic* integer controlling *process-wide* task timing.
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled;
 
-// Set (release) once jl_init has fully completed (image restored, module
-// initializers run). The exit-signal paths consult it: before this point the
-// graceful teardown (running `jl_atexit_hook` on a hijacked thread 0) is
-// unsafe - the image may be half-restored and the interrupted thread may
-// hold runtime locks the teardown needs - and no Julia atexit hooks can
-// have been registered yet, so an exit signal just dies abruptly instead.
-extern JL_DLLEXPORT _Atomic(int) jl_initialization_complete;
-
 #define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
 STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
