@@ -1192,73 +1192,13 @@ static const auto jl_newbits_func = new JuliaFunction<>{
 // `julia.typeof` does read memory, but it is effectively readnone before we lower
 // the allocation function. This is OK as long as we lower `julia.typeof` no later than
 // `julia.gc_alloc_obj`.
-static const auto jl_typeof_func = new JuliaFunction<>{
-    "julia.typeof",
-    [](LLVMContext &C) {
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(T_prjlvalue,
-                {T_prjlvalue}, false);
-    },
-    [](LLVMContext &C) {
-        AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::none());
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        FnAttrs.addAttribute(Attribute::NoRecurse);
-        return AttributeList::get(C,
-            AttributeSet::get(C, FnAttrs),
-            Attributes(C, {Attribute::NonNull}),
-            {}); },
-};
 
 // `julia.blackbox` is an optimization barrier for GC-tracked pointer values.
 // It returns its argument unchanged, but is opaque to the optimizer: it cannot
 // be CSE'd, constant-folded, or treated as loop-invariant. Lowered to inline
 // asm after GC frame lowering (when the pointer is a raw non-tracked pointer).
-static const auto jl_blackbox_func = new JuliaFunction<>{
-    "julia.blackbox",
-    [](LLVMContext &C) {
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(T_prjlvalue, {T_prjlvalue}, false);
-    },
-    [](LLVMContext &C) {
-        AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::none());
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        FnAttrs.addAttribute(Attribute::NoRecurse);
-        FnAttrs.addAttribute(Attribute::WillReturn);
-        FnAttrs.addAttribute(Attribute::NoSync);
-        return AttributeList::get(C,
-            AttributeSet::get(C, FnAttrs),
-            Attributes(C, {Attribute::NonNull}),
-            {}); },
-};
 
-static const auto jl_write_barrier_func = new JuliaFunction<>{
-    "julia.write_barrier",
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {JuliaType::get_prjlvalue_ty(C)}, true); },
-    [](LLVMContext &C) {
-        AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        FnAttrs.addAttribute(Attribute::NoRecurse);
-        return AttributeList::get(C,
-            AttributeSet::get(C, FnAttrs),
-            AttributeSet(),
-            {Attributes(C, {Attribute::ReadOnly})});
-    },
-};
 
-static const auto jl_cancellation_point_func = new JuliaFunction<>{
-    "julia.cancellation_point",
-    [](LLVMContext &C) {
-        return FunctionType::get(getInt32Ty(C), {}, false);
-    },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReturnsTwice}),
-            AttributeSet(),
-            {}); }
-};
 
 static const auto jlisa_func = new JuliaFunction<>{
     XSTR(jl_isa),
@@ -1503,11 +1443,6 @@ static const auto jldnd_func = new JuliaFunction<>{
 // The `julia.gcroot_flush` intrinsic is a marker function to flush all current
 // GC roots, to the shadow stack. It is used in the codegen of `GC.safepoint`/`jl_gc_safepoint`
 // and `jl_sigatomic_{begin,end}`. It is removed in late-gc-lowering (no-effect).
-static const auto gcroot_flush_func = new JuliaFunction<>{
-    "julia.gcroot_flush",
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
-    nullptr,
-};
 static const auto gc_preserve_begin_func = new JuliaFunction<>{
     "llvm.julia.gc_preserve_begin",
     [](LLVMContext &C) { return FunctionType::get(Type::getTokenTy(C), true); },
@@ -1517,23 +1452,6 @@ static const auto gc_preserve_end_func = new JuliaFunction<> {
     "llvm.julia.gc_preserve_end",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), {Type::getTokenTy(C)}, false); },
     nullptr,
-};
-static const auto pointer_from_objref_func = new JuliaFunction<>{
-    "julia.pointer_from_objref",
-    [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pjlvalue_ty(C),
-            {PointerType::get(C, AddressSpace::Derived)}, false); },
-    [](LLVMContext &C) {
-        AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::none());
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        FnAttrs.addAttribute(Attribute::Speculatable);
-        FnAttrs.addAttribute(Attribute::WillReturn);
-        FnAttrs.addAttribute(Attribute::NoRecurse);
-        FnAttrs.addAttribute(Attribute::NoSync);
-        return AttributeList::get(C,
-            AttributeSet::get(C, FnAttrs),
-            Attributes(C, {Attribute::NonNull}),
-            {}); },
 };
 // julia.call represents a call with julia calling convention, it is used as
 //
@@ -1546,43 +1464,11 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
 // with all the spelled out args appropriately moved into the argument stack buffer.
 // By representing it this way rather than allocating the stack buffer earlier, we
 // allow LLVM to make more aggressive optimizations on the call arguments.
-static const auto julia_call = new JuliaFunction<>{
-    "julia.call",
-    [](LLVMContext &C) {
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(T_prjlvalue,
-            {getPointerTy(C),
-             T_prjlvalue}, // %f
-            true); }, // %args
-    get_attrs_basic,
-};
 
 // julia.call2 is like julia.call, except that %arg1 gets passed as a register
 // argument at the end of the argument list.
-static const auto julia_call2 = new JuliaFunction<>{
-    "julia.call2",
-    [](LLVMContext &C) {
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(T_prjlvalue,
-            {getPointerTy(C),
-             T_prjlvalue, // %arg1
-             T_prjlvalue}, // %f
-            true); }, // %args
-    get_attrs_basic,
-};
 
 // julia.call3 is like julia.call, except that %fptr is derived rather than tracked
-static const auto julia_call3 = new JuliaFunction<>{
-    "julia.call3",
-    [](LLVMContext &C) {
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        Type *T = PointerType::get(C, AddressSpace::Derived);
-        return FunctionType::get(T_prjlvalue,
-            {getPointerTy(C),
-             T}, // %f
-            true); }, // %args
-    get_attrs_basic,
-};
 
 
 static const auto jltuple_func = new JuliaFunction<>{XSTR(jl_f_tuple), get_func_sig, get_func_attrs};
@@ -2228,10 +2114,16 @@ static Value *get_tls_world_age(jl_codectx_t &ctx);
 static Value *get_scope_field(jl_codectx_t &ctx);
 static Value *get_tls_world_age_field(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
+// The julia.call trampoline family, see JuliaDialect.td.
+enum class jl_calltramp {
+    call,
+    call2,
+    call3,
+};
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
-                             ArrayRef<jl_cgval_t> args, size_t nargs, JuliaFunction<> *trampoline) JL_CANSAFEPOINT;
+                             ArrayRef<jl_cgval_t> args, size_t nargs, jl_calltramp trampoline) JL_CANSAFEPOINT;
 static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value *theF,
-                             ArrayRef<jl_cgval_t> args, size_t nargs, JuliaFunction<> *trampoline) JL_CANSAFEPOINT;
+                             ArrayRef<jl_cgval_t> args, size_t nargs, jl_calltramp trampoline) JL_CANSAFEPOINT;
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                         Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr) JL_CANSAFEPOINT;
 static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, ArrayRef<jl_cgval_t> argv, bool is_promotable=false) JL_CANSAFEPOINT;
@@ -5451,8 +5343,7 @@ isdefined_unknown_idx:
                 if (obj.isboxed) {
                     // Boxed GC-tracked pointer: emit julia.blackbox intrinsic,
                     // lowered to inline asm after GC frame expansion.
-                    Function *BB = prepare_call(jl_blackbox_func);
-                    Value *result = ctx.builder.CreateCall(BB, {boxed(ctx, obj)});
+                    Value *result = ctx.builder.create<julia::Blackbox>(boxed(ctx, obj));
                     *ret = mark_julia_type(ctx, result, true, obj.typ);
                 } else if (Ty->isSingleValueType() && !Ty->isPointerTy()) {
                     // Non-pointer scalar (int, float): fits in a register, use "=r,0".
@@ -5568,7 +5459,7 @@ isdefined_unknown_idx:
         // load below may follow it, so that a longjmp back onto the setjmp
         // re-reads the now-cancelled state.
         ctx.builder.SetInsertPoint(point_bb);
-        Value *marker = ctx.builder.CreateCall(prepare_call(jl_cancellation_point_func));
+        Value *marker = ctx.builder.create<julia::CancellationPoint>();
         ctx.builder.CreateCondBr(is_nothing, merge_bb, loadst_bb);
 
         ctx.builder.SetInsertPoint(loadst_bb);
@@ -5608,18 +5499,16 @@ isdefined_unknown_idx:
 
 // Returns ctx.types().T_prjlvalue
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
-                             ArrayRef<jl_cgval_t> argv, size_t nargs, JuliaFunction<> *trampoline)
+                             ArrayRef<jl_cgval_t> argv, size_t nargs, jl_calltramp trampoline)
 {
     ++EmittedJLCalls;
-    Function *TheTrampoline = prepare_call(trampoline);
     // emit arguments
     SmallVector<Value*, 4> theArgs;
-    theArgs.push_back(theFptr);
     if (theF)
         theArgs.push_back(theF);
     for (size_t i = 0; i < nargs; i++) {
         Value *arg;
-        if (i == 0 && trampoline == julia_call3) {
+        if (i == 0 && trampoline == jl_calltramp::call3) {
             const jl_cgval_t &f = argv[i];
             arg = f.inline_roots.empty() && f.ispointer() ? data_pointer(ctx, f) : value_to_pointer(ctx, f).V;
             arg = decay_derived(ctx, arg);
@@ -5629,8 +5518,24 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
         }
         theArgs.push_back(arg);
     }
-    CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs);
-    result->setAttributes(TheTrampoline->getAttributes());
+    CallInst *result;
+    switch (trampoline) {
+    case jl_calltramp::call:
+        assert(theArgs.size() >= 1);
+        result = ctx.builder.create<julia::JuliaCall>(theFptr, theArgs[0],
+                                                      ArrayRef<Value*>(theArgs).drop_front());
+        break;
+    case jl_calltramp::call2:
+        assert(theArgs.size() >= 2);
+        result = ctx.builder.create<julia::JuliaCall2>(theFptr, theArgs[0], theArgs[1],
+                                                       ArrayRef<Value*>(theArgs).drop_front(2));
+        break;
+    case jl_calltramp::call3:
+        assert(theArgs.size() >= 1);
+        result = ctx.builder.create<julia::JuliaCall3>(theFptr, theArgs[0],
+                                                       ArrayRef<Value*>(theArgs).drop_front());
+        break;
+    }
     // N.B.: no julia.reset_safe tag here even for reset_safe statements: the
     // jlcall trampoline is implicitly-inserted runtime machinery (dispatch,
     // builtin fallbacks), not covered by the statement's IPO contract, and
@@ -5641,7 +5546,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
 
 // Returns ctx.types().T_prjlvalue
 static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value *theF,
-                             ArrayRef<jl_cgval_t> argv, size_t nargs, JuliaFunction<> *trampoline)
+                             ArrayRef<jl_cgval_t> argv, size_t nargs, jl_calltramp trampoline)
 {
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
@@ -5845,7 +5750,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
     Value *theFptr;
     theFptr = jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee();
     addRetAttr(cast<Function>(theFptr), Attribute::NonNull);
-    Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, julia_call);
+    Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, jl_calltramp::call);
     return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
 
@@ -5890,11 +5795,11 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             Function *f = ctx.f;
             FunctionType *ft = f->getFunctionType();
             if (ft == ctx.types().T_jlfunc) {
-                Value *ret = emit_jlcall(ctx, f, nullptr, argv, nargs, julia_call);
+                Value *ret = emit_jlcall(ctx, f, nullptr, argv, nargs, jl_calltramp::call);
                 result = update_julia_type(ctx, mark_julia_type(ctx, ret, true, ctx.rettype), rt);
             }
             else if (ft == ctx.types().T_jlfuncparams) {
-                Value *ret = emit_jlcall(ctx, f, ctx.spvals_ptr, argv, nargs, julia_call2);
+                Value *ret = emit_jlcall(ctx, f, ctx.spvals_ptr, argv, nargs, jl_calltramp::call2);
                 result = update_julia_type(ctx, mark_julia_type(ctx, ret, true, ctx.rettype), rt);
             }
             else {
@@ -5917,7 +5822,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
-                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, jl_calltramp::call2);
                         result = mark_julia_type(ctx, r, true, rt);
                     }
                     else {
@@ -5936,7 +5841,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         }
     }
     if (!handled) {
-        Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
+        Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, jl_calltramp::call2);
         result = mark_julia_type(ctx, r, true, rt);
     }
     if (result.typ == jl_bottom_type) {
@@ -5991,12 +5896,12 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
         }
 
         if (it != builtin_func_map().end()) {
-            Value *oldnew = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
+            Value *oldnew = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, jl_calltramp::call);
             return mark_julia_type(ctx, oldnew, true, rt);
         }
     }
     // emit function and arguments
-    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
+    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, jl_calltramp::call);
     return mark_julia_type(ctx, callval, true, rt);
 }
 
@@ -6058,7 +5963,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
 
     if (f.typ == (jl_value_t*)jl_intrinsic_type) {
-        Value *ret = emit_jlcall(ctx, prepare_call(jlintrinsic_func), nullptr, argv, nargs, julia_call3);
+        Value *ret = emit_jlcall(ctx, prepare_call(jlintrinsic_func), nullptr, argv, nargs, jl_calltramp::call3);
         setName(ctx.emission_context, ret, "Builtin_ret");
         return mark_julia_type(ctx, ret, true, rt);
     }
@@ -6069,7 +5974,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             return result;
         auto it = builtin_func_map().find(f.constant);
         if (it != builtin_func_map().end()) {
-            Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
+            Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, jl_calltramp::call);
             setName(ctx.emission_context, ret, it->second->name + "_ret");
             return mark_julia_type(ctx, ret, true, rt);
         }
@@ -6091,7 +5996,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         }
     }
     // emit function and arguments
-    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, n_generic_args, julia_call);
+    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, n_generic_args, jl_calltramp::call);
     return mark_julia_type(ctx, callval, true, rt);
 }
 
@@ -7143,7 +7048,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 res.promotion_ssa = ssaidx_0based;
             return res;
         }
-        Value *val = emit_jlcall(ctx, jlnew_func, nullptr, argv, nargs, julia_call);
+        Value *val = emit_jlcall(ctx, jlnew_func, nullptr, argv, nargs, jl_calltramp::call);
         // temporarily mark as `Any`, expecting `emit_ssaval_assign` to update
         // it to the inferred type.
         return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
@@ -7237,7 +7142,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
 
         return mark_julia_type(ctx,
-                emit_jlcall(ctx, jl_new_opaque_closure_jlcall_func, Constant::getNullValue(ctx.types().T_prjlvalue), argv, nargs, julia_call),
+                emit_jlcall(ctx, jl_new_opaque_closure_jlcall_func, Constant::getNullValue(ctx.types().T_prjlvalue), argv, nargs, jl_calltramp::call),
                 true, jl_any_type);
     }
     else if (head == jl_exc_sym) {
@@ -7630,7 +7535,7 @@ static void emit_specsig_to_specsig(
     jl_cgval_t gf_retval;
     if (target || targetspec) {
         if (targetspec == nullptr)
-            gf_retval = mark_julia_type(ctx, emit_jlcall(ctx, target, nullptr, myargs, nargs, julia_call), true, targetrt);
+            gf_retval = mark_julia_type(ctx, emit_jlcall(ctx, target, nullptr, myargs, nargs, jl_calltramp::call), true, targetrt);
         else
             gf_retval = emit_call_specfun_other(ctx, is_for_opaque_closure, targetsig, targetrt, *targetspec, myargs, nargs);
     }
@@ -7943,12 +7848,12 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
             retval = emit_call_specfun_other(ctx, is_opaque_closure, sigt, declrt, targetspec, inputargs, nargs);
         }
         else {
-            retval = mark_julia_type(ctx, emit_jlcall(ctx, target, nullptr, inputargs, nargs, julia_call), true, declrt);
+            retval = mark_julia_type(ctx, emit_jlcall(ctx, target, nullptr, inputargs, nargs, jl_calltramp::call), true, declrt);
         }
     }
     else {
         // emit a dispatch
-        Value *ret = emit_jlcall(ctx, jlapplygeneric_func, NULL, inputargs, nargs, julia_call);
+        Value *ret = emit_jlcall(ctx, jlapplygeneric_func, NULL, inputargs, nargs, jl_calltramp::call);
         retval = mark_julia_type(ctx, ret, true, jl_any_type);
         // inline a call to typeassert here
         emit_typecheck(ctx, retval, declrt, "cfunction");
@@ -9672,7 +9577,7 @@ static jl_llvm_functions_t
             }
             else {
                 restTuple = emit_jlcall(ctx, jltuple_func, Constant::getNullValue(ctx.types().T_prjlvalue),
-                    vargs, ctx.nvargs, julia_call);
+                    vargs, ctx.nvargs, jl_calltramp::call);
                 jl_cgval_t tuple = mark_julia_type(ctx, restTuple, true, vi.value.typ);
                 emit_varinfo_assign(ctx, vi, tuple);
             }
@@ -10856,8 +10761,6 @@ static void init_jit_functions(void)
     add_named_global(jl_alloc_genericmemory_unchecked_func, &jl_alloc_genericmemory_unchecked);
     add_named_global(jl_alloc_obj_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
-    add_named_global(jl_typeof_func, (void*)NULL);
-    add_named_global(jl_write_barrier_func, (void*)NULL);
     add_named_global(jldlsym_func, &jl_load_and_lookup);
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);
@@ -10866,12 +10769,8 @@ static void init_jit_functions(void)
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
     add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);
     add_named_global(jl_allocgenericmemory, &jl_alloc_genericmemory);
-    add_named_global(gcroot_flush_func, (void*)NULL);
     add_named_global(gc_preserve_begin_func, (void*)NULL);
     add_named_global(gc_preserve_end_func, (void*)NULL);
-    add_named_global(pointer_from_objref_func, (void*)NULL);
-    add_named_global(julia_call, (void*)NULL);
-    add_named_global(julia_call2, (void*)NULL);
     add_named_global(jllockvalue_func, &jl_lock_value);
     add_named_global(jlunlockvalue_func, &jl_unlock_value);
     add_named_global(jllockfield_func, &jl_lock_field);

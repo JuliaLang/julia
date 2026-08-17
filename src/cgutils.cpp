@@ -355,9 +355,7 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
     if (AS != AddressSpace::Tracked && AS != AddressSpace::Derived)
         return V;
     V = decay_derived(ctx, V);
-    Function *F = prepare_call(pointer_from_objref_func);
-    CallInst *Call = ctx.builder.CreateCall(F, V);
-    Call->setAttributes(F->getAttributes());
+    CallInst *Call = ctx.builder.create<julia::PointerFromObjref>(V);
     ++EmittedPointerFromObjref;
     return Call;
 }
@@ -1948,10 +1946,9 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
     ++EmittedTypeof;
     assert(v != NULL && !isa<AllocaInst>(v) && "expected a conditionally boxed value");
     Value *nonnull = maybenull ? null_pointer_cmp(ctx, v) : ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
-    Function *typeof = prepare_call(jl_typeof_func);
-    auto val = emit_guarded_test(ctx, nonnull, Constant::getNullValue(justtag ? ctx.types().T_size : typeof->getReturnType()), [&] () JL_CANSAFEPOINT {
+    auto val = emit_guarded_test(ctx, nonnull, Constant::getNullValue(justtag ? ctx.types().T_size : ctx.types().T_prjlvalue), [&] () JL_CANSAFEPOINT {
         // e.g. emit_typeof(ctx, v)
-        Value *typetag = ctx.builder.CreateCall(typeof, {v});
+        Value *typetag = ctx.builder.create<julia::Typeof>(v);
         if (notag)
             return typetag;
         Value *tag = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, typetag), ctx.types().T_size);
@@ -2607,7 +2604,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type, true);
         }
         else {
-            Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
+            Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, jl_calltramp::call);
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
         }
         emit_typecheck(ctx, ret, jltype, fname);
@@ -4418,7 +4415,7 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
     for (auto ptr : ptrs) {
         decay_ptrs.push_back(maybe_decay_untracked(ctx, ptr));
     }
-    ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
+    ctx.builder.create<julia::WriteBarrier>(decay_ptrs[0], ArrayRef<Value*>(decay_ptrs).drop_front());
 }
 
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,

@@ -82,6 +82,7 @@ def GetPGCStackOrNew : JuliaOp<"get_pgcstack_or_new",
 
 // Attribute traits not (yet) provided by llvm-dialects upstream.
 def NoAlias : LlvmEnumAttributeTrait<"NoAlias", [ParamTrait, RetTrait]>;
+def ReturnsTwice : LlvmEnumAttributeTrait<"ReturnsTwice", [FnTrait]>;
 
 def GCLoaded : JuliaOp<"gc_loaded",
                     [Memory<[]>, NoSync, NoUnwind, Speculatable, WillReturn, NoRecurse]> {
@@ -104,6 +105,169 @@ def GCLoaded : JuliaOp<"gc_loaded",
     `tracked`.
   }];
 }
+
+def Typeof : JuliaOp<"typeof", [Memory<[]>, NoUnwind, NoRecurse]> {
+  let results = (outs TrackedPtr:$result);
+  let arguments = (ins TrackedPtr:$object);
+
+  let value_traits = [
+    (NonNull $result),
+  ];
+
+  let summary = "type tag of a GC-managed object";
+  let description = [{
+    Returns the type of `object` as read from its object header. It does read
+    memory, but is effectively readnone before allocation lowering: the type
+    tag of an object never changes. This is only sound as long as
+    `julia.typeof` is lowered no later than `julia.gc_alloc_obj`.
+  }];
+}
+
+def Blackbox : JuliaOp<"blackbox",
+                    [Memory<[]>, NoUnwind, NoRecurse, WillReturn, NoSync]> {
+  let results = (outs TrackedPtr:$result);
+  let arguments = (ins TrackedPtr:$value);
+
+  let value_traits = [
+    (NonNull $result),
+  ];
+
+  let summary = "optimization barrier for GC-tracked pointer values";
+  let description = [{
+    Returns its argument unchanged, but is opaque to the optimizer: it cannot
+    be CSE'd, constant-folded, or treated as loop-invariant. Lowered to
+    inline asm after GC frame lowering (when the pointer is a raw non-tracked
+    pointer).
+  }];
+}
+
+def WriteBarrier : JuliaOp<"write_barrier",
+                        [Memory<[(readwrite InaccessibleMem)]>, NoUnwind, NoRecurse]> {
+  let results = (outs);
+  // N.B.: no (ReadOnly $parent) value trait: ops with varargs generate a
+  // fully-varargs declaration, on which parameter attributes are invalid.
+  let arguments = (ins TrackedPtr:$parent, varargs:$children);
+
+  let summary = "GC generational write barrier";
+  let description = [{
+    Records that the fields of `parent` holding `children` were mutated.
+    Lowered by `LateLowerGCFrame` to the mark-bit fast path plus a call to
+    `julia.queue_gc_root` for old objects.
+  }];
+}
+
+def CancellationPoint : JuliaOp<"cancellation_point", [ReturnsTwice]> {
+  let results = (outs I32:$state);
+  let arguments = (ins);
+
+  let summary = "marker for a task cancellation point";
+  let description = [{
+    Placeholder marking a point where the enclosing task can be cancelled.
+    Lowered by the `LowerCancellationPoints` pass.
+  }];
+}
+
+def GCRootFlush : JuliaOp<"gcroot_flush", []> {
+  let results = (outs);
+  let arguments = (ins);
+
+  let summary = "flush all live GC roots to the shadow stack";
+  let description = [{
+    Marker used in the codegen of `GC.safepoint`/`jl_gc_safepoint` and
+    `jl_sigatomic_{begin,end}`. Removed (no-effect) by `LateLowerGCFrame`.
+  }];
+}
+
+def PointerFromObjref : JuliaOp<"pointer_from_objref",
+                             [Memory<[]>, NoUnwind, Speculatable, WillReturn,
+                              NoRecurse, NoSync]> {
+  let results = (outs Ptr:$result);
+  let arguments = (ins DerivedPtr:$object);
+
+  let value_traits = [
+    (NonNull $result),
+  ];
+
+  let summary = "raw address of a GC-managed object";
+  let description = [{
+    Strips the GC-tracking address space from an object pointer without
+    keeping the object alive: the caller is responsible for rooting it.
+    Lowered by `LateLowerGCFrame` to an addrspacecast.
+  }];
+}
+
+// The julia.call family represents calls with the Julia calling convention:
+//
+//   ptr(Tracked) julia.call(ptr %fptr, ptr(Tracked) %f, ptr(Tracked) %args...)
+//
+// In late GC lowering the call is rewritten as
+//
+//   ptr(Tracked) %fptr(ptr(Tracked) %f, ptr args, i64 nargs)
+//
+// with the spelled-out arguments moved into an argument stack buffer. By
+// deferring the buffer allocation, LLVM can optimize the call arguments more
+// aggressively.
+def JuliaCall : JuliaOp<"call", []> {
+  let results = (outs TrackedPtr:$result);
+  let arguments = (ins Ptr:$fptr, TrackedPtr:$f, varargs:$args);
+
+  let value_traits = [
+    (NonNull $result),
+  ];
+
+  let summary = "call with the Julia calling convention";
+  let description = [{}];
+}
+
+def JuliaCall2 : JuliaOp<"call2", []> {
+  let results = (outs TrackedPtr:$result);
+  let arguments = (ins Ptr:$fptr, TrackedPtr:$arg1, TrackedPtr:$f, varargs:$args);
+
+  let value_traits = [
+    (NonNull $result),
+  ];
+
+  let summary = "like `julia.call`, but `arg1` is passed as a trailing register argument";
+  let description = [{}];
+}
+
+def JuliaCall3 : JuliaOp<"call3", []> {
+  let results = (outs TrackedPtr:$result);
+  let arguments = (ins Ptr:$fptr, DerivedPtr:$f, varargs:$args);
+
+  let value_traits = [
+    (NonNull $result),
+  ];
+
+  let summary = "like `julia.call`, but `f` is derived rather than tracked";
+  let description = [{}];
+}
+
+def GCAllocObj : JuliaOp<"gc_alloc_obj",
+                      [Memory<[(read ArgMem), (readwrite InaccessibleMem)]>,
+                       NoUnwind, WillReturn]> {
+  let results = (outs TrackedPtr:$result);
+  let arguments = (ins Ptr:$ptls, (IntegerType any):$size, TrackedPtr:$type);
+
+  let value_traits = [
+    (NoAlias $result), (NonNull $result),
+  ];
+
+  let summary = "allocate a GC-managed object of a given Julia type";
+  let description = [{
+    Allocates `size` bytes (not including the object header) tagged with the
+    Julia type `type`, in the thread described by `ptls`. Lowered by
+    `LateLowerGCFrame` to `julia.gc_alloc_bytes` plus the store of the tag.
+    The declaration additionally carries `allocsize(1)` and
+    `allockind("alloc")` attributes, which cannot yet be expressed as
+    llvm-dialects traits.
+  }];
+}
+
+// Not represented here: `llvm.julia.gc_preserve_begin` and
+// `llvm.julia.gc_preserve_end` use the reserved `llvm.` intrinsic prefix and
+// a token result type, neither of which llvm-dialects can express for a
+// dialect named `julia`.
 
 // ============================================================================
 // GC lowering ops ("Julia GC dialect")
@@ -177,7 +341,10 @@ def GCAllocBytes : JuliaOp<"gc_alloc_bytes",
     `type`. Lowered by `FinalLowerGC` to a call to the appropriate runtime
     allocation function based on the size. The declaration additionally
     carries `allocsize(1)` and `allockind("alloc")` attributes, which cannot
-    yet be expressed as llvm-dialects traits.
+    yet be expressed as llvm-dialects traits; because `allocsize` also
+    requires a non-varargs declaration and the size type is target
+    dependent, `LateLowerGCFrame` creates this op through a runtime-typed
+    declaration rather than the generated builder.
   }];
 }
 
