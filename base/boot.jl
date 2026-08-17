@@ -834,6 +834,8 @@ end))
 Array{T}(::UndefInitializer, m::Int) where {T} = Array{T, 1}(undef, m)
 Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T, 2}(undef, m, n)
 Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T, 3}(undef, m, n, o)
+# Guard against invalidations due to spurious `Tuple{}` intersections
+Array{T}(::UndefInitializer, ::Tuple{}) where {T} = Array{T, 0}(undef)
 Array{T}(::UndefInitializer, d::NTuple{N, Int}) where {T, N} = Array{T, N}(undef, d)
 # empty vector constructor
 (self::Type{Array{T, 1}})() where {T} = self(undef, 0)
