@@ -15,6 +15,7 @@
 /test/results_*.json
 /test/results_*.dat
 /test/deps
+/coverage-selfbuild-*.info
 
 *.expmap
 *.exe
