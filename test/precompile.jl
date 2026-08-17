@@ -1156,6 +1156,67 @@ precompile_test_harness("code caching") do dir
     end
 end
 
+precompile_test_harness("invalidated foreign cache is retained") do dir
+    # A precompiled *foreign* specialization that is invalidated at load time (via
+    # the reinfer/verify_methods path) must be kept in its MethodInstance cache
+    # with its world age set, rather than dropped to a NULL cache.
+    InvLow = :InvLow_0x5b8f2a1c
+    InvUse = :InvUse_0x5b8f2a1c
+    InvExt = :InvExt_0x5b8f2a1c
+    write(joinpath(dir, "$InvLow.jl"),
+        """
+        module $InvLow
+        low(x) = 1
+        mid(x) = low(x)
+        end
+        """)
+    write(joinpath(dir, "$InvUse.jl"),
+        """
+        module $InvUse
+        using $InvLow
+        # Precompiles the foreign specialization $InvLow.mid(::String) and its edge
+        # to $InvLow.low(::String). $InvUse does not know about $InvExt.
+        top() = $InvLow.mid("hi")
+        begin
+            Base.Experimental.@force_compile
+            @noinline top()
+        end
+        end
+        """)
+    write(joinpath(dir, "$InvExt.jl"),
+        """
+        module $InvExt
+        using $InvLow
+        $InvLow.low(x::String) = 2
+        end
+        """)
+    for pkg in (InvLow, InvUse, InvExt)
+        Base.compilecache(Base.PkgId(string(pkg)))
+    end
+    # Load the invalidator first, then the package whose precompiled foreign
+    # specialization is now stale.
+    @eval using $InvExt
+    @eval using $InvUse
+    invokelatest() do
+        ML = Base.root_module(Base.PkgId(string(InvLow)))
+        world = Base.get_world_counter()
+        m = only(methods(ML.mid))
+        mis = filter(x -> x isa Core.MethodInstance, collect(Base.specializations(m)))
+        mi = only(mis)  # InvLow.mid(::String)
+        @test mi.specTypes.parameters[end] === String
+        # The invalidated CI is retained (not dropped to a NULL cache) ...
+        @test isdefined(mi, :cache)
+        # ... still considered invalidated in the current world ...
+        @test mi.cache.max_world < world
+        # ... with a sane, non-sentinel world age ...
+        @test mi.cache.min_world != ~zero(UInt)
+        @test mi.cache.max_world != Base.ReinferUtils.WORLD_AGE_REVALIDATION_SENTINEL
+        # ... and it recompiles on demand.
+        MU = Base.root_module(Base.PkgId(string(InvUse)))
+        @test invokelatest(MU.top) == 2
+    end
+end
+
 precompile_test_harness("precompiletools") do dir
     PrecompileToolsModule = :PCTb8321416e8a3e2f1
     write(joinpath(dir, "$PrecompileToolsModule.jl"),

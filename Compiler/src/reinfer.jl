@@ -323,14 +323,17 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
             if result.result_maxworld == 0 || result.child_cycle == work.depth
                 while length(workspace.stack) ≥ work.depth
                     child = pop!(workspace.stack)
-                    if result.result_maxworld ≠ 0
-                        @atomic :monotonic child.min_world = result.result_minworld
-                        # Finally, if this CI is still valid in some world age and marked as valid in the native cache, poke it in that mi's cache now
-                        if child.flags & CI_FLAGS_NATIVE_CACHE_VALID == CI_FLAGS_NATIVE_CACHE_VALID
-                            @ccall jl_mi_cache_insert(get_ci_mi(child)::Any, child::Any)::Cvoid
-                        end
-                    end
+                    @atomic :monotonic child.min_world = result.result_minworld
                     @atomic :monotonic child.max_world = result.result_maxworld
+                    # Poke this CI back into its mi's cache if it was in the native cache, using
+                    # the computed world age. We do this even when the CI is now invalidated
+                    # (max_world below the validation world): keeping the invalidated CI in the
+                    # cache leaves it discoverable so it can be recompiled on demand, instead of
+                    # leaving the cache empty and silently dropping a precompiled-but-invalidated
+                    # (foreign) method.
+                    if child.flags & CI_FLAGS_NATIVE_CACHE_VALID == CI_FLAGS_NATIVE_CACHE_VALID
+                        @ccall jl_mi_cache_insert(get_ci_mi(child)::Any, child::Any)::Cvoid
+                    end
                     if result.result_maxworld == validation_world && validation_world == get_world_counter() && isdefined(child, :edges)
                         store_backedges(child, child.edges)
                     end
