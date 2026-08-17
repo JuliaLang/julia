@@ -341,12 +341,15 @@ julia> Base.front(())
 ERROR: ArgumentError: Cannot call front on an empty tuple.
 ```
 """
-front(::Tuple{}) = throw(ArgumentError("Cannot call front on an empty tuple."))
-
-function front(t::Tuple{Any,Vararg{Any,N}}) where {N}
+function front(t::Tuple)
     @inline
-    r = ntuple(i -> getfield(t, i), Val(N))
-    return r::Tuple{Vararg{eltype(typeof(t))}}
+    _front(t...)
+end
+_front() = throw(ArgumentError("Cannot call front on an empty tuple."))
+_front(v) = ()
+function _front(v, t...)
+    @inline
+    (v, _front(t...)...)
 end
 
 ## mapping ##
@@ -368,6 +371,13 @@ const All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          Vararg{T,N}}
+
+function front(t::Any32)
+    n = length(t) - 1
+    r = ntuple(i -> getfield(t, i), n)
+    return r::Tuple{Vararg{eltype(typeof(t))}}
+end
+
 function map(f, t::Any32)
     n = length(t)
     A = Vector{Any}(undef, n)
