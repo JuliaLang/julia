@@ -104,6 +104,9 @@
     XX(jl_current_exception) \
     XX(jl_debug_method_invalidation) \
     XX(jl_deprecate_binding) \
+    XX(jl_deserves_argbox) \
+    XX(jl_deserves_retbox) \
+    XX(jl_deserves_stack) \
     XX(jl_dlclose) \
     XX(jl_dlopen) \
     XX(jl_dlsym) \
@@ -206,6 +209,7 @@
     XX(jl_get_sysimage_cpu_target) \
     XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
+    XX(jl_get_ci_abi) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
     XX(jl_get_fenv_consts) \
@@ -279,6 +283,7 @@
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
     XX(jl_is_compilable) \
+    XX(jl_is_concrete_immutable) \
     XX(jl_is_const) \
     XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
@@ -541,6 +546,7 @@
     YY(jl_get_llvm_external_fns) \
     YY(jl_get_llvm_cis) \
     YY(jl_get_llvm_mi_cache_order) \
+    YY(jl_get_specsig_layout) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
