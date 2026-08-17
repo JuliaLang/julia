@@ -1780,22 +1780,16 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == ctx.types().T_size);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
 
         // jl_task_t *ct = jl_current_task;
         // if (ct->ptls->in_pure_callback)
         //     return ~(size_t)0;
         // return jl_atomic_load_acquire(&jl_world_counter);
-        Type *T_int16 = getInt16Ty(ctx.builder.getContext());
-        Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_tls_states_t, in_pure_callback) / sizeof(int16_t));
-        Value *field_ptr = ctx.builder.CreateInBoundsGEP(T_int16, get_current_ptls(ctx), offset);
-        Instruction *in_pure_callback = ai.decorateInst(ctx.builder.CreateAlignedLoad(T_int16,
-            field_ptr, Align(sizeof(int16_t)), "in_pure_callback"));
-        Value *cond = ctx.builder.CreateICmpEQ(in_pure_callback, ConstantInt::get(T_int16, 0));
+        LoadInst *in_pure_callback = emit_in_pure_callback_load(ctx);
+        Value *cond = ctx.builder.CreateICmpEQ(in_pure_callback,
+            ConstantInt::get(in_pure_callback->getType(), 0));
 
-        Value *world_counter = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
-        cast<LoadInst>(world_counter)->setOrdering(AtomicOrdering::Acquire);
+        Value *world_counter = emit_world_counter_load(ctx);
         Value *ret = ctx.builder.CreateSelect(cond, world_counter, ConstantInt::get(ctx.types().T_size, ~(size_t)0));
         return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
     }
