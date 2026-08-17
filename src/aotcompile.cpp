@@ -2540,8 +2540,10 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             // Emit the coverage counter table if the image was compiled with
             // coverage instrumentation; layouts match jl_image_coverage_t and
             // jl_image_coverage_entry_t. The loader registers the counters so
-            // instrumented image code contributes to coverage reports.
-            if (!coverage_entries.empty()) {
+            // instrumented image code contributes to coverage reports. The
+            // table is emitted even when empty (e.g. a JLL package with no
+            // compiled code): its presence marks the image as instrumented.
+            if (jl_options.code_coverage != JL_LOG_NONE) {
                 Type *T_i32 = Type::getInt32Ty(Context);
                 Type *T_i64 = Type::getInt64Ty(Context);
                 StructType *ET = StructType::get(Context, {T_ptr, T_ptr, T_i32, T_i32});
