@@ -3618,6 +3618,8 @@ static void jl_image_load_metadata(void *handle, jl_image_buf_t *image)
     uint32_t *pchecksum;
     jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
     image->heap_checksum = *pchecksum;
+    // only present if the image was built with coverage counters
+    jl_dlsym(handle, "jl_image_coverage", (void **)&image->coverage, 0, 0);
 }
 
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
@@ -4730,6 +4732,8 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_t pkgimage = {};
+    // a plain .ji cache carries no (instrumented) native code
+    jl_register_image_coverage(NULL, /* is_sysimg */ 0);
     jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, completeinfo, pkgname, 1);
     ios_close(&f);
     return ret;
@@ -4744,6 +4748,8 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
 
     if (buf.kind == JL_IMAGE_KIND_SO)
         assert(image->fptrs.ptrs); // jl_load_sysimg should already be run
+
+    jl_register_image_coverage(buf.coverage, /* is_sysimg */ 1);
 
     JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char *)buf.data, buf.size);
@@ -4763,6 +4769,8 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 
     // Despite the name, this function actually parses the pkgimage
     jl_image_t pkgimage = jl_load_pkgimg(buf);
+
+    jl_register_image_coverage(buf.coverage, /* is_sysimg */ 0);
 
     if (ignore_native) {
         // Must disable using native code in possible downstream users of this code:

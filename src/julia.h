@@ -2391,6 +2391,7 @@ typedef struct {
     uint64_t base;
     uint32_t heap_checksum;
     bool_t is_split;
+    const void *coverage; // jl_image_coverage_t *, if built with coverage counters
 } jl_image_buf_t;
 
 struct _jl_image_t;
