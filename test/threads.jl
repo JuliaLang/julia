@@ -926,13 +926,9 @@ let code = """
     @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end
 
-# Regression test for the macOS mach-exception safepoint path: a thread resumed
-# from a safepoint used to re-execute the faulting poll load, and under
-# back-to-back collections could fault again every time without making
-# progress, starving the main thread in the hijack/restore dance
-# (`jl_mach_restore_trigger`). The child keeps collections back-to-back while
-# the main task must keep crossing safepoint polls to spawn and reap workers;
-# on affected builds it hangs and the timer fires.
+# The macOS exception handler must resume a safepoint-faulting thread past the
+# poll: re-executing the poll under back-to-back collections can fault again
+# every time and starve the thread (here the child's main task) indefinitely.
 @testset "no starvation at safepoint polls under back-to-back collections" begin
     code = """
     function work(n)

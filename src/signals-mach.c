@@ -326,18 +326,13 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     // and nothing arms the sigint page anymore.)
 }
 
-// A safepoint poll is a load of the safepoint page whose result is discarded
-// (`jl_gc_safepoint_`, `FinalLowerGC::lowerSafepoint`), so its destination
-// register is dead and the interrupted thread may resume *after* the poll
-// instead of re-executing it. Re-executing (what the Unix signal handler
-// does, where sigreturn makes it cheap) is not viable here: resuming requires
-// a second round-trip through the handler thread (jl_mach_restore_trigger),
-// and if another collection arms the page during that window the thread
-// faults again without having made progress. Under back-to-back collections
-// from another thread it can lose that race every time and starve.
-//
-// Returns the length of the poll instruction at `pc`, or 0 if it is not a
-// recognized poll load (leaving the PC alone re-executes it as before).
+// Return the length of the safepoint poll instruction at `pc`, or 0 if it is
+// not a recognized poll load (which then re-executes as before). A poll's
+// load result is dead (jl_gc_safepoint_, FinalLowerGC::lowerSafepoint), so
+// the poll may be skipped: re-executing it would fault again whenever
+// another collection arms the page before the Mach restore round-trip
+// completes, which under back-to-back collections can repeat forever and
+// starve the thread.
 static size_t safepoint_poll_insn_len(uintptr_t pc)
 {
 #if defined(_CPU_AARCH64_)
@@ -360,8 +355,11 @@ static size_t safepoint_poll_insn_len(uintptr_t pc)
     uint8_t rm = modrm & 0x7;
     if (mod == 3) // register source: not a load
         return 0;
-    if (rm == 4) // SIB byte
-        i++;
+    if (rm == 4) { // SIB byte
+        uint8_t sib = p[i++];
+        if (mod == 0 && (sib & 0x7) == 5)
+            i += 4; // no base: disp32 follows
+    }
     if (mod == 1)
         i += 1; // disp8
     else if (mod == 2 || (mod == 0 && rm == 5))
@@ -529,10 +527,8 @@ kern_return_t catch_mach_exception_raise_state_identity(
                                              (thread_state_t)float_state, &float_count);
         HANDLE_MACH_ERROR("thread_get_state", ret);
         assert(float_count == jl_mach_float_state_info.count);
-        // Step the saved PC past the poll so the eventual restore resumes
-        // after it, guaranteeing forward progress even if another collection
-        // arms the page before the restore completes (see
-        // safepoint_poll_insn_len).
+        // Skip recognized polls so another collection cannot fault the
+        // thread again before the Mach restore round-trip completes.
 #if defined(_CPU_X86_64_)
         state->__rip += safepoint_poll_insn_len(state->__rip);
 #elif defined(_CPU_AARCH64_)
