@@ -2309,7 +2309,10 @@ function expand_const_decl(ctx, ex)
             x2 = @ast ctx x [K"=" lhs x[2]]
             @ast ctx ex [K"block" decls... expand_assignment(ctx, x2, true)]
         end
-        [K"=" _ _] -> expand_assignment(ctx, ex[1], true)
+        [K"=" l r] -> let (l2, relayered) = relayer_global_if_unhygienic(ctx, l)
+            isempty(relayered) ? expand_assignment(ctx, ex[1], true) :
+                expand_assignment(ctx, @ast(ctx, ex[1], [K"=" l2 r]), true)
+        end
         # Expr(:const, v) where v is a Symbol or a GlobalRef is an unfortunate
         # remnant from the days when const-ness was a flag that could be set on
         # any global.  It creates a binding with kind PARTITION_KIND_UNDEF_CONST.
@@ -3818,15 +3821,10 @@ function expand_typegroup_def(ctx, ex)
 
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block, then do the expand and replace
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        mapsyntax(x->@ast(ctx, x, [K"global" x]), struct_names)...
+        [K"scope_block" [K"hard_scope"] [K"block" stmts...]]
         fdef_stmts...
     ]
 
@@ -3966,15 +3964,10 @@ function expand_struct_def(ctx, ex, docs)
     end
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
+        [K"global" struct_name]
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        [K"scope_block" [K"hard_scope"] stmts...]
         fdef_stmts...
     ]
 
@@ -4060,7 +4053,7 @@ end
 
 function _unplaceholder(st)
     k = kind(st)
-    k === K"Placeholder" ? @mknode(st; kind=K"Identifier") :
+    k === K"Placeholder" || k === K"Symbol" ? @mknode(st; kind=K"Identifier") :
         k === K"Identifier" ? st : @jl_assert false st
 end
 

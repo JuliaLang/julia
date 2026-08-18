@@ -931,3 +931,144 @@ end
     t = JuliaLowering.include_string(m, "TwoScores(1, 2)")
     @test (t._, t.__) == (1, 2)
 end
+
+# A global should be declared in scope.  the local name should not be
+# user-visible (the user may use it in a function arg type)
+@testset "struct def in local scope" for expr_compat_mode in (true, false)
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        struct S; x::Int; end
+        Core.isdefinedglobal(@__MODULE__, :S)
+    end
+    """; expr_compat_mode) == true
+
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        struct S; x::Int; end
+        S(y::UInt) = S(-1)
+        S(UInt(1)).x
+    end
+    """; expr_compat_mode) == -1
+
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        struct S; x::Int; end
+        S(y::UInt) = S(-1)
+        f(arg::S) = arg.x # S should be the global
+        f(S(UInt(1)))
+    end
+    """; expr_compat_mode) == -1
+
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        struct S{T}; x::T; end
+        S(;y=0) = S{typeof(y)}(y)
+        f(::Type{<:S}) = 1
+        (f(S{Int}), fieldcount(S{Int}), nameof(typeof(S(;y=2))))
+    end
+    """; expr_compat_mode) == (1, 1, :S)
+
+    # local captures
+    @test JuliaLowering.include_string(@newmod(), """
+    let loc = 1
+        struct S; x::Int; end
+        S(y::Float64) = S(loc += 1)
+        S(1).x, S(1.0).x, S(2).x, S(2.0).x, S(3).x, S(3.0).x
+    end
+    """; expr_compat_mode) == (1, 2, 2, 3, 3, 4)
+    @test JuliaLowering.include_string(@newmod(), """
+    let loc = 1
+        struct S
+            x::Int
+            S(y::Float64) = new(loc += 1)
+        end
+        S(1.0).x, S(2.0).x, S(3.0).x
+    end
+    """; expr_compat_mode) == (2, 3, 4)
+end
+@testset "nonstruct type def in local scope" for expr_compat_mode in (true, false)
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        abstract type AbstractTypeInLocalScope end
+        Core.isdefinedglobal(@__MODULE__, :AbstractTypeInLocalScope)
+    end
+    """; expr_compat_mode) == true
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        primitive type PrimitiveTypeInLocalScope 8 end
+        Core.isdefinedglobal(@__MODULE__, :PrimitiveTypeInLocalScope)
+    end
+    """; expr_compat_mode) == true
+end
+
+@testset "(AI) typegroup def in local scope" for expr_compat_mode in (true, false)
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        typegroup
+            struct N; x::Int; end
+            struct E; f::N; end
+        end
+        Core.isdefinedglobal(@__MODULE__, :N)
+    end
+    """; expr_compat_mode, version=v"1.14") == true
+
+    # A later method whose body refers to the type name.
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        typegroup
+            struct N; x::Int; end
+            struct E; f::N; end
+        end
+        N(y::UInt) = N(-1)
+        N(UInt(1)).x
+    end
+    """; expr_compat_mode, version=v"1.14") == -1
+
+    # A later method whose signature refers to the type name.
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        typegroup
+            struct N; x::Int; end
+            struct E; f::N; end
+        end
+        N(y::UInt) = N(-1)
+        f(arg::N) = arg.x
+        f(N(UInt(1)))
+    end
+    """; expr_compat_mode, version=v"1.14") == -1
+end
+
+@testset "(AI) type def in local scope: name conflicts" for expr_compat_mode in (true, false)
+    for src in ("""let S = 1
+                    struct S; x::Int; end
+                end
+                """,
+                """let A = 1
+                    abstract type A end
+                end
+                """,
+                """let P = 1
+                    primitive type P 8 end
+                end
+                """,
+                """let N = 1
+                    typegroup
+                        struct N; x::Int; end
+                        struct E; f::N; end
+                    end
+                end""")
+        @test_throws JuliaLowering.LoweringError JuliaLowering.include_string(
+            test_mod, src; expr_compat_mode, version=v"1.14")
+    end
+
+    # shadowing is OK
+    @test JuliaLowering.include_string(@newmod(), """
+    let S = 1
+        let
+            struct S; x::Int; end
+        end
+        S
+    end
+    """; expr_compat_mode) == 1
+end
