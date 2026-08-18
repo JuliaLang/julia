@@ -754,6 +754,18 @@ STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPA
     return (jl_method_instance_t*)def;
 }
 
+// Returns true if the specptr of `codeinst` can safely be invoked using `from_abi` ABI
+STATIC_INLINE int jl_specptr_matches_abi(jl_abi_t from_abi, jl_code_instance_t *codeinst,
+                                         uint8_t specsigflags, jl_callptr_t invoke)
+{
+    if (invoke == jl_fptr_args_addr)
+        return !from_abi.specsig && jl_subtype(codeinst->rettype, from_abi.rt);
+    if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED)
+        return from_abi.specsig && jl_egal(jl_get_ci_mi(codeinst)->specTypes, from_abi.sigt) &&
+               jl_egal(codeinst->rettype, from_abi.rt);
+    return 0;
+}
+
 JL_DLLEXPORT const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo) JL_NOTSAFEPOINT;
 JL_DLLEXPORT const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def) JL_NOTSAFEPOINT;
