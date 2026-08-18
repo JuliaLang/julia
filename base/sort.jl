@@ -1748,7 +1748,7 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v` is
+When calling `sort` on the [`keys`](@ref) or [`values`](@ref) of a dictionary, `v` is
 collected and then sorted.
 
 !!! compat "Julia 1.12"
