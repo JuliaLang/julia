@@ -818,7 +818,10 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
             // for an actual cancellation of the bound token, level-
             // triggered - whichever request delivered the signal.
             if (bound_cancelled) {
-                uint8_t sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state);
+                // The handler contract is in terms of the severity levels
+                // alone - mask off the terminate flag.
+                uint8_t sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state)
+                              & JL_CANCEL_SEVERITY_MASK;
                 hctx->fn(hctx->state, sev);
             }
         }
@@ -1301,11 +1304,39 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             }
         }
+        else if (sig == SIGTERM) {
+            // Request graceful termination through the cancellation system:
+            // the root source's cancellation unwinds the governed work and
+            // the process exits through the ordinary exit path, which runs
+            // the atexit hooks on a sound stack and then re-raises the
+            // signal (see jl_request_process_termination). Hijacking a
+            // thread into jl_atexit_hook at an arbitrary point is unsound -
+            // the interrupted frame may hold runtime locks the teardown
+            // needs, or the image may still be initializing (issue #62774).
+            if (jl_request_process_termination(sig))
+                continue;
+            // No root source is registered (still initializing, or an
+            // embedder that never runs Base.__init__ - no Julia atexit
+            // hooks can exist either way), or this is a repeat request and
+            // the graceful attempt did not lead to an exit: die abruptly
+            // with the signal's default disposition, preserving the exit
+            // status.
+            sigset_t tset;
+            sigemptyset(&tset);
+            sigaddset(&tset, sig);
+            pthread_sigmask(SIG_UNBLOCK, &tset, NULL);
+#ifdef HAVE_KEVENT
+            signal(sig, SIG_DFL);
+#endif
+            uv_tty_reset_mode();
+            fflush(NULL);
+            raise(sig); // very unlikely to return
+            _exit(128 + sig);
+        }
         else {
             critical = 0;
         }
 
-        critical |= (sig == SIGTERM);
         critical |= (sig == SIGABRT);
         critical |= (sig == SIGQUIT);
 #ifdef SIGINFO

@@ -568,8 +568,11 @@ static void jl_cancel_subtree_mark(jl_cancel_source_t *root, uint8_t sev) JL_NOT
         // parent's state): an attacher this walk misses observes the state.
         uint8_t st = jl_atomic_load(&node->state);
         int advanced = 0;
-        while (st < sev) {
-            if (jl_atomic_cmpswap(&node->state, &st, sev)) {
+        while (1) {
+            uint8_t nw = jl_cancel_state_join(st, sev);
+            if (nw == st)
+                break;
+            if (jl_atomic_cmpswap(&node->state, &st, nw)) {
                 advanced = 1;
                 break;
             }
@@ -670,6 +673,78 @@ static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
     }
     jl_atomic_store_release(&sigint_pending_gen, gen);
     deliver_sigint_notification();
+}
+
+// The process-wide root cancellation source: Base.__init__ creates it,
+// keeps a rooted reference for the lifetime of the process, and registers
+// this mirror. Every session/episode source attaches underneath it, so
+// cancelling it reaches everything a termination request should stop. The
+// signal thread reads the mirror lock-free and uses the object only under
+// a GC exclusion (the subtree walk follows weak child links).
+static _Atomic(jl_value_t *) jl_term_source = NULL;
+// The signal that requested process termination (0 = none). Set (once)
+// before the root source is marked, so any observer of a terminate-flagged
+// cancellation also observes the signal number. Read by Base (the dispatch
+// pass and the exit drivers) and by jl_atexit_hook, which re-raises it at
+// the end of the ordinary teardown to preserve the exit status and
+// disposition of a signal death.
+static _Atomic(int) jl_term_signo = 0;
+
+JL_DLLEXPORT void jl_set_term_source(jl_value_t *src) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_release(&jl_term_source,
+                            (src == NULL || src == jl_nothing) ? NULL : src);
+}
+
+JL_DLLEXPORT int jl_process_term_signo(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_acquire(&jl_term_signo);
+}
+
+// A termination signal (SIGTERM) requests graceful process termination:
+// mark the root source's subtree cancelled with the terminate bit and let
+// the cancellation unwind the governed work, so the process exits through
+// the ordinary exit path - atexit hooks run on a sound stack instead of a
+// frame hijacked at an arbitrary point (issue #62774). Returns 1 when the
+// request was delivered; 0 when it cannot be (no root source registered -
+// still initializing, or an embedder that never runs Base.__init__ - or
+// termination was already requested once), in which case the caller must
+// exit abruptly instead. Runs on an ordinary (non-Julia) thread; must not
+// allocate GC memory or take Julia-side locks.
+static int jl_request_process_termination(int sig) JL_NOTSAFEPOINT
+{
+    // One graceful attempt per process: a repeat request reports failure so
+    // the caller escalates to an abrupt exit (the cooperative delivery
+    // evidently did not lead to an exit).
+    int expected = 0;
+    if (!jl_atomic_cmpswap(&jl_term_signo, &expected, sig))
+        return 0;
+    int have_listener = jl_atomic_load_relaxed(&sigint_cond_loc) != NULL;
+    jl_safepoint_exclude_gc_begin();
+    jl_cancel_source_t *src =
+        (jl_cancel_source_t*)jl_atomic_load_acquire(&jl_term_source);
+    if (src != NULL) {
+        // SAFE severity plus the terminate bit: a termination request wants
+        // the same orderly unwinding as a ^C - resources are released, not
+        // abandoned - it is just not resumable (drivers exit instead of
+        // continuing; see e.g. `Base._start`).
+        jl_cancel_subtree_mark(src, JL_CANCEL_TERMINATE_BIT | 0x1);
+        jl_membarrier();
+    }
+    jl_safepoint_exclude_gc_end();
+    if (src == NULL)
+        return 0;
+    // Delivery, exactly like jl_sigint_request_cancellation's: flag the
+    // dispatch (idle threads keep the event loop moving until a listener
+    // claims it and wakes the parked waiters), interrupt asynchronously-
+    // interruptible regions on every thread, and notify the listener.
+    if (have_listener)
+        jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (int16_t tid = 0; tid < (int16_t)nthreads; tid++)
+        jl_send_cancellation_signal(tid);
+    deliver_sigint_notification();
+    return 1;
 }
 
 static void stack_overflow_warning(void)

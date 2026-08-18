@@ -2679,3 +2679,174 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     close(ptm)
     wait(reader)
 end
+
+Sys.isunix() && @testset "SIGTERM graceful termination" begin
+    # Bare executable, as in the "^C" testset: these scenarios assert the
+    # termination semantics, not the suite's flag matrix.
+    exe = joinpath(Sys.BINDIR, Base.julia_exename())
+    function run_with_sigterm(code::String, delays)
+        # The readiness marker proves the runtime is up before the first
+        # SIGTERM is sent (see the "^C" testset's run_with_sigint).
+        code = "println(\"CHILD-READY\")\n" * code
+        out = Pipe()
+        p = run(pipeline(`$exe --startup-file=no -e $code`,
+                         stdin=devnull, stdout=out, stderr=out), wait=false)
+        close(out.in)
+        readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
+        reader = @async read(out, String)
+        killer = @async begin
+            for d in delays
+                sleep(d)
+                process_running(p) && kill(p) # SIGTERM
+            end
+        end
+        exited = timedwait(() -> process_exited(p), 60.0)
+        exited === :ok || kill(p, Base.SIGKILL) # never wedge the suite
+        wait(p)
+        wait(killer)
+        return fetch(reader), p, exited
+    end
+
+    # SIGTERM cancels the process root source: the parked sleep unwinds
+    # quietly (no error report), the atexit hooks run in the ordinary exit
+    # path, and the process still dies by SIGTERM (the runtime re-raises it
+    # at the end of the teardown) - issue #62774
+    output, p, exited = run_with_sigterm("""
+        atexit(() -> println("ATEXIT-RAN"))
+        sleep(100)
+        println("FAIL: not terminated")
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("ATEXIT-RAN", output)
+    @test !occursin("FAIL", output)
+    @test !occursin("CancellationRequest", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # `finally` blocks of the governed work run before the exit (shielded,
+    # like any cleanup that must still block - here: write to a pipe - under
+    # its own cancelled scope)
+    output, p, exited = run_with_sigterm("""
+        try
+            sleep(100)
+        finally
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                println("FINALLY-RAN")
+            end
+        end
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("FINALLY-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # cleanup code can distinguish a terminating process from an ordinary
+    # cancellation - and catching the request does not avert the exit
+    output, p, exited = run_with_sigterm("""
+        try
+            sleep(100)
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                println("terminating=", Base.process_terminating())
+                println("terminate-request=",
+                        e isa Base.CancellationRequest && Base.is_terminate_request(e))
+            end
+        end
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("terminating=true", output)
+    @test occursin("terminate-request=true", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # work shielded from cancellation cannot be unwound by the graceful
+    # request; a repeat SIGTERM exits abruptly instead
+    output, p, exited = run_with_sigterm("""
+        Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+            sleep(100)
+        end
+    """, [0.5, 3.0])
+    @test exited === :ok
+    @test p.termsignal == Base.SIGTERM
+
+    # a SIGTERM at any point during startup must terminate the process:
+    # before Base registers the root source it exits abruptly, afterwards
+    # through the graceful path - it must never wedge (the failure mode of
+    # issue #62774: a teardown hijacked onto a half-initialized thread 0
+    # deadlocking on runtime locks)
+    for delay in (0.0, 0.05, 0.2)
+        p = run(pipeline(`$exe --startup-file=no -e 'sleep(60)'`,
+                         stdin=devnull, stdout=devnull, stderr=devnull), wait=false)
+        delay > 0 && sleep(delay)
+        process_running(p) && kill(p)
+        exited = timedwait(() -> process_exited(p), 60.0)
+        exited === :ok || kill(p, Base.SIGKILL)
+        wait(p)
+        @test exited === :ok
+        @test p.termsignal == Base.SIGTERM || p.exitcode == 128 + Base.SIGTERM
+    end
+end
+
+Sys.isunix() && @testset "SIGTERM in the REPL (pty)" begin
+    isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+
+    # Interactive julia on a pty (like the "^C in the REPL" testset); the
+    # session must shut down cleanly on SIGTERM, dying by the signal.
+    function repl_sigterm_session(drive!::Function)
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        env = copy(ENV)
+        env["TERM"] = "dumb"
+        env["JULIA_HISTORY"] = tempname()
+        exe = joinpath(Sys.BINDIR, Base.julia_exename())
+        p = run(detach(setenv(`$exe -i -q --startup-file=no --color=no`, env)),
+                pts, pts, pts; wait=false)
+        ccall(:close, Cint, (Cint,), pts) # only the child owns the pts now
+        transcript_lock = ReentrantLock()
+        transcript = UInt8[]
+        reader = @async try
+            while true
+                chunk = readavailable(ptm)
+                isempty(chunk) && break
+                @lock transcript_lock append!(transcript, chunk)
+            end
+        catch # pty closes when the child exits
+        end
+        snapshot() = @lock transcript_lock String(copy(transcript))
+        cursor = Ref(1)
+        function expect(needle::String; timeout::Real=120.0)
+            status = timedwait(timeout; pollint=0.05) do
+                idx = findnext(needle, snapshot(), cursor[])
+                idx === nothing && return false
+                cursor[] = last(idx) + 1
+                return true
+            end
+            if status !== :ok && process_running(p)
+                kill(p, 3) # SIGQUIT: dump task backtraces into the CI log
+                timedwait(() -> istaskdone(reader), 20.0)
+                @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+            end
+            @test status == :ok
+        end
+        sendline(s) = write(ptm, s * "\n")
+        expect("julia> ")
+        drive!(p, expect, sendline)
+        kill(p) # SIGTERM
+        exited = timedwait(() -> process_exited(p), 60.0)
+        exited === :ok || kill(p, Base.SIGKILL)
+        wait(p)
+        @test exited === :ok
+        @test p.termsignal == Base.SIGTERM
+        close(ptm)
+        wait(reader)
+    end
+
+    # SIGTERM at an idle prompt: the frontend's terminal read unwinds and
+    # the session exits
+    repl_sigterm_session() do p, expect, sendline
+    end
+
+    # SIGTERM during an evaluation: the evaluation unwinds (with no error
+    # report) and the session exits
+    repl_sigterm_session() do p, expect, sendline
+        sendline("println(\"EVAL-1\"); sleep(1000)")
+        expect("EVAL-1")
+        sleep(0.5)
+    end
+end

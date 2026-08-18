@@ -301,11 +301,12 @@ function show(io::IO, src::Core.CancellationTokenSource)
     if sev === nothing
         print(io, "active")
     else
-        r = sev.request
+        r = severity(sev)
         print(io, r == 0x1 ? "cancelled" :
                   r == 0x3 ? "cancelled, abandon external" :
                   r == 0x4 ? "cancelled, abandon all" :
                   "cancelled, severity $(repr(r))")
+        is_terminate_request(sev) && print(io, ", terminating")
     end
     np = Int(src.nparents)
     np > 0 && print(io, ", ", np, np == 1 ? " parent" : " parents")

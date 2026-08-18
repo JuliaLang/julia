@@ -349,6 +349,12 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
 #ifdef _OS_WINDOWS_
     jl_fin_stackwalk();
 #endif
+    // A graceful, signal-requested termination ran the ordinary teardown
+    // above; the process must nevertheless die by that signal, preserving
+    // the exit status and disposition a supervisor expects of it.
+    int termsig = jl_process_term_signo();
+    if (termsig != 0)
+        jl_raise(termsig);
 }
 
 JL_DLLEXPORT void jl_postoutput_hook(void)
