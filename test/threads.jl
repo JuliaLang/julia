@@ -925,3 +925,65 @@ let code = """
     # JULIA_COPY_STACKS is broken on Windows (#35147)
     @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end
+
+# Regression test for the macOS mach-exception safepoint path: a thread resumed
+# from a safepoint used to re-execute the faulting poll load, and under
+# back-to-back collections could fault again every time without making
+# progress, starving the main thread in the hijack/restore dance
+# (`jl_mach_restore_trigger`). The child keeps collections back-to-back while
+# the main task must keep crossing safepoint polls to spawn and reap workers;
+# on affected builds it hangs and the timer fires.
+@testset "no starvation at safepoint polls under back-to-back collections" begin
+    code = """
+    function work(n)
+        s = 0.0
+        for i in 1:n
+            s += sqrt(i)
+        end
+        return s
+    end
+    function main(iters)
+        done = Threads.Atomic{Bool}(false)
+        gcspam = Threads.@spawn while !done[]
+            GC.gc(false)
+            yield()
+        end
+        nworkers = max(2, Threads.nthreads() - 1)
+        for i in 1:iters
+            tasks = [Threads.@spawn work(10_000) for _ in 1:nworkers]
+            foreach(wait, tasks)
+        end
+        done[] = true
+        wait(gcspam)
+    end
+    main(300)
+    """
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -t8 -e $code`
+    cmd = ignorestatus(setenv(cmd; dir = @__DIR__))
+    cmd = pipeline(cmd; stdout = stderr, stderr)
+    proc = run(cmd; wait = false)
+    # a passing run takes a few seconds; the timeout only fires on starvation
+    timeout = false
+    timer = Timer(120) do t
+        timeout = true
+        # a starved process ignores SIGTERM-level requests; go straight to the
+        # backtrace-dumping and then killing signals
+        for sig in (Base.SIGQUIT, Base.SIGKILL)
+            for _ in 1:3
+                process_running(proc) || return
+                kill(proc, sig)
+                sleep(1)
+            end
+        end
+    end
+    try
+        wait(proc)
+    finally
+        close(timer)
+    end
+    if !success(proc) || timeout
+        @error "The safepoint poll starvation test failed" proc.exitcode proc.termsignal timeout
+    end
+    @test success(proc)
+    @test !timeout
+end

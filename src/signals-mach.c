@@ -326,6 +326,52 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     // and nothing arms the sigint page anymore.)
 }
 
+// A safepoint poll is a load of the safepoint page whose result is discarded
+// (`jl_gc_safepoint_`, `FinalLowerGC::lowerSafepoint`), so its destination
+// register is dead and the interrupted thread may resume *after* the poll
+// instead of re-executing it. Re-executing (what the Unix signal handler
+// does, where sigreturn makes it cheap) is not viable here: resuming requires
+// a second round-trip through the handler thread (jl_mach_restore_trigger),
+// and if another collection arms the page during that window the thread
+// faults again without having made progress. Under back-to-back collections
+// from another thread it can lose that race every time and starve.
+//
+// Returns the length of the poll instruction at `pc`, or 0 if it is not a
+// recognized poll load (leaving the PC alone re-executes it as before).
+static size_t safepoint_poll_insn_len(uintptr_t pc)
+{
+#if defined(_CPU_AARCH64_)
+    uint32_t insn = *(const uint32_t*)pc;
+    if ((insn & 0xFFC00000u) == 0xF9400000u || // LDR Xt, [Xn, #pimm]
+        (insn & 0xFFE00C00u) == 0xF8400000u || // LDUR Xt, [Xn, #simm]
+        (insn & 0xFFE00C00u) == 0xF8600800u)   // LDR Xt, [Xn, Xm{, extend}]
+        return 4;
+    return 0;
+#elif defined(_CPU_X86_64_)
+    // MOV r64, r/m64 (REX.W + 8B /r), the only form our polls compile to
+    const uint8_t *p = (const uint8_t*)pc;
+    size_t i = 0;
+    if ((p[i] & 0xF8) == 0x48) // REX.W prefix
+        i++;
+    if (p[i++] != 0x8B)
+        return 0;
+    uint8_t modrm = p[i++];
+    uint8_t mod = modrm >> 6;
+    uint8_t rm = modrm & 0x7;
+    if (mod == 3) // register source: not a load
+        return 0;
+    if (rm == 4) // SIB byte
+        i++;
+    if (mod == 1)
+        i += 1; // disp8
+    else if (mod == 2 || (mod == 0 && rm == 5))
+        i += 4; // disp32 / RIP-relative
+    return i;
+#else
+    return 0;
+#endif
+}
+
 #if defined(_CPU_AARCH64_)
 __attribute__((naked, used)) static void jl_mach_restore_trigger(void)
 {
@@ -483,6 +529,15 @@ kern_return_t catch_mach_exception_raise_state_identity(
                                              (thread_state_t)float_state, &float_count);
         HANDLE_MACH_ERROR("thread_get_state", ret);
         assert(float_count == jl_mach_float_state_info.count);
+        // Step the saved PC past the poll so the eventual restore resumes
+        // after it, guaranteeing forward progress even if another collection
+        // arms the page before the restore completes (see
+        // safepoint_poll_insn_len).
+#if defined(_CPU_X86_64_)
+        state->__rip += safepoint_poll_insn_len(state->__rip);
+#elif defined(_CPU_AARCH64_)
+        state->__pc += safepoint_poll_insn_len(state->__pc);
+#endif
         // Hijack the faulting thread to handle the safepoint on its own
         // stack, using the same jl_set_gc_and_wait() codepath as Unix signals.
         jl_call_in_state(state, (void (*)(void))&mach_safepoint_trampoline,
