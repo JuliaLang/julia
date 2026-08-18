@@ -2330,3 +2330,9 @@ f54131 = F54131()
     @test_broken REPLCompletions.KeywordArgumentCompletion("kwarg") in a
     @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
 end
+
+# JuliaLang/julia#57780
+const issue57780 = ["a", "b", "c"]
+const issue57780_orig = copy(issue57780)
+test_complete_context("empty!(issue57780).", Main)
+@test issue57780 == issue57780_orig
