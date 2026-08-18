@@ -301,6 +301,7 @@ include("binaryplatforms.jl")
 # misc useful functions & macros
 include("timing.jl")
 include("client.jl")
+include("sessions.jl")
 include("asyncmap.jl")
 
 # deprecated functions

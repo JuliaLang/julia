@@ -144,6 +144,17 @@ static void destroy_query_cache(jl_query_cache *cache) JL_NOTSAFEPOINT
     htable_free(&cache->type_in_worklist);
 }
 
+// When set, the serializer is writing a session image (`Base.save_session`):
+// Task objects cannot be serialized, so every reachable Task (other than the
+// root task, which resolves to the restoring process's own root task) is
+// written as a reference to a single placeholder task that is already done.
+// That way `istaskdone` guards throughout Base treat stale task references
+// as finished instead of trying to schedule or switch to them. Session
+// overlays also widen extext-method collection (see
+// jl_collect_methcache_from_mod).
+static int session_image_save = 0;
+static jl_task_t *session_placeholder_task = NULL;
+
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
 
@@ -419,6 +430,10 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
         return 0;
     }
     else if (v == (jl_value_t*)s->ptls->root_task) {
+        return 0;
+    }
+    else if (session_image_save && jl_typeof(v) == (jl_value_t*)jl_task_type &&
+             v != (jl_value_t*)session_placeholder_task) {
         return 0;
     }
 
@@ -1039,7 +1054,8 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
 
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     // check early from errors, so we have a little bit of contextual state for debugging them
-    if (t == jl_task_type) {
+    if (t == jl_task_type &&
+        !(session_image_save && v == (jl_value_t*)session_placeholder_task)) {
         jl_error("Task cannot be serialized");
     }
     if (s->incremental && needs_uniquing(v, s->query_cache) && t == jl_binding_type) {
@@ -1192,6 +1208,12 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
     }
     else if (v == (jl_value_t*)s->ptls->root_task) {
         return (uintptr_t)TagRef << RELOC_TAG_OFFSET;
+    }
+    else if (session_image_save && jl_typeof(v) == (jl_value_t*)jl_task_type &&
+             v != (jl_value_t*)session_placeholder_task) {
+        // stale task reference: redirect to the placeholder done-task and
+        // fall through to the normal serialization_order lookup
+        v = (jl_value_t*)session_placeholder_task;
     }
     else if (v == jl_nothing) {
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + 1;
@@ -1640,7 +1662,38 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             jl_write_module(s, item, (jl_module_t*)v);
         }
         else if (jl_typetagis(v, jl_task_tag << 4)) {
-            abort(); // unreachable
+            // Only the session placeholder done-task ever gets here (any other
+            // Task errors at queue time). Write the GC-visible pointer fields
+            // with relocations, and copy the bits regions and the hidden
+            // runtime tail verbatim from the live struct: the placeholder was
+            // never started, so tid == -1 and every raw pointer in the tail
+            // (ptls, stack, exception state) is NULL.
+            assert(f == s->s);
+            assert(session_image_save && v == (jl_value_t*)session_placeholder_task);
+            jl_task_t *task = (jl_task_t*)v;
+            const char *tdata = (const char*)task;
+            size_t task_write_start = ios_pos(f);
+            (void)task_write_start;
+            write_pointerfield(s, task->next);
+            write_pointerfield(s, task->queue);
+            write_pointerfield(s, task->tls);
+            write_pointerfield(s, task->donenotify);
+            write_pointerfield(s, task->result);
+            write_pointerfield(s, task->scope);
+            write_pointerfield(s, task->start);
+            ios_write(f, tdata + offsetof(jl_task_t, _state),
+                      offsetof(jl_task_t, waiting_on) - offsetof(jl_task_t, _state));
+            write_pointerfield(s, jl_atomic_load_relaxed(&task->waiting_on));
+            write_pointerfield(s, task->cached_wait_entry);
+            write_pointerfield(s, task->cached_cancel_entry);
+            write_pointer(f); // invoked (always NULL for the placeholder)
+            write_pointerfield(s, jl_atomic_load_relaxed(&task->bound_cancel_token));
+            write_padding(f, offsetof(jl_task_t, tid) -
+                             (offsetof(jl_task_t, bound_cancel_token) + sizeof(void*)));
+            ios_write(f, tdata + offsetof(jl_task_t, tid),
+                      sizeof(jl_task_t) - offsetof(jl_task_t, tid));
+            assert(ios_pos(f) - task_write_start == sizeof(jl_task_t) &&
+                   "manual jl_task_t serialization no longer matches the struct layout");
         }
         else if (jl_is_svec(v)) {
             assert(f == s->s);
@@ -1699,8 +1752,11 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         else if (jl_bigint_type && jl_typetagis(v, jl_bigint_type)) {
             // foreign types require special handling
             assert(f == s->s);
-            jl_value_t *sizefield = jl_get_nth_field(v, 1);
-            int32_t sz = jl_unbox_int32(sizefield);
+            void *pdata = jl_unbox_voidpointer(jl_get_nth_field(v, 2));
+            // an uninitialized BigInt shell (`new()` before `init2!`) has
+            // uninitialized bits fields too, so don't trust its size field;
+            // restore it as a canonical zero
+            int32_t sz = pdata == NULL ? 0 : jl_unbox_int32(jl_get_nth_field(v, 1));
             int32_t nw = (sz == 0 ? 1 : (sz < 0 ? -sz : sz));
             size_t nb = nw * gmp_limb_size;
             ios_write(f, (char*)&nw, sizeof(int32_t));
@@ -1711,8 +1767,10 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             assert(data < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to constant data too large");
             arraylist_push(&s->relocs_list, (void*)(reloc_offset + 8)); // relocation location
             arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + data)); // relocation target
-            void *pdata = jl_unbox_voidpointer(jl_get_nth_field(v, 2));
-            ios_write(s->const_data, (char*)pdata, nb);
+            if (pdata != NULL)
+                ios_write(s->const_data, (char*)pdata, nb);
+            else
+                write_padding(s->const_data, nb);
             write_pointer(f);
         }
         else {
@@ -3162,6 +3220,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, worklist);
             jl_queue_for_serialization(&s, module_init_order);
         }
+        if (session_image_save && session_placeholder_task != NULL)
+            jl_queue_for_serialization(&s, (jl_value_t*)session_placeholder_task);
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
             // Queue method extensions
@@ -3567,6 +3627,125 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     JL_GC_POP();
     *s = f;
     return checksum;
+}
+
+// Write the entire state of the running session as a heap-only (no native
+// code) system image that `julia --restore` can boot from. See
+// doc/src/devdocs/sessions.md. The write destroys serializer-adjacent live
+// heap state (type caches, backedges, Core.ARGS), so the caller is expected
+// to exit the process afterwards.
+JL_DLLEXPORT void jl_save_session_image(const char *fname)
+{
+    if (jl_generating_output())
+        jl_error("save_session cannot be used while generating precompile output");
+    // The boot-time module init order was already consumed (and its
+    // initializers run) in this session; store an empty list so that restore
+    // runs no module initializers. Base handles reinitialization instead.
+    if (jl_module_init_order == NULL)
+        jl_module_init_order = jl_alloc_vec_any(0);
+    // Every reachable Task is redirected to this never-started, already-done
+    // placeholder (see session_image_save above).
+    jl_task_t *placeholder = jl_new_task(jl_nothing, jl_nothing, 0);
+    JL_GC_PUSH1(&placeholder);
+    placeholder->scope = jl_nothing;
+#ifdef USE_TRACY
+    placeholder->name = NULL; // not initialized by jl_new_task
+#endif
+    jl_atomic_store_relaxed(&placeholder->_state, JL_TASK_STATE_DONE);
+    session_placeholder_task = placeholder;
+    session_image_save = 1;
+    ios_t *s = NULL;
+    JL_TRY {
+        jl_create_system_image(NULL, NULL, 0, 0, &s, NULL, NULL, jl_module_init_order);
+    }
+    JL_CATCH {
+        // The writer mutates live heap state (type caches, backedges,
+        // Core.ARGS) before it can fail, and an abandoned jl_create_system_image
+        // leaves finalizers disabled; the process cannot safely continue.
+        jl_printf(JL_STDERR, "fatal: error while writing session image: ");
+        jl_static_show(JL_STDERR, jl_current_exception(jl_current_task));
+        jl_printf(JL_STDERR, "\n");
+        exit(1);
+    }
+    session_image_save = 0;
+    session_placeholder_task = NULL;
+    JL_GC_POP();
+    ios_t f;
+    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
+        // the heap is already pruned at this point, so this cannot be a
+        // recoverable error
+        jl_printf(JL_STDERR, "fatal: cannot open session image file \"%s\" for writing\n", fname);
+        exit(1);
+    }
+    ios_bufmode(&f, bm_none);
+    ios_write(&f, (const char*)s->buf, (size_t)s->size);
+    ios_close(s);
+    free(s);
+    ios_close(&f);
+}
+
+// Write the session as an incremental, heap-only image ("session overlay")
+// whose worklist is `sess`, a runtime-created module holding the projected
+// session state (see Base.save_session and doc/src/devdocs/sessions.md).
+// Restore boots the normal sysimage and loads this file the way a pkgimage
+// loads. As with jl_save_session_image, the write destroys
+// serializer-adjacent live heap state, so the caller is expected to exit the
+// process afterwards.
+JL_DLLEXPORT void jl_save_session_overlay(const char *fname, jl_module_t *sess)
+{
+    if (jl_generating_output())
+        jl_error("save_session cannot be used while generating precompile output");
+    jl_array_t *worklist = NULL;
+    jl_array_t *init_order = NULL;
+    jl_array_t *udeps = NULL;
+    jl_task_t *placeholder = NULL;
+    JL_GC_PUSH4(&worklist, &init_order, &udeps, &placeholder);
+    worklist = jl_alloc_vec_any(1);
+    jl_array_ptr_set(worklist, 0, (jl_value_t*)sess);
+    // nothing is replayed through the module init order; Base re-runs no
+    // initializers on restore
+    init_order = jl_alloc_vec_any(0);
+    placeholder = jl_new_task(jl_nothing, jl_nothing, 0);
+    placeholder->scope = jl_nothing;
+#ifdef USE_TRACY
+    placeholder->name = NULL; // not initialized by jl_new_task
+#endif
+    jl_atomic_store_relaxed(&placeholder->_state, JL_TASK_STATE_DONE);
+    session_placeholder_task = placeholder;
+    session_image_save = 1;
+    ios_t *s = NULL;
+    int64_t srctextpos = 0;
+    JL_TRY {
+        jl_create_system_image(NULL, worklist, 0, 0, &s, &udeps, &srctextpos, init_order);
+    }
+    JL_CATCH {
+        // same contract as jl_save_session_image: the writer mutates live
+        // heap state before it can fail, so the process cannot safely
+        // continue
+        jl_printf(JL_STDERR, "fatal: error while writing session overlay: ");
+        jl_static_show(JL_STDERR, jl_current_exception(jl_current_task));
+        jl_printf(JL_STDERR, "\n");
+        exit(1);
+    }
+    session_image_save = 0;
+    session_placeholder_task = NULL;
+    ios_t f;
+    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
+        // the heap is already pruned at this point, so this cannot be a
+        // recoverable error
+        jl_printf(JL_STDERR, "fatal: cannot open session file \"%s\" for writing\n", fname);
+        exit(1);
+    }
+    ios_bufmode(&f, bm_none);
+    ios_write(&f, (const char*)s->buf, (size_t)s->size);
+    // no source text is appended (the header's srctext position stays 0);
+    // terminate with the whole-file checksum that cache-file consumers
+    // (Base.isvalid_file_crc) expect
+    write_uint32(&f, jl_crc32c(0, (const char*)s->buf, (size_t)s->size));
+    ios_close(s);
+    free(s);
+    ios_close(&f);
+    JL_GC_POP();
 }
 
 // Takes in a path of the form "usr/lib/julia/sys.so"

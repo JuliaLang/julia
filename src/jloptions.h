@@ -77,6 +77,8 @@ typedef struct {
     int8_t target_sanitize_memory;
     int8_t target_sanitize_thread;
     int8_t target_sanitize_address;
+    const char *restore_file;
+    int8_t restore_session;
 } jl_options_t;
 
 #endif

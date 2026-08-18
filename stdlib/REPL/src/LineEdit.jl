@@ -2761,6 +2761,21 @@ function edit_abort(s::MIState, confirm::Bool=options(s).confirm_exit; key="^D")
     end
 end
 
+# Ctrl-X Ctrl-S (or Ctrl-Shift-D, in terminals that encode it distinctly) on
+# an empty prompt: save the session and exit, the save-and-exit parallel to ^D.
+function save_session_exit(s::MIState)
+    set_action!(s, :save_session_exit)
+    println(terminal(s))
+    raw!(terminal(s), false) && disable_bracketed_paste(terminal(s))
+    try
+        Base.invokelatest(Base.save_session) # writes the image and exits the process
+    catch err
+        raw!(terminal(s), true) && enable_bracketed_paste(terminal(s))
+        @error "save_session failed" exception = (err, catch_backtrace())
+    end
+    return refresh_line(s)
+end
+
 const default_keymap =
 AnyDict(
     # Tab
@@ -2791,6 +2806,20 @@ AnyDict(
             edit_abort(s)
         end
     end,
+    # Ctrl-X Ctrl-S: save session and exit
+    "^X^S" => (s::MIState,o...)->begin
+        if buffer(s).size > 0
+            beep(s)
+        else
+            save_session_exit(s)
+        end
+    end,
+    # Ctrl-Shift-D likewise, in terminals that encode it distinctly
+    # (CSI u and modifyOtherKeys encodings)
+    "\e[100;6u" => KeyAlias("^X^S"),
+    "\e[68;6u" => KeyAlias("^X^S"),
+    "\e[27;6;100~" => KeyAlias("^X^S"),
+    "\e[27;6;68~" => KeyAlias("^X^S"),
     # Ctrl-Space
     "\0" => (s::MIState,o...)->setmark(s),
     "^G" => (s::MIState,o...)->(deactivate_region(s); refresh_line(s)),
