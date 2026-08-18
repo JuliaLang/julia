@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 # RUN: export JULIA_LLVM_ARGS="--print-before=loop-vectorize --print-module-scope"
+# RUN: export JULIA_OBJCACHE=0
 # RUN: rm -rf %t
 # RUN: mkdir %t
 # RUN: julia --image-codegen -t1,0 --startup-file=no %s 2> %t/output.txt
