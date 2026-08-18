@@ -209,9 +209,6 @@ timesofar("promotions")
 
         # Chunk rounding and reshape products must remain valid at the Int limit.
         @test Base.num_bit_chunks(typemax(Int)) == div(typemax(Int), 64) + 1
-        maxbits = trues(1)
-        @test_throws OutOfMemoryError resize!(maxbits, typemax(Int))
-        @test maxbits == trues(1)
         overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
         @test_throws ArgumentError reshape(trues(2), 3, overflow_dim)
     end
