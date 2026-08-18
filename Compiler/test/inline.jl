@@ -10,6 +10,17 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
+# Inlined IR drops coverage effects when the active process does not collect them.
+coverage_strip_callee() = nothing
+let mi = Base.method_instance(coverage_strip_callee, ()),
+    src = make_codeinfo(Any[Expr(:code_coverage_effect), ReturnNode(nothing)];
+                        ssavaluetypes=Any[Nothing, Nothing],
+                        slottypes=Any[typeof(coverage_strip_callee)], slotnames=[:self])
+    ir, _, _ = Compiler.retrieve_ir_for_inlining(mi, src, true)
+    @test !any(stmt -> isexpr(stmt, :code_coverage_effect), ir.stmts.stmt)
+    @test isexpr(src.code[1], :code_coverage_effect)
+end
+
 """
 Helper to walk the AST and call a function on every node.
 """
