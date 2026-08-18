@@ -199,6 +199,150 @@ end
     @test length(A) == 5
     @test A == [1:5;]
 end
+@testset "resize! for N-dimensional arrays" begin
+    # elements are preserved in their linear (column-major) order, as if vec(A) was
+    # resized and then reshaped; the memory is managed like for Vector (spare
+    # capacity is reused and kept)
+
+    # growing/shrinking the trailing dimension preserves Cartesian indices
+    A = reshape([1:6;], 2, 3)
+    @test resize!(A, (2, 5)) === A
+    @test size(A) == (2, 5)
+    @test A[:, 1:3] == reshape(1:6, 2, 3)
+    resize!(A, (2, 2))
+    @test size(A) == (2, 2)
+    @test A == reshape(1:4, 2, 2)
+
+    # growing/shrinking a leading dimension keeps the linear order
+    A = reshape([1:9;], 3, 3)
+    resize!(A, (4, 3))
+    @test size(A) == (4, 3)
+    @test vec(A)[1:9] == 1:9
+    @test A[:, 1] == 1:4
+    resize!(A, (2, 3))
+    @test vec(A) == 1:6
+
+    # growing a matrix places the old elements in the leading columns and the
+    # round trip restores the original
+    A = [1 2; 3 4]
+    resize!(A, 4, 4)
+    @test A[:, 1] == [1, 3, 2, 4]
+    resize!(A, (2, 2))
+    @test A == [1 2; 3 4]
+
+    # resizing without changing the length relabels the dims and keeps the memory
+    A = reshape([1:6;], 2, 3)
+    mem = A.ref.mem
+    resize!(A, (3, 2))
+    @test size(A) == (3, 2)
+    @test vec(A) == 1:6
+    @test A.ref.mem === mem
+
+    # combined grow + shrink: shrinking keeps the memory (and its spare capacity),
+    # growing within the spare capacity reuses it
+    A = reshape([1:12;], 3, 4)
+    mem = A.ref.mem
+    resize!(A, (5, 2))
+    @test vec(A) == 1:10
+    @test A.ref.mem === mem
+    resize!(A, (3, 4))
+    @test vec(A)[1:10] == 1:10
+    @test A.ref.mem === mem
+
+    # middle dimension of a 3-d array
+    A = reshape([1:24;], 2, 3, 4)
+    resize!(A, (2, 2, 4))
+    @test vec(A) == 1:16
+    resize!(A, (2, 3, 4))
+    @test vec(A)[1:16] == 1:16
+
+    # resizing to the same size is a no-op and keeps the identity and memory
+    A = reshape([1:6;], 2, 3)
+    r = A.ref
+    @test resize!(A, (2, 3)) === A
+    @test A.ref === r
+    @test resize!(A, 2, 3) === A
+    @test A.ref === r
+
+    # the tuple form for Vector keeps the Vector semantics (may keep slack)
+    v = sizehint!([1, 2, 3], 100)
+    mem = v.ref.mem
+    @test resize!(v, (2,)) === v
+    @test v == [1, 2]
+    @test v.ref.mem === mem
+    @test resize!(v, (10,)) === v
+    @test length(v) == 10
+    @test v[1:2] == [1, 2]
+
+    # vararg form with mixed Integer types
+    A = reshape([1:6;], 2, 3)
+    @test resize!(A, 0x03, Int16(2)) === A
+    @test size(A) == (3, 2)
+    @test vec(A) == 1:6
+
+    # non-isbits eltype: assigned elements keep their linear index, undefs preserved,
+    # new slots undef
+    A = Matrix{String}(undef, 2, 2)
+    A[1, 1] = "x"
+    A[2, 2] = "y" # linear index 4
+    resize!(A, (3, 3))
+    @test size(A) == (3, 3)
+    @test A[1, 1] == "x"
+    @test A[1, 2] == "y" # linear index 4
+    @test !isassigned(A, 2, 1)
+    @test !isassigned(A, 3, 3)
+
+    # isbits-Union eltype
+    A = Matrix{Union{Int,Nothing}}(undef, 2, 2)
+    A[1, 1] = 1
+    A[2, 1] = nothing
+    resize!(A, (3, 2))
+    @test A[1, 1] === 1
+    @test A[2, 1] === nothing
+
+    # zero-sized dimensions
+    A = reshape([1:6;], 2, 3)
+    resize!(A, (0, 3))
+    @test size(A) == (0, 3)
+    @test length(A) == 0
+    resize!(A, (2, 3))
+    @test size(A) == (2, 3)
+
+    # 0-d arrays can only be "resized" to their own shape
+    z = fill(1.0)
+    @test resize!(z, ()) === z
+    @test z[] == 1.0
+
+    # error cases
+    A = reshape([1:6;], 2, 3)
+    @test_throws ArgumentError resize!(A, (-1, 3))
+    @test_throws ArgumentError resize!(A, -1, 3)
+    @test_throws ArgumentError resize!(A, (typemax(Int), 2))
+    @test_throws MethodError resize!(A, 5)
+    @test_throws MethodError resize!(A, (5,))
+    @test_throws MethodError resize!(A, (2, 3, 4))
+    @test_throws MethodError resize!([1, 2], 2, 3)
+    @test_throws MethodError resize!([1, 2], ())
+    @test A == reshape(1:6, 2, 3) # unchanged by the failed calls
+
+    # growing beyond the spare capacity reallocates, leaving other arrays that
+    # share the memory unaffected
+    v = [1:6;]
+    A = reshape(v, 2, 3)
+    resize!(A, (3, 3))
+    @test v == 1:6
+    @test v.ref.mem !== A.ref.mem
+    @test vec(A)[1:6] == 1:6
+
+    # source arrays whose memoryref has a nonzero offset (from reshape of a
+    # sizehint!ed vector) resize correctly
+    w = [1:9;]
+    sizehint!(w, 200; first=true)
+    A = reshape(w, 3, 3)
+    resize!(A, (3, 4))
+    @test size(A) == (3, 4)
+    @test vec(A)[1:9] == 1:9
+end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
     let A = range(1, stop=60, length=60)
