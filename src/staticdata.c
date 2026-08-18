@@ -147,13 +147,54 @@ static void destroy_query_cache(jl_query_cache *cache) JL_NOTSAFEPOINT
 // When set, the serializer is writing a session image (`Base.save_session`):
 // Task objects cannot be serialized, so every reachable Task (other than the
 // root task, which resolves to the restoring process's own root task) is
-// written as a reference to a single placeholder task that is already done.
-// That way `istaskdone` guards throughout Base treat stale task references
-// as finished instead of trying to schedule or switch to them. Session
-// overlays also widen extext-method collection (see
+// written as a reference to a placeholder task: finished tasks map to a
+// fresh done placeholder carrying their result and exception state (so
+// `fetch` still returns the value), and unfinished tasks share a single
+// done-with-nothing placeholder. Either way `istaskdone` guards throughout
+// Base treat stale task references as finished instead of trying to schedule
+// or switch to them. Session mode also resets every raw `Ptr` value (boxed
+// values and immutable fields included, unlike the mutable-field-only rule
+// that images apply in general) and widens extext-method collection (see
 // jl_collect_methcache_from_mod).
 static int session_image_save = 0;
-static jl_task_t *session_placeholder_task = NULL;
+static jl_task_t *session_placeholder_task = NULL; // shared, for unfinished tasks
+static htable_t session_task2placeholder;          // original Task -> placeholder
+static htable_t session_placeholder_set;           // placeholders (the serializable tasks)
+
+static jl_task_t *new_session_placeholder(jl_value_t *result, uint8_t state, uint8_t isexc)
+{
+    // runs with the GC disabled for the whole image write, so no rooting needed
+    jl_task_t *p = jl_new_task(jl_nothing, jl_nothing, 0);
+    p->scope = jl_nothing;
+#ifdef USE_TRACY
+    p->name = NULL; // not initialized by jl_new_task
+#endif
+    p->result = result;
+    jl_gc_wb(p, result);
+    jl_atomic_store_relaxed(&p->_state, state);
+    jl_atomic_store_relaxed(&p->_isexception, isexc);
+    return p;
+}
+
+static jl_task_t *session_task_placeholder(jl_task_t *t)
+{
+    void *ph = ptrhash_get(&session_task2placeholder, t);
+    if (ph != HT_NOTFOUND)
+        return (jl_task_t*)ph;
+    uint8_t state = jl_atomic_load_relaxed(&t->_state);
+    jl_task_t *p;
+    if (state == JL_TASK_STATE_RUNNABLE) {
+        if (session_placeholder_task == NULL)
+            session_placeholder_task = new_session_placeholder(jl_nothing, JL_TASK_STATE_DONE, 0);
+        p = session_placeholder_task;
+    }
+    else {
+        p = new_session_placeholder(t->result, state, jl_atomic_load_relaxed(&t->_isexception));
+    }
+    ptrhash_put(&session_task2placeholder, t, p);
+    ptrhash_put(&session_placeholder_set, p, (void*)2); // n.b. (void*)1 is HT_NOTFOUND
+    return p;
+}
 
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
@@ -433,7 +474,7 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
         return 0;
     }
     else if (session_image_save && jl_typeof(v) == (jl_value_t*)jl_task_type &&
-             v != (jl_value_t*)session_placeholder_task) {
+             ptrhash_get(&session_placeholder_set, v) == HT_NOTFOUND) {
         return 0;
     }
 
@@ -1049,13 +1090,20 @@ done_fields: ;
 
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
 {
+    if (session_image_save && v != NULL && jl_typetagis(v, jl_task_tag << 4) &&
+        v != (jl_value_t*)s->ptls->root_task &&
+        ptrhash_get(&session_placeholder_set, v) == HT_NOTFOUND) {
+        // serialize the task's placeholder instead (see session_task_placeholder)
+        jl_queue_for_serialization(s, (jl_value_t*)session_task_placeholder((jl_task_t*)v));
+        return;
+    }
     if (!jl_needs_serialization(s, v))
         return;
 
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     // check early from errors, so we have a little bit of contextual state for debugging them
     if (t == jl_task_type &&
-        !(session_image_save && v == (jl_value_t*)session_placeholder_task)) {
+        !(session_image_save && ptrhash_get(&session_placeholder_set, v) != HT_NOTFOUND)) {
         jl_error("Task cannot be serialized");
     }
     if (s->incremental && needs_uniquing(v, s->query_cache) && t == jl_binding_type) {
@@ -1210,10 +1258,12 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         return (uintptr_t)TagRef << RELOC_TAG_OFFSET;
     }
     else if (session_image_save && jl_typeof(v) == (jl_value_t*)jl_task_type &&
-             v != (jl_value_t*)session_placeholder_task) {
-        // stale task reference: redirect to the placeholder done-task and
-        // fall through to the normal serialization_order lookup
-        v = (jl_value_t*)session_placeholder_task;
+             ptrhash_get(&session_placeholder_set, v) == HT_NOTFOUND) {
+        // stale task reference: redirect to its placeholder (created during
+        // the queue phase) and fall through to the serialization_order lookup
+        void *ph = ptrhash_get(&session_task2placeholder, v);
+        assert(ph != HT_NOTFOUND && "task reference not seen during queueing");
+        v = (jl_value_t*)ph;
     }
     else if (v == jl_nothing) {
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + 1;
@@ -1669,7 +1719,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             // never started, so tid == -1 and every raw pointer in the tail
             // (ptls, stack, exception state) is NULL.
             assert(f == s->s);
-            assert(session_image_save && v == (jl_value_t*)session_placeholder_task);
+            assert(session_image_save && ptrhash_get(&session_placeholder_set, v) != HT_NOTFOUND);
             jl_task_t *task = (jl_task_t*)v;
             const char *tdata = (const char*)task;
             size_t task_write_start = ios_pos(f);
@@ -1747,7 +1797,13 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         else if (jl_datatype_nfields(t) == 0) {
             // The object has no fields, so we just snapshot its byte representation
             assert(t->layout->npointers == 0);
-            ios_write(f, (char*)v, jl_datatype_size(t));
+            if (session_image_save && jl_is_cpointer_type((jl_value_t*)t) &&
+                *(intptr_t*)v != -1)
+                // session images reset raw pointer values (keep MAP_FAILED /
+                // INVALID_HANDLE), including boxed ones like Libdl handles
+                write_pointer(f);
+            else
+                ios_write(f, (char*)v, jl_datatype_size(t));
         }
         else if (jl_bigint_type && jl_typetagis(v, jl_bigint_type)) {
             // foreign types require special handling
@@ -1800,8 +1856,10 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     if (isunion)
                         write_uint8(f, nth);
                 }
-                else if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
-                    // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
+                else if ((t->name->mutabl || session_image_save) &&
+                         jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
+                    // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE);
+                    // session images apply this to immutable fields too
                     assert(!jl_field_isptr(t, i));
                     write_pointer(f);
                 }
@@ -3220,8 +3278,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, worklist);
             jl_queue_for_serialization(&s, module_init_order);
         }
-        if (session_image_save && session_placeholder_task != NULL)
-            jl_queue_for_serialization(&s, (jl_value_t*)session_placeholder_task);
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
             // Queue method extensions
@@ -3643,16 +3699,8 @@ JL_DLLEXPORT void jl_save_session_image(const char *fname)
     // runs no module initializers. Base handles reinitialization instead.
     if (jl_module_init_order == NULL)
         jl_module_init_order = jl_alloc_vec_any(0);
-    // Every reachable Task is redirected to this never-started, already-done
-    // placeholder (see session_image_save above).
-    jl_task_t *placeholder = jl_new_task(jl_nothing, jl_nothing, 0);
-    JL_GC_PUSH1(&placeholder);
-    placeholder->scope = jl_nothing;
-#ifdef USE_TRACY
-    placeholder->name = NULL; // not initialized by jl_new_task
-#endif
-    jl_atomic_store_relaxed(&placeholder->_state, JL_TASK_STATE_DONE);
-    session_placeholder_task = placeholder;
+    htable_new(&session_task2placeholder, 0);
+    htable_new(&session_placeholder_set, 0);
     session_image_save = 1;
     ios_t *s = NULL;
     JL_TRY {
@@ -3669,7 +3717,8 @@ JL_DLLEXPORT void jl_save_session_image(const char *fname)
     }
     session_image_save = 0;
     session_placeholder_task = NULL;
-    JL_GC_POP();
+    htable_free(&session_task2placeholder);
+    htable_free(&session_placeholder_set);
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
         // the heap is already pruned at this point, so this cannot be a
@@ -3698,20 +3747,14 @@ JL_DLLEXPORT void jl_save_session_overlay(const char *fname, jl_module_t *sess)
     jl_array_t *worklist = NULL;
     jl_array_t *init_order = NULL;
     jl_array_t *udeps = NULL;
-    jl_task_t *placeholder = NULL;
-    JL_GC_PUSH4(&worklist, &init_order, &udeps, &placeholder);
+    JL_GC_PUSH3(&worklist, &init_order, &udeps);
     worklist = jl_alloc_vec_any(1);
     jl_array_ptr_set(worklist, 0, (jl_value_t*)sess);
     // nothing is replayed through the module init order; Base re-runs no
     // initializers on restore
     init_order = jl_alloc_vec_any(0);
-    placeholder = jl_new_task(jl_nothing, jl_nothing, 0);
-    placeholder->scope = jl_nothing;
-#ifdef USE_TRACY
-    placeholder->name = NULL; // not initialized by jl_new_task
-#endif
-    jl_atomic_store_relaxed(&placeholder->_state, JL_TASK_STATE_DONE);
-    session_placeholder_task = placeholder;
+    htable_new(&session_task2placeholder, 0);
+    htable_new(&session_placeholder_set, 0);
     session_image_save = 1;
     ios_t *s = NULL;
     int64_t srctextpos = 0;
@@ -3729,6 +3772,8 @@ JL_DLLEXPORT void jl_save_session_overlay(const char *fname, jl_module_t *sess)
     }
     session_image_save = 0;
     session_placeholder_task = NULL;
+    htable_free(&session_task2placeholder);
+    htable_free(&session_placeholder_set);
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
         // the heap is already pruned at this point, so this cannot be a

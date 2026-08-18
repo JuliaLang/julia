@@ -2762,9 +2762,27 @@ function edit_abort(s::MIState, confirm::Bool=options(s).confirm_exit; key="^D")
 end
 
 # Ctrl-X Ctrl-S (or Ctrl-Shift-D, in terminals that encode it distinctly) on
-# an empty prompt: save the session and exit, the save-and-exit parallel to ^D.
+# an empty prompt: save the session and exit, the save-and-exit parallel to
+# ^D. If the session holds state that cannot survive a restore, show the
+# report first and require a second press to proceed.
 function save_session_exit(s::MIState)
     set_action!(s, :save_session_exit)
+    if s.last_action !== :save_session_exit
+        issues = try
+            Base.invokelatest(Base.session_save_report)::Vector{String}
+        catch
+            String[]
+        end
+        if !isempty(issues)
+            println(terminal(s))
+            println(terminal(s), "This session contains state that will not survive a restore:")
+            for m in issues
+                println(terminal(s), "  ! ", m)
+            end
+            println(terminal(s), "Press ^X^S again to save anyway.\n")
+            return refresh_line(s)
+        end
+    end
     println(terminal(s))
     raw!(terminal(s), false) && disable_bracketed_paste(terminal(s))
     try
@@ -2820,6 +2838,12 @@ AnyDict(
     "\e[68;6u" => KeyAlias("^X^S"),
     "\e[27;6;100~" => KeyAlias("^X^S"),
     "\e[27;6;68~" => KeyAlias("^X^S"),
+    # ^X followed by anything unbound: advertise the ^X chords
+    "^X*" => (s::MIState,o...)->begin
+        println(terminal(s))
+        println(terminal(s), "  ^X commands:  ^X^S  save session and exit    ^X^X  exchange point and mark")
+        refresh_line(s)
+    end,
     # Ctrl-Space
     "\0" => (s::MIState,o...)->setmark(s),
     "^G" => (s::MIState,o...)->(deactivate_region(s); refresh_line(s)),

@@ -206,8 +206,12 @@ Session files live in the depot under a new Base-owned directory, versioned at
 minor-release granularity like the compile cache:
 
 ```
-~/.julia/sessions/v1.14/<timestamp>.ji
+~/.julia/sessions/v1.14/<timestamp>[-<name>].ji
 ```
+
+Sessions may be named (`save_session("mywork")`), and `--restore=<name>` finds
+the newest session whose name matches exactly, by prefix, or as a substring of
+the file name (so timestamp fragments work too).
 
 * Writes go to `DEPOT_PATH[1]` only; `--restore`'s most-recent search reads across
   all depot entries, matching the existing write-one/read-all depot convention.
@@ -242,8 +246,9 @@ those encodings wholesale.
 
 ## [What is not preserved](@id sessions-not-preserved)
 
-* Running or waiting tasks: task references restore as one completed placeholder
-  task.
+* Running or waiting tasks: unfinished task references restore as one completed
+  placeholder task (finished tasks keep their result and exception state, via a
+  placeholder per task).
 * Open files, sockets, pipes, timers, and child processes (defunct after restore).
 * Memory-mapped arrays and raw pointers of any kind, including `Libdl` handles.
 * Finalizers on restored objects.
@@ -264,8 +269,11 @@ loud rather than silent.
   partitions created after boot.
 * **Save-and-continue**, either by making the writer non-destructive or by forking
   on POSIX platforms (Windows would still exit, or use the non-destructive writer).
-* **Handle-object sentinels and a pre-save warning walk**, so dead OS-backed
-  objects fail loudly after restore.
+* **Deeper handle sanitization.** `save_session` warns about non-survivable
+  state before writing (`Base.session_save_report`), session images reset every
+  raw `Ptr` value, and restore replaces top-level `IOStream`s with closed
+  streams; still missing are replacement of handles nested inside immutable
+  containers and closed-state sentinels for the remaining libuv handle types.
 * **Docstring projection** for `Main` definitions.
 * **Preserving session-triggered inference of image methods**, via session-keyed
   method roots.
@@ -275,8 +283,8 @@ loud rather than silent.
   2 of 19 hits on a small session), so the code recompiles. Making restored
   CodeInstances key-stable would eliminate the post-restore re-JIT cost without
   storing any native code in session files.
-* **Named sessions** (`save_session("mywork")`, `julia --restore=mywork`) and
-  re-restorable overlays (a fresh worklist key per load).
+* **Re-restorable overlays** (a fresh worklist key per load, so the same session
+  file can be restored twice into one process).
 
 ## Status
 
