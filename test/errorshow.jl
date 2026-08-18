@@ -1338,19 +1338,25 @@ let err = nothing
     end
 end
 
+# expands inline, without the `do`-block forms of `mktemp`/`redirect_stderr`: a
+# StackOverflowError is only reliably catchable from the interpreted top-level
+# `@testset` body, not from within a compiled closure
 macro capture_stack_overflow(ex)
     return quote
-        mktemp() do _, warning_output
-            bt = redirect_stderr(warning_output) do
-                try
-                    $(esc(ex))
-                catch
-                    catch_backtrace()
-                end
-            end
-            seekstart(warning_output)
-            return bt, read(warning_output, String)
+        local path, warning_output = mktemp()
+        local prev_stderr = stderr
+        redirect_stderr(warning_output)
+        local bt = try
+            $(esc(ex))
+        catch
+            catch_backtrace()
+        finally
+            redirect_stderr(prev_stderr)
+            close(warning_output)
         end
+        local warning = read(path, String)
+        rm(path)
+        bt, warning
     end
 end
 
