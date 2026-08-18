@@ -1369,14 +1369,15 @@ show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 """
     unsplat(f)
 
-Equivalent to
-```julia
-my_unsplat(f) = (args...) -> f(args)
-```
-i.e. given a function that takes a single tuple argument, return a new function
-that takes multiple arguments and bundles them into a tuple to pass to the
-original function. This is the inverse of [`splat`](@ref): `unsplat(splat(f))
-=== f` and `splat(unsplat(f)) === f`.
+Given a function `f` that takes a single tuple argument, return a new function
+that takes any number of arguments and bundles them into a tuple to pass to the
+original function.
+
+That is, the return value is *effectively* equivalent to `(args...) -> f(args)`, except that
+it may use a more specialized function type (such as `f ∘ tuple` via [`∘`](@ref) and [`tuple`](@ref))
+for improved clarity or efficiency, rather than creating a new anonymous function.
+
+`unsplat` is the inverse of [`splat`](@ref): `unsplat(splat(f)) === f` and `splat(unsplat(f)) === f`.
 
 # Examples
 ```jldoctest
