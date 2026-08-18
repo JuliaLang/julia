@@ -1771,6 +1771,8 @@ end
     mkdepottempdir() do depot
         cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
         cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        # Do not let an outer tracefile redirect .cov output.
+        cov_exename = Base.julia_cmd()[1]
         function rm_cov_files()
             for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
                 rm(cov_file)
@@ -1785,7 +1787,7 @@ end
         cd(cov_test_dir) do
             # In our depot, precompile CovTest.jl with coverage on
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
@@ -1794,7 +1796,7 @@ end
 
             # same again but call foo(), which is in the pkgimage, and should generate coverage
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test cov_exists()
@@ -1802,7 +1804,7 @@ end
 
             # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test cov_exists()
