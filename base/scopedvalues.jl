@@ -91,10 +91,12 @@ Base.eltype(::AbstractScopedValue{T}) where {T} = T
 hasdefault(val::ScopedValue) = val.hasdefault
 hasdefault(val::LazyScopedValue) = true
 hasdefault(val::Base.CancelTokenKey) = true
+hasdefault(val::Base.Threads.ThreadsLoopKey) = true
 
 getdefault(val::ScopedValue) = val.hasdefault ? val.default : throw(KeyError(val))
 getdefault(val::LazyScopedValue) = val.getdefault()
 getdefault(val::Base.CancelTokenKey) = nothing
+getdefault(val::Base.Threads.ThreadsLoopKey) = false
 
 """
     isassigned(val::ScopedValue)
