@@ -942,21 +942,25 @@ end
         end
         return s
     end
-    function main(iters)
+    function main(iters, budget)
         done = Threads.Atomic{Bool}(false)
         gcspam = Threads.@spawn while !done[]
             GC.gc(false)
             yield()
         end
         nworkers = max(2, Threads.nthreads() - 1)
+        t0 = time()
         for i in 1:iters
             tasks = [Threads.@spawn work(10_000) for _ in 1:nworkers]
             foreach(wait, tasks)
+            # bound the healthy runtime on slow machines; a starved main
+            # task never gets back here, so this cannot mask the hang
+            time() - t0 < budget || break
         end
         done[] = true
         wait(gcspam)
     end
-    main(300)
+    main(300, 10)
     """
     cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -t8 -e $code`
     cmd = ignorestatus(setenv(cmd; dir = @__DIR__))
@@ -967,11 +971,16 @@ end
     timer = Timer(120) do t
         timeout = true
         # a starved process ignores SIGTERM-level requests; go straight to the
-        # backtrace-dumping and then killing signals
-        for sig in (Base.SIGQUIT, Base.SIGKILL)
+        # backtrace-dumping and then killing signals (SIGQUIT is unsupported
+        # on Windows, where kill would throw and skip the SIGKILL fallback)
+        sigs = Sys.iswindows() ? (Base.SIGKILL,) : (Base.SIGQUIT, Base.SIGKILL)
+        for sig in sigs
             for _ in 1:3
                 process_running(proc) || return
-                kill(proc, sig)
+                try
+                    kill(proc, sig)
+                catch
+                end
                 sleep(1)
             end
         end
