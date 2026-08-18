@@ -2769,6 +2769,9 @@ function history_search(mistate::MIState)
             result.mode,
             mistate.current_mode)
     end
+    if !haskey(mistate.mode_state, mimode)
+        mistate.mode_state[mimode] = init_state(term, mimode)
+    end
     pstate = mistate.mode_state[mimode]
     raw!(term, true)
     mistate.current_mode = mimode
