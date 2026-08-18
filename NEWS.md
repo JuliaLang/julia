@@ -7,6 +7,14 @@ New language features
 Language changes
 ----------------
 
+* On Unix, `SIGTERM` now requests graceful termination through the cancellation system:
+  it cancels a process-wide root cancellation source (with a terminate flag on the
+  resulting `Base.CancellationRequest`s, see `Base.is_terminate_request` and
+  `Base.process_terminating`), the governed work unwinds (running its `finally` blocks),
+  and the process exits through the ordinary exit path - `atexit` hooks run on a sound
+  stack instead of a frame interrupted at an arbitrary point - before dying by the
+  signal, preserving the exit status. A repeat `SIGTERM` (or one during startup)
+  terminates the process abruptly ([#62774]).
 Compiler/Runtime improvements
 -----------------------------
 
