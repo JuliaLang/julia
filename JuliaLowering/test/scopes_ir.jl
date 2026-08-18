@@ -442,7 +442,7 @@ end
 27  SourceLocation::3:11
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (captured_local 1)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -478,7 +478,7 @@ end
 12  SourceLocation::2:11
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.+
     2   (captured_local 1)
     3   (call core.isdefined %₂ :contents)

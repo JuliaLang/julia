@@ -551,7 +551,6 @@ function to_code_info(ex::SyntaxTree)
         slotflags[i] =                   # Inference          | Codegen
             slot.is_read          << 3 | # SLOT_USED          | jl_vinfo_sa
             slot.is_single_assign << 4 | # SLOT_ASSIGNEDONCE  | -
-            slot.is_maybe_undef   << 5 | # SLOT_USEDUNDEF     | jl_vinfo_usedundef
             slot.is_called        << 6   # SLOT_CALLED        | -
     end
 
