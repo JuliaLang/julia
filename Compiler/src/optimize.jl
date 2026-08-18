@@ -1079,6 +1079,106 @@ matchpass(optimize_until::Int, stage, _) = optimize_until == stage
 matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
+struct CoverageLocation
+    file::Symbol
+    line::Int32
+end
+
+struct CoverageLocationKey
+    parent::Int
+    file::Symbol
+    line::Int32
+end
+
+function coverage_debuginfo_file(debuginfo::Union{DebugInfo,DebugInfoStream})
+    def = debuginfo.def
+    def isa MethodInstance && (def = def.def)
+    def isa Method && (def = def.file)
+    return def isa Symbol ? def : :var"<unknown>"
+end
+
+function append_coverage_location!(stack::Vector{CoverageLocation}, pc::Int, di)
+    update = true
+    while di !== nothing
+        pc > 0 || return false
+        if has_prev_debuginfo(di, pc)
+            prev_di, prev_pc = prev_debuginfo(di, pc)
+            update &= append_coverage_location!(stack, prev_pc, prev_di)
+        else
+            line = source_location(di, pc).line
+            line <= 0 && (update = false; line = 0)
+            push!(stack, CoverageLocation(coverage_debuginfo_file(di), Int32(line)))
+        end
+        di, pc = edge_debuginfo(di, pc)
+        update |= di !== nothing
+    end
+    return update
+end
+
+function coverage_location(ir::IRCode, idx::Int)
+    stack = CoverageLocation[]
+    append_coverage_location!(stack, idx, ir.debuginfo) || empty!(stack)
+    if isempty(stack)
+        line = getdebugidx(ir.debuginfo, idx)[1]
+        push!(stack, CoverageLocation(:var"<unknown>", line))
+    end
+    return stack
+end
+
+function coverage_location_id!(ids::IdDict{CoverageLocationKey,Int},
+                               stack::Vector{CoverageLocation})
+    id = 0
+    for frame in stack
+        key = CoverageLocationKey(id, frame.file, frame.line)
+        next = get(ids, key, 0)
+        if next == 0
+            next = length(ids) + 1
+            ids[key] = next
+        end
+        id = next
+    end
+    return id
+end
+
+"""
+    deduplicate_coverage_effects!(ir::IRCode) -> ir
+
+Remove hit-mode coverage effects whose complete debug-location stack is already
+reached on every path to the effect. Since hit-mode counters are idempotent, an
+effect is redundant when an identical earlier effect dominates it. Effects in
+unrelated control-flow branches are retained.
+"""
+function deduplicate_coverage_effects!(ir::IRCode)
+    location_ids = IdDict{CoverageLocationKey,Int}()
+    effects = IdDict{Int,Vector{Tuple{Int,Int}}}()
+    for (bb, block) in pairs(ir.cfg.blocks)
+        for idx in block.stmts
+            isexpr(ir.stmts[idx][:stmt], :code_coverage_effect) || continue
+            stack = coverage_location(ir, idx)
+            location = coverage_location_id!(location_ids, stack)
+            push!(get!(Vector{Tuple{Int,Int}}, effects, location), (idx, bb))
+        end
+    end
+
+    domtree = nothing
+    for occurrences in values(effects)
+        length(occurrences) == 1 && continue
+        for (idx, bb) in occurrences
+            duplicate = any(occurrences) do (other_idx, other_bb)
+                if bb == other_bb
+                    return other_idx < idx
+                end
+                domtree === nothing && (domtree = construct_domtree(ir))
+                dt = domtree::DomTree
+                return !bb_unreachable(dt, bb) && !bb_unreachable(dt, other_bb) &&
+                    dominates(dt, other_bb, bb)
+            end
+            duplicate && (ir.stmts[idx][:stmt] = nothing)
+        end
+    end
+    return ir
+end
+
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
@@ -1096,6 +1196,9 @@ function run_passes_ipo_safe(
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "CC: COMPACT_1" ir = compact!(ir)
     @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    if JLOptions().code_coverage_mode == 0 # hit mode
+        @pass "CC: COVERAGE DEDUP" ir = deduplicate_coverage_effects!(ir)
+    end
     # @zone "CC: VERIFY 2" verify_ir(ir)
     @pass "CC: COMPACT_2" ir = compact!(ir)
     @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
