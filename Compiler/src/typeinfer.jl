@@ -1321,7 +1321,11 @@ function ci_has_source(interp::AbstractInterpreter, code::CodeInstance)
     if isa(inf, String)
         inf = _uncompressed_ir(code, inf)
     end
-    if code.owner === nothing
+    if code.owner === nothing || code.owner === :trim
+        # `:trim`-owned instances (see `typeinf_ext_toplevel`) are plain
+        # NativeInterpreter results in an isolated cache namespace; codegen
+        # must see them like unowned ones, or `compile!` cannot find source
+        # for edges discovered through them.
         if isa(inf, CodeInfo)
             codegen[code] = inf
             return true
