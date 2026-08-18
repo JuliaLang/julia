@@ -672,6 +672,9 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
         sprint(show, ex, context=IOContext(io, :color => false))))
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
+    # An evaluation unwound by a process-termination request (SIGTERM) needs
+    # no report - the session is exiting, not returning to a prompt.
+    Base.process_terminating() && return nothing
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
         io = IOContext(io, :module => Base.active_module(repl)::Module)
@@ -860,11 +863,17 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             write(repl.terminal, '\n')
             ((!interrupted && isempty(line)) || hit_eof) && break
         catch e
+            # A process-termination request unwinds the blocked reads; shut
+            # down like an EOF (see the LineEditREPL frontend).
+            Base.process_terminating() && break
             isa(e, InterruptException) || rethrow()
         end
     end
-    # terminate backend
-    put!(backend.repl_channel, (nothing, -1))
+    # terminate backend (shielded: this is REPL teardown and must work while
+    # the frontend's own scope is being cancelled)
+    Base.ScopedValues.@with Base.CANCEL_TOKEN => nothing begin
+        put!(backend.repl_channel, (nothing, -1))
+    end
     dopushdisplay && popdisplay(d)
     nothing
 end
@@ -1868,10 +1877,17 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     catch e
         # The terminal went away (e.g. its window was closed): end the session
         # like ^D does, rather than failing on the next write to it.
-        terminal_gone(e) || rethrow()
+        # A process-termination request (SIGTERM) cancels the root source,
+        # which unwinds the frontend's blocked terminal reads: shut the REPL
+        # down like an EOF would, so the process exits through the ordinary
+        # exit path.
+        terminal_gone(e) || Base.process_terminating() || rethrow()
     end
-    # Terminate Backend
-    put!(backend.repl_channel, (nothing, -1))
+    # Terminate Backend. The put! is REPL teardown and must work while the
+    # frontend's own scope is being cancelled - shield it.
+    Base.ScopedValues.@with Base.CANCEL_TOKEN => nothing begin
+        put!(backend.repl_channel, (nothing, -1))
+    end
     dopushdisplay && popdisplay(d)
     nothing
 end
