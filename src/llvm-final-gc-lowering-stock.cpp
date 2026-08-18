@@ -62,7 +62,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     // (which would dereference null). If every child is NULL there is nothing
     // to remember, so emit no barrier; the caller erases the call.
     SmallVector<Value*, 8> children;
-    for (unsigned i = 1; i < target->arg_size(); i++) {
+    for (unsigned i = write_barrier_first_child_arg; i < target->arg_size(); i++) {
         Value *child = target->getArgOperand(i);
         if (isa<ConstantPointerNull>(child->stripPointerCasts()))
             continue;

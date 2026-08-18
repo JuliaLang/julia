@@ -1783,7 +1783,7 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     return {Colors, PreAssignedColors};
 }
 
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+#ifndef MMTK_SNAPSHOT_BARRIER
 static SmallVector<int, 1> *FindRefinements(Value *V, State *S)
 {
     if (!S)
@@ -1824,13 +1824,14 @@ static MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
 }
 
 void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified) {
+    SmallVector<CallInst*, 0> Live;
     for (auto CI : WriteBarriers) {
         auto parent = CI->getArgOperand(0);
         // Insertion-barrier optimization: elide the barrier when every child is the
-        // parent or perm-rooted. Invalid under SATB (ConcurrentImmix), which must
-        // snapshot the parent's old fields regardless of the child.
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
-        if (std::all_of(CI->op_begin() + 1, CI->op_end(),
+        // parent or perm-rooted. Invalid for plans that must observe the parent's old
+        // fields regardless of the child (MMTK_SNAPSHOT_BARRIER).
+#ifndef MMTK_SNAPSHOT_BARRIER
+        if (std::all_of(CI->op_begin() + write_barrier_first_child_arg, CI->op_end(),
                     [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
             CI->eraseFromParent();
             continue;
@@ -1838,7 +1839,98 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
 #else
         (void)parent;
 #endif
+        Live.push_back(CI);
     }
+    MergeWriteBarriers(F, Live);
+}
+
+// Two barriers on the same parent with no safepoint between them are redundant. A
+// collection can only begin at a safepoint, so the parent's GC bits cannot change over the
+// interval; and the slow path records the parent, so once the first barrier has run the
+// second finds it already recorded and does nothing. Merging them leaves one test and one
+// slow-path call site where there were N -- which is what makes it affordable to emit a
+// separate barrier per reference for an inline composite store.
+//
+// Two conditions keep this sound, and both are checked by scanning the instructions in
+// between rather than reasoned about globally:
+//
+//  - Nothing that writes memory may intervene. That subsumes safepoints, since anything
+//    that can reach a collection writes memory, and it is also what keeps the surviving
+//    barrier ahead of every store it now covers: a barrier that must observe a displaced
+//    reference has to run before the store displacing it, so merging across a store would
+//    move a barrier past the very write it was there to witness.
+//  - Every operand of the later barrier must dominate the earlier one, since the merged
+//    call is emitted at the earlier position.
+//
+// The merged call keeps the slot only when the barriers named the same field, and
+// otherwise names the parent alone -- always a safe over-approximation, since a null slot
+// means "something in this object changed". A field-granularity plan that wants to keep
+// per-field information should merge only barriers whose slots already agree.
+void LateLowerGCFrame::MergeWriteBarriers(Function &F, const SmallVector<CallInst*, 0> &Barriers) {
+    if (Barriers.size() < 2)
+        return;
+    DominatorTree &DT = GetDT();
+    // Barriers are collected in program order, so the candidate to merge into is always the
+    // most recent surviving barrier on the same parent in the same block.
+    SmallDenseMap<Value*, CallInst*, 8> PrevForParent;
+    BasicBlock *CurBB = nullptr;
+    for (auto CI : Barriers) {
+        if (CI->getParent() != CurBB) {
+            CurBB = CI->getParent();
+            PrevForParent.clear();
+        }
+        Value *parent = CI->getArgOperand(0);
+        auto it = PrevForParent.find(parent);
+        CallInst *Prev = it == PrevForParent.end() ? nullptr : it->second;
+        if (Prev && CanMergeWriteBarrier(DT, Prev, CI)) {
+            SmallVector<Value*, 8> args;
+            args.push_back(parent);
+            Value *PrevSlot = Prev->getArgOperand(write_barrier_slot_arg);
+            Value *Slot = CI->getArgOperand(write_barrier_slot_arg);
+            args.push_back(PrevSlot == Slot ? Slot
+                                            : Constant::getNullValue(Slot->getType()));
+            for (auto *B : {Prev, CI})
+                for (unsigned i = write_barrier_first_child_arg; i < B->arg_size(); i++)
+                    args.push_back(B->getArgOperand(i));
+            IRBuilder<> builder(Prev);
+            builder.SetCurrentDebugLocation(Prev->getDebugLoc());
+            auto *Merged = builder.CreateCall(write_barrier_func, args);
+            // The merged barrier stands in for a site that may run inside a published
+            // reset region if either of the two did.
+            if (auto *MD = Prev->getMetadata("julia.reset_region"))
+                Merged->setMetadata("julia.reset_region", MD);
+            else if (auto *MD2 = CI->getMetadata("julia.reset_region"))
+                Merged->setMetadata("julia.reset_region", MD2);
+            Prev->eraseFromParent();
+            CI->eraseFromParent();
+            PrevForParent[parent] = Merged;
+            continue;
+        }
+        PrevForParent[parent] = CI;
+    }
+}
+
+bool LateLowerGCFrame::CanMergeWriteBarrier(DominatorTree &DT, CallInst *Prev, CallInst *CI) {
+    assert(Prev->getParent() == CI->getParent());
+    for (auto it = std::next(Prev->getIterator()); it != CI->getIterator(); ++it) {
+        // Another write barrier is the one call that cannot reach a collection, and
+        // consecutive barriers are exactly the case worth merging.
+        if (auto *Other = dyn_cast<CallInst>(&*it)) {
+            if (Other->getCalledOperand() == write_barrier_func)
+                continue;
+            return false;
+        }
+        if (it->mayWriteToMemory())
+            return false;
+    }
+    // The merged call is emitted where `Prev` is, so everything it names must be available
+    // there. `Prev`'s own operands trivially are.
+    for (unsigned i = write_barrier_slot_arg; i < CI->arg_size(); i++) {
+        auto *Op = dyn_cast<Instruction>(CI->getArgOperand(i));
+        if (Op && !DT.dominates(Op, Prev))
+            return false;
+    }
+    return true;
 }
 
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {

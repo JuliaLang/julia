@@ -11,7 +11,9 @@
 extern "C" {
 #endif
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+// This collector remembers the object containing the overwritten field, so it has no use
+// for the field's address.
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent isa jl_value_t* and ptr isa jl_value_t* or NULL
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */)) // parent is old and not in remset
@@ -25,6 +27,13 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
         jl_gc_queue_root((jl_value_t*)ptr);
     }
 }
+
+// The three annotated-store barriers (see gc-interface.h for what each one asserts). This
+// collector is generational and remembers old parents holding young children, so every one
+// of the three properties is exactly a reason it has nothing to record.
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {

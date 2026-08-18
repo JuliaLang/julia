@@ -361,6 +361,10 @@ private:
     void PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
     void PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S, std::map<Value *, std::pair<int, int>>);
     void CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified);
+    // Merges barriers on the same parent that no safepoint separates.
+    void MergeWriteBarriers(Function &F, const SmallVector<CallInst*, 0> &Barriers);
+    // Whether `CI` may be folded into the earlier barrier `Prev` in the same block.
+    bool CanMergeWriteBarrier(DominatorTree &DT, CallInst *Prev, CallInst *CI);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
