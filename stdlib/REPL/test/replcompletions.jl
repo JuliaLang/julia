@@ -2004,3 +2004,9 @@ let s = "using ...Issue52922.Inn"
     @test res
     @test "Inner2" in c
 end
+
+# JuliaLang/julia#57780
+const issue57780 = ["a", "b", "c"]
+const issue57780_orig = copy(issue57780)
+test_complete_context("empty!(issue57780).", Main)
+@test issue57780 == issue57780_orig
