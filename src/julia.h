@@ -2563,6 +2563,9 @@ struct _jl_handler_t {
     struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
+    // Saved `bound_cancel_default` flag, restored with `bound_cancel_token`
+    // (the pair is only coherent together; see julia_threads.h).
+    uint8_t bound_cancel_default;
 };
 
 #define JL_TASK_STATE_RUNNABLE  0

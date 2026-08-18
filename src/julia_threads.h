@@ -487,7 +487,17 @@ typedef struct _jl_task_t {
     // the task's next cancellation point; a preempt shootdown sets it and
     // kicks the task out of any published reset region.
     _Atomic(uint8_t) preempt_request;
-    uint8_t pad0[2];
+    // When nonzero, `bound_cancel_token` holds the cached resolution of the
+    // scoped-default CANCEL_TOKEN lookup for the task's current `scope` (the
+    // token's source, or `nothing` for "no governing token"), placed there by
+    // the slow path of `Base.default_cancel_token`. Owner-task private (no
+    // concurrent reader consults it). Cleared wherever a new scope is
+    // installed (codegen/interpreter `:enter` with scope, codegen's inline
+    // leave restore) and by a cancellation point that publishes a different
+    // source; saved and restored alongside `bound_cancel_token` by exception
+    // handlers and the finalizer bracket.
+    uint8_t bound_cancel_default;
+    uint8_t pad0[1];
     // === 64 bytes (cache line)
     uint64_t rngState[JL_RNG_SIZE];
     // flag indicating whether or not to record timing metrics for this task
@@ -528,7 +538,9 @@ typedef struct _jl_task_t {
     // `nothing`, or a `Core.CancellationTokenSource`. Read by cancellers
     // scanning for running computations governed by a cancelled subtree; may
     // be stale between cancellation points (benign: level-triggered recovery
-    // at the next check).
+    // at the next check). When `bound_cancel_default` is set, the value is
+    // the cached scoped-default resolution for the task's current scope
+    // (still a governing source, so the scanning semantics are unchanged).
     _Atomic(jl_value_t *) bound_cancel_token;
 
 // hidden state:
