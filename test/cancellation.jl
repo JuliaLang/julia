@@ -2684,9 +2684,9 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     # Bare executable, as in the "^C" testset: these scenarios assert the
     # termination semantics, not the suite's flag matrix.
     exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    function run_with_sigterm(code::String, delays)
+    function run_with_sigterm(code::String, delays; signum::Int=Base.SIGTERM)
         # The readiness marker proves the runtime is up before the first
-        # SIGTERM is sent (see the "^C" testset's run_with_sigint).
+        # signal is sent (see the "^C" testset's run_with_sigint).
         code = "println(\"CHILD-READY\")\n" * code
         out = Pipe()
         p = run(pipeline(`$exe --startup-file=no -e $code`,
@@ -2697,7 +2697,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
         killer = @async begin
             for d in delays
                 sleep(d)
-                process_running(p) && kill(p) # SIGTERM
+                process_running(p) && kill(p, signum)
             end
         end
         exited = timedwait(() -> process_exited(p), 60.0)
@@ -2765,6 +2765,34 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     """, [0.5, 3.0])
     @test exited === :ok
     @test p.termsignal == Base.SIGTERM
+
+    # with exit-on-sigint, a SIGINT terminates the process through the same
+    # graceful path: the atexit hooks run, the exit is quiet, and the
+    # process dies by SIGINT
+    output, p, exited = run_with_sigterm("""
+        Base.exit_on_sigint(true)
+        atexit(() -> println("ATEXIT-RAN"))
+        sleep(100)
+        println("FAIL: not terminated")
+    """, [0.5]; signum=Int(Base.SIGINT))
+    @test exited === :ok
+    @test occursin("ATEXIT-RAN", output)
+    @test !occursin("FAIL", output)
+    @test !occursin("CancellationRequest", output)
+    @test p.termsignal == Base.SIGINT
+
+    # SIGQUIT is the wedge-proof dump-and-die escape hatch: it prints the
+    # all-task backtraces and exits abruptly - no graceful unwinding, no
+    # atexit hooks - so watchdogs can rely on it even when the process
+    # cannot cooperate
+    output, p, exited = run_with_sigterm("""
+        atexit(() -> println("ATEXIT-RAN"))
+        sleep(100)
+    """, [0.5]; signum=Int(Base.SIGQUIT))
+    @test exited === :ok
+    @test occursin("signal (3)", output)
+    @test !occursin("ATEXIT-RAN", output)
+    @test p.termsignal == Base.SIGQUIT
 
     # a SIGTERM at any point during startup must terminate the process:
     # before Base registers the root source it exits abruptly, afterwards

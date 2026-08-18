@@ -62,8 +62,6 @@ static bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT
 #endif
 }
 
-static int thread0_exit_count = 0;
-static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf, int val);
 
 #if !defined(_OS_DARWIN_)
@@ -726,42 +724,15 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     pthread_mutex_unlock(&in_signal_lock);
 }
 
-// Write only by signal handling thread, read only by main thread
-// no sync necessary.
-static int thread0_exit_signo = 0;
-static void jl_exit_thread0_cb(void) JL_CANSAFEPOINT
-{
-    jl_gc_enable_from_nonmutator(1);
-    jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
-    jl_atexit_hook(128);
-    jl_raise(thread0_exit_signo);
-}
-
-static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    bt_context_t signal_context;
-    // This also makes sure `sleep` is aborted.
-    if (jl_thread_suspend_and_get_state(0, 30, &signal_context)) {
-        thread0_exit_signo = signo;
-        ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
-        memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-        jl_atomic_store_release(&ptls2->signal_request, 3);
-        jl_thread_resume(0); // resume with message 3 (call jl_exit_thread0_cb)
-    }
-    else {
-        // thread 0 is gone? just do the exit ourself
-        jl_raise(signo);
-    }
-}
-
 // request:
 // -1: processing
 //  0: nothing [not from here]
 //  1: get state & wait for request
 //  2: unused (was the sigint force-throw request, removed with the old ^C
 //     mechanism)
-//  3: raise `thread0_exit_signo` and try to exit
+//  3: unused (was the exit-signal thread-0 hijack into jl_atexit_hook,
+//     removed when termination signals became graceful root-source
+//     cancellations - see jl_request_process_termination)
 //  4: no-op
 //  5: deliver a pending cancellation to the current task's published
 //     interruptible-region context(s), if any and the task's bound token
@@ -917,7 +888,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         assert(got == 1);
         request = jl_atomic_exchange(&ptls->signal_request, -1);
         usr2_signal_context = NULL;
-        assert(request == 3 || request == 4);
+        assert(request == 4);
     }
     {
         // Acknowledge the request to its synchronously waiting sender (the
@@ -930,9 +901,6 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     }
     sig_atomic_t processing = -1;
     jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
-    if (request == 3) {
-        jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
-    }
     errno = errno_save;
 }
 
@@ -1290,12 +1258,28 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #endif
 
+        // Signals that terminate the process gracefully - SIGTERM and
+        // (with exit-on-sigint) SIGINT - request termination through the
+        // cancellation system: the root source's cancellation unwinds the
+        // governed work and the process exits through the ordinary exit
+        // path, which runs the atexit hooks on a sound stack and then
+        // re-raises the signal (see jl_request_process_termination).
+        // Hijacking a thread into jl_atexit_hook at an arbitrary point is
+        // unsound - the interrupted frame may hold runtime locks the
+        // teardown needs, or the image may still be initializing (issue
+        // #62774). SIGQUIT is deliberately NOT graceful: its contract is
+        // "dump state and die now" - watchdogs aim it at wedged processes
+        // that a cooperative request cannot unwind - so it prints the
+        // all-task backtraces (via `critical` below) and exits abruptly,
+        // preserving the core-dump disposition; it no longer runs the
+        // atexit hooks.
+        int termsig = 0;
         if (sig == SIGINT) {
             if (jl_ignore_sigint()) {
                 continue;
             }
             else if (exit_on_sigint) {
-                critical = 1;
+                termsig = sig;
             }
             else {
                 // Deliver the press through the cancellation system (see
@@ -1304,85 +1288,20 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             }
         }
-        else if (sig == SIGTERM) {
-            // Request graceful termination through the cancellation system:
-            // the root source's cancellation unwinds the governed work and
-            // the process exits through the ordinary exit path, which runs
-            // the atexit hooks on a sound stack and then re-raises the
-            // signal (see jl_request_process_termination). Hijacking a
-            // thread into jl_atexit_hook at an arbitrary point is unsound -
-            // the interrupted frame may hold runtime locks the teardown
-            // needs, or the image may still be initializing (issue #62774).
-            if (jl_request_process_termination(sig))
-                continue;
-            // No root source is registered (still initializing, or an
-            // embedder that never runs Base.__init__ - no Julia atexit
-            // hooks can exist either way), or this is a repeat request and
-            // the graceful attempt did not lead to an exit: die abruptly
-            // with the signal's default disposition, preserving the exit
-            // status.
-            sigset_t tset;
-            sigemptyset(&tset);
-            sigaddset(&tset, sig);
-            pthread_sigmask(SIG_UNBLOCK, &tset, NULL);
-#ifdef HAVE_KEVENT
-            signal(sig, SIG_DFL);
-#endif
-            uv_tty_reset_mode();
-            fflush(NULL);
-            raise(sig); // very unlikely to return
-            _exit(128 + sig);
-        }
-        else {
-            critical = 0;
-        }
-
+        critical = 0;
+        if (sig == SIGTERM)
+            termsig = sig;
+        critical |= (sig == SIGQUIT); // dump state, then exit abruptly below
         critical |= (sig == SIGABRT);
-        critical |= (sig == SIGQUIT);
 #ifdef SIGINFO
         critical |= (sig == SIGINFO);
+        if (sig == SIGINFO && profile_running != 1)
+            trigger_profile_peek();
 #else
         critical |= (sig == SIGUSR1 && !profile);
+        if (sig == SIGUSR1 && profile_running != 1 && timer_graceperiod_elapsed())
+            trigger_profile_peek();
 #endif
-
-        int doexit = critical;
-#ifdef SIGINFO
-        if (sig == SIGINFO) {
-            if (profile_running != 1)
-                trigger_profile_peek();
-            doexit = 0;
-        }
-#else
-        if (sig == SIGUSR1) {
-            if (profile_running != 1 && timer_graceperiod_elapsed())
-                trigger_profile_peek();
-            doexit = 0;
-        }
-#endif
-        if (doexit) {
-            // The exit can get stuck if it happens at an unfortunate spot in thread 0
-            // (unavoidable due to its async nature).
-            // Try much harder to exit next time, if we get multiple exit requests.
-            // 1. unblock the signal, so this thread can be killed by it
-            // 2. reset the tty next, because we might die before we get another chance to do that
-            // 3. attempt a graceful cleanup of julia, followed by an abrupt end to the C runtime (except for fflush)
-            // 4. kill this thread with `raise`, to preserve the signo / exit code / and coredump configuration
-            // Similar to jl_raise, but a slightly different order of operations
-            sigset_t sset;
-            sigemptyset(&sset);
-            sigaddset(&sset, sig);
-            pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
-#ifdef HAVE_KEVENT
-            signal(sig, SIG_DFL);
-#endif
-            uv_tty_reset_mode();
-            thread0_exit_count++;
-            fflush(NULL);
-            if (thread0_exit_count > 1) {
-                raise(sig); // very unlikely to return
-                _exit(128 + sig);
-            }
-        }
 
         signal_bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
@@ -1410,19 +1329,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 
         // this part is async with the running of the rest of the program
         // and must be thread-safe, but not necessarily signal-handler safe
-        if (doexit) {
-//            // this is probably always SI_USER (0x10001 / 65537), so we suppress it
-//            int si_code = 0;
-//#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L && !HAVE_KEVENT
-//            si_code = info.si_code;
-//#endif
-            // Let's forbid threads from running GC while we're trying to exit,
-            // also let's make sure we're not in the middle of GC.
-            jl_gc_enable_from_nonmutator(0);
-            jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
-        }
-        else if (critical) {
-            // critical in this case actually means SIGINFO request
+        if (critical) {
+            // a state-dump request: SIGQUIT (before terminating), a
+            // SIGINFO/SIGUSR1 information request, or the can't-happen
+            // SIGABRT fallback above
 #ifndef SIGINFO // SIGINFO already prints something similar automatically
             int nthreads = jl_atomic_load_acquire(&jl_n_threads);
             int n_threads_running = 0;
@@ -1439,8 +1349,38 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 jl_fprint_bt_entry_codeloc(ios_safe_stderr, signal_bt_data + i);
             }
             jl_safe_printf("\n");
-            // Enable trace compilation to stderr with timing during profile collection
-            jl_force_trace_compile_timing_enable();
+            if (termsig == 0) {
+                // Enable trace compilation to stderr with timing during profile collection
+                jl_force_trace_compile_timing_enable();
+            }
+        }
+        if (termsig != 0) {
+            if (!jl_request_process_termination(termsig)) {
+                // No root source is registered (still initializing, or an
+                // embedder that never runs Base.__init__ - no Julia atexit
+                // hooks can exist either way), or termination was already
+                // requested once and the graceful attempt did not lead to
+                // an exit: die abruptly with the signal's default
+                // disposition, preserving the exit status.
+                sigset_t tset;
+                sigemptyset(&tset);
+                sigaddset(&tset, sig);
+                pthread_sigmask(SIG_UNBLOCK, &tset, NULL);
+#ifdef HAVE_KEVENT
+                signal(sig, SIG_DFL);
+#endif
+                uv_tty_reset_mode();
+                fflush(NULL);
+                raise(sig); // very unlikely to return
+                _exit(128 + sig);
+            }
+        }
+        else if (sig == SIGQUIT || sig == SIGABRT) {
+            // dump-and-die (SIGQUIT; SIGABRT can't occur - only set by the
+            // sigwait-corruption fallback above): exit abruptly after the
+            // dump, with the signal's default disposition (a core dump,
+            // where enabled)
+            jl_raise(sig);
         }
     }
     return NULL;

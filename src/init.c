@@ -353,8 +353,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     // above; the process must nevertheless die by that signal, preserving
     // the exit status and disposition a supervisor expects of it.
     int termsig = jl_process_term_signo();
-    if (termsig != 0)
+    if (termsig != 0) {
+#ifdef _OS_WINDOWS_
+        // There is no death-by-signal on Windows; report the conventional
+        // 128 + signo exit status instead.
+        exit(128 + termsig);
+#else
         jl_raise(termsig);
+#endif
+    }
 }
 
 JL_DLLEXPORT void jl_postoutput_hook(void)
