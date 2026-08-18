@@ -497,7 +497,7 @@ function _rdiv_q!(x::BigInt, a::BigInt, b::BigInt, down::Bool)
         rd = Memory{Limb}(undef, bn)
         _mpn_tdiv_qr(qd, rd, ad, an % mp_size_t, bd, bn % mp_size_t)
         _finish!(x, qd, qn, neg)
-        rnz = _norm(rd, bn) != 0
+        rnz = any(!iszero, @view rd[1:bn])
     end
     wrong && rnz && (down ? _dec!(x) : _inc!(x))
     return x
