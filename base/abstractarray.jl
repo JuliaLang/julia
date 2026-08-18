@@ -2714,7 +2714,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         outdims[d1] = 0
     end
 
-    outlen = Core.checked_dims(outdims...)
+    outlen = Core.checked_dims(ntuple(i -> outdims[i], Val(N))...)
     elementcount == outlen ||
         throw(DimensionMismatch("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
@@ -2801,7 +2801,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
         end
     end
 
-    outlen = Core.checked_dims(outdims...)
+    outlen = Core.checked_dims(ntuple(i -> outdims[i], Val(N))...)
     elementcount == outlen ||
         throw(ArgumentError("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
