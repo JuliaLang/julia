@@ -1182,7 +1182,12 @@ end
 
 # Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
 # so that users can define their own binding named `Module` in Main.
-@test !Base.isbindingresolved(Main, :Module)
+# This only holds in a fresh process: displaying any type resolves its name in the
+# display module (`Main` by default), so a recycled test worker may have resolved
+# `Module` long before this file runs. Check in a subprocess instead.
+let cmd = `$(Base.julia_cmd()) --startup-file=no -e 'print(Base.isbindingresolved(Main, :Module))'`
+    @test read(cmd, String) == "false"
+end
 
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
