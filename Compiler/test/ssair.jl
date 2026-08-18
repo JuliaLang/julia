@@ -863,6 +863,24 @@ let cl = Int32[0,0,0,255,0,0,256,0,0,257,0,0]
     @test roundtrip_di(cl, 33, 4) == cl
 end
 
+# Test line comparisons with byte-precise debuginfo.
+let sbt = String(UInt8[
+        1, 0, 0, 0, # byte offset
+        1, 0, 0, 0, # line offset
+        2, 0, 0, 0, # number of locations
+        1, 1,       # byte and span encoding lengths
+        0, 1, 2, 1, # byte spans
+        0, 2,       # line starts
+    ])
+    codelocs = Int32[1, 0, 0, 2, 0, 0]
+    str = ccall(:jl_compress_codelocs,
+                Any, (Int32, Any, Int), Int32(-1), codelocs, 2)::String
+    di = Core.DebugInfo(:foo, sbt, Core.svec(), str)
+    @test !Compiler.changed_lineinfo(di, 1, 1)
+    @test Compiler.changed_lineinfo(di, 2, 1)
+    @test !Compiler._should_instrument(di)
+end
+
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = typemax(Int))
 
