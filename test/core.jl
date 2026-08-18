@@ -8812,3 +8812,24 @@ end
     return freed[]
 end
 @test issue52533_beside(Ref(false))
+
+# jl_array_len must compute the length from the dimensions: an N-d array may be
+# backed by a Memory with excess capacity and/or a nonzero memoryref offset
+# (e.g. from `reshape` of a `sizehint!`ed vector), so reading the Memory length
+# splatted/copied too many elements (and could read out of bounds)
+let f = (x...) -> length(x)
+    v = collect(1.0:9.0)
+    sizehint!(v, 100)
+    m = reshape(v, 3, 3)
+    @test f(m...) == 9
+    @test length(Core.svec(m...)) == 9
+    m2 = ccall(:jl_array_copy, Ref{Matrix{Float64}}, (Any,), m)
+    @test m2 == m
+    @test length(m2.ref.mem) == 9
+    # nonzero memoryref offset
+    w = collect(1:9)
+    sizehint!(w, 1000; first=true)
+    m3 = reshape(w, 3, 3)
+    @test f(m3...) == 9
+    @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
+end
