@@ -447,7 +447,7 @@ fn audit_reference_counts(lxr: &mmtk::plan::lxr::LXR<JuliaVM>, snapshot: &[(usiz
             continue;
         }
         let o = unsafe { mmtk::util::Address::from_usize(addr).to_object_reference::<JuliaVM>() };
-        o.iterate_fields::<JuliaVM, _>(|s| {
+        o.iterate_fields::<JuliaVM, _>(mmtk::util::VMThread::UNINITIALIZED, |s| {
             if s.is_derived() {
                 return;
             }
@@ -477,10 +477,10 @@ fn audit_reference_counts(lxr: &mmtk::plan::lxr::LXR<JuliaVM>, snapshot: &[(usiz
             unmarked += 1;
         }
         let got = usize::from(lxr.rc.count(o));
-        // Counts are two bits wide, so at `MAX_REF_COUNT` (3) the count is sticky: it stops
+        // Counts are two bits wide, so at the maximum count (3) the count is sticky: it stops
         // tracking the true number of references and the object is never decremented again.
         // Anything at that value is immortal by design, not undercounted.
-        if got >= usize::from(mmtk::util::rc::MAX_REF_COUNT) {
+        if lxr.rc.is_stuck(o) {
             continue;
         }
         let want = expected.get(&addr).copied().unwrap_or(0);
@@ -524,7 +524,7 @@ struct CollectingRootsFactory {
 }
 
 impl mmtk::vm::RootsWorkFactory<crate::slots::JuliaVMSlot> for CollectingRootsFactory {
-    fn create_process_roots_work(
+    fn create_process_roots_work_with_root_kind(
         &mut self,
         slots: Vec<crate::slots::JuliaVMSlot>,
         _kind: mmtk::scheduler::RootKind,
@@ -605,7 +605,7 @@ fn verify_rc_covers_live_closure() {
                 missing.push((o, name));
             }
         }
-        o.iterate_fields::<JuliaVM, _>(|s| {
+        o.iterate_fields::<JuliaVM, _>(mmtk::util::VMThread::UNINITIALIZED, |s| {
             if let Some(t) = s.load() {
                 stack.push(t);
             }
@@ -652,7 +652,7 @@ fn verify_rc_covers_live_closure() {
             }) else {
                 continue;
             };
-            referrer.iterate_fields::<JuliaVM, _>(|s| {
+            referrer.iterate_fields::<JuliaVM, _>(mmtk::util::VMThread::UNINITIALIZED, |s| {
                 let Some(t) = s.load() else { return };
                 if !targets.contains(&t.to_raw_address().as_usize()) {
                     return;

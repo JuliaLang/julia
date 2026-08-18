@@ -70,6 +70,14 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         semantics: CopySemantics,
         copy_context: &mut GCWorkerCopyContext<JuliaVM>,
     ) -> ObjectReference {
+        Self::try_copy(from, semantics, copy_context).expect("Failed to copy object")
+    }
+
+    fn try_copy(
+        from: ObjectReference,
+        semantics: CopySemantics,
+        copy_context: &mut GCWorkerCopyContext<JuliaVM>,
+    ) -> Option<ObjectReference> {
         trace!("Attempting to copy object {}", from);
 
         let bytes = Self::get_current_size(from);
@@ -87,8 +95,11 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         } else {
             unimplemented!()
         };
-        // `alloc_copy` should never return zero.
-        debug_assert!(!dst.is_zero());
+        // A copy allocator cannot trigger a GC to get more memory, so it reports failure by
+        // returning zero. The caller decides whether to leave the object in place.
+        if dst.is_zero() {
+            return None;
+        }
 
         let src = from_start;
         unsafe {
@@ -124,7 +135,7 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
             );
         }
 
-        to_obj
+        Some(to_obj)
     }
 
     fn copy_to(_from: ObjectReference, _to: ObjectReference, _region: Address) -> Address {
