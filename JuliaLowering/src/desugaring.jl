@@ -3190,7 +3190,8 @@ function expand_abstract_or_primitive_type(ctx, ex)
                     ]
                 ]
                 [K"=" name newtype_var]
-                [K"call" "_setsuper!"::K"core" newtype_var supertype]
+                [K"call" "_setsuper!"::K"core" newtype_var supertype
+                    [K"call" "svec"::K"core" typevar_names...]]
                 [K"call" "_typebody!"::K"core" name]
             ]
         ]

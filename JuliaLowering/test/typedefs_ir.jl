@@ -172,29 +172,8 @@ abstract type A end
 1   (call core.svec)
 2   (call core._abstracttype TestMod :A %₁)
 3   (= slot₁/A %₂)
-4   (call core._setsuper! %₂ core.Any)
-5   (call core._typebody! slot₁/A)
-6   (call core.declare_global TestMod :A false)
-7   latestworld
-8   (call core.isdefinedglobal TestMod :A false)
-9   (gotoifnot %₈ label₁₄)
-10  TestMod.A
-11  (call core._equiv_typedef %₁₀ %₂)
-12  (gotoifnot %₁₁ label₁₄)
-13  (goto label₁₆)
-14  (call core.declare_const TestMod :A %₂)
-15  latestworld
-16  (return core.nothing)
-
-########################################
-# Abstract type definition with supertype
-abstract type A <: B end
-#---------------------
-1   (call core.svec)
-2   (call core._abstracttype TestMod :A %₁)
-3   (= slot₁/A %₂)
-4   TestMod.B
-5   (call core._setsuper! %₂ %₄)
+4   (call core.svec)
+5   (call core._setsuper! %₂ core.Any %₄)
 6   (call core._typebody! slot₁/A)
 7   (call core.declare_global TestMod :A false)
 8   latestworld
@@ -209,6 +188,29 @@ abstract type A <: B end
 17  (return core.nothing)
 
 ########################################
+# Abstract type definition with supertype
+abstract type A <: B end
+#---------------------
+1   (call core.svec)
+2   (call core._abstracttype TestMod :A %₁)
+3   (= slot₁/A %₂)
+4   TestMod.B
+5   (call core.svec)
+6   (call core._setsuper! %₂ %₄ %₅)
+7   (call core._typebody! slot₁/A)
+8   (call core.declare_global TestMod :A false)
+9   latestworld
+10  (call core.isdefinedglobal TestMod :A false)
+11  (gotoifnot %₁₀ label₁₆)
+12  TestMod.A
+13  (call core._equiv_typedef %₁₂ %₂)
+14  (gotoifnot %₁₃ label₁₆)
+15  (goto label₁₈)
+16  (call core.declare_const TestMod :A %₂)
+17  latestworld
+18  (return core.nothing)
+
+########################################
 # Abstract type definition with multiple typevars
 abstract type A{X, Y <: X} end
 #---------------------
@@ -220,19 +222,22 @@ abstract type A{X, Y <: X} end
 6   (call core.svec %₄ %₅)
 7   (call core._abstracttype TestMod :A %₆)
 8   (= slot₁/A %₇)
-9   (call core._setsuper! %₇ core.Any)
-10  (call core._typebody! slot₁/A)
-11  (call core.declare_global TestMod :A false)
-12  latestworld
-13  (call core.isdefinedglobal TestMod :A false)
-14  (gotoifnot %₁₃ label₁₉)
-15  TestMod.A
-16  (call core._equiv_typedef %₁₅ %₇)
-17  (gotoifnot %₁₆ label₁₉)
-18  (goto label₂₁)
-19  (call core.declare_const TestMod :A %₇)
-20  latestworld
-21  (return core.nothing)
+9   slot₂/X
+10  slot₃/Y
+11  (call core.svec %₉ %₁₀)
+12  (call core._setsuper! %₇ core.Any %₁₁)
+13  (call core._typebody! slot₁/A)
+14  (call core.declare_global TestMod :A false)
+15  latestworld
+16  (call core.isdefinedglobal TestMod :A false)
+17  (gotoifnot %₁₆ label₂₂)
+18  TestMod.A
+19  (call core._equiv_typedef %₁₈ %₇)
+20  (gotoifnot %₁₉ label₂₂)
+21  (goto label₂₄)
+22  (call core.declare_const TestMod :A %₇)
+23  latestworld
+24  (return core.nothing)
 
 ########################################
 # Error: Abstract type definition with bad signature
@@ -277,19 +282,20 @@ primitive type P 8 end
 1   (call core.svec)
 2   (call core._primitivetype TestMod :P %₁ 8)
 3   (= slot₁/P %₂)
-4   (call core._setsuper! %₂ core.Any)
-5   (call core._typebody! slot₁/P)
-6   (call core.declare_global TestMod :P false)
-7   latestworld
-8   (call core.isdefinedglobal TestMod :P false)
-9   (gotoifnot %₈ label₁₄)
-10  TestMod.P
-11  (call core._equiv_typedef %₁₀ %₂)
-12  (gotoifnot %₁₁ label₁₄)
-13  (goto label₁₆)
-14  (call core.declare_const TestMod :P %₂)
-15  latestworld
-16  (return core.nothing)
+4   (call core.svec)
+5   (call core._setsuper! %₂ core.Any %₄)
+6   (call core._typebody! slot₁/P)
+7   (call core.declare_global TestMod :P false)
+8   latestworld
+9   (call core.isdefinedglobal TestMod :P false)
+10  (gotoifnot %₉ label₁₅)
+11  TestMod.P
+12  (call core._equiv_typedef %₁₁ %₂)
+13  (gotoifnot %₁₂ label₁₅)
+14  (goto label₁₇)
+15  (call core.declare_const TestMod :P %₂)
+16  latestworld
+17  (return core.nothing)
 
 ########################################
 # Complex primitive type definition
@@ -303,19 +309,22 @@ primitive type P{X,Y} <: Z 32 end
 6   (call core._primitivetype TestMod :P %₅ 32)
 7   (= slot₁/P %₆)
 8   TestMod.Z
-9   (call core._setsuper! %₆ %₈)
-10  (call core._typebody! slot₁/P)
-11  (call core.declare_global TestMod :P false)
-12  latestworld
-13  (call core.isdefinedglobal TestMod :P false)
-14  (gotoifnot %₁₃ label₁₉)
-15  TestMod.P
-16  (call core._equiv_typedef %₁₅ %₆)
-17  (gotoifnot %₁₆ label₁₉)
-18  (goto label₂₁)
-19  (call core.declare_const TestMod :P %₆)
-20  latestworld
-21  (return core.nothing)
+9   slot₂/X
+10  slot₃/Y
+11  (call core.svec %₉ %₁₀)
+12  (call core._setsuper! %₆ %₈ %₁₁)
+13  (call core._typebody! slot₁/P)
+14  (call core.declare_global TestMod :P false)
+15  latestworld
+16  (call core.isdefinedglobal TestMod :P false)
+17  (gotoifnot %₁₆ label₂₂)
+18  TestMod.P
+19  (call core._equiv_typedef %₁₈ %₆)
+20  (gotoifnot %₁₉ label₂₂)
+21  (goto label₂₄)
+22  (call core.declare_const TestMod :P %₆)
+23  latestworld
+24  (return core.nothing)
 
 ########################################
 # Primitive type definition with computed size (should this be allowed??)
@@ -326,19 +335,20 @@ primitive type P P_nbits() end
 3   (call %₂)
 4   (call core._primitivetype TestMod :P %₁ %₃)
 5   (= slot₁/P %₄)
-6   (call core._setsuper! %₄ core.Any)
-7   (call core._typebody! slot₁/P)
-8   (call core.declare_global TestMod :P false)
-9   latestworld
-10  (call core.isdefinedglobal TestMod :P false)
-11  (gotoifnot %₁₀ label₁₆)
-12  TestMod.P
-13  (call core._equiv_typedef %₁₂ %₄)
-14  (gotoifnot %₁₃ label₁₆)
-15  (goto label₁₈)
-16  (call core.declare_const TestMod :P %₄)
-17  latestworld
-18  (return core.nothing)
+6   (call core.svec)
+7   (call core._setsuper! %₄ core.Any %₆)
+8   (call core._typebody! slot₁/P)
+9   (call core.declare_global TestMod :P false)
+10  latestworld
+11  (call core.isdefinedglobal TestMod :P false)
+12  (gotoifnot %₁₁ label₁₇)
+13  TestMod.P
+14  (call core._equiv_typedef %₁₃ %₄)
+15  (gotoifnot %₁₄ label₁₇)
+16  (goto label₁₉)
+17  (call core.declare_const TestMod :P %₄)
+18  latestworld
+19  (return core.nothing)
 
 ########################################
 # Empty struct
