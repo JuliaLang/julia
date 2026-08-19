@@ -575,10 +575,40 @@ STATIC_INLINE size_t jl_world_idx(size_t world) JL_NOTSAFEPOINT
     return world & JL_WORLD_IDX_MASK;
 }
 
+// Segment kinds, for serializing world histories. The boot prefix (the
+// worlds the system image was built at, shared verbatim by every process
+// that loads it) is never materialized and reports JL_WORLD_SEG_BOOT. Spine
+// runs are the maximal linear stretches of this process's own history
+// between graft events. Image runs are runs grafted from a loaded package
+// image, identified stably by (image id, run ordinal). Other segments
+// (e.g. fabricated by tests) are not serializable.
+enum jl_world_seg_kind {
+    JL_WORLD_SEG_BOOT = 0,
+    JL_WORLD_SEG_RUN = 1,
+    JL_WORLD_SEG_IMAGE = 2,
+    JL_WORLD_SEG_OTHER = 3,
+};
+
+typedef struct {
+    uint32_t id;
+    uint32_t anc_nbits;         // number of valid bits in anc_row (== id)
+    _Atomic(size_t) end_idx;    // terminal index once closed; JL_WORLD_IDX_MASK while open
+    uint8_t kind;               // enum jl_world_seg_kind
+    uint32_t run;               // RUN: spine run ordinal; IMAGE: run ordinal within the origin image
+    uint64_t image_id;          // IMAGE: origin image id; 0 otherwise
+    uint32_t nparents;
+    size_t *parents;            // parent worlds, in declaration order
+    uint64_t anc_row[];         // ancestor segment bitset, immutable after publication
+} jl_world_segment_t;
+
 JL_DLLEXPORT int jl_world_seg_reaches(size_t sa, size_t sb) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents);
 JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, size_t nextra);
-JL_DLLEXPORT size_t jl_world_graft_segment(void);
+JL_DLLEXPORT void jl_world_init_runs(void);
+JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size_t *parent_worlds, size_t nparents);
+JL_DLLEXPORT size_t jl_world_image_run(uint64_t image_id, uint32_t run) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_world_segment_t *jl_world_get_segment(size_t seg) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_world_nsegments(void) JL_NOTSAFEPOINT;
 
 // mirror of Core.WorldToken
 typedef struct {
