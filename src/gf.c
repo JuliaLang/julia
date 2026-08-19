@@ -5072,7 +5072,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     }
     else if (!jl_world_at_most(closure->world, max_world)) {
         // exclude method table entries that have been replaced in the current world
-        closure->match.min_valid = jl_world_spine_join(closure->match.min_valid, max_world + 1);
+        closure->match.min_valid = jl_world_join(closure->match.min_valid, max_world + 1, closure->world);
         return 1;
     }
     if (closure->match.max_valid > max_world)
@@ -5470,7 +5470,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                 jl_array_ptr_set(env.t, 0, env.matc);
                 size_t min_world = jl_atomic_load_relaxed(&entry->min_world);
                 size_t max_world = jl_atomic_load_relaxed(&entry->max_world);
-                *min_valid = jl_world_spine_join(*min_valid, min_world);
+                *min_valid = jl_world_join(*min_valid, min_world, world);
                 if (*max_valid > max_world)
                     *max_valid = max_world;
                 JL_GC_POP();
@@ -5502,7 +5502,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                         env.match.env, meth, FULLY_COVERS);
                     env.t = (jl_value_t*)jl_alloc_vec_any(1);
                     jl_array_ptr_set(env.t, 0, env.matc);
-                    *min_valid = jl_world_spine_join(*min_valid, min_world);
+                    *min_valid = jl_world_join(*min_valid, min_world, world);
                     if (*max_valid > max_world)
                         *max_valid = max_world;
                     JL_GC_POP();
@@ -5692,7 +5692,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
         // method applicability is the same as typemapentry applicability
         size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
         // intersect the env valid range with method lookup's inclusive valid range
-        env.match.min_valid = jl_world_spine_join(env.match.min_valid, min_world);
+        env.match.min_valid = jl_world_join(env.match.min_valid, min_world, world);
     }
     if (mc && cache_result_recursion && ((jl_datatype_t*)unw)->isdispatchtuple) { // cache_result_recursion prevents lock confusion and unnecessary work
         if (len == 1 && !has_ambiguity) {

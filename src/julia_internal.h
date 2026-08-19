@@ -524,16 +524,19 @@ extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 
 // === world age segments ===
 //
-// World ages form an append-only DAG rather than a single linear sequence: a
-// world is a packed (segment, index) pair with the segment id in the high
-// bits. Segments are maximal linear runs of worlds. Segment 0 is the boot
-// segment; while it is the only segment, packed worlds coincide with the
-// historical linear numbering and every query below degenerates to the
-// integer compares it replaced.
+// World ages form an append-only DAG (matching the shape of the precompile
+// graph) rather than a single linear sequence: a world is a packed
+// (segment, index) pair with the segment id in the high bits. Segments are
+// maximal linear runs of worlds. Segment 0 is the boot segment; while it is
+// the only segment, packed worlds coincide with the historical linear
+// numbering and every query below degenerates to the integer compares it
+// replaced.
 //
 // A segment's parent set is fixed at its creation and only ever references
 // segments that are closed (will allocate no further worlds), at their full
-// extent. This yields the central decomposition used by jl_world_reaches:
+// extent. This yields the central decomposition used by jl_world_reaches,
+// the two-point visibility predicate ("running at world (sb, ib), can I see
+// something that happened at world (sa, ia)?"):
 //
 //    (sa, ia) preceq (sb, ib)  iff  sa == sb ? ia <= ib
 //                                           : sa is an ancestor of sb
@@ -546,14 +549,28 @@ extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 // in), ancestry falls back to the chain order sa < sb, which agrees with the
 // DAG on any prefix of history that is still a pure chain.
 //
-// Integer comparison of two worlds remains exact whenever both lie on the
-// spine -- the chain of segments the world counter has traversed -- because
-// segment ids and indices are both monotone along it. Sites that compare or
-// intersect worlds that are all known to be on the spine (e.g. the world
-// counter, method insertion worlds, and validity bounds computed from them
-// in-process) may therefore still use integer compares; sites that test a
-// stored world bound against an arbitrary query world must use the
-// predicates below.
+// Joins in the DAG are not symmetric: a segment's first parent continues its
+// trunk (the main branch), and the remaining parents are side branches whose
+// events semantically happen after the main-branch events preceding the join
+// point and before those following it. Each segment therefore imposes a
+// total order on its entire visible cone -- the three-point predicate
+// (sa, ia) preceq_[observer] (sb, ib), see jl_world_ordered_before -- in
+// which trunk worlds order as themselves and a side branch's worlds order at
+// its merge point (recursively, by the side branch's own total order within
+// one merge point). jl_world_join computes the earliest world in the
+// observer's order whose history includes two given worlds; interval bounds
+// from different branches are incomparable under the two-point predicate, so
+// intersecting validity intervals must use this join rather than an integer
+// max.
+//
+// Integer comparison of two worlds remains exact whenever both lie on one
+// trunk -- e.g. the spine, the chain of segments the world counter has
+// traversed -- because segment ids and indices are both monotone along it.
+// Sites that compare worlds all known to be on the spine (e.g. the world
+// counter, method insertion worlds, and invalidation caps, which only ever
+// happen at the spine head) may therefore still use integer compares; sites
+// that test a stored world bound against an arbitrary query world must use
+// the predicates below.
 
 #ifdef _P64
 #define JL_WORLD_IDX_BITS 48
@@ -589,16 +606,29 @@ enum jl_world_seg_kind {
     JL_WORLD_SEG_OTHER = 3,
 };
 
+// Join-position sentinel: the segment lies on the observer's trunk, so a
+// world's position in the observer's total order is the world itself.
+#define JL_WORLD_POS_TRUNK (~(size_t)0)
+
 typedef struct {
     uint32_t id;
     uint32_t anc_nbits;         // number of valid bits in anc_row (== id)
     _Atomic(size_t) end_idx;    // terminal index once closed; JL_WORLD_IDX_MASK while open
-    _Atomic(size_t) joined_spine; // first spine world whose history includes this segment; 0 while unmerged
     uint8_t kind;               // enum jl_world_seg_kind
     uint32_t run;               // RUN: spine run ordinal; IMAGE: run ordinal within the origin image
     uint64_t image_id;          // IMAGE: origin image id; 0 otherwise
     uint32_t nparents;
-    size_t *parents;            // parent worlds, in declaration order
+    size_t *parents;            // parent worlds; parents[0] is the trunk (main-branch) parent
+    // This segment's total order over its visible cone (the three-point
+    // predicate): for each ancestor segment, either JL_WORLD_POS_TRUNK (the
+    // ancestor is on this segment's trunk -- its chain of first parents --
+    // and its worlds are positioned at themselves), or the trunk world at
+    // which the ancestor's branch was merged. Joins are asymmetric: a side
+    // branch's events are positioned at its merge point, i.e. after every
+    // main-branch event before the join and before every one after it.
+    // Positions are trunk worlds and compare exactly as integers. 0 = unset.
+    size_t *join_pos;
+
 #ifdef __cplusplus
     uint64_t anc_row[1];        // ancestor segment bitset, immutable after publication
 #else
@@ -614,7 +644,9 @@ JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size
 JL_DLLEXPORT size_t jl_world_image_run(uint64_t image_id, uint32_t run) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_world_segment_t *jl_world_get_segment(size_t seg) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t jl_world_nsegments(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_join(size_t a, size_t b, size_t observer) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_world_spine_join(size_t a, size_t b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_world_ordered_before(size_t a, size_t b, size_t observer) JL_NOTSAFEPOINT;
 
 // mirror of Core.WorldToken
 typedef struct {
