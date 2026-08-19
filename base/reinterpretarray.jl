@@ -742,20 +742,17 @@ function showerror(io::IO, p::PaddingError)
     print(io, "Padding of type $(p.S) is not compatible with type $(p.T).")
 end
 
-# `used` has an element for each byte of an aligned `T`
+# Return a byte index to Bool map for each byte of an aligned `T`
 # if false, that byte is undefined padding that should not be observed.
 # Preconditions, already checked by the `reinterpret` constructors and `_reinterpret`:
 # `isbitstype(T)` and `!has_bit_padding(T)`
-struct NonPadding
-    used::Memory{Bool}
-end
-function NonPadding(T::DataType)
+function non_padding_bytes(T::DataType)::Memory{Bool}
     @assert isbitstype(T)
     @assert !has_bit_padding(T)
     used = Memory{Bool}(undef, aligned_sizeof(T))
     fill!(used, false)
     fill_nonpadding_bytes!(T, 0, used)
-    NonPadding(used)
+    used
 end
 function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
     if isprimitivetype(T)
@@ -772,17 +769,17 @@ end
 # Preconditions, already checked by the `reinterpret` constructors:
 # `isbitstype(T/S)` and `!has_bit_padding(T/S)`
 @assume_effects :foldable function array_subpadding(S, T)
-    s, t = NonPadding(S), NonPadding(T)
+    s_used, t_used = non_padding_bytes(S), non_padding_bytes(T)
     # If T has no padding, any byte can be read.
     # This also covers zero-size T.
-    all(t.used) && return true
+    all(t_used) && return true
     # match previous behavior on zero-size S
-    isempty(s.used) && return false
-    s_n, t_n = length(s.used), length(t.used)
+    isempty(s_used) && return false
+    s_n, t_n = length(s_used), length(t_used)
     s_i, t_i = 1, 1
     while true
         # If a byte can be read in S, but is padding in T, return false
-        if s.used[s_i] && !t.used[t_i]
+        if s_used[s_i] && !t_used[t_i]
             return false
         end
         # Advance the indexes with wrapping around
@@ -802,16 +799,16 @@ end
 end
 
 @assume_effects :foldable function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
-    NonPadding(Out).used == NonPadding(In).used
+    non_padding_bytes(Out) == non_padding_bytes(In)
 end
 
 @assume_effects :foldable function packedsize(::Type{T}) where T
-    count(NonPadding(T).used)
+    count(non_padding_bytes(T))
 end
 
 @assume_effects :foldable function ispacked(::Type{T}) where T
     isprimitivetype(T) && return Core.bitsizeof(T) == sizeof(T) * 8
-    return all(NonPadding(T).used)
+    return all(non_padding_bytes(T))
 end
 
 @assume_effects :foldable function has_bit_padding(::Type{T}) where T
