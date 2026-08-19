@@ -734,4 +734,65 @@ function setindex!(x::Threads.Atomic, v)
     return @atomic x[] = v
 end
 
+# --- compatibility properties for the legacy two-field UnionAll layout ---
+# The stored representation is positional: the wrapped type lives in the
+# `inner` field and refers to the binder with `Core.TypeVarRef` indices, and
+# no TypeVar object exists until one is asked for. Legacy code that walks
+# `u.var`/`u.body` keeps working through these properties: `var` materializes
+# a canonical TypeVar for the binder, and `body` is the wrapped type with the
+# binder's references substituted by that variable, so the identities compose
+# the way they used to (`u.body` mentions `u.var`, and
+# `UnionAll(u.var, u.body) == u`).
+
+# The minted variable is memoized so that its identity is stable for as long
+# as anything can still observe it: repeated accesses, and the substituted
+# `u.body` forms derived from it, agree on the same TypeVar object. Once every
+# reference to the variable is gone, its identity is unobservable and the
+# entry can be collected, so the cache does not pin a TypeVar for every
+# UnionAll ever inspected. The values are held weakly, the keys strongly:
+# UnionAll egality is structural, so the collection of one key allocation
+# would not be the disappearance of the key (an egal spelling can be
+# constructed at any time), and pinning the stored key for exactly as long as
+# its variable is observable is what keeps all egal spellings of a binder on
+# one canonical variable.
+const _unionall_var_cache = WeakValueIdDict{UnionAll,TypeVar}()
+
+function unionall_var(u::UnionAll)
+    # open-coded `get!` without closures: this runs under `--trim` whenever
+    # trimmed code prints a type, so every call here must resolve statically
+    h = _unionall_var_cache
+    @lock h begin
+        v = _getvalue(h, u)
+        if v === nothing
+            # raw construction: the binder's stored bounds are used verbatim (a
+            # detached inner node's bounds may contain dangling references, which
+            # the normalizing TypeVar constructor would reject)
+            v = ccall(:jl_new_typevar_raw, Ref{TypeVar}, (Any, Any, Any),
+                      getfield(u, :name), getfield(u, :lb), getfield(u, :ub))
+            _cleanup_locked(h)
+            finalizer(h.finalizer, v)
+            h.ht[u] = WeakRef(v)
+        end
+        return v::TypeVar
+    end
+end
+
+# `u.body` needs no cache of its own: instantiation is interned, so with a
+# stable `u.var` the substituted body is identity-stable too
+unionall_body(u::UnionAll) = u{unionall_var(u)}
+
+function getproperty(u::UnionAll, s::Symbol)
+    @inline
+    s === :var && return unionall_var(u)
+    s === :body && return unionall_body(u)
+    return getfield(u, s)
+end
+function getproperty(u::UnionAll, s::Symbol, order::Symbol)
+    @inline
+    (s === :var || s === :body) && return getproperty(u, s)
+    return getfield(u, s, order)
+end
+propertynames(u::UnionAll, private::Bool=false) =
+    private ? (:var, :body, fieldnames(UnionAll)...) : (:var, :body)
+
 # END 1.14 deprecations
