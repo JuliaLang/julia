@@ -2813,19 +2813,23 @@ function detect_unbound_args(mods...;
                     nonempty_vararg = true
                 end
             end
-            # the where-chain binders, aligned with the `static_parameter` numbering used in `idxs`
+            # the where-chain binders, aligned with the `static_parameter` numbering
+            # used in `idxs`; open every binder (substituting fresh free TypeVars)
+            # so slot parameters carry identities instead of positional references
             sig_vars = TypeVar[]
+            opened_params = params
             let body = m.sig
                 while body isa UnionAll
-                    push!(sig_vars, body.var)
-                    body = body.body
+                    var, body = Base.unionall_open(body)
+                    push!(sig_vars, var)
                 end
+                opened_params = (body::DataType).parameters
             end
             shadowed_slots = Int[]
             for i in eachindex(params)
                 # a `Type{S}` argument (with type `S`) may bind `S = Union{}` — which does not constrain
                 # TypeVar internal to `S`, unless we later identify a covering method for that dispatch
-                v = type_slot_var(params[i])
+                v = type_slot_var(opened_params[i])
                 v === nothing && continue
                 # the re-check consumes a shadowed slot only through a
                 # `MATCH_INHABITED` `constrains_var` on the slot variable's bound, so a
@@ -2862,9 +2866,15 @@ end
 # rescue in `detect_unbound_args`: either a slot-local range
 # (`Type{S} where S<:UB`) or a plain method parameter (`Type{S}` with `S`
 # bound in the signature's `where` chain). Returns `S`, or `nothing`.
+# The slot must come from an opened signature (see the callers), so the
+# plain-parameter case sees the binder's TypeVar identity; a slot-local
+# range is opened here, yielding a fresh TypeVar carrying its bounds.
 function type_slot_var(@nospecialize(p))
-    if p isa UnionAll && Base.isTypeEq(p.body) && Base.type_parameter(p.body) === p.var
-        return p.var
+    if p isa UnionAll
+        v, body = Base.unionall_open(p)
+        if Base.isTypeEq(body) && Base.type_parameter(body) === v
+            return v
+        end
     elseif Base.isTypeEq(p)
         q = Base.type_parameter(p)
         q isa TypeVar && return q
@@ -2879,15 +2889,21 @@ end
 function unbound_sparams(@nospecialize(sig), nonempty_vararg::Bool=false,
                          shadowed_slots::Vector{Int}=Int[])
     idxs = Int[]
-    params = isempty(shadowed_slots) ? Core.svec() :
-        (Base.unwrap_unionall(sig)::DataType).parameters
+    # open the where chain once up front: `openeds[i]` is the chain after
+    # peeling binder `i`, with the peeled binders substituted as (fresh) free
+    # TypeVars and the deeper binders still positional
+    sig_vars = TypeVar[]
+    openeds = Any[]
     body = sig
-    i = 0
     while body isa UnionAll
-        i += 1
-        var = body.var
-        body = body.body
-        Base.Compiler.constrains_var(var, body, Core.Compiler.MATCH_TYPEOF, nonempty_vararg) && continue
+        var, body = Base.unionall_open(body)
+        push!(sig_vars, var)
+        push!(openeds, body)
+    end
+    params = isempty(shadowed_slots) ? Core.svec() : (body::DataType).parameters
+    for i in 1:length(sig_vars)
+        var = sig_vars[i]
+        Base.Compiler.constrains_var(var, openeds[i], Core.Compiler.MATCH_TYPEOF, nonempty_vararg) && continue
         pinned = false
         for j in shadowed_slots
             # any non-`Union{}` value of this slot's `Type` parameter pins
