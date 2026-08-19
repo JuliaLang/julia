@@ -1328,7 +1328,9 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             newm_data->min_world = data->min_world;
             newm_data->max_world = data->max_world;
             newm_data->flags = data->flags;
-            if (s->incremental) {
+            if (s->incremental && !s->world_table_mode) {
+                // (in world-table mode the bounds are kept verbatim and
+                // translated by segment at load)
                 if (data->max_world != ~(size_t)0)
                     newm_data->max_world = 0;
                 newm_data->min_world = jl_require_world;
@@ -1347,7 +1349,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
         for (i = 0; i < module_usings_length(m); i++) {
             struct _jl_module_using *data = module_usings_getidx(m, i);
             write_pointerfield(s, (jl_value_t*)data->mod);
-            if (s->incremental) {
+            if (s->incremental && !s->world_table_mode) {
                 // TODO: Drop dead ones entirely?
                 write_uint(s->s, jl_require_world);
                 write_uint(s->s, data->max_world == ~(size_t)0 ? ~(size_t)0 : 1);
@@ -1804,7 +1806,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     jl_atomic_store_relaxed(&newentry->max_world, 0);
                 }
             }
-            else if (s->incremental && jl_is_binding_partition(v)) {
+            else if (s->incremental && !s->world_table_mode && jl_is_binding_partition(v)) {
+                // (in world-table mode, the whole partition chain keeps its
+                // verbatim world bounds and is translated by segment at load)
                 jl_binding_partition_t *newbpart = (jl_binding_partition_t*)&s->s->buf[reloc_offset];
                 size_t max_world = jl_atomic_load_relaxed(&newbpart->max_world);
                 if (max_world == ~(size_t)0) {
@@ -3957,19 +3961,28 @@ JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
 int IMAGE_NATIVE_CODE_TAINTED = 0;
 
 // TODO: This should possibly be in Julia
-static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit, int no_replacement) JL_CANSAFEPOINT
+static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit, int no_replacement, int grafted) JL_CANSAFEPOINT
 {
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
     size_t raw_kind = bpart->kind;
     enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & PARTITION_MASK_KIND);
     if (!unchanged_implicit && jl_bkind_is_some_implicit(kind)) {
-        // TODO: Should we actually update this in place or delete it from the partitions list
-        // and allocate a fresh bpart?
-        jl_update_loaded_bpart(b, bpart);
-        bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
-        if (jl_atomic_load_relaxed(&bpart->min_world) > jl_require_world)
-            goto invalidated;
+        if (grafted) {
+            // the grafted resolution stays valid in its own branch's cone; if
+            // this process's resolution differs, the partition is capped and
+            // a fresh spine resolution is prepended
+            if (jl_bpart_reresolve_loaded(b, bpart) != NULL)
+                goto invalidated;
+        }
+        else {
+            // TODO: Should we actually update this in place or delete it from the partitions list
+            // and allocate a fresh bpart?
+            jl_update_loaded_bpart(b, bpart);
+            bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
+            if (jl_atomic_load_relaxed(&bpart->min_world) > jl_require_world)
+                goto invalidated;
+        }
     }
     {
         if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
@@ -3992,9 +4005,14 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
         }
         else {
             // Binding partition was invalidated
-            assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
-            jl_atomic_store_relaxed(&bpart->min_world,
-                jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+            if (!grafted) {
+                assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
+                jl_atomic_store_relaxed(&bpart->min_world,
+                    jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+            }
+            // (a grafted partition keeps its branch worlds; the
+            // changed-since-prefix signal is already carried by its
+            // min_world lying above the prefix)
         }
     }
 invalidated:
@@ -4010,7 +4028,7 @@ invalidated:
             if (!jl_atomic_load_relaxed(&bedge->partitions))
                 continue;
             JL_UNLOCK(&b->globalref->mod->lock);
-            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
+            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0, grafted);
             JL_LOCK(&b->globalref->mod->lock);
         }
         JL_UNLOCK(&b->globalref->mod->lock);
@@ -4029,7 +4047,7 @@ invalidated:
                 if (!jl_atomic_load_relaxed(&importee->partitions))
                     continue;
                 JL_UNLOCK(&mod->lock);
-                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0, 0);
+                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0, 0, grafted);
                 JL_LOCK(&mod->lock);
             }
         }
@@ -4577,6 +4595,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                 // Rebuild cross-image usings backedges
                 for (size_t i = 0; i < module_usings_length(mod); ++i) {
                     struct _jl_module_using *data = module_usings_getidx(mod, i);
+                    if (world_segmap) {
+                        // translate the entries' verbatim world bounds onto
+                        // the grafted copy of the image's world history
+                        data->min_world = world_remap(data->min_world, world_segmap, world_segmap_len);
+                        if (data->max_world != ~(size_t)0)
+                            data->max_world = world_remap(data->max_world, world_segmap, world_segmap_len);
+                    }
                     if (external_blob_index((jl_value_t*)data->mod) != mod_idx) {
                         jl_add_usings_backedge(data->mod, mod);
                     }
@@ -4597,7 +4622,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             abort();
         }
     }
-    free(world_segmap);
     if (worldtoken_graft)
         *worldtoken_graft = graft_head;
     if (s.incremental) {
@@ -4615,13 +4639,26 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                     if ((jl_value_t*)b == jl_nothing)
                         continue;
                     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
-                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit, no_replacement)) {
+                    if (world_segmap) {
+                        // translate the verbatim world bounds of the whole
+                        // partition chain: the image's binding history
+                        for (jl_binding_partition_t *p = bpart; p != NULL && jl_is_binding_partition((jl_value_t*)p);
+                                p = jl_atomic_load_relaxed(&p->next)) {
+                            jl_atomic_store_relaxed(&p->min_world,
+                                world_remap(jl_atomic_load_relaxed(&p->min_world), world_segmap, world_segmap_len));
+                            size_t pmax = jl_atomic_load_relaxed(&p->max_world);
+                            if (pmax != ~(size_t)0)
+                                jl_atomic_store_relaxed(&p->max_world, world_remap(pmax, world_segmap, world_segmap_len));
+                        }
+                    }
+                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit, no_replacement, world_segmap != NULL)) {
                         unchanged_implicit = all_usings_unchanged_implicit(mod);
                     }
                 }
             }
         }
     }
+    free(world_segmap);
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
 

@@ -28,11 +28,20 @@ world_at_most(w::UInt, maxw::UInt) =
 world_in_range(w::UInt, minw::UInt, maxw::UInt) =
     world_reaches(minw, w) && world_at_most(w, maxw)
 world_on_spine(w::UInt) = world_reaches(w, get_world_counter())
+# The earliest spine world whose history includes both `a` and `b` (the join
+# in the world DAG, projected onto the spine, where positions compare exactly
+# as integers). For comparable worlds this is simply the later of the two.
+function world_join(a::UInt, b::UInt)
+    world_seg(a) == world_seg(b) && return max(a, b)
+    return ccall(:jl_world_spine_join, Csize_t, (Csize_t, Csize_t), a, b) % UInt
+end
 
 in(world::UInt, wr::WorldRange) = world_in_range(world, wr.min_world, wr.max_world)
 
 @inline function intersect(a::WorldRange, b::WorldRange)
-    minw = max(a.min_world, b.min_world)
+    # the min side joins in the world DAG: bounds from different merged
+    # branches are incomparable and their join lies on the spine
+    minw = world_join(a.min_world, b.min_world)
     maxw = min(a.max_world, b.max_world)
     if minw > maxw
         # Interval arithmetic cannot describe the validity region of a world
