@@ -4,7 +4,7 @@
 export Core,
     # key types
     Any, TypeEq, DataType, Vararg, NTuple,
-    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    Tuple, Type, UnionAll, TypeVar, TypeVarRef, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
