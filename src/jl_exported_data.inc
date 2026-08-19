@@ -155,6 +155,7 @@
     XX(voidpointer_type, jl_datatype_t*) \
     XX(wait_entry_type, jl_datatype_t*) \
     XX(weakref_type, jl_datatype_t*) \
+    XX(worldtoken_type, jl_datatype_t*) \
     XX(typeapp_type, jl_datatype_t*)
 
 // Global constant values (jl_true, jl_false, jl_nothing)

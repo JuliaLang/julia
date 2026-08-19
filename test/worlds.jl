@@ -822,4 +822,46 @@ end
     @test Base.invoke_in_world(sib2, g_frozen) == 1
 end
 
+# WorldToken: opaque world capture, usable in place of a raw world age
+wt_f() = 1
+const wt_tok1 = Base.world_token()
+wt_f() = 2
+@testset "WorldToken (in-process)" begin
+    @test wt_tok1 isa Core.WorldToken
+    @test wt_f() == 2
+    @test Base.invoke_in_world(wt_tok1, wt_f) == 1
+    @test Base.invoke_in_world(wt_tok1.world, wt_f) == 1
+    @test Base.invoke_in_world(wt_tok1, sort, [3, 1, 2]; rev=true) == [3, 2, 1] # kwargs path accepts tokens
+end
+
+include("precompile_utils.jl")
+precompile_test_harness("WorldToken precompilation") do load_path
+    write(joinpath(load_path, "WTokenPkg.jl"),
+          """
+          module WTokenPkg
+          wfn() = 1
+          const tok = Base.world_token()
+          gfn() = 1
+          end
+          """)
+    @test !isa(Base.compilecache(Base.PkgId("WTokenPkg")), Base.PrecompilableError)
+    @eval using WTokenPkg
+    invokelatest() do
+        @test WTokenPkg.tok isa Core.WorldToken
+        # the token was rebased onto a grafted segment of the world DAG, not
+        # left at the saving process's meaningless numbering
+        @test wseg(WTokenPkg.tok.world) != wseg(unsafe_load(cglobal(:jl_require_world, UInt)))
+        @test wseg(WTokenPkg.tok.world) != wseg(Base.get_world_counter())
+        # image content is visible at the token (granularity within the
+        # capturing image itself is currently the whole image)
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.gfn) == 1
+        # redefinitions after loading are invisible at the token: it is not in
+        # the invalidating event's future cone
+        @eval WTokenPkg wfn() = 42
+        @test invokelatest(WTokenPkg.wfn) == 42
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
+    end
+end
+
 end # module WorldAgeSegments

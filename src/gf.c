@@ -3207,7 +3207,11 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_value_t *oldvalue = NULL;
     jl_array_t *oldmi = NULL;
     size_t world = jl_atomic_load_relaxed(&method->primary_world);
-    assert(world == jl_atomic_load_relaxed(&jl_world_counter) + 1); // min-world
+    // min-world is the next spine world, or the base of a grafted image
+    // segment that the current spine segment has already merged
+    assert(world == jl_atomic_load_relaxed(&jl_world_counter) + 1 ||
+           (jl_world_idx(world) == 0 &&
+            jl_world_seg_reaches(jl_world_seg(world), jl_world_seg(jl_atomic_load_relaxed(&jl_world_counter)))));
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     assert(jl_atomic_load_relaxed(&newentry->min_world) == ~(size_t)0);

@@ -108,6 +108,32 @@ JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, s
     return w;
 }
 
+// Close the currently open segment and continue the counter in a fresh
+// segment, additionally materializing a side segment G (a child of the
+// closed spine head) that the new spine segment also merges. A serialized
+// image's world history is grafted into G: entries and world tokens from the
+// image reference (G, offset) worlds, which are part of the new spine's
+// history but isolated from invalidation events that happen after the graft.
+// Returns G's first world.
+JL_DLLEXPORT size_t jl_world_graft_segment(void)
+{
+    JL_LOCK(&world_counter_lock);
+    if (world_nsegments + 1 >= JL_WORLD_MAX_SEGMENTS) {
+        JL_UNLOCK(&world_counter_lock);
+        jl_error("world age segment limit exceeded");
+    }
+    size_t cur = jl_atomic_load_relaxed(&jl_world_counter);
+    jl_world_segment_t *gseg = world_new_segment_locked(cur, NULL, 0);
+    size_t gbase = (size_t)gseg->id << JL_WORLD_IDX_BITS;
+    jl_world_segment_t *sseg = world_new_segment_locked(cur, &gbase, 1);
+    jl_world_segment_t *oldseg = jl_atomic_load_relaxed(&world_segments[jl_world_seg(cur)]);
+    if (oldseg)
+        jl_atomic_store_relaxed(&oldseg->end_idx, jl_world_idx(cur));
+    jl_atomic_store_release(&jl_world_counter, (size_t)sseg->id << JL_WORLD_IDX_BITS);
+    JL_UNLOCK(&world_counter_lock);
+    return gbase;
+}
+
 #ifdef __cplusplus
 }
 #endif

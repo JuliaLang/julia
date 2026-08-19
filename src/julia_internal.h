@@ -578,6 +578,12 @@ STATIC_INLINE size_t jl_world_idx(size_t world) JL_NOTSAFEPOINT
 JL_DLLEXPORT int jl_world_seg_reaches(size_t sa, size_t sb) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents);
 JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, size_t nextra);
+JL_DLLEXPORT size_t jl_world_graft_segment(void);
+
+// mirror of Core.WorldToken
+typedef struct {
+    size_t world;
+} jl_worldtoken_t;
 
 // a preceq b: does world `a` precede (or equal) world `b` in the world DAG,
 // i.e. is the state of the world as of `a` part of the history of `b`?

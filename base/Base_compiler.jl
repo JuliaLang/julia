@@ -293,13 +293,16 @@ as they existed at the given `world` age. In a sense, this is like the opposite
 of [`invokelatest`](@ref).
 
 !!! note
-    It is not valid to store world ages obtained in precompilation for later use.
-    This is because precompilation generates a "parallel universe" where the
-    world age refers to system state unrelated to the main Julia session.
+    It is not valid to store raw world ages obtained in precompilation for later
+    use. This is because precompilation generates a "parallel universe" where
+    the world age refers to system state unrelated to the main Julia session.
+    Use an opaque token from [`Base.world_token`](@ref) instead, which remains
+    meaningful after the precompiled image is loaded and can be passed to
+    `invoke_in_world` in place of a raw world age.
 """
 const invoke_in_world = Core.invoke_in_world
 
-function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke_in_world), world::UInt, f, args...)
+function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke_in_world), world::Union{UInt,Core.WorldToken}, f, args...)
     @inline
     return Core.invoke_in_world(world, Core.kwcall, kwargs, f, args...)
 end

@@ -1258,6 +1258,16 @@ const _apply_pure = _apply
 const _call_latest = invokelatest
 const _call_in_world = invoke_in_world
 
+# An opaque, serializable capture of a world age, applied with
+# `invoke_in_world`. Mutable so that every token is a distinct heap object:
+# precompilation rebases the world of tokens serialized in a package image
+# onto a grafted world segment at load time, which requires each token to be
+# independently addressable (and never inlined into a parent object).
+mutable struct WorldToken
+    const world::UInt
+    WorldToken(world::UInt) = new(world)
+end
+
 struct Pair{A, B}
     first::A
     second::B

@@ -1076,8 +1076,14 @@ JL_CALLABLE(jl_f_invoke_in_world)
     JL_NARGSV(invoke_in_world, 2);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    JL_TYPECHK(invoke_in_world, ulong, args[0]);
-    size_t world = jl_unbox_ulong(args[0]);
+    size_t world;
+    if (jl_typetagis(args[0], jl_worldtoken_type)) {
+        world = ((jl_worldtoken_t*)args[0])->world;
+    }
+    else {
+        JL_TYPECHK(invoke_in_world, ulong, args[0]);
+        world = jl_unbox_ulong(args[0]);
+    }
     if (!ct->ptls->in_pure_callback) {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         if (jl_world_at_most(world, ct->world_age))
@@ -1129,7 +1135,9 @@ JL_CALLABLE(jl_f__rcjulia_call)
 JL_CALLABLE(jl_f__call_in_world_total)
 {
     JL_NARGSV(_call_in_world_total, 2);
-    JL_TYPECHK(_call_in_world_total, ulong, args[0]);
+    if (!jl_typetagis(args[0], jl_worldtoken_type)) {
+        JL_TYPECHK(_call_in_world_total, ulong, args[0]);
+    }
     jl_check_rc("_call_in_world_total");
     jl_task_t *ct = jl_current_task;
     int last_in = ct->ptls->in_pure_callback;
@@ -1137,7 +1145,8 @@ JL_CALLABLE(jl_f__call_in_world_total)
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
-        size_t world = jl_unbox_ulong(args[0]);
+        size_t world = jl_typetagis(args[0], jl_worldtoken_type) ?
+            ((jl_worldtoken_t*)args[0])->world : jl_unbox_ulong(args[0]);
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         if (jl_world_at_most(world, ct->world_age))
             ct->world_age = world;
