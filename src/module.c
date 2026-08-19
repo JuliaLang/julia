@@ -52,7 +52,7 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition__(jl_binding_t *b
     // resolution if necessary.
     while (is_some_partition(gap->replace)) {
         size_t replace_min_world = jl_atomic_load_relaxed(&gap->replace->min_world);
-        if (world >= replace_min_world)
+        if (jl_world_at_least(world, replace_min_world))
             break;
         gap->insert = &gap->replace->next;
         gap->max_world = replace_min_world - 1;
@@ -61,7 +61,7 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition__(jl_binding_t *b
         // `gap->replace` becomes that binding (not a partition) at end-of-chain.
         gap->replace = jl_atomic_load_relaxed(gap->insert);
     }
-    if (is_some_partition(gap->replace) && world <= jl_atomic_load_relaxed(&gap->replace->max_world)) {
+    if (is_some_partition(gap->replace) && jl_world_at_most(world, jl_atomic_load_relaxed(&gap->replace->max_world))) {
         return gap->replace;
     }
     gap->min_world = is_some_partition(gap->replace) ? jl_atomic_load_relaxed(&gap->replace->max_world) + 1 : 0;
@@ -569,7 +569,7 @@ jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b, size_t min
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, min_world);
     if (!bpart)
         return NULL;
-    if (jl_atomic_load_relaxed(&bpart->max_world) < max_world)
+    if (!jl_world_at_most(max_world, jl_atomic_load_relaxed(&bpart->max_world)))
         return NULL;
     return bpart;
 }
@@ -1360,7 +1360,7 @@ static int jl_print_using_dep_messages(jl_module_t *m, jl_sym_t *name, jl_sym_t 
         JL_LOCK(&m->lock);
         struct _jl_module_using data = *module_usings_getidx(m, i);
         JL_UNLOCK(&m->lock);
-        if (data.min_world > world || data.max_world < world)
+        if (!jl_world_in_range(world, data.min_world, data.max_world))
             continue;
         jl_module_t *imp = data.mod;
         JL_GC_PROMISE_ROOTED(imp); // rooted via `m->usings`
@@ -2301,7 +2301,7 @@ static void _materialize_reexported_bindings(jl_module_t *m, size_t world, jl_ar
         struct _jl_module_using data = *module_usings_getidx(m, i);
         JL_UNLOCK(&m->lock);
 
-        if (data.min_world > world || data.max_world < world)
+        if (!jl_world_in_range(world, data.min_world, data.max_world))
             continue;
 
         if (data.flags & JL_MODULE_USING_REEXPORT) {

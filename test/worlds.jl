@@ -680,3 +680,119 @@ let ci = method_instance(iter61667, ()).cache
     Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
     @test ci.max_world == typemax(UInt)
 end
+
+## world age segments: worlds form an append-only DAG of (segment, index)
+## pairs; see the comment next to jl_world_reaches in julia_internal.h
+module WorldAgeSegments
+using Test
+
+const WORLD_IDX_BITS = Sys.WORD_SIZE == 64 ? 48 : 24
+wseg(w::UInt) = w >> WORLD_IDX_BITS
+widx(w::UInt) = w & ((UInt(1) << WORLD_IDX_BITS) - UInt(1))
+seg_reaches(sa::UInt, sb::UInt) = ccall(:jl_world_seg_reaches, Cint, (Csize_t, Csize_t), sa, sb) != 0
+# mirror of the C-side jl_world_reaches/jl_world_in_range inlines
+reaches(a::UInt, b::UInt) = wseg(a) == wseg(b) ? a <= b : seg_reaches(wseg(a), wseg(b))
+in_range(w::UInt, minw::UInt, maxw::UInt) =
+    reaches(minw, w) && (maxw == typemax(UInt) || !reaches(maxw + UInt(1), w))
+new_segment(parents::Vector{UInt}) =
+    ccall(:jl_world_new_segment, Csize_t, (Ptr{Csize_t}, Csize_t), parents, length(parents)) % UInt
+advance_into_segment(extra::Vector{UInt}) =
+    ccall(:jl_world_advance_into_segment, Csize_t, (Ptr{Csize_t}, Csize_t), extra, length(extra)) % UInt
+mt_entry(@nospecialize(ft), w::UInt) = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, Csize_t), ft, nothing, w)
+
+@testset "world segment reachability algebra" begin
+    w0 = Base.get_world_counter()
+    @test widx(w0) > UInt(16) # plenty of room below the current index
+    a = new_segment([w0]) # branch A off the current spine segment
+    b = new_segment([w0]) # branch B, sibling of A
+    m = new_segment([a + UInt(9), b + UInt(9)]) # merge of A and B
+    @test reaches(w0, a) && reaches(w0, b) && reaches(w0, m)
+    @test !reaches(a, b) && !reaches(b, a) # siblings are unordered
+    @test reaches(a, m) && reaches(b, m) # a merge sees both parents
+    @test !reaches(m, a) && !reaches(m, b) && !reaches(m, w0)
+    @test !reaches(a, w0) && !reaches(b, w0) # nothing reaches back in time
+    # within-segment order is the index order
+    @test reaches(a + UInt(5), a + UInt(9)) && !reaches(a + UInt(9), a + UInt(5))
+    @test reaches(a + UInt(5), a + UInt(5)) && reaches(w0, w0) # reflexivity
+    @test reaches(a + UInt(5), m) # parent segments are ancestors at full extent
+    # transitivity through a deeper chain
+    c = new_segment([m])
+    @test reaches(w0, c) && reaches(a, c) && reaches(b, c) && reaches(m, c)
+    @test !reaches(c, m)
+    # ~0 acts as the end of time: everything reaches it, it reaches nothing
+    @test reaches(w0, typemax(UInt)) && reaches(m, typemax(UInt))
+    @test !reaches(typemax(UInt), m)
+end
+
+@testset "validity bounds across branches" begin
+    w0 = Base.get_world_counter()
+    x = new_segment([w0])
+    y = new_segment([w0])
+    # an entry created on X and never invalidated is visible on X and its
+    # descendants, but not on the sibling branch Y
+    @test in_range(x + UInt(2), x + UInt(1), typemax(UInt))
+    @test !in_range(y + UInt(2), x + UInt(1), typemax(UInt))
+    xy = new_segment([x + UInt(3), y + UInt(3)])
+    @test in_range(xy, x + UInt(1), typemax(UInt))
+    # an entry created before the fork and invalidated on X (max_world capped
+    # inclusively at x+4, i.e. the invalidating event is at x+5) is dead in
+    # that event's future cone, but still live on the sibling branch
+    minw = w0 - UInt(5)
+    capw = x + UInt(4)
+    @test in_range(x + UInt(2), minw, capw)
+    @test !in_range(x + UInt(6), minw, capw)
+    @test in_range(y + UInt(6), minw, capw) # sibling never sees the invalidation
+    @test !in_range(xy, minw, capw) # but the merge of both branches does
+    # hard-killed bounds (max_world = 0) match nowhere
+    @test !in_range(x + UInt(2), minw, UInt(0))
+    # inverted "unactivated" bounds (min=~0, max=1) match nowhere
+    @test !in_range(x + UInt(2), typemax(UInt), UInt(1))
+end
+
+# Advancing the spine into a fresh segment must be transparent to execution:
+# everything below exercises the cross-segment paths of the world predicates
+# through real dispatch.
+f_before_advance() = 1
+@test f_before_advance() == 1
+const w_preadvance = Base.get_world_counter()
+const w_postadvance = advance_into_segment(UInt[])
+@testset "spine advance is transparent" begin
+    # the `const` declaration of w_postadvance itself bumped the counter, so
+    # compare segments rather than exact worlds
+    @test wseg(Base.get_world_counter()) == wseg(w_postadvance)
+    @test reaches(w_postadvance, Base.get_world_counter())
+    @test wseg(w_postadvance) != wseg(w_preadvance)
+    @test widx(w_postadvance) == UInt(0)
+    @test reaches(w_preadvance, w_postadvance)
+    @test f_before_advance() == 1 # pre-advance code still dispatches
+    @test Base.invoke_in_world(w_preadvance, f_before_advance) == 1
+    @test invokelatest(f_before_advance) == 1
+end
+f_after_advance() = 2
+g_redefined() = 1
+@test f_after_advance() == 2
+@test g_redefined() == 1
+const w_mid = Base.get_world_counter()
+g_redefined() = 2
+@testset "definitions and invalidations after the advance" begin
+    @test g_redefined() == 2
+    @test Base.invoke_in_world(w_mid, g_redefined) == 1
+    @test mt_entry(Tuple{typeof(f_after_advance)}, Base.get_world_counter()) !== nothing
+end
+@testset "sibling branches of the spine" begin
+    # fork a branch at the (now closed) pre-advance spine world: spine
+    # definitions made after the advance must be invisible there, while
+    # everything from before the fork remains visible
+    sib = new_segment([w_preadvance]) + UInt(1)
+    @test reaches(w_preadvance, sib) && !reaches(w_postadvance, sib) && !reaches(sib, w_postadvance)
+    @test mt_entry(Tuple{typeof(f_before_advance)}, sib) !== nothing
+    @test mt_entry(Tuple{typeof(f_after_advance)}, sib) === nothing
+    # (n.b. lookup at typemax(UInt) is refused by ml_matches as an
+    # unenumerable future world, as it was with linear world ages)
+    @test mt_entry(Tuple{typeof(f_after_advance)}, Base.get_world_counter()) !== nothing
+    # dispatch of already-compiled code at a branch world
+    @test Base.invoke_in_world(sib, f_before_advance) == 1
+    @test Base.invoke_in_world(sib, +, 1, 2) == 3
+end
+
+end # module WorldAgeSegments

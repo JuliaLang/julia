@@ -522,6 +522,103 @@ static inline jl_callptr_t jl_invoke_api_callptr(jl_invoke_api_t type) JL_NOTSAF
 // useful constants
 extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 
+// === world age segments ===
+//
+// World ages form an append-only DAG rather than a single linear sequence: a
+// world is a packed (segment, index) pair with the segment id in the high
+// bits. Segments are maximal linear runs of worlds. Segment 0 is the boot
+// segment; while it is the only segment, packed worlds coincide with the
+// historical linear numbering and every query below degenerates to the
+// integer compares it replaced.
+//
+// A segment's parent set is fixed at its creation and only ever references
+// segments that are closed (will allocate no further worlds), at their full
+// extent. This yields the central decomposition used by jl_world_reaches:
+//
+//    (sa, ia) preceq (sb, ib)  iff  sa == sb ? ia <= ib
+//                                           : sa is an ancestor of sb
+//
+// Segment-level ancestry is answered by an immutable per-segment bitset
+// built when the segment is created, so readers need no locks. Segment ids
+// are assigned in creation order and are therefore topologically sorted; for
+// segments that have never been materialized (plain linear operation, and
+// the reserved all-ones segment that sentinel values like ~(size_t)0 fall
+// in), ancestry falls back to the chain order sa < sb, which agrees with the
+// DAG on any prefix of history that is still a pure chain.
+//
+// Integer comparison of two worlds remains exact whenever both lie on the
+// spine -- the chain of segments the world counter has traversed -- because
+// segment ids and indices are both monotone along it. Sites that compare or
+// intersect worlds that are all known to be on the spine (e.g. the world
+// counter, method insertion worlds, and validity bounds computed from them
+// in-process) may therefore still use integer compares; sites that test a
+// stored world bound against an arbitrary query world must use the
+// predicates below.
+
+#ifdef _P64
+#define JL_WORLD_IDX_BITS 48
+#else
+#define JL_WORLD_IDX_BITS 24
+#endif
+#define JL_WORLD_IDX_MASK ((~(size_t)0) >> (8 * sizeof(size_t) - JL_WORLD_IDX_BITS))
+// number of allocatable segments; the top segment id is never allocated so
+// that sentinel worlds (~(size_t)0 and values near it) fall in an
+// unmaterialized segment
+#define JL_WORLD_MAX_SEGMENTS ((~(size_t)0) >> JL_WORLD_IDX_BITS)
+
+STATIC_INLINE size_t jl_world_seg(size_t world) JL_NOTSAFEPOINT
+{
+    return world >> JL_WORLD_IDX_BITS;
+}
+STATIC_INLINE size_t jl_world_idx(size_t world) JL_NOTSAFEPOINT
+{
+    return world & JL_WORLD_IDX_MASK;
+}
+
+JL_DLLEXPORT int jl_world_seg_reaches(size_t sa, size_t sb) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents);
+JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, size_t nextra);
+
+// a preceq b: does world `a` precede (or equal) world `b` in the world DAG,
+// i.e. is the state of the world as of `a` part of the history of `b`?
+STATIC_INLINE int jl_world_reaches(size_t a, size_t b) JL_NOTSAFEPOINT
+{
+    if ((a >> JL_WORLD_IDX_BITS) == (b >> JL_WORLD_IDX_BITS))
+        return a <= b;
+    return jl_world_seg_reaches(a >> JL_WORLD_IDX_BITS, b >> JL_WORLD_IDX_BITS);
+}
+
+// Had an entry with the given `min_world` bound already been created as of
+// `world`?
+STATIC_INLINE int jl_world_at_least(size_t world, size_t min_world) JL_NOTSAFEPOINT
+{
+    return jl_world_reaches(min_world, world);
+}
+
+// Is `world` still covered by validity bounds capped (inclusively) at
+// `max_world`? `max_world == ~(size_t)0` means the entry has not been
+// invalidated; otherwise `max_world + 1` is the world of the invalidating
+// event and the entry is invalid exactly in that world's future cone.
+STATIC_INLINE int jl_world_at_most(size_t world, size_t max_world) JL_NOTSAFEPOINT
+{
+    if (max_world == ~(size_t)0)
+        return 1;
+    return !jl_world_reaches(max_world + 1, world);
+}
+
+// Is `world` within the validity bounds [min_world, max_world]?
+STATIC_INLINE int jl_world_in_range(size_t world, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+{
+    return jl_world_at_least(world, min_world) && jl_world_at_most(world, max_world);
+}
+
+// Is the entire (spine) world range [query_min, query_max] within the
+// validity bounds [min_world, max_world]?
+STATIC_INLINE int jl_world_range_in_range(size_t query_min, size_t query_max, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+{
+    return jl_world_at_least(query_min, min_world) && jl_world_at_most(query_max, max_world);
+}
+
 typedef void (*tracer_cb)(jl_value_t *tracee);
 extern tracer_cb jl_newmeth_tracer;
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee) JL_CANSAFEPOINT;
