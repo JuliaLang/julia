@@ -38,10 +38,37 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nothrow_meta
     @_nospecializeinfer_meta
+    # A detached fragment — an operand with dangling positional references
+    # relative to itself — cannot be joined structurally with anything else:
+    # references from unrelated binder chains would conflate (see the
+    # reference-leaf branch in `_typejoin`; the recursion there strips binders
+    # itself and re-closes them, so only entry operands can be detached).
+    # Identity and subtyping still relate a fragment to types containing it.
+    if a !== b && (Core.has_dangling_tvarrefs(a) || Core.has_dangling_tvarrefs(b))
+        isa(a, Type) && isa(b, Type) || return Any
+        a <: b && return b
+        b <: a && return a
+        return Any
+    end
+    return _typejoin(a, b)
+end
+
+function _typejoin(@nospecialize(a), @nospecialize(b))
+    @_foldable_meta
+    @_nothrow_meta
+    @_nospecializeinfer_meta
     if isa(a, TypeVar)
+        # re-enter through the entry guard: the bound of a free variable can
+        # itself carry a detached fragment
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
         return typejoin(a, b.ub)
+    elseif isa(a, Core.TypeVarRef) || isa(b, Core.TypeVarRef)
+        # a reference leaf can only be reached here when the two sides come
+        # from different binder chains (a join of a type with itself returns
+        # at the `===` fast path before any binder is stripped), so identity
+        # carries no meaning and the join must widen
+        return Any
     elseif a === b
         return a
     elseif !isa(a, Type) || !isa(b, Type)
@@ -51,17 +78,19 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: a
         return a
     elseif isa(a, UnionAll)
-        return UnionAll(a.var, typejoin(a.body, b))
+        # the join preserves the body's binder references (a reference leaf
+        # joins to `Any`); re-close the binder over the result
+        return rewrap_unionall_one(_typejoin(getfield(a, :inner), b), a)
     elseif isa(b, UnionAll)
-        return UnionAll(b.var, typejoin(a, b.body))
+        return rewrap_unionall_one(_typejoin(a, getfield(b, :inner)), b)
     elseif isa(a, Union)
-        return typejoin(typejoin(a.a, a.b), b)
+        return _typejoin(_typejoin(a.a, a.b), b)
     elseif isa(b, Union)
-        return typejoin(a, typejoin(b.a, b.b))
+        return _typejoin(a, _typejoin(b.a, b.b))
     elseif isTypeEgal(a) || isTypeEgal(b)
         a = isTypeEgal(a) ? typeof(type_parameter(a)) : a
         b = isTypeEgal(b) ? typeof(type_parameter(b)) : b
-        return typejoin(a, b)
+        return _typejoin(a, b)
     elseif isTypeEq(a) || isTypeEq(b)
         # At least one operand is a `Type{X}` kind. We have already ruled out
         # `a <: b`, `b <: a`, and any `UnionAll`/`Union`/`TypeVar`. The least supertype
@@ -95,7 +124,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(undef, laf)
-                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp, laf))}
+                c[laf] = Vararg{_typejoin(unwrapva(ap[lar]), tailjoin(bp, laf))}
                 n = laf-1
             else
                 c = Vector{Any}(undef, laf+1)
@@ -105,7 +134,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
                 c = Vector{Any}(undef, lbf)
-                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap, lbf))}
+                c[lbf] = Vararg{_typejoin(unwrapva(bp[lbr]), tailjoin(ap, lbf))}
                 n = lbf-1
             else
                 c = Vector{Any}(undef, lbf+1)
@@ -118,7 +147,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         end
         for i = 1:n
             ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
-            ci = typejoin(unwrapva(ai), unwrapva(bi))
+            ci = _typejoin(unwrapva(ai), unwrapva(bi))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
@@ -136,27 +165,34 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             if n == 0
                 return aprimary
             end
-            vars = []
-            for i = 1:n
-                ai, bi = a.parameters[i], b.parameters[i]
-                if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
-                    aprimary = aprimary{ai}
-                else
-                    aprimary = aprimary::UnionAll
-                    # pushfirst!(vars, aprimary.var)
-                    _growbeg!(vars, 1)
-                    vars[1] = aprimary.var
-                    aprimary = aprimary.body
-                end
-            end
-            for v in vars
-                aprimary = UnionAll(v, aprimary)
-            end
-            return aprimary
+            return typejoin_apply_params(aprimary, a.parameters, b.parameters, 1)
         end
         b = supertype(b)::DataType
     end
     return Any
+end
+
+# Apply the agreeing parameter joins to the wrapper's binder chain, keeping
+# the binders of the disagreeing slots in place: an agreeing (closed) value
+# substitutes into the fragment below a kept binder capture-free, and a kept
+# binder's node is rebuilt around the result verbatim — its bounds and the
+# references to it are positional, so nothing is materialized or renamed.
+function typejoin_apply_params(@nospecialize(t), ap::Core.SimpleVector, bp::Core.SimpleVector, i::Int)
+    if i > length(ap)
+        return t
+    end
+    ai, bi = ap[i], bp[i]
+    # references from two different chains compare `===` (they are
+    # interned positionally) without denoting an agreed value
+    agree = !(ai isa Core.TypeVarRef || bi isa Core.TypeVarRef ||
+              Core.has_dangling_tvarrefs(ai) || Core.has_dangling_tvarrefs(bi)) &&
+            (ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai))
+    t = t::UnionAll
+    if agree
+        return typejoin_apply_params(t{ai}, ap, bp, i+1)
+    end
+    body = typejoin_apply_params(getfield(t, :inner), ap, bp, i+1)
+    return UnionAll(getfield(t, :name), getfield(t, :lb), getfield(t, :ub), body)
 end
 
 # return an upper-bound on type `a` with type `b` removed
@@ -274,7 +310,7 @@ function tailjoin(A::SimpleVector, i::Int)
     end
     t = Bottom
     for j = i:length(A)
-        t = typejoin(t, unwrapva(A[j]))
+        t = _typejoin(t, unwrapva(A[j]))
     end
     return t
 end
