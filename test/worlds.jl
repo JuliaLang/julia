@@ -797,6 +797,37 @@ end
     @test Base.invoke_in_world(sib, f_before_advance) == 1
     @test Base.invoke_in_world(sib, +, 1, 2) == 3
 end
+@testset "three-point total order (asymmetric joins)" begin
+    ordered(x, y, obs) = ccall(:jl_world_ordered_before, Cint, (Csize_t, Csize_t, Csize_t), x, y, obs) != 0
+    w_pre = Base.get_world_counter()
+    t1 = advance_into_segment(UInt[]) # close w_pre's run; the trunk continues
+    a = new_segment([w_pre]) + UInt(1)          # side branch A forked at w_pre
+    b = new_segment([w_pre]) + UInt(1)          # side branch B forked at w_pre
+    t2 = advance_into_segment([a - UInt(1)])    # spine merges A
+    t3 = advance_into_segment([b - UInt(1)])    # spine merges B
+    obs = Base.get_world_counter()
+    @test !reaches(a, b) && !reaches(b, a)
+    # comparable pairs order by visibility
+    @test ordered(w_pre, a, obs) && !ordered(a, w_pre, obs)
+    @test ordered(a, t2, obs) && ordered(b, t3, obs)
+    # incomparable pairs order by their merge points on the observer's trunk:
+    # trunk events before a join precede the side branch's events, which
+    # precede trunk events after it
+    @test ordered(t1, a, obs) && !ordered(a, t1, obs)
+    @test ordered(a, b, obs) && !ordered(b, a, obs) # A merged before B
+    @test ordered(a, t3, obs) && !ordered(t3, a, obs)
+    # a side branch with internal structure merged wholesale: worlds that
+    # join at the same merge point order by the branch's own total order
+    x1 = new_segment([w_pre]) + UInt(1)
+    x2 = new_segment([w_pre]) + UInt(1)
+    z = new_segment([x1, x2]) # z's trunk is x1's branch; x2 is its side branch
+    advance_into_segment([z])
+    obs2 = Base.get_world_counter()
+    @test !reaches(x1, x2) && !reaches(x2, x1)
+    @test ordered(x1, x2, obs2) && !ordered(x2, x1, obs2)
+    @test ordered(x2, z, obs2) && !ordered(z, x1, obs2)
+end
+
 @testset "inference and compilation at branch worlds" begin
     sib2 = new_segment([w_preadvance]) + UInt(1)
     # a function that has never been called or inferred, invoked at a branch

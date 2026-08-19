@@ -52,7 +52,11 @@ JL_DLLEXPORT int jl_world_seg_reaches(size_t sa, size_t sb) JL_NOTSAFEPOINT
 }
 
 // Requires world_counter_lock. `chain_parent == ~(size_t)0` means no
-// implicit parent.
+// implicit parent; otherwise it is the trunk (main-branch) parent, and the
+// remaining parents are side branches merged at this segment's base world.
+// Joins are asymmetric: a side branch's events order after every main-branch
+// event before the join point and before every one after it, which is
+// recorded in join_pos (the segment's total order over its visible cone).
 static jl_world_segment_t *world_new_segment_locked(size_t chain_parent, size_t *parent_worlds, size_t nparents)
 {
     uint32_t id = world_nsegments_;
@@ -65,11 +69,14 @@ static jl_world_segment_t *world_new_segment_locked(size_t chain_parent, size_t 
     jl_atomic_store_relaxed(&seg->end_idx, JL_WORLD_IDX_MASK);
     seg->nparents = (uint32_t)nparents + (chain_parent != ~(size_t)0);
     seg->parents = seg->nparents ? (size_t*)malloc_s(seg->nparents * sizeof(size_t)) : NULL;
+    seg->join_pos = id ? (size_t*)calloc_s(id * sizeof(size_t)) : NULL;
+    size_t base = (size_t)id << JL_WORLD_IDX_BITS;
     uint32_t pi = 0;
     for (size_t i = 0; i <= nparents; i++) {
         size_t pw = i == 0 ? chain_parent : parent_worlds[i - 1];
         if (pw == ~(size_t)0)
             continue;
+        int is_trunk = pi == 0; // the first parent continues the trunk
         seg->parents[pi++] = pw;
         size_t psid = jl_world_seg(pw);
         assert(psid < id && "parent segment must precede the new segment");
@@ -79,12 +86,30 @@ static jl_world_segment_t *world_new_segment_locked(size_t chain_parent, size_t 
             size_t pwords = (pseg->anc_nbits + 63) / 64;
             for (size_t w = 0; w < pwords; w++)
                 seg->anc_row[w] |= pseg->anc_row[w];
+            if (is_trunk) {
+                // inherit the trunk parent's total order and extend the trunk
+                memcpy(seg->join_pos, pseg->join_pos, pseg->anc_nbits * sizeof(size_t));
+                seg->join_pos[psid] = JL_WORLD_POS_TRUNK;
+            }
+            else {
+                // a side branch: everything newly visible through it joins
+                // the trunk at this segment's base world
+                for (uint32_t b = 0; b <= psid; b++) {
+                    if (b == psid || ((pseg->anc_row[b >> 6] >> (b & 63)) & 1)) {
+                        if (seg->join_pos[b] == 0)
+                            seg->join_pos[b] = base;
+                    }
+                }
+            }
         }
         else {
             // an unmaterialized (boot prefix) parent: its history is the
             // whole linear chain of segments up to and including it
-            for (size_t b = 0; b <= psid; b++)
+            for (size_t b = 0; b <= psid; b++) {
                 seg->anc_row[b >> 6] |= (uint64_t)1 << (b & 63);
+                if (seg->join_pos[b] == 0)
+                    seg->join_pos[b] = is_trunk ? JL_WORLD_POS_TRUNK : base;
+            }
         }
     }
     world_nsegments_ = id + 1;
@@ -120,45 +145,84 @@ static jl_world_segment_t *world_advance_locked(size_t *extra_parent_worlds, siz
     jl_world_segment_t *oldseg = jl_atomic_load_relaxed(&world_segments[jl_world_seg(cur)]);
     if (oldseg)
         jl_atomic_store_relaxed(&oldseg->end_idx, jl_world_idx(cur));
-    size_t base = (size_t)seg->id << JL_WORLD_IDX_BITS;
-    // every newly merged segment joins the spine at this run's base world
-    for (uint32_t i = 0; i < seg->anc_nbits; i++) {
-        if ((seg->anc_row[i >> 6] >> (i & 63)) & 1) {
-            jl_world_segment_t *anc = jl_atomic_load_relaxed(&world_segments[i]);
-            if (anc && anc->kind != JL_WORLD_SEG_RUN && jl_atomic_load_relaxed(&anc->joined_spine) == 0)
-                jl_atomic_store_relaxed(&anc->joined_spine, base);
-        }
-    }
-    jl_atomic_store_release(&jl_world_counter, base);
+    jl_atomic_store_release(&jl_world_counter, (size_t)seg->id << JL_WORLD_IDX_BITS);
     return seg;
 }
 
-// The position on the spine at (or from) which the history of `w` is
-// included: `w` itself for spine worlds (boot prefix and spine runs), the
-// merge point for grafted segments. Spine positions compare exactly as
-// integers.
-static size_t world_spine_pos(size_t w) JL_NOTSAFEPOINT
+// Position of `w` in the total order that the observer segment imposes on
+// its visible cone: `w` itself for worlds on the observer's trunk, the merge
+// point for worlds of merged side branches. Positions are trunk worlds and
+// compare exactly as integers.
+static size_t world_pos(size_t w, jl_world_segment_t *obs) JL_NOTSAFEPOINT
 {
-    jl_world_segment_t *seg = jl_world_get_segment(jl_world_seg(w));
-    if (seg == NULL || seg->kind == JL_WORLD_SEG_RUN)
-        return w;
-    size_t j = jl_atomic_load_relaxed(&seg->joined_spine);
-    assert(j != 0 && "join of a world whose segment has not been merged into the spine");
-    return j ? j : jl_atomic_load_relaxed(&jl_world_counter);
+    size_t ws = jl_world_seg(w);
+    if (obs == NULL || ws == obs->id)
+        return w; // the observer's own segment, or a fully linear history
+    size_t p = ws < obs->anc_nbits ? obs->join_pos[ws] : 0;
+    if (p == JL_WORLD_POS_TRUNK || p == 0)
+        return w; // on the trunk (0: not visible; fall back to chain order)
+    return p;
 }
 
-// The earliest spine world whose history includes both `a` and `b`. For
-// comparable worlds this is simply the later of the two; for worlds on
-// different branches it is the later of their spine merge points.
-JL_DLLEXPORT size_t jl_world_spine_join(size_t a, size_t b) JL_NOTSAFEPOINT
+// The earliest world in the observer's total order whose history includes
+// both `a` and `b`. For comparable worlds this is simply the later of the
+// two; for worlds on different branches it is the later of their merge
+// points on the observer's trunk.
+JL_DLLEXPORT size_t jl_world_join(size_t a, size_t b, size_t observer) JL_NOTSAFEPOINT
 {
     if (jl_world_reaches(a, b))
         return b;
     if (jl_world_reaches(b, a))
         return a;
-    size_t pa = world_spine_pos(a);
-    size_t pb = world_spine_pos(b);
+    jl_world_segment_t *obs = jl_world_get_segment(jl_world_seg(observer));
+    size_t pa = world_pos(a, obs);
+    size_t pb = world_pos(b, obs);
     return pa > pb ? pa : pb;
+}
+
+// The join with the current spine head as the observer.
+JL_DLLEXPORT size_t jl_world_spine_join(size_t a, size_t b) JL_NOTSAFEPOINT
+{
+    return jl_world_join(a, b, jl_atomic_load_acquire(&jl_world_counter));
+}
+
+// The three-point predicate `a preceq_observer b`: does `a` come at or
+// before `b` in the total order that the observer's segment imposes on its
+// visible history? Trunk worlds order as themselves; a merged side branch's
+// worlds order at its merge point (after the main-branch events preceding
+// the join, before those following it), and within one merge point, by the
+// side branch's own total order, recursively.
+JL_DLLEXPORT int jl_world_ordered_before(size_t a, size_t b, size_t observer) JL_NOTSAFEPOINT
+{
+    if (a == b)
+        return 1;
+    if (jl_world_reaches(a, b))
+        return 1;
+    if (jl_world_reaches(b, a))
+        return 0;
+    jl_world_segment_t *obs = jl_world_get_segment(jl_world_seg(observer));
+    size_t pa = world_pos(a, obs);
+    size_t pb = world_pos(b, obs);
+    if (pa != pb)
+        return pa < pb;
+    // both worlds joined the observer's trunk at the same merge point:
+    // order them by the total order of the side branch that merged there
+    jl_world_segment_t *pseg = jl_world_get_segment(jl_world_seg(pa));
+    if (pseg != NULL) {
+        for (uint32_t i = 1; i < pseg->nparents; i++) {
+            size_t pw = pseg->parents[i];
+            int ra = jl_world_reaches(a, pw);
+            int rb = jl_world_reaches(b, pw);
+            if (ra && rb) {
+                assert(jl_world_seg(pw) != jl_world_seg(observer) && "side branch cannot be the observer's segment");
+                return jl_world_ordered_before(a, b, pw);
+            }
+            if (ra || rb)
+                return ra; // side branches merged together order by parent position
+        }
+    }
+    // not visible through materialized structure: fall back to chain order
+    return a < b;
 }
 
 // Close the currently open segment at the current world counter and continue
