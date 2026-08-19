@@ -455,12 +455,18 @@ end
 end
 
 @testset "slotflags" begin
+    # Direct and broadcast callees should be marked called for specialization.
     JuliaLowering.include_string(test_mod, """
     function f_slotflags(x, y, f, z)
         f() + x + y
     end
+
+    f_slotflags_broadcast(f, x) = f.(x)
+    f_slotflags_broadcast_kw(f, x) = f.(x; init=0)
     """)
     @test only(methods(test_mod.f_slotflags)).called == 0b0100
+    @test only(methods(test_mod.f_slotflags_broadcast)).called == 0b0001
+    @test only(methods(test_mod.f_slotflags_broadcast_kw)).called == 0b0001
 end
 
 @testset "nospecialize" begin
