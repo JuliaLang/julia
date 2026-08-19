@@ -120,8 +120,45 @@ static jl_world_segment_t *world_advance_locked(size_t *extra_parent_worlds, siz
     jl_world_segment_t *oldseg = jl_atomic_load_relaxed(&world_segments[jl_world_seg(cur)]);
     if (oldseg)
         jl_atomic_store_relaxed(&oldseg->end_idx, jl_world_idx(cur));
-    jl_atomic_store_release(&jl_world_counter, (size_t)seg->id << JL_WORLD_IDX_BITS);
+    size_t base = (size_t)seg->id << JL_WORLD_IDX_BITS;
+    // every newly merged segment joins the spine at this run's base world
+    for (uint32_t i = 0; i < seg->anc_nbits; i++) {
+        if ((seg->anc_row[i >> 6] >> (i & 63)) & 1) {
+            jl_world_segment_t *anc = jl_atomic_load_relaxed(&world_segments[i]);
+            if (anc && anc->kind != JL_WORLD_SEG_RUN && jl_atomic_load_relaxed(&anc->joined_spine) == 0)
+                jl_atomic_store_relaxed(&anc->joined_spine, base);
+        }
+    }
+    jl_atomic_store_release(&jl_world_counter, base);
     return seg;
+}
+
+// The position on the spine at (or from) which the history of `w` is
+// included: `w` itself for spine worlds (boot prefix and spine runs), the
+// merge point for grafted segments. Spine positions compare exactly as
+// integers.
+static size_t world_spine_pos(size_t w) JL_NOTSAFEPOINT
+{
+    jl_world_segment_t *seg = jl_world_get_segment(jl_world_seg(w));
+    if (seg == NULL || seg->kind == JL_WORLD_SEG_RUN)
+        return w;
+    size_t j = jl_atomic_load_relaxed(&seg->joined_spine);
+    assert(j != 0 && "join of a world whose segment has not been merged into the spine");
+    return j ? j : jl_atomic_load_relaxed(&jl_world_counter);
+}
+
+// The earliest spine world whose history includes both `a` and `b`. For
+// comparable worlds this is simply the later of the two; for worlds on
+// different branches it is the later of their spine merge points.
+JL_DLLEXPORT size_t jl_world_spine_join(size_t a, size_t b) JL_NOTSAFEPOINT
+{
+    if (jl_world_reaches(a, b))
+        return b;
+    if (jl_world_reaches(b, a))
+        return a;
+    size_t pa = world_spine_pos(a);
+    size_t pb = world_spine_pos(b);
+    return pa > pb ? pa : pb;
 }
 
 // Close the currently open segment at the current world counter and continue

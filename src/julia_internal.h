@@ -593,12 +593,17 @@ typedef struct {
     uint32_t id;
     uint32_t anc_nbits;         // number of valid bits in anc_row (== id)
     _Atomic(size_t) end_idx;    // terminal index once closed; JL_WORLD_IDX_MASK while open
+    _Atomic(size_t) joined_spine; // first spine world whose history includes this segment; 0 while unmerged
     uint8_t kind;               // enum jl_world_seg_kind
     uint32_t run;               // RUN: spine run ordinal; IMAGE: run ordinal within the origin image
     uint64_t image_id;          // IMAGE: origin image id; 0 otherwise
     uint32_t nparents;
     size_t *parents;            // parent worlds, in declaration order
+#ifdef __cplusplus
+    uint64_t anc_row[1];        // ancestor segment bitset, immutable after publication
+#else
     uint64_t anc_row[];         // ancestor segment bitset, immutable after publication
+#endif
 } jl_world_segment_t;
 
 JL_DLLEXPORT int jl_world_seg_reaches(size_t sa, size_t sb) JL_NOTSAFEPOINT;
@@ -609,6 +614,7 @@ JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size
 JL_DLLEXPORT size_t jl_world_image_run(uint64_t image_id, uint32_t run) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_world_segment_t *jl_world_get_segment(size_t seg) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t jl_world_nsegments(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_spine_join(size_t a, size_t b) JL_NOTSAFEPOINT;
 
 // mirror of Core.WorldToken
 typedef struct {
@@ -1291,6 +1297,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b J
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_bpart_reresolve_loaded(jl_binding_t *b, jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;

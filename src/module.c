@@ -462,6 +462,42 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     bpart->kind = resolution.ultimate_kind | resolution.deprecation_flags;
 }
 
+// During image loading: the head partition `bpart` of `b` came from a grafted
+// world history and carries the resolution the saving process computed.
+// Recompute the implicit resolution at the current world; if it matches, the
+// grafted partition stays valid everywhere it reaches (returns NULL).
+// Otherwise cap the grafted partition just before the current world -- it
+// remains valid in its own branch's cone of the world DAG -- and prepend a
+// fresh partition carrying this process's resolution for spine worlds
+// (returned). The new partition's min_world deliberately lies on the spine,
+// which is not an ancestor of the grafted history, so queries at grafted
+// worlds fall through to the capped partition.
+JL_DLLEXPORT jl_binding_partition_t *jl_bpart_reresolve_loaded(jl_binding_t *b, jl_binding_partition_t *bpart)
+{
+    size_t cur = jl_atomic_load_acquire(&jl_world_counter);
+    struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, cur, 0);
+    size_t flags = bpart->kind & PARTITION_MASK_FLAG;
+    if ((enum jl_partition_kind)(resolution.ultimate_kind) == (enum jl_partition_kind)(bpart->kind & PARTITION_MASK_KIND) &&
+        resolution.binding_or_const == bpart->restriction)
+        return NULL;
+    jl_value_t *restriction = resolution.binding_or_const;
+    JL_GC_PUSH1(&restriction);
+    jl_binding_partition_t *newp = new_binding_partition(b);
+    jl_gc_write(newp, newp->restriction, jl_value_t, restriction);
+    newp->kind = resolution.ultimate_kind | resolution.deprecation_flags | flags;
+    jl_atomic_store_relaxed(&newp->min_world, cur);
+    // (max_world is already ~(size_t)0)
+    jl_atomic_store_relaxed(&newp->next, bpart);
+    jl_gc_wb(newp, bpart);
+    jl_atomic_store_release(&b->partitions, newp);
+    jl_gc_wb(b, newp);
+    // the grafted resolution ends just before this process's resolution takes
+    // over on the spine
+    jl_atomic_store_release(&bpart->max_world, cur - 1);
+    JL_GC_POP();
+    return newp;
+}
+
 static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world) JL_CANSAFEPOINT
 {
     jl_binding_partition_t *bpart = *pbpart;

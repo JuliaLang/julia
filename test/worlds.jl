@@ -840,9 +840,13 @@ precompile_test_harness("WorldToken precompilation") do load_path
           """
           module WTokenPkg
           wfn() = 1
+          sfn(::Any) = 1
+          cfn(x) = sfn(x)
           const tok = Base.world_token()
           gfn() = 1
+          sfn(::Int) = 2
           const tok2 = Base.world_token()
+          precompile(cfn, (Int,))
           end
           """)
     @test !isa(Base.compilecache(Base.PkgId("WTokenPkg")), Base.PrecompilableError)
@@ -859,6 +863,13 @@ precompile_test_harness("WorldToken precompilation") do load_path
         @test_throws MethodError Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.gfn)
         @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.wfn) == 1
         @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.gfn) == 1
+        # a CodeInstance compiled against a method added after the capture
+        # keeps its true creation world through edge validation: it is not
+        # valid at tok, and off-spine inference resolves the older method
+        # state there instead
+        @test invokelatest(WTokenPkg.cfn, 1) == 2
+        @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.cfn, 1) == 2
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.cfn, 1) == 1
         # redefinitions after loading are invisible at the tokens: they are
         # not in the invalidating event's future cone
         @eval WTokenPkg wfn() = 42
@@ -891,6 +902,38 @@ precompile_test_harness("WorldToken precompilation") do load_path
         # the dependency's own token still works and does not see WTokenNested
         @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
         @test_throws MethodError Base.invoke_in_world(WTokenPkg.tok2, WTokenNested.nfn)
+    end
+    # binding history: partition chains and usings entries keep their
+    # (translated) verbatim worlds, so tokens see the binding state as of
+    # their capture
+    write(joinpath(load_path, "WTokenBind.jl"),
+          """
+          module WTokenBind
+          module Sub
+          export subname
+          const subname = 7
+          end
+          const cv = 1
+          const cw = 10
+          const tokb = Base.world_token()
+          const cv = 2
+          using .Sub
+          end
+          """)
+    @test !isa(Base.compilecache(Base.PkgId("WTokenBind")), Base.PrecompilableError)
+    @eval using WTokenBind
+    invokelatest() do
+        # a const replaced after the capture: the token sees the original value
+        @test invokelatest(getglobal, WTokenBind, :cv) == 2
+        @test Base.invoke_in_world(WTokenBind.tokb, getglobal, WTokenBind, :cv) == 1
+        # a `using` after the capture: the implicitly-resolved name is not
+        # visible at the token
+        @test invokelatest(getglobal, WTokenBind, :subname) == 7
+        @test_throws UndefVarError Base.invoke_in_world(WTokenBind.tokb, getglobal, WTokenBind, :subname)
+        # a const replaced after loading is likewise invisible at the token
+        @eval WTokenBind const cw = 20
+        @test invokelatest(getglobal, WTokenBind, :cw) == 20
+        @test Base.invoke_in_world(WTokenBind.tokb, getglobal, WTokenBind, :cw) == 10
     end
 end
 
