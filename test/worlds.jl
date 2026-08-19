@@ -842,25 +842,55 @@ precompile_test_harness("WorldToken precompilation") do load_path
           wfn() = 1
           const tok = Base.world_token()
           gfn() = 1
+          const tok2 = Base.world_token()
           end
           """)
     @test !isa(Base.compilecache(Base.PkgId("WTokenPkg")), Base.PrecompilableError)
     @eval using WTokenPkg
     invokelatest() do
         @test WTokenPkg.tok isa Core.WorldToken
-        # the token was rebased onto a grafted segment of the world DAG, not
-        # left at the saving process's meaningless numbering
+        # the tokens were rebased onto grafted copies of the saving process's
+        # spine runs, not left at its meaningless numbering
         @test wseg(WTokenPkg.tok.world) != wseg(unsafe_load(cglobal(:jl_require_world, UInt)))
         @test wseg(WTokenPkg.tok.world) != wseg(Base.get_world_counter())
-        # image content is visible at the token (granularity within the
-        # capturing image itself is currently the whole image)
+        # full fidelity within the image: tok predates gfn's definition,
+        # tok2 postdates it
         @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
-        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.gfn) == 1
-        # redefinitions after loading are invisible at the token: it is not in
-        # the invalidating event's future cone
+        @test_throws MethodError Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.gfn)
+        @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.wfn) == 1
+        @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.gfn) == 1
+        # redefinitions after loading are invisible at the tokens: they are
+        # not in the invalidating event's future cone
         @eval WTokenPkg wfn() = 42
         @test invokelatest(WTokenPkg.wfn) == 42
         @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
+        @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.wfn) == 1
+    end
+    # nested capture: a package that depends on the token-capturing package
+    # and captures its own token re-serializes both world histories; its
+    # token resolves the dependency's runs by their stable image identity
+    write(joinpath(load_path, "WTokenNested.jl"),
+          """
+          module WTokenNested
+          using WTokenPkg
+          nfn() = WTokenPkg.wfn() + 100
+          const ntok = Base.world_token()
+          end
+          """)
+    @test !isa(Base.compilecache(Base.PkgId("WTokenNested")), Base.PrecompilableError)
+    @eval using WTokenNested
+    invokelatest() do
+        @test WTokenNested.ntok isa Core.WorldToken
+        # at the latest world, nfn sees this session's wfn redefinition (the
+        # image CodeInstance fails edge validation and is re-inferred)
+        @test invokelatest(WTokenNested.nfn) == 142
+        # at the nested token, the loading session's redefinition of wfn is
+        # not part of the token's history: nfn resolves the dependency's
+        # original definition (via off-spine inference at the token's world)
+        @test Base.invoke_in_world(WTokenNested.ntok, WTokenNested.nfn) == 101
+        # the dependency's own token still works and does not see WTokenNested
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
+        @test_throws MethodError Base.invoke_in_world(WTokenPkg.tok2, WTokenNested.nfn)
     end
 end
 

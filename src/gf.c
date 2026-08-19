@@ -3028,7 +3028,11 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     jl_typemap_entry_t *newentry = NULL;
     JL_GC_PUSH1(&newentry);
     // add our new entry
-    assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0); // min-world
+    // min-world: either not yet activated, or already carrying its original
+    // world from a grafted image history (activation preserves it)
+    assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0 ||
+           jl_world_seg(jl_atomic_load_relaxed(&method->primary_world)) !=
+               jl_world_seg(jl_atomic_load_relaxed(&jl_world_counter)));
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     JL_LOCK(&mt->cache->writelock);
@@ -3207,11 +3211,10 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_value_t *oldvalue = NULL;
     jl_array_t *oldmi = NULL;
     size_t world = jl_atomic_load_relaxed(&method->primary_world);
-    // min-world is the next spine world, or the base of a grafted image
-    // segment that the current spine segment has already merged
+    // min-world is the next spine world, or a world within a grafted image
+    // history (which the spine merges once the graft completes)
     assert(world == jl_atomic_load_relaxed(&jl_world_counter) + 1 ||
-           (jl_world_idx(world) == 0 &&
-            jl_world_seg_reaches(jl_world_seg(world), jl_world_seg(jl_atomic_load_relaxed(&jl_world_counter)))));
+           jl_world_seg(world) != jl_world_seg(jl_atomic_load_relaxed(&jl_world_counter)));
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     assert(jl_atomic_load_relaxed(&newentry->min_world) == ~(size_t)0);

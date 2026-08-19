@@ -1643,11 +1643,13 @@ world age.
 
 Unlike a raw world age, a token remains meaningful across precompilation: when
 a token is serialized into a package image, the loading process grafts the
-image's world history into the world-age DAG as its own segment and rebases
-the token onto it, so invoking at the token continues to see the captured
-state and is isolated from later redefinitions. (The granularity within the
-capturing package itself is currently the whole image: a token does not
-distinguish definitions made before and after its capture in its own package.)
+image's world history into the world-age DAG and rebases the token onto it, so
+invoking at the token continues to see exactly the captured state. In
+particular, the token distinguishes definitions made before and after its
+capture (including within its own package), is isolated from redefinitions
+made after the image is loaded, and does not see definitions that are not part
+of its own history (such as packages loaded by the loading process that the
+capturing package did not depend on).
 """
 world_token() = Core.WorldToken(tls_world_age())
 
