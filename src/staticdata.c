@@ -1808,6 +1808,23 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     jl_atomic_store_relaxed(&newbpart->max_world, 0);
                 }
             }
+            else if (s->incremental && jl_typetagis(v, jl_worldtoken_type)) {
+                assert(f == s->s);
+                jl_worldtoken_t *newtok = (jl_worldtoken_t*)&f->buf[reloc_offset];
+                if (newtok->world > jl_require_world) {
+                    // The captured world is above the shared sysimage prefix
+                    // and its numbering has no meaning in a loading process.
+                    // Rewrite it to an offset from the prefix; the loader
+                    // grafts this image's world history as a fresh segment of
+                    // the world DAG and rebases the token into it.
+                    if (jl_world_seg(newtok->world) != jl_world_seg(jl_require_world))
+                        jl_error("cannot serialize a world token captured above another grafted image history (not implemented yet)");
+                    newtok->world -= jl_require_world;
+                    arraylist_push(&s->fixup_objs, (void*)reloc_offset);
+                }
+                // else: part of the shared sysimage prefix; remains valid as
+                // an absolute world in any loading process
+            }
             else if (jl_is_method(v)) {
                 assert(f == s->s);
                 write_padding(f, sizeof(jl_method_t) - tot); // hidden fields
@@ -3988,7 +4005,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
-                                                 pkgcachesizes *cachesizes) JL_CANSAFEPOINT JL_GC_DISABLED
+                                                 pkgcachesizes *cachesizes,
+                                                 size_t *worldtoken_graft) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
     int en = jl_gc_enable(0);
@@ -4385,6 +4403,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
+    size_t graft_world = 0;
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -4432,10 +4451,22 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             // child links were dropped at serialization)
             jl_cancel_source_relink((jl_cancel_source_t*)obj);
         }
+        else if (jl_typetagis(obj, jl_worldtoken_type)) {
+            // this image's world history must survive: graft it as its own
+            // segment of the world DAG (once per image) and rebase the
+            // token's serialized offset onto it
+            assert(s.incremental);
+            if (graft_world == 0)
+                graft_world = jl_world_graft_segment();
+            jl_worldtoken_t *tok = (jl_worldtoken_t*)obj;
+            tok->world += graft_world;
+        }
         else {
             abort();
         }
     }
+    if (worldtoken_graft)
+        *worldtoken_graft = graft_world;
     if (s.incremental) {
         int no_replacement = jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0;
         for (size_t i = 0; i < s.fixup_objs.len; i++) {
@@ -4637,7 +4668,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 ios_close(f);
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes);
+            size_t worldtoken_graft = 0;
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes, &worldtoken_graft);
             JL_SIGATOMIC_END();
 
             // Add roots to methods
@@ -4661,13 +4693,22 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             JL_LOCK(&world_counter_lock);
             // allocate a world for the new methods, and insert them there, invalidating content as needed
             size_t world = jl_atomic_load_relaxed(&jl_world_counter);
-            if (new_methods)
-                world += 1;
-            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
-            // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
-            // allow users to start running in this updated world
-            if (new_methods)
-                jl_atomic_store_release(&jl_world_counter, world);
+            if (worldtoken_graft) {
+                // this image's world history was grafted as its own segment
+                // (it contains captured world tokens); its content activates
+                // at the segment's base world, which the current spine
+                // segment has already merged
+                jl_activate_methods(extext_methods, internal_methods, worldtoken_graft, pkgname);
+            }
+            else {
+                if (new_methods)
+                    world += 1;
+                jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+                // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
+                // allow users to start running in this updated world
+                if (new_methods)
+                    jl_atomic_store_release(&jl_world_counter, world);
+            }
             // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
 
@@ -4710,7 +4751,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL);
+                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT

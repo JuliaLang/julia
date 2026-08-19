@@ -1634,6 +1634,23 @@ Return the world the [`current_task`](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
+"""
+    Base.world_token()
+
+Capture the current world age as an opaque `Core.WorldToken`, which can be
+passed to [`invoke_in_world`](@ref Base.invoke_in_world) in place of a raw
+world age.
+
+Unlike a raw world age, a token remains meaningful across precompilation: when
+a token is serialized into a package image, the loading process grafts the
+image's world history into the world-age DAG as its own segment and rebases
+the token onto it, so invoking at the token continues to see the captured
+state and is isolated from later redefinitions. (The granularity within the
+capturing package itself is currently the whole image: a token does not
+distinguish definitions made before and after its capture in its own package.)
+"""
+world_token() = Core.WorldToken(tls_world_age())
+
 get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
 
 """
