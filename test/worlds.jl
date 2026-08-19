@@ -229,12 +229,24 @@ f38435(::Int, ::Int) = 3.0
 function method_instance(f, types=Base.default_tt(f))
     m = which(f, types)
     inst = nothing
-    tt = Base.signature_type(f, types)
+    tt0 = Base.signature_type(f, types)
+    # runtime-dispatch specializations key type-valued slots by egality
+    # (see `jl_compilation_sig`); inference-only (`==`) ones keep `Type{X}`
+    u = Base.unwrap_unionall(tt0)::DataType
+    ps = Any[isa(p, Core.TypeEq) && !Base.has_free_typevars(Base.type_parameter(p)) ?
+             Core.TypeEgal{Base.type_parameter(p)} : p for p in u.parameters]
+    tt1 = Base.rewrap_unionall(Tuple{ps...}, tt0)
     for mi in Base.specializations(m)
-        if mi.specTypes <: tt && tt <: mi.specTypes
+        if (mi.specTypes <: tt1 && tt1 <: mi.specTypes) ||
+           (mi.specTypes <: tt0 && tt0 <: mi.specTypes)
             inst = mi
             break
         end
+    end
+    if inst === nothing
+        # create the (egality-keyed) dispatch specialization if nothing has needed it yet
+        match = Base._which(tt1; raise=false)
+        match === nothing || (inst = Base.specialize_method(match))
     end
     return inst
 end
@@ -626,4 +638,45 @@ rettype_with_side_effect() = eval(:(rettype_side_effect = "blah"; Cint))
 let
     @test rettype_side_effect == "blah"
     ccall(:strlen, rettype_with_side_effect(), (Cstring,), "xx")
+end
+
+# issue #62022 - missing invalidation with CI equivalence swaps during expansive recursion
+# When inference hits recursion limits and reuses cached CIs, the swapped CIs must have
+# proper edges/backedges so that subsequent method additions correctly invalidate them.
+struct W62022{T}; x::T; end
+@noinline leaf62022() = true
+# grow the type up to a fixed limit (inference's recursion limits will trigger first)
+@noinline foo62022(w::W62022)::Bool = foo62022(W62022(w))
+@noinline foo62022(::W62022{W62022{W62022{W62022{W62022{W62022{T}}}}}}) where {T} = leaf62022()
+@test foo62022(W62022(1)) === true # trigger compilation
+# add a new method that bottoms out the recursion earlier, but after the limit
+@noinline foo62022(::W62022{W62022{W62022{W62022{Int}}}}) = false
+@test foo62022(W62022(1)) === false # test for invalidation
+@test foo62022(W62022(W62022(W62022(1)))) === false
+
+# issue #61667 - rebinding a name in Main must not invalidate the show machinery, which
+# concrete-evals binding queries against Main (via `isvisible`)
+struct ShowInval61667; x::Int; end
+fshow61667(v) = string(v)
+@test fshow61667([ShowInval61667(1)]) isa String
+let ci = method_instance(fshow61667, (Vector{ShowInval61667},)).cache
+    @test ci.max_world == typemax(UInt)
+    Core.eval(Main, :(struct ShowInval61667 end))
+    @test ci.max_world == typemax(UInt)
+end
+
+# issue #61667 - new array types must not invalidate abstractly-typed array iteration
+struct IterInval61667{T} <: AbstractVector{T}
+    v::Vector{T}
+end
+Base.size(A::IterInval61667) = size(A.v)
+Base.getindex(A::IterInval61667, i::Int) = A.v[i]
+absvec61667() = Base.inferencebarrier(Module[])::AbstractVector{Module}
+iter61667() = invoke(iterate, Tuple{AbstractArray}, absvec61667())
+@test precompile(iter61667, ())
+let ci = method_instance(iter61667, ()).cache
+    @test ci.max_world == typemax(UInt)
+    Base.eachindex(::IndexLinear, A::IterInval61667) = eachindex(A.v)
+    Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
+    @test ci.max_world == typemax(UInt)
 end

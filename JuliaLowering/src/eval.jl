@@ -1,19 +1,80 @@
 # Non-incremental lowering API for non-toplevel non-module expressions.
 # May be removed?
 
-function lower(mod::Module, ex0::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter(),
+function lower(mod::Module, ex_in::SyntaxTree; expr_compat_mode::Bool=false,
                soft_scope::Union{Nothing,Bool}=nothing)
-     ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
-     ctx2, ex2 = expand_forms_2(  ctx1, ex1)
-     ctx3, ex3 = resolve_scopes(  ctx2, ex2; soft_scope)
-     ctx4, ex4 = convert_closures(ctx3, ex3)
-    _ctx5, ex5 = linearize_ir(    ctx4, ex4)
+    ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
+    ex0 = rebase_layers(ex_in, mod, ver)
+    world = Base.get_world_counter()
+    ex1 = expand_forms_1(ex0, world, true)
+    ctx2, ex2 = expand_forms_2(ex1, world)
+    ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
+    ctx4, ex4 = convert_closures(ctx3, ex3)
+    _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ex5
 end
 
-function macroexpand(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter())
-    _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
-    ex1
+function macroexpand(mod::Module, ex_in::SyntaxTree;
+                     expr_compat_mode::Bool=false,
+                     ver::VersionNumber=expr_compat_mode ?
+                         JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION,
+                     recursive::Bool=true)
+    ex0 = rebase_layers(ex_in, mod, ver)
+    expand_forms_1(ex0, Base.get_world_counter(), recursive)
+end
+
+"May be used in macros or from any module"
+function macroexpand(st::SyntaxTree)
+    DEBUG && assert_expandable(st)
+    ctx = MacroExpansionContext(st, Base.get_world_counter(), true)
+    expand_forms_1(ctx, st)
+end
+
+# If a top-level thunk has existing context, we can assume all syntax has the
+# same base layer: either it was produced by a macro expansion and went through
+# `apply_expansion_layer`, or it was produced by parsing (which we assume either
+# adds zero or uniform context to the tree).
+
+# We ignore old the base layer's module, which should usually be the same as the
+# current lowering module.  (counterexample: macroexpand in mod A producing
+# escaped :toplevel st, then eval st in mod B, but flisp does the same thing by
+# spamming globalrefs to mod A throughout st).
+function rebase_layers(st, mod::Module, ver::VersionNumber)
+    out = if st.context === nothing
+        # assert zero context
+        sc = SyntaxContext(mod, ver)
+        fill_context!(st, sc)
+    else
+        base = base_layer(st.context::SyntaxContext)
+        newbase = ScopeLayer(mod, nothing)
+        _rebase_layers(
+            st, Dict{ScopeLayer, ScopeLayer}(base=>newbase),
+            Dict{SyntaxContext, SyntaxContext}())
+    end
+    DEBUG && assert_expandable(out)
+    out
+end
+
+function _rebase_layers(st, slmap, scmap)
+    sc = st.context::SyntaxContext
+    sc2 = get(scmap, sc, nothing)
+    if isnothing(sc2)
+        sl2 = _get_sl!(slmap, sc.layer)
+        sc2 = scmap[sc] = SyntaxContext(sl2, sc.unexpanded, sc.version, sc.internal)
+    end
+    if is_leaf(st) || numchildren(st) == 0
+        @mknode(st; context=sc2)
+    else
+        cs = mapsyntax(c->_rebase_layers(c, slmap, scmap), children(st))
+        @mknode(st; context=sc2, children=cs)
+    end
+end
+
+function _get_sl!(slmap, sl::ScopeLayer)
+    out = get(slmap, sl, nothing)
+    out isa ScopeLayer && return out
+    slmap[sl] = ScopeLayer(
+        sl.mod, isnothing(sl.escaped) ? nothing : _get_sl!(slmap, sl.escaped))
 end
 
 # Incremental lowering API which can manage toplevel and module expressions.
@@ -33,13 +94,13 @@ end
 # We might consider changing at least the second of these choices, depending on
 # how we end up putting this into Base.
 
-struct LoweringIterator{Attrs}
-    expr_compat_mode::Bool # later stored in module?
-    todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
+struct LoweringIterator
+    ver::VersionNumber # later stored in module?
+    todo::Vector{Tuple{SyntaxTree, Bool, Int}}
 end
 
-function lower_init(ex::SyntaxTree{T}; expr_compat_mode::Bool=false) where {T}
-    LoweringIterator{T}(expr_compat_mode, [(ex, false, 0)])
+function lower_init(ex::SyntaxTree, ver)
+    LoweringIterator(ver, [(ex, false, 0)])
 end
 
 function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
@@ -64,30 +125,29 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
 
     k = kind(ex)
     if !(k in KSet"toplevel module")
-        ctx1, ex = expand_forms_1(mod, ex, iter.expr_compat_mode, world)
+        ex = rebase_layers(ex, mod, iter.ver)
+        ex = expand_forms_1(ex, world, true)
         k = kind(ex)
     end
     if k == K"toplevel"
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter, mod, world; soft_scope)
     elseif k == K"module"
-        (version, notbare, name, body) = @stm ex begin
-            [K"module" version nb_st name body] ->
-                (version.value, nb_st.value, name, body)
-            [K"module" nb_st name body] ->
-                (nothing, nb_st.value, name, body)
+        (version, notbare, mname, body) = @stm ex begin
+            [K"module" version nb_st mname body] ->
+                (version.value, nb_st.value, mname, body)
+            [K"module" nb_st mname body] ->
+                (nothing, nb_st.value, mname, body)
         end
-        if kind(name) != K"Identifier"
-            throw(LoweringError(name, "Expected module name"))
+        if kind(mname) != K"Identifier"
+            throw(LoweringError(mname, "Expected module name"))
         end
-        newmod_name = Symbol(name.name_val)
+        newmod_name = Symbol(syntax_name(mname))
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     else
-        # Non macro expansion parts of lowering
-        @assert @isdefined(ctx1) "Assertion to tell the compiler about the definedness of this variable"
-         ctx2, ex2 = expand_forms_2(ctx1, ex)
+         ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
@@ -107,6 +167,17 @@ function codeinfo_has_image_globalref(@nospecialize(e))
     else
         return false
     end
+end
+
+function codeinfo_has_fcall(@nospecialize(e))
+    if e isa Expr
+        if e.head === :(=)
+            return codeinfo_has_fcall(e.args[2])
+        end
+        return e.head === :foreigncall || e.head === :foreignglobal ||
+            e.head === :cfunction
+    end
+    return false
 end
 
 const _CodeInfo_need_ver = v"1.12.0-DEV.512"
@@ -145,73 +216,320 @@ else
     end
 end
 
-function _compress_debuginfo(info)
-    filename, edges, codelocs = info
-    edges = Core.svec(map(_compress_debuginfo, edges)...)
-    codelocs = @ccall jl_compress_codelocs((-1)::Int32, codelocs::Any,
-                                           div(length(codelocs),3)::Csize_t)::String
-    Core.DebugInfo(Symbol(filename), nothing, edges, codelocs)
-end
-
-function ir_debug_info_state(ex)
-    e1 = first(flattened_provenance(ex))
-    topfile = filename(e1)
-    Tuple{String, Vector{Any}, Vector{Int32}}[(topfile, [], Vector{Int32}())]
-end
-
-function add_ir_debug_info!(current_codelocs_stack, stmt)
-    locstk = Tuple{String, Int32}[(filename(e), source_location(e)[1]) for e in flattened_provenance(stmt)]
-    for j in 1:length(locstk)
-        if j === 1 && current_codelocs_stack[j][1] != locstk[j][1]
-            # dilemma: the filename stack here shares no prefix with that of the
-            # previous statement, where differing filenames usually (j > 1) mean
-            # a different macro expansion has started at this statement.  guess
-            # that both files are the same, and inherit the previous filename.
-            locstk[j] = (current_codelocs_stack[j][1], locstk[j][2])
+"""
+Uncompressed form of DebugInfo's linetable::String.  When compressing, some
+conveniences are erased:
+- `file` is not present
+- `line_offset` is identical
+- `spans` pairs (s1, s2) are stored `(s1-byte_offset, s2-s1+1)`
+- `line_starts` are stored `x-byte_offset`
+"""
+struct SourceByteTable
+    file::Symbol
+    line_offset::Int32
+    spans::Vector{Tuple{Int32,Int32}}
+    line_starts::Vector{Int32}
+    function SourceByteTable(file, line_offset, spans, line_starts)
+        @assert issorted(spans)
+        @assert allunique(spans)
+        @assert issorted(line_starts)
+        @assert allunique(line_starts)
+        @assert length(line_starts) > 0
+        for s in spans
+            @assert 0 < s[2] "linenode provenance; expected SourceFile"
+            @assert 0 < s[1] <= s[2]+1
         end
-        if j < length(current_codelocs_stack) && (j === length(locstk) ||
-                current_codelocs_stack[j+1][1] != locstk[j+1][1])
-            while j < length(current_codelocs_stack)
-                info = pop!(current_codelocs_stack)
-                push!(last(current_codelocs_stack)[2], info)
+        if !isempty(spans)
+            @assert !isempty(line_starts)
+            min_byte = spans[begin][begin]
+            max_byte = maximum(last, spans)
+            @assert line_starts[begin] <= min_byte
+            for ls in line_starts[begin+1:end]
+                @assert min_byte < ls
+                @assert ls <= max_byte
             end
-        elseif j > length(current_codelocs_stack)
-            push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
-        end
-    end
-    @jl_assert length(locstk) === length(current_codelocs_stack) stmt
-    for (j, (file,line)) in enumerate(locstk)
-        fn, edges, codelocs = current_codelocs_stack[j]
-        @jl_assert fn == file stmt
-        if j < length(locstk)
-            edge_index = length(edges) + 1
-            edge_codeloc_index = fld1(length(current_codelocs_stack[j+1][3]) + 1, 3)
         else
-            edge_index = 0
-            edge_codeloc_index = 0
+            # Not used for now
+            @assert false
         end
-        push!(codelocs, line)
-        push!(codelocs, edge_index)
-        push!(codelocs, edge_codeloc_index)
+
+        new(file, line_offset, spans, line_starts)
+    end
+end
+function SourceByteTable(sf::SourceFile, spans::Vector{Tuple{Int32, Int32}})
+    # Trim all newlines outside SBT's range
+    line_starts = map(ls->Int32(ls+sf.byte_offset), sf.line_starts)
+    b0, _ = JuliaSyntax.source_line_range(sf, spans[1][1])
+    first_line = sf.first_line
+    while length(line_starts) >= 2 && line_starts[2] <= b0
+        popfirst!(line_starts)
+        first_line += 1
+    end
+    max_byte = maximum(last, spans)
+    while !isempty(line_starts) && max_byte < line_starts[end]
+        pop!(line_starts)
+    end
+    SourceByteTable(Symbol(sf.filename), first_line, spans, line_starts)
+end
+
+function _take32(io::IOBuffer, n::Integer)
+    n in (0, 1, 2, 4) || throw(ArgumentError("Unsupported byte count"))
+    v = Int32(0)
+    n >= 1 && (v |= Int32(read(io, UInt8)))
+    n >= 2 && (v |= Int32(read(io, UInt8))<<8)
+    n >= 4 && (v |= Int32(read(io, UInt8))<<16)
+    n >= 4 && (v |= Int32(read(io, UInt8))<<24)
+    return v
+end
+
+function _push32(io::IOBuffer, v::Int32, n)
+    n in (0, 1, 2, 4) || throw(ArgumentError("Unsupported byte count"))
+    n >= 1 && write(io, v % UInt8)
+    n >= 2 && write(io, (v>>>8) % UInt8)
+    n >= 4 && write(io, (v>>>16) % UInt8)
+    n >= 4 && write(io, (v>>>24) % UInt8)
+    nothing
+end
+
+_encoded_len(max::Int32) = Int32(max == 0 ? 0 :
+    max < typemax(UInt8) ? 1 :
+    max < typemax(UInt16) ? 2 : 4)
+
+function compress_sbt(sbt::SourceByteTable)
+    min_byte = sbt.line_starts[1]
+    max_byte = Int32(0)
+    max_span = Int32(0)
+    for (b1,b2) in sbt.spans
+        max_span = max(max_span, (b2+Int32(1))-b1)
+        max_byte = max(max_byte, b2)
+    end
+
+    max_byte_rel = Int32(min_byte >= max_byte ? 1 : (max_byte - min_byte))
+    nlocs::Int32 = length(sbt.spans)
+    encl_span = _encoded_len(max_span)
+    encl_byte = _encoded_len(max_byte_rel)
+    final_len = 14 + # header
+        (encl_byte + encl_span) * nlocs +
+        (encl_byte * length(sbt.line_starts))
+
+    io = IOBuffer(;sizehint=final_len)
+    _push32(io, min_byte, 4)
+    _push32(io, sbt.line_offset, 4)
+    _push32(io, nlocs, 4)
+    _push32(io, encl_byte, 1)
+    _push32(io, encl_span, 1)
+    for (b1, b2) in sbt.spans
+        _push32(io, b1 - min_byte, encl_byte)
+        _push32(io, b2 - b1 + Int32(1), encl_span)
+    end
+    for n in sbt.line_starts
+        _push32(io, n - min_byte, encl_byte)
+    end
+
+    out = take!(io)
+    let l = length(out)
+        @assert l == final_len "wrong final length $l"
+    end
+    return String(out)
+end
+
+function uncompress_sbt(di::Core.DebugInfo)
+    di.linetable isa String || throw(ArgumentError("linetable: expected string"))
+    io = IOBuffer(di.linetable)
+    byte_offset = _take32(io, 4)
+    line_offset = _take32(io, 4)
+    nlocs = _take32(io, 4)
+    byte_encl = _take32(io, 1)
+    span_encl = _take32(io, 1)
+
+    let newlines_offset = (byte_encl + span_encl) * nlocs
+        @assert bytesavailable(io) >= newlines_offset "compressed string too short"
+        @assert byte_encl == 0 ||
+            (bytesavailable(io) - newlines_offset) % byte_encl == 0 "bad newlines"
+    end
+
+    out_spans = Tuple{Int32,Int32}[]
+    for i in 1:nlocs
+        s1 = _take32(io, byte_encl)
+        s2 = _take32(io, span_encl)
+        push!(out_spans, (s1+byte_offset, s1+byte_offset+s2-1))
+    end
+
+    out_newlines = Int32[]
+    while bytesavailable(io) > 0
+        push!(out_newlines, _take32(io, byte_encl) + byte_offset)
+    end
+    return SourceByteTable(di.def, line_offset, out_spans, out_newlines)
+end
+
+const LINENODE_SPAN_END = Int32(-5)
+
+# Byte-precise `DebugInfo` requires `Core.DebugInfo` to accept a `String` linetable,
+# which is only available on recent Julia.  On older versions (e.g. v1.12) we degrade to
+# line-based `DebugInfo` so that lowering still produces a valid `CodeInfo`, at the cost of
+# byte-precise source attribution.
+const _has_byte_precise_debuginfo =
+    hasmethod(Core.DebugInfo, Tuple{Symbol, String, Core.SimpleVector, String})
+
+function _di_pos(st::SyntaxTree)
+    src = JuliaSyntax.unexpanded_sourceref(st)
+    pos = if src isa SourceRef
+        (Int32(first_byte(src)), Int32(last_byte(src)))
+    elseif src isa LineNumberNode
+        (Int32(src.line), LINENODE_SPAN_END)
+    else
+        @jl_assert false st
     end
 end
 
-function finish_ir_debug_info!(current_codelocs_stack)
-    while length(current_codelocs_stack) > 1
-        info = pop!(current_codelocs_stack)
-        push!(last(current_codelocs_stack)[2], info)
+# TODO sourcefile(::LNN) should return Symbol, not LNN
+function _di_sourcefile(st)
+    x = JuliaSyntax.unexpanded_sourceref(st)
+    x isa LineNumberNode ? x.file : x.file[]::SourceFile
+end
+
+# A single pass over all IR to collect unique byte/line positions and CodeInfos
+function collect_locs!(node_sources, codeinfos, top_sf, st)
+    if kind(st) === K"code_info"
+        push!(codeinfos, st)
+        # TODO: macro_source is ignored for now
+        get!(node_sources, st, _di_pos(st))
+        for c in children(st[2])
+            node_sources[c] =
+                if _di_sourcefile(c) !== top_sf
+                    top_sf isa SourceFile &&
+                        @warn "inconsistent provenance for child" c st
+                    node_sources[st]
+                else
+                    _di_pos(c)
+                end
+            collect_locs!(node_sources, codeinfos, top_sf, c)
+        end
+    elseif !is_leaf(st)
+        # Non-toplevel codeinfo can contain nested codeinfo (opaque closures)
+        for c in children(st)
+            collect_locs!(node_sources, codeinfos, top_sf, c)
+        end
+    end
+    nothing
+end
+
+function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
+                           top_sbt::Union{String, Nothing},
+                           node_sources::Dict{SyntaxTree, Tuple{Int32, Int32}},
+                           spans::Vector{Tuple{Int32, Int32}})
+    @jl_assert kind(st) === K"code_info" st
+    locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[2]))
+        for c in children(st[2])
+            if top_sbt isa String # precise provenance
+                push!(a, Int32(searchsortedfirst(spans, node_sources[c])))
+            else
+                i = searchsortedfirst(spans, node_sources[c])
+                @jl_assert spans[i][2] == LINENODE_SPAN_END (c, "lno with span end?")
+                push!(a, spans[i][1])
+            end
+            push!(a, Int32(0))
+            push!(a, Int32(0))
+        end
+        a
     end
 
-    _compress_debuginfo(only(current_codelocs_stack))
+    setmeta!(st, :debuginfo, Core.DebugInfo(
+        file, top_sbt, Core.svec(),
+        @ccall(jl_compress_codelocs((-1)::Int32, locs::Any,
+                                    numchildren(st[2])::Csize_t)::String)))
+end
+
+# Populate `.debuginfo` on all K"code_info" in `st`
+function add_debuginfo!(st::SyntaxTree)
+    @jl_assert kind(st) === K"code_info" st
+    node_sources = Dict{SyntaxTree, Tuple{Int32, Int32}}()
+    codeinfos = SyntaxList()
+    top_sf = _di_sourcefile(st)
+    collect_locs!(node_sources, codeinfos, top_sf, st)
+    byte_precise = _has_byte_precise_debuginfo && top_sf isa SourceFile
+    if !byte_precise && top_sf isa SourceFile
+        # Without byte-precise support, degrade each byte span to its line number
+        # so the line-based path below emits valid `DebugInfo` (same shape as the
+        # `LineNumberNode` case).
+        for id in collect(keys(node_sources))
+            line = Int32(JuliaSyntax.source_line(top_sf, node_sources[id][1]))
+            node_sources[id] = (line, LINENODE_SPAN_END)
+        end
+    end
+    spans = sort!(unique(values(node_sources)))
+    if byte_precise
+        top_sbt = compress_sbt(SourceByteTable(top_sf, spans))
+        file = Symbol(top_sf.filename)
+    else
+        top_sbt = nothing
+        file = top_sf isa SourceFile ? Symbol(top_sf.filename) : Symbol(top_sf)
+    end
+    for ci in codeinfos
+        add_ci_debuginfo!(ci, file, top_sbt, node_sources, spans)
+    end
+end
+
+# flisp: jl_new_code_info_from_ir (method.c)
+function compute_ssaflags(st::SyntaxTree)
+    @jl_assert kind(st) == K"block" st
+    stmts = children(st)
+    out = zeros(UInt32, length(stmts))
+    inline_flags = Vector{Bool}()
+    inbounds_depth = 0
+    purity_flags = Vector{UInt32}()
+
+    # Note this should probably go in validation or be a user-facing
+    # loweringerror, but method.c only checks this in asserts builds, so we may
+    # need to allow these to be unbalanced
+    function checked_pop!(stk)
+        @jl_assert(!isempty(stk), (st, "ssaflags pop without push"))
+        pop!(stk)
+    end
+    for (i, stmt) in enumerate(stmts)
+        is_flag_stmt = true
+        @stm stmt begin
+            [K"inbounds" [K"Value"]] -> stmt[1].value::Bool ?
+                (inbounds_depth += 1) : # push
+                (inbounds_depth = 0)    # clear
+            [K"inbounds_pop"] -> (inbounds_depth = max(0, inbounds_depth-1))
+            [K"boundscheck" _...] -> nothing
+            [K"inline" [K"Value"]] -> stmt[1].value::Bool ?
+                push!(inline_flags, true) : checked_pop!(inline_flags)
+            [K"noinline" [K"Value"]] -> stmt[1].value::Bool ?
+                push!(inline_flags, false) : checked_pop!(inline_flags)
+            [K"purity"] -> checked_pop!(purity_flags)
+            [K"purity" _ _...] -> push!(
+                purity_flags,
+                UInt32(purity_expr_to_flags(stmt)) << Core.Compiler.NUM_IR_FLAGS)
+            _ -> is_flag_stmt = false
+        end
+        flag = UInt32(0)
+        if !isempty(inline_flags)
+            flag |= (inline_flags[end] ?
+                Core.Compiler.IR_FLAG_INLINE : Core.Compiler.IR_FLAG_NOINLINE)
+        end
+        if inbounds_depth != 0
+            flag |= Core.Compiler.IR_FLAG_INBOUNDS
+        end
+        if !isempty(purity_flags)
+            for pf in purity_flags
+                flag |= pf
+            end
+        end
+        out[i] = is_flag_stmt ? UInt32(0) : flag
+    end
+    @jl_assert length(out) == length(stmts) st
+    @jl_assert length(inline_flags) == 0 st
+    @jl_assert length(purity_flags) == 0 st
+    out
 end
 
 # Convert SyntaxTree to the CodeInfo+Expr data structures understood by the
 # Julia runtime
-function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
-    stmts = Any[]
-
-    current_codelocs_stack = ir_debug_info_state(ex)
-
+function to_code_info(ex::SyntaxTree)
+    slots = ex[1].value::Vector{Slot}
+    meta = ex.meta
     nargs = sum((s.kind==:argument for s in slots), init=0)
     slotnames = Vector{Symbol}(undef, length(slots))
     slot_rename_inds = Dict{String,Int}()
@@ -237,25 +555,12 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
             slot.is_called        << 6   # SLOT_CALLED        | -
     end
 
-    for stmt in children(ex)
-        push!(stmts, _to_lowered_expr(stmt))
-        add_ir_debug_info!(current_codelocs_stack, stmt)
-    end
-
-    debuginfo = finish_ir_debug_info!(current_codelocs_stack)
-
+    stmts = map(_to_lowered_expr, children(ex[2]))
     has_image_globalref = any(codeinfo_has_image_globalref, stmts)
-
-    # TODO: Set ssaflags based on call site annotations:
-    # - @inbounds annotations
-    # - call site @inline / @noinline
-    # - call site @assume_effects
-    ssaflags = zeros(UInt32, length(stmts))
-
+    ssaflags = compute_ssaflags(ex[2])
     propagate_inbounds =
         get(meta, :propagate_inbounds, false)
-    # TODO: Set true if there's a foreigncall
-    has_fcall = false
+    has_fcall = any(codeinfo_has_fcall, stmts)
     nospecializeinfer =
         get(meta, :nospecializeinfer, false)
     inlining =
@@ -266,7 +571,7 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
         get(meta, :no_constprop, false) ? 0x02 : 0x00
     purity =
         let eo = get(meta, :purity, nothing)
-            isnothing(eo) ? 0x0000 : Base.encode_effects_override(eo)
+            isnothing(eo) ? 0x0000 : eo::UInt16
         end
 
     # The following CodeInfo fields always get their default values for
@@ -282,11 +587,11 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     inlining_cost       = 0xffff
     rettype             = Any
 
-    @jl_assert(length(stmts) == numchildren(ex), ex)
+    @jl_assert(length(stmts) == numchildren(ex[2]), ex)
 
     _CodeInfo(
         stmts,
-        debuginfo,
+        getmeta(ex, :debuginfo, nothing),
         ssavaluetypes,
         ssaflags,
         slotnames,
@@ -311,7 +616,15 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     )
 end
 
+"""
+This pass convert's JuliaLowering's internal representation of untyped IR into
+a form the Julia runtime understands. This is a necessary decoupling which
+separates the development of JuliaLowering.jl from the evolution of the Julia
+runtime itself.
+"""
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
+    @jl_assert kind(ex) in KSet"thunk code_info" ex
+    add_debuginfo!(kind(ex) === K"thunk" ? ex[1] : ex)
     _to_lowered_expr(ex)
 end
 
@@ -322,59 +635,48 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"nothing"
         nothing
     elseif k == K"core"
-        GlobalRef(Core, Symbol(ex.name_val::String))
+        GlobalRef(Core, Symbol(syntax_name(ex)))
     elseif k == K"top"
-        GlobalRef(Base, Symbol(ex.name_val::String))
+        GlobalRef(Base, Symbol(syntax_name(ex)))
     elseif k == K"globalref"
-        GlobalRef(ex.mod::Module, Symbol(ex.name_val::String))
+        GlobalRef(ex.mod::Module, Symbol(syntax_name(ex)))
     elseif k == K"Identifier"
-        # Implicitly refers to name in parent module
-        # TODO: Should we even have plain identifiers at this point or should
-        # they all effectively be resolved into GlobalRef earlier?
-        Symbol(ex.name_val::String)
+        # TODO: assert false (only reachable from simdloop?)
+        Symbol(syntax_name(ex))
     elseif k == K"SourceLocation"
         QuoteNode(source_location(LineNumberNode, ex))
     elseif k == K"Symbol"
-        QuoteNode(Symbol(ex.name_val::String))
+        QuoteNode(Symbol(syntax_name(ex)))
     elseif k == K"slot"
-        Core.SlotNumber(ex.var_id::IdTag)
+        Core.SlotNumber(syntax_id(ex))
     elseif k == K"static_parameter"
-        Expr(:static_parameter, ex.var_id::IdTag)
+        Expr(:static_parameter, syntax_id(ex))
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id::IdTag)
+        Core.SSAValue(syntax_id(ex))
     elseif k == K"return"
-        Core.ReturnNode(_to_lowered_expr(ex[1]))
+        v = _to_lowered_expr(ex[1])
+        @jl_assert Base.Compiler.is_valid_return(v) ex
+        Core.ReturnNode(v)
     elseif k == K"inert"
         est_to_expr(ex)
-    elseif k == K"inert_syntaxtree"
+    elseif k == K"syntaxinert"
         ex[1]
     elseif k == K"code_info"
-        ir = to_code_info(ex[1], ex.slots, ex.meta)
-        if ex.is_toplevel_thunk
-            Expr(:thunk, ir) # TODO: Maybe nice to just return a CodeInfo here?
-        else
-            ir
-        end
+        to_code_info(ex)
     elseif k == K"Value"
-        # TODO: we still do this in ccall, import
-        # @jl_assert !isa_lowering_ast_node(ex.value) (
-        #     ex, "smuggling AST through Value is asking for trouble; find a SyntaxTree representation")
+        @jl_assert !isa_lowering_ast_node(ex.value) (
+            ex, string("smuggling AST through Value is asking for trouble; ",
+                       "find a SyntaxTree representation"))
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
-        Core.GotoNode(ex[1].id)
+        Core.GotoNode(syntax_id(ex[1]))
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(_to_lowered_expr(ex[1]), ex[2].id)
+        Core.GotoIfNot(_to_lowered_expr(ex[1]), syntax_id(ex[2]))
     elseif k == K"enter"
-        catch_idx = ex[1].id
+        catch_idx = syntax_id(ex[1])
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2]))
-    elseif k == K"method"
-        cs = map(_to_lowered_expr, children(ex))
-        # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
-        cs1 = cs[1]
-        c1 = cs1 isa QuoteNode ? cs1.value : cs1
-        Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
         Core.NewvarNode(_to_lowered_expr(ex[1]))
     elseif k == K"opaque_closure_method"
@@ -389,12 +691,12 @@ function _to_lowered_expr(ex::SyntaxTree)
         args = Any[_to_lowered_expr(e) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         arg1 = args[1]
-        @jl_assert arg1 isa QuoteNode ex
+        @jl_assert (arg1 isa QuoteNode) ex
         args[1] = arg1.value
         Expr(:meta, args...)
-    elseif k == K"foreigncall_arg1"
+    elseif k == K"foreignsymbol"
         @jl_assert kind(ex[1]) == K"tuple" ex
-        _foreigncall_arg1_expr(ex[1])
+        _foreignsymbol_expr(ex[1])
     elseif k == K"static_eval"
         @jl_assert numchildren(ex) == 1 ex
         _to_lowered_expr(ex[1])
@@ -405,12 +707,15 @@ function _to_lowered_expr(ex::SyntaxTree)
         ret = Expr(:cfunction)
         for (i, e) in enumerate(children(ex))
             if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
-                push!(ret.args, QuoteNode(Symbol(e[1].name_val::String)))
+                push!(ret.args, QuoteNode(Symbol(syntax_name(e[1]))))
             else
                 push!(ret.args, _to_lowered_expr(e))
             end
         end
         return ret
+    elseif k in KSet"inline noinline inbounds inbounds_pop purity"
+        # only used in compute_ssaflags (see method.c)
+        nothing
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -425,6 +730,7 @@ function _to_lowered_expr(ex::SyntaxTree)
                k == K"leave"     ? :leave      :
                k == K"isdefined" ? :isdefined  :
                k == K"loopinfo"  ? :loopinfo   :
+               k == K"thunk"     ? :thunk      :
                k == K"boundscheck"       ? :boundscheck       :
                k == K"latestworld"       ? :latestworld       :
                k == K"pop_exception"     ? :pop_exception     :
@@ -432,7 +738,10 @@ function _to_lowered_expr(ex::SyntaxTree)
                k == K"gc_preserve_begin" ? :gc_preserve_begin :
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
+               k == K"foreignglobal"     ? :foreignglobal     :
                k == K"cfunction"         ? :cfunction         :
+               k == K"aliasscope"        ? :aliasscope        :
+               k == K"popaliasscope"     ? :popaliasscope     :
                k == K"new_opaque_closure" ? :new_opaque_closure :
                nothing
         if isnothing(head)
@@ -447,29 +756,34 @@ function _to_lowered_expr(ex::SyntaxTree)
 end
 
 # ultra-permissive conversion allowing unlowered structure, but lowered leaves
-function _foreigncall_arg1_expr(ex)
+function _foreignsymbol_expr(ex)
     if is_leaf(ex) || kind(ex) == K"inert"
         _to_lowered_expr(ex)
     else
         k = kind(ex)
-        Expr(Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String),
-             map(_foreigncall_arg1_expr, children(ex))...)
+        Expr(Symbol((k === K"unknown_head" ? syntax_name(ex) : untokenize(k))::String),
+             map(_foreignsymbol_expr, children(ex))...)
     end
 end
 
 #-------------------------------------------------------------------------------
 # Our version of eval - should be upstreamed though?
-@fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
-                                macro_world::UInt=Base.get_world_counter(),
+@fzone "JL: eval" function eval(mod::Module, @nospecialize(ex);
                                 soft_scope::Union{Nothing,Bool}=nothing,
-                                opts...)
-    iter = lower_init(ex; opts...)
-    _eval(mod, iter; soft_scope)
+                                expr_compat_mode::Bool=false)
+    # Run the `eval` driver in the lowering world. Any internal operations
+    # are required to `invokelatest` before executing any code that dispatches
+    # on user code / types.
+    ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
+    return invoke_in_lowering_world(_lower_and_eval, mod, ex, ver, soft_scope)
 end
 
-# Version of eval() taking `Expr` (or Expr tree leaves of any type)
-function eval(mod::Module, @nospecialize(ex); opts...)
-    eval(mod, expr_to_est(ex); opts...)
+# `ex` may be a `SyntaxTree` or an `Expr` (or `Expr` tree leaves of any type).
+function _lower_and_eval(mod::Module, @nospecialize(ex), ver::VersionNumber,
+                         soft_scope::Union{Nothing,Bool})
+    st = ex isa SyntaxTree ? ex : expr_to_est(ex)
+    iter = lower_init(st, ver)
+    return _eval(mod, iter; soft_scope)
 end
 
 function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bool}=nothing)
@@ -491,7 +805,7 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
             result = pop!(modules)
         else
             @assert type == :thunk
-            result = Core.eval(modules[end], thunk[2])
+            result = Base.invokelatest(Core.eval, modules[end], thunk[2])
         end
     end
     @assert length(modules) === 1
@@ -533,7 +847,7 @@ Like `include`, except reads code from the given string rather than from a file.
 """
 function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
                         expr_compat_mode=false, version::VersionNumber=VERSION)
-    eval(mod, parseall(SyntaxTree, code; filename=filename, version=version); expr_compat_mode)
+    eval(mod, parseall(SyntaxTree, code; filename, version); expr_compat_mode)
 end
 
 include(path::AbstractString) = include(JuliaLowering, path)

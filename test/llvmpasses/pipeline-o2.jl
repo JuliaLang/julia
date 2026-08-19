@@ -152,9 +152,9 @@ emit(multiiterate_read, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write, Vector{Int64}, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write!, Vector{Int64}, Vector{Int64})
 
-emit(zeros, Type{Int64}, Int64)
-emit(zeros, Type{Int32}, Int64)
-emit(zeros, Type{Int16}, Int64)
+emit(zeros, Core.TypeEgal{Int64}, Int64)
+emit(zeros, Core.TypeEgal{Int32}, Int64)
+emit(zeros, Core.TypeEgal{Int16}, Int64)
 # COM: Int8 is hardcoded to memset anyways
 
 emit(sumloop, Int64)

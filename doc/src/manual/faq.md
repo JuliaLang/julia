@@ -83,18 +83,21 @@ functionality like command line argument handling. A way to determine that a fil
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
 However, it is recommended to not write files that double as a script and as an importable library.
-If one needs functionality both available as a library and a script, it is better to write is as a library, then import the functionality into a distinct script.
+If one needs functionality both available as a library and a script, it is better to write it as a library, then import the functionality into a distinct script.
 
 ### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
-Running a Julia script using `julia file.jl` does not throw
-[`InterruptException`](@ref) when you try to terminate it with CTRL-C
-(SIGINT). To run a certain code before terminating a Julia script,
+Running a Julia script using `julia file.jl` terminates the process when
+you try to terminate it with CTRL-C (SIGINT), without raising a catchable
+exception. To run a certain code before terminating a Julia script,
 which may or may not be caused by CTRL-C, use [`atexit`](@ref).
-Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
-file.jl` to execute a script while being able to catch
-`InterruptException` in the [`try`](@ref) block.
-Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
+Alternatively, you can call
+[`Base.exit_on_sigint(false)`](@ref Base.exit_on_sigint) in the script
+(or use `julia -e 'include(popfirst!(ARGS))' file.jl`, where it is
+disabled by default) to have CTRL-C cancel the script's ^C scope instead,
+observed at cancellation points as a catchable
+[`Base.CancellationRequest`](@ref) in a [`try`](@ref) block.
+Note that with the `-e` strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ### How do I pass options to `julia` using `#!/usr/bin/env`?
 
@@ -587,7 +590,7 @@ ans =
 Oops. Adding a `>>>` operator to Matlab wouldn't help, because saturation that occurs when adding
 `n` and `2n` has already destroyed the information necessary to compute the correct midpoint.
 
-Not only is lack of associativity unfortunate for programmers who cannot rely it for techniques
+Not only is lack of associativity unfortunate for programmers who cannot rely on it for techniques
 like this, but it also defeats almost anything compilers might want to do to optimize integer
 arithmetic. For example, since Julia integers use normal machine integer arithmetic, LLVM is free
 to aggressively optimize simple little functions like `f(k) = 5k-1`. The machine code for this
@@ -1053,15 +1056,15 @@ However, upgrading to the next Stable release will always be possible as each re
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
 The current LTS version of Julia is versioned according to SemVer as v1.6.x;
-this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.6.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
+this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.6.x series will no longer receive regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
 As a package developer, you may prefer to develop for the LTS version, to maximize the number of users who can use your package.
 As per SemVer, code written for v1.0 will continue to work for all future LTS and Stable versions.
 In general, even if targeting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).
 
 You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don't mind if the version available today occasionally doesn't actually work.
 As the name implies, releases to the nightly version are made roughly every night (depending on build infrastructure stability).
-In general nightly released are fairly safe to use—your code will not catch on fire.
-However, they may be occasional regressions and or issues that will not be found until more thorough pre-release testing.
+In general nightly releases are fairly safe to use—your code will not catch on fire.
+However, there may be occasional regressions and/or issues that will not be found until more thorough pre-release testing.
 You may wish to test against the nightly version to ensure that such regressions that affect your use case are caught before a release is made.
 
 Finally, you may also consider building Julia from source for yourself. This option is mainly for those individuals who are comfortable at the command line, or interested in learning.

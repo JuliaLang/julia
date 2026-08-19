@@ -4,7 +4,7 @@
 # Must outline anything that can throw, e.g. globalrefs, static params
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval foreigncall_arg1"
+    if is_simple_atom(ctx, ex) || k in KSet"inert syntaxinert top core quote static_eval foreignsymbol"
         true
     elseif k == K"BindingId"
         binfo = get_binding(ctx, ex)
@@ -21,39 +21,38 @@ end
 
 # Target to jump to, including info on try handler nesting and catch block
 # nesting
-struct JumpTarget{Attrs}
-    label::SyntaxTree{Attrs}
-    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    result_var::Union{SyntaxTree{Attrs}, Nothing}  # for symbolicblock valued breaks
+struct JumpTarget
+    label::SyntaxTree
+    handler_token_stack::Vector{SyntaxTree}
+    catch_token_stack::Vector{SyntaxTree}
+    result_var::Union{SyntaxTree, Nothing}  # for symbolicblock valued breaks
 end
 
-function JumpTarget(label::SyntaxTree{Attrs}, ctx, result_var=nothing) where {Attrs}
-    JumpTarget{Attrs}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack), result_var)
+function JumpTarget(label::SyntaxTree, ctx, result_var=nothing)
+    JumpTarget(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack), result_var)
 end
 
-struct JumpOrigin{Attrs}
-    goto::SyntaxTree{Attrs}
+struct JumpOrigin
+    goto::SyntaxTree
     index::Int
-    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    handler_token_stack::Vector{SyntaxTree}
+    catch_token_stack::Vector{SyntaxTree}
 end
 
-function JumpOrigin(goto::SyntaxTree{Attrs}, index, ctx) where {Attrs}
-    JumpOrigin{Attrs}(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+function JumpOrigin(goto::SyntaxTree, index, ctx)
+    JumpOrigin(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
 end
 
-struct FinallyHandler{Attrs}
-    tagvar::SyntaxTree{Attrs}
-    target::JumpTarget{Attrs}
-    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree{Attrs}}}}
+struct FinallyHandler
+    tagvar::SyntaxTree
+    target::JumpTarget
+    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree}}}
 end
 
-function FinallyHandler(tagvar::SyntaxTree{Attrs}, target::JumpTarget) where {Attrs}
-    FinallyHandler{Attrs}(tagvar, target,
-        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree{Attrs}}}}())
+function FinallyHandler(tagvar::SyntaxTree, target::JumpTarget)
+    FinallyHandler(tagvar, target,
+        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree}}}())
 end
-
 
 """
 Context for creating linear IR.
@@ -61,36 +60,40 @@ Context for creating linear IR.
 One of these is created per lambda expression to flatten the body down to
 a sequence of statements (linear IR), which eventually becomes one CodeInfo.
 """
-struct LinearIRContext{Attrs} <: AbstractLoweringContext
-    graph::SyntaxGraph{Attrs}
-    code::SyntaxList{Attrs, Vector{NodeId}}
-    bindings::Bindings
-    next_label_id::Ref{Int}
-    is_toplevel_thunk::Bool
-    lambda_bindings::LambdaBindings
-    argmap::Dict{IdTag, IdTag}
-    return_type::Union{Nothing, SyntaxTree{Attrs}}
-    break_targets::Dict{String, JumpTarget{Attrs}}
-    break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
-    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    finally_handlers::Vector{FinallyHandler{Attrs}}
-    symbolic_jump_targets::Dict{String,JumpTarget{Attrs}}
-    symbolic_jump_origins::Vector{JumpOrigin{Attrs}}
-    symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
-    meta::Dict{Symbol, Any}
-    mod::Module
+mutable struct LinearIRContext <: AbstractLoweringContext
+    const code::Vector{SyntaxTree}
+    const bindings::Bindings
+    const next_label_id::Base.RefValue{Int}
+    const is_toplevel_thunk::Bool
+    const lambda_bindings::LambdaBindings
+    const argmap::Dict{IdTag, IdTag}
+    const rettype_ssa::Base.RefValue{Union{Nothing,SyntaxTree}}
+    const break_targets::Dict{String, JumpTarget}
+    const break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
+    const handler_token_stack::Vector{SyntaxTree}
+    const catch_token_stack::Vector{SyntaxTree}
+    const finally_handlers::Vector{FinallyHandler}
+    const symbolic_jump_targets::Dict{String,JumpTarget}
+    const symbolic_jump_origins::Vector{JumpOrigin}
+    const symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
+    const meta::Dict{Symbol, Any}
+    const mod::Module
 end
 
-function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings, return_type)
-    rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
-    Attrs = typeof(graph.attributes)
-    LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
-                    is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(), rett,
-                    Dict{String,JumpTarget{Attrs}}(), String[],
-                    SyntaxList(ctx), SyntaxList(ctx),
-                    Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
-                    Vector{JumpOrigin{Attrs}}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
+function rettype(ctx::LinearIRContext)
+    let r = ctx.rettype_ssa[]
+        isnothing(r) ? nothing : r
+    end
+end
+
+function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings)
+    LinearIRContext(SyntaxList(), ctx.bindings, Ref(0),
+                    is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
+                    Ref{Union{Nothing,SyntaxTree}}(nothing),
+                    Dict{String,JumpTarget}(), String[],
+                    SyntaxList(), SyntaxList(),
+                    Vector{FinallyHandler}(), Dict{String,JumpTarget}(),
+                    Vector{JumpOrigin}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)
@@ -110,9 +113,9 @@ end
 function is_simple_arg(ctx, ex)
     k = kind(ex)
     return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" ||
-        k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+        k == K"inert" || k == K"syntaxinert" || k == K"top" ||
         k == K"core" || k == K"globalref" || k == K"static_eval" ||
-        k == K"foreigncall_arg1"
+        k == K"foreignsymbol"
 end
 
 # flisp note: arguments are always counted as single-assign, so effects on
@@ -128,8 +131,8 @@ function is_const_read_arg(ctx, ex)
     # Even if we have side effects, we know that singly-assigned
     # locals cannot be affected by them so we can inline them anyway.
     # TODO from flisp: "We could also allow const globals here"
-    return k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
-        k == K"core" || k == K"static_eval" || k == K"foreigncall_arg1" ||
+    return k == K"inert" || k == K"syntaxinert" || k == K"top" ||
+        k == K"core" || k == K"static_eval" || k == K"foreignsymbol" ||
         is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
 
@@ -138,7 +141,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: invoke ?
-            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin foreigncall new_opaque_closure")
+            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall foreignglobal gc_preserve_begin new_opaque_closure")
 end
 
 function check_no_local_bindings(ctx, ex, msg)
@@ -156,7 +159,7 @@ function compile_args(ctx, args)
     # Otherwise, we need to use ssa values for all arguments to ensure proper
     # left-to-right evaluation semantics.
     all_simple = all(a->is_simple_arg(ctx, a), args)
-    args_out = SyntaxList(ctx)
+    args_out = SyntaxList()
     for arg in args
         arg_val = compile(ctx, arg, true, false)
         if isnothing(arg_val)
@@ -189,7 +192,7 @@ function compile_pop_exception(ctx, srcref, src_tokens, dest_tokens)
     # dest_tokens when src_tokens is the same or nested within dest_tokens.
     # It's enough to check the token on the top of the dest stack.
     n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && _binding_id(dest_tokens[n]) == _binding_id(src_tokens[n]))
+    jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into catch block"))
     if n < length(src_tokens)
         @ast ctx srcref [K"pop_exception" src_tokens[n+1]]
@@ -200,7 +203,7 @@ end
 
 function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && _binding_id(dest_tokens[n]) == _binding_id(src_tokens[n]))
+    jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
     if n < length(src_tokens)
         @ast ctx srcref [K"leave" src_tokens[n+1:end]...]
@@ -245,8 +248,7 @@ end
 # Helper function for emit_return
 function _actually_return(ctx, ex)
     # TODO: Handle the implicit return coverage hack for #53354 ?
-    rett = ctx.return_type
-    if !isnothing(rett)
+    if (rett = rettype(ctx); !isnothing(rett))
         ex = compile(ctx, convert_for_type_decl(ctx, rett, ex, rett, true), true, false)
     end
     simple_ret_val = isempty(ctx.catch_token_stack) ?
@@ -256,7 +258,7 @@ function _actually_return(ctx, ex)
     if !simple_ret_val
         ex = emit_assign_tmp(ctx, ex, "return_tmp")
     end
-    emit_pop_exception(ctx, ex, SyntaxList(ctx.graph))
+    emit_pop_exception(ctx, ex, SyntaxList())
     emit(ctx, @ast ctx ex [K"return" ex])
     return nothing
 end
@@ -296,7 +298,7 @@ function emit_return(ctx, ex)
 end
 
 function emit_break(ctx, ex)
-    name = ex[1].name_val
+    name = syntax_name(ex[1])
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
         if name == "loop-exit"
@@ -386,7 +388,7 @@ end
 function make_label(ctx, srcref)
     id = ctx.next_label_id[]
     ctx.next_label_id[] += 1
-    setattr!(newleaf(ctx, srcref, K"label"), :id, id)
+    newleaf(srcref, K"label", id)
 end
 
 # flisp: make&mark-label
@@ -406,11 +408,12 @@ end
 function emit_latestworld(ctx, srcref)
     (isempty(ctx.code) || kind(last(ctx.code)) != K"latestworld") &&
         emit(ctx, kind(srcref) === K"latestworld" ? srcref :
-        newleaf(ctx, srcref, K"latestworld"))
+        newleaf(srcref, K"latestworld"))
 end
 
 function compile_condition_term(ctx, ex)
     cond = compile(ctx, ex, true, false)
+    isnothing(cond) && return nothing
     if !is_valid_body_ir_argument(ctx, cond)
         cond = emit_assign_tmp(ctx, cond)
     end
@@ -419,7 +422,7 @@ end
 
 # flisp: emit-cond
 function compile_conditional(ctx, ex, false_label)
-    if kind(ex) == K"block"
+    if kind(ex) == K"block" && numchildren(ex) >= 1
         for i in 1:numchildren(ex)-1
             compile(ctx, ex[i], false, false)
         end
@@ -432,6 +435,7 @@ function compile_conditional(ctx, ex, false_label)
         true_label = make_label(ctx, test)
         for (i,e) in enumerate(children(test))
             c = compile_condition_term(ctx, e)
+            isnothing(c) && break
             if i < numchildren(test)
                 next_term_label = make_label(ctx, test)
                 # Jump over short circuit
@@ -447,11 +451,12 @@ function compile_conditional(ctx, ex, false_label)
     elseif k == K"&&"
         for e in children(test)
             c = compile_condition_term(ctx, e)
+            isnothing(c) && break
             emit(ctx, @ast ctx e [K"gotoifnot" c false_label])
         end
     else
         c = compile_condition_term(ctx, test)
-        emit(ctx, @ast ctx test [K"gotoifnot" c false_label])
+        isnothing(c) || emit(ctx, @ast ctx test [K"gotoifnot" c false_label])
     end
 end
 
@@ -483,7 +488,61 @@ end
 #
 #   (pop_exception tok) - pop exception stack back to state of associated enter
 #
-# See the devdocs for further discussion.
+# When an `enter` is encountered, the runtime pushes a new handler onto the
+# `Task`'s exception handler stack which will jump to `catch_label` when an
+# exception occurs.
+#
+# There are two ways that the exception-related task state can be restored
+#
+# 1. By encountering a `leave` which will restore the handler state with `tok`.
+# 2. By throwing an exception. In this case the runtime will pop one handler
+#    automatically and jump to the catch label with the new exception pushed
+#    onto the exception stack. On this path the exception stack state must be
+#    restored back to the associated `enter` by encountering `pop_exception`.
+#
+# Note that the handler and exception stack represent two distinct types of
+# exception-related state restoration which need to happen. Note also that the
+# "handler state restoration" actually includes several pieces of runtime state
+# including GC flags - see `jl_eh_restore_state` in the runtime for that.
+# #### Lowering finally code paths
+#
+# When lowering `finally` blocks we want to emit the user's finally code once
+# but multiple code paths may traverse the finally block. For example, consider
+# the code
+#
+# ```julia
+# function foo(x)
+#     while true
+#         try
+#             if x == 1
+#                 return f(x)
+#             elseif x == 2
+#                 g(x)
+#                 continue
+#             else
+#                 break
+#             end
+#         finally
+#             h()
+#         end
+#     end
+# end
+# ```
+#
+# In this situation there's four distinct code paths through the finally block:
+# 1. `return f(x)` needs to call `val = f(x)`, leave the `try` block, run `h()` then
+#    return `val`.
+# 2. `continue` needs to call `h()` then jump to the start of the while loop
+# 3. `break` needs to call `h()` then jump to the exit of the while loop
+# 4. If an exception occurs in `f(x)` or `g(x)`, we need to call `h()` before
+#    falling back into the while loop.
+#
+# To deal with these we create a `finally_tag` variable to dynamically track
+# which action to take after the finally block exits. Before jumping to the
+# block we set this variable to a unique integer tag identifying the incoming
+# code path. At the exit of the user's code (`h()` in this case) we perform the
+# jump appropriate to the `break`, `continue` or `return` as necessary based on
+# the tag.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
          [K"trycatchelse" t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
@@ -496,9 +555,9 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     end_label = !in_tail_pos || has_finally_block ? make_label(ctx, ex) : nothing
     try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "try_result") : nothing
 
-    enter_scope_arg = SyntaxList(ctx)
+    enter_scope_arg = SyntaxList()
     if scope !== nothing
-        args = SyntaxList(ctx)
+        args = SyntaxList()
         push!(args, scope)
         enter_scope_arg = compile_args(ctx, args)
     end
@@ -569,7 +628,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             next_action_label = !in_tail_pos || tag != 1 || on_exit != :return ?
                 make_label(ctx, srcref) : nothing
             if !isnothing(next_action_label)
-                next_action_label = make_label(ctx, srcref)
                 tmp = ssavar(ctx, srcref, "do_finally_action")
                 emit(ctx, @ast ctx srcref [K"=" tmp
                     [K"call"
@@ -594,6 +652,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
         end
     else
+        @assert !isnothing(catch_block)
         push!(ctx.catch_token_stack, handler_token)
         catch_val = compile(ctx, catch_block, needs_value, in_tail_pos)
         if !isnothing(try_result) && !isnothing(catch_val)
@@ -617,15 +676,15 @@ end
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"BindingId" || is_literal(k) || k == K"nothing" ||
-            k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+            k == K"inert" || k == K"syntaxinert" || k == K"top" ||
             k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"SourceLocation" || k == K"static_eval" ||
-            k == K"foreigncall_arg1" || k == K"static_parameter"
+            k == K"foreignsymbol" || k == K"static_parameter"
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
             if haskey(ctx.argmap, binfo.id)
-                ex1 = setattr!(newleaf(ctx, ex1, K"BindingId"), :var_id, ctx.argmap[binfo.id])
+                ex1 = newleaf(ex1, K"BindingId", ctx.argmap[binfo.id])
             end
         end
         if in_tail_pos
@@ -647,8 +706,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         @jl_assert !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
-            k == K"new_opaque_closure" || k == K"cfunction"
-        callex = newnode(ctx, ex, k, compile_args(ctx, children(ex)))
+            k == K"foreignglobal" || k == K"new_opaque_closure" || k == K"cfunction"
+        callex = newnode(ex, k, compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
         elseif needs_value
@@ -678,7 +737,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             if kind(lhs) == K"BindingId"
                 binfo = get_binding(ctx, lhs)
                 if haskey(ctx.argmap, binfo.id)
-                    lhs = setattr!(newleaf(ctx, lhs, K"BindingId"), :var_id, ctx.argmap[binfo.id])
+                    lhs = newleaf(lhs, K"BindingId", ctx.argmap[binfo.id])
                 end
             end
             if needs_value && !isnothing(rhs)
@@ -714,7 +773,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             res
         end
     elseif k == K"symbolicblock"
-        name = ex[1].name_val
+        name = syntax_name(ex[1])
         # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
         if name != "loop-exit" && name != "loop-cont"
             if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
@@ -762,7 +821,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"symboliclabel"
         label = emit_label(ctx, ex)
-        name = ex.name_val
+        name = syntax_name(ex)
         if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
             throw(LoweringError(ex, "Label `$name` defined multiple times"))
         end
@@ -774,9 +833,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"symbolicgoto" || k == K"oldsymbolicgoto"
         push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
-        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
-        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? leave
-        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? goto
+        emit(ctx, newleaf(ex, K"TOMBSTONE")) # ? pop_exception
+        emit(ctx, newleaf(ex, K"TOMBSTONE")) # ? leave
+        emit(ctx, newleaf(ex, K"TOMBSTONE")) # ? goto
         nothing
     elseif k == K"return"
         compile(ctx, ex[1], true, true)
@@ -832,12 +891,25 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"method"
         @jl_assert ctx.is_toplevel_thunk (ex, "method not at top level")
         res = if numchildren(ex) == 1
-            if in_tail_pos
-                emit_return(ctx, ex)
-            elseif needs_value
-                ex
+            # Generic function declaration: define_method(module, name)
+            func_name = ex[1]
+            mod, name = if kind(func_name) == K"BindingId"
+                binfo = get_binding(ctx, func_name)
+                binfo.mod, binfo.name
+            elseif kind(func_name) == K"globalref"
+                func_name.mod, syntax_name(func_name)
             else
-                emit(ctx, ex)
+                ctx.mod, syntax_name(func_name)
+            end
+            call_ex = @ast ctx ex [K"call" "define_method"::K"core"
+                                   mod::K"Value" name::K"Symbol"]
+            if in_tail_pos
+                emit_return(ctx, call_ex)
+            elseif needs_value
+                call_ex
+            else
+                emit(ctx, call_ex)
+                nothing
             end
         else
             @jl_assert numchildren(ex) == 3 ex
@@ -852,9 +924,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
-            emit(ctx, @ast ctx ex [K"method" fname sig lam])
-            @jl_assert !needs_value && !in_tail_pos ex
-            nothing
+            emit(ctx, @ast ctx ex [K"call" "define_method"::K"core"
+                                   ctx.mod::K"Value" fname sig lam])
         end
         emit_latestworld(ctx, ex)
         res
@@ -866,7 +937,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             ex[4]
             compile_lambda(ctx, ex[5])
         ]
-    elseif k == K"lambda"
+    elseif k in KSet"lambda generated_lambda toplevel_lambda"
         lam = compile_lambda(ctx, ex)
         if in_tail_pos
             emit_return(ctx, lam)
@@ -876,7 +947,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, lam)
         end
     elseif k == K"gc_preserve_begin"
-        newnode(ctx, ex, k, compile_args(ctx, children(ex)))
+        newnode(ex, k, compile_args(ctx, children(ex)))
     elseif k == K"gc_preserve_end" || k == K"loopinfo"
         if needs_value
             throw(LoweringError(ex, "misplaced kind $k in value position"))
@@ -884,17 +955,39 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         emit(ctx, ex)
         nothing
     elseif k == K"meta"
-        @jl_assert numchildren(ex) >= 1 ex
-        if ex[1].name_val in ("inline", "noinline", "propagate_inbounds",
-                              "nospecializeinfer", "aggressive_constprop", "no_constprop")
-            for c in children(ex)
-                ctx.meta[Symbol(c.name_val)] = true
+        if numchildren(ex) >= 1
+            # Certain blessed forms are allowed to share a meta expression;
+            # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
+            if kind(ex[1]) === K"purity" ||
+                kind(ex[1]) === K"Symbol" && syntax_name(ex[1]) in (
+                    "inline", "noinline", "propagate_inbounds",
+                    "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                for c in children(ex)
+                    if kind(c) === K"purity"
+                        old = get(ctx.meta, :purity, UInt16(0))
+                        ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
+                    elseif kind(c) === K"Symbol"
+                        ctx.meta[Symbol(syntax_name(c))] = true
+                    else
+                        @jl_assert false c
+                    end
+                end
+            else
+                emit(ctx, ex)
             end
-        elseif ex[1].name_val === "purity"
-            ctx.meta[Symbol(ex[1].name_val)] = ex[2].value::Base.EffectsOverride
-        else
-            emit(ctx, ex)
         end
+        if needs_value
+            val = @ast ctx ex (::K"nothing")
+            if in_tail_pos
+                emit_return(ctx, val)
+            else
+                val
+            end
+        end
+    elseif k == K"inbounds" || k == K"inbounds_pop" ||
+        k == K"inline" || k == K"noinline" || k == K"purity" ||
+        k == K"aliasscope" || k == K"popaliasscope"
+        emit(ctx, ex) # if absorbed in flags, converted to nothing later
         if needs_value
             val = @ast ctx ex (::K"nothing")
             if in_tail_pos
@@ -923,8 +1016,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"isdefined" || k == K"captured_local" || k == K"throw_undef_if_not" ||
-            k == K"boundscheck"
+    elseif k == K"isdefined" || k == K"captured_local" ||
+        k == K"throw_undef_if_not" || k == K"boundscheck"
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value
@@ -933,24 +1026,29 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"newvar"
         @jl_assert !needs_value ex
         is_duplicate = !isempty(ctx.code) &&
-            (e = last(ctx.code); kind(e) == K"newvar" && _binding_id(e[1]) == _binding_id(ex[1]))
+            (e = last(ctx.code); kind(e) == K"newvar" && syntax_id(e[1]) == syntax_id(ex[1]))
         if !is_duplicate
             # TODO: also exclude deleted vars
             emit(ctx, ex)
         end
     elseif k == K"latestworld"
         if needs_value
-            throw(LoweringError(ex, "misplaced latestsworld"))
+            throw(LoweringError(ex, "misplaced latestworld"))
         end
         emit_latestworld(ctx, ex)
     elseif k == K"latestworld_if_toplevel"
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
     elseif k == K"unused_only"
-        if needs_value && !(in_tail_pos && ctx.is_toplevel_thunk)
-            throw(LoweringError(ex,
-                "global declaration doesn't read the variable and can't return a value"))
+        if needs_value && !in_tail_pos
+            throw(LoweringError(
+                ex, "global declaration doesn't read the variable and can't return a value"))
         end
-        compile(ctx, ex[1], needs_value, in_tail_pos)
+        if needs_value && in_tail_pos && !ctx.is_toplevel_thunk
+            compile(ctx, ex[1], false, false)
+            compile(ctx, @ast(ctx, ex, (::K"nothing")), needs_value, in_tail_pos)
+        else
+            compile(ctx, ex[1], needs_value, in_tail_pos)
+        end
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end
@@ -960,7 +1058,7 @@ function _remove_vars_with_isdefined_check!(vars, ex)
     if is_leaf(ex) || is_quoted(ex) || kind(ex) == K"static_eval"
         return
     elseif kind(ex) == K"isdefined"
-        delete!(vars, ex[1].var_id::IdTag)
+        delete!(vars, syntax_id(ex[1]))
     else
         for e in children(ex)
             _remove_vars_with_isdefined_check!(vars, e)
@@ -985,14 +1083,14 @@ function unnecessary_newvar_ids(ctx, stmts)
         _remove_vars_with_isdefined_check!(vars, ex)
         k = kind(ex)
         if k == K"newvar"
-            id = _binding_id(ex[1])
+            id = syntax_id(ex[1])
             if !get_binding(ctx, id).is_captured
                 push!(vars, id)
             end
         elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
             empty!(vars)
         elseif k == K"="
-            id = _binding_id(ex[1])
+            id = syntax_id(ex[1])
             if id in vars
                 delete!(vars, id)
                 push!(ids_assigned_before_branch, id)
@@ -1009,7 +1107,7 @@ function compile_body(ctx::LinearIRContext, ex)
     # Fix up any symbolic gotos. (We can't do this earlier because the goto
     # might precede the label definition in unstructured control flow.)
     for origin in ctx.symbolic_jump_origins
-        name = origin.goto.name_val
+        name = syntax_name(origin.goto)
         target = get(ctx.symbolic_jump_targets, name, nothing)
         if isnothing(target)
             # Check if it's a symbolic block label
@@ -1040,7 +1138,7 @@ function compile_body(ctx::LinearIRContext, ex)
     # Filter out unnecessary newvar nodes
     ids_assigned_before_branch = unnecessary_newvar_ids(ctx, ctx.code)
     filter!(ctx.code) do ex
-        !(kind(ex) == K"newvar" && _binding_id(ex[1]) in ids_assigned_before_branch)
+        !(kind(ex) == K"newvar" && syntax_id(ex[1]) in ids_assigned_before_branch)
     end
 end
 
@@ -1051,9 +1149,9 @@ end
 function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     k = kind(ex)
     if k == K"BindingId"
-        id = _binding_id(ex)
+        id = syntax_id(ex)
         if haskey(ssa_rewrites, id)
-            setattr!(newleaf(ctx, ex, K"SSAValue"), :var_id, ssa_rewrites[id])
+            newleaf(ex, K"SSAValue", ssa_rewrites[id])
         else
             new_id = get(slot_rewrites, id, nothing)
             binfo = get_binding(ctx, id)
@@ -1061,14 +1159,12 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                 sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
                      binfo.kind == :static_parameter                 ? K"static_parameter" :
                      throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
-                setattr!(newleaf(ctx, ex, sk), :var_id, new_id)
+                newleaf(ex, sk, new_id)
             else
                 if binfo.kind !== :global
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
-                out = newleaf(ctx, ex, K"globalref")
-                setattr!(out, :name_val, binfo.name)
-                setattr!(out, :mod, binfo.mod)
+                @mknode(ex; kind=K"globalref", value=binfo.name, mod=binfo.mod)
             end
         end
     elseif k == K"meta" || k == K"static_eval"
@@ -1076,17 +1172,17 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         # weird top-level semantics for `gen`, but we still need to translate
         # the binding it contains to a globalref. (TODO: use
         # static_eval for this meta, somehow)
-        mapchildren(ctx, ex) do e
+        mapchildren(ex) do e
             _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, e)
         end
     elseif is_literal(k) || is_quoted(k)
         ex
     elseif k == K"label"
-        @ast ctx ex label_table[ex.id::Int]::K"label"
+        @ast ctx ex label_table[syntax_id(ex)]::K"label"
     elseif k == K"code_info"
         ex
     else
-        mapchildren(ctx, ex) do e
+        mapchildren(ex) do e
             _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, e)
         end
     end
@@ -1097,24 +1193,25 @@ function renumber_body(ctx, input_code, slot_rewrites)
     # Step 1: Remove any assignments to SSA variables, record the indices of labels
     ssa_rewrites = Dict{IdTag,IdTag}()
     label_table = Dict{Int,Int}()
-    code = SyntaxList(ctx)
+    code = SyntaxList()
     for ex in input_code
         k = kind(ex)
         ex_out = nothing
-        if k == K"=" && is_ssa(ctx, ex[1])
-            lhs_id = _binding_id(ex[1])
+        if k == K"=" && (b = get_binding(ctx, ex[1]); b.is_ssa || b.kind == :typevar)
+            lhs_id = syntax_id(ex[1])
             @jl_assert(!haskey(ssa_rewrites, lhs_id),
                        (ex, "multiple assignments to ssavalue"))
+            @jl_assert ctx.is_toplevel_thunk || b.kind !== :typevar binding_ex(ctx, b)
             if is_ssa(ctx, ex[2])
                 # For SSA₁ = SSA₂, record that all uses of SSA₁ should be replaced by SSA₂
-                ssa_rewrites[lhs_id] = ssa_rewrites[_binding_id(ex[2])]
+                ssa_rewrites[lhs_id] = ssa_rewrites[syntax_id(ex[2])]
             else
                 # Otherwise, record which `code` index this SSA value refers to
                 ssa_rewrites[lhs_id] = length(code) + 1
                 ex_out = ex[2]
             end
         elseif k == K"label"
-            label_table[ex.id] = length(code) + 1
+            label_table[syntax_id(ex)] = length(code) + 1
         elseif k == K"TOMBSTONE"
             # remove statement
         else
@@ -1145,22 +1242,27 @@ struct Slot
 end
 
 function compile_lambda(outer_ctx, ex)
-    lambda_args = ex[1]
-    static_parameters = ex[2]
-    ret_var = numchildren(ex) == 4 ? ex[4] : nothing
-    lambda_bindings = ex.lambda_bindings
-    ctx = LinearIRContext(outer_ctx.graph, outer_ctx, ex.is_toplevel_thunk,
-                          lambda_bindings, ret_var)
+    k = kind(ex)
+    lbs = lambda_bindings(ex[1])
+    lambda_args = ex[2]
+    static_parameters = ex[3]
+    ctx = LinearIRContext(
+        outer_ctx, k === K"toplevel_lambda", lbs)
+    if numchildren(ex) == 5
+        tmp = ssavar(ctx, ex[5], "rett")
+        ctx.rettype_ssa[] = tmp
+        compile(ctx, @ast(ctx, ex[5], [K"=" tmp ex[5]]), false, false)
+    end
     for arg in children(lambda_args)
         kind(arg) == K"Placeholder" && continue
         @jl_assert kind(arg) == K"BindingId" ex
         binfo = get_binding(ctx, arg)
         if binfo.is_assigned
             @jl_assert !haskey(ctx.argmap, binfo.id) ex arg
-            ctx.argmap[binfo.id] = _binding_id(new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name))
+            ctx.argmap[binfo.id] = syntax_id(new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name))
         end
     end
-    compile_body(ctx, ex[3])
+    compile_body(ctx, ex[4])
     for (id, remapped) in pairs(ctx.argmap)
         binding = binding_ex(ctx, id)
         local_slot = binding_ex(ctx, remapped)
@@ -1171,11 +1273,12 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(UNUSED, :argument, getmeta(arg, :nospecialize, false),
+            push!(slots, Slot(UNUSED, :argument,
+                              getmeta(arg, :nospecialize, false)::Bool,
                               false, false, false, false))
         else
             @jl_assert kind(arg) == K"BindingId" ex arg
-            id = arg.var_id
+            id = syntax_id(arg)
             binfo = get_binding(ctx, id)
             @jl_assert binfo.kind == :local || binfo.kind == :argument ex arg
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
@@ -1185,7 +1288,7 @@ function compile_lambda(outer_ctx, ex)
         end
     end
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
-    for (id, is_capt) in sort(collect(pairs(lambda_bindings.locals_capt)), by=first)
+    for (id, is_capt) in sort(collect(pairs(lbs.locals_capt)), by=first)
         if !is_capt
             binfo = get_binding(ctx.bindings, id)
             if binfo.kind == :local
@@ -1198,17 +1301,17 @@ function compile_lambda(outer_ctx, ex)
     end
     for (i,arg) in enumerate(children(static_parameters))
         @jl_assert kind(arg) == K"BindingId" arg
-        id = arg.var_id
+        id = syntax_id(arg)
         info = get_binding(ctx.bindings, id)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i
     end
-    let ns_slots = SyntaxList(ctx)
+    let ns_slots = SyntaxList()
         for (i, s) in enumerate(slots)
             if s.is_nospecialize
                 s.kind === :argument || throw(LoweringError(
                     ex, "nospecialize on non-argument"))
-                push!(ns_slots, setattr!(newleaf(ctx, lambda_args[i], K"slot"), :var_id, i))
+                push!(ns_slots, newleaf(lambda_args[i], K"slot", i))
             end
         end
         if !isempty(ns_slots)
@@ -1225,31 +1328,23 @@ function compile_lambda(outer_ctx, ex)
     for (k, v) in ctx.meta
         meta = CompileHints(meta, k, v)
     end
-    @ast ctx ex [K"code_info"(is_toplevel_thunk=ex.is_toplevel_thunk,
-                              slots=slots, meta=meta)
-        [K"block"(ex[3])
-            code...
-        ]
+    out = @ast ctx ex [K"code_info"(;meta=meta)
+        slots::K"Slots"
+        [K"block"(ex[4]) code...]
     ]
+    k === K"toplevel_lambda" ? @ast(ctx, ex, [K"thunk" out]) : out
 end
-
-ensure_linearization_attributes!(graph) = ensure_attributes!(
-    ensure_scope_attributes!(graph),
-    slots=Vector{Slot},
-    id=Int)
 
 """
 This pass converts nested ASTs in the body of a lambda into a list of
 statements (ie, Julia's linear/untyped IR).
 
-Most of the compliexty of this pass is in lowering structured control flow (if,
+Most of the complexity of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into `K"slot"`, `K"globalref"` or `K"SSAValue"` as appropriate.
 """
 @fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
-    graph = ensure_linearization_attributes!(copy_attrs(ctx.graph))
-    ex = reparent(graph, ex)
-    ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings(), nothing)
+    ctx_out = LinearIRContext(ctx, false, LambdaBindings())
     ex_out = compile_lambda(ctx_out, ex)
     ctx_out, ex_out
 end

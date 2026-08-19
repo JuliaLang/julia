@@ -208,6 +208,8 @@ function showerror(io::IO, ex::CanonicalIndexError)
     print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
 end
 
+# Must match `jl_inst_arg_tuple_type`: reflection through `typesof` should agree
+# with actual dispatch, including egality keys for closed type-valued arguments.
 typesof(@nospecialize args...) = Tuple{Any[Core.Typeof(arg) for arg in args]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
@@ -443,7 +445,7 @@ function showerror_ambiguous(io::IO, meths, f, args::Type)
     nothing
 end
 
-#Show an error by directly calling jl_printf.
+#Show an error by directly calling jl_printf and jl_static_show.
 #Useful in Base submodule __init__ functions where stderr isn't defined yet.
 function showerror_nostdio(@nospecialize(err), msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
@@ -456,6 +458,7 @@ end
 stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND_BASEPATHS", false) === true
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
+stacktrace_full_loading()::Bool = Base.get_bool_env("JULIA_STACKTRACE_FULL_LOADING", false) === true
 
 # Print `::<sig>` with structural framing (type names, braces) in the default
 # color, matching parameters and their separating commas in gray, and the
@@ -470,6 +473,8 @@ function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_c
     sig_params, called_params, alias = params
     if alias !== nothing
         show_typealias_name(io, alias)
+    elseif sig isa TypeEq
+        print(io, "Type")
     else
         show_type_name(io, (sig::DataType).name)
     end
@@ -543,14 +548,17 @@ end
 #   `(sa_env, ca_env, alias::GlobalRef)`           — both resolve to the same alias
 #   `nothing`                                      — bail; caller falls back to whole-subtree highlighting
 function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
+    if sig isa TypeEq && (called isa TypeEq || called isa Core.TypeEgal)
+        return Core.svec(type_parameter(sig)), Core.svec(type_parameter(called)), nothing
+    end
     sig isa DataType && called isa DataType || return nothing
     sig.name === called.name || return nothing
     n = length(sig.parameters)
     n > 0 && n == length(called.parameters) || return nothing
     sig.name === typename(NamedTuple) && return nothing
     (any(isvarargtype, sig.parameters) || any(isvarargtype, called.parameters)) && return nothing
-    sa = make_typealias(makeproper(io, sig))
-    ca = make_typealias(makeproper(io, called))
+    sa = make_typealias(sig, io)
+    ca = make_typealias(called, io)
     if sa === nothing && ca === nothing
         return sig.parameters, called.parameters, nothing
     elseif sa !== nothing && ca !== nothing && sa[1] === ca[1]
@@ -611,7 +619,7 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
             isa(expected, Core.TypeofVararg) && (expected = unwrapva(expected))
 
             e_dt = unwrap_unionall(expected); isa(e_dt, DataType) || continue
-            a_dt = unwrap_unionall(san_arg_types_param[i])::DataType
+            a_dt = unwrap_unionall(san_arg_types_param[i]); isa(a_dt, DataType) || continue
             e_tn, a_tn = e_dt.name, a_dt.name
 
             # actual shadowing heuristics
@@ -652,7 +660,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
     f = ex.f
-    ft = typeof(f)
     lines = String[]
     line_score = Int[]
     # These functions are special cased to only show if first argument is matched.
@@ -665,8 +672,11 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isType(at1) && !has_free_typevars(at1) && at1.parameters[1] isa Type
-            push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
+        if isType(at1) && !has_free_typevars(at1)
+            at1p = type_parameter(at1)
+            if at1p isa Type
+                push!(funcs, (at1p, arg_types_param[2:end]))
+            end
         end
     end
 
@@ -805,7 +815,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             if !isempty(kwargs)::Bool
                 unexpected = Symbol[]
                 if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                    for (k, v) in kwargs
+                    for (k, _) in kwargs
                         if !(k::Symbol in kwords)
                             push!(unexpected, k::Symbol)
                         end
@@ -881,12 +891,11 @@ function _backtrace_find_and_remove_cycles(t)
     max_nested_cycles = 0
     displayed_stackframes = []
     repeated_cycles = Tuple{Int,Int,Int}[]
-    # First:  index into `display_stackframes` to introuce the cycle bracket on
+    # First:  index into `displayed_stackframes` to introduce the cycle bracket on
     # Second: length of the cycle as a count in the trace
     # Third:  number of cycle repetitions
 
     t_curr = 1
-    frame_counter = 1
 
     while t_curr ≤ length(t)
         (last_frame, n) = t[t_curr]
@@ -996,7 +1005,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
 
         print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
-        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
+        frame_counter, _nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
         frame_counter += 1
 
         if i < length(trace)
@@ -1103,6 +1112,7 @@ Stacktrace processing pipeline:
 4. `process_backtrace` filters a trace for internal implementation or redundant frames and summarizes repeated single frames:
     - `kwcall` frames removed
     - `include`-related stack frames removed
+    - code loading (`using`/`import`) stack frames collapsed to the frame that entered loading
     - Some frames that have the same location info are merged
     - Repeated frames are removed and summarized with a count
     - Output is an Any[] containing (StackFrame, count) tuple elements and this form is exposed to e.g. Revise
@@ -1233,6 +1243,83 @@ function _backtrace_simplify_include_frames!(trace)
     keepat!(trace, kept_frames)
 end
 
+# Functions making up the code loading machinery. Their frames are an implementation
+# detail of `using`/`import` and are collapsed away by
+# `_backtrace_simplify_loading_frames!` - see #52988.
+const _LOADING_INTERNAL_FUNCS = (
+    :__require, :_require_prelocked, :__require_prelocked, :_require_from_serialized,
+    :_tryrequire_from_serialized, :run_package_callbacks, :run_extension_callbacks,
+    :retry_load_extensions, :eval_import_path, :eval_import_path_all, :_eval_import,
+    :_eval_using)
+
+# The frames a collapsed run is allowed to be represented by. A run without one of
+# these is left alone, so that frames which are only incidentally part of loading
+# (e.g. `invoke_in_world`) are never hidden on their own.
+const _LOADING_ANCHOR_FUNCS = (:require, :require_stdlib, :include_package_for_output)
+
+function _is_loading_frame(frame::StackFrame)
+    mod = parentmodule(frame)
+    # Hack: allow `mod === nothing` as a workaround for inlined functions, as in
+    # `_backtrace_simplify_include_frames!`
+    (mod === Base || mod === nothing) || return false
+    file = basename(string(frame.file))
+    func = frame.func
+    if func === Symbol("macro expansion")
+        # the `@lock require_lock` and `@zone` blocks in `require`/`__require`
+        return file == "loading.jl" || file == "lock.jl"
+    elseif func === :invoke_in_world || func === :invokelatest
+        return file == "essentials.jl"
+    elseif func === :include || func === :_include
+        # `include`ing the package's own source, not a user-level `include`
+        return file == "Base.jl" || file == "loading.jl"
+    end
+    return (file == "loading.jl" || file == "module.jl") &&
+           (func in _LOADING_INTERNAL_FUNCS || func in _LOADING_ANCHOR_FUNCS)
+end
+
+_is_loading_anchor(frame::StackFrame) = frame.func in _LOADING_ANCHOR_FUNCS
+
+# For improved user experience, collapse runs of frames belonging to the code loading
+# machinery down to the single frame that entered it - see #52988. Unlike hiding
+# everything thrown through `require`, this keeps frames for user code that runs
+# during loading (e.g. a package erroring while its source is being run).
+function _backtrace_simplify_loading_frames!(trace)
+    stacktrace_full_loading() && return trace
+    kept_frames = trues(length(trace))
+    i = firstindex(trace)
+    while i <= lastindex(trace)
+        if !_is_loading_frame(trace[i][1]::StackFrame)
+            i += 1
+            continue
+        end
+        # find the extent of this run of loading frames
+        j = i
+        while j < lastindex(trace) && _is_loading_frame(trace[j+1][1]::StackFrame)
+            j += 1
+        end
+        anchor = nothing
+        for k in i:j
+            frame = trace[k][1]::StackFrame
+            if frame.func === :require || frame.func === :require_stdlib
+                anchor = k
+                break
+            elseif frame.func === :include_package_for_output
+                # precompilation runs the package in a worker process, where the whole
+                # run is machinery. Represent it by its innermost frame, which at least
+                # reports the file being run, rather than by the long `input`/`depot_path`
+                # signature of `include_package_for_output` itself.
+                anchor = i
+            end
+        end
+        if anchor !== nothing
+            kept_frames[i:j] .= false
+            kept_frames[anchor] = true
+        end
+        i = j + 1
+    end
+    keepat!(trace, kept_frames)
+end
+
 # Collapse frames that have the same location (in some cases)
 function _backtrace_collapse_repeated_locations!(trace)
     kept_frames = trues(length(trace))
@@ -1275,7 +1362,6 @@ function _backtrace_collapse_repeated_locations!(trace)
                 params, last_params = Base.unwrap_unionall(m.sig).parameters::SimpleVector, Base.unwrap_unionall(last_m.sig).parameters::SimpleVector
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
-                    issame = true
                     if pos_sig_params == params
                         kept_frames[i] = false
                     end
@@ -1306,6 +1392,7 @@ end
 function process_backtrace(tracecount::Vector{Any})
     _backtrace_remove_kwcall_frames!(tracecount)
     _backtrace_simplify_include_frames!(tracecount)
+    _backtrace_simplify_loading_frames!(tracecount)
     _backtrace_collapse_repeated_locations!(tracecount)
     return tracecount
 end
@@ -1364,7 +1451,7 @@ function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
             printstyled(io, "a[1, 2]", color=:cyan)
             print(io, " rather than a[1][2]")
         elseif isType(T)
-            Tx = T.parameters[1]
+            Tx = type_parameter(T)
             print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
             printstyled(io, "d = $Tx([...])", color=:cyan)
             print(io, " rather than d = $Tx")
@@ -1385,6 +1472,18 @@ function string_concatenation_hint_handler(@nospecialize(io::IO), ex::MethodErro
 end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
+
+# Display a hint in case the user tries to use replace! on a string
+# (replace! cannot modify a string in place; replace returns a new string)
+function string_replace_hint_handler(@nospecialize(io::IO), ex::MethodError, arg_types::Vector{Any}, kwargs::Vector{Any})
+    if ex.f === _replace! && any(@nospecialize(a) -> unwrapva(a) <: AbstractString, arg_types)
+        print(io, "\n`String`s cannot be modified with `replace!`. Use ")
+        printstyled(io, "replace", color=:cyan)
+        print(io, " instead, which returns a new string.")
+    end
+end
+
+Experimental.register_error_hint(string_replace_hint_handler, MethodError)
 
 # Display a hint in case the user tries to use the min or max function on an iterable
 # or tries to use something like `collect` on an iterator without defining either IteratorSize or length

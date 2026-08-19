@@ -598,6 +598,12 @@ const NRANDOM = 50
                     end
                 end
             end
+            if n % 16 != 0
+                # Byte swap is only defined for widths that are multiples of 16 bits.
+                @test_throws ErrorException _test_bswap(first(allints))
+                @test_throws ErrorException runtime_call(I.bswap_int, first(allints))
+                @test Base.infer_exception_type(_test_bswap, (UT,)) === ErrorException
+            end
 
             # --- FP conversions ---
             @testset "sitofp Float64" begin

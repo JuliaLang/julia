@@ -33,7 +33,15 @@ This is called on the outermost lambda, and recursively processes nested lambdas
 """
 function analyze_def_and_use!(ctx, ex)
     @stm ex begin
-        [K"lambda" _ _ body _...] -> begin
+        [K"lambda" _ _ _ body _...] -> begin
+            _analyze_nested_lambdas!(ctx, body)
+            _analyze_lambda_vars!(ctx, ex)
+        end
+        [K"toplevel_lambda" _ _ _ body _...] -> begin
+            _analyze_nested_lambdas!(ctx, body)
+            _analyze_lambda_vars!(ctx, ex)
+        end
+        [K"generated_lambda" _ _ _ body _...] -> begin
             _analyze_nested_lambdas!(ctx, body)
             _analyze_lambda_vars!(ctx, ex)
         end
@@ -42,7 +50,7 @@ end
 
 function _analyze_nested_lambdas!(ctx, ex)
     k = kind(ex)
-    if k == K"lambda"
+    if k in KSet"lambda toplevel_lambda generated_lambda"
         analyze_def_and_use!(ctx, ex)
     elseif !is_leaf(ex) && !is_quoted(ex)
         for child in children(ex)
@@ -65,6 +73,7 @@ Fields:
 - `args`: argument variables (never undefined, special handling in mark_used!)
 """
 mutable struct DefUseState
+    const lambda_id::ScopeId
     const unused::Set{IdTag}
     const live::Set{IdTag}
     const seen::Set{IdTag}
@@ -72,7 +81,7 @@ mutable struct DefUseState
     decl_outside_loop::Set{IdTag}
     const args::Set{IdTag}
 
-    function DefUseState(ctx, candidates)
+    function DefUseState(lambda_id, ctx, candidates)
         unused = copy(candidates)
         live = Set{IdTag}()
         seen = Set{IdTag}()
@@ -87,7 +96,7 @@ mutable struct DefUseState
                 push!(args, id)
             end
         end
-        return new(unused, live, seen, decl, decl_outside_loop, args)
+        return new(lambda_id, unused, live, seen, decl, decl_outside_loop, args)
     end
 end
 
@@ -171,7 +180,7 @@ function du_visit!(ctx, state::DefUseState, e)
     k = kind(e)
 
     if k == K"BindingId"
-        du_mark_used!(state, e.var_id)
+        du_mark_used!(state, syntax_id(e))
         return false
 
     elseif k == K"symboliclabel"
@@ -194,14 +203,13 @@ function du_visit!(ctx, state::DefUseState, e)
         has_label = du_visit!(ctx, state, e[2])
         lhs = e[1]
         if kind(lhs) == K"BindingId"
-            du_assign!(state, lhs.var_id)
+            du_assign!(state, syntax_id(lhs))
         end
         return has_label
 
     elseif k == K"lambda"
         # Check captures from nested lambda
-        nested_lb = e.lambda_bindings
-        for (id, is_capt) in nested_lb.locals_capt
+        for (id, is_capt) in lambda_bindings(e[1]).locals_capt
             if is_capt
                 du_mark_captured!(state, id)
             end
@@ -216,7 +224,7 @@ function du_visit!(ctx, state::DefUseState, e)
         # a separate K"decl" node. So we only need to handle K"BindingId" here.
         for child in children(e)
             if kind(child) == K"BindingId"
-                du_declare!(state, child.var_id)
+                du_declare!(state, syntax_id(child))
             end
         end
         return false
@@ -231,14 +239,15 @@ function du_visit!(ctx, state::DefUseState, e)
 
     elseif k == K"function_decl"
         # [function_decl] defines and instantiates the closure type and assigns
-        # it to its first argument (but only once per unique first argument).
-        func_id = e[1].var_id
+        # it to its first argument (but only once per unique closure key).
         @assert kind(e[1]) == K"BindingId"
+        func_id = syntax_id(e[1])
         func_id in state.seen && return false
-        if haskey(ctx.closure_bindings, func_id)
-            for lam in ctx.closure_bindings[func_id].lambdas
+        ck = ClosureKey(func_id, state.lambda_id)
+        if haskey(ctx.closure_bindings, ck)
+            for lam in ctx.closure_bindings[ck].lambdas
                 for (id, capt) in lam.locals_capt
-                    du_mark_captured!(state, id)
+                    capt && du_mark_captured!(state, id)
                 end
             end
         end
@@ -318,12 +327,10 @@ function du_visit!(ctx, state::DefUseState, e)
     end
 end
 
-function _analyze_lambda_vars!(ctx, ex)
-    lambda_bindings = ex.lambda_bindings
-
+function _analyze_lambda_vars!(ctx::VariableAnalysisContext, ex)
     # Collect candidate variables: captured and single-assigned
     candidates = Set{IdTag}()
-    for (id, from_outer_lambda) in lambda_bindings.locals_capt
+    for (id, from_outer_lambda) in lambda_bindings(ex[1]).locals_capt
         b = get_binding(ctx, id)
         !b.is_captured && continue
         from_outer_lambda && continue
@@ -333,11 +340,13 @@ function _analyze_lambda_vars!(ctx, ex)
     end
     isempty(candidates) && return
 
-    state = DefUseState(ctx, candidates)
+    state = DefUseState(lambda_bindings(ex[1]).scope_id, ctx, candidates)
     @stm ex begin
-        [K"lambda" _ _ body] -> du_visit!(ctx, state, body)
-        [K"lambda" _ _ body rett] -> (du_visit!(ctx, state, body);
+        [K"lambda" _ _ _ body] -> du_visit!(ctx, state, body)
+        [K"lambda" _ _ _ body rett] -> (du_visit!(ctx, state, body);
                                       du_visit!(ctx, state, rett))
+        [K"toplevel_lambda" _ _ _ body] -> du_visit!(ctx, state, body)
+        [K"generated_lambda" _ _ _ body] -> du_visit!(ctx, state, body)
     end
 
     for id in union(state.live, state.unused)

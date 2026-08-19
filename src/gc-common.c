@@ -168,8 +168,8 @@ void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
 
 void run_finalizer(jl_task_t *ct, void *o, void *ff)
 {
-    int ptr_finalizer = gc_ptr_tag(o, 1);
-    o = gc_ptr_clear_tag(o, 3);
+    int ptr_finalizer = gc_ptr_tag(o, GC_FIN_CFUNC_TAG);
+    o = gc_ptr_clear_tag(o, GC_FIN_TAG_MASK);
     if (ptr_finalizer) {
         ((void (*)(void*))ff)((void*)o);
         return;
@@ -207,7 +207,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
     for (size_t i = 0; i < len; i += 2) {
         void *v = items[i];
         int move = 0;
-        if (o == (jl_value_t*)gc_ptr_clear_tag(v, 1)) {
+        if (o == (jl_value_t*)gc_ptr_clear_tag(v, GC_FIN_CFUNC_TAG)) {
             void *f = items[i + 1];
             move = 1;
             arraylist_push(copied_list, v);
@@ -251,13 +251,20 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOI
 }
 
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
-// to be hold for the current thread and will release the lock when the
+// to be held for the current thread and will release the lock when the
 // function returns.
-static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE
+static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE_WITH_CANSAFEPOINT
 {
+    // Finalizer bookkeeping is not reset-safe. Allocation entry points that
+    // can preserve a reset region must unpublish it before reaching here.
+    assert(jl_atomic_load_relaxed(&ct->reset_ctx) == NULL);
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
     uint8_t sticky = ct->sticky;
+    // Finalizers hijack the current task, so preserve its token binding.
+    jl_value_t *bound_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    uint8_t bound_default = ct->bound_cancel_default;
+    JL_GC_PUSH1(&bound_token);
     // empty out the first two entries for the GC frame
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
@@ -273,11 +280,13 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
     ct->sticky = sticky;
+    jl_atomic_store_relaxed(&ct->bound_cancel_token, bound_token);
+    ct->bound_cancel_default = bound_default;
+    jl_gc_wb_current_task(ct, bound_token);
+    JL_GC_POP(); // matches the JL_GC_PUSH1 above
 }
 
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
-
-void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 {
@@ -306,9 +315,14 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
     arraylist_new(&to_finalize, 0);
 
+    // Finalizers shouldn't affect either rng or errno state
     uint64_t save_rngState[JL_RNG_SIZE];
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
 
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
@@ -318,6 +332,10 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     arraylist_free(&copied_list);
 
     memcpy(&ct->rngState[0], &save_rngState[0], sizeof(save_rngState));
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
 }
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
@@ -451,14 +469,14 @@ void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT
 {
-    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | GC_FIN_CFUNC_TAG), f);
 }
 
 // schedule f(v) to call at the next quiescent interval (aka after the next safepoint/region on all threads)
 JL_DLLEXPORT void jl_gc_add_quiescent(jl_ptls_t ptls, void **v, void *f) JL_NOTSAFEPOINT
 {
-    assert(!gc_ptr_tag(v, 3));
-    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 3), f);
+    assert(!gc_ptr_tag(v, GC_FIN_TAG_MASK));
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | GC_FIN_TAG_MASK), f);
 }
 
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT
@@ -528,10 +546,102 @@ JL_DLLEXPORT void * jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc(ptls, sz, ty);
 }
 
-JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
+JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz) JL_CANSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return jl_gc_alloc(ptls, sz, NULL);
+}
+
+// Reset-safe variants of the allocation and write-barrier entry points,
+// selected by FinalLowerGC for sites that may execute inside a published
+// cancellation reset region (see llvm-cancellation-lowering.cpp): the
+// region is unpublished around the operation - its internal frames must not
+// be abandoned by a delivered reset - and republished on the way out, so a
+// region survives allocation. The allocating variants write the object tag
+// before republishing, since the compiler's own tag store only happens
+// after the call returns and (stock) sweep reads every cell's header. No
+// safepoint lies between allocation and either tag store, so marking can
+// never observe an untagged live cell; a reset-abandoned cell is fully
+// tagged and merely unreachable.
+STATIC_INLINE jl_reset_ctx_t *reset_region_unpublish(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    jl_reset_ctx_t *reset_ctx = jl_atomic_load_relaxed(&ct->reset_ctx);
+    jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
+    // synchronizes with the read of reset_ctx in the signal handler
+    jl_signal_fence();
+    return reset_ctx;
+}
+
+STATIC_INLINE void reset_region_deliver_pending(jl_task_t *ct)
+{
+    jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    if (bound == NULL || bound == jl_nothing ||
+        jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+        return;
+    // Protected foreign calls defer reset delivery until their guard exits.
+    if (jl_atomic_load_acquire(&ct->cancel_handler_ctx) != NULL)
+        return;
+    jl_reset_ctx_t *reset_ctx = jl_atomic_exchange(&ct->reset_ctx, NULL);
+    if (reset_ctx == NULL || reset_ctx->sp == 0)
+        return;
+    ct->gcstack = reset_ctx->gcstack;
+    ct->eh = reset_ctx->eh;
+    asan_unpoison_task_stack(ct, &reset_ctx->mctx);
+    jl_longjmp(reset_ctx->mctx, JL_RESET_CODE_CANCEL);
+}
+
+STATIC_INLINE void reset_region_republish(jl_task_t *ct, jl_reset_ctx_t *reset_ctx)
+{
+    jl_signal_fence();
+    jl_atomic_store_release(&ct->reset_ctx, reset_ctx);
+    if (reset_ctx == NULL)
+        return;
+    // A cancellation that arrived while the region was unpublished found no
+    // reset context and was dropped, and the code we return into may never
+    // poll. Re-check the region's governing source (republish first, so an
+    // arrival in between is the sender's to handle) and perform the missed
+    // delivery ourselves.
+    reset_region_deliver_pending(ct);
+}
+
+JL_DLLEXPORT jl_value_t *jl_gc_small_alloc_reset_safe(jl_ptls_t ptls, int offset, int osize,
+                                                      jl_value_t *type) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    jl_value_t *val = jl_gc_small_alloc(ptls, offset, osize, type);
+    jl_set_typeof(val, type);
+    reset_region_republish(ct, reset_ctx);
+    return val;
+}
+
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc_reset_safe(jl_ptls_t ptls, size_t sz,
+                                                    jl_value_t *type) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    jl_value_t *val = jl_gc_big_alloc(ptls, sz, type);
+    jl_set_typeof(val, type);
+    reset_region_republish(ct, reset_ctx);
+    return val;
+}
+
+JL_DLLEXPORT void *jl_gc_alloc_typed_reset_safe(jl_ptls_t ptls, size_t sz, void *ty) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    // jl_gc_alloc_typed writes the tag itself
+    void *val = jl_gc_alloc_typed(ptls, sz, ty);
+    reset_region_republish(ct, reset_ctx);
+    return val;
+}
+
+JL_DLLEXPORT void jl_gc_queue_root_reset_safe(const jl_value_t *ptr)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    jl_gc_queue_root(ptr);
+    reset_region_republish(ct, reset_ctx);
 }
 
 // allocator entry points
@@ -541,18 +651,57 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc_(ptls, sz, ty);
 }
 
-JL_DLLEXPORT void *jl_malloc(size_t sz)
+JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 {
     return jl_gc_counted_malloc(sz);
 }
 
+// === GMP allocation hooks ===================================================
+// These are special reset-safe versions of GMP's allocation functions. GMP is
+// generally reset-safe, but our allocators are not, so unpublish the reset
+// region around them as the *_reset_safe entry points above do.
+
+JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL)
+        return jl_gc_counted_malloc(sz);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    void *data = jl_gc_counted_malloc(sz);
+    reset_region_republish(ct, reset_ctx); // may longjmp
+    return data;
+}
+
+JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL)
+        return jl_gc_counted_realloc_with_old_size(p, old, sz);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
+    reset_region_republish(ct, reset_ctx); // may longjmp
+    return data;
+}
+
+JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL) {
+        jl_gc_counted_free_with_size(p, sz);
+        return;
+    }
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    jl_gc_counted_free_with_size(p, sz);
+    reset_region_republish(ct, reset_ctx); // may longjmp
+}
+
 //_unchecked_calloc does not check for potential overflow of nm*sz
-STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
+STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
     size_t nmsz = nm*sz;
     return jl_gc_counted_calloc(nmsz, 1);
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT
 {
     if (nm > SSIZE_MAX/sz)
         return NULL;
@@ -567,7 +716,7 @@ JL_DLLEXPORT void jl_free(void *p)
     }
 }
 
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
+JL_DLLEXPORT void *jl_realloc(void *p, size_t sz) JL_CANSAFEPOINT
 {
     size_t old = p ? memory_block_usable_size(p, 0) : 0;
     return jl_gc_counted_realloc_with_old_size(p, old, sz);
@@ -630,6 +779,23 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
         start = (char*)mem->ptr;
         len = mem->length;
     }
+    else if (vt == jl_cancel_source_type) {
+        // the (strong) `parent` slots of the trailing link entries are the
+        // only slots marked as an array (see the objarray mark with stride
+        // sizeof(jl_cancel_parent_link_t) in gc-stock.c)
+        jl_cancel_source_t *s = (jl_cancel_source_t*)obj;
+        start = (char*)jl_cancel_source_links(s);
+        len = s->nparents;
+        elsize = sizeof(jl_cancel_parent_link_t);
+    }
+    else if (vt == jl_wait_entry_type) {
+        // the `owner`/`next` slots of the trailing wait slots are marked as
+        // strided arrays (see gc-stock.c)
+        jl_wait_entry_t *w = (jl_wait_entry_t*)obj;
+        start = (char*)jl_wait_entry_slots(w);
+        len = w->nslots;
+        elsize = sizeof(jl_wait_slot_t);
+    }
     if (slot < start || slot >= start + elsize * len)
         return -1;
     return (slot - start) / elsize;
@@ -638,10 +804,6 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
 // =========================================================================== //
 // GC Control
 // =========================================================================== //
-
-JL_DLLEXPORT uint32_t jl_get_gc_disable_counter(void) {
-    return jl_atomic_load_acquire(&jl_gc_disable_counter);
-}
 
 JL_DLLEXPORT int jl_gc_is_enabled(void)
 {
@@ -657,31 +819,6 @@ JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
 
 JL_DLLEXPORT int jl_is_gc_logging_enabled(void) {
     return gc_logging_enabled;
-}
-
-
-// collector entry point and control
-_Atomic(uint32_t) jl_gc_disable_counter = 1;
-
-JL_DLLEXPORT int jl_gc_enable(int on)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    int prev = !ptls->disable_gc;
-    ptls->disable_gc = (on == 0);
-    if (on && !prev) {
-        // disable -> enable
-        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
-            gc_num.allocd += gc_num.deferred_alloc;
-            gc_num.deferred_alloc = 0;
-        }
-    }
-    else if (prev && !on) {
-        // enable -> disable
-        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-        // check if the GC is running and wait for it to finish
-        jl_gc_safepoint_(ptls);
-    }
-    return prev;
 }
 
 // =========================================================================== //
@@ -727,3 +864,14 @@ void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT
 #ifdef __cplusplus
 }
 #endif
+
+#define JL_GC_ABI_STR_(x) #x
+#define JL_GC_ABI_STR(x) JL_GC_ABI_STR_(x)
+JL_DLLEXPORT const char *jl_gc_image_abi(void)
+{
+#ifdef WITH_THIRD_PARTY_HEAP
+    return "mmtk-" MMTK_PLAN "-moving-" JL_GC_ABI_STR(MMTK_MOVING);
+#else
+    return "stock";
+#endif
+}

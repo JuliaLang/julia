@@ -1757,7 +1757,7 @@ end
         ))
     end
     mktempdir() do depot
-        # This manifest has a LibGit2 entry that has a LibGit2_jll with a git-tree-hash1
+        # This manifest has a LibGit2 entry that has a LibGit2_jll with a git-tree-sha1
         # which simulates an old manifest where LibGit2_jll was not a stdlib
         badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
         @test success(addenv(
@@ -1771,6 +1771,8 @@ end
     mkdepottempdir() do depot
         cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
         cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        # Do not let an outer tracefile redirect .cov output.
+        cov_exename = Base.julia_cmd()[1]
         function rm_cov_files()
             for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
                 rm(cov_file)
@@ -1785,7 +1787,7 @@ end
         cd(cov_test_dir) do
             # In our depot, precompile CovTest.jl with coverage on
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
@@ -1794,7 +1796,7 @@ end
 
             # same again but call foo(), which is in the pkgimage, and should generate coverage
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test cov_exists()
@@ -1802,7 +1804,7 @@ end
 
             # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test cov_exists()
@@ -2163,5 +2165,104 @@ end
         @test contains(output, "SUCCESS")
     finally
         rm(tmpdir; recursive=true, force=true)
+    end
+end
+
+@testset "CACHE_FETCH_HOOK" begin
+    mktempdir() do dir
+        # a minimal package to precompile/load in child processes
+        pkgdir = joinpath(dir, "CacheHookPkg")
+        mkpath(joinpath(pkgdir, "src"))
+        write(joinpath(pkgdir, "Project.toml"), """
+            name = "CacheHookPkg"
+            uuid = "b1e9525c-3f39-4e6a-b8b8-c1d9f8d1a001"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkgdir, "src", "CacheHookPkg.jl"),
+              "module CacheHookPkg\nanswer() = 42\nend\n")
+
+        depot = joinpath(dir, "depot")
+        stash = joinpath(dir, "stash")
+        mkpath(stash)
+        listsep = Sys.iswindows() ? ";" : ":"
+        childenv = ["JULIA_DEPOT_PATH" => depot * listsep,
+                    "JULIA_LOAD_PATH" => pkgdir * listsep * "@stdlib"]
+        runchild(script) = run(addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, childenv...))
+
+        # generate a genuine cachefile, then stash it away (leaving the depot
+        # cold). The stash/delete happens in *this* process: the child that
+        # loaded the package cannot remove its own pkgimage on Windows (mapped
+        # DLLs are locked while loaded)
+        runchild("using CacheHookPkg")
+        cachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CacheHookPkg")
+        @test isdir(cachedir)
+        for f in readdir(cachedir; join=true)
+            cp(f, joinpath(stash, basename(f)))
+        end
+        rm(cachedir; recursive=true)
+        @test !isempty(readdir(stash))
+
+        # a hook that restores the stashed files must satisfy loading with no
+        # local compile (exactly the stashed candidate files, hook hit once);
+        # exercised on both the parallel-driver and the serial path
+        fetch_script = serial -> """
+            Base.disable_parallel_precompile = $serial
+            hits = Ref(0)
+            Base.CACHE_FETCH_HOOK[] = function (pkg, sourcepath)
+                @assert pkg.name == "CacheHookPkg"
+                @assert isfile(sourcepath)
+                hits[] += 1
+                cachedir = joinpath(DEPOT_PATH[1], "compiled", "v\$(VERSION.major).\$(VERSION.minor)", pkg.name)
+                mkpath(cachedir)
+                for f in readdir($(repr(stash)); join=true)
+                    cp(f, joinpath(cachedir, basename(f)); force=true)
+                end
+                return true
+            end
+            using CacheHookPkg
+            @assert CacheHookPkg.answer() == 42
+            @assert hits[] == 1
+            cachedir = dirname(only(Base.find_all_in_cache_path(Base.identify_package("CacheHookPkg"))))
+            @assert sort(readdir(cachedir)) == sort(readdir($(repr(stash)))) # no extra (recompiled) files
+            """
+        @test success(runchild(fetch_script(false)))
+        rm(joinpath(depot, "compiled"); recursive=true, force=true)
+        @test success(runchild(fetch_script(true)))
+        rm(joinpath(depot, "compiled"); recursive=true, force=true)
+
+        # a hook serving garbage is harmless: normal compilation takes over
+        @test success(runchild("""
+            Base.CACHE_FETCH_HOOK[] = function (pkg, sourcepath)
+                cachedir = joinpath(DEPOT_PATH[1], "compiled", "v\$(VERSION.major).\$(VERSION.minor)", pkg.name)
+                mkpath(cachedir)
+                write(joinpath(cachedir, pkg.name * "_garbage.ji"), "not a cachefile")
+                return true
+            end
+            using CacheHookPkg
+            @assert CacheHookPkg.answer() == 42
+            """))
+        rm(joinpath(depot, "compiled"); recursive=true, force=true)
+
+        # a throwing hook is demoted to a miss
+        @test success(runchild("""
+            Base.CACHE_FETCH_HOOK[] = (pkg, sourcepath) -> error("boom")
+            using CacheHookPkg
+            @assert CacheHookPkg.answer() == 42
+            """))
+
+        # guards: reentrant invocation is refused, and the helper declines
+        # while generating output; both directly observable in-process
+        @test success(runchild("""
+            inner = Ref{Any}(:unset)
+            Base.CACHE_FETCH_HOOK[] = function (pkg, sourcepath)
+                if inner[] === :unset
+                    inner[] = :running
+                    inner[] = Base.maybe_fetch_cache(pkg, sourcepath)
+                end
+                return false
+            end
+            @assert Base.maybe_fetch_cache(Base.PkgId("Fake"), $(repr(joinpath(pkgdir, "src", "CacheHookPkg.jl")))) === false
+            @assert inner[] === false  # the nested call was refused by the guard
+            """))
     end
 end

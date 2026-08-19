@@ -52,11 +52,12 @@ end
 function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
     (show_type && used) || return nothing
     str = "::$type"
+    cls = Base.Compiler.IRShow.warntype_type_class(type)
     if !highlighting[:warntype]
         print(io, str)
-    elseif type isa Union && Base.Compiler.IRShow.is_expected_union(type)
+    elseif cls === Base.Compiler.IRShow.SSA_WARN_TYPE_MILD
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
-    elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
+    elseif cls === Base.Compiler.IRShow.SSA_WARN_TYPE_STRONG
         Base.emphasize(io, str)
     else
         Base.printstyled(io, str, color=:cyan) # show the "good" type
@@ -84,7 +85,7 @@ function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(retty
     print(io, "Body")
     warntype_type_printer(io; type=rettype, used=true)
     println(io)
-    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer; label_dynamic_calls)
+    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer; label_dynamic_calls, color_warntype=highlighting[:warntype])
     Base.IRShow.show_ir(io, src, irshow_config)
     println(io)
 end
@@ -325,7 +326,7 @@ end
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
 
-If the `optimize` keyword is unset, the code will be shown before LLVM optimizations.
+If the `optimize` keyword is `false`, the code will be shown before LLVM optimizations.
 All metadata and dbg.* calls are removed from the printed bitcode. For the full IR, set the `raw` keyword to true.
 To dump the entire module that encapsulates the function (with declarations), set the `dump_module` keyword to true.
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
@@ -364,7 +365,7 @@ generic function and type signature to `io`.
 
 * Set assembly syntax by setting `syntax` to `:intel` (default) for intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (equivalently, `:default`) or `:none`.
-* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `binary` is `true`, also print the binary machine code for each instruction preceded by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 * If `raw` is `false` (default), uninteresting instructions (like the safepoint function prologue) are elided.
 

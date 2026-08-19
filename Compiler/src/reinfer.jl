@@ -67,7 +67,7 @@ end
 
 
 # Restore backedges to external targets
-# `edges` = [caller1, ...], the list of worklist-owned code instances internally
+# `internal_methods` = [caller1, ...], the list of worklist-owned code instances internally
 function insert_backedges(internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
@@ -124,6 +124,8 @@ function gen_staged_sig(def::Method, mi::MethodInstance)
 end
 
 function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::Method, validation_world::UInt)
+    # foreign CIs (owner !== nothing) aren't run as native code here, so instrumenting them is moot
+    codeinst.owner === nothing || return false
     if JLOptions().code_coverage != 0 || JLOptions().malloc_log != 0
         # test if the code needs to run with instrumentation, in which case we cannot use existing generated code
         if isdefined(def, :debuginfo) ? # generated_only functions do not have debuginfo, so fall back to considering their codeinst debuginfo though this may be slower and less reliable
@@ -154,7 +156,7 @@ function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::
 end
 
 # Test all edges relevant to a method:
-# - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
+# - Visit the entire call graph, starting from `codeinst` to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 #   and slightly modified with an early termination option once the computation reaches its minimum
 function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
@@ -464,6 +466,11 @@ function method_morespecific_via_interferences(method1::Method, method2::Method)
     return false
 end
 
+# Max interference-set size for which n==1 uses the interference fast path instead of
+# `ml_matches`: the scan probes every member with `typeintersect`, so above this size the
+# pruned `ml_matches` lookup is cheaper (~8 is the empirical crossover).
+const VERIFY_INTERF_CAP = 8
+
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, matches::Vector{Any})
     # verify that these edges intersect with the same methods as before
     mi = nothing
@@ -480,36 +487,48 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         if _jl_debug_method_invalidation[] === nothing && world == get_world_counter()
             return UInt(1), UInt(0)
         end
-    elseif n == 1
-        # first, fast-path a check if the expected method simply dominates its sig anyways
-        # so the result of ml_matches is already simply known
-        let t = expecteds[i], meth, minworld, maxworld
-            meth = get_method_from_edge(t)
-            if !(t isa Method)
-                if t isa CodeInstance
-                    mi = get_ci_mi(t)::MethodInstance
-                else
-                    mi = t::MethodInstance
+    else # n >= 1
+        if n == 1
+            # first, fast-path a check if the expected method simply dominates its sig anyways
+            # so the result of ml_matches is already simply known
+            let t = expecteds[i], meth, minworld, maxworld
+                meth = get_method_from_edge(t)
+                if !(t isa Method)
+                    if t isa CodeInstance
+                        mi = get_ci_mi(t)::MethodInstance
+                    else
+                        mi = t::MethodInstance
+                    end
+                    # Fast path is legal when fully_covers=true
+                    if fully_covers && !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                        minworld = meth.primary_world
+                        @assert minworld ≤ world "expected method not present in verification world"
+                        maxworld = typemax(UInt)
+                        return minworld, maxworld
+                    end
                 end
                 # Fast path is legal when fully_covers=true
-                if fully_covers && !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
                     minworld = meth.primary_world
                     @assert minworld ≤ world "expected method not present in verification world"
                     maxworld = typemax(UInt)
                     return minworld, maxworld
                 end
             end
-            # Fast path is legal when fully_covers=true
-            if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
-                minworld = meth.primary_world
-                @assert minworld ≤ world "expected method not present in verification world"
-                maxworld = typemax(UInt)
-                return minworld, maxworld
+        end
+        # Try the interference set fast path (used by both n==1, when the O(1) checks above
+        # did not resolve it, and n>1): the result is unchanged as long as no interfering
+        # method intersects sig outside of what the expected method(s) cover.
+        interference_fast_path_success = fully_covers
+        if interference_fast_path_success && n == 1
+            # Skip to ml_matches for large interference sets (see VERIFY_INTERF_CAP). The set
+            # is packed, so isassigned(., cap+1) tests "size > cap" without any typeintersect.
+            let interf = get_method_from_edge(expecteds[i]).interferences, cap = VERIFY_INTERF_CAP
+                if length(interf) > cap && isassigned(interf, cap + 1)
+                    interference_fast_path_success = false
+                end
             end
         end
-    elseif n > 1
-        # Try the interference set fast path: check if all interference sets are covered by expecteds
-        interference_fast_path_success = fully_covers
         # If it didn't fail yet, then check that all interference methods are either expected, or not applicable.
         if interference_fast_path_success
             local interference_minworld::UInt = 1

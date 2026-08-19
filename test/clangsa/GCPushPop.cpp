@@ -22,6 +22,13 @@ void superfluousPop() {
   JL_GC_POP(); // expected-warning{{JL_GC_POP without corresponding push}}
 }              // expected-note@-1{{JL_GC_POP without corresponding push}}
 
+extern void JL_NORETURN no_return_error(void);
+void noreturnAfterPush() {
+  jl_value_t *x = NULL;
+  JL_GC_PUSH1(&x);
+  no_return_error();
+}
+
 // From gc.c, jl_gc_push_arraylist creates a custom stack frame.
 extern void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list);
 extern void run_finalizer(jl_ptls_t ptls, jl_value_t *o, jl_value_t *ff);

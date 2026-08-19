@@ -52,7 +52,7 @@ end
 
 The symbols on the side of each call argument and SSA statements represent the following meaning:
 - `◌` (plain): this value is not analyzed because escape information of it won't be used anyway (when the object is `isbitstype` for example)
-- `✓` (green or cyan): this value never escapes (`has_no_escape(result.state[x])` holds), colored blue if it has arg escape also (`has_arg_escape(result.state[x])` holds)
+- `✓` (green or cyan): this value never escapes (`has_no_escape(result.state[x])` holds), colored cyan if it has arg escape also (`has_arg_escape(result.state[x])` holds)
 - `↑` (blue or yellow): this value can escape to the caller via return (`has_return_escape(result.state[x])` holds), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
 - `X` (red): this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
 - `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref Base.Compiler.EscapeAnalysis.EscapeInfo), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
@@ -72,7 +72,7 @@ result.state[Core.SSAValue(3)] # get EscapeInfo of `r3`
 `EscapeAnalysis` is implemented as a [data-flow analysis](https://en.wikipedia.org/wiki/Data-flow_analysis)
 that works on a lattice of [`x::EscapeInfo`](@ref Base.Compiler.EscapeAnalysis.EscapeInfo),
 which is composed of the following properties:
-- `x.Analyzed::Bool`: not formally part of the lattice, only indicates `x` has not been analyzed or not
+- `x.Analyzed::Bool`: not formally part of the lattice, only indicates whether `x` has been analyzed or not
 - `x.ReturnEscape::BitSet`: records SSA statements where `x` can escape to the caller via return
 - `x.ThrownEscape::BitSet`: records SSA statements where `x` can be thrown as exception
   (used for the [exception handling](@ref EA-Exception-Handling) described below)
@@ -346,7 +346,7 @@ Accordingly, `analyze_escapes` is also able to analyze post-inlining IR and coll
 escape information that is useful for certain memory-related optimizations.
 
 However, since certain optimization passes like inlining can change control flows and eliminate dead code,
-they can break the inter-procedural validity of escape information. In particularity,
+they can break the inter-procedural validity of escape information. In particular,
 in order to collect inter-procedurally valid escape information, we need to analyze a pre-inlining IR.
 
 Because of this reason, `analyze_escapes` can analyze `IRCode` at any Julia-level optimization stage,

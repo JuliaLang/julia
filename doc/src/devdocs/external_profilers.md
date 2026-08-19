@@ -5,6 +5,7 @@ Julia provides explicit support for some external tracing profilers, enabling yo
 The currently supported profilers are:
 - [Tracy](https://github.com/wolfpld/tracy)
 - [Intel VTune (ITTAPI)](https://github.com/intel/ittapi)
+- [NVIDIA Nsight Systems (NVTX)](#NVIDIA-Nsight-Systems-(NVTX))
 - [Apple Instruments](#Apple-Instruments-(OSLog)) (macOS only)
 
 ### Adding New Zones
@@ -40,6 +41,9 @@ A typical Tracy session might look like this:
 ### Building Julia with Tracy
 
 To enable Tracy integration, build Julia with the extra option `WITH_TRACY=1` in the `Make.user` file.
+
+!!! note
+    Julia currently bundles Tracy 0.13.1. The Tracy client and the profile viewer must use the same protocol version, so make sure the viewer (e.g. from `TracyProfiler_jll`) matches this version.
 
 ### Installing the Tracy Profile Viewer
 
@@ -93,9 +97,22 @@ The `TracyCZoneColor` function can be used to set the color of a certain zone. S
 
 ### Viewing Tracy files in your browser
 
-Visit https://topolarity.github.io/trace-viewer/ for an (experimental) web viewer for Tracy traces.
+Visit [https://maleadt.github.io/trace-viewer/](https://maleadt.github.io/trace-viewer/) for an (experimental) web viewer for Tracy traces.
 
-You can open a local `.tracy` file or provide a URL from the web (e.g. a file in a Github repo). If you load a trace file from the web, you can also share the page URL directly with others, enabling them to view the same trace.
+You can open a local `.tracy` file or provide a URL from the web (e.g. a file in a GitHub repo). If you load a trace file from the web, you can also share the page URL directly with others, enabling them to view the same trace.
+
+### Exporting trace data to CSV
+
+Since `.tracy` files are binary, it is often useful to export aggregated zone statistics to CSV for scripting or quick analysis. The `tracy_csvexport` tool from `TracyProfiler_jll` does this:
+
+```julia
+using TracyProfiler_jll
+run(`$(TracyProfiler_jll.tracy_csvexport()) -e mytracefile.tracy`)
+```
+
+The output columns are `name, src_file, src_line, total_ns, total_perc, counts, mean_ns, min_ns, max_ns, std_ns`. The `-e` flag reports self time (time spent in a zone excluding its children), which is usually what you want for finding where time is actually spent. The `counts` column is helpful for spotting zones that are entered many times with small durations.
+
+Useful flags include `-f <name>` to filter by zone name, `-u` to report each zone event individually (unwrapped), `-p` to include plot data (with `-u`), `-m` to report only messages, and `-t <percentile>` to report a truncated mean. Run with `--help` for the full list.
 
 ### Enabling stack trace samples
 
@@ -115,6 +132,32 @@ Note that the Julia JIT runtime does not yet have integration for Tracy's symbol
 ## Intel VTune (ITTAPI) Profiler
 
 *This section is yet to be written.*
+
+## NVIDIA Nsight Systems (NVTX)
+
+[NVTX](https://github.com/NVIDIA/NVTX) is NVIDIA's lightweight instrumentation API for annotating events, code ranges, and resources so they can be visualized by NVIDIA profiling tools.
+Julia emits the same `JL_TIMING` zones used by Tracy and ITTAPI as NVTX ranges, grouped and colored by subsystem, which can then be viewed in [NVIDIA Nsight Systems](https://developer.nvidia.com/nsight-systems).
+
+NVTX is header-only and its calls are cheap no-ops unless a tool is actively attached and capturing, so building with NVTX support does not require a CUDA toolkit installation and has minimal overhead when no profiler is attached.
+
+### Building Julia with NVTX support
+
+To enable NVTX instrumentation of the Julia runtime, build Julia with the extra option `WITH_NVTX := 1` in the `Make.user` file, or with `make ... WITH_NVTX=1` from the command line.
+
+### Profiling Julia with Nsight Systems
+
+With [Nsight Systems](https://developer.nvidia.com/nsight-systems) installed, you can record a trace from the command line using `nsys`:
+
+```
+nsys profile -o my_julia_trace ./julia -e '...'
+```
+
+Open the resulting `my_julia_trace.nsys-rep` file in the Nsight Systems UI to view Julia's timing zones on the NVTX row of the timeline, grouped and colored by subsystem in the same way as with Tracy.
+
+### Instrumenting arbitrary Julia code
+
+If you want to additionally annotate your Julia code with custom markers see [`NVTX.jl`](https://github.com/JuliaGPU/NVTX.jl), which works independently of the `WITH_NVTX=1` build option.
+You can still use the Nsight Systems profiler as explained above.
 
 ## Apple Instruments (OSLog)
 

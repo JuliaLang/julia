@@ -20,6 +20,49 @@ function new_state()
     LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
 end
 
+# History search initializes prompt modes added after MIState creation (#61584).
+module HistorySearchDynamicMode
+
+using Test
+using REPL
+import REPL.LineEdit
+import ..FakeTerminals: FakeTerminal
+
+struct MockHistoryFile end
+
+mutable struct MockHistoryProvider <: LineEdit.HistoryProvider
+    history::MockHistoryFile
+    last_buffer::IOBuffer
+    last_mode::Union{Nothing,LineEdit.Prompt}
+    mode_mapping::Dict{Symbol,LineEdit.Prompt}
+end
+
+REPL.histsearch(::MockHistoryFile, args...) = (mode = :pkg, text = "status")
+
+@testset "history search initializes dynamic modes" begin
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    main_mode = LineEdit.Prompt("julia> ")
+    dummy_pkg_mode = LineEdit.Prompt("pkg> ")
+    history = MockHistoryProvider(MockHistoryFile(), IOBuffer(), nothing,
+                                  Dict(:julia => main_mode, :pkg => dummy_pkg_mode))
+    main_mode.hist = dummy_pkg_mode.hist = history
+    interface = LineEdit.ModalInterface(LineEdit.TextInterface[main_mode, dummy_pkg_mode])
+    mistate = LineEdit.init_state(term, interface)
+    mistate.terminal_properties.da1 = Int[]
+
+    pkg_mode = LineEdit.Prompt("(project) pkg> ")
+    pkg_mode.hist = history
+    history.mode_mapping[:pkg] = pkg_mode
+    push!(interface.modes, pkg_mode)
+    @test !haskey(mistate.mode_state, pkg_mode)
+
+    LineEdit.history_search(mistate)
+    @test mistate.current_mode === pkg_mode
+    @test String(take!(copy(LineEdit.buffer(mistate)))) == "status"
+end
+
+end # module HistorySearchDynamicMode
+
 charseek(buf, i) = seek(buf, nextind(content(buf), 0, i+1)-1)
 charpos(buf, pos=position(buf)) = length(content(buf), 1, pos)
 
@@ -525,6 +568,24 @@ end
     @test LineEdit.region(s) == (0=>9)
     @inferred Union{Bool, LineEdit.InputAreaState} LineEdit.edit_shift_move(s, LineEdit.edit_move_right)
     @test LineEdit.region(s) == (2=>9)
+
+    # issue #61377
+    for edit_move in [LineEdit.edit_insert_newline, LineEdit.edit_backspace,
+            LineEdit.edit_move_left, LineEdit.edit_move_right,
+            LineEdit.edit_move_word_left, LineEdit.edit_move_word_right,
+            LineEdit.edit_move_up, LineEdit.edit_move_down]
+        s = new_state()
+        edit_insert(s, "abcd\nefgh\nijkl")
+        s.current_action = :unknown
+        LineEdit.edit_move_up(s)
+        s.current_action = :unknown
+        LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+        s.current_action = :unknown
+        LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+        s.current_action = :unknown
+        edit_move(s)
+        @test !LineEdit.is_region_active(s)
+    end
 end
 
 @testset "tab/backspace alignment feature" begin
@@ -665,7 +726,7 @@ end
     s.last_action = :unknown
     @test transform!(s->LineEdit.edit_yank_pop(s, false), s) == ("ça ≡ nothinga ≡ not", 19, 12)
 
-    # repetition (concatenation of killed strings
+    # repetition (concatenation of killed strings)
     edit_insert(s, "A B  C")
     LineEdit.edit_delete_prev_word(s)
     s.key_repeats = 1
@@ -1140,12 +1201,12 @@ end
     @test content(s) == " \"\""
     @test position(buffer(s)) == 2
 
-    # Test quote behavior: (|) + " -> ("")
+    # Test quote behavior: (|)) + " -> ("")
     s = LineEdit.init_state(term, interface)
     write_input(s, ")")
     charseek(buffer(s), 0)
     write_input(s, "(")
-    # Buffer is now () with cursor at 1
+    # Buffer is now ()) with cursor at 1
     write_input(s, "\"")
     @test content(s) == "(\"\"))"
     @test position(buffer(s)) == 2
@@ -1226,5 +1287,78 @@ end
         s = new_state()
         @test s.terminal_properties isa LineEdit.TerminalProperties
         @test s.terminal_properties.da1 === nothing
+    end
+end
+
+# Test OSC colour response parsing (see `query_colors`)
+@testset "OSC colour responses" begin
+    RGB(r, g, b) = (; r=UInt8(r), g=UInt8(g), b=UInt8(b))
+    # `awaiting` mirrors a pending `query_colors`, so the sentinel applies the palette.
+    function receive(responses...; awaiting = true)
+        props = LineEdit.TerminalProperties()
+        props.awaiting_colors = awaiting
+        for r in responses
+            LineEdit.receive_osc!(props, IOBuffer(r))
+        end
+        props
+    end
+
+    @testset "interpret_color" begin
+        @test LineEdit.interpret_color("rgb:24/27/30") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:1/2/3") == RGB(0x11, 0x22, 0x33)
+        @test LineEdit.interpret_color("rgb:242/272/303") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:2424/2727/3030") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:24242/2/3") === nothing
+        @test LineEdit.interpret_color("rgba:24/27/30/ff") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("#242730") === nothing
+        @test LineEdit.interpret_color("rgb:24/27") === nothing
+        @test LineEdit.interpret_color("rgb:24/27/30/ff") === nothing
+        @test LineEdit.interpret_color("rgba:24/27/30") === nothing
+        @test LineEdit.interpret_color("rgb:zz/27/30") === nothing
+    end
+
+    @testset "read_osc_response terminators" begin
+        for term in ("\a", "\e\\", "\x9c", "\x03")
+            @test LineEdit.read_osc_response(IOBuffer("10;rgb:24/27/30" * term)) == "10;rgb:24/27/30"
+        end
+        # An unterminated response ends at EOF rather than blocking.
+        @test LineEdit.read_osc_response(IOBuffer("10;rgb:24/27/30")) == "10;rgb:24/27/30"
+    end
+
+    @testset "colour accumulation" begin
+        props = receive("4;1;rgb:ff/00/00\a", "4;2;rgb:00/ff/00\a")
+        @test props.colors == [:red => RGB(0xff, 0, 0), :green => RGB(0, 0xff, 0)]
+        @test receive("4;15;rgb:ff/ff/ff\a").colors == [:bright_white => RGB(0xff, 0xff, 0xff)]
+        # Out-of-range indices and malformed specs are dropped, not stored.
+        @test isempty(receive("4;16;rgb:ff/ff/ff\a").colors)
+        @test isempty(receive("4;0;not-a-color\a").colors)
+        @test isempty(receive("nonsense\a").colors)
+    end
+
+    @testset "foreground/background sentinel" begin
+        props = receive("4;0;rgb:00/00/00\a", "10;rgb:bb/c2/cf\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:black => RGB(0, 0, 0), :foreground => RGB(0xbb, 0xc2, 0xcf),
+                               :background => RGB(0x24, 0x27, 0x30)]
+        props = receive("4;0;rgb:00/00/00\a", "10;rgb:bb/c2/cf\a")
+        @test props.awaiting_colors
+        LineEdit.receive_osc!(props, IOBuffer("11;rgb:24/27/30\a"))
+        @test !props.awaiting_colors
+    end
+
+    @testset "partial response" begin
+        # A terminal that answers only fg/bg still applies its colours.
+        props = receive("10;rgb:bb/c2/cf\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:foreground => RGB(0xbb, 0xc2, 0xcf), :background => RGB(0x24, 0x27, 0x30)]
+        @test !props.awaiting_colors
+        # One that answers only the palette never reaches the sentinel.
+        props = receive("4;0;rgb:00/00/00\a")
+        @test props.awaiting_colors
+        # A malformed sentinel reply still ends the query.
+        props = receive("10;garbage\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:background => RGB(0x24, 0x27, 0x30)]
+        @test !props.awaiting_colors
+        # Responses outside a query are ignored.
+        props = receive("4;1;rgb:ff/00/00\a", awaiting = false)
+        @test isempty(props.colors)
     end
 end

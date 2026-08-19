@@ -40,7 +40,7 @@ DLLEXPORT complex double cgtest(complex double a) {
 }
 
 DLLEXPORT complex double *cgptest(complex double *a) {
-    //Unpack a ComplexPair{Float64} struct
+    //Unpack a ComplexPair{Float64} struct pointer
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(*a), cimag(*a));
     *a += 1 - (2.0*I);
     return a;
@@ -54,7 +54,7 @@ DLLEXPORT complex float cftest(complex float a) {
 }
 
 DLLEXPORT complex float *cfptest(complex float *a) {
-    //Unpack a ComplexPair{Float64} struct
+    //Unpack a ComplexPair{Float32} struct pointer
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(*a), cimag(*a));
     *a += 1 - (2.0*I);
     return a;
@@ -958,6 +958,26 @@ DLLEXPORT int threadcall_args(int a, int b) {
 
 DLLEXPORT void c_exit_finalizer(void* v) {
     printf("c_exit_finalizer: %d, %u", *(int*)v, (unsigned)((uintptr_t)v & (uintptr_t)1));
+}
+
+// Test helpers for `@ccall cancel_handler=(fn, state) ...`: a foreign
+// computation that spins until cancelled, and a matching handler.
+// `cell` points at two int64 slots: [0] the stop flag, [1] a scratch slot
+// the handler fills. The handler runs asynchronously on the thread blocked
+// in cancelspin_wait, like a signal handler.
+DLLEXPORT int64_t cancelspin_wait(volatile int64_t *cell) {
+    int64_t iters = 0;
+    while (!cell[0])
+        iters++;
+    return iters;
+}
+
+// The handler runs under signal-handler discipline; the delivery machinery
+// preserves the complete interrupted register state around it.
+DLLEXPORT void cancelspin_handler(void *state, uint8_t sev) {
+    volatile int64_t *cell = (volatile int64_t*)state;
+    cell[1] = (int64_t)sev + 1; // distinguish sev 0 from "never ran"
+    cell[0] = 1;
 }
 
 // global variable for cglobal testing

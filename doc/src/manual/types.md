@@ -19,7 +19,7 @@ The default behavior in Julia when types are omitted is to allow values to be of
 one can write many useful Julia functions without ever explicitly using types. When additional
 expressiveness is needed, however, it is easy to gradually introduce explicit type annotations
 into previously "untyped" code. Adding annotations serves three primary purposes: to take advantage
-of Julia's powerful multiple-dispatch mechanism,  to improve human readability, and to catch
+of Julia's powerful multiple-dispatch mechanism, to improve human readability, and to catch
 programmer errors.
 
 Describing Julia in the lingo of [type systems](https://en.wikipedia.org/wiki/Type_system), it
@@ -32,7 +32,7 @@ While this might at first seem unduly restrictive, it has many beneficial conseq
 few drawbacks. It turns out that being able to inherit behavior is much more important than being
 able to inherit structure, and inheriting both causes significant difficulties in traditional
 object-oriented languages. While concrete types do have abstract subtypes, there are only two examples of this
-([`Union{}`](@ref man-abstract-types) and [`Type{T}`](@ref man-typet-type))) and additional subtypes
+([`Union{}`](@ref man-abstract-types) and [`Type{T}`](@ref man-typet-type)) and additional subtypes
 of concrete types cannot be declared.
 
 Other high-level aspects of Julia's type system that should be mentioned up front are:
@@ -113,7 +113,7 @@ x::Int8 = 10   # as the left-hand side of an assignment
 
 and applies to the whole current scope, even before the declaration.
 
-As of Julia 1.8, type declarations can now be used in global scope i.e.
+As of Julia 1.8, type declarations can now be used in global scope i.e.,
 type annotations can be added to global variables to make accessing them type stable.
 ```julia
 julia> x::Int = 10
@@ -296,14 +296,20 @@ primitive type «name» «bits» end
 primitive type «name» <: «supertype» «bits» end
 ```
 
-The number of bits indicates how much storage the type requires and the name gives the new type
-a name. A primitive type can optionally be declared to be a subtype of some supertype. If a supertype
-is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
-of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
-[`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
-8 bits are supported and you are more likely to experience bugs with sizes other than those used above.
-Therefore, boolean values, although they really need just a single bit, cannot be declared to be any
-smaller than eight bits.
+The number of bits gives the declared logical width of the primitive type, and the name gives the
+new type a name. A primitive type can optionally be declared to be a subtype of some supertype. If a
+supertype is omitted, then the type defaults to having `Any` as its immediate supertype. The
+declaration of [`Bool`](@ref) above therefore means that a boolean value has a logical width of eight
+bits, and has [`Integer`](@ref) as its immediate supertype. Primitive types continue to use
+byte-rounded storage, so `sizeof(T)` rounds their storage size up to a whole number of bytes even
+when their logical width is not a multiple of 8 bits. Use `Core.bitsizeof(T)` to query the declared
+logical width.
+
+Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
+expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays still
+use byte-rounded element storage rather than packed bit layouts. Therefore, boolean values, although
+they really need just a single bit, should still use the built-in eight-bit [`Bool`](@ref) unless
+you are deliberately working with these expert-only semantics.
 
 The types [`Bool`](@ref), [`Int8`](@ref) and [`UInt8`](@ref) all have identical representations:
 they are eight-bit chunks of memory. Since Julia's type system is nominative, however, they
@@ -470,7 +476,7 @@ To recap, two essential properties define immutability in Julia:
   * It is not permitted to modify the value of an immutable type.
     * For bits types this means that the bit pattern of a value once set will never change
       and that value is the identity of a bits type.
-    * For composite  types, this means that the identity of the values of its fields will
+    * For composite types, this means that the identity of the values of its fields will
       never change. When the fields are bits types, that means their bits will never change,
       for fields whose values are mutable types like arrays, that means the fields will
       always refer to the same mutable value even though that mutable value's content may
@@ -510,7 +516,7 @@ ERROR: setfield!: const field .b of type Baz cannot be changed
 
 ## Mutually Recursive Types
 
-Because julia's top level scope is procedural, types defined later in a file are not available for
+Because Julia's top level scope is procedural, types defined later in a file are not available for
 earlier field types. This is generally not a problem if types are written in the order they are
 used, but of course this does not work if there are cycles in the field type definitions:
 
@@ -544,10 +550,13 @@ Vector{Edge} (alias for Array{Edge, 1})
 ```
 
 !!! note
-    Only (`mutable`) `struct` definitions are allowed inside a `typegroup` block. All
-    other declarations, including method definitions are disallowed (Inner constructor
+    Only `struct` or `mutable struct` definitions are allowed inside a `typegroup` block;
+    All other declarations, including method definitions are disallowed (Inner constructor
     definitions are allowed inside the `struct` definition and will semantically run
     after all types have been atomically instantiated).
+
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
 
 ## [Declared Types](@id man-declared-types)
 
@@ -1462,7 +1471,7 @@ is raised:
 
 ```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
-ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
+ERROR: MethodError: no method matching supertype(::Core.TypeEgal{Union{Float64, Int64}})
 The function `supertype` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:

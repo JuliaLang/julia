@@ -60,7 +60,7 @@ open(fname) do f
         x = map(s -> rstrip(s, [' ','\t','\n']),
                 split(replace(L, r"[{}\"]+" => "\t"), "\t"))
         c = Char(parse(Int, x[2], base = 16))
-        if (Base.is_id_char(c) || Base.isoperator(Symbol(c))) &&
+        if (Base.Meta.is_id_char(c) || Base.isoperator(Symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
             tabcomname = escape_string(x[3])
             if startswith(tabcomname, "\\\\math")
@@ -2672,7 +2672,7 @@ const latex_symbols = Dict(
     "\\1/8" => "⅛", # vulgar fraction one eighth
     "\\3/8" => "⅜", # vulgar fraction three eighths
     "\\5/8" => "⅝", # vulgar fraction five eighths
-    "\\7/8" => "⅞", # vulgar fraction seventh eighths
+    "\\7/8" => "⅞", # vulgar fraction seven eighths
     "\\1/" => "⅟", # fraction numerator one
     "\\0/3" => "↉", # vulgar fraction zero thirds
     "\\1/4" => "¼", # vulgar fraction one quarter

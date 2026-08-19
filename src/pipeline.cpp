@@ -24,7 +24,11 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Passes/PassPlugin.h>
+#if JL_LLVM_VERSION >= 220000
+#  include <llvm/Plugins/PassPlugin.h>
+#else
+#  include <llvm/Passes/PassPlugin.h>
+#endif
 
 // NewPM needs to manually include all the pass headers
 #include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
@@ -93,6 +97,10 @@
 #include "jitlayers.h"
 #include "julia_assert.h"
 #include "passes.h"
+
+#ifdef USE_TRACY
+#include "tracy/TracyC.h"
+#endif
 
 using namespace llvm;
 
@@ -535,14 +543,15 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         // Rerotate loops that might have been unrotated in the simplification
         LoopPassManager LPM;
         LPM.addPass(LoopRotatePass());
+        LPM.addPass(LoopIdiomRecognizePass());
         LPM.addPass(LoopDeletionPass());
-        FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/false, /*UseBlockFrequencyInfo=*/false));
+        FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/false));
         FPM.addPass(LoopDistributePass());
         FPM.addPass(InjectTLIMappings());
         FPM.addPass(LoopVectorizePass());
         FPM.addPass(LoopLoadEliminationPass());
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
-        FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
+        FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true));
         FPM.addPass(EarlyCSEPass());
         FPM.addPass(CorrelatedValuePropagationPass());
         FPM.addPass(InstCombinePass());
@@ -572,13 +581,14 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
         {
             FunctionPassManager FPM;
+            JULIA_PASS(FPM.addPass(CancellationLoweringPass())); // Lower cancellation points to setjmp (before GC lowering)
             JULIA_PASS(FPM.addPass(LateLowerGCPass()));
             JULIA_PASS(FPM.addPass(FinalLowerGCPass()));
             JULIA_PASS(FPM.addPass(ExpandAtomicModifyPass())); // after LateLowerGCPass so that all IPO is valid
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
-        JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
-        MPM.addPass(RemoveJuliaAddrspacesPass()); //TODO: Make this conditional on arches (GlobalISel doesn't like our addrsspaces)
+        JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native, options.tls_getters)));
+        MPM.addPass(RemoveJuliaAddrspacesPass()); //TODO: Make this conditional on arches (GlobalISel doesn't like our addrspaces)
         if (O.getSpeedupLevel() >= 1) {
             FunctionPassManager FPM;
             if (O.getSpeedupLevel() >= 2) {
@@ -719,7 +729,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 
         FunctionAnalysisManager FAM;
         // Register the AA manager first so that our version is the one used.
-        FAM.registerPass([&] JL_NOTSAFEPOINT {
+        FAM.registerPass([&]() JL_NOTSAFEPOINT {
             AAManager AA;
             if (O.getSpeedupLevel() >= 2) {
                 AA.registerFunctionAnalysis<BasicAA>();
@@ -730,8 +740,8 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
             return AA;
         });
         // Register our TargetLibraryInfoImpl.
-        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetIRAnalysis(TM.getTargetIRAnalysis()); });
-        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM.getTargetTriple())); });
+        FAM.registerPass([&]() JL_NOTSAFEPOINT { return llvm::TargetIRAnalysis(TM.getTargetIRAnalysis()); });
+        FAM.registerPass([&]() JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM.getTargetTriple())); });
         return FAM;
     }
 
@@ -863,6 +873,9 @@ void NewPM::run(Module &M) {
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);
+#ifdef USE_TRACY
+    registerTracyCallbacks(PIC);
+#endif
 
     // Register print callbacks if print options are set
     raw_ostream &OS = print_options.out ? *print_options.out : errs();
@@ -981,6 +994,40 @@ void NewPM::run(Module &M) {
 void NewPM::printTimers() {
     TimePasses.print();
 }
+
+#ifdef USE_TRACY
+// Per-thread stack of open Tracy zones for LLVM passes. We don't go through
+// JL_TIMING here: LLVM passes also run on the AOT image-shard libuv worker
+// threads, which lack a Julia task/ptls.
+static thread_local SmallVector<TracyCZoneCtx, 8> tracy_pass_stack;
+
+static bool is_meta_pass(StringRef PassID) JL_NOTSAFEPOINT {
+    // Pass managers and adaptors merely wrap other passes; skip them so the
+    // zones reflect the actual transformation passes.
+    return PassID.starts_with("PassManager") || PassID.ends_with("PassAdaptor");
+}
+
+void NewPM::registerTracyCallbacks(PassInstrumentationCallbacks &PIC) {
+    PIC.registerBeforeNonSkippedPassCallback([](StringRef PassID, Any) {
+        if (is_meta_pass(PassID)) return;
+        static const struct ___tracy_source_location_data srcloc =
+            { "LLVM pass", __func__, __FILE__, __LINE__, 0 };
+        TracyCZoneCtx ctx = ___tracy_emit_zone_begin(&srcloc, 1);
+        ___tracy_emit_zone_text(ctx, PassID.data(), PassID.size());
+        tracy_pass_stack.push_back(ctx);
+    });
+    auto end_zone = [](StringRef PassID) {
+        if (is_meta_pass(PassID) || tracy_pass_stack.empty()) return;
+        ___tracy_emit_zone_end(tracy_pass_stack.pop_back_val());
+    };
+    PIC.registerAfterPassCallback([end_zone](StringRef PassID, Any, const PreservedAnalyses &) {
+        end_zone(PassID);
+    });
+    PIC.registerAfterPassInvalidatedCallback([end_zone](StringRef PassID, const PreservedAnalyses &) {
+        end_zone(PassID);
+    });
+}
+#endif
 
 OptimizationLevel getOptLevel(int optlevel) {
     switch (std::min(std::max(optlevel, 0), 3)) {

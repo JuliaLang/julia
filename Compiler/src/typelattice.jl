@@ -4,9 +4,9 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct/InterConditional/InterMustAlias are defined in Core,
+# N.B.: Const/PartialStruct/InterConditional/InterMustAlias/PartialTask are defined in Core,
 # to allow them to be used inside the global code cache.
-import Core: Const, InterConditional, PartialStruct, InterMustAlias
+import Core: Const, InterConditional, PartialStruct, InterMustAlias, PartialTask
 
 function may_form_limited_typ(@nospecialize(aty), @nospecialize(bty), @nospecialize(xty))
     if aty isa LimitedAccuracy
@@ -71,16 +71,16 @@ end
 """
     alias::MustAlias
 
-This lattice element wraps a reference to object field while recoding the identity of the
+This lattice element wraps a reference to object field while recording the identity of the
 parent object. It allows certain constraints that can be imposed on the object field type
 by built-in functions like `isa` and `===` to be propagated to another reference to the
 same object field.
 One important note is that this lattice element assumes the invariant that the field of
 wrapped slot object never changes until the slot object is re-assigned. This means, the
 wrapped object field should be constant as inference currently doesn't track any memory
-effects on per-object basis. Particularly `maybe_const_fldidx` takes the lift to check if
+effects on per-object basis. Particularly `maybe_const_fldidx` has the task of checking if
 a given lattice element is eligible to be wrapped by `MustAlias`. Example:
-```juila
+```julia
 let alias = getfield(x::Some{Union{Nothing,String}}, :value)::MustAlias(x, Some{Union{Nothing,String}}, 1, Union{Nothing,String})
     if alias === nothing
         # May assume `getfield(x, :value)` is `nothing` now
@@ -456,7 +456,8 @@ end
         return isa(b, Type) && a.typ <: b
     elseif isa(b, PartialStruct)
         if isa(a, Const)
-            widea = widenconst(a)::DataType
+            widea = widenconst(a)
+            isa(widea, DataType) || return false
             wideb = widenconst(b)
             wideb′ = unwrap_unionall(wideb)::DataType
             widea.name === wideb′.name || return false
@@ -499,6 +500,14 @@ end
         end
         return ⊑(widenlattice(lattice), widenconst(a), b)
     elseif isa(b, PartialOpaque)
+        return false
+    end
+    if isa(a, PartialTask)
+        if isa(b, PartialTask)
+            return ⊑(lattice, a.fetch_type, b.fetch_type)
+        end
+        return ⊑(widenlattice(lattice), Task, b)
+    elseif isa(b, PartialTask)
         return false
     end
     return ⊑(widenlattice(lattice), a, b)
@@ -568,6 +577,11 @@ end
         return is_lattice_equal(lattice, a.env, b.env)
     end
     isa(b, PartialOpaque) && return false
+    if isa(a, PartialTask)
+        isa(b, PartialTask) || return false
+        return is_lattice_equal(lattice, a.fetch_type, b.fetch_type)
+    end
+    isa(b, PartialTask) && return false
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
 
@@ -596,7 +610,7 @@ end
 # lattice operations
 # ==================
 
-@nospecializeinfer function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::AnyType))
     if isa(v, PartialStruct)
         has_free_typevars(t) && return v
         widev = widenconst(v)
@@ -630,11 +644,14 @@ end
         ti = typeintersect(widev, t)
         valid_as_lattice(ti, true) || return Bottom
         return PartialOpaque(ti, v.env, v.parent, v.source)
+    elseif isa(v, PartialTask)
+        has_free_typevars(t) && return v
+        return Task <: t ? v : Bottom
     end
     return tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(lattice::ConstsLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::ConstsLattice, @nospecialize(v), @nospecialize(t::AnyType))
     if isa(v, Const)
         if !has_free_typevars(t) && !isa(v.val, t)
             return Bottom
@@ -644,7 +661,7 @@ end
     tmeet(widenlattice(lattice), widenconst(v), t)
 end
 
-@nospecializeinfer function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::AnyType))
     if isa(v, Conditional)
         if !(Bool <: t)
             return Bottom
@@ -654,26 +671,26 @@ end
     tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(𝕃::MustAliasesLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(𝕃::MustAliasesLattice, @nospecialize(v), @nospecialize(t::AnyType))
     if isa(v, MustAlias)
         v = widenmustalias(v)
     end
     return tmeet(widenlattice(𝕃), v, t)
 end
 
-@nospecializeinfer function tmeet(lattice::InferenceLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::InferenceLattice, @nospecialize(v), @nospecialize(t::AnyType))
     # TODO: This can probably happen and should be handled
     @assert !isa(v, LimitedAccuracy)
     tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(lattice::InterConditionalsLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::InterConditionalsLattice, @nospecialize(v), @nospecialize(t::AnyType))
     # TODO: This can probably happen and should be handled
     @assert !isa(v, AnyConditional)
     tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(𝕃::InterMustAliasesLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(𝕃::InterMustAliasesLattice, @nospecialize(v), @nospecialize(t::AnyType))
     if isa(v, InterMustAlias)
         v = widenmustalias(v)
     end
@@ -687,11 +704,16 @@ Widens extended lattice element `x` to native `Type` representation.
 """
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
-widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+# a closed type value widens to the egality kind, mirroring how `jl_inst_arg_tuple_type`
+# keys runtime dispatch (`Const(v) ⊑ TypeEgal{v} ⊑ Type{v}`); an open one only to its
+# `==`-class `Type{v}`
+widenconst(c::Const) = (v = c.val; isa(v, Type) ?
+    (has_free_typevars(v) ? Type{v} : Core.TypeEgal{v}) : typeof(v))
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
-@nospecializeinfer widenconst(@nospecialize t::Type) = t
+widenconst(t::PartialTask) = Task
+@nospecializeinfer widenconst(@nospecialize t::AnyType) = t
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")
 widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")

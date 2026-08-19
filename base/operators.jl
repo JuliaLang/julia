@@ -84,7 +84,7 @@ DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
 supertype(T::DataType) = (@_total_meta; T.super)
-supertype(T::UnionAll) = (@_total_meta; UnionAll(T.var, supertype(T.body)))
+supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
 
@@ -318,6 +318,7 @@ false
 ```
 """
 !=(x, y) = !(x == y)
+typeof(!=).name.max_methods = UInt8(1)
 const ≠ = !=
 
 """
@@ -422,6 +423,7 @@ true
 ```
 """
 >(x, y) = y < x
+typeof(>).name.max_methods = UInt8(1)
 
 """
     <=(x, y)
@@ -477,6 +479,7 @@ true
 ```
 """
 >=(x, y) = (y <= x)
+typeof(>=).name.max_methods = UInt8(1)
 const ≥ = >=
 
 # this definition allows Number types to implement < instead of isless,
@@ -642,7 +645,7 @@ function afoldl(op, a, bs...)
 end
 setfield!(typeof(afoldl).name, :max_args, Int32(34), :monotonic)
 
-for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
+for op in (:+, :(+%), :*, :(*%), :&, :|, :xor, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
@@ -867,68 +870,68 @@ const ÷ = div
 """
     mod1(x, y)
 
-Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
-in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+Equivalent to `rem(x, y, RoundUp) + x*sign(y)`. Returns a value in the range
+``(0, y]`` for positive `y` and ``[-|y|,0)`` for negative `y`.
 
-With integer arguments and positive `y`, this is equal to `mod(x, 1:y)`, and hence natural
-for 1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` is natural for computations with
-offsets or strides.
+With integer arguments and positive `y`, this is equal to `mod(x, 1:y)`, and hence natural for
+1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` is natural for 0-based indexing.
 
-See also [`mod`](@ref), [`fld1`](@ref), [`fldmod1`](@ref).
+See also [`rem`](@ref), [`mod`](@ref), [`cld`](@ref), [`cldmod1`](@ref).
 
 # Examples
 ```jldoctest
 julia> mod1(4, 2)
 2
 
-julia> mod1.(-5:5, 3)'
-1×11 adjoint(::Vector{Int64}) with eltype Int64:
- 1  2  3  1  2  3  1  2  3  1  2
+julia> [-7:7  mod1.(-7:7, 3)]'
+2×15 adjoint(::Matrix{Int64}) with eltype Int64:
+ -7  -6  -5  -4  -3  -2  -1  0  1  2  3  4  5  6  7
+  2   3   1   2   3   1   2  3  1  2  3  1  2  3  1
 
-julia> mod1.([-0.1, 0, 0.1, 1, 2, 2.9, 3, 3.1]', 3)
+julia> mod1.([-0.1  0  0.1  1  2  2.9  3  3.1], 3)
 1×8 Matrix{Float64}:
  2.9  3.0  0.1  1.0  2.0  2.9  3.0  0.1
 ```
 """
-mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
+mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); iszero(m) ? y : m)
 
 
 """
-    fld1(x, y)
+    cldmod1(x, y)
 
-Flooring division, returning a value consistent with `mod1(x,y)`
+Return `(cld(x,y), mod1(x,y))`. For positive integer inputs, this is the (col, row) index
+of the xᵗʰ element in a column major matrix with y rows.
 
-See also [`mod1`](@ref), [`fldmod1`](@ref).
+See also [`cld`](@ref), [`mod1`](@ref), [`divrem`](@ref), [`fldmod`](@ref).
 
 # Examples
 ```jldoctest
-julia> x = 15; y = 4;
+julia> col, row = cldmod1(20, 6)
+(4, 2)
 
-julia> fld1(x, y)
-4
-
-julia> x == fld(x, y) * y + mod(x, y)
+julia> 20 == (col - 1) * 6 + row
 true
 
-julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
-true
+julia> reshape(1:36, 6, 6)
+6×6 reshape(::UnitRange{Int64}, 6, 6) with eltype Int64:
+ 1   7  13  19  25  31
+ 2   8  14  20  26  32
+ 3   9  15  21  27  33
+ 4  10  16  22  28  34
+ 5  11  17  23  29  35
+ 6  12  18  24  30  36
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld((x - m) + y, y))
-function fld1(x::T, y::T) where T<:Integer
-    d = div(x, y)
-    return d + (!signbit(x ⊻ y) & (d * y != x))
-end
+cldmod1(x, y) = (cld(x, y), mod1(x, y))
 
 """
     fldmod1(x, y)
 
-Return `(fld1(x,y), mod1(x,y))`.
+Legacy spelling of `cldmod1(x, y)` for integers.
 
-See also [`fld1`](@ref), [`mod1`](@ref).
+See also [`cldmod1`](@ref).
 """
-fldmod1(x, y) = (fld1(x, y), mod1(x, y))
-
+fldmod1(x, y) = cldmod1(x, y)
 
 """
     widen(x)
@@ -1024,7 +1027,7 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
-The last argument to `∘` execute first.
+The last argument to `∘` executes first.
 
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
@@ -1462,13 +1465,14 @@ contains `missing` but not `item`, in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
 Some collections follow a slightly different definition. For example,
-[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements;
-[`Dict`](@ref)s look for `key=>value` pairs, and the `key` is compared using
-[`isequal`](@ref).
+[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
+For [`Dict`](@ref), [`ImmutableDict`](@ref), and [`WeakKeyDict`](@ref),
+`key=>value` membership compares keys using [`isequal`](@ref) and values using
+[`==`](@ref); [`IdDict`](@ref) instead compares keys using [`===`](@ref).
 
 To test for the presence of a key in a dictionary, use [`haskey`](@ref)
-or `k in keys(dict)`. For the collections mentioned above,
-the result is always a `Bool`.
+or `k in keys(dict)`. For the dictionaries mentioned above,
+the result of `haskey(dict, k)` or `k in keys(dict)` is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `items` and `collection` are broadcasted over, which is often not what is intended.

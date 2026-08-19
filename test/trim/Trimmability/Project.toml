@@ -1,0 +1,6 @@
+name = "Trimmability"
+uuid = "a947d18a-c8c7-4008-a319-1a4dcdfce70b"
+version = "0.1.0"
+
+[deps]
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"

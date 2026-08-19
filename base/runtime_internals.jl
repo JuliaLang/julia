@@ -221,8 +221,9 @@ macro __FUNCTION__()
     Expr(:thisfunction)
 end
 
-# TODO: this is vaguely broken because it only works for explicit calls to
-# `Base.deprecate`, not the @deprecated macro:
+# Reflects binding-partition deprecation (as set by `Base.deprecate` / `Base.@deprecate_binding`),
+# including a binding reached through an implicit `using`, transparently through reexports.
+# `@deprecate` deprecates a method rather than the binding, so it is intentionally not reported here.
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 
 function binding_module(m::Module, s::Symbol)
@@ -232,6 +233,7 @@ function binding_module(m::Module, s::Symbol)
 end
 
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
+const _TYPE_NAME = TypeEq.name
 
 function _fieldnames(@nospecialize t)
     if t.name === _NAMEDTUPLE_NAME
@@ -262,9 +264,10 @@ const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
 const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
+const PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100
 
 const PARTITION_MASK_KIND         = 0x0f
-const PARTITION_MASK_FLAG         = 0xf0
+const PARTITION_MASK_FLAG         = 0x1f0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
 
@@ -318,6 +321,40 @@ information.
 """
 function delete_binding(mod::Module, sym::Symbol)
     ccall(:jl_disable_binding, Cvoid, (Any,), GlobalRef(mod, sym))
+end
+
+"""
+    set_binding_visibility!(mod::Module, sym::Symbol, vis::Symbol)
+
+Select the declared visibility of `mod.sym`, one of `:export`, `:public`, or
+`:none`. This is the programmatic counterpart to the `export` and `public`
+keywords; unlike them it can also *retract* a declaration, since `:none`
+removes a name's `export` or `public` status.
+
+Retracting an `export` causes modules that did `using \$mod` to stop resolving
+`sym` implicitly, once their world age advances past this call (see
+[`invokelatest`](@ref) and [`get_world_counter`](@ref)). Because that
+invalidates dependent compiled code, it can be expensive.
+
+Unlike the exported flag, the public flag is not world-versioned: setting or
+clearing it takes effect in every world age at once. Retracting to `:none`
+therefore drops public status in all world ages, including ones in which the name
+is declared public. Combined with the world-versioned export flag, this means an
+older world age can still report a name as [`isexported`](@ref) while no longer
+reporting it as [`ispublic`](@ref).
+
+See also [`isexported`](@ref), [`ispublic`](@ref), [`delete_binding`](@ref).
+
+!!! compat "Julia 1.14"
+    This function was added in Julia 1.14.
+"""
+function set_binding_visibility!(mod::Module, sym::Symbol, vis::Symbol)
+    state = vis === :none   ? Cint(0) :
+            vis === :public ? Cint(1) :
+            vis === :export ? Cint(2) :
+            throw(ArgumentError(LazyString("visibility must be :none, :public, or :export, got ", repr(vis))))
+    ccall(:jl_module_set_visibility, Cvoid, (Any, Any, Cint), mod, sym, state)
+    return nothing
 end
 
 """
@@ -582,7 +619,8 @@ struct DataTypeLayout
     # arrayelem_isatomic : 1;
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
-    # padding : 8;
+    # unused_bits : 3;
+    # padding : 5;
 end
 
 function DataTypeLayout(dt::DataType)
@@ -621,6 +659,12 @@ function aligned_sizeof(@nospecialize T::Type)
             return LLT_ALIGN(sz, al)
         end
     elseif allocatedinline(T)
+        if T === Type{Union{}}
+            # allocated with the layout of the `typeof(Union{})` singleton
+            # (cf. `normalize_typeofbottom_layout_alias`), which is what the
+            # `DataType`-only layout queries below expect
+            T = Core.TypeofBottom
+        end
         al = datatype_alignment(T)
         return LLT_ALIGN(Core.sizeof(T), al)
     end
@@ -885,7 +929,10 @@ Determine whether type `T` is a [`Tuple`](@ref) that could appear as a type
 signature in dispatch.  For this to be true, every element of the tuple type
 must be either:
 - [concrete](@ref isconcretetype) but not a [kind type](@ref Base.iskindtype)
-- a [`Type{U}`](@ref Type) with no free type variables in `U`
+- the egality kind `Core.TypeEgal{U}` with no free type variables in `U` (a
+  `Type{U}` slot is not enough, since it also admits `==`-equal but non-`===`
+  argument values; `Type{Union{}}` is the exception, the bottom object being
+  unique)
 
 !!! note
     A dispatch tuple is relevant for method dispatch because it has no inhabited
@@ -915,6 +962,9 @@ julia> isdispatchtuple(Tuple{DataType})
 false
 
 julia> isdispatchtuple(Tuple{Type{Int}})
+false
+
+julia> isdispatchtuple(Tuple{Core.TypeEgal{Int}})
 true
 
 julia> isdispatchtuple(Tuple{Type})
@@ -938,6 +988,9 @@ function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
+    elseif isType(t)
+        T = type_parameter(t)
+        return isa(T, Type) && ismutationfree(typeof(T))
     elseif isa(t, Union)
         return ismutationfree(t.a) && ismutationfree(t.b)
     end
@@ -958,6 +1011,9 @@ function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_isidentityfree(t)
+    elseif isType(t)
+        T = type_parameter(t)
+        return isa(T, Type) && isidentityfree(typeof(T))
     elseif isa(t, Union)
         return isidentityfree(t.a) && isidentityfree(t.b)
     end
@@ -974,7 +1030,7 @@ or [`Core.TypeofBottom`](@ref).
 
 All kinds are [concrete](@ref isconcretetype) because types are Julia values.
 """
-iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+iskindtype(@nospecialize t) = (t === Core.AnyType || t === DataType || t === UnionAll || t === Union || t === TypeEq || t === Core.TypeEgal || t === typeof(Bottom))
 
 """
     Base.isconcretedispatch(T)
@@ -1007,11 +1063,37 @@ using Core: has_free_typevars
 # and is thus perhaps most similar to the old (pre-1.0) `isconcretetype` query
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
-        (isType(v) && !has_free_typevars(v))
+        isTypeEgal(v) || (isTypeEq(v) && type_parameter(v) === Union{})
 end
 
-const _TYPE_NAME = Type.body.name
-isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
+"""
+    Base.isType(t)
+
+Determine whether `t` is a kind whose values are Julia type objects. This is
+true for both equality-keyed `Type{T}`/`TypeEq{T}` kinds and egality-keyed
+`Core.TypeEgal{T}` kinds.
+
+Use [`Base.isTypeEq`](@ref) or [`Base.isTypeEgal`](@ref) when the distinction
+between equality and egality matters.
+"""
+isType(@nospecialize t) = isTypeEq(t) || isTypeEgal(t)
+
+"""
+    Base.isTypeEq(t)
+
+Determine whether `t` is an equality-keyed `Type{T}`/`TypeEq{T}` kind.
+"""
+isTypeEq(@nospecialize t) = isa(t, TypeEq)
+
+"""
+    Base.isTypeEgal(t)
+
+Determine whether `t` is an egality-keyed `Core.TypeEgal{T}` kind.
+"""
+isTypeEgal(@nospecialize t) = isa(t, Core.TypeEgal)
+
+type_parameter(t::TypeEq) = getfield(t, :T)
+type_parameter(t::Core.TypeEgal) = getfield(t, :T)
 
 """
     isconcretetype(T)
@@ -1088,6 +1170,7 @@ false
 function isabstracttype(@nospecialize(t))
     @_total_meta
     t = unwrap_unionall(t)
+    isType(t) && return true
     # TODO: what to do for `Union`?
     return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
 end
@@ -1151,7 +1234,7 @@ We can use it to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-14-element Vector{Tuple{UInt64, Symbol, Type}}:
+14-element Vector{Tuple{UInt64, Symbol, Core.AnyType}}:
  (0x0000000000000000, :desc, Union{RawFD, String})
  (0x0000000000000008, :device, UInt64)
  (0x0000000000000010, :inode, UInt64)
@@ -1240,18 +1323,37 @@ function _fieldindex_nothrow(T::DataType, name::Symbol)
 end
 
 function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
-    t = argument_datatype(t)
-    if t === nothing
+    return _fieldindex(t, name, err)
+end
+
+function fieldindex(t::Union, name::Symbol, err::Bool=true)
+    return _fieldindex(t, name, err)
+end
+
+function _fieldindex(@nospecialize(t), name::Symbol, err::Bool)
+    idx = _fieldindex_noerror(t, name)
+    if idx === nothing
         err && throw(ArgumentError("type does not have definite fields"))
         return 0
     end
-    return fieldindex(t, name, err)
+    if idx == 0 && err
+        t = _fieldindex_error_type(t)
+        t === nothing && throw(ArgumentError("type does not have definite fields"))
+        return fieldindex(t, name, true)
+    end
+    return idx
 end
 
 function argument_datatype(@nospecialize t)
     @_total_meta
     @noinline
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
+end
+
+function argument_datatypename(@nospecialize t)
+    @_total_meta
+    @noinline
+    return ccall(:jl_argument_datatypename, Any, (Any,), t)::Union{Nothing,Core.TypeName}
 end
 
 function datatype_fieldcount(t::DataType)
@@ -1276,6 +1378,64 @@ function datatype_fieldcount(t::DataType)
     return length(t.name.names)
 end
 
+function _typename_noerror(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if t isa DataType
+        return t.name
+    elseif t isa Union
+        aname = _typename_noerror(t.a)
+        aname === nothing && return nothing
+        bname = _typename_noerror(t.b)
+        return aname === bname ? aname : nothing
+    end
+    return nothing
+end
+
+function _fieldindex_error_type(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if t isa DataType
+        fieldcount_noerror(t) === nothing && return nothing
+        return t
+    elseif t isa Union
+        tn = _typename_noerror(t)
+        tn === nothing && return nothing
+        t = unwrap_unionall(tn.wrapper)
+        t isa DataType || return nothing
+        return t
+    end
+    return nothing
+end
+
+function _fieldindex_noerror(@nospecialize(t), name::Symbol)
+    t = unwrap_unionall(t)
+    if t isa Union
+        _typename_noerror(t) === nothing && return nothing
+        aidx = _fieldindex_noerror(t.a, name)
+        aidx === nothing && return nothing
+        bidx = _fieldindex_noerror(t.b, name)
+        return aidx === bidx ? aidx : nothing
+    elseif t isa DataType
+        return fieldindex(t, name, false)
+    end
+    return nothing
+end
+
+function _fieldcount_noerror(@nospecialize(t))
+    t === Union{} && return 0
+    t = unwrap_unionall(t)
+    if t isa Union
+        _typename_noerror(t) === nothing && return nothing
+        acount = _fieldcount_noerror(t.a)
+        acount === nothing && return nothing
+        bcount = _fieldcount_noerror(t.b)
+        return acount === bcount ? acount : nothing
+    elseif t === Union{}
+        return 0
+    end
+    t isa DataType || return nothing
+    return datatype_fieldcount(t)
+end
+
 """
     fieldcount(t::Type)
 
@@ -1284,13 +1444,14 @@ An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
     @_foldable_meta
-    if t isa UnionAll || t isa Union
-        t = argument_datatype(t)
-        if t === nothing
-            throw(ArgumentError("type does not have a definite number of fields"))
-        end
-    elseif t === Union{}
+    if t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
+    end
+    t = unwrap_unionall(t)
+    if t isa Union
+        fcount = _fieldcount_noerror(t)
+        fcount === nothing && throw(ArgumentError("type does not have a definite number of fields"))
+        return fcount
     end
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
@@ -1303,28 +1464,7 @@ function fieldcount(@nospecialize t)
 end
 
 function fieldcount_noerror(@nospecialize t)
-    if t isa UnionAll || t isa Union
-        t = argument_datatype(t)
-        if t === nothing
-            return nothing
-        end
-    elseif t === Union{}
-        return 0
-    end
-    t isa DataType || return nothing
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters
-        if names isa Tuple
-            return length(names)
-        end
-        if types isa DataType && types <: Tuple
-            return fieldcount_noerror(types)
-        end
-        return nothing
-    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-        return nothing
-    end
-    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
+    return _fieldcount_noerror(t)
 end
 
 
@@ -1376,7 +1516,7 @@ function to_tuple_type(@nospecialize(t))
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
-            if !(isa(p, Type) || isa(p, TypeVar))
+            if !(isa(p, Core.AnyType) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
@@ -1388,6 +1528,8 @@ end
 
 function signature_type(@nospecialize(f), @nospecialize(argtypes))
     argtypes = to_tuple_type(argtypes)
+    # `Core.Typeof` matches the per-argument key of the dispatch tuple
+    # constructed by `jl_inst_arg_tuple_type`.
     ft = Core.Typeof(f)
     u = unwrap_unionall(argtypes)::DataType
     return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
@@ -1406,15 +1548,22 @@ end
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
-function has_bottom_parameter(t::DataType)
-    for p in t.parameters
-        has_bottom_parameter(p) && return true
+function has_bottom_parameter(@nospecialize(t::Core.AnyType))
+    t === Bottom && return true
+    ty = typeof(t)
+    if ty === DataType
+        for p in getfield(t, :parameters)
+            has_bottom_parameter(p) && return true
+        end
+    elseif ty === TypeEq || ty === Core.TypeEgal
+        return has_bottom_parameter(type_parameter(t))
+    elseif ty === UnionAll
+        return has_bottom_parameter(unwrap_unionall(t))
+    elseif ty === Union
+        return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
     end
     return false
 end
-has_bottom_parameter(t::typeof(Bottom)) = true
-has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
-has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
 has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
@@ -1481,7 +1630,7 @@ get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 """
     tls_world_age()
 
-Return the world the [current_task()](@ref) is executing within.
+Return the world the [`current_task`](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
@@ -1738,7 +1887,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     end
     if method.isva
         # If the va argument is used, we need to ensure that all arguments that
-        # contribute to the va tuple are dispatchelemes
+        # contribute to the va tuple are dispatch elements
         if (ast_slotflag(code, firstarg + nargs + nsparams) & SLOT_USED) != 0
             for i = (non_va_args+1):length(at.parameters)
                 if !isdispatchelem(at.parameters[i])
@@ -1798,6 +1947,9 @@ is_nospecializeinfer(method::Method) = method.nospecializeinfer && is_nospeciali
 Return MethodInstance corresponding to `atype` and `sparams`.
 
 No widening / narrowing / compileable-normalization of `atype` is performed.
+A slot for an argument known by egality must already carry the egality kind
+(`TypeEgal{X}`, as `Compiler.widenconst` produces); a closed `Type{X}` slot
+means the argument is only known up to type equality (#61323).
 """
 function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     @inline
@@ -1833,11 +1985,13 @@ function visit(f, mt::Core.MethodTable)
 end
 function visit(f, mc::Core.TypeMapLevel)
     function avisit(f, e::Memory{Any})
-        for i in 2:2:length(e)
+        # slot 1 holds the smallintset index; key/value pairs follow, so values
+        # live on the odd slots starting at 3 (see mtcache layout in src/typemap.c)
+        for i in 3:2:length(e)
             isassigned(e, i) || continue
             ei = e[i]
             if ei isa Memory{Any}
-                for j in 2:2:length(ei)
+                for j in 3:2:length(ei)
                     isassigned(ei, j) || continue
                     visit(f, ei[j])
                 end

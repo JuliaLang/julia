@@ -28,9 +28,16 @@ export run_interface, Prompt, ModalInterface, transition, reset_state, edit_inse
 
 const StringLike = Union{Char,String,SubString{String}}
 
+const ANSI_COLOR_ORDER = (
+    :black, :red, :green, :yellow, :blue, :magenta, :cyan, :white,
+    :bright_black, :bright_red, :bright_green, :bright_yellow,
+    :bright_blue, :bright_magenta, :bright_cyan, :bright_white)
+
 mutable struct TerminalProperties
     da1::Union{Nothing, Vector{Int}}  # DA1 feature parameters
-    TerminalProperties() = new(nothing)
+    colors::Vector{Pair{Symbol, StyledStrings.RGBTuple}}
+    awaiting_colors::Bool
+    TerminalProperties() = new(nothing, Pair{Symbol, StyledStrings.RGBTuple}[], false)
 end
 
 """
@@ -63,6 +70,153 @@ function receive_da1!(props::TerminalProperties, io::IO)
     end
     props.da1 = params
     return
+end
+
+"""
+    read_osc_response(io::IO)
+
+Read the body of an OSC response from `io` (after `\\e]` has been consumed by
+the keymap), up to a BEL, ST, or `^C` terminator.
+
+`^C` is accepted so that a malformed or truncated response cannot hang the REPL.
+"""
+function read_osc_response(io::IO)
+    data = Base.StringVector(0)
+    while !eof(io)
+        b = read(io, UInt8)
+        b ∈ (0x03, 0x07, 0x9c) && break  # ^C, BEL, or ST (8-bit)
+        if b == UInt8('\e')              # ST (7-bit, "\e\\")
+            b = read(io, UInt8)
+            b == UInt8('\\') && break
+            push!(data, UInt8('\e'))
+        end
+        push!(data, b)
+    end
+    String(data)
+end
+
+"""
+    interpret_color(spec::AbstractString)
+
+Interpret an X11 `rgb:`/`rgba:` colour `spec` as an `RGBTuple`, or return
+`nothing` if it is malformed.
+
+Components may be given with any number of hex digits (`rgb:RR/GG/BB` and
+`rgb:RRRR/GGGG/BBBB` are both common); they are scaled down to 8 bits. Any
+alpha component is ignored.
+
+# Examples
+```julia
+julia> interpret_color("rgb:2424/2727/3030")
+(r = 0x24, g = 0x27, b = 0x30)
+```
+"""
+function interpret_color(spec::AbstractString)
+    ncomponents = if startswith(spec, "rgb:")
+        3
+    elseif startswith(spec, "rgba:")
+        4
+    else
+        return
+    end
+    # The prefix is one character longer than the number of components it announces.
+    components = split(@view(spec[ncomponents+2:end]), '/')
+    length(components) == ncomponents || return
+    function tryparsecolor(chex)
+        ndigits = ncodeunits(chex)
+        ndigits in 1:4 || return nothing
+        cnum = tryparse(UInt16, chex, base=16)
+        isnothing(cnum) && return nothing
+        # Scale to 8 bits: "R" is widened to "RR", "RRRR" truncated to its high byte.
+        if ndigits == 1
+            UInt8(cnum * 0x11)
+        else
+            UInt8(cnum ÷ 16^(ndigits - 2))
+        end
+    end
+    r = tryparsecolor(components[1])
+    isnothing(r) && return
+    g = tryparsecolor(components[2])
+    isnothing(g) && return
+    b = tryparsecolor(components[3])
+    isnothing(b) && return
+    (; r, g, b)
+end
+
+"""
+    receive_osc!(props::TerminalProperties, io::IO)
+
+Read an OSC response from `io` (after `\\e]` has been consumed by the keymap)
+and record any colour it reports in `props.colors`.
+
+Recognises the foreground (`10`), background (`11`), and ANSI palette (`4`)
+responses issued by [`query_colors`](@ref). The background is queried last, so
+its reply means every colour the terminal intends to report has been seen, and
+the palette is applied with `StyledStrings.setcolors!`.
+"""
+function receive_osc!(props::TerminalProperties, io::IO)
+    parts = split(read_osc_response(io), ';')
+    opcode = tryparse(Int, first(parts))
+    (isnothing(opcode) || !props.awaiting_colors) && return
+    if opcode == 10 || opcode == 11
+        if length(parts) == 2
+            color = interpret_color(parts[2])
+            isnothing(color) ||
+                push!(props.colors, ifelse(opcode == 10, :foreground, :background) => color)
+        end
+        if opcode == 11
+            props.awaiting_colors = false
+            StyledStrings.setcolors!(props.colors)
+        end
+    elseif opcode == 4
+        # "4;<index>;<spec>", possibly repeated for terminals that batch replies.
+        for i in 2:2:length(parts)-1
+            index = tryparse(Int, parts[i])
+            isnothing(index) && continue
+            index in 0:15 || continue
+            color = interpret_color(parts[i+1])
+            isnothing(color) || push!(props.colors, ANSI_COLOR_ORDER[index+1] => color)
+        end
+    end
+    return
+end
+
+"""
+    query_colors(props::TerminalProperties, term::TextTerminal)
+
+Ask the terminal for its foreground, background, and ANSI palette colours,
+which [`receive_osc!`](@ref) applies once they arrive.
+
+The palette is queried first and the foreground/background last, so that the
+latter's response acts as a sentinel: terminals answer queries in order, so
+whatever has arrived by then is everything that is coming. Terminals that
+answer nothing simply leave the colours untouched.
+
+!!! warning
+    The responses are only collected while the REPL is reading input, which
+    dispatches `\\e]` to [`receive_osc!`](@ref).
+"""
+function query_colors(props::TerminalProperties, term::TextTerminal)
+    empty!(props.colors)
+    props.awaiting_colors = true
+    raw!(term, true)  # so the tty does not echo the replies
+    # NOTE: In theory, as per <https://www.xfree86.org/current/ctlseqs.html>
+    # 'Operating System Controls' > 'P s = 4', multiple queries may be provided:
+    #
+    #   "Because more than one pair of color number and specification can be given
+    #    in one control sequence, xterm can make more than one reply."
+    #
+    # However, in practice, while some terminals are good and support this
+    # (e.g. Kitty, Wezterm, and Foot) others, even those with good reputations
+    # for being faithful VTs, do not (e.g. Ghostty, Alacritty, Konsole).
+    #
+    # So, we resort to sending 16 individual OSC queries instead of one large one 🥲.
+    for n in 0:15
+        print(term, "\e]4;$n;?\e\\")
+    end
+    print(term, "\e]10;?\e\\\e]11;?\e\\")
+    flush(term)
+    nothing
 end
 
 # interface for TextInterface
@@ -297,14 +451,15 @@ cancel_beep(::ModeState) = nothing
 
 for f in Union{Symbol,Expr}[
           :terminal, :on_enter, :add_history, :_buffer, :(Base.isempty),
-          :replace_line, :refresh_multi_line, :input_string, :update_display_buffer,
+          :replace_line, :input_string, :update_display_buffer,
           :empty_undo, :push_undo, :pop_undo, :options, :cancel_beep, :beep,
           :deactivate_region, :activate_region, :is_region_active, :region_active]
     @eval ($f)(s::MIState, args...) = $(f)(state(s), args...)
 end
+refresh_multi_line(s::MIState, args...; kwargs...) = refresh_multi_line(state(s), args...; kwargs...)
 
 for f in [:edit_insert, :edit_insert_newline, :edit_backspace, :edit_move_left,
-          :edit_move_right, :edit_move_word_left, :edit_move_word_right]
+          :edit_move_word_left, :edit_move_word_right]  # :edit_move_right is handled separately
     @eval function ($f)(s::MIState, args...)
         set_action!(s, $(Expr(:quote, f)))
         $(f)(state(s), args...)
@@ -632,7 +787,7 @@ refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@asser
 
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf::IOBuffer,
                             state::InputAreaState, prompt = "";
-                            indent::Int = 0, region_active::Bool = false)
+                            indent::Int = 0, region_active::Bool = false, show_cursor::Bool = true)
     _clear_input_area(termbuf, state)
 
     cols = width(terminal)
@@ -673,7 +828,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         full_input = String(buf.data[1:buf.size])
         if !isempty(full_input)
             passes = StylingPass[]
-            context = StylingContext(buf_pos + 1, regstart + 1, regstop) # StylingContext positions are 1-based
+            context = StylingContext(show_cursor ? buf_pos + 1 : -1, regstart + 1, regstop)
 
             # Add prompt-specific styling passes if the prompt has them and styling is enabled
             enable_style_input = prompt_obj === nothing ? false :
@@ -911,6 +1066,7 @@ function edit_move_right(buf::IOBuffer)
     return false
 end
 function edit_move_right(m::MIState)
+    set_action!(m, :edit_move_right)
     s = state(m)
     buf = s.input_buffer
     if edit_move_right(s.input_buffer)
@@ -1375,7 +1531,7 @@ function edit_transpose_chars(s::MIState)
 end
 
 function edit_transpose_chars(buf::IOBuffer)
-    # Moving left but not transpoing anything is intentional, and matches Emacs's behavior
+    # Moving left but not transposing anything is intentional, and matches Emacs's behavior
     eof(buf) && position(buf) !== 0 && char_move_left(buf)
     position(buf) == 0 && return false
     char_move_left(buf)
@@ -2114,6 +2270,8 @@ const escape_defaults = merge!(
         "\eO*" => nothing,
         # Intercept DA1 responses
         "\e[?" => (s::MIState, o...) -> receive_da1!(s.terminal_properties, terminal(s)),
+        # Intercept OSC responses
+        "\e]" => (s::MIState, o...) -> receive_osc!(s.terminal_properties, terminal(s)),
         # Also ignore extended escape sequences
         # TODO: Support ranges of characters
         "\e[1**" => nothing,
@@ -2352,11 +2510,12 @@ function show(io::IO, s::PrefixSearchState)
 end
 
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
-                            s::Union{PromptState,PrefixSearchState}; beeping::Bool=false)
+                            s::Union{PromptState,PrefixSearchState}; beeping::Bool=false, show_cursor::Bool=true)
     beeping || cancel_beep(s)
     ias = refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s;
                              indent = s.indent,
-                             region_active = is_region_active(s))
+                             region_active = is_region_active(s),
+                             show_cursor)
     s.ias = ias
     return ias
 end
@@ -2520,7 +2679,7 @@ end
 function commit_line(s::MIState)
     cancel_beep(s)
     move_input_end(s)
-    refresh_line(s)
+    refresh_multi_line(s; show_cursor=false)
     println(terminal(s))
     add_history(s)
     ias = InputAreaState(0, 0)
@@ -2689,9 +2848,31 @@ AnyDict(
         catch
         end
         cancel_beep(s)
-        move_input_end(s)
-        refresh_line(s)
-        print(terminal(s), "^C\n\n")
+        if buffer(s).size == 0 && !Base.generating_output()
+            # ^C at an empty prompt: nothing to clear, so the press reaches
+            # for still-running work from earlier evaluations. Two presses
+            # in a row sweep it (with an announce in between) - which also
+            # makes hammering ^C at spewing background output do what the
+            # user means, even though the prompt already returned. The arm
+            # survives exactly one keystroke (`last_action`), so any other
+            # key stands it down.
+            if s.last_action === :cancel_session_arm
+                set_action!(s, :cancel_session)
+                print(terminal(s), "^C\n")
+                if Base.cancel_session_work!()
+                    print(terminal(s), "Cancelled all in-flight work.\n\n")
+                else
+                    print(terminal(s), "\n")
+                end
+            else
+                set_action!(s, :cancel_session_arm)
+                print(terminal(s), "^C  (press ^C again to cancel all in-flight work)\n\n")
+            end
+        else
+            move_input_end(s)
+            refresh_line(s)
+            print(terminal(s), "^C\n\n")
+        end
         transition(s, :reset)
         refresh_line(s)
     end,
@@ -2771,6 +2952,9 @@ function history_search(mistate::MIState)
             result.mode,
             mistate.current_mode)
     end
+    if !haskey(mistate.mode_state, mimode)
+        mistate.mode_state[mimode] = init_state(term, mimode)
+    end
     pstate = mistate.mode_state[mimode]
     raw!(term, true)
     mistate.current_mode = mimode
@@ -2808,6 +2992,7 @@ const prefix_history_keymap = merge!(
         "\e[*" => "*",
         "\eO*"  => "*",
         "\e[?" => "*",
+        "\e]" => "*",
         "\e[1;5*" => "*", # Ctrl-Arrow
         "\e[1;2*" => "*", # Shift-Arrow
         "\e[1;3*" => "*", # Meta-Arrow
@@ -2937,12 +3122,25 @@ end
 
 function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=init_state(terminal, m))
     while !s.aborted
-        buf, ok, suspend = prompt!(terminal, m, s)
-        while suspend
-            @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
+        try
             buf, ok, suspend = prompt!(terminal, m, s)
+            while suspend
+                @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
+                buf, ok, suspend = prompt!(terminal, m, s)
+            end
+            Base.invokelatest(mode(state(s)).on_done, s, buf, ok)
+        catch e
+            isa(e, InterruptException) || rethrow()
+            try
+                cancel_beep(s)
+                move_input_end(s)
+                refresh_line(s)
+                print(terminal(s), "^C\n\n")
+                transition(s, :reset)
+                refresh_line(s)
+            catch
+            end
         end
-        Base.invokelatest(mode(state(s)).on_done, s, buf, ok)
     end
 end
 
@@ -3036,7 +3234,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
             notify(s.prompt_ready_event)
         end
         old_state = mode(s)
-        # spawn this because the main repl task is sticky (due to use of @async and _wait2)
+        # spawn this because the main repl task is sticky (due to use of @async and schedule_on_notify!)
         # and we want to not block typing when the repl task thread is busy
         t2 = Threads.@spawn :interactive while true
             eof(term) || peek(term) # wait before locking but don't consume

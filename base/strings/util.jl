@@ -386,9 +386,7 @@ end
         has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
         ncu - (has_lf + has_cr)
     end
-    off = s isa String ? 0 : s.offset
-    par = s isa String ? s : s.string
-    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+    @inbounds raw_substring(s, 1, len)
 end
 """
     lstrip([pred=isspace,] str::AbstractString)::SubString

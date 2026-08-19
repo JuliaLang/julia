@@ -244,6 +244,11 @@ end
     @test muladd(big(1//1),2,3) == big(1//1)*2+3
     @test muladd(1.0,2,3) == 1.0*2+3
     @test muladd(big(1.0),2,3) == big(1.0)*2+3
+    @test muladd(Inf, false, 3) === 3.0
+    @test muladd(Inf, true, 3) === Inf
+    @test muladd(false, NaN, 3) === 3.0
+    @test muladd(true, NaN, 3) === NaN
+    @test muladd(true, true, 3) === 4
 end
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808
@@ -653,14 +658,14 @@ end
     @test eltype(copysign(-1//2,-1//2)) <: Rational
 
     # Verify type stability with rational (x is positive)
-    @test eltype(copysign(-1//2,1)) <: Rational
-    @test eltype(copysign(-1//2,BigInt(1))) <: Rational
-    @test eltype(copysign(-1//2,1.0)) <: Rational
-    @test eltype(copysign(-1//2,1//2)) <: Rational
-    @test eltype(copysign(-1//2,-1)) <: Rational
-    @test eltype(copysign(-1//2,-BigInt(1))) <: Rational
-    @test eltype(copysign(-1//2,-1.0)) <: Rational
-    @test eltype(copysign(-1//2,-1//2)) <: Rational
+    @test eltype(copysign(1//2,1)) <: Rational
+    @test eltype(copysign(1//2,BigInt(1))) <: Rational
+    @test eltype(copysign(1//2,1.0)) <: Rational
+    @test eltype(copysign(1//2,1//2)) <: Rational
+    @test eltype(copysign(1//2,-1)) <: Rational
+    @test eltype(copysign(1//2,-BigInt(1))) <: Rational
+    @test eltype(copysign(1//2,-1.0)) <: Rational
+    @test eltype(copysign(1//2,-1//2)) <: Rational
 
     # test x = NaN
     @test isnan(copysign(0/0,1))
@@ -2443,10 +2448,10 @@ let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end
 
-@testset "mod1 and fld1" begin
+@testset "mod1 and cld" begin
     @test all(x -> (m=mod1(x,3); 0<m<=3), -5:+5)
-    @test all(x -> x == (fld1(x,3)-1)*3 + mod1(x,3), -5:+5)
-    @test all(x -> fldmod1(x,3) == (fld1(x,3), mod1(x,3)), -5:+5)
+    @test all(x -> x == (cld(x,3)-1)*3 + mod1(x,3), -5:+5)
+    @test all(x -> cldmod1(x,3) == (cld(x,3), mod1(x,3)), -5:+5)
 end
 #Issue #5570
 @test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]

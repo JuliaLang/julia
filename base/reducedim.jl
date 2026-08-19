@@ -49,7 +49,6 @@ for (Op, initval) in ((:(typeof(and_all)), true), (:(typeof(or_any)), false))
     @eval initarray!(a::AbstractArray, ::Any, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
 end
 
-# reducedim_initarray is called by
 reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
 reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
 
@@ -240,7 +239,7 @@ Extract first entry of slices of array A into existing array R.
 copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
 function mapfirst!(f::F, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N, F}
-    lsiz = check_reducedims(R, A)
+    check_reducedims(R, A)
     t = _firstreducedslice(axes(R), axes(A))
     map!(f, R, view(A, t...))
 end
@@ -260,7 +259,6 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
 
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
-        nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i in eachindex(R)
             r = op(@inbounds(R[i]), mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
@@ -271,7 +269,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     end
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsRt)
-    if reducedim1(R, A)
+    if reducedim1(R)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(axes1(R))
         for IA in CartesianIndices(indsAt)
@@ -343,6 +341,12 @@ _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+
+_mapreduce_dim(f, op, nt, R::ReshapedArray, ::Colon) =
+    _mapreduce_dim(f, op, nt, parent(R), :)
+
+_mapreduce_dim(f, op, i::_InitialValue, R::ReshapedArray, ::Colon) =
+    _mapreduce_dim(f, op, i, parent(R), :)
 
 """
     reduce(f, A::AbstractArray; dims=:, [init])
@@ -986,6 +990,8 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
         # Underlying implementations using dispatch
         ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
         ($_fname)(f, a, ::Colon; kw...) = mapreduce($mapf, $op, a; kw...)
+
+        ($_fname)(R::ReshapedArray, ::Colon) = ($fname)(parent(R))
     end
 end
 
@@ -1016,7 +1022,7 @@ end
 #
 function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
-    lsiz = check_reducedims(Rval, A)
+    check_reducedims(Rval, A)
     for i = 1:N
         axes(Rval, i) == axes(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
     end
@@ -1027,7 +1033,7 @@ function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     ks = keys(A)
     y = iterate(ks)
     zi = zero(eltype(ks))
-    if reducedim1(Rval, A)
+    if reducedim1(Rval)
         i1 = first(axes1(Rval))
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
@@ -1217,10 +1223,10 @@ function _findminmax_inittype(f, A::AbstractArray)
     # Second conditional: handle missing specifically, as most often, f(missing) = missing;
     # certainly, some predicate functions return Bool, but not all.
     # Else, return the type of the transformation.
-    Tr = v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
+    return v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
 end
 
-reducedim1(R, A) = length(axes1(R)) == 1
+reducedim1(R) = length(axes1(R)) == 1
 
 """
     argmin(A; dims) -> indices

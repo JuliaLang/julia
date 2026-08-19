@@ -26,7 +26,8 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
 
     // Zero out the GC frame.
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
-    builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16), tbaa_gcframe);
+    auto memset_instr = builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16));
+    memset_instr->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 
     target->replaceAllUsesWith(gcframe);
     target->eraseFromParent();
@@ -103,7 +104,11 @@ void FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 {
     ++QueueGCRootCount;
     assert(target->arg_size() == 1);
-    target->setCalledFunction(queueRootFunc);
+    // The site may execute with a reset region published (metadata inherited
+    // from the write barrier CancellationLowering annotated).
+    target->setCalledFunction(target->hasMetadata("julia.reset_region")
+                                  ? queueRootResetSafeFunc
+                                  : queueRootFunc);
 }
 
 void FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
@@ -153,6 +158,10 @@ bool FinalLowerGC::runOnFunction(Function &F)
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
+    queueRootResetSafeFunc = getOrDeclare(jl_well_known::GCQueueRootResetSafe);
+    smallAllocResetSafeFunc = getOrDeclare(jl_well_known::GCSmallAllocResetSafe);
+    bigAllocResetSafeFunc = getOrDeclare(jl_well_known::GCBigAllocResetSafe);
+    allocTypedResetSafeFunc = getOrDeclare(jl_well_known::GCAllocTypedResetSafe);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
 
 

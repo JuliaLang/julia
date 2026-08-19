@@ -592,7 +592,7 @@ struct NonFunctionIsZero end
 @test count(!, [true false; false true], dims=:, init=Int16(0)) === 2
 @test isequal(count(identity, [true false; false true], dims=2, init=UInt(0)), reshape(UInt[1, 1], 2, 1))
 
-## cumsum, cummin, cummax
+## cumsum
 
 z = rand(10^6)
 let es = sum(BigFloat.(z)), es2 = sum(BigFloat.(z[1:10^5]))
@@ -790,4 +790,18 @@ end
         e
     end
     @test (res isa Exception) || res == (1, (2, 3))
+end
+
+@testset "reductions over ReshapedArray" begin
+    @test sum(reshape(map(UInt8, 1:9), 3, 3)) === 45
+    @test @inferred(sum(reshape(1:4, 2, 2))) === 10
+    for f in (minimum, maximum, extrema)
+        @test_throws "range must be non-empty" f(reshape(1:0, 0, 1))
+    end
+
+    P = reshape(PermutedDimsArray(collect(reshape(1:6, 2, 3)), (2, 1)), 2, 3)
+    C = collect(P)
+    @test mapreduce(string, *, P) == mapreduce(string, *, C)
+    @test foldl(-, P) == foldl(-, C) && foldr(-, P) == foldr(-, C)
+    @test [x for x in P] == C
 end

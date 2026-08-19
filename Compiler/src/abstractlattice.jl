@@ -24,13 +24,13 @@ is_valid_lattice_norec(::ConstsLattice, @nospecialize(elem)) = isa(elem, Const) 
 """
     struct PartialsLattice{𝕃<:AbstractLattice} <: AbstractLattice
 
-A lattice extending a base lattice `𝕃` and adjoining `PartialStruct` and `PartialOpaque`.
+A lattice extending a base lattice `𝕃` and adjoining `PartialStruct`, `PartialOpaque`, and `PartialTask`.
 """
 struct PartialsLattice{𝕃<:AbstractLattice} <: AbstractLattice
     parent::𝕃
 end
 widenlattice(𝕃::PartialsLattice) = 𝕃.parent
-is_valid_lattice_norec(::PartialsLattice, @nospecialize(elem)) = isa(elem, PartialStruct) || isa(elem, PartialOpaque)
+is_valid_lattice_norec(::PartialsLattice, @nospecialize(elem)) = isa(elem, PartialStruct) || isa(elem, PartialOpaque) || isa(elem, PartialTask)
 
 """
     struct ConditionalsLattice{𝕃<:AbstractLattice} <: AbstractLattice
@@ -96,7 +96,7 @@ widenlattice(𝕃::InferenceLattice) = 𝕃.parent
 is_valid_lattice_norec(::InferenceLattice, @nospecialize(elem)) = isa(elem, LimitedAccuracy)
 
 """
-    tmeet(𝕃::AbstractLattice, a, b::Type)
+    tmeet(𝕃::AbstractLattice, a, b::AnyType)
 
 Compute the lattice meet of lattice elements `a` and `b` over the lattice `𝕃`,
 dropping any results that will not be inhabited at runtime.
@@ -107,7 +107,7 @@ Note that currently `b` is restricted to being a type
 """
 function tmeet end
 
-function tmeet(::JLTypeLattice, @nospecialize(a::Type), @nospecialize(b::Type))
+function tmeet(::JLTypeLattice, @nospecialize(a::AnyType), @nospecialize(b::AnyType))
     ti = typeintersect(a, b)
     valid_as_lattice(ti, true) || return Bottom
     return ti
@@ -150,7 +150,7 @@ If `𝕃` is `JLTypeLattice`, this is equivalent to subtyping.
 """
 function ⊑ end
 
-@nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::Type), @nospecialize(b::Type)) = a <: b
+@nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::AnyType), @nospecialize(b::AnyType)) = a <: b
 
 """
     ⊏(𝕃::AbstractLattice, a, b)::Bool
@@ -191,13 +191,16 @@ information that would not be available from the type itself.
 @nospecializeinfer function has_nontrivial_extended_info(𝕃::PartialsLattice, @nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
+    isa(t, PartialTask) && return true
     return has_nontrivial_extended_info(widenlattice(𝕃), t)
 end
 @nospecializeinfer function has_nontrivial_extended_info(𝕃::ConstsLattice, @nospecialize t)
     isa(t, PartialTypeVar) && return true
     if isa(t, Const)
         val = t.val
-        return !issingletontype(typeof(val)) && !(isa(val, Type) && hasuniquerep(val))
+        # a type-valued `Const` may pin `=== val` beyond its widening (which for
+        # an open `val` is only the `==`-class `Type{val}`)
+        return !issingletontype(typeof(val))
     end
     return has_nontrivial_extended_info(widenlattice(𝕃), t)
 end
@@ -223,6 +226,7 @@ that should be forwarded along with constant propagation.
         # return false
     end
     isa(t, PartialOpaque) && return true
+    isa(t, PartialTask) && return true
     return is_const_prop_profitable_arg(widenlattice(𝕃), t)
 end
 @nospecializeinfer function is_const_prop_profitable_arg(𝕃::ConstsLattice, @nospecialize t)
@@ -246,6 +250,7 @@ end
 @nospecializeinfer function is_forwardable_argtype(𝕃::PartialsLattice, @nospecialize x)
     isa(x, PartialStruct) && return true
     isa(x, PartialOpaque) && return true
+    isa(x, PartialTask) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
 @nospecializeinfer function is_forwardable_argtype(𝕃::ConstsLattice, @nospecialize x)
@@ -264,7 +269,7 @@ end
 
 Appropriately converts inferred type of a return value `rt` to such a type
 that we know we can store in the cache and is valid and good inter-procedurally,
-E.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
+e.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
 or the other cacheable lattice element.
 
 External lattice `𝕃ᵢ::ExternalLattice` may overload:

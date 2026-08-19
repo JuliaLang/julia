@@ -92,16 +92,16 @@ without any intermediate rounding.
 - if `r == RoundToZero` (default), then the result is exact, and in the interval
   ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise. See also [`RoundToZero`](@ref).
 
-- if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
-  ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
+- if `r == RoundDown`, then the result is in the interval ``[0, |y|)`` if `y` is positive, or
+  ``(-|y|, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
   `abs(x) < abs(y)`. See also [`RoundDown`](@ref).
 
-- if `r == RoundUp`, then the result is in the interval ``(-y, 0]`` if `y` is positive, or
-  ``[0, -y)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
+- if `r == RoundUp`, then the result is in the interval ``(-|y|, 0]`` if `y` is positive, or
+  ``[0, |y|)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
 
-- if `r == RoundFromZero`, then the result is in the interval ``(-y, 0]`` if `y` is positive, or
-  ``[0, -y)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
+- if `r == RoundFromZero`, then the result is in the interval ``(-|y|, 0]`` if `x` is positive, or
+  ``[0, |y|)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundFromZero`](@ref).
 
 !!! compat "Julia 1.9"
@@ -153,7 +153,7 @@ end
 
 Largest integer less than or equal to `x / y`. Equivalent to `div(x, y, RoundDown)`.
 
-See also [`div`](@ref), [`cld`](@ref), [`fld1`](@ref).
+See also [`div`](@ref), [`cld`](@ref), [`mod`](@ref), [`fldmod`](@ref).
 
 # Examples
 ```jldoctest
@@ -200,7 +200,7 @@ fld(a, b) = div(a, b, RoundDown)
 
 Smallest integer larger than or equal to `x / y`. Equivalent to `div(x, y, RoundUp)`.
 
-See also [`div`](@ref), [`fld`](@ref).
+See also [`div`](@ref), [`fld`](@ref), [`mod1`](@ref), [`cldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -242,6 +242,15 @@ julia> cld.(-5:5, 3)'
 """
 cld(a, b) = div(a, b, RoundUp)
 
+"""
+    fld1(a, b)
+
+Legacy spelling of `cld(a, b)` for integers.
+
+See also [`cld`](@ref).
+"""
+fld1(a, b) = cld(a, b)
+
 # divrem
 """
     divrem(x, y, r::RoundingMode=RoundToZero)
@@ -250,7 +259,7 @@ The quotient and remainder from Euclidean division.
 Equivalent to `(div(x, y, r), rem(x, y, r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x ÷ y, x % y)`.
 
-See also [`fldmod`](@ref), [`cld`](@ref).
+See also [`fldmod`](@ref), [`cldmod1`](@ref), [`div`](@ref), [`rem`](@ref).
 
 # Examples
 ```jldoctest
@@ -293,6 +302,25 @@ function divrem(a::Integer, b::Integer, r::Union{typeof(RoundUp),
         # For compat. Remove in 2.0.
         d = div(a, b, r)
         (d, a - d * b)
+    end
+end
+# For fixed-width integers the floored/ceiled quotient times `b` lies in
+# `(a - b, a + b]` and so wraps on valid inputs (e.g. `fld(typemin(Int), 3)*3`);
+# the remainder is correct only through wrap-cancellation.  The truncated
+# quotient satisfies `|d*b| <= |a|`, so the RoundToZero branch cannot overflow
+# and stays on checkable operators.
+function divrem(a::T, b::T, r::Union{typeof(RoundUp),
+                                     typeof(RoundDown),
+                                     typeof(RoundToZero)}) where T<:BitSigned
+    if r === RoundToZero
+        d = div(a, b)
+        (d, a - d * b)
+    elseif r === RoundDown
+        d = fld(a, b)
+        (d, a -% d *% b)
+    elseif r === RoundUp
+        d = div(a, b, r)
+        (d, a -% d *% b)
     end
 end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
@@ -354,11 +382,11 @@ end
 The floored quotient and modulus after division. A convenience wrapper for
 `divrem(x, y, RoundDown)`. Equivalent to `(fld(x, y), mod(x, y))`.
 
-See also [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
+See also [`fld`](@ref), [`mod`](@ref), [`divrem`](@ref), [`cldmod1`](@ref).
 """
 fldmod(x, y) = divrem(x, y, RoundDown)
 
-# We definite generic rounding methods for other rounding modes in terms of
+# We define generic rounding methods for other rounding modes in terms of
 # RoundToZero.
 function div(x::Signed, y::Unsigned, ::typeof(RoundDown))
     (q, r) = divrem(x, y)

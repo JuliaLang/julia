@@ -33,7 +33,7 @@ STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
 
 /*
  * Julia LICM pass.
- * This takes care of some julia intrinsics that is safe to move around/out of loops but
+ * This takes care of some julia intrinsics that are safe to move around/out of loops but
  * can't be handled by LLVM's LICM. These intrinsics can be moved outside of
  * loop context as well but it is inside a loop where they matter the most.
  */
@@ -257,6 +257,10 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                 }
                 else if (callee == write_barrier_func) {
+                    // A SATB (ConcurrentImmix) barrier must fire every iteration to
+                    // snapshot each overwritten value, so it can't be hoisted. Other
+                    // plans only mark the parent dirty, where hoisting is safe.
+#ifndef MMTK_PLAN_CONCURRENTIMMIX
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!makeLoopInvariant(L, call->getArgOperand(i),
@@ -278,6 +282,7 @@ struct JuliaLICM : public JuliaPassContext {
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting write barrier " << ore::NV("GC Write Barrier", call);
                     });
+#endif
                 }
                 else if (callee == alloc_obj_func) {
                     bool valid = true;

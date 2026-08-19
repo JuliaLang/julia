@@ -11,11 +11,15 @@ using Logging
 module DeprecationTests # to test @deprecate
     f() = true
 
+    const source_file = Symbol(@__FILE__)
+
     # test the Symbol path of @deprecate
+    const f1_method_line = @__LINE__() + 1
     @deprecate f1 f
     @deprecate f2 f false # test that f2 is not exported
 
     # test the Expr path of @deprecate
+    const f3_method_line = @__LINE__() + 1
     @deprecate f3() f()
     @deprecate f4() f() false # test that f4 is not exported
     @deprecate f5(x::T) where T f()
@@ -32,6 +36,7 @@ module DeprecationTests # to test @deprecate
     @deprecate Sub.f2 f false
 
     # test that @deprecate_moved can be overridden by an import
+    const foo1234_method_line = @__LINE__() + 1
     Base.@deprecate_moved foo1234 "Foo"
     Base.@deprecate_moved bar "Bar" false
 
@@ -87,6 +92,20 @@ begin # @deprecate
 
     @test @test_warn "`Sub.f1()` is deprecated, use `f()` instead." DeprecationTests.Sub.f1()
 
+    # @deprecate-generated methods should report the macro call site.
+    let m = only(methods(DeprecationTests.f1))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.f1_method_line
+    end
+    let m = only(methods(DeprecationTests.f3))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.f3_method_line
+    end
+    let m = only(methods(DeprecationTests.foo1234))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.foo1234_method_line
+    end
+
     redirect_stderr(devnull) do
         @test call(f1)
         @test call(DeprecationTests.f2)
@@ -112,6 +131,16 @@ begin # @deprecate
         T21972()
     end
     @test_deprecated "something" f21972()
+
+    @noinline deprecated_typename(T) = Base.typename(T)
+    @noinline deprecated_nameof(T) = nameof(T)
+    @noinline deprecated_parentmodule(T) = parentmodule(T)
+    @noinline deprecated_isabstracttype(T) = isabstracttype(T)
+    deprecated_type_ref = Ref{Any}(Type{Int})
+    @test @test_warn "calling `typename` on `Type` is deprecated" deprecated_typename(deprecated_type_ref[]) === TypeEq.name
+    @test @test_warn "calling `nameof` on `Type` is deprecated" deprecated_nameof(deprecated_type_ref[]) === :Type
+    @test @test_warn "calling `parentmodule` on `Type` is deprecated" deprecated_parentmodule(deprecated_type_ref[]) === Core
+    @test @test_warn "calling `isabstracttype` on a `Type{...}` is deprecated" deprecated_isabstracttype(deprecated_type_ref[]) === true
 
     # test that positional and keyword arguments are forwarded when
     # there is no explicit type annotation
@@ -145,6 +174,20 @@ testlogs = testlogger.logs
 @test all(l.message == "f25130 message" for l in testlogs)
 global_logger(prev_logger)
 
+
+#-------------------------------------------------------------------------------
+# BEGIN 1.14 deprecations
+
+begin # SubString noshift deprecations
+    @test_deprecated SubString{String}("abcd", 0, 1, Val(:noshift)) == "a"
+    let ss = SubString("abcd", 2, 3)
+        @test_deprecated (SubString{typeof(ss)}(ss, 0, 1, Val(:noshift)) == "b")
+        @test_deprecated (SubString{typeof(ss)}(ss, 0, 1, Val(:noshift)) isa SubString{typeof(ss)})
+    end
+end
+
+
+# END 1.14 deprecations
 
 #-------------------------------------------------------------------------------
 # BEGIN 0.7 deprecations
@@ -185,4 +228,208 @@ begin #@deprecated error message
         "invalid usage of @deprecate",
         @eval @deprecate Foo{T} where {T <: Int} g true
     )
+end
+
+# A deprecated binding reached through `using` must warn on access,
+# consistently for constants and globals, matching a direct access and the
+# runtime `getglobal`. An explicit `import M: x` still suppresses the warning
+# (the import site is what should warn). The constant must still be
+# constant-folded despite the deprecation.
+module DeprecatedUsingTest
+    using Test
+    module Src
+        export DepC
+        const _real = 0x1234
+        Base.@deprecate_binding DepC _real false
+    end
+    using .Src
+
+    read_dep() = DepC
+    fold_dep() = DepC === 0x1234 ? true : nothing
+
+    @test (@test_warn "DepC is deprecated" read_dep()) === Src._real
+    @test (@test_warn "DepC is deprecated" getglobal(@__MODULE__, :DepC)) === Src._real
+    @test Base.infer_return_type(fold_dep, Tuple{}) === Bool
+    @test Base.isdeprecated(@__MODULE__, :DepC)
+
+    ex = :(module Consumer; import ..Src: DepC; getdep() = DepC; end)
+    @test_warn "importing deprecated binding Src.DepC into Consumer, use _real instead." eval(ex)
+    @test (@test_nowarn Consumer.getdep()) === Src._real
+    @test !Base.isdeprecated(Consumer, :DepC)
+end
+
+# Importing the same deprecated constant from two modules must unify by value, not report an
+# ambiguity, and still warn (with each source's deprecation message) on access. Constants with
+# unequal values are still ambiguous, and a non-deprecated peer still wins (no warning).
+module DeprecatedUsingUnifyTest
+    using Test
+    # Two deprecated constants with equal values.
+    module A
+        export DepC
+        const _a = 0x123456789
+        Base.@deprecate_binding DepC _a false
+    end
+    module B
+        export DepC
+        const _b = 0x123456789
+        Base.@deprecate_binding DepC _b false
+    end
+    using .A, .B
+    read2() = DepC
+    fold2() = DepC === 0x123456789 ? true : nothing
+    # The compiled/const-folded read and the dynamic read both warn, and the warning reports
+    # each contributing source module's deprecation message.
+    @test (@test_warn r"DepC is deprecated, use _a instead\., use _b instead\."s read2()) === 0x123456789
+    @test (@test_warn "DepC is deprecated, use _a instead." getglobal(@__MODULE__, :DepC)) === 0x123456789
+    @test Base.isdeprecated(@__MODULE__, :DepC)
+    # The value still const-folds through the unified resolution.
+    @test Base.infer_return_type(fold2, Tuple{}) === Bool
+
+    # Two deprecated constants with unequal values stay ambiguous.
+    module C
+        export DiffC
+        const _c = 0x0001
+        Base.@deprecate_binding DiffC _c false
+    end
+    module D
+        export DiffC
+        const _d = 0x0002
+        Base.@deprecate_binding DiffC _d false
+    end
+    using .C, .D
+    @test_throws UndefVarError getglobal(@__MODULE__, :DiffC)
+
+    # A deprecated and a non-deprecated constant naming the same value:
+    # the non-deprecated one wins, so access should not warn.
+    module E
+        export MixC
+        const _e = 0xff
+        Base.@deprecate_binding MixC _e false
+    end
+    module F
+        export MixC
+        const MixC = 0xff
+    end
+    using .E, .F
+    readmix() = MixC
+    @test (@test_nowarn readmix()) === 0xff
+    @test !Base.isdeprecated(@__MODULE__, :MixC)
+end
+
+# The deprecation is carried on the importer's partition for globals as well as constants, and
+# transparently through reexports: a `using` of a module that only reexports a deprecated
+# binding still reports it deprecated (`isdeprecated`) and warns on access, without walking to
+# the defining owner. An explicit `import` still suppresses the use-site warning.
+module DeprecatedReexportTest
+    using Test
+    module Src
+        export DepC, DepG
+        const _c = 0x1234
+        Base.@deprecate_binding DepC _c false
+        newg() = 1
+        Base.@deprecate_binding DepG newg false ", use newg instead." false
+    end
+    module Reexport
+        using ..Src
+        export DepC, DepG                                           # reexport both
+    end
+    using .Reexport
+    readc() = DepC
+    readg() = DepG
+    # Reached through `using .Reexport`; the deprecation is visible on this module's partition.
+    @test Base.isdeprecated(@__MODULE__, :DepC)
+    @test Base.isdeprecated(@__MODULE__, :DepG)
+    @test (@test_warn "DepC is deprecated" readc()) === Src._c
+    @test (@test_warn "DepG is deprecated, use newg instead." readg()) === Src.newg
+
+    # An explicit selective import of the reexported binding suppresses the use-site warning.
+    ex = :(module Consumer; import ..Reexport: DepC; getdep() = DepC; end)
+    @test_warn "importing deprecated binding" eval(ex)
+    @test (@test_nowarn Consumer.getdep()) === Src._c
+    @test !Base.isdeprecated(Consumer, :DepC)
+end
+
+# Defining a new binding over a deprecated implicit import must not warn: binding
+# resolution in a method definition (or a new `const`/`global`) exists precisely to create
+# a fresh binding when the name was not explicitly imported, and the fresh binding is not
+# deprecated (issue #62721).
+module DeprecatedShadowTest
+    using Test
+    module Src
+        export old_foo, OldC, OldG
+        foo() = "foo"
+        Base.@deprecate_binding old_foo foo
+        const _newc = 0x4321
+        Base.@deprecate_binding OldC _newc
+        newg() = 1
+        Base.@deprecate_binding OldG newg true ", use newg instead." false
+    end
+    using .Src
+
+    # A method definition creates a new generic function; neither the definition itself
+    # nor later uses of the new function warn.
+    @test_nowarn @eval old_foo() = "old foo"
+    @test (@test_nowarn old_foo()) == "old foo"
+    @test !Base.isdeprecated(@__MODULE__, :old_foo)
+
+    # Same for a new `const`, including when the deprecated implicit resolution has
+    # already been materialized on this module's binding by a prior query.
+    @test Base.isdeprecated(@__MODULE__, :OldC)
+    @test_nowarn @eval const OldC = 0x9999
+    @test (@test_nowarn OldC) === 0x9999
+    @test !Base.isdeprecated(@__MODULE__, :OldC)
+
+    # And for a global declaration and assignment shadowing a deprecated global.
+    @test Base.isdeprecated(@__MODULE__, :OldG)
+    @test_nowarn @eval global OldG = 5
+    @test (@test_nowarn OldG) === 5
+    @test !Base.isdeprecated(@__MODULE__, :OldG)
+
+    # Deprecating the source after the importer's implicit partition has already been
+    # materialized re-resolves and marks it deprecated, un-deprecating clears it again, and
+    # a method definition over the halfway-deprecated import still creates a fresh binding.
+    module SrcH
+        export HCon, old_h
+        const HCon = 0x33
+        h() = "src h"
+        const old_h = h
+    end
+    using .SrcH
+    @test !Base.isdeprecated(@__MODULE__, :HCon)        # materialize, not deprecated yet
+    @test (@test_nowarn Base.invokelatest(old_h)) == "src h"
+    Base.deprecate(SrcH, :HCon)
+    Base.deprecate(SrcH, :old_h)
+    @test Base.isdeprecated(@__MODULE__, :HCon)
+    @test (@test_warn "HCon is deprecated" Base.invokelatest(() -> HCon)) === 0x33
+    Base.deprecate(SrcH, :HCon, 0)                      # un-deprecate again
+    @test !Base.isdeprecated(@__MODULE__, :HCon)
+    @test (@test_nowarn Base.invokelatest(() -> HCon)) === 0x33
+    @test_nowarn @eval old_h() = "my old_h"
+    @test (@test_nowarn Base.invokelatest(old_h)) == "my old_h"
+    @test !Base.isdeprecated(@__MODULE__, :old_h)
+
+    # By contrast, deprecation explicitly set on the importing module's own binding (not
+    # set by resolution) is preserved when the binding is replaced by a definition.
+    module SrcE
+        export ECon
+        const ECon = 0x11
+    end
+    using .SrcE
+    Base.deprecate(@__MODULE__, :ECon)
+    @test Base.isdeprecated(@__MODULE__, :ECon)
+    @eval const ECon = 0x22
+    @test Base.isdeprecated(@__MODULE__, :ECon)
+    @test (@test_warn "ECon is deprecated" @eval(ECon)) === 0x22
+
+    # An explicit import over an already-materialized deprecated implicit resolution warns
+    # at the import site only; the use site stays quiet and is not reported deprecated.
+    ex = :(module Consumer
+        using ..Src, Test
+        @test Base.isdeprecated(@__MODULE__, :OldC)     # materialize the implicit resolution
+        import ..Src: OldC
+        getdep() = OldC
+    end)
+    @test_warn "importing deprecated binding" eval(ex)
+    @test (@test_nowarn Consumer.getdep()) === Src._newc
+    @test !Base.isdeprecated(Consumer, :OldC)
 end

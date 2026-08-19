@@ -117,6 +117,10 @@ macro test999_str(args...); args; end
 @test_parseerror "."
 @test_parseerror "..."
 
+# Wrapping compound assignments parse as distinct assignment heads.
+@test Meta.parse("x -%= y"; mod=@__MODULE__) == Expr(Symbol("-%="), :x, :y)
+@test Meta.parse("x .-%= y"; mod=@__MODULE__) == Expr(Symbol(".-%="), :x, :y)
+
 # issue #10901
 @test Meta.parse("/([1], 1)[1]") == :(([1] / 1)[1])
 
@@ -578,8 +582,10 @@ end
 let code = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code
     local src
     for i = length(code):-1:1
-        if Meta.isexpr(code[i], :method)
-            src = code[i].args[3]
+        if Meta.isexpr(code[i], :call) && length(code[i].args) >= 5 &&
+           code[i].args[1] isa GlobalRef && code[i].args[1].name == :define_method &&
+           code[i].args[5] isa Core.CodeInfo
+            src = code[i].args[5]
             break
         end
     end
@@ -789,6 +795,17 @@ end"""))
     @test !any(x->(x == Expr(:meta, :push_loc, :none)), ex.args)
 end
 
+# LineNumberNode with file=nothing
+let ex = Expr(:toplevel,
+              LineNumberNode(1),
+              Expr(:->, Expr(:tuple),
+                   Expr(:block,
+                        LineNumberNode(2),
+                        Expr(:call, throw, 1))))
+    f = Core.eval(@__MODULE__, ex)
+    @test only(methods(f)).debuginfo.def isa Symbol
+end
+
 # Check qualified string macros
 Base.r"regex" == r"regex"
 
@@ -968,7 +985,7 @@ end
              Meta.parse("module B
                         using ..x,
                               ..y
-                    end").args[3].args)[1] ==
+                    end").args[end].args)[1] ==
       Expr(:using,
            Expr(:., :., :., :x),
            Expr(:., :., :., :y))
@@ -977,7 +994,7 @@ end
              Meta.parse("module A
                         using .B,
                               .C
-                    end").args[3].args)[1] ==
+                    end").args[end].args)[1] ==
       Expr(:using,
            Expr(:., :., :B),
            Expr(:., :., :C))
@@ -1737,7 +1754,7 @@ end
 # #6080
 @test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variables")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
@@ -1870,6 +1887,7 @@ end
 @test Meta.parse("1…2") == Expr(:call, :…, 1, 2)
 @test Meta.parse("1⁝2") == Expr(:call, :⁝, 1, 2)
 @test Meta.parse("1..2") == Expr(:call, :.., 1, 2)
+@test Meta.parse("-1e10..2") == Expr(:call, :.., -1e10, 2)
 # we don't parse chains of these since the associativity and meaning aren't clear
 @test_parseerror "1..2..3"
 
@@ -3255,7 +3273,7 @@ end
     x, f1()... = [1, 2, 3]
     @test x == 1
     @test f1() == [2, 3]
-    # test that call to `Base.rest` is outside the definition of `f`
+    # test that call to `Base.rest` is outside the definition of `f1`
     @test f1() === f1()
 
     x, f2()... = 1, 2, 3
@@ -4042,8 +4060,16 @@ end
     code = src.args[1].code
     for i = length(code):-1:1
         expr = code[i]
-        Meta.isexpr(expr, :method) || continue
-        @test isa(expr.args[1], Union{GlobalRef, Symbol})
+        if Meta.isexpr(expr, :call) && length(expr.args) >= 3 &&
+           expr.args[1] isa GlobalRef && expr.args[1].name == :define_method
+            # args[3] should be a QuoteNode wrapping a Symbol, or a GlobalRef
+            name_arg = expr.args[3]
+            if name_arg isa QuoteNode
+                @test isa(name_arg.value, Symbol)
+            else
+                @test isa(name_arg, GlobalRef)
+            end
+        end
     end
 end
 
@@ -4113,6 +4139,11 @@ module ExtendedIsDefined
         @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
         @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
         @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
+
+        @test Core.isdefinedglobal(@__MODULE__, :x1, true, :monotonic)
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false, :acquire)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false, :sequentially_consistent)
+        @test_throws ConcurrencyViolationError Core.isdefinedglobal(@__MODULE__, :x1, true, :not_atomic)
     end
 end
 
@@ -4255,7 +4286,7 @@ end
 @test callme(3, 3) === 3
 @test callme(4, 4, 4) === 4.0
 
-# Ambiguous 1-arg anymous vs macrosig
+# Ambiguous 1-arg anonymous vs macrosig
 @test_parseerror "function (@foo(a)) end"
 
 # #57267 - Missing `latestworld` after typealias
@@ -4425,12 +4456,27 @@ module DoubleImport
 end
 @test DoubleImport.Random === Test.Random
 
-# Expr(:method) returns the method
+# define_method call returns the method
 let ex = @Meta.lower function return_my_method(); 1; end
     code = ex.args[1].code
-    idx = findfirst(ex->Meta.isexpr(ex, :method) && length(ex.args) > 1, code)
+    idx = findfirst(ex->Meta.isexpr(ex, :call) && length(ex.args) >= 5 &&
+                       ex.args[1] isa GlobalRef && ex.args[1].name == :define_method, code)
     code[end] = Core.ReturnNode(Core.SSAValue(idx))
     @test isa(Core.eval(@__MODULE__, ex), Method)
+end
+
+# Core.define_method validates its internal signature and body representation.
+@test_throws TypeError Core.define_method(@__MODULE__, :invalid_method, nothing, nothing)
+@test_throws ErrorException Core.define_method(@__MODULE__, :invalid_method, Core.svec(), nothing)
+
+# A method defined through a GlobalRef name records the evaluating module,
+# not the GlobalRef's module
+module GlobalRefMethodModule62320
+function no_methods_yet end
+end
+let f = GlobalRefMethodModule62320.no_methods_yet
+    Core.eval(@__MODULE__, Expr(:function, Expr(:call, GlobalRef(GlobalRefMethodModule62320, :no_methods_yet)), nothing))
+    @test only(methods(f)).module === @__MODULE__
 end
 
 # Capturing a @nospecialize argument should result in an Any field in the closure
@@ -4714,4 +4760,24 @@ module M59755 end
     @test M59755.v5 === 6
     @test M59755.v6 === 5
     @test Base.binding_kind(M59755, :v6) == Base.PARTITION_KIND_CONST
+end
+
+@testset "assignment to where-expr throws unless LHS is `call`" for ex in [
+    :(x where T = 1)
+    :((x...) where T = 1)
+    Expr(:(=), Expr(:where, Expr(:block, :a, :b)), 1)
+    :((((a,b,c::T)     where T<:U where U<:Any) = (a,b,c))(1,2,3))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2,3))
+    :((((a::T...)      where T<:U where U<:Any) = (a...,))(1,2,3))
+    :((((a::T;)        where T<:U where U<:Any) = a)(1))
+    :((((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1))
+    :((((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1;b=3))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))())
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(;b=3))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3))
+    ]
+    @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
 end

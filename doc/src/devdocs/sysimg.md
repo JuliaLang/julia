@@ -26,7 +26,7 @@ wrapper functions to automate this process.
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures
 under the same instruction set architecture (ISA). Multiple versions of the same function
-may be created with minimum dispatch point inserted into shared functions
+may be created with minimal dispatch points inserted into shared functions
 in order to take advantage of different ISA extensions or other microarchitecture features.
 The version that offers the best performance will be selected automatically at runtime
 based on available CPU features.
@@ -175,7 +175,7 @@ debug info, respectively, and so will make debugging more difficult.
 - Use tools like [JET.jl](https://github.com/aviatesk/JET.jl),
   [Cthulhu.jl](https://github.com/JuliaDebug/Cthulhu.jl), and/or
   [SnoopCompile](https://github.com/timholy/SnoopCompile.jl)
-  to identify failures of type-inference, and follow our [Performance Tips](@ref) to fix them.
+  to identify failures of type-inference, and follow our [Performance Tips](@ref man-performance-tips) to fix them.
 
 ### Compatibility concerns
 

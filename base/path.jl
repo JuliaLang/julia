@@ -207,7 +207,7 @@ function isabspath(path::String)
     @static if Sys.iswindows()
         # the letter before : in e.g. "C:\" must be a valid drive letter.
         # This differs from `splitdrive`, where any non-separator single codeunit char is
-        # is accepted.
+        # accepted.
         firstsep = findfirst(isseparator, codeunits(path))
         if (!isnothing(firstsep) &&
             firstsep >= 3 &&
@@ -684,7 +684,7 @@ function homedir(username::AbstractString)
     # For the current user, just return homedir().
     current_user = try
         Sys.username()
-    catch
+    catch err
         err isa IOError || rethrow()
         nothing
     end
@@ -738,9 +738,9 @@ function _win_profile_from_registry(username::AbstractString)
     buf_size = Ref{UInt32}(0)
     # RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ = 0x00000006
     HKEY_LOCAL_MACHINE = 0x80000002 % UInt
-    ret = ccall((:RegGetValueW, "advapi32"), stdcall, Clong,
-                (UInt, Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
-                HKEY_LOCAL_MACHINE, subkey, value, 0x00000006, C_NULL, C_NULL, buf_size)
+    ccall((:RegGetValueW, "advapi32"), stdcall, Clong,
+          (UInt, Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
+          HKEY_LOCAL_MACHINE, subkey, value, 0x00000006, C_NULL, C_NULL, buf_size)
     buf_size[] == 0 && return nothing
     buf = Vector{UInt16}(undef, buf_size[] ÷ 2)
     ret = ccall((:RegGetValueW, "advapi32"), stdcall, Clong,

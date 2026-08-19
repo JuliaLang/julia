@@ -70,7 +70,7 @@ end
        ret i32 %3""", Int32, Tuple{Int32, Int32},
         Int32(1), Int32(2))) # llvmcall must be compiled to be called
 
-#Since LLVM 18, LLVM does a best effort to automatically include the intrinsics
+#Since LLVM 18, LLVM makes a best effort to automatically include the intrinsics
 function undeclared_ceil(x::Float64)
     llvmcall("""%2 = call double @llvm.ceil.f64(double %0)
         ret double %2""", Float64, Tuple{Float64}, x)
