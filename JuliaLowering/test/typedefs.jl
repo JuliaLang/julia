@@ -81,6 +81,27 @@ abstract type E <: C{E} end
 """) === nothing
 @test test_mod.E isa Type
 
+# a declared supertype that uses the definition's parameters must have them
+# rebound as the new type's binders (not left as free TypeVars)
+@test JuliaLowering.include_string(test_mod, """
+abstract type CSub{X} <: C{X} end
+""") === nothing
+@test supertype(test_mod.CSub{Int}) === test_mod.C{Int}
+@test test_mod.CSub{Int} <: test_mod.C{Int}
+
+@test JuliaLowering.include_string(test_mod, """
+struct CSubS{X,Y} <: C{Y}
+    x::X
+end
+""") === nothing
+@test supertype(test_mod.CSubS{Int,Char}) === test_mod.C{Char}
+@test test_mod.CSubS{Int,Char} <: test_mod.C{Char}
+
+@test JuliaLowering.include_string(test_mod, """
+primitive type CSubP{X} <: C{X} 16 end
+""") === nothing
+@test supertype(test_mod.CSubP{Int}) === test_mod.C{Int}
+
 @test JuliaLowering.include_string(test_mod, """
 primitive type P <: A 16 end
 """) === nothing
