@@ -703,13 +703,6 @@ end
     r48 = reinterpret(RUInt48, (0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f))
     @test reinterpret(NTuple{6, UInt8}, r48) === (0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f)
 
-    @test_throws ArgumentError Base.padding(RUInt17)
-    @test_throws ArgumentError Base.packedsize(RUInt17)
-    @test_throws ArgumentError Base.padding(RUInt23)
-    @test_throws ArgumentError Base.packedsize(RUInt23)
-    @test_throws ArgumentError Base.padding(RUInt63)
-    @test_throws ArgumentError Base.packedsize(RUInt63)
-
     @test_throws ArgumentError reinterpret(RUInt17, (0x01, 0x02, 0x03))
     @test_throws ArgumentError reinterpret(RUInt23, (0x01, 0x02, 0x03))
     @test_throws ArgumentError reinterpret(RUInt63, ntuple(i -> UInt8(i), 8))
@@ -849,14 +842,42 @@ end
     @test a[] === RInt24(3)
 
     # The padding bytes of Tuple{RInt24,RInt24} coincide with the padding bytes of
-    # RInt24, so these reinterprets should be readable and writable, but an offset
-    # convention inconsistency between `padding` and `CyclePadding` makes
-    # `array_subpadding` conservatively return false.
+    # RInt24, so these reinterprets should be readable and writable.
     a = [(RInt24(1), RInt24(2)), (RInt24(3), RInt24(4))]
     b = reinterpret(RInt24, a)
     @test length(b) == 4
-    @test_broken b[1] === RInt24(1)
-    @test_broken (b[1] = RInt24(5); a[1][1] === RInt24(5))
-    @test_broken Base.array_subpadding(RInt24, Tuple{RInt24, RInt24})
-    @test_broken Base.array_subpadding(Tuple{RInt24, RInt24}, RInt24)
+    @test b[1] === RInt24(1)
+    @test (b[1] = RInt24(5); a[1][1] === RInt24(5))
+    @test Base.array_subpadding(RInt24, Tuple{RInt24, RInt24})
+    @test Base.array_subpadding(Tuple{RInt24, RInt24}, RInt24)
+    @test Base.array_subpadding(Tuple{RInt24}, RInt24)
+    @test Base.array_subpadding(RInt24, Tuple{RInt24})
+end
+
+@testset "issue #62815" begin
+    # Same layout should be readable and writable
+    T = Tuple{
+        Tuple{UInt8,UInt16},
+        Tuple{UInt8,UInt64}
+    }
+    S = Tuple{
+        Tuple{UInt8,UInt16},
+        Tuple{UInt8,Int64}
+    }
+    @test Base.array_subpadding(T, S)
+    @test Base.array_subpadding(S, T)
+
+    # Padding should not be observed
+    struct S_4_7           # 16 bytes, padding at bytes 4:7
+        a::UInt32      # offset 0
+        b::UInt64      # offset 8
+    end
+    struct T_9           # 16 bytes, padding at byte 9
+        a::UInt64      # offset 0
+        b::UInt8       # offset 8
+        c::UInt16      # offset 10
+        d::UInt32      # offset 12
+    end
+    @test !Base.array_subpadding(T_9, S_4_7)
+    @test !Base.array_subpadding(S_4_7, T_9)
 end

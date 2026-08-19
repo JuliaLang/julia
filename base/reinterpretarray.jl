@@ -733,17 +733,6 @@ end
     return a
 end
 
-# Padding
-struct Padding
-    offset::Int # 0-indexed offset of the next valid byte; sizeof(T) indicates trailing padding
-    size::Int   # bytes of padding before a valid byte
-end
-function intersect(p1::Padding, p2::Padding)
-    start = max(p1.offset, p2.offset)
-    stop = min(p1.offset + p1.size, p2.offset + p2.size)
-    Padding(start, max(0, stop-start))
-end
-
 struct PaddingError <: Exception
     S::Type
     T::Type
@@ -753,113 +742,76 @@ function showerror(io::IO, p::PaddingError)
     print(io, "Padding of type $(p.S) is not compatible with type $(p.T).")
 end
 
-"""
-    CyclePadding(padding, total_size)
-
-Cycles an iterator of `Padding` structs, restarting the padding at `total_size`.
-E.g. if `padding` is all the padding in a struct and `total_size` is the total aligned size of that struct, `CyclePadding` will correspond to the padding in an infinite vector of such structs.
-"""
-struct CyclePadding{P}
-    padding::P
-    total_size::Int
+# `used` has an element for each byte of an aligned `T`
+# if false, that byte is undefined padding that should not be observed.
+# Preconditions, already checked by the `reinterpret` constructors and `_reinterpret`:
+# `isbitstype(T)` and `!has_bit_padding(T)`
+struct NonPadding
+    used::Memory{Bool}
 end
-eltype(::Type{<:CyclePadding}) = Padding
-IteratorSize(::Type{<:CyclePadding}) = IsInfinite()
-isempty(cp::CyclePadding) = isempty(cp.padding)
-function iterate(cp::CyclePadding)
-    y = iterate(cp.padding)
-    y === nothing && return nothing
-    y[1], (0, y[2])
+function NonPadding(T::DataType)
+    @assert isbitstype(T)
+    @assert !has_bit_padding(T)
+    used = Memory{Bool}(undef, aligned_sizeof(T))
+    fill!(used, false)
+    fill_nonpadding_bytes!(T, 0, used)
+    NonPadding(used)
 end
-function iterate(cp::CyclePadding, state::Tuple)
-    y = iterate(cp.padding, tail(state)...)
-    y === nothing && return iterate(cp, (state[1]+cp.total_size,))
-    Padding(y[1].offset+state[1], y[1].size), (state[1], tail(y)...)
-end
-
-"""
-    Compute the location of padding in an isbits datatype. Recursive over the fields of that type.
-"""
-@assume_effects :foldable function padding(T::DataType, baseoffset::Int = 0)
-    pads = Padding[]
+function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
     if isprimitivetype(T)
-        Core.bitsizeof(T) % 8 == 0 || throw(ArgumentError(LazyString(
-            "padding cannot be computed for non-byte-aligned primitive type ", T)))
-        return Core.svec()
-    end
-    last_end::Int = baseoffset
-    for i = 1:fieldcount(T)
-        offset = baseoffset + Int(fieldoffset(T, i))
-        fT = fieldtype(T, i)
-        append!(pads, padding(fT, offset))
-        if offset != last_end
-            push!(pads, Padding(offset, offset-last_end))
+        for i in 1:sizeof(T)
+            used[i + offset] = true
         end
-        last_end = offset + sizeof(fT)
+    else
+        for i in 1:fieldcount(T)
+            fill_nonpadding_bytes!(fieldtype(T, i), offset + Int(fieldoffset(T, i)), used)
+        end
     end
-    if 0 < last_end - baseoffset < sizeof(T)
-        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end + baseoffset))
-    end
-    return Core.svec(pads...)
 end
 
-function CyclePadding(T::DataType)
-    a, s = datatype_alignment(T), sizeof(T)
-    as = s + (a - (s % a)) % a
-    pad = padding(T)
-    if s != as
-        pad = Core.svec(pad..., Padding(s, as - s))
-    end
-    CyclePadding(pad, as)
-end
-
-@assume_effects :total function array_subpadding(S, T)
-    s, t = CyclePadding(S), CyclePadding(T)
-    # the pattern of the two padding cycles relative to each other repeats
-    # with this period, so checking it fully covers all offsets
-    lcm_size = lcm(s.total_size, t.total_size)
-    checked_size = 0
-    # use of Stateful harms inference and makes this vulnerable to invalidation
-    (pad, tstate) = let
-        it = iterate(t)
-        it === nothing && return true
-        it
-    end
-    (ps, sstate) = let
-        it = iterate(s)
-        it === nothing && return false
-        it
-    end
-    while checked_size < lcm_size
-        while true
-            # See if there's corresponding padding in S
-            ps.offset > pad.offset && return false
-            intersect(ps, pad) == pad && break
-            ps, sstate = iterate(s, sstate)
+# Preconditions, already checked by the `reinterpret` constructors:
+# `isbitstype(T/S)` and `!has_bit_padding(T/S)`
+@assume_effects :foldable function array_subpadding(S, T)
+    s, t = NonPadding(S), NonPadding(T)
+    # If T has no padding, any byte can be read.
+    # This also covers zero-size T.
+    all(t.used) && return true
+    # match previous behavior on zero-size S
+    isempty(s.used) && return false
+    s_n, t_n = length(s.used), length(t.used)
+    s_i, t_i = 1, 1
+    while true
+        # If a byte can be read in S, but is padding in T, return false
+        if s.used[s_i] && !t.used[t_i]
+            return false
         end
-        checked_size = pad.offset + pad.size
-        pad, tstate = iterate(t, tstate)
+        # Advance the indexes with wrapping around
+        s_i += 1
+        if s_i > s_n
+            s_i = 1
+        end
+        t_i += 1
+        if t_i > t_n
+            t_i = 1
+        end
+        # We made it back to the start
+        if isone(s_i) && isone(t_i)
+            return true
+        end
     end
-    return true
 end
 
 @assume_effects :foldable function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
-    padding(Out) == padding(In)
+    NonPadding(Out).used == NonPadding(In).used
 end
 
 @assume_effects :foldable function packedsize(::Type{T}) where T
-    if isprimitivetype(T)
-        Core.bitsizeof(T) % 8 == 0 || throw(ArgumentError(LazyString(
-            "packed size cannot be computed for non-byte-aligned primitive type ", T)))
-        return Core.bitsizeof(T) >> 3
-    end
-    pads = padding(T)
-    return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
+    count(NonPadding(T).used)
 end
 
 @assume_effects :foldable function ispacked(::Type{T}) where T
     isprimitivetype(T) && return Core.bitsizeof(T) == sizeof(T) * 8
-    return isempty(padding(T))
+    return all(NonPadding(T).used)
 end
 
 @assume_effects :foldable function has_bit_padding(::Type{T}) where T
