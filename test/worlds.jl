@@ -753,6 +753,8 @@ end
 # everything below exercises the cross-segment paths of the world predicates
 # through real dispatch.
 f_before_advance() = 1
+fresh_branch_fn(x) = 2x # deliberately not called (or inferred) until the branch tests
+g_frozen() = 1
 @test f_before_advance() == 1
 const w_preadvance = Base.get_world_counter()
 const w_postadvance = advance_into_segment(UInt[])
@@ -770,6 +772,7 @@ const w_postadvance = advance_into_segment(UInt[])
 end
 f_after_advance() = 2
 g_redefined() = 1
+g_frozen() = 2 # redefinition on the spine, invisible to branches forked before it
 @test f_after_advance() == 2
 @test g_redefined() == 1
 const w_mid = Base.get_world_counter()
@@ -793,6 +796,30 @@ end
     # dispatch of already-compiled code at a branch world
     @test Base.invoke_in_world(sib, f_before_advance) == 1
     @test Base.invoke_in_world(sib, +, 1, 2) == 3
+end
+@testset "inference and compilation at branch worlds" begin
+    sib2 = new_segment([w_preadvance]) + UInt(1)
+    # a function that has never been called or inferred, invoked at a branch
+    # world: dispatch, inference, compilation and caching must work off-spine
+    @test Base.invoke_in_world(sib2, fresh_branch_fn, 21) == 42
+    # the published CodeInstance has point validity at exactly sib2
+    mi = only(Base.specializations(only(methods(fresh_branch_fn))))
+    found_point_ci = false
+    ci = isdefined(mi, :cache) ? mi.cache : nothing
+    while ci !== nothing
+        if ci.min_world == sib2 && ci.max_world == sib2
+            found_point_ci = true
+        end
+        ci = isdefined(ci, :next) ? ci.next : nothing
+    end
+    @test found_point_ci
+    # the spine is unaffected and can still run and infer the same function
+    @test fresh_branch_fn(21) == 42
+    @test Base.infer_return_type(fresh_branch_fn, (Int,); world=sib2) == Int
+    # a method redefined on the spine after the fork keeps its old meaning on
+    # the branch: the invalidation's future cone does not contain sib2
+    @test g_frozen() == 2
+    @test Base.invoke_in_world(sib2, g_frozen) == 1
 end
 
 end # module WorldAgeSegments

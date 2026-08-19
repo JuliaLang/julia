@@ -9,14 +9,44 @@ WorldRange(w::UInt) = WorldRange(w, w)
 WorldRange(r::UnitRange) = WorldRange(first(r), last(r))
 first(wr::WorldRange) = wr.min_world
 last(wr::WorldRange) = wr.max_world
-in(world::UInt, wr::WorldRange) = wr.min_world <= world <= wr.max_world
 min_world(wr::WorldRange) = first(wr)
 max_world(wr::WorldRange) = last(wr)
 
+# World DAG predicates, mirroring the jl_world_* inlines in
+# src/julia_internal.h: a world is a packed (segment, index) pair and
+# (sa, ia) preceq (sb, ib) iff sa == sb ? ia <= ib : sa is an ancestor
+# segment of sb. Worlds on the spine (the chain of segments the world
+# counter traverses) always compare exactly with plain integer compares.
+const WORLD_IDX_BITS = UInt === UInt64 ? 48 : 24
+world_seg(w::UInt) = w >> WORLD_IDX_BITS
+world_seg_reaches(sa::UInt, sb::UInt) =
+    ccall(:jl_world_seg_reaches, Cint, (Csize_t, Csize_t), sa, sb) != 0
+world_reaches(a::UInt, b::UInt) =
+    world_seg(a) == world_seg(b) ? a <= b : world_seg_reaches(world_seg(a), world_seg(b))
+world_at_most(w::UInt, maxw::UInt) =
+    maxw == typemax(UInt) || !world_reaches(maxw + UInt(1), w)
+world_in_range(w::UInt, minw::UInt, maxw::UInt) =
+    world_reaches(minw, w) && world_at_most(w, maxw)
+world_on_spine(w::UInt) = world_reaches(w, get_world_counter())
+
+in(world::UInt, wr::WorldRange) = world_in_range(world, wr.min_world, wr.max_world)
+
 @inline function intersect(a::WorldRange, b::WorldRange)
-    ret = WorldRange(max(a.min_world, b.min_world), min(a.max_world, b.max_world))
-    @assert ret.min_world <= ret.max_world
-    return ret
+    minw = max(a.min_world, b.min_world)
+    maxw = min(a.max_world, b.max_world)
+    if minw > maxw
+        # Interval arithmetic cannot describe the validity region of a world
+        # off the spine; a point range there absorbs any bounds whose region
+        # contains its world (e.g. bounds capped by an invalidation on the
+        # spine, whose future cone does not contain the point's world).
+        if a.min_world == a.max_world && a.min_world in b
+            return a
+        elseif b.min_world == b.max_world && b.min_world in a
+            return b
+        end
+        @assert false "attempting to intersect disjoint world ranges"
+    end
+    return WorldRange(minw, maxw)
 end
 
 @inline function union(a::WorldRange, b::WorldRange)

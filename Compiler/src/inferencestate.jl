@@ -406,7 +406,9 @@ mutable struct InferenceState{I<:AbstractInterpreter}
         callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
         tasks = WorkThunk[]
 
-        valid_worlds = WorldRange(1, get_world_counter())
+        frame_world = get_inference_world(interp)
+        valid_worlds = world_on_spine(frame_world) ? WorldRange(1, get_world_counter()) :
+            WorldRange(frame_world, frame_world)
         bestguess = Bottom
         exc_bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
@@ -1300,9 +1302,18 @@ has_mustalias(::AbstractLattice, ::IRInterpretationState) = false
 
 # work towards converging the valid age range for sv
 function update_valid_age!(sv::AbsIntState, world, valid_worlds::WorldRange)
-    valid_worlds = intersect(sv.valid_worlds, valid_worlds)
     if !(world in valid_worlds)
         error("invalid age range update")
+    end
+    if world_on_spine(world)
+        valid_worlds = intersect(sv.valid_worlds, valid_worlds)
+        if !(world in valid_worlds)
+            error("invalid age range update")
+        end
+    else
+        # Off the spine, interval bounds cannot describe the validity region;
+        # results are published with point validity for exactly this world.
+        valid_worlds = WorldRange(world, world)
     end
     sv.valid_worlds = valid_worlds
     return valid_worlds

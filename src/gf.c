@@ -1838,7 +1838,10 @@ static void cache_insert(
     // exact-dispatch lookups (`jl_typemap_entry_assoc_exact`) require datatype sigs
     assert(jl_is_datatype(cachett));
     int unconstrained_max = max_valid == ~(size_t)0;
-    if (max_valid > current_world)
+    // clamp bounds that extend past the current spine world (they are
+    // restored below if the world has not advanced); a point bound on a
+    // closed branch does not extend into the spine's future and stays as is
+    if (max_valid > current_world && (unconstrained_max || jl_world_reaches(current_world, max_valid)))
         max_valid = current_world;
     jl_datatype_t *simplett = NULL;
     jl_typemap_entry_t *newentry = NULL;
@@ -1930,6 +1933,15 @@ static jl_method_instance_t *cache_result(
 {
     // caller must hold the parent->writelock, which this releases
     int8_t offs = mc ? jl_cachearg_offset() : 1;
+    // A cache entry created for a query world off the spine gets point
+    // validity: interval bounds cannot describe its DAG validity region, and
+    // lookups at exactly that world are its only consumers. (A world in the
+    // current spine segment beyond the counter -- a pending insertion world
+    // -- is on the spine, not off it.)
+    if (jl_world_seg(world) != jl_world_seg(current_world) && !jl_world_reaches(world, current_world)) {
+        min_valid = world;
+        max_valid = world;
+    }
     // short-circuit (now that we hold the lock) if this entry is already present
     if (!tt_known_absent) {
         jl_typemap_entry_t *entry = mt_find_cache_entry(cache, mc ? &mc->leafcache : NULL, tt, world, offs);
