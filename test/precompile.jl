@@ -697,7 +697,9 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
+    redirect_stderr(devnull) do
+        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
+    end
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
@@ -711,7 +713,9 @@ precompile_test_harness(false) do dir
         $code
         end
         """)
-        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
+        redirect_stderr(devnull) do
+            @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
+        end
     end
 
     # Declaring an already-existing generic function of a closed module is a
