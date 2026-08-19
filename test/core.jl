@@ -9152,7 +9152,7 @@ end
 primitive type ByteString58434 (18 * 8) end
 
 @test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
-@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == !Base.ispacked(Tuple{ByteString58434})
 
 # #60659 - Behavior of using'd ambiguous bindings
 module AmbiguousUsing60659
