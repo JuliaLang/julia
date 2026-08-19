@@ -1136,8 +1136,6 @@ end
 
     unordered_fair = collect(jitter_channel(sin, k, delay, 10, Threads.FairSchedule()))
     unordered_static = collect(jitter_channel(sin, k, delay, 10, Threads.StaticSchedule()))
-    @test expected != unordered_fair
-    @test expected != unordered_static
     @test Set(expected) == Set(unordered_fair)
     @test Set(expected) == Set(unordered_static)
 

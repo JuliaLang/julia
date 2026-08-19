@@ -373,14 +373,6 @@ extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
 // Global *atomic* integer controlling *process-wide* task timing.
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled;
 
-// Set (release) once jl_init has fully completed (image restored, module
-// initializers run). The exit-signal paths consult it: before this point the
-// graceful teardown (running `jl_atexit_hook` on a hijacked thread 0) is
-// unsafe - the image may be half-restored and the interrupted thread may
-// hold runtime locks the teardown needs - and no Julia atexit hooks can
-// have been registered yet, so an exit signal just dies abruptly instead.
-extern JL_DLLEXPORT _Atomic(int) jl_initialization_complete;
-
 #define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
 STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
@@ -1211,9 +1203,11 @@ STATIC_INLINE int jl_bkind_is_real_constant(enum jl_partition_kind kind) JL_NOTS
     return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT;
 }
 
-STATIC_INLINE int jl_bpart_is_exported(uint8_t flags) JL_NOTSAFEPOINT {
-    return flags & (PARTITION_FLAG_EXPORTED | PARTITION_FLAG_IMPLICITLY_EXPORTED);
+STATIC_INLINE int jl_bpart_is_exported(size_t flags) JL_NOTSAFEPOINT {
+    return (flags & (PARTITION_FLAG_EXPORTED | PARTITION_FLAG_IMPLICITLY_EXPORTED)) != 0;
 }
+
+size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *previous_part, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;

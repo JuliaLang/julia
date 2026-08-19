@@ -263,6 +263,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     uint8_t sticky = ct->sticky;
     // Finalizers hijack the current task, so preserve its token binding.
     jl_value_t *bound_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    uint8_t bound_default = ct->bound_cancel_default;
     JL_GC_PUSH1(&bound_token);
     // empty out the first two entries for the GC frame
     arraylist_push(list, list->items[0]);
@@ -280,6 +281,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     JL_GC_POP();
     ct->sticky = sticky;
     jl_atomic_store_relaxed(&ct->bound_cancel_token, bound_token);
+    ct->bound_cancel_default = bound_default;
     jl_gc_wb_current_task(ct, bound_token);
     JL_GC_POP(); // matches the JL_GC_PUSH1 above
 }
