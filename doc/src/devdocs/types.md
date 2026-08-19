@@ -70,8 +70,12 @@ For example, [`Array`](@ref) has two parameters as in `Array{Int,2}`. If we did 
 type, we could write `Array{T,2} where T`, which is the union of `Array{T,2}` for all values of
 `T`: `Union{Array{Int8,2}, Array{Int16,2}, ...}`.
 
-Such a type is represented by a `UnionAll` object, which contains a variable (`T` in this example,
-of type `TypeVar`), and a wrapped type (`Array{T,2}` in this example).
+Such a type is represented by a `UnionAll` object, which records the bound variable's name and
+its lower and upper bounds (in the fields `name`, `lb`, and `ub`), together with a wrapped type
+(`Array{T,2}` in this example, stored in the field `inner`). The wrapped type does not contain
+a `TypeVar` object; instead it refers to the enclosing binder positionally, with a
+`Core.TypeVarRef` de Bruijn index: `TypeVarRef(n)` denotes the binder of the `n`-th enclosing
+`UnionAll`, counting outward from the reference.
 
 Consider the following methods:
 
@@ -90,28 +94,40 @@ Let's look at these types a little more closely:
 ```jldoctest
 julia> dump(Array)
 UnionAll
-  var: TypeVar
-    name: Symbol T
+  name: Symbol T
+  lb: Union{}
+  ub: abstract type Any
+  inner: UnionAll
+    name: Symbol N
     lb: Union{}
     ub: abstract type Any
-  body: UnionAll
-    var: TypeVar
-      name: Symbol N
-      lb: Union{}
-      ub: abstract type Any
-    body: mutable struct Array{T, N} <: DenseArray{T, N}
-      ref::MemoryRef{T}
-      size::NTuple{N, Int64}
+    inner: mutable struct Array{TypeVarRef(2), TypeVarRef(1)} <: DenseArray{TypeVarRef(2), TypeVarRef(1)}
+      ref::GenericMemoryRef{:not_atomic, TypeVarRef(2), Core.AddrSpace{Core}(0x00)}
+      size::NTuple{TypeVarRef(1), Int64}
+    flags: UInt32 0x00000007
+  flags: UInt32 0x00000005
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
-each parameter, nested. The syntax `Array{Int,2}` is equivalent to `Array{Int}{2}`;
+each parameter, nested. In the innermost body, `TypeVarRef(2)` refers to the binder two
+`UnionAll`s out (`T`) and `TypeVarRef(1)` to the immediately enclosing one (`N`). The syntax
+`Array{Int,2}` is equivalent to `Array{Int}{2}`;
 internally each `UnionAll` is instantiated with a particular variable value, one at a time,
 outermost-first. This gives a natural meaning to the omission of trailing type parameters;
 `Array{Int}` gives a type equivalent to `Array{Int,N} where N`.
+(The `flags` field caches structural properties of the wrapped body for the subtyping fast
+paths, such as whether the bound variable occurs in it at all.)
 
-A `TypeVar` is not itself a type, but rather should be considered part of the structure of a
-`UnionAll` type. Type variables have lower and upper bounds on their values (in the fields
+A `TypeVar` is not itself a type, nor is it stored in the structure of a `UnionAll` type.
+Instead, `TypeVar` objects are materialized on demand when a `UnionAll` is *opened* — for
+example by reflection, printing, or instantiation — at which point a fresh `TypeVar` carrying
+the binder's name and bounds is substituted for the corresponding positional references in the
+body. For compatibility with the historical two-field layout, the properties `u.var` and
+`u.body` still work on a `UnionAll` `u`: `u.var` materializes a *canonical* `TypeVar` for the
+binder (memoized weakly, so repeated accesses agree on one object for as long as it remains
+reachable), and `u.body` is the wrapped type with the binder's references substituted by that
+variable, so that `u.body` mentions `u.var` and `UnionAll(u.var, u.body) == u`, as they did
+when these were stored fields. Type variables have lower and upper bounds on their values (in the fields
 `lb` and `ub`). The symbol `name` is purely cosmetic. Internally, `TypeVar`s are compared by
 address, so they are defined as mutable types to ensure that "different" type variables can be
 distinguished. However, by convention they should not be mutated.
@@ -135,6 +151,8 @@ end
 ```
 
 so it is seldom necessary to construct a `TypeVar` manually (indeed, this is to be avoided).
+The `UnionAll(T, body)` constructor converts the occurrences of `T` in `body` into positional
+references while recording `T`'s name and bounds on the new node.
 
 ## Free variables
 
@@ -183,16 +201,16 @@ TypeName
   atomicfields: Ptr{Nothing}(0x0000000000000000)
   constfields: Ptr{Nothing}(0x0000000000000000)
   wrapper: UnionAll
-    var: TypeVar
-      name: Symbol T
+    name: Symbol T
+    lb: Union{}
+    ub: abstract type Any
+    inner: UnionAll
+      name: Symbol N
       lb: Union{}
       ub: abstract type Any
-    body: UnionAll
-      var: TypeVar
-        name: Symbol N
-        lb: Union{}
-        ub: abstract type Any
-      body: mutable struct Array{T, N} <: DenseArray{T, N}
+      inner: mutable struct Array{TypeVarRef(2), TypeVarRef(1)} <: DenseArray{TypeVarRef(2), TypeVarRef(1)}
+      flags: UInt32 0x00000007
+    flags: UInt32 0x00000005
   Typeofwrapper: abstract type Type{Array} <: Any
   cache: SimpleVector
     ...
