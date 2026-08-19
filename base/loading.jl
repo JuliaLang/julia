@@ -361,6 +361,18 @@ const EXT_DORMITORY_FAILED = ExtensionId[]
 
 function prime_extensions(pkg::PkgId)
     pkg.uuid === nothing && return
+    pr = PRERESOLVED[]
+    if pr !== nothing
+        exts = get(pr.exts, pkg, nothing)
+        if exts !== nothing
+            # the driver's table is authoritative for packages it covers
+            for (extname, triggers) in exts
+                _prime_extension(pkg, extname, triggers)
+            end
+            return
+        end
+        _preresolved_miss(:prime_extensions, pkg)
+    end
     stack = loading_env_stack()
     specenv = _locate_package(stack, pkg)
     specenv === nothing && return
@@ -777,7 +789,11 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     loaded = start_loading(modkey, build_id, false)
     if loaded === nothing
         try
-            modspec = locate_package_load_spec(modkey)
+            modspec = preresolved_load_spec(modkey)
+            if modspec === nothing
+                specenv = _locate_package(loading_env_stack(), modkey)
+                modspec = specenv === nothing ? nothing : specenv[1]
+            end
             isnothing(modspec) && error("Cannot locate source for $(repr("text/plain", modkey))")
             set_pkgorigin_version_path(modkey, modspec.path)
             loaded = _require_search_from_serialized(modkey, modspec, build_id, true)
@@ -836,9 +852,18 @@ end
 
 # returns `nothing` if require found a precompile cache for this sourcepath, but couldn't load it or it was stale
 # returns the set of modules restored if the cache load succeeded
-@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt128, stalecheck::Bool; reasons=nothing, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
+@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt128, stalecheck::Bool; reasons=nothing, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH, use_preresolved::Bool=true)
     assert_havelock(require_lock)
-    paths = find_all_in_cache_path(pkg, DEPOT_PATH)
+    pr = use_preresolved ? PRERESOLVED[] : nothing
+    pre = pr === nothing ? nothing : get(pr.cachefiles, pkg, nothing)
+    if pre !== nothing
+        # the driver's validated cachefile is the only candidate; if it is
+        # rejected the whole search is retried without the table below
+        paths = String[pre]
+    else
+        use_preresolved && _preresolved_miss(:cachefile, pkg)
+        paths = find_all_in_cache_path(pkg, DEPOT_PATH)
+    end
     newdeps = PkgId[]
     try_build_ids = UInt128[build_id]
     if build_id == UInt128(0)
@@ -852,7 +877,8 @@ end
     end
     for build_id in try_build_ids
         @label next_path for path_to_try in paths::Vector{String}
-            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons, stalecheck)
+            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons, stalecheck,
+                                        trusted = path_to_try === pre)
             if staledeps === true
                 continue
             end
@@ -896,9 +922,11 @@ end
                     @assert canstart_loading(modkey, modbuild_id, stalecheck) === nothing
                     package_locks[modkey] = (current_task(), Threads.Condition(require_lock), modbuild_id)
                     startedloading = i
-                    modpaths = find_all_in_cache_path(modkey, DEPOT_PATH)
+                    mpre = pr === nothing ? nothing : get(pr.cachefiles, modkey, nothing)
+                    modpaths = mpre === nothing ? find_all_in_cache_path(modkey, DEPOT_PATH) : String[mpre]
                     for modpath_to_try in modpaths
-                        modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try; stalecheck)
+                        modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try; stalecheck,
+                                                       trusted = modpath_to_try === mpre)
                         if modstaledeps === true
                             continue
                         end
@@ -962,6 +990,12 @@ end
                 end
             end
         end
+    end
+    if pre !== nothing
+        # the driver's file was rejected (or a dep of it was): fall back to
+        # the full search-and-validate path
+        _preresolved_miss(:cachefile_rejected, pkg)
+        return _require_search_from_serialized(pkg, sourcespec, build_id, stalecheck; reasons, DEPOT_PATH, use_preresolved=false)
     end
     return nothing
 end
@@ -1279,10 +1313,22 @@ function __require(into::Module, mod::Symbol)
         return topmod
     end
     @lock require_lock begin
+    pr = PRERESOLVED[]
+    if pr !== nothing
+        uuidkey = get(pr.names, (PkgId(into), String(mod)), nothing)
+        if uuidkey !== nothing
+            if _track_dependencies[]
+                path = binpack(uuidkey)
+                push!(_require_dependencies, (into, path, UInt64(0), UInt32(0), 0.0))
+            end
+            return _require_prelocked(uuidkey, nothing)
+        end
+        _preresolved_miss(:identify, (PkgId(into), String(mod)))
+    end
     # Pin the environment for the duration of this top-level load; mutations
     # made while it is in progress do not affect it.
     env_stack_pinned = ENV_STACK[] !== nothing
-    env_stack_pinned || (ENV_STACK[] = EnvironmentStack())
+    env_stack_pinned || pin_env_stack!()
     try
         uuidkey_env = _identify_package_env(loading_env_stack(), PkgId(into), String(mod))
         # Core.println("require($(PkgId(into)), $mod) -> $uuidkey_env")
@@ -1380,7 +1426,9 @@ end
 function __require(uuidkey::PkgId)
     @lock require_lock begin
     env_stack_pinned = ENV_STACK[] !== nothing
-    env_stack_pinned || (ENV_STACK[] = EnvironmentStack())
+    if !env_stack_pinned && PRERESOLVED[] === nothing
+        pin_env_stack!()
+    end
     try
         return _require_prelocked(uuidkey)
     finally
@@ -1536,15 +1584,18 @@ function __require_prelocked(pkg::PkgId, env)
     assert_havelock(require_lock)
 
     # perform the search operation to select the module file require intends to load
-    specenv = _locate_package(loading_env_stack(), pkg, env;
-                              honor_stopenv=!(loading_extension || precompiling_extension))
-    if specenv === nothing
-        throw(ArgumentError("""
-            Package $(repr("text/plain", pkg)) is required but does not seem to be installed:
-             - Run `Pkg.instantiate()` to install all recorded dependencies.
-            """))
+    spec = preresolved_load_spec(pkg)
+    if spec === nothing
+        specenv = _locate_package(loading_env_stack(), pkg, env;
+                                  honor_stopenv=!(loading_extension || precompiling_extension))
+        if specenv === nothing
+            throw(ArgumentError("""
+                Package $(repr("text/plain", pkg)) is required but does not seem to be installed:
+                 - Run `Pkg.instantiate()` to install all recorded dependencies.
+                """))
+        end
+        spec = specenv[1]
     end
-    spec = specenv[1]
     path = spec.path
     set_pkgorigin_version_path(pkg, path)
 
@@ -1990,7 +2041,8 @@ const newly_inferred = []
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
-                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
+                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String},
+                                    preresolved::Union{Nothing, Vector{PreresolvedPkg}}=nothing)
 
     @lock require_lock begin
     m = start_loading(pkg, UInt128(0), false)
@@ -2000,9 +2052,19 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     append!(empty!(Base.LOAD_PATH), load_path)
     ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
     set_active_project(nothing)
-    # Pin the environment for the whole process: mutations made by the code
-    # being precompiled cannot be replayed when loading the cache file.
-    ENV_STACK[] = EnvironmentStack()
+    if preresolved === nothing
+        # Pin the environment for the whole process: mutations made by the code
+        # being precompiled cannot be replayed when loading the cache file.
+        ENV_STACK[] = EnvironmentStack()
+    else
+        # The driver resolved this worker's whole dependency closure; the
+        # environment stack is only materialized (and then pinned) if a
+        # lookup misses the table, and then from this bootstrap-time load
+        # path, not one the precompiled code may have mutated since.
+        PRERESOLVED[] = build_preresolved_table(preresolved)
+        PRERESOLVED_ENTRIES[] = preresolved
+        PRERESOLVED_BOOT_LOAD_PATH[] = copy(load_path)
+    end
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
@@ -2050,6 +2112,27 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
                     " deps_ns=", _precompile_dep_load_ns[],
                     " compilation_ns=", t_comp_after -% t_comp_before,
                     " methods=", length(newly_inferred))
+            if PRERESOLVED[] !== nothing
+                println(stderr, PRECOMPILE_PRERESOLVED_MARKER,
+                        " env_stack_built=", ENV_STACK[] !== nothing,
+                        " misses=", isempty(_preresolved_misses) ? "none" :
+                            join(("$k:$v" for (k, v) in _preresolved_misses), ","))
+            end
+        end
+        if PRERESOLVED[] !== nothing
+            # measurement-only: drop the miss report next to the stat logs
+            let dir = get(ENV, "JULIA_STAT_LOG_DIR", "")
+                if !isempty(dir)
+                    open(joinpath(dir, "preresolved-$(getpid()).info"), "w") do io
+                        println(io, pkg, " env_stack_built=", ENV_STACK[] !== nothing,
+                                " misses=", isempty(_preresolved_misses) ? "none" :
+                                    join(("$k:$v" for (k, v) in _preresolved_misses), ","))
+                        for (k, key) in _preresolved_miss_keys
+                            println(io, "  ", k, " ", key)
+                        end
+                    end
+                end
+            end
         end
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
         keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 0)
@@ -2077,14 +2160,29 @@ _pkg_str(_pkg::Vector) = sprint(show, eltype(_pkg); context = :module=>nothing) 
 _pkg_str(_pkg::Pair{PkgId}) = _pkg_str(_pkg.first) * " => " * repr(_pkg.second)
 _pkg_str(_pkg::Nothing) = "nothing"
 
+_spec_str(spec::PkgLoadSpec) = "Base.PkgLoadSpec($(repr(spec.path)), $(repr(spec.julia_syntax_version)))"
+_spec_str(::Nothing) = "nothing"
+function _preresolved_str(v::Union{Nothing, Vector{PreresolvedPkg}})
+    v === nothing && return "nothing"
+    entries = map(v) do e
+        exts = join(("$(repr(x.first)) => $(_pkg_str(x.second))" for x in e.exts), ", ")
+        string("Base.PreresolvedPkg(", _pkg_str(e.pkg), ", ", _pkg_str(e.deps), ", ",
+               _spec_str(e.spec), ", ", repr(e.cachefile),
+               ", Base.Pair{Base.String, Base.Vector{Base.PkgId}}[", exts, "])")
+    end
+    return "Base.PreresolvedPkg[" * join(entries, ",\n    ") * "]"
+end
+
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 # Marker prefix used by the precompile subprocess to report per-package timing
 # buckets back to the parent process; the parent surfaces them in verbose mode.
 const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
+const PRECOMPILE_PRERESOLVED_MARKER = "__JL_PRECOMP_PRERESOLVED__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                            internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
-                           report_timing::Bool=false)
+                           report_timing::Bool=false,
+                           preresolved::Union{Nothing, Vector{PreresolvedPkg}} = @lock(require_lock, PRERESOLVED_ENTRIES[]))
     @nospecialize internal_stderr internal_stdout
     depot_path = String[abspath(x) for x in DEPOT_PATH]
     dl_load_path = String[abspath(x) for x in DL_LOAD_PATH]
@@ -2145,7 +2243,8 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_syntax_version)), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))))
+            $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))),
+            $(_preresolved_str(preresolved)))
         """)
     close(io.in)
     return io
@@ -2211,7 +2310,8 @@ const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
-                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
+                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false,
+                      preresolved::Union{Nothing, Vector{PreresolvedPkg}} = @lock(require_lock, PRERESOLVED_ENTRIES[]))
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -2249,7 +2349,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing)
+        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, preresolved)
 
         # Report the PID of the compilation subprocess
         if pid_channel !== nothing
@@ -3000,8 +3100,14 @@ end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true,
-                                          verify_checksums::Bool=true)
+                                          verify_checksums::Bool=true, trusted::Bool=false)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
+    if trusted
+        # the precompile driver already validated this file; only structural
+        # checks (header, flags, build ids, dep fulfillment) remain
+        stalecheck = false
+        verify_checksums = false
+    end
     io = try
         open(cachefile, "r")
     catch ex
@@ -3107,7 +3213,11 @@ end
                     return true # Won't be able to fulfill dependency
                 end
             end
-            spec = locate_package_load_spec(req_key) # TODO: add env and/or skip this when stalecheck is false
+            spec = preresolved_load_spec(req_key)
+            if spec === nothing # TODO: add env and/or skip this when stalecheck is false
+                specenv = _locate_package(loading_env_stack(), req_key)
+                spec = specenv === nothing ? nothing : specenv[1]
+            end
             if spec === nothing
                 @debug "Rejecting cache file $cachefile because dependency $req_key not found."
                 record_reason(reasons, :dep_missing)
@@ -3178,7 +3288,7 @@ end
             end
         end
 
-        if stale_prefs(prefs_blob)
+        if !trusted && stale_prefs(prefs_blob)
             @debug "Rejecting cache file $cachefile because preferences have changed"
             record_reason(reasons, :preferences_changed)
             return true

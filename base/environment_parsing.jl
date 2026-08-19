@@ -945,11 +945,86 @@ function current_env_stack()
     return stack
 end
 
+# Driver-supplied resolution: a parent precompile driver has already
+# identified, located, and validated every package in this worker's
+# dependency closure, so lookups consult this table before touching the
+# environment stack or searching cache candidates. Any miss falls back to
+# the normal machinery (which also covers code that mutates the environment
+# while being precompiled). Set once at worker bootstrap under `require_lock`.
+struct PreresolvedPkg
+    pkg::PkgId
+    deps::Vector{PkgId}                        # deps visible to `pkg`, including sysimage stdlibs
+    spec::Union{Nothing, PkgLoadSpec}          # the driver's locate result
+    cachefile::Union{Nothing, String}          # driver-validated fresh cachefile
+    exts::Vector{Pair{String, Vector{PkgId}}}  # extension name => triggers (parent excluded)
+end
+
+struct PreresolvedTable
+    names::Dict{Tuple{PkgId, String}, PkgId}
+    specs::Dict{PkgId, PkgLoadSpec}
+    cachefiles::Dict{PkgId, String}
+    exts::Dict{PkgId, Vector{Pair{String, Vector{PkgId}}}}
+end
+
+const PRERESOLVED = Ref{Union{Nothing, PreresolvedTable}}(nothing)
+const PRERESOLVED_ENTRIES = Ref{Union{Nothing, Vector{PreresolvedPkg}}}(nothing) # forwarded to nested workers
+# the worker's load path as of bootstrap; a lazily pinned stack must be built
+# from this, not from a LOAD_PATH the precompiled code may have mutated since
+const PRERESOLVED_BOOT_LOAD_PATH = Ref{Union{Nothing, Vector{String}}}(nothing)
+const _preresolved_misses = Dict{Symbol, Int}() # protected by require_lock
+
+# Pin the stack `require` resolves against. In a preresolved worker the pin
+# happens lazily (on the first lookup past the table), from the bootstrap-time
+# load path.
+function pin_env_stack!()
+    lp = PRERESOLVED_BOOT_LOAD_PATH[]
+    return ENV_STACK[] = lp === nothing ? EnvironmentStack() : EnvironmentStack(lp)
+end
+
+const _preresolved_miss_keys = Vector{Pair{Symbol, Any}}() # first 50, for diagnostics
+
+function _preresolved_miss(kind::Symbol, @nospecialize(key))
+    PRERESOLVED[] === nothing && return
+    _preresolved_misses[kind] = get(_preresolved_misses, kind, 0) + 1
+    length(_preresolved_miss_keys) < 50 && push!(_preresolved_miss_keys, kind => key)
+    @debug "preresolved table miss" kind key
+    return
+end
+
+function build_preresolved_table(entries::Vector{PreresolvedPkg})
+    names = Dict{Tuple{PkgId, String}, PkgId}()
+    specs = Dict{PkgId, PkgLoadSpec}()
+    cachefiles = Dict{PkgId, String}()
+    exts = Dict{PkgId, Vector{Pair{String, Vector{PkgId}}}}()
+    for e in entries
+        for d in e.deps
+            names[(e.pkg, d.name)] = d
+        end
+        e.spec === nothing || (specs[e.pkg] = e.spec)
+        e.cachefile === nothing || (cachefiles[e.pkg] = e.cachefile)
+        exts[e.pkg] = e.exts
+    end
+    return PreresolvedTable(names, specs, cachefiles, exts)
+end
+
+function preresolved_load_spec(pkg::PkgId)
+    pr = PRERESOLVED[]
+    pr === nothing && return nothing
+    spec = get(pr.specs, pkg, nothing)
+    spec === nothing && _preresolved_miss(:locate, pkg)
+    return spec
+end
+
 # The stack `require` resolves against: pinned for the load in progress (the
 # whole process when precompiling), even if the environment has been mutated since.
 function loading_env_stack()
     stack = ENV_STACK[]
-    return stack === nothing ? current_env_stack() : stack
+    stack === nothing || return stack
+    if PRERESOLVED[] !== nothing && _env_frozen()
+        # first fallback past the driver's resolution table: pin now, lazily
+        return pin_env_stack!()
+    end
+    return current_env_stack()
 end
 
 struct EnvStatSig

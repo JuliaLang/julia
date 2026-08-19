@@ -215,6 +215,7 @@ Base.@kwdef mutable struct PrecompileSession
     ext_to_parent::Dict{PkgId, PkgId}
     parent_to_exts::Dict{PkgId, Vector{PkgId}}
     triggers::Dict{PkgId, Vector{PkgId}}
+    sysimage_deps::Dict{PkgId, Vector{PkgId}}
     project_deps::Vector{PkgId}
     serial_deps::Vector{PkgId}
     circular_deps::Vector{PkgId}
@@ -238,6 +239,7 @@ Base.@kwdef mutable struct PrecompileSession
     was_processed::Dict{PkgConfig, Base.Event}
     stale_cache::Dict{StaleCacheKey, Bool}         = Dict{StaleCacheKey,Bool}()
     cachepath_cache::Dict{PkgId, Vector{String}}   = Dict{PkgId,Vector{String}}()
+    sourcespecs::Dict{PkgId, Base.PkgLoadSpec}     = Dict{PkgId,Base.PkgLoadSpec}()
     pkg_queue::Vector{PkgConfig}                   = PkgConfig[]
     prev_cpu_times::Dict{Int32, UInt64}            = Dict{Int32,UInt64}()
 
@@ -591,6 +593,7 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
     parent_to_exts = Dict{PkgId, Vector{PkgId}}()
     ext_to_parent = Dict{PkgId, PkgId}()
     triggers = Dict{PkgId, Vector{PkgId}}()
+    sysimage_deps = Dict{PkgId, Vector{PkgId}}() # deps excluded from direct_deps because they are in the sysimage
 
     # `manifest` selects workspace-wide rather than project-local roots.
     roots = manifest ? env.workspace_deps : env.project_deps
@@ -606,6 +609,8 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
         pkg = PkgId(dep, env.names[dep])
         Base.in_sysimage(pkg) && continue
         deps = [PkgId(x, env.names[x]) for x in env.deps[dep]]
+        sysdeps = filter(Base.in_sysimage, deps)
+        isempty(sysdeps) || (sysimage_deps[pkg] = sysdeps)
         direct_deps[pkg] = filter!(!Base.in_sysimage, deps)
         for (ext_name, trigger_uuids) in get(Dict{String, Vector{UUID}}, env.extensions, dep)
             ext_uuid = Base.uuid5(pkg.uuid, ext_name)
@@ -623,6 +628,8 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
             end
             all_triggers_available || continue
             ext_to_parent[ext] = pkg
+            ext_sysdeps = filter(Base.in_sysimage, triggers[ext])
+            isempty(ext_sysdeps) || (sysimage_deps[ext] = ext_sysdeps)
             direct_deps[ext] = filter(!Base.in_sysimage, triggers[ext])
             if !haskey(parent_to_exts, pkg)
                 parent_to_exts[pkg] = PkgId[ext]
@@ -697,7 +704,7 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
         end
     end
 
-    return (; direct_deps, ext_to_parent, parent_to_exts, triggers, project_deps, serial_deps)
+    return (; direct_deps, ext_to_parent, parent_to_exts, triggers, sysimage_deps, project_deps, serial_deps)
 end
 
 # Detect circular dependencies and notify their Events so waiting tasks can skip them.
@@ -1767,6 +1774,12 @@ function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::Preco
             job.verbose_timing = strip(str)
             continue
         end
+        if startswith(str, Base.PRECOMPILE_PRERESOLVED_MARKER)
+            s.logcalls === CoreLogging.Debug && @lock s.print_lock begin
+                @debug "$(full_name(s.ext_to_parent, pkg)): $(strip(str))"
+            end
+            continue
+        end
         if single_requested_pkg && (liveprinting || !isempty(str))
             BG.monitoring && @lock s.print_lock begin
                 if !liveprinting
@@ -1837,6 +1850,59 @@ function precompile_pkgs_maybe_cachefile_lock(f, s::PrecompileSession, pkg_confi
     return cachefile
 end
 
+# The driver's answer for one worker's entire dependency closure: visible dep
+# names (including sysimage stdlibs), source specs, validated cachefiles, and
+# extension maps. Built right before the worker spawns, after all its deps
+# have finished, so their cachefiles are final. Returns `nothing` when the
+# mode is disabled (JULIA_PRECOMPILE_PRERESOLVED=0), making the worker resolve
+# everything itself as before.
+function preresolved_closure(s::PrecompileSession, pkg::PkgId)
+    Base.get_bool_env("JULIA_PRECOMPILE_PRERESOLVED", true) || return nothing
+    entries = Base.PreresolvedPkg[]
+    seen = Set{PkgId}((pkg,))
+    queue = PkgId[pkg]
+    @lock s.cache_lock while !isempty(queue)
+        p = pop!(queue)
+        deps = get(s.direct_deps, p, nothing)
+        deps === nothing && continue # not a graph node (e.g. sysimage stdlib)
+        exts = Pair{String, Vector{PkgId}}[]
+        for ext in get(Vector{PkgId}, s.parent_to_exts, p)
+            # triggers[ext] also carries the parent and ext-to-ext scheduling
+            # edges; the worker only wants the real triggers
+            trigs = filter(t -> t != p && !haskey(s.ext_to_parent, t), s.triggers[ext])
+            push!(exts, ext.name => trigs)
+            ext in seen || (push!(seen, ext); push!(queue, ext))
+        end
+        spec = nothing
+        cachefile = nothing
+        if p !== pkg
+            spec = get(s.sourcespecs, p, nothing)
+            fresh = get(s.cachepath_cache, p, nothing)
+            fresh !== nothing && !isempty(fresh) && (cachefile = first(fresh))
+        end
+        names = PkgId[]
+        append!(names, deps)
+        append!(names, get(Vector{PkgId}, s.sysimage_deps, p))
+        # an extension resolves names through its parent's whole dependency
+        # universe: the parent's deps and its weakdeps (≈ every ext trigger)
+        parent = get(s.ext_to_parent, p, nothing)
+        if parent !== nothing
+            push!(names, parent)
+            append!(names, get(Vector{PkgId}, s.direct_deps, parent))
+            append!(names, get(Vector{PkgId}, s.sysimage_deps, parent))
+            for sibling in get(Vector{PkgId}, s.parent_to_exts, parent)
+                append!(names, Iterators.filter(t -> t != parent && !haskey(s.ext_to_parent, t), s.triggers[sibling]))
+            end
+            unique!(names)
+        end
+        push!(entries, Base.PreresolvedPkg(p, names, spec, cachefile, exts))
+        for d in deps
+            d in seen || (push!(seen, d); push!(queue, d))
+        end
+    end
+    return entries
+end
+
 function spawn_precompile_tasks!(s::PrecompileSession;
         direct_deps, was_processed, configs, circular_deps,
         requested_pkgids, pkg_names, requested_pkgs, from_loading)
@@ -1844,8 +1910,11 @@ function spawn_precompile_tasks!(s::PrecompileSession;
     for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
-        @lock s.cache_lock s.cachepath_cache[pkg] = freshpaths
         sourcespec = Base.locate_package_load_spec(pkg)
+        @lock s.cache_lock begin
+            s.cachepath_cache[pkg] = freshpaths
+            sourcespec === nothing || (s.sourcespecs[pkg] = sourcespec)
+        end
         single_requested_pkg = length(requested_pkgs) == 1 &&
             (pkg in requested_pkgids || pkg.name in pkg_names)
         for config in configs
@@ -1941,7 +2010,8 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             t = @elapsed ret = begin
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch, report_timing=true)
+                                                  pid_channel=pid_ch, report_timing=true,
+                                                  preresolved=preresolved_closure(s, pkg))
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
@@ -1966,7 +2036,8 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 end
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch, report_timing=true)
+                                                  pid_channel=pid_ch, report_timing=true,
+                                                  preresolved=preresolved_closure(s, pkg))
                             end
                         end
                         if ret isa Exception
@@ -2081,6 +2152,7 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                     merge!(s.ext_to_parent, new_graph.ext_to_parent)
                     merge!(s.parent_to_exts, new_graph.parent_to_exts)
                     merge!(s.triggers, new_graph.triggers)
+                    merge!(s.sysimage_deps, new_graph.sysimage_deps)
                     union!(s.project_deps, new_graph.project_deps)
                     union!(s.serial_deps, new_graph.serial_deps)
                     union!(s.requested_pkgids, effective_pkgids)
@@ -2496,7 +2568,8 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids, requested_all,
         direct_deps=graph.direct_deps,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
-        triggers=graph.triggers, project_deps=graph.project_deps,
+        triggers=graph.triggers, sysimage_deps=graph.sysimage_deps,
+        project_deps=graph.project_deps,
         serial_deps=graph.serial_deps, circular_deps,
         n_total=length(graph.direct_deps) * nconfigs,
         printloop_should_exit=!fancyprint, target,
