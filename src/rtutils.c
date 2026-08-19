@@ -663,15 +663,32 @@ JL_DLLEXPORT int jl_is_identifier(const char *str) JL_NOTSAFEPOINT
     return 1;
 }
 
-static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
+// chain of the UnionAll binders crossed on the way to the current subterm
+struct nth_arg_binders {
+    jl_unionall_t *ua;
+    struct nth_arg_binders *prev;
+};
+
+static jl_datatype_t *nth_arg_datatype_(jl_value_t *a JL_PROPAGATES_ROOT, int n, struct nth_arg_binders *env) JL_NOTSAFEPOINT
 {
+    if (jl_is_tvarref(a)) {
+        // resolve a bound variable to its binder's upper bound (whose own
+        // references live in the remainder of the chain)
+        size_t idx = jl_tvarref_depth(a);
+        struct nth_arg_binders *b = env;
+        while (b != NULL && --idx > 0)
+            b = b->prev;
+        if (b == NULL)
+            return NULL;
+        return nth_arg_datatype_(b->ua->ub, n, b->prev);
+    }
     if (jl_is_datatype(a)) {
         if (n == 0)
             return (jl_datatype_t*)a;
         if (jl_is_tuple_type(a)) {
             if (jl_nparams(a) < n)
                 return NULL;
-            return nth_arg_datatype(jl_tparam(a, n - 1), 0);
+            return nth_arg_datatype_(jl_tparam(a, n - 1), 0, env);
         }
         return NULL;
     }
@@ -684,27 +701,35 @@ static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) 
         if (jl_is_datatype(T))
             return (jl_datatype_t*)T;
         if (jl_is_typevar(T))
-            return nth_arg_datatype(((jl_tvar_t*)T)->ub, 0);
+            return nth_arg_datatype_(((jl_tvar_t*)T)->ub, 0, env);
+        if (jl_is_tvarref(T))
+            return nth_arg_datatype_(T, 0, env);
         if (jl_is_unionall(T))
-            return nth_arg_datatype(jl_unwrap_unionall(T), 0);
+            return nth_arg_datatype_(T, 0, env);
         return NULL;
     }
     else if (jl_is_typevar(a)) {
-        return nth_arg_datatype(((jl_tvar_t*)a)->ub, n);
+        return nth_arg_datatype_(((jl_tvar_t*)a)->ub, n, env);
     }
     else if (jl_is_unionall(a)) {
-        return nth_arg_datatype(((jl_unionall_t*)a)->body, n);
+        struct nth_arg_binders newenv = { (jl_unionall_t*)a, env };
+        return nth_arg_datatype_(((jl_unionall_t*)a)->body, n, &newenv);
     }
     else if (jl_is_uniontype(a)) {
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        jl_datatype_t *d1 = nth_arg_datatype(u->a, n);
+        jl_datatype_t *d1 = nth_arg_datatype_(u->a, n, env);
         if (d1 == NULL) return NULL;
-        jl_datatype_t *d2 = nth_arg_datatype(u->b, n);
+        jl_datatype_t *d2 = nth_arg_datatype_(u->b, n, env);
         if (d2 == NULL || d1->name != d2->name)
             return NULL;
         return d1;
     }
     return NULL;
+}
+
+static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
+{
+    return nth_arg_datatype_(a, n, NULL);
 }
 
 static jl_datatype_t *arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
@@ -1238,7 +1263,27 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         jl_unionall_t *ua = (jl_unionall_t*)v;
         n += jl_static_show_x(out, ua->body, depth, ctx);
         n += jl_printf(out, " where ");
-        n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev, ctx);
+        // print the binder with its bounds (which live in the enclosing scope)
+        jl_value_t *blb = ua->lb, *bub = ua->ub;
+        if (blb != jl_bottom_type) {
+            int ualb = jl_is_unionall(blb);
+            if (ualb)
+                n += jl_printf(out, "(");
+            n += jl_static_show_x(out, blb, depth->prev, ctx);
+            if (ualb)
+                n += jl_printf(out, ")");
+            n += jl_printf(out, "<:");
+        }
+        n += jl_static_show_symbol(out, ua->name);
+        if (bub != (jl_value_t*)jl_any_type || blb != jl_bottom_type) {
+            int uaub = jl_is_unionall(bub);
+            n += jl_printf(out, "<:");
+            if (uaub)
+                n += jl_printf(out, "(");
+            n += jl_static_show_x(out, bub, depth->prev, ctx);
+            if (uaub)
+                n += jl_printf(out, ")");
+        }
     }
     else if (vt == jl_typeeq_type) {
         n += jl_printf(out, "Type{");
@@ -1256,17 +1301,21 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth, ctx);
         n += jl_printf(out, ")");
     }
+    else if (vt == jl_tvarref_type) {
+        // a bound-variable occurrence: name it after the binder it refers to
+        size_t idx = jl_tvarref_depth(v);
+        struct recur_list *p = depth ? depth->prev : NULL; // exclude this ref itself
+        while (p != NULL && !(jl_is_unionall(p->v) && --idx == 0))
+            p = p->prev;
+        if (p != NULL)
+            n += jl_static_show_symbol(out, ((jl_unionall_t*)p->v)->name);
+        else
+            n += jl_printf(out, "TypeVarRef(%" PRIuPTR ")", (uintptr_t)jl_tvarref_depth(v));
+    }
     else if (vt == jl_tvar_type) {
-        // show type-var bounds only if they aren't going to be printed by UnionAll later
+        // TypeVars only occur free now; always show their bounds
         jl_tvar_t *var = (jl_tvar_t*)v;
-        struct recur_list *p;
         int showbounds = 1;
-        for (p = depth; p != NULL; p = p->prev) {
-            if (jl_is_unionall(p->v) && ((jl_unionall_t*)p->v)->var == var) {
-                showbounds = 0;
-                break;
-            }
-        }
         jl_value_t *lb = var->lb, *ub = var->ub;
         if (showbounds && lb != jl_bottom_type) {
             // show type-var lower bound if it is defined
@@ -1706,7 +1755,29 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         while (jl_is_unionall(tvars)) {
             if (!first)
                 n += jl_printf(s, ", ");
-            n += jl_static_show_x(s, (jl_value_t*)tvars->var, first ? NULL : depth,  ctx);
+            // print the binder's name and bounds; the bounds live in the scope
+            // of the previously printed binders
+            struct recur_list *bdepth = first ? NULL : depth;
+            jl_value_t *blb = tvars->lb, *bub = tvars->ub;
+            if (blb != jl_bottom_type) {
+                int ua = jl_is_unionall(blb);
+                if (ua)
+                    n += jl_printf(s, "(");
+                n += jl_static_show_x(s, blb, bdepth, ctx);
+                if (ua)
+                    n += jl_printf(s, ")");
+                n += jl_printf(s, "<:");
+            }
+            n += jl_static_show_symbol(s, tvars->name);
+            if (bub != (jl_value_t*)jl_any_type || blb != jl_bottom_type) {
+                int ua = jl_is_unionall(bub);
+                n += jl_printf(s, "<:");
+                if (ua)
+                    n += jl_printf(s, "(");
+                n += jl_static_show_x(s, bub, bdepth, ctx);
+                if (ua)
+                    n += jl_printf(s, ")");
+            }
             tvars = (jl_unionall_t*)tvars->body;
             if (!first)
                 depth += 1;
