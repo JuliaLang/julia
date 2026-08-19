@@ -1147,6 +1147,18 @@ end
 
 end
 
+# Format buffer estimates must not wrap before direct writers fill the buffer.
+@testset "format length overflow" begin
+    for conversion in ('e', 'f', 'g')
+        fmt = Printf.Format("%1.$(typemax(Int))$conversion")
+        @test_throws OverflowError Printf.format(fmt, 0.0)
+    end
+    @test_throws OverflowError Printf.format(Printf.Format("%.$(typemax(Int))d"), 1)
+    @test_throws OverflowError Printf.format(Printf.Format("%$(typemax(Int))s"), "α")
+    @test_throws OverflowError Printf.format(
+        Printf.Format("%$(typemax(Int))s%1s"), "", "")
+end
+
 @testset "length modifiers" begin
     @test_throws Printf.InvalidFormatStringError Printf.Format("%h")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%hh")

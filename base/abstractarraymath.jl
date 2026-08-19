@@ -558,7 +558,7 @@ repeat_inner_outer(arr, inner, outer) = repeat_outer(repeat_inner(arr, inner), o
 
 function repeat_outer(a::AbstractMatrix, (m,n)::NTuple{2, Any})
     o, p = size(a,1), size(a,2)
-    b = similar(a, o*m, p*n)
+    b = similar(a, Base.checked_mul(o, m), Base.checked_mul(p, n))
     for j=1:n
         d = (j-1)*p+1
         R = d:d+p-1
@@ -572,7 +572,7 @@ end
 
 function repeat_outer(a::AbstractVector, (m,)::Tuple{Any})
     o = length(a)
-    b = similar(a, o*m)
+    b = similar(a, Base.checked_mul(o, m))
     for i=1:m
         c = (i-1)*o+1
         @inbounds b[c:c+o-1] = a
@@ -582,7 +582,7 @@ end
 
 function repeat_outer(arr::AbstractArray{<:Any,N}, dims::NTuple{N,Any}) where {N}
     insize  = size(arr)
-    outsize = map(*, insize, dims)
+    outsize = map(Base.checked_mul, insize, dims)
     out = similar(arr, outsize)
     for I in CartesianIndices(arr)
         for J in CartesianIndices(dims)
@@ -597,7 +597,7 @@ function repeat_outer(arr::AbstractArray{<:Any,N}, dims::NTuple{N,Any}) where {N
 end
 
 function repeat_inner(arr, inner)
-    outsize = map(*, size(arr), inner)
+    outsize = map(Base.checked_mul, size(arr), inner)
     out = similar(arr, outsize)
     for I in CartesianIndices(arr)
         for J in CartesianIndices(inner)

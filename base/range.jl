@@ -1405,7 +1405,7 @@ promote_rule(::Type{LinRange{A,L}}, b::Type{StepRangeLen{T2,R2,S2,L2}}) where {A
 function vcat(rs::AbstractRange{T}...) where T
     n::Int = 0
     for ra in rs
-        n += length(ra)
+        n = checked_add(n, length(ra))
     end
     a = Vector{T}(undef, n)
     i = 1
