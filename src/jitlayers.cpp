@@ -2061,7 +2061,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         for (auto CI : CIs) {
             auto It = CISymbols.find(CI);
             if (It == CISymbols.end())
-                return;
+                continue;
             auto CISym = It->second;
             if (CISym.invoke)
                 Exports.add(CISym.invoke);
@@ -2084,7 +2084,22 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         auto Syms = std::move(*SymsE);
         for (auto [i, CI] : llvm::enumerate(CIs)) {
             jl_codeinst_funcs_t<void *> Addrs{};
-            const auto &S = CISymbols.at(CIs[i]);
+            // If jl_jit_unregister_ci has been called for this CI before our
+            // callback fired, it's possible that we won't find anything in
+            // CISymbols.  This is ok, since the code instance is no longer
+            // needed.
+            auto It = CISymbols.find(CIs[i]);
+            if (It == CISymbols.end())
+                continue;
+            const auto &S = It->second;
+
+            // It is also possible that a new CI has been allocated with the
+            // same address in the meantime.  It is guaranteed to have a new ORC
+            // symbol, so we can close this by ignoring queries if the symbols
+            // in CISymbols don't agree with Syms.
+            if ((S.invoke && !Syms.contains(S.invoke)) ||
+                (S.specptr && !Syms.contains(S.specptr)))
+                continue;
             Addrs.invoke_api = S.invoke_api;
             if (S.invoke)
                 Addrs.invoke = (void *)Syms.at(S.invoke).getAddress().getValue();
