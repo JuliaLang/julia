@@ -25,17 +25,23 @@ static int jl_is_any(jl_value_t *t1)
 
 static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int invariant) JL_NOTSAFEPOINT
 {
+    // (decided on the binders too: a `Type{T} where T<:Union{}` admits only `Union{}`)
+    if (t1 == jl_bottom_type || (invariant && jl_is_typeofbottom_param(t1))) {
+        // file all spellings to Type{Union{}} in the same bucket, then walk to the other type buckets from there
+        return (jl_value_t*)jl_typeofbottom_type->name;
+    }
     if (jl_is_unionall(t1))
         t1 = jl_unwrap_unionall(t1);
     if (jl_is_vararg(t1)) {
         return jl_type_extract_name(jl_unwrap_vararg(t1), invariant);
     }
-    else if (t1 == jl_bottom_type || (invariant && jl_is_typeofbottom_param(t1))) {
-        // file all spellings to Type{Union{}} in the same bucket, then walk to the other type buckets from there
-        return (jl_value_t*)jl_typeofbottom_type->name;
-    }
     else if (jl_is_typevar(t1)) {
         return jl_type_extract_name(((jl_tvar_t*)t1)->ub, 0);
+    }
+    else if (jl_is_tvarref(t1)) {
+        // a bound-variable reference: its bound is not available here; key it
+        // like a typevar with an unknown (`Any`) upper bound
+        return invariant ? NULL : (jl_value_t*)((jl_datatype_t*)jl_any_type)->name;
     }
     else if (jl_is_some_Type(t1)) {
         // invariantly this is the wrapper's own name; covariantly the key must lie on
@@ -70,13 +76,13 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
 // (such that intersection also needs to consider the subtypes)
 static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
 {
+    if (invariant && jl_is_typeofbottom_param(t1)) {
+        return 1; // the `TypeofBottom` name holds every spelling of `Type{typeof(Union{})}`
+    }
     if (jl_is_unionall(t1))
         t1 = jl_unwrap_unionall(t1);
     if (jl_is_vararg(t1)) {
         return jl_type_extract_name_precise(jl_unwrap_vararg(t1), invariant);
-    }
-    else if (invariant && jl_is_typeofbottom_param(t1)) {
-        return 1; // the `TypeofBottom` name holds every spelling of `Type{typeof(Union{})}`
     }
     else if (jl_is_typevar(t1)) {
         jl_value_t *ub = ((jl_tvar_t*)t1)->ub;
@@ -86,6 +92,9 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
         if (invariant && jl_type_extract_name(ub, 0) == (jl_value_t*)jl_anytype_type->name)
             return 0;
         return jl_type_extract_name_precise(ub, 0);
+    }
+    else if (jl_is_tvarref(t1)) {
+        return 0; // unknown bound: the `Any` key is an over-approximation
     }
     else if (jl_is_some_Type(t1)) {
         return 1;
@@ -114,10 +123,50 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
     return 1;
 }
 
+// resolve a parameter extracted from directly under `origsig`'s binder chain:
+// a bound-variable reference resolves (iteratively) to its binder's upper
+// bound, re-framed to the extraction depth
+// The result is always rooted through the arguments (or stronger): it is
+// either `ty` itself, a binder bound extracted from `origsig`, `jl_any_type`,
+// or a freshly-built bound interned as a permanent global root below.
+static jl_value_t *resolve_param_ub(jl_value_t *ty JL_PROPAGATES_ROOT, jl_value_t *origsig JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+{
+    if (!jl_is_tvarref(ty))
+        return ty;
+    size_t n = 0;
+    jl_value_t *u = origsig;
+    while (jl_is_unionall(u)) {
+        n++;
+        u = ((jl_unionall_t*)u)->body;
+    }
+    size_t depth = n; // `ty` was extracted at depth n
+    while (jl_is_tvarref(ty)) {
+        size_t idx = jl_tvarref_depth(ty);
+        if (idx > depth)
+            return (jl_value_t*)jl_any_type; // malformed reference; be conservative
+        size_t i = depth - idx, j;
+        u = origsig;
+        for (j = 0; j < i; j++)
+            u = ((jl_unionall_t*)u)->body;
+        ty = ((jl_unionall_t*)u)->ub;
+        depth = i; // the bound lives outside its own binder
+    }
+    if (depth < n && jl_has_dangling_tvarrefs(ty)) {
+        // re-frame the bound's own references to the extraction depth; intern
+        // the freshly-built type so callers may treat the result as rooted
+        // (the set of binder bounds reachable here is small and fixed)
+        JL_GC_PUSH1(&ty);
+        ty = jl_shift_dangling_refs(ty, n - depth);
+        ty = jl_as_global_root(ty, 1);
+        JL_GC_POP();
+    }
+    return ty;
+}
+
 // return whether Type{Union{}} is a subtype of Type{t1} (which may have free typevars)
 static int jl_parameter_includes_bottom(jl_value_t *t1)
 {
-    if (jl_is_typevar(t1) || t1 == jl_bottom_type)
+    if (jl_is_typevar(t1) || jl_is_tvarref(t1) || t1 == jl_bottom_type)
         return 1;
     else if (jl_is_uniontype(t1)) {
         jl_uniontype_t *u1 = (jl_uniontype_t*)t1;
@@ -467,10 +516,14 @@ exit:
     }
 }
 
+// returns 0 if the chain reaches a still-unset supertype (definition in
+// progress)
 static unsigned jl_supertype_height(jl_datatype_t *dt) JL_CANSAFEPOINT
 {
     unsigned height = 1;
-    while (dt != NULL && dt != jl_any_type) {
+    while (dt != jl_any_type) {
+        if (dt == NULL)
+            return 0; // deferred supertype of a self-referential fragment
         height++;
         dt = jl_datatype_compute_super(dt);
     }
@@ -483,6 +536,8 @@ static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigne
 {
     if (a == jl_any_type)
         return 1;
+    if (ha == 0)
+        return 1; // deferred supertype somewhere in the chain: conservatively visit
     jl_datatype_t *b = (jl_datatype_t*)jl_unwrap_unionall(bname->wrapper);
     // Additionally, a `TypeEq` meets every kind name (`TypeEq{R} <: Union{DataType, UnionAll, ...}`),
     // and every kind meets both wrapper names (`TypeEgal{X} <: typeof(X)`, `TypeEq{Vector} intersects UnionAll`).
@@ -520,27 +575,39 @@ static jl_datatype_t *tname_super(jl_datatype_t *super JL_PROPAGATES_ROOT) JL_CA
 // `TypeEgal{X}` for some `X` named `bname` (tparam 1), over just the type-names: `a` may be
 // any type, including a kind, union, typevar or wrapper, and a `Type{...}` parameter that is
 // a typevar, union or nested wrapper is treated covariantly, which is conservative
-static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam) JL_CANSAFEPOINT
+static int tname_intersection_(jl_value_t *a, jl_typename_t *bname, int8_t tparam, jl_uaenv_t *env) JL_CANSAFEPOINT
 {
     if (a == (jl_value_t*)jl_any_type)
         return 1;
-    a = jl_unwrap_unionall(a);
+    while (jl_is_unionall(a)) {
+        // (the binders are kept, to read a `Type{T}` parameter's bound below)
+        jl_uaenv_t *node = (jl_uaenv_t*)alloca(sizeof(jl_uaenv_t));
+        node->ua = (jl_unionall_t*)a;
+        node->prev = env;
+        env = node;
+        a = ((jl_unionall_t*)a)->body;
+    }
     assert(!jl_is_vararg(a));
     if (jl_is_uniontype(a))
-        return tname_intersection(((jl_uniontype_t*)a)->a, bname, tparam) ||
-               tname_intersection(((jl_uniontype_t*)a)->b, bname, tparam);
+        return tname_intersection_(((jl_uniontype_t*)a)->a, bname, tparam, env) ||
+               tname_intersection_(((jl_uniontype_t*)a)->b, bname, tparam, env);
     if (jl_is_typevar(a))
-        return tname_intersection(((jl_tvar_t*)a)->ub, bname, tparam);
+        return tname_intersection_(((jl_tvar_t*)a)->ub, bname, tparam, NULL);
+    if (jl_is_tvarref(a))
+        return 1; // bound-variable reference: bound not available here, conservatively visit
     if (tparam) {
         if (jl_is_kind(a) || a == (jl_value_t*)jl_anytype_type)
             return 1; // a kind contains the `X` of any `Type{X}`
         if (!jl_is_some_Type(a))
             return 0;
-        a = jl_unwrap_unionall(jl_some_Type_T(a));
-        if (a == jl_bottom_type || jl_is_typeofbottom_param(a))
+        a = jl_some_Type_T(a);
+        if (a == jl_bottom_type || jl_is_typeofbottom_param_env(a, env))
             a = (jl_value_t*)jl_typeofbottom_type; // filed under the `TypeofBottom` name, as `jl_type_extract_name`
-        else if (!jl_is_datatype(a))
-            return tname_intersection(a, bname, 0);
+        else {
+            a = jl_unwrap_unionall(a);
+            if (!jl_is_datatype(a))
+                return tname_intersection_(a, bname, 0, env);
+        }
     }
     // a wrapper is not a datatype, so it has no supertype chain of its own: replace it with
     // the kind of its instances, `typeof(X)` for the single instance of a `TypeEgal{X}`, and
@@ -553,6 +620,11 @@ static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam
     if (jl_is_datatype(a))
         return tname_intersection_dt((jl_datatype_t*)a, bname, jl_supertype_height((jl_datatype_t*)a));
     return 0;
+}
+
+static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam) JL_CANSAFEPOINT
+{
+    return tname_intersection_(a, bname, tparam, NULL);
 }
 
 // Classify how `t` can match a type object, as a total query over what `t` meets.
@@ -590,6 +662,27 @@ static void typemap_type_components(jl_value_t *t, int *by_identity, int *by_kin
     }
 }
 
+// the `X` of a `Type{X}` parameter `t` of the (closed) query type `ty`, as the lookups
+// classify it: a reference to one of `ty`'s own binders (`Type{<:T}`) is read as that
+// binder's canonical variable, so it is classified like a typevar, by its upper bound with
+// the invariance dropped; a reference escaping `ty` stays a reference (classified
+// conservatively, as nothing is known about it here)
+static jl_value_t *typemap_type_param(jl_value_t *ty JL_PROPAGATES_ROOT, jl_value_t *t JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+{
+    jl_value_t *tp0 = jl_some_Type_T(t);
+    if (!jl_is_tvarref(tp0))
+        return tp0;
+    size_t d = jl_tvarref_depth(tp0), n = 0;
+    for (jl_value_t *u = ty; jl_is_unionall(u); u = ((jl_unionall_t*)u)->body)
+        n++;
+    if (d > n)
+        return tp0;
+    jl_value_t *u = ty;
+    for (size_t j = 0; j < n - d; j++)
+        u = ((jl_unionall_t*)u)->body;
+    return (jl_value_t*)jl_unionall_var((jl_unionall_t*)u);
+}
+
 static int concrete_intersects(jl_value_t *t, jl_value_t *ty, int8_t tparam) JL_CANSAFEPOINT
 {
     if (ty == (jl_value_t*)jl_any_type) // easy case: Any always matches
@@ -615,7 +708,7 @@ static int jl_typemap_intersection_memory_visitor(jl_genericmemory_t *a, jl_valu
         jl_value_t *ttype = jl_unwrap_unionall(ty);
         if (tparam & 1)
             // extract T from Type{T} (if possible)
-            ttype = jl_is_some_Type(ttype) ? jl_some_Type_T(ttype) : NULL;
+            ttype = jl_is_some_Type(ttype) ? typemap_type_param(ty, ttype) : NULL;
         if (ttype && jl_is_datatype(ttype)) {
             tydt = (jl_datatype_t*)ttype;
         }
@@ -723,35 +816,41 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     return 1;
 }
 
-// if TypeVar tv is used covariantly, it cannot be Union{}
-static int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
+// if TypeVar tv (or bound-variable reference) is used covariantly, it cannot be Union{}
+static int has_covariant_var(jl_datatype_t *ttypes, jl_value_t *tv)
 {
     size_t i, l = jl_nparams(ttypes);
-    for (i = 0; i < l; i++)
-        if (jl_tparam(ttypes, i) == (jl_value_t*)tv)
+    for (i = 0; i < l; i++) {
+        jl_value_t *pi = jl_tparam(ttypes, i);
+        if (pi == tv)
             return 1;
+        if (jl_is_tvarref(tv) && jl_is_tvarref(pi) &&
+            jl_tvarref_depth(pi) == jl_tvarref_depth(tv))
+            return 1;
+    }
     return 0;
 }
 
-// Wrap `t` in the unionalls surrounding `u`, as `jl_rewrap_unionall`, except that `tv` is
-// instantiated as `Union{}` at the `where` that binds it, so that it is also substituted
-// into the bounds of the typevars bound inside it. Returns NULL if that is not a valid
-// instantiation. Reuses the wrappers of `u` while `t` is still its body.
-static jl_value_t *rewrap_unionall_bottom(jl_value_t *t, jl_value_t *u, jl_tvar_t *tv) JL_CANSAFEPOINT
+// Wrap `t` in the unionalls surrounding `u`, as `jl_rewrap_unionall`, except that the binder
+// `d` levels out from `t` (of the `n` binders of `u`) is instantiated as `Union{}` at its
+// `where`, so that it is also substituted into the bounds of the binders inside it. Returns
+// NULL if that is not a valid instantiation. Reuses the wrappers of `u` while `t` is still
+// its body.
+static jl_value_t *rewrap_unionall_bottom(jl_value_t *t, jl_value_t *u, size_t d, size_t n) JL_CANSAFEPOINT
 {
     if (!jl_is_unionall(u))
         return t;
     jl_unionall_t *ua = (jl_unionall_t*)u;
-    t = rewrap_unionall_bottom(t, ua->body, tv);
+    t = rewrap_unionall_bottom(t, ua->body, d, n - 1);
     if (t == NULL)
         return NULL;
     JL_GC_PUSH1(&t);
-    if (ua->var == tv)
-        t = jl_substitute_var_nothrow(t, tv, jl_bottom_type, 1);
+    if (n == d)
+        t = jl_substitute_tvarref_nothrow(t, 1, jl_bottom_type);
     else if (t == ua->body)
         t = u;
     else
-        t = jl_type_unionall(ua->var, t);
+        t = jl_rewrap_unionall_one(t, ua);
     JL_GC_POP();
     return t;
 }
@@ -768,20 +867,27 @@ static jl_value_t *typemap_bottom_calls(struct typemap_intersection_env *closure
     size_t l = jl_nparams(ttypes);
     int unroll = closure->va && l <= offs + 1;
     jl_value_t *ty = unroll ? closure->va : jl_tparam(ttypes, offs);
-    jl_tvar_t *tv = NULL;
-    if (jl_is_typeeq(ty) && jl_is_typevar(jl_typeeq_T(ty))) {
+    size_t nbinders = 0;
+    for (jl_value_t *u = closure->type; jl_is_unionall(u); u = ((jl_unionall_t*)u)->body)
+        nbinders++;
+    size_t tvd = 0; // the depth (from the body) of the binder `ty` is `Type{T}` of, if any
+    if (jl_is_typeeq(ty) && jl_is_tvarref(jl_typeeq_T(ty)) && jl_tvarref_depth(jl_typeeq_T(ty)) <= nbinders) {
         // `T` must be `Union{}`, so instantiate it as that at its `where` to form a tighter
         // bound in case `T` got used elsewhere too, which is exact (up to its own bound, when
         // that is open). If that is not a valid instantiation (e.g. `T` is also a `Vararg`
         // count, or a parameter of `B{X>:Int}`), there are no such calls, and so any method
         // "covers" them.
-        tv = (jl_tvar_t*)jl_typeeq_T(ty);
-        if (tv->lb != jl_bottom_type && !jl_has_free_typevars(tv->lb)) {
+        tvd = jl_tvarref_depth(jl_typeeq_T(ty));
+        jl_value_t *u = closure->type;
+        for (size_t j = 0; j < nbinders - tvd; j++)
+            u = ((jl_unionall_t*)u)->body;
+        jl_value_t *lb = ((jl_unionall_t*)u)->lb;
+        if (lb != jl_bottom_type && !jl_has_free_typevars(lb) && !jl_has_dangling_tvarrefs(lb)) {
             // `T >: lb` with a closed, non-empty `lb` cannot be `Union{}`: there are no such calls
             return jl_bottom_type;
         }
         if (!unroll) {
-            jl_value_t *bottom_calls = rewrap_unionall_bottom(ttypes, closure->type, tv);
+            jl_value_t *bottom_calls = rewrap_unionall_bottom(ttypes, closure->type, tvd, nbinders);
             return bottom_calls ? bottom_calls : jl_bottom_type; // NULL will pass the subtype query trivially (and would be a valid optimization even without the special bottom method)
         }
     }
@@ -821,10 +927,10 @@ static jl_value_t *typemap_bottom_calls(struct typemap_intersection_env *closure
     }
     jl_svecset(params, offs, jl_wrap_Type(jl_bottom_type));
     bottom_calls = (jl_value_t*)jl_apply_tuple_type(params, 1);
-    if (tv == NULL)
+    if (tvd == 0)
         bottom_calls = jl_rewrap_unionall(bottom_calls, closure->type);
     else
-        bottom_calls = rewrap_unionall_bottom(bottom_calls, closure->type, tv);
+        bottom_calls = rewrap_unionall_bottom(bottom_calls, closure->type, tvd, nbinders);
     JL_GC_POP();
     return bottom_calls ? bottom_calls : jl_bottom_type;
 }
@@ -881,10 +987,11 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
         if (ty) {
             while (jl_is_typevar(ty))
                 ty = ((jl_tvar_t*)ty)->ub;
-            // approxify the tparam until we have a valid type
-            if (jl_has_free_typevars(ty))
-                ty = jl_rewrap_unionall(ty, closure->type);
             JL_GC_PUSH1(&ty);
+            ty = resolve_param_ub(ty, closure->type);
+            // approxify the tparam until we have a valid type
+            if (jl_has_free_typevars(ty) || jl_has_dangling_tvarrefs(ty))
+                ty = jl_rewrap_unionall(ty, closure->type);
             jl_genericmemory_t *targ = jl_atomic_load_relaxed(&cache->targ);
             jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname);
             int maybe_type = 0;
@@ -899,12 +1006,14 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                 maybe_type = by_identity || maybe_kind;
                 if (maybe_type && !maybe_kind) { // a kind query keeps the `TypeofBottom` bucket
                     typetype = jl_unwrap_unionall(ty);
-                    typetype = jl_is_some_Type(typetype) ? jl_some_Type_T(typetype) : NULL;
+                    // (a reference is kept for the occurrence scan, which is positional)
+                    jl_value_t *typeref = jl_is_some_Type(typetype) ? jl_some_Type_T(typetype) : NULL;
+                    typetype = typeref ? typemap_type_param(ty, typetype) : NULL;
                     name = typetype ? jl_type_extract_name(typetype, 1) : NULL;
                     if (!typetype)
                         exclude_typeofbottom = !jl_subtype((jl_value_t*)jl_typeofbottom_type, ty);
-                    else if (jl_is_typevar(typetype))
-                        exclude_typeofbottom = has_covariant_var((jl_datatype_t*)ttypes, (jl_tvar_t*)typetype);
+                    else if (jl_is_typevar(typeref) || jl_is_tvarref(typeref))
+                        exclude_typeofbottom = has_covariant_var((jl_datatype_t*)ttypes, typeref);
                     else
                         exclude_typeofbottom = !jl_parameter_includes_bottom(typetype);
                 }
@@ -942,14 +1051,14 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     }
                 }
                 if (name != (jl_value_t*)jl_typeofbottom_type->name &&
-                        (!typetype || jl_has_free_typevars(typetype) || is_cache_leaf(typetype, 1))) { // otherwise cannot contain this particular kind, so don't bother with checking
+                        (!typetype || jl_has_free_typevars(typetype) || jl_has_dangling_tvarrefs(typetype) || jl_is_tvarref(typetype) || is_cache_leaf(typetype, 1))) { // otherwise cannot contain this particular kind, so don't bother with checking
                     targ = jl_atomic_load_relaxed(&cache->targ); // may be GC'd earlier
                     if (exclude_typeofbottom && name && jl_type_extract_name_precise(typetype, 1)) {
                         // attempt semi-direct lookup of types via their names
                         // consider the type name first
                         jl_value_t *ml = mtcache_hash_lookup(targ, (jl_value_t*)name);
                         if (jl_is_genericmemory(ml)) {
-                            if (typetype && !jl_has_free_typevars(typetype)) {
+                            if (typetype && !jl_has_free_typevars(typetype) && !jl_is_tvarref(typetype) && !jl_has_dangling_tvarrefs(typetype)) {
                                 // direct lookup of leaf types
                                 if (is_cache_leaf(typetype, 1)) {
                                     ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, typetype);
@@ -1224,6 +1333,8 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
         else {
             ty = NULL;
         }
+        if (ty)
+            ty = resolve_param_ub(ty, (jl_value_t*)search->types);
         // If there is a type at offs, look in the optimized leaf type caches
         if (ty && !subtype) {
             if (jl_is_any(ty))
@@ -1537,6 +1648,30 @@ static unsigned jl_typemap_list_count_locked(jl_typemap_entry_t *ml) JL_NOTSAFEP
     return count;
 }
 
+// does the parameter `t1` (the body of `t1local`, stripped of its `nlocal` own
+// binders) admit only `Union{}`, with its references read through its own binders
+// and the signature's?
+static int typeofbottom_param_in_sig(jl_value_t *t1, jl_value_t *t1local, size_t nlocal, jl_value_t *sig) JL_NOTSAFEPOINT
+{
+    size_t nsig = 0;
+    for (jl_value_t *u = sig; jl_is_unionall(u); u = ((jl_unionall_t*)u)->body)
+        nsig++;
+    size_t n = nsig + nlocal;
+    if (n == 0)
+        return jl_is_typeofbottom_param(t1);
+    jl_uaenv_t *nodes = (jl_uaenv_t*)alloca(sizeof(jl_uaenv_t) * n);
+    // outermost first: the signature's binders, then the parameter's own
+    size_t i = 0;
+    for (jl_value_t *u = sig; jl_is_unionall(u); u = ((jl_unionall_t*)u)->body)
+        nodes[i++].ua = (jl_unionall_t*)u;
+    for (jl_value_t *u = t1local; jl_is_unionall(u); u = ((jl_unionall_t*)u)->body)
+        nodes[i++].ua = (jl_unionall_t*)u;
+    assert(i == n);
+    for (i = 0; i < n; i++)
+        nodes[i].prev = i == 0 ? NULL : &nodes[i - 1];
+    return jl_is_typeofbottom_param_env(t1, &nodes[n - 1]);
+}
+
 static void jl_typemap_level_insert_(jl_typemap_t *map, jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs) JL_CANSAFEPOINT;
 
 static jl_typemap_level_t *jl_new_typemap_level(void) JL_CANSAFEPOINT
@@ -1684,6 +1819,8 @@ static void jl_typemap_level_insert_(
     else {
         t1 = NULL;
     }
+    if (t1)
+        t1 = resolve_param_ub(t1, (jl_value_t*)newrec->sig);
     // If the type at `offs` is Any, put it in the Any list
     if (t1 && jl_is_any(t1)) {
         jl_typemap_insert_generic(map, &cache->any, (jl_value_t*)cache, newrec, 0, offs+1, NULL);
@@ -1719,7 +1856,7 @@ static void jl_typemap_level_insert_(
             jl_typemap_memory_insert_(map, &cache->tname, (jl_value_t*)name, newrec, (jl_value_t*)cache, 1, offs, NULL);
             return;
         }
-        if (jl_is_typeofbottom_param(t1)) {
+        if (typeofbottom_param_in_sig(t1, t1local, nlocal, (jl_value_t*)newrec->sig)) {
             // A parameter that admits only `Union{}`, such as `T<:Type{Union{}}`,
             // ranks above every other in specificity, and must not get skipped by the filter
             // logic, even if the above code didn't notice it shares that specificity rule.
