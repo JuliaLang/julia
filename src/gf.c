@@ -411,7 +411,7 @@ static jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi 
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
         if (codeinst->owner != jl_nothing)
             continue;
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
+        if (jl_world_in_range(world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world))) {
             if (emit_codeinst_and_edges(codeinst) && jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
                 return codeinst;
         }
@@ -589,8 +589,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
     jl_value_t *owner = jl_nothing; // TODO: owner should be arg
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
+        if (jl_world_range_in_range(min_world, max_world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world)) &&
             jl_egal(codeinst->owner, owner) &&
             jl_egal(codeinst->rettype, rettype)) {
             if (di == NULL)
@@ -1762,7 +1761,7 @@ static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache
         //
         // n.b. this entire chain is type-equal to tt (by construction), so it is unnecessary to call `tt<:entry->sig`
         do {
-            if (jl_atomic_load_relaxed(&entry->min_world) <= world && world <= jl_atomic_load_relaxed(&entry->max_world)) {
+            if (jl_world_in_range(world, jl_atomic_load_relaxed(&entry->min_world), jl_atomic_load_relaxed(&entry->max_world))) {
                 if (entry->simplesig == (void*)jl_nothing || concretesig_equal(tt, (jl_value_t*)entry->simplesig))
                     return entry;
             }
@@ -3590,8 +3589,7 @@ STATIC_INLINE jl_value_t *_jl_rettype_inferred(jl_value_t *owner, jl_method_inst
 {
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
-            max_world <= jl_atomic_load_relaxed(&codeinst->max_world) &&
+        if (jl_world_range_in_range(min_world, max_world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world)) &&
             jl_egal(codeinst->owner, owner)) {
 
             jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
@@ -3621,7 +3619,7 @@ STATIC_INLINE jl_callptr_t jl_method_compiled_callptr(jl_method_instance_t *mi, 
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
         if (codeinst->owner != jl_nothing)
             continue;
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
+        if (jl_world_in_range(world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world))) {
             jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
             if (!invoke)
                 continue;
@@ -4724,7 +4722,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
             entry = jl_atomic_load_relaxed(&call_cache[cache_idx[i]]); \
             if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
                 sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
-                world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
+                jl_world_in_range(world, jl_atomic_load_relaxed(&entry->min_world), jl_atomic_load_relaxed(&entry->max_world))) { \
                 goto have_entry; \
             } \
         } while (0);
@@ -5047,13 +5045,13 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     // excluding it from the results is valid for the full span.
     size_t min_world = jl_atomic_load_relaxed(&ml->min_world);
     size_t max_world = jl_atomic_load_relaxed(&ml->max_world);
-    if (closure->world < min_world) {
-        // exclude method table entries that are part of a later world
+    if (!jl_world_at_least(closure->world, min_world)) {
+        // exclude method table entries that are part of a later (or unrelated) world
         if (closure->match.max_valid >= min_world)
             closure->match.max_valid = min_world - 1;
         return 1;
     }
-    else if (closure->world > max_world) {
+    else if (!jl_world_at_most(closure->world, max_world)) {
         // exclude method table entries that have been replaced in the current world
         if (closure->match.min_valid <= max_world)
             closure->match.min_valid = max_world + 1;
@@ -5378,8 +5376,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               size_t *min_valid, size_t *max_valid, int *ambig)
 {
     size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
-    if (world > current_world)
-        return jl_nothing; // the future is not enumerable
+    if (!jl_world_at_most(world, current_world))
+        return jl_nothing; // the future is not enumerable (but closed sibling branches of the world DAG are)
     JL_TIMING(METHOD_MATCH, METHOD_MATCH);
     int has_ambiguity = 0;
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)type);

@@ -1067,7 +1067,7 @@ JL_CALLABLE(jl_f_invoke_in_world)
     size_t world = jl_unbox_ulong(args[0]);
     if (!ct->ptls->in_pure_callback) {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        if (ct->world_age > world)
+        if (jl_world_at_most(world, ct->world_age))
             ct->world_age = world;
     }
     jl_value_t *ret = jl_apply(&args[1], nargs - 1);
@@ -1087,7 +1087,7 @@ JL_CALLABLE(jl_f__call_in_world_total)
         ct->ptls->in_pure_callback = 1;
         size_t world = jl_unbox_ulong(args[0]);
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        if (ct->world_age > world)
+        if (jl_world_at_most(world, ct->world_age))
             ct->world_age = world;
         ret = jl_apply(&args[1], nargs - 1);
         ct->world_age = last_age;
@@ -1933,8 +1933,8 @@ JL_CALLABLE(jl_f_invoke)
                 jl_type_error("invoke: argument type error", mi->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
             }
         }
-        if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
-            jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
+        if (!jl_world_in_range(jl_current_task->world_age, jl_atomic_load_relaxed(&codeinst->min_world),
+                               jl_atomic_load_relaxed(&codeinst->max_world))) {
             jl_error("invoke: CodeInstance not valid for this world");
         }
         if (!invoke) {

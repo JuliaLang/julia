@@ -622,7 +622,7 @@ static int codeinst_may_be_runnable(jl_code_instance_t *ci, int incremental) {
         return 1;
     if (incremental)
         return 0;
-    return jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= max_world;
+    return jl_world_in_range(jl_typeinf_world, jl_atomic_load_relaxed(&ci->min_world), max_world);
 }
 
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"

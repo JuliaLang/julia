@@ -610,9 +610,9 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     // that can be absolutely critical for speed
     register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
     for (;  ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (closure->max_valid < jl_atomic_load_relaxed(&ml->min_world))
+        if (!jl_world_at_least(closure->max_valid, jl_atomic_load_relaxed(&ml->min_world)))
             continue;
-        if (closure->min_valid > jl_atomic_load_relaxed(&ml->max_world))
+        if (!jl_world_at_most(closure->min_valid, jl_atomic_load_relaxed(&ml->max_world)))
             continue;
         int nonempty;
         if (closure->emptiness_only) {
@@ -922,7 +922,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
     size_t n = jl_nparams(unw);
     int typesisva = n == 0 ? 0 : jl_is_vararg(jl_tparam(unw, n-1));
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (search->world < jl_atomic_load_relaxed(&ml->min_world) || search->world > jl_atomic_load_relaxed(&ml->max_world))
+        if (!jl_world_in_range(search->world, jl_atomic_load_relaxed(&ml->min_world), jl_atomic_load_relaxed(&ml->max_world)))
             continue;
         size_t lensig = jl_nparams(jl_unwrap_unionall((jl_value_t*)ml->sig));
         if (lensig == n || (ml->va && lensig <= n+1)) {
@@ -974,7 +974,7 @@ static jl_typemap_entry_t *jl_typemap_entry_lookup_by_type(
         jl_typemap_entry_t *ml, struct jl_typemap_assoc *search) JL_CANSAFEPOINT
 {
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (search->world < jl_atomic_load_relaxed(&ml->min_world) || search->world > jl_atomic_load_relaxed(&ml->max_world))
+        if (!jl_world_in_range(search->world, jl_atomic_load_relaxed(&ml->min_world), jl_atomic_load_relaxed(&ml->max_world)))
             continue;
         // unroll the first few cases here, to the extent that is possible to do fast and easily
         jl_value_t *types = search->types;
@@ -1184,7 +1184,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
     // some manually-unrolled common special cases
     while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
         // use a tight loop for as long as possible
-        if (world >= jl_atomic_load_relaxed(&ml->min_world) && world <= jl_atomic_load_relaxed(&ml->max_world)) {
+        if (jl_world_in_range(world, jl_atomic_load_relaxed(&ml->min_world), jl_atomic_load_relaxed(&ml->max_world))) {
             if (n == jl_nparams(ml->sig) && jl_typeof(arg1) == jl_tparam(ml->sig, 0)) {
                 if (n == 1)
                     return ml;
@@ -1209,7 +1209,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
     }
 
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (world < jl_atomic_load_relaxed(&ml->min_world) || world > jl_atomic_load_relaxed(&ml->max_world))
+        if (!jl_world_in_range(world, jl_atomic_load_relaxed(&ml->min_world), jl_atomic_load_relaxed(&ml->max_world)))
             continue; // ignore replaced methods
         size_t lensig = jl_nparams(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
