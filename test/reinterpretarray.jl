@@ -868,16 +868,15 @@ end
     @test Base.array_subpadding(S, T)
 
     # Padding should not be observed
-    struct S_4_7           # 16 bytes, padding at bytes 4:7
+    struct S_1_3           # 8 bytes, padding at bytes 1:3
+        a::UInt8       # offset 0
+        b::UInt32      # offset 4
+    end
+    struct T_5           # 8 bytes, padding at byte 5
         a::UInt32      # offset 0
-        b::UInt64      # offset 8
+        b::UInt8       # offset 4
+        c::UInt16      # offset 6
     end
-    struct T_9           # 16 bytes, padding at byte 9
-        a::UInt64      # offset 0
-        b::UInt8       # offset 8
-        c::UInt16      # offset 10
-        d::UInt32      # offset 12
-    end
-    @test !Base.array_subpadding(T_9, S_4_7)
-    @test !Base.array_subpadding(S_4_7, T_9)
+    @test !Base.array_subpadding(T_5, S_1_3)
+    @test !Base.array_subpadding(S_1_3, T_5)
 end
