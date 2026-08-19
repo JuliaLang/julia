@@ -28,7 +28,10 @@ JL_DLLEXPORT uint32_t memhash32_seed(const char *buf, size_t n, uint32_t seed) J
 #ifdef _P64
 STATIC_INLINE uint64_t bitmix(uint64_t a, uint64_t b) JL_NOTSAFEPOINT
 {
-    return int64hash(a^bswap_64(b));
+    a = (a << 5) | (a >> (8*sizeof(a) - 5)); // rotate 5 bits to the left
+    a ^= b;
+    a *= 0x517cc1b727220a95;
+    return a;
 }
 #else
 STATIC_INLINE uint32_t bitmix(uint32_t a, uint32_t b) JL_NOTSAFEPOINT
