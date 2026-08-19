@@ -1880,7 +1880,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
                 (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef, typ)
                 if maybe_undef
                     insert_node!(
-                        NewInstruction(Expr(:throw_undef_if_not, sp_at_idx(ssa_substitute.mi.def.sig, spidx).name, tcheck_not), Nothing))
+                        NewInstruction(Expr(:throw_undef_if_not, nth_binder(ssa_substitute.mi.def.sig, spidx).name, tcheck_not), Nothing))
                 end
                 return ret
             end

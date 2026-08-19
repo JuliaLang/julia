@@ -109,8 +109,6 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
     troot = widenconst(troot)
     if t === Bottom
         return Bottom, true, true, false # runtime unreachable
-    elseif t === typeof(Bottom) || !hasintersect(t, Type)
-        return Bottom, true, false, false # literal Bottom or non-Type
     elseif isTypeEgal(t)
         # the value is exactly (`===`) the closed type `tp`
         tp = type_parameter(t)
@@ -119,19 +117,27 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
     elseif isTypeEq(t)
         tp = type_parameter(t)
         valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
-        if troot isa UnionAll
+        if troot isa UnionAll && !isa(tp, TypeVarRef)
             # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
             # Widen them before `UnionAll` rewraping to relax concrete constraint.
+            # (A bare bound-variable reference has no diagonal constraint here.)
             tp = widen_diagonal(tp, troot)
         end
-        return tp, !has_free_typevars(tp), isconcretetype(tp), true
+        # a dangling de Bruijn reference stands for the enclosing binder's
+        # variable: like a free TypeVar it makes the result inexact
+        exact = !has_free_typevars(tp) && !has_dangling_typevar_refs(tp)
+        return tp, exact, isconcretetype(tp), true
+    elseif t === typeof(Bottom) || !hasintersect(t, Type)
+        return Bottom, true, false, false # literal Bottom or non-Type
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
         t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag, rewrap_unionall(t, troot))
         tr = rewrap_unionall(t′′, t)
-        if t′′ isa DataType && t′′.name !== Tuple.name && !has_free_typevars(tr)
+        if t′′ isa DataType && t′′.name !== Tuple.name && !has_free_typevars(tr) &&
+           !has_dangling_typevar_refs(tr)
             # a real instance must be within the declared bounds of the type,
-            # so we can intersect with the original wrapper.
+            # so we can intersect with the original wrapper (the intersection
+            # lattice cannot take detached fragments).
             tr = typeintersect(tr, t′′.name.wrapper)
             isconcrete = !isabstracttype(t′′)
             if tr === Union{}
@@ -142,7 +148,8 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
         end
         # If this is a NamedTuple type with known names but an unknown tuple type
         # parameter, use the length of the names to constrain the tuple type.
-        if t′′ isa DataType && t′′.name === _NAMEDTUPLE_NAME && t′′.parameters[1] isa Tuple && has_free_typevars(t′′)
+        if t′′ isa DataType && t′′.name === _NAMEDTUPLE_NAME && t′′.parameters[1] isa Tuple &&
+           (has_free_typevars(t′′) || has_dangling_typevar_refs(t′′))
             names = t′′.parameters[1]::Tuple
             n = length(names)
             nt_bound = NamedTuple{names, T} where T<:NTuple{n, Any}
@@ -727,7 +734,7 @@ function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        if isa(unw, DataType) && unw.name === Ptr.inner.name
             T = unw.parameters[1]
             valid_as_lattice(T, true) || return Bottom
             return rewrap_unionall(T, a)
@@ -761,7 +768,7 @@ end
     a = widenconst(ptr)
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        if isa(unw, DataType) && unw.name === Ptr.inner.name
             T = unw.parameters[1]
             # note: we could sometimes refine this to a PartialStruct if we analyzed `op(T, T)::T`
             valid_as_lattice(T, true) || return Bottom
@@ -774,7 +781,7 @@ end
     a = widenconst(ptr)
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        if isa(unw, DataType) && unw.name === Ptr.inner.name
             T = unw.parameters[1]
             valid_as_lattice(T) || return Bottom
             return rewrap_unionall(ccall(:jl_apply_cmpswap_type, Any, (Any,), T), a)
@@ -862,25 +869,61 @@ end
         b = widenconst(_typeof_tfunc(𝕃, t.b))
         return Union{a, b}
     elseif isa(t, UnionAll)
-        u = unwrap_unionall(t)
+        # walk the binders natively: the recursion resolves occurrences at
+        # their binder (through `benv`), and the reference-bearing skeleton of
+        # the result is re-bound by rewrapping
+        benv = nothing
+        u = t
+        while u isa UnionAll
+            benv = (u, benv)
+            u = u.inner
+        end
+        local r
         if isa(u, DataType) && !isabstracttype(u)
             if u.name === Tuple.name
                 uu = typeof_concrete_vararg(u)
-                if uu !== nothing
-                    return rewrap_unionall(uu, t)
-                end
+                r = uu === nothing ? widenconst(_typeof_tfunc(𝕃, u, benv)) : uu
             else
-                return rewrap_unionall(Type{u}, t)
+                r = Type{u}
             end
+        else
+            r = widenconst(_typeof_tfunc(𝕃, u, benv))
         end
-        return rewrap_unionall(widenconst(typeof_tfunc(𝕃, u)), t)
+        return rewrap_unionall(r, t)
     end
     return DataType # typeof(anything)::DataType
 end
-# helper function of `typeof_tfunc`, which accepts `TypeVar`
-@nospecs function _typeof_tfunc(𝕃::AbstractLattice, t)
+# helper function of `typeof_tfunc`, which accepts `TypeVar` and, through the
+# binder env `benv` (a linked `(binder::UnionAll, prev)` list, innermost
+# first), resolves bound-variable references at their binder
+@nospecs function _typeof_tfunc(𝕃::AbstractLattice, t, benv=nothing)
     if isa(t, TypeVar)
         return t.ub !== Any ? _typeof_tfunc(𝕃, t.ub) : DataType
+    elseif isa(t, TypeVarRef)
+        d = t.depth
+        while true
+            while benv !== nothing && d > 1
+                d -= 1
+                benv = benv[2]
+            end
+            benv === nothing && return DataType # dangling occurrence
+            ub = (benv[1]::UnionAll).ub
+            ub === Any && return DataType
+            if isa(ub, TypeVarRef)
+                # a bare reference bound chases outward through its own frame
+                d = ub.depth
+                benv = benv[2]
+                continue
+            end
+            # the bound is framed under the binder's own prefix; only a closed
+            # bound can be measured in this frame
+            has_dangling_typevar_refs(ub) && return DataType
+            return _typeof_tfunc(𝕃, ub)
+        end
+    elseif isa(t, Union)
+        a = widenconst(_typeof_tfunc(𝕃, t.a, benv))
+        b = widenconst(_typeof_tfunc(𝕃, t.b, benv))
+        return Union{a, b}
     end
     return typeof_tfunc(𝕃, t)
 end
@@ -902,6 +945,23 @@ add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
     return Bool
 end
 add_tfunc(has_free_typevars, 1, 1, has_free_typevars_tfunc, 1)
+
+@nospecs function has_dangling_tvarrefs_tfunc(𝕃::AbstractLattice, t)
+    isa(t, Const) && return Const(Core.has_dangling_tvarrefs(t.val))
+    t = widenconst(t)
+    if isType(t)
+        p = type_parameter(t)
+        # a free typevar in the lattice element stands for closed runtime values
+        has_free_typevars(p) && return Bool
+        return Const(Core.has_dangling_tvarrefs(p))
+    elseif t === TypeVar || t === TypeVarRef
+        return Const(false)
+    elseif !hasintersect(t, Type) && !hasintersect(t, TypeVar) && !hasintersect(t, TypeofVararg)
+        return Const(false)
+    end
+    return Bool
+end
+add_tfunc(Core.has_dangling_tvarrefs, 1, 1, has_dangling_tvarrefs_tfunc, 1)
 
 @nospecs function typeassert_tfunc(𝕃::AbstractLattice, v, t)
     t = instanceof_tfunc(t, true)[1]
@@ -1143,6 +1203,20 @@ end
     _getfield_tfunc(𝕃, s00, name, false)
 end
 
+# A constant that carries dangling de Bruijn references (e.g. a `UnionAll`
+# body, or a template field-types entry) poisons downstream `isa`/`<:` folds;
+# fall back to widened inference for such values.
+function _const_or_widen(@nospecialize r)
+    if isa(r, Core.SimpleVector)
+        for x in r
+            (isa(x, Type) || isa(x, TypeVarRef)) && has_dangling_typevar_refs(x) && return nothing
+        end
+    elseif (isa(r, Type) || isa(r, TypeVarRef)) && has_dangling_typevar_refs(r)
+        return nothing
+    end
+    return Const(r)
+end
+
 function _getfield_fieldindex(s::DataType, name::Const)
     nv = name.val
     if isa(nv, Symbol)
@@ -1160,11 +1234,11 @@ function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     # `types` and `super` are write-once: non-const (filled lazily), but once
     # a defined value is observed it can never change, so folding it is sound
     if isa(sv, DataType) && (nv == DATATYPE_TYPES_FIELDINDEX || nv == DATATYPE_SUPER_FIELDINDEX) && isdefined(sv, nv)
-        return Const(getfield(sv, nv))
+        return _const_or_widen(getfield(sv, nv))
     end
     if !isa(sv, Module) && isconst(typeof(sv), nv)
         if isdefined(sv, nv)
-            return Const(getfield(sv, nv))
+            return _const_or_widen(getfield(sv, nv))
         end
         return Bottom
     end
@@ -1258,13 +1332,16 @@ end
             sv = type_parameter(s)
             if isa(sv, DataType) && isa(name, Const) &&
                _getfield_fieldindex(DataType, name) == DATATYPE_SUPER_FIELDINDEX &&
-               # read without forcing: on a deferred instantiation whose slot
-               # is still unset the modeled `getfield` throws, so no precision
-               # is lost by falling through (see issue #61347)
+               # read without forcing: on a deferred fragment whose slot is
+               # still unset the modeled `getfield` throws, so no precision is
+               # lost by falling through (see issue #61347)
                isdefined(sv, :super) &&
-               (svsuper = getfield(sv, :super); !has_free_typevars(svsuper))
+               (svsuper = getfield(sv, :super); !has_free_typevars(svsuper) && !has_dangling_typevar_refs(svsuper))
                 # only `DataType` reps reach `.super` without throwing, and the
-                # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal)
+                # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal);
+                # a parameter-dependent supertype (free typevars on the wrapper's
+                # body under the legacy representation, dangling references on a
+                # fragment here) must widen instead of leaking an unbound piece
                 return Type{svsuper}
             end
             if isTypeDataType(sv) && isa(name, Const)
@@ -1329,7 +1406,13 @@ end
                 _ft = unwrapva(ftypes[i])
                 valid_as_lattice(_ft, true) || continue
                 setfield && isconst(s, i) && continue
-                t = tmerge(t, rewrap_unionall(_ft, s00))
+                rft = rewrap_unionall(_ft, s00)
+                if isa(rft, TypeVarRef) || has_dangling_typevar_refs(rft)
+                    # unresolvable bound-variable reference: unknown field type
+                    t = Any
+                else
+                    t = tmerge(t, rft)
+                end
                 t === Any && break
             end
             return t
@@ -1666,7 +1749,8 @@ end
         exact && return Bottom
         # Type{...} without free typevars has no subtypes, so it is actually
         # exact, even if `exact` is false.
-        isType(u) && !has_free_typevars(type_parameter(u)) && return Bottom
+        isType(u) && !has_free_typevars(type_parameter(u)) &&
+            !has_dangling_typevar_refs(type_parameter(u)) && return Bottom
         return Any
     end
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
@@ -1687,7 +1771,7 @@ end
         for i in 1:length(ftypes)
             fti = ftypes[i]
             ft1 = unwrapva(fti)
-            if !(isa(ft1, Type) || isa(ft1, TypeVar))
+            if !(isa(ft1, Type) || isa(ft1, TypeVar) || isa(ft1, TypeVarRef))
                 if !isvarargtype(fti) && u.name === Tuple.name
                     # A genuine tuple field may be a value parameter (e.g.
                     # `Tuple{1:2}`); `fieldtype` returns that value rather than
@@ -1703,7 +1787,8 @@ end
                 # components (e.g., `3`); `fieldtype` would throw at runtime.
                 continue
             end
-            exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
+            exactft1 = exact || (!has_free_typevars(ft1) && !has_dangling_typevar_refs(ft1) &&
+                                 u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
                 # `fieldtype` returns exactly (`===`) the stored type, but only
@@ -1739,18 +1824,19 @@ end
         return Bottom
     else
         ft = ftypes[fld]
-        if !(isa(ft, Type) || isa(ft, TypeVar)) && u.name === Tuple.name
+        if !(isa(ft, Type) || isa(ft, TypeVar) || isa(ft, TypeVarRef)) && u.name === Tuple.name
             # a value parameter in a genuine tuple field (see the loop above):
             # non-type parameters are compared by egality, so this is `Const`
             # even for an `==`-only argument
             return Const(ft)
         end
     end
-    if !(isa(ft, Type) || isa(ft, TypeVar))
+    if !(isa(ft, Type) || isa(ft, TypeVar) || isa(ft, TypeVarRef))
         return Bottom # see non-`Const` case above
     end
 
-    exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
+    exactft = exact || (!has_free_typevars(ft) && !has_dangling_typevar_refs(ft) &&
+                        u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
         # only an egality-certain argument pins the stored rep (see above)
@@ -1859,25 +1945,29 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     # TODO: implement optimization for isvarargtype(u) and istuple occurrences (which are valid but are not UnionAll)
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
+        # read the binder's bounds in place; a bound that references an outer
+        # binder is conservatively rejected wherever a closed bound is needed
+        ulb, uub = u.lb, u.ub
         ai = widenconditional(argtypes[i])
         if ⊑(𝕃, ai, TypeVar) || ai === DataType
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
-            if !(u.var.lb === Union{} && u.var.ub === Any)
+            if !(ulb === Union{} && uub === Any)
                 return false
             end
         elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
             ai = isa(ai, Const) ? ai.val : type_parameter(ai)
-            if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
+            if has_free_typevars(ulb) || has_dangling_typevar_refs(ulb) ||
+               has_free_typevars(uub) || has_dangling_typevar_refs(uub)
                 return false
             end
-            if !(u.var.lb <: ai <: u.var.ub)
+            if !(ulb <: ai <: uub)
                 return false
             end
         else
             T, exact, _, istype = instanceof_tfunc(ai, false)
             if T === Bottom
-                if !(u.var.lb === Union{} && u.var.ub === Any)
+                if !(ulb === Union{} && uub === Any)
                     return false
                 end
                 if !valid_tparam_type(widenconst(ai))
@@ -1885,22 +1975,24 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 end
             else
                 istype || return false
-                if isa(u.var.ub, TypeVar)
+                if isa(uub, TypeVar) || isa(uub, TypeVarRef) || has_dangling_typevar_refs(uub)
                     return false
                 end
                 Tub = T
                 while isa(Tub, TypeVar)
                     Tub = Tub.ub
                 end
-                if !(Tub <: u.var.ub)
+                if !(Tub <: uub)
                     return false
                 end
-                if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
+                if exact
+                    (has_dangling_typevar_refs(ulb) || !(ulb <: T)) && return false
+                elseif !(ulb === Bottom)
                     return false
                 end
             end
         end
-        u = u.body
+        u = u.inner
     end
     return true
 end
@@ -1937,7 +2029,9 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
             ai = argtypes[i]
             if isa(ai, Const)
                 if !isa(ai.val, Type)
-                    if isa(ai.val, TypeVar)
+                    # the runtime accepts detached bound-variable references as
+                    # rigid `Union` operands, just like `TypeVar`s
+                    if isa(ai.val, TypeVar) || isa(ai.val, TypeVarRef)
                         hasnonType = true
                     else
                         return Bottom
@@ -1945,7 +2039,8 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
                 end
             else
                 if !(isTypeEq(ai) || (isTypeEgal(ai) && type_parameter(ai) isa Type))
-                    if !isa(ai, Type) || hasintersect(ai, Type) || hasintersect(ai, TypeVar)
+                    if !isa(ai, Type) || hasintersect(ai, Type) || hasintersect(ai, TypeVar) ||
+                       hasintersect(ai, TypeVarRef)
                         hasnonType = true
                     else
                         return Bottom
@@ -1954,7 +2049,7 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
             end
         end
         if largs == 2 # Union{T} --> T
-            return tmeet(widenconst(argtypes[2]), Union{Type,TypeVar})
+            return tmeet(widenconst(argtypes[2]), Union{Type,TypeVar,TypeVarRef})
         end
         hasnonType && return Type
         ty = Union{}
@@ -2043,18 +2138,17 @@ end
     tparams = Any[]
     outervars = TypeVar[]
 
-    # first push the tailing vars from headtype into outervars
-    outer_start, ua = 0, headtype
-    while isa(ua, UnionAll)
-        if (outer_start += 1) > largs - 1
-            push!(outervars, ua.var)
+    nbinders = 0
+    let ua = headtype
+        while isa(ua, UnionAll)
+            nbinders += 1
+            ua = ua.inner
         end
-        ua = ua.body
     end
-    if largs - 1 > outer_start && isa(headtype, UnionAll) # e.g. !isvarargtype(ua) && !istuple
+    if largs - 1 > nbinders && isa(headtype, UnionAll) # e.g. !isvarargtype(headtype) && !istuple
         return Bottom # too many arguments
     end
-    outer_start = outer_start - largs + 2
+    # (binders beyond the arguments simply remain in the partial application)
 
     varnamectr = 1
     ua = headtype
@@ -2070,18 +2164,19 @@ end
         elseif istuple && (pva = partial_typeofvararg_value(ai)) !== nothing
             anyeq = true
             push!(tparams, pva)
-        elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
+        elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) || isa(ai.val, TypeVarRef) ||
                                   valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
             push!(tparams, ai.val)
         elseif isa(ai, PartialTypeVar)
             canconst = false
             push!(tparams, ai.tv)
         else
-            if widenconst(ai) <: TypeVar && widenconst(ai) !== Union{}
-                # A TypeVar value of unknown identity used as a type parameter
-                # yields a type with a free typevar, which `jl_isa` excludes
-                # from every closed `Type{...}` form this function could
-                # construct; only the top kind forms are sound here.
+            aiw = widenconst(ai)
+            if (aiw <: TypeVar || aiw <: TypeVarRef) && aiw !== Union{}
+                # A TypeVar (or detached bound-variable reference) of unknown
+                # identity used as a type parameter yields a type that `jl_isa`
+                # excludes from every closed `Type{...}` form this function
+                # could construct; only the top kind forms are sound here.
                 return isvarargtype(headtype) ? TypeofVararg : Type
             end
             uncertain = true
@@ -2124,25 +2219,20 @@ end
                 end
                 push!(tparams, ub)
             elseif isT
-                tai = ai
-                while isa(tai, UnionAll)
-                    # make sure vars introduced here are unique
-                    if contains_is(outervars, tai.var)
-                        ai = rename_unionall(ai)
-                        unw = unwrap_unionall(ai)
-                        # ub = rewrap_unionall(unw, ai)
-                        break
-                    end
-                    tai = tai.body
-                end
-                push!(tparams, type_parameter(unw))
+                # open the argument's binders: the result mixes material from
+                # several sources under the wrapper's remaining binders, so
+                # position-independent tokens are needed here — the fresh free
+                # TypeVars are unique by construction and re-bind around the result
                 while isa(ai, UnionAll)
-                    push!(outervars, ai.var)
-                    ai = ai.body
+                    v_, ai = unionall_open(ai)
+                    push!(outervars, v_)
                 end
+                unw = ai
+                push!(tparams, type_parameter(unw))
             else
                 # Is this the second parameter to a NamedTuple?
-                if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === ua.var
+                if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) &&
+                   uw.parameters[2] isa TypeVarRef && (uw.parameters[2]::TypeVarRef).depth == nbinders - i + 2
                     # If the names are known, keep the upper bound, but otherwise widen to Tuple.
                     # This is a widening heuristic to avoid keeping type information
                     # that's unlikely to be useful.
@@ -2160,7 +2250,7 @@ end
             end
         end
         if ua isa UnionAll
-            ua = ua.body
+            ua = ua.inner
             #otherwise, sometimes ua isa Vararg (Core.TypeofVararg) or Tuple (DataType)
         end
     end
@@ -2178,21 +2268,32 @@ end
         canconst = false
         uncertain = true
         empty!(outervars)
-        outer_start = 1
-        # FIXME: if these vars are substituted with TypeVar here, the result
-        # might be wider than the input, so should we use the `.name.wrapper`
-        # object here instead, to replace all of these outervars with
-        # unconstrained ones? Note that this code is nearly unreachable though,
-        # and possibly should simply return Union{} here also, since
-        # `apply_type` is already quite conservative about detecting and
-        # throwing errors.
+        # FIXME: the result here might be wider than the input, so should we
+        # use the `.name.wrapper` object here instead, to replace all of these
+        # binders with unconstrained ones? Note that this code is nearly
+        # unreachable though, and possibly should simply return Union{} here
+        # also, since `apply_type` is already quite conservative about
+        # detecting and throwing errors.
         appl = headtype
         if isa(appl, UnionAll)
+            # strip the binders the arguments would have consumed and rebuild
+            # their nodes around the widened result: the stripped body's
+            # references resolve through the rebuilt chain, materializing nothing
+            stripped = UnionAll[]
             for _ = 2:largs
                 appl = appl::UnionAll
-                push!(outervars, appl.var)
-                appl = appl.body
+                push!(stripped, appl)
+                appl = appl.inner
             end
+            isvarargtype(appl) && return TypeofVararg
+            ans = Type{appl}
+            k = length(stripped)
+            while k > 0
+                node = stripped[k]
+                ans = UnionAll(node.name, node.lb, node.ub, ans)
+                k -= 1
+            end
+            return ans
         end
     end
     # An `==`-only (`Type{X}`) argument still yields a `Const`: datatype instantiation
@@ -2220,7 +2321,7 @@ end
         return Type{<:appl}
     end
     ans = Type{appl}
-    for i = length(outervars):-1:outer_start
+    for i = length(outervars):-1:1
         ans = UnionAll(outervars[i], ans)
     end
     return ans
@@ -2361,11 +2462,11 @@ add_tfunc(memoryref_isassigned, 3, 3, memoryref_isassigned_tfunc, 20)
     a = widenconst(unwrapva(mem))
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === GenericMemory.body.body.body.name
+        if isa(unw, DataType) && unw.name === GenericMemory.inner.inner.inner.name
             A = unw.parameters[1]
             T = unw.parameters[2]
             AS = unw.parameters[3]
-            T isa Type || T isa TypeVar || return Bottom
+            T isa Type || T isa TypeVar || T isa TypeVarRef || return Bottom
             return rewrap_unionall(GenericMemoryRef{A, T, AS}, a)
         end
     end
@@ -2401,14 +2502,13 @@ end
 @nospecs function memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
-        m0 = m
-        if isa(m, UnionAll)
-            m = unwrap_unionall(m0)
-        end
-        if isa(m, DataType)
-            T = m.parameters[2]
+        u = unwrap_unionall(m)
+        if isa(u, DataType)
+            T = u.parameters[2]
             valid_as_lattice(T, true) || return Bottom
-            return rewrap_unionall(T, m0)
+            # the element slot keeps `m`'s own binder references; rewrapping
+            # re-binds them
+            return rewrap_unionall(T, m)
         end
     end
     return Any
@@ -2417,15 +2517,12 @@ end
 @nospecs function _memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
-        m0 = m
-        if isa(m, UnionAll)
-            m = unwrap_unionall(m0)
-        end
-        if isa(m, DataType)
-            T = m.parameters[2]
+        u = unwrap_unionall(m)
+        if isa(u, DataType)
+            T = u.parameters[2]
             valid_as_lattice(T, true) || return Bottom
-            has_free_typevars(T) || return Const(T)
-            return rewrap_unionall(Type{T}, m0)
+            (has_free_typevars(T) || has_dangling_typevar_refs(T)) || return Const(T)
+            return rewrap_unionall(Type{T}, m)
         end
     end
     return Type
@@ -2642,6 +2739,7 @@ const _PURE_BUILTINS = Any[
     ===,
     typeof,
     has_free_typevars,
+    Core.has_dangling_tvarrefs,
     nfields,
 ]
 
@@ -2651,6 +2749,7 @@ const _CONSISTENT_BUILTINS = Any[
     ===,
     typeof,
     has_free_typevars,
+    Core.has_dangling_tvarrefs,
     nfields,
     fieldtype,
     apply_type,
@@ -2717,6 +2816,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     typeassert,
     typeof,
     has_free_typevars,
+    Core.has_dangling_tvarrefs,
     compilerbarrier,
     Core._typevar,
     donotdelete,
@@ -2929,6 +3029,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     getfield,
     getglobal,
     has_free_typevars,
+    Core.has_dangling_tvarrefs,
     # invoke,
     isa,
     isdefined,
