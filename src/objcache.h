@@ -61,7 +61,7 @@ private:
     size_t PageSize;
     uv_thread_t WriterThread;
     bool Started = false;
-    bool Exiting = false;
+    std::atomic<bool> Exiting = false;
     // Non-null MemoryBuffer -> cache miss, want to write new entry
     // Null MemoryBuffer     -> cache hit, want to update atime
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
