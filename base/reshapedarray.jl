@@ -220,7 +220,7 @@ end
 # General reshape
 function _reshape(parent::AbstractArray, dims::Dims)
     n = length(parent)
-    prod(dims) == n || _throw_dmrs(n, "size", dims)
+    Core.checked_dims(dims...) == n || _throw_dmrs(n, "size", dims)
     __reshape((parent, IndexStyle(parent)), dims)
 end
 

@@ -2669,6 +2669,11 @@ end
 end
 
 @testset "collect with specialized vcat" begin
+    # Specialized range concatenation must check its aggregate allocation length.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    overflow_range = 1:overflow_dim
+    @test_throws OverflowError vcat(overflow_range, overflow_range, overflow_range)
+
     struct OneToThree <: AbstractUnitRange{Int} end
     Base.size(r::OneToThree) = (3,)
     Base.first(r::OneToThree) = 1

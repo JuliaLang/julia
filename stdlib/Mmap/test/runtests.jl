@@ -211,6 +211,11 @@ b = @inferred mmap(s, BitArray, (17,13))
 @test Test._check_bitarray_consistency(b)
 @test b == trues(17,13)
 @test_throws ArgumentError mmap(s, BitArray, (7,3))
+
+# Memory-mapped BitArray dimensions must be checked before computing the mapped size.
+overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+@test_throws ArgumentError mmap(IOBuffer(), BitArray, (3, overflow_dim))
+@test_throws ArgumentError mmap(BitMatrix, (3, overflow_dim))
 close(s)
 s = open(file, "r+")
 b = mmap(s, BitArray, (17,19))

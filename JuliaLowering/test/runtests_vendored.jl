@@ -1,5 +1,16 @@
 using Pkg
 
+function with_output_on_failure(f)
+    output = IOBuffer()
+    try
+        return f(output)
+    catch
+        seekstart(output)
+        write(stderr, read(output))
+        rethrow()
+    end
+end
+
 let old_active_project = Base.active_project()
     try
         # test local (dev) copy of JuliaLowering, not yet vendored into Base
@@ -11,7 +22,9 @@ let old_active_project = Base.active_project()
         # picks up that dev copy without needing a committed manifest. Skip the
         # registry update: the only dependencies are path-based / stdlib, so no
         # network access is required (and tests may run with networking disabled).
-        Pkg.instantiate(; update_registry=false)
+        with_output_on_failure() do output
+            Pkg.instantiate(; update_registry=false, io=output)
+        end
 
         # restore error hints (emptied by `testdefs.jl`) so that errors print as
         # JuliaLowering expects them to
