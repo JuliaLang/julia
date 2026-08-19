@@ -1288,6 +1288,7 @@ const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
 
 # Check whether all type parameters are constrained by fields or other constrained tvars.
+# `tvars` must be ordered from outermost to innermost `UnionAll`.
 function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVector)
     nparams = length(tvars)
     n = length(fts)
@@ -1327,12 +1328,8 @@ function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVec
     return true
 end
 
-# Default constructor generation for structs without explicit inner constructors.
-# Called by lowered code from struct definitions (both flisp and JuliaLowering).
-# Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
-
-function _defaultctors(@nospecialize(ty), functionloc)
-    # Walk the UnionAll chain to collect type variables and get the DataType
+# Return the DataType, outer-to-inner type variables, and field types for `ty`.
+function _defaultctor_typeinfo(@nospecialize(ty::Type))
     nparams = 0
     ua = ty
     while isa(ua, UnionAll)
@@ -1348,9 +1345,21 @@ function _defaultctors(@nospecialize(ty), functionloc)
         ua = (ua::UnionAll).body
         i = i + 1
     end
+    fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
+    return dt, tvars, fts
+end
+
+# Default constructor generation for structs without explicit inner constructors.
+# Called by lowered code from struct definitions (both flisp and JuliaLowering).
+# Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
+function _defaultctors(@nospecialize(ty), functionloc)
+    typeinfo = _defaultctor_typeinfo(ty)
+    dt = getfield(typeinfo, 1)
+    tvars = getfield(typeinfo, 2)
+    fts = getfield(typeinfo, 3)
+    nparams = length(tvars)
 
     mod = dt.name.module
-    fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
     n = length(fts)
     names = dt.name.names::Core.SimpleVector
     src_file = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), functionloc.file)
