@@ -2527,10 +2527,7 @@ static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, s
 // the enclosing binder's bounds so that `==`-equivalent forms (for example
 // `Tuple{Vararg{T}} where T<:Int` and `Tuple{Vararg{Int}}`) fall into the same
 // hash bucket, matching how free TypeVars hash through their upper bound
-typedef struct type_hash_env_t {
-    jl_unionall_t *ua;
-    struct type_hash_env_t *prev;
-} type_hash_env_t;
+typedef jl_uaenv_t type_hash_env_t;
 
 static type_hash_env_t *type_hash_env_lookup(type_hash_env_t *env, size_t depth) JL_NOTSAFEPOINT
 {
@@ -2608,7 +2605,7 @@ static unsigned type_hash(jl_value_t *kj, type_hash_env_t *env, int *failed) JL_
         return hasha + hashb;
     }
     else if (jl_is_typeeq(uw)) {
-        if (jl_is_typeofbottom_param(uw))
+        if (jl_is_typeofbottom_param_env(uw, env))
             return jl_typeofbottom_type->hash;
         return typeeq_hash(jl_typeeq_T(uw), env, failed);
     }

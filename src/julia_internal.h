@@ -983,7 +983,14 @@ enum atomic_kind {
 };
 
 JL_DLLEXPORT int jl_has_intersect_type_not_kind(jl_value_t *t);
+// a chain of binders, innermost first, under which a term's bound-variable
+// references resolve (a bound is located under the chain outside its binder)
+typedef struct _jl_uaenv_t {
+    jl_unionall_t *ua;
+    struct _jl_uaenv_t *prev;
+} jl_uaenv_t;
 int jl_is_typeofbottom_param(jl_value_t *t) JL_NOTSAFEPOINT;
+int jl_is_typeofbottom_param_env(jl_value_t *t, jl_uaenv_t *env) JL_NOTSAFEPOINT;
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 JL_DLLEXPORT int jl_has_concrete_subtype(jl_value_t *typ);
 jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size_t nargs, int leaf) JL_CANSAFEPOINT;
