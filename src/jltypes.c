@@ -97,7 +97,7 @@ static size_t typeenv_crossed_binders(jl_typeenv_t *env, jl_typeenv_t *stop) JL_
 // array is read-only afterwards. Pointer identity of TypeVarRefs is never
 // relied upon (egal compares the depth), this only reduces allocation.
 #define N_SMALL_TVARREFS 64
-static jl_tvarref_t *small_tvarrefs[N_SMALL_TVARREFS];
+static jl_tvarref_t *small_tvarrefs[N_SMALL_TVARREFS] JL_GLOBALLY_ROOTED;
 
 void jl_init_tvarref_cache(void)
 {
@@ -1354,6 +1354,7 @@ JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_
     if (has_refs_above(lb, 0) || has_refs_above(ub, 0) || has_refs_above(body, 1))
         flags |= JL_UNIONALL_ESCAPINGREFS;
     u->flags = flags;
+    jl_atomic_store_relaxed(&u->hash, 0); // filled lazily by the objectid walk
     return (jl_value_t*)u;
 }
 
@@ -4556,12 +4557,12 @@ void jl_init_types(void) JL_GC_DISABLED
     // `body` and `var` to be served as computed compatibility properties by
     // `Base.getproperty` (which materializes a canonical TypeVar per binder)
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, jl_anytype_type, jl_emptysvec,
-                                       jl_perm_symsvec(5, "name", "lb", "ub", "inner", "flags"),
-                                       jl_svec(5, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type,
-                                               jl_any_type /*jl_uint32_type*/),
-                                       jl_emptysvec, 0, 0, 5);
+                                       jl_perm_symsvec(6, "name", "lb", "ub", "inner", "flags", "hash"),
+                                       jl_svec(6, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type,
+                                               jl_any_type /*jl_uint32_type*/, jl_any_type /*jl_ulong_type*/),
+                                       jl_emptysvec, 0, 0, 6);
     XX(unionall);
-    const static uint32_t unionall_constfields[1] = { 0x0000001f }; // all fields are constant
+    const static uint32_t unionall_constfields[1] = { 0x0000001f }; // all fields constant except the memoized `hash`
     jl_unionall_type->name->constfields = unionall_constfields;
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_unionall_type->name->mayinlinealloc = 0;
@@ -5458,6 +5459,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_value_t *partition_next_types[2] = { (jl_value_t*)jl_binding_partition_type, (jl_value_t*)jl_binding_type };
     jl_svecset(jl_binding_partition_type->types, 3, jl_type_union(partition_next_types, 2));
     jl_svecset(jl_unionall_type->types, 4, jl_uint32_type);
+    jl_svecset(jl_unionall_type->types, 5, jl_ulong_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

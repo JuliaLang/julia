@@ -220,8 +220,21 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         // the binder name is observable (display, reflection), so `===`
         // distinguishes alpha-renamed binders; `jl_types_struct_equiv`
         // (`tvar_names == 0`) compares the structure only
-        if (tvar_names && ua->name != ub->name)
-            return 0;
+        if (tvar_names) {
+            // differing memoized objectid hashes decide inequality without a
+            // structural walk. Only valid on this path: the hash covers the
+            // binder names that `tvar_names == 0` ignores. Cached hashes exist
+            // only for terms without free TypeVars, whose egality is also
+            // independent of `env`.
+            uintptr_t ha = jl_atomic_load_relaxed(&ua->hash);
+            if (ha) {
+                uintptr_t hb = jl_atomic_load_relaxed(&ub->hash);
+                if (hb && ha != hb)
+                    return 0;
+            }
+            if (ua->name != ub->name)
+                return 0;
+        }
         if (!(egal_types(ua->lb, ub->lb, env, tvar_names) && egal_types(ua->ub, ub->ub, env, tvar_names)))
             return 0;
         return egal_types(ua->body, ub->body, env, tvar_names);
@@ -418,12 +431,17 @@ typedef struct _varidx {
     struct _varidx *prev;
 } jl_varidx_t;
 
-static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
+// `*cacheable` is cleared when the computed hash depends on session-local
+// state (a free TypeVar's address or in-image id, or an opaque immutable
+// with object references), so that it must not be memoized on UnionAll nodes
+// (their cache is serialized into images and must be deterministic).
+static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env, int *cacheable) JL_NOTSAFEPOINT
 {
     if (v == NULL)
         return 0;
     jl_datatype_t *tv = (jl_datatype_t*)jl_typeof(v);
     if (tv == jl_tvar_type) {
+        *cacheable = 0;
         jl_varidx_t *pe = env;
         int i = 0;
         while (pe != NULL) {
@@ -439,21 +457,32 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     }
     if (tv == jl_uniontype_type) {
         return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
-                             type_object_id_(((jl_uniontype_t*)v)->a, env)),
-                      type_object_id_(((jl_uniontype_t*)v)->b, env));
+                             type_object_id_(((jl_uniontype_t*)v)->a, env, cacheable)),
+                      type_object_id_(((jl_uniontype_t*)v)->b, env, cacheable));
     }
     if (tv == jl_typeeq_type || tv == jl_typeegal_type) {
         return bitmix(jl_object_id((jl_value_t*)tv),
-                      type_object_id_(((jl_typeeq_t*)v)->T, env));
+                      type_object_id_(((jl_typeeq_t*)v)->T, env, cacheable));
     }
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
+        uintptr_t h = jl_atomic_load_relaxed(&u->hash);
+        if (h)
+            return h;
         // the binder name is observable (display, reflection) and therefore
         // part of the object's identity, like the rest of the binder
-        uintptr_t h = u->name->hash;
-        h = bitmix(h, type_object_id_(u->lb, env));
-        h = bitmix(h, type_object_id_(u->ub, env));
-        return bitmix(h, type_object_id_(u->body, env));
+        int subcacheable = 1;
+        h = u->name->hash;
+        h = bitmix(h, type_object_id_(u->lb, env, &subcacheable));
+        h = bitmix(h, type_object_id_(u->ub, env, &subcacheable));
+        h = bitmix(h, type_object_id_(u->body, env, &subcacheable));
+        if (h == 0)
+            h = 0x55c5b06e; // deterministic substitute: 0 must keep meaning "unset"
+        if (subcacheable)
+            jl_atomic_store_relaxed(&u->hash, h);
+        else
+            *cacheable = 0;
+        return h;
     }
     if (tv == jl_tvarref_type) {
         return inthash(jl_tvarref_depth(v)) ^ 0x171717aabb00cc55;
@@ -465,7 +494,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         uintptr_t h = ~dtv->name->hash;
         size_t i, l = jl_nparams(v);
         for (i = 0; i < l; i++) {
-            h = bitmix(h, type_object_id_(jl_tparam(v, i), env));
+            h = bitmix(h, type_object_id_(jl_tparam(v, i), env, cacheable));
         }
         return h;
     }
@@ -473,14 +502,18 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         jl_vararg_t *vm = (jl_vararg_t*)v;
         jl_value_t *t = vm->T ? vm->T : (jl_value_t*)jl_any_type;
         jl_value_t *n = vm->N ? vm->N : jl_nothing;
-        return bitmix(type_object_id_(t, env),
-            type_object_id_(n, env));
+        return bitmix(type_object_id_(t, env, cacheable),
+            type_object_id_(n, env, cacheable));
     }
     if (tv == jl_symbol_type)
         return ((jl_sym_t*)v)->hash;
     if (tv == jl_module_type)
         return ((jl_module_t*)v)->hash;
     assert(!tv->name->mutabl);
+    // an immutable parameter value: plain bits hash deterministically, but
+    // object references inside it escape this walk's determinism tracking
+    if (tv->layout == NULL || tv->layout->npointers > 0)
+        *cacheable = 0;
     return immut_id_(tv, v, tv->hash);
 }
 
@@ -504,8 +537,10 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         }
         return bits_hash(v, sz) ^ h;
     }
-    if (dt == jl_unionall_type)
-        return type_object_id_(v, NULL);
+    if (dt == jl_unionall_type) {
+        int cacheable = 1;
+        return type_object_id_(v, NULL, &cacheable);
+    }
     for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)v + offs;
