@@ -222,28 +222,16 @@ end
 (d::WeakValueIdDictFinalizer)(v) = d.d.dirty = true
 
 """
-    WeakValueIdDict()
+    WeakValueIdDict
 
-`WeakValueIdDict()` constructs a hash table keyed by object identity whose
-values are only weakly referenced: an entry does not keep its value alive, and
-is treated as absent (and eventually removed) once the value has been garbage
-collected. The keys are held normally (strongly) for as long as their entry is
-present; a key is released together with its entry, on the first mutation
-after its value's collection.
+`WeakValueIdDict` is an identity-keyed dictionary like [`IdDict`](@ref).
+However, unlike `IdDict`, the dictionary holds its values weakly.
 
-This is useful for canonicalization caches, which memoize a minted companion
-object for as long as anybody can still observe its identity, and re-mint it
-afterwards. Note that weakness on the key side would be meaningless for such
-caches when key egality is structural (e.g. immutable keys): the collection
-of one particular key allocation is not the disappearance of the key, since
-an egal key can exist elsewhere or be constructed at any time. Holding the
-stored key strongly is what makes the canonical value stable across all egal
-spellings of its key for as long as the value is observable.
+See also [`WeakKeyDict`](@ref), which differs in two ways:
+1. `WeakKeyDict` holds its *keys* weakly, while `WeakValueIdDict` holds its *values* weakly.
+2. `WeakKeyDict` is equality-keyed, while `WeakValueIdDict` is identity-keyed.
 
-Values must be mutable objects, since value finalizers are used to mark dead
-entries for cleanup.
-
-See also [`WeakKeyDict`](@ref), [`IdDict`](@ref) and [`WeakRef`](@ref).
+See also [`WeakRef`](@ref).
 """
 mutable struct WeakValueIdDict{K,V} <: AbstractDict{K,V}
     const ht::IdDict{K,WeakRef}
