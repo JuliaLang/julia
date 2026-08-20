@@ -2394,7 +2394,7 @@ end
 
 module RetTypeDecl
     using Test
-    import Base: +, *, broadcast, convert
+    import Base: +, *, muladd, broadcast, convert
 
     struct MeterUnits{T,P} <: Number
         val::T
@@ -2407,6 +2407,7 @@ module RetTypeDecl
     (+)(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{T,pow}(x.val+y.val)
     (*)(x::Int, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
     (*)(x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    muladd(x::MeterUnits{T,1}, y::MeterUnits{T,1}, z::MeterUnits{T,2}) where {T} = MeterUnits{T,2}(muladd(x.val, y.val, z.val))
     broadcast(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
     convert(::Type{MeterUnits{T,pow}}, y::Real) where {T,pow} = MeterUnits{T,pow}(convert(T,y))
 
@@ -2415,6 +2416,7 @@ module RetTypeDecl
     @test @inferred(broadcast(*,m,[m,m])) == [m2,m2]
     @test @inferred(broadcast(*,[m,m],m)) == [m2,m2]
     @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
+    @test @inferred([m 2m; m m]*[m 2m; m m]) == [3m2 4m2; 2m2 3m2]
     @test @inferred(broadcast(*,[m m],[m,m])) == [m2 m2; m2 m2]
 end
 

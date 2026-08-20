@@ -127,21 +127,21 @@ declare ptr @ijl_autoinit_and_adopt_thread()
 ; CHECK-DAG: "julia.mv.clones"="2"
 ; CHECK-DAG: "julia.mv.clone"="0"
 ; CHECK-DAG: "target-cpu"="cpubase"
-; CHECK-DAG: "target-features"="nofeatures"
+; CHECK-DAG: "target-features"="-nofeatures"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[DECLARATION_DEFAULT_ATTRS]]
 ; CHECK-SAME: {
 ; CHECK-DAG: "julia.mv.clones"="2"
 ; CHECK-DAG: "julia.mv.clone"="0"
 ; CHECK-DAG: "target-cpu"="cpubase"
-; CHECK-DAG: "target-features"="nofeatures"
+; CHECK-DAG: "target-features"="-nofeatures"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[SUBTARGET_CLONED_DEFAULT_ATTRS]]
 ; CHECK-SAME: {
 ; CHECK-DAG: "julia.mv.clones"="6"
 ; CHECK-DAG: "julia.mv.clone"="0"
 ; CHECK-DAG: "target-cpu"="cpubase"
-; CHECK-DAG: "target-features"="nofeatures"
+; CHECK-DAG: "target-features"="-nofeatures"
 ; CHECK-DAG: "julia.mv.reloc"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[CALL_SUBTARGET_CLONED_DEFAULT_ATTRS]]
@@ -149,28 +149,28 @@ declare ptr @ijl_autoinit_and_adopt_thread()
 ; CHECK-DAG: "julia.mv.clones"="6"
 ; CHECK-DAG: "julia.mv.clone"="0"
 ; CHECK-DAG: "target-cpu"="cpubase"
-; CHECK-DAG: "target-features"="nofeatures"
+; CHECK-DAG: "target-features"="-nofeatures"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[BORING_CLONEALL_ATTRS]]
 ; CHECK-SAME: {
 ; CHECK-DAG: "julia.mv.clones"="2"
 ; CHECK-DAG: "julia.mv.clone"="1"
 ; CHECK-DAG: "target-cpu"="cpucloneall"
-; CHECK-DAG: "target-features"="cloneall"
+; CHECK-DAG: "target-features"="-cloneall"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[DECLARATION_CLONEALL_ATTRS]]
 ; CHECK-SAME: {
 ; CHECK-DAG: "julia.mv.clones"="2"
 ; CHECK-DAG: "julia.mv.clone"="1"
 ; CHECK-DAG: "target-cpu"="cpucloneall"
-; CHECK-DAG: "target-features"="cloneall"
+; CHECK-DAG: "target-features"="-cloneall"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[SUBTARGET_CLONED_CLONEALL_ATTRS]]
 ; CHECK-SAME: {
 ; CHECK-DAG: "julia.mv.clones"="6"
 ; CHECK-DAG: "julia.mv.clone"="1"
 ; CHECK-DAG: "target-cpu"="cpucloneall"
-; CHECK-DAG: "target-features"="cloneall"
+; CHECK-DAG: "target-features"="-cloneall"
 ; CHECK-DAG: "julia.mv.reloc"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[SUBTARGET_CLONED_FASTMATH_ATTRS]]
@@ -178,7 +178,7 @@ declare ptr @ijl_autoinit_and_adopt_thread()
 ; CHECK-DAG: "julia.mv.clones"="6"
 ; CHECK-DAG: "julia.mv.clone"="2"
 ; CHECK-DAG: "target-cpu"="cpufastmath"
-; CHECK-DAG: "target-features"="fastmathclone"
+; CHECK-DAG: "target-features"="-fastmathclone"
 ; CHECK-DAG: "julia.mv.reloc"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[CALL_SUBTARGET_CLONED_CLONEALL_ATTRS]]
@@ -186,14 +186,14 @@ declare ptr @ijl_autoinit_and_adopt_thread()
 ; CHECK-DAG: "julia.mv.clones"="6"
 ; CHECK-DAG: "julia.mv.clone"="1"
 ; CHECK-DAG: "target-cpu"="cpucloneall"
-; CHECK-DAG: "target-features"="cloneall"
+; CHECK-DAG: "target-features"="-cloneall"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[CALL_SUBTARGET_CLONED_FASTMATH_ATTRS]]
 ; CHECK-SAME: {
 ; CHECK-DAG: "julia.mv.clones"="6"
 ; CHECK-DAG: "julia.mv.clone"="2"
 ; CHECK-DAG: "target-cpu"="cpufastmath"
-; CHECK-DAG: "target-features"="fastmathclone"
+; CHECK-DAG: "target-features"="-fastmathclone"
 ; CHECK-SAME: }
 ; CHECK: attributes #[[SUBTARGET_ALIASED_ATTRS]]
 ; CHECK-SAME: {
@@ -210,9 +210,9 @@ attributes #3 = {"julia.mv.clones"="6"}
 !1 = !{i32 1, !"julia.mv.annotated", i32 1}
 !2 = !{i32 1, !"julia.mv.specs", !3}
 !3 = !{!4, !5, !6, !7, !8}
-!4 = !{!"cpubase", !"nofeatures", i32 0, i32 0}
-!5 = !{!"cpucloneall", !"cloneall", i32 0, i32 1}
-!6 = !{!"cpufastmath", !"fastmathclone", i32 0, i32 8}
+!4 = !{!"cpubase", !"-nofeatures", i32 0, i32 0}
+!5 = !{!"cpucloneall", !"-cloneall", i32 0, i32 1}
+!6 = !{!"cpufastmath", !"-fastmathclone", i32 0, i32 8}
 !7 = !{!"cpuloop", !"loopclone", i32 0, i32 0}
 !8 = !{!"cpusimd", !"simdclone", i32 0, i32 16}
 ; CHECK-DAG: ![[TBAA_CONST_METADATA]] = !{![[JTBAA_CONST_METADATA:[0-9]+]], ![[JTBAA_CONST_METADATA]]
