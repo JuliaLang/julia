@@ -181,6 +181,26 @@ static size_t world_pos(size_t w, jl_world_segment_t *obs) JL_NOTSAFEPOINT
     return p;
 }
 
+// Combine two validity caps: the result's invalidation cone must contain
+// both inputs' cones, so intervals capped by it are invalid wherever either
+// input was. Returns 0 if the cones are incomparable (neither contains the
+// other, e.g. shadowing events on two different side branches), in which
+// case a single cap cannot represent the exclusion and the caller must
+// degrade (typically to point validity at its query world). Caps that are
+// events on one trunk are always comparable.
+JL_DLLEXPORT size_t jl_world_cap_meet(size_t a, size_t b) JL_NOTSAFEPOINT
+{
+    if (a == ~(size_t)0)
+        return b;
+    if (b == ~(size_t)0)
+        return a;
+    if (jl_world_reaches(a + 1, b + 1))
+        return a; // cone(b+1) is contained in cone(a+1)
+    if (jl_world_reaches(b + 1, a + 1))
+        return b;
+    return 0;
+}
+
 // Is `w` on the observer's trunk? Trunk worlds are exactly the worlds whose
 // position in the observer's total order is themselves, so interval bounds
 // between them compare exactly as integers; a merged side branch's worlds

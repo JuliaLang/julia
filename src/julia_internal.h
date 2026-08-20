@@ -651,6 +651,7 @@ JL_DLLEXPORT size_t jl_world_join(size_t a, size_t b, size_t observer) JL_NOTSAF
 JL_DLLEXPORT size_t jl_world_spine_join(size_t a, size_t b) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_world_ordered_before(size_t a, size_t b, size_t observer) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_world_on_trunk(size_t w, size_t observer) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_cap_meet(size_t a, size_t b) JL_NOTSAFEPOINT;
 
 // mirror of Core.WorldToken
 typedef struct {

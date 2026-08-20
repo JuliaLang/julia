@@ -34,35 +34,42 @@ world_in_range(w::UInt, minw::UInt, maxw::UInt) =
 # validity instead.
 world_on_spine(w::UInt) =
     ccall(:jl_world_on_trunk, Cint, (Csize_t, Csize_t), w, get_world_counter()) != 0
-# The earliest spine world whose history includes both `a` and `b` (the join
-# in the world DAG, projected onto the spine, where positions compare exactly
-# as integers). For comparable worlds this is simply the later of the two.
-function world_join(a::UInt, b::UInt)
+# The earliest world in the observer's total order whose history includes
+# both `a` and `b`. For comparable worlds this is simply the later of the
+# two; for worlds on different branches it is the later of their merge
+# points on the observer's trunk.
+function world_join(a::UInt, b::UInt, observer::UInt)
     world_seg(a) == world_seg(b) && return max(a, b)
-    return ccall(:jl_world_spine_join, Csize_t, (Csize_t, Csize_t), a, b) % UInt
+    return ccall(:jl_world_join, Csize_t, (Csize_t, Csize_t, Csize_t), a, b, observer) % UInt
 end
+# Combine two validity caps; 0 if their invalidation cones are incomparable
+# (see jl_world_cap_meet), in which case the caller must degrade to point
+# validity.
+world_cap_meet(a::UInt, b::UInt) =
+    ccall(:jl_world_cap_meet, Csize_t, (Csize_t, Csize_t), a, b) % UInt
 
 in(world::UInt, wr::WorldRange) = world_in_range(world, wr.min_world, wr.max_world)
 
-@inline function intersect(a::WorldRange, b::WorldRange)
-    # the min side joins in the world DAG: bounds from different merged
-    # branches are incomparable and their join lies on the spine
-    minw = world_join(a.min_world, b.min_world)
-    maxw = min(a.max_world, b.max_world)
-    if minw > maxw
-        # Interval arithmetic cannot describe the validity region of a world
-        # off the spine; a point range there absorbs any bounds whose region
-        # contains its world (e.g. bounds capped by an invalidation on the
-        # spine, whose future cone does not contain the point's world).
-        if a.min_world == a.max_world && a.min_world in b
-            return a
-        elseif b.min_world == b.max_world && b.min_world in a
-            return b
-        end
-        @assert false "attempting to intersect disjoint world ranges"
+# Intersect two validity regions, as observed from `observer` (the world the
+# result will be used at). Both endpoints may lie off the observer's trunk
+# (e.g. a min_world within a grafted image history together with a cap from a
+# later spine invalidation); such intervals are nonempty whenever the cap's
+# invalidation cone does not contain the min. Only when the two caps'
+# invalidation cones are incomparable (shadowing events on two different side
+# branches) can a single interval not represent the region, and the result
+# degrades to point validity at the observer.
+@inline function intersect(a::WorldRange, b::WorldRange, observer::UInt)
+    minw = world_join(a.min_world, b.min_world, observer)
+    maxw = world_cap_meet(a.max_world, b.max_world)
+    if iszero(maxw)
+        @assert world_in_range(observer, a.min_world, a.max_world) &&
+            world_in_range(observer, b.min_world, b.max_world) "attempting to intersect disjoint world ranges"
+        return WorldRange(observer, observer)
     end
+    @assert world_at_most(minw, maxw) "attempting to intersect disjoint world ranges"
     return WorldRange(minw, maxw)
 end
+intersect(a::WorldRange, b::WorldRange) = intersect(a, b, get_world_counter())
 
 @inline function union(a::WorldRange, b::WorldRange)
     if b.min_world < a.min_world
