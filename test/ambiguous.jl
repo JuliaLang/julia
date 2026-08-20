@@ -845,13 +845,18 @@ ambig_exclusion_caller() = AmbigResolveByExclusion.g(AmbigResolveByExclusion.A1(
                                                   AmbigResolveByExclusion.B1())
 
 # A match that is dominated over its whole region can be dropped from the report,
-# since it can never be selected -- but only as long as the ambiguities it takes
-# part in stay witnessed by the matches that remain. Here method 1 is covered over
-# the query region by the union of methods 5 (the `(A1, A1)` part) and 3 (the
-# `(A1, B1)` part), which each strictly beat it. Method 3 reaches that cover role
-# only by being dropped itself (method 4 covers it) while sitting in a specificity
-# cycle with methods 1 and 2 (1 ≻ 2 ≻ 3 ≻ 1), which is where a region-blind
-# transfer check would lose the cycle.
+# since it can never be selected -- but only as long as, at every point of the
+# region, the ambiguities it takes part in stay witnessed by the matches that
+# remain applicable there. Here method 1 is covered over the query region by the
+# union of methods 5 (the `(A1, A1)` part) and 3 (the `(A1, B1)` part), which
+# each strictly beat it. But method 1 is the only match blocking method 4 at
+# `(A1, B1)`: method 3, the cover applying there, is itself beaten by method 4,
+# so it blocks nothing. A region-blind transfer check accepts method 5 (which
+# blocks method 4, but only where it applies) and drops method 1, leaving the
+# reported subset at `(A1, B1)` reading as resolved to method 4. Method 3 also
+# sits in a specificity cycle with methods 1 and 2 (1 ≻ 2 ≻ 3 ≻ 1), which is
+# where a transfer check that ignores cycles would additionally lose the
+# ambiguity flag.
 module AmbigTransferRegion
 abstract type Top end
 abstract type MidA <: Top end
@@ -883,12 +888,17 @@ let A1 = AmbigTransferRegion.A1, B1 = AmbigTransferRegion.B1,
             nothing, -1, Base.get_world_counter(), true,
             Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test ambig[] == 1
-        # methods 4 and 5 witness the ambiguity at `(A1, A1)`. Method 1 blocks
-        # method 4 at `(A1, B1)`, but over this whole region it is covered by the
-        # union of 5 and 3, so it is dropped: the region-wide report guarantees a
-        # witness pair for the query, not one for every point in it. The `1`/`4`
-        # pair is still reported over its own intersection (below).
-        @test Set(m.method for m in matches) == Set([m4, m5])
+        # methods 4 and 5 witness the ambiguity at `(A1, A1)`. Method 1 is
+        # covered over this whole region by the union of 5 and 3, so it can
+        # never be selected -- but it must stay reported anyway, because it is
+        # the only match blocking method 4 at `(A1, B1)`: dropping it would make
+        # the reported subset applicable at that point read as resolved to
+        # method 4, while the call is really ambiguous (below).
+        @test Set(m.method for m in matches) == Set([m1, m4, m5])
+        # every point of the region keeps its ambiguity witnessed by the
+        # reported matches applicable there
+        applicable_at = [m.method for m in matches if Tuple{typeof(AmbigTransferRegion.f), A1, B1} <: m.method.sig]
+        @test m1 in applicable_at && m4 in applicable_at
     end
     @test Base.isambiguous(m1, m4) # visible over the pair's own intersection
     # `(A1, B1)` applies methods 1, 3 and 4, and nothing beats all of them, so it
