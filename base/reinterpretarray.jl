@@ -458,10 +458,8 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    GC.@preserve ap begin
-        p = unsafe_convert(Ptr{T}, ap) + aligned_sizeof(T) * (li - 1)
-        unsafe_load(p)
-    end
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
+    GC.@preserve ap return unsafe_load(p)
 end
 
 function _is_scalar_reinterpret_applicable(T, S)
@@ -609,10 +607,8 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    GC.@preserve ap begin
-        p = unsafe_convert(Ptr{T}, ap) + aligned_sizeof(T) * (li - 1)
-        unsafe_store!(p, v)
-    end
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
+    GC.@preserve ap unsafe_store!(p, v)
     return a
 end
 
@@ -747,8 +743,8 @@ end
 # Preconditions, already checked by the `reinterpret` constructors and `_reinterpret`:
 # `isbitstype(T)` and `!has_bit_padding(T)`
 function non_padding_bytes(T::DataType)::Memory{Bool}
-    @assert isbitstype(T)
-    @assert !has_bit_padding(T)
+    # @assert isbitstype(T)
+    # @assert !has_bit_padding(T)
     used = Memory{Bool}(undef, aligned_sizeof(T))
     fill!(used, false)
     fill_nonpadding_bytes!(T, 0, used)
