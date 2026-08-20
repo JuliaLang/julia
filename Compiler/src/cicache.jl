@@ -17,7 +17,7 @@ max_world(wr::WorldRange) = last(wr)
 # (sa, ia) preceq (sb, ib) iff sa == sb ? ia <= ib : sa is an ancestor
 # segment of sb. Worlds on the spine (the chain of segments the world
 # counter traverses) always compare exactly with plain integer compares.
-const WORLD_IDX_BITS = UInt === UInt64 ? 48 : 24
+const WORLD_IDX_BITS = UInt === UInt64 ? 48 : 16
 world_seg(w::UInt) = w >> WORLD_IDX_BITS
 world_seg_reaches(sa::UInt, sb::UInt) =
     ccall(:jl_world_seg_reaches, Cint, (Csize_t, Csize_t), sa, sb) != 0

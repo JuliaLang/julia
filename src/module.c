@@ -1538,7 +1538,7 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
         return;
     }
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *btopart = jl_get_binding_partition(bto, new_world);
     enum jl_partition_kind btokind = jl_binding_kind(btopart);
     if (jl_bkind_is_some_implicit(btokind)) {
@@ -1637,7 +1637,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t fla
         }
     }
 
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
 
     if (existing_idx == (size_t)-1) {
         // Add new using entry
@@ -1762,7 +1762,7 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size
 {
     volatile int any_new = 0;
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     JL_TRY {
         for (size_t i = 0; i < nsymbols; i++) {
             jl_sym_t *name = (jl_sym_t*)symbols[i];
@@ -2085,7 +2085,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding(jl_binding_t *b,
         return NULL;
     }
 
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *bpart = jl_replace_binding_locked(b, old_bpart, restriction_val, kind, new_world);
     if (bpart && jl_atomic_load_relaxed(&bpart->min_world) == new_world)
         jl_atomic_store_release(&jl_world_counter, new_world);
@@ -2142,7 +2142,7 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag) 
                        flag == 2 ? PARTITION_FLAG_DEPRECATED :
                                    0;
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     if ((old_bpart->kind & DEPWARN_FLAGS) == new_flags) {
         JL_UNLOCK(&world_counter_lock);
@@ -2168,7 +2168,7 @@ JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int st
     int want_public = state >= 1;
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     int was_exported = (old_bpart->kind & PARTITION_FLAG_EXPORTED) != 0;
     if (was_exported != want_exported) {

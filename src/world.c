@@ -70,7 +70,7 @@ static jl_world_segment_t *world_new_segment_locked(size_t chain_parent, size_t 
     seg->nparents = (uint32_t)nparents + (chain_parent != ~(size_t)0);
     seg->parents = seg->nparents ? (size_t*)malloc_s(seg->nparents * sizeof(size_t)) : NULL;
     seg->join_pos = id ? (size_t*)calloc_s(id * sizeof(size_t)) : NULL;
-    size_t base = (size_t)id << JL_WORLD_IDX_BITS;
+    size_t base = JL_WORLD_PACK(id, 0);
     uint32_t pi = 0;
     for (size_t i = 0; i <= nparents; i++) {
         size_t pw = i == 0 ? chain_parent : parent_worlds[i - 1];
@@ -121,7 +121,7 @@ static jl_world_segment_t *world_new_segment_locked(size_t chain_parent, size_t 
 // parents are the segments of `parent_worlds` (referenced at full extent).
 // Returns the segment's first world. Exposed for testing; segments created
 // this way carry no serializable identity.
-JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents)
+JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents) JL_CANSAFEPOINT
 {
     JL_LOCK(&world_counter_lock);
     if (world_nsegments_ >= JL_WORLD_MAX_SEGMENTS) {
@@ -130,7 +130,7 @@ JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents)
     }
     jl_world_segment_t *seg = world_new_segment_locked(~(size_t)0, parent_worlds, nparents);
     JL_UNLOCK(&world_counter_lock);
-    return (size_t)seg->id << JL_WORLD_IDX_BITS;
+    return JL_WORLD_PACK(seg->id, 0);
 }
 
 // Requires world_counter_lock: close the currently open segment at the
@@ -145,8 +145,25 @@ static jl_world_segment_t *world_advance_locked(size_t *extra_parent_worlds, siz
     jl_world_segment_t *oldseg = jl_atomic_load_relaxed(&world_segments[jl_world_seg(cur)]);
     if (oldseg)
         jl_atomic_store_relaxed(&oldseg->end_idx, jl_world_idx(cur));
-    jl_atomic_store_release(&jl_world_counter, (size_t)seg->id << JL_WORLD_IDX_BITS);
+    jl_atomic_store_release(&jl_world_counter, JL_WORLD_PACK(seg->id, 0));
     return seg;
+}
+
+// Requires world_counter_lock: the world that the next modification event
+// should be assigned -- normally jl_world_counter + 1. When the current
+// run's index space is exhausted (realistic only with 16-bit indices on
+// 32-bit platforms), the trunk first continues into a fresh run, so that
+// indices never carry into the segment field.
+JL_DLLEXPORT size_t jl_world_next_locked(void) JL_CANSAFEPOINT
+{
+    size_t cur = jl_atomic_load_relaxed(&jl_world_counter);
+    if (jl_world_idx(cur) >= JL_WORLD_IDX_MASK - 1) {
+        if (world_nsegments_ >= JL_WORLD_MAX_SEGMENTS)
+            jl_error("world age segment limit exceeded");
+        world_advance_locked(NULL, 0);
+        cur = jl_atomic_load_relaxed(&jl_world_counter);
+    }
+    return cur + 1;
 }
 
 // Position of `w` in the total order that the observer segment imposes on
@@ -230,7 +247,7 @@ JL_DLLEXPORT int jl_world_ordered_before(size_t a, size_t b, size_t observer) JL
 // none) name additional history -- e.g. a grafted image's final world --
 // merged into the new run. Returns the new run's first world, which becomes
 // the current world counter value.
-JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, size_t nextra)
+JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, size_t nextra) JL_CANSAFEPOINT
 {
     JL_LOCK(&world_counter_lock);
     if (world_nsegments_ >= JL_WORLD_MAX_SEGMENTS) {
@@ -238,7 +255,7 @@ JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, s
         jl_error("world age segment limit exceeded");
     }
     jl_world_segment_t *seg = world_advance_locked(extra_parent_worlds, nextra);
-    size_t w = (size_t)seg->id << JL_WORLD_IDX_BITS;
+    size_t w = JL_WORLD_PACK(seg->id, 0);
     JL_UNLOCK(&world_counter_lock);
     return w;
 }
@@ -249,7 +266,7 @@ JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, s
 // and this process's first spine run starts in a fresh segment. This keeps
 // every parent reference to the prefix exact: prefix segments are referenced
 // only at full extent, never mid-segment.
-JL_DLLEXPORT void jl_world_init_runs(void)
+JL_DLLEXPORT void jl_world_init_runs(void) JL_CANSAFEPOINT
 {
     JL_LOCK(&world_counter_lock);
     size_t cur = jl_atomic_load_relaxed(&jl_world_counter);
@@ -269,7 +286,7 @@ JL_DLLEXPORT size_t jl_world_image_run(uint64_t image_id, uint32_t run) JL_NOTSA
     for (uint32_t i = 0; i < n; i++) {
         jl_world_segment_t *seg = jl_atomic_load_acquire(&world_segments[i]);
         if (seg && seg->kind == JL_WORLD_SEG_IMAGE && seg->image_id == image_id && seg->run == run)
-            return (size_t)i << JL_WORLD_IDX_BITS;
+            return JL_WORLD_PACK(i, 0);
     }
     return ~(size_t)0;
 }
@@ -279,7 +296,7 @@ JL_DLLEXPORT size_t jl_world_image_run(uint64_t image_id, uint32_t run) JL_NOTSA
 // world. The counter does not move; the caller is expected to eventually
 // merge the image's final run into the spine with
 // jl_world_advance_into_segment.
-JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size_t *parent_worlds, size_t nparents)
+JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size_t *parent_worlds, size_t nparents) JL_CANSAFEPOINT
 {
     JL_LOCK(&world_counter_lock);
     if (world_nsegments_ >= JL_WORLD_MAX_SEGMENTS) {
@@ -291,7 +308,7 @@ JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size
     seg->kind = JL_WORLD_SEG_IMAGE;
     seg->image_id = image_id;
     seg->run = run;
-    size_t w = (size_t)seg->id << JL_WORLD_IDX_BITS;
+    size_t w = JL_WORLD_PACK(seg->id, 0);
     JL_UNLOCK(&world_counter_lock);
     return w;
 }
