@@ -3069,24 +3069,13 @@ static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t 
     return result;
 }
 
-// Dispatch selects a match only when it is morespecific than every other
-// applicable match, so a call is ambiguous whenever no match beats all the
-// others. That has two shapes, which the two checks here correspond to: a pair
-// that is unordered (a mutual ambiguity, `check_fully_ambiguous`) or a
-// specificity cycle, where every match is beaten by another one (the SCC pass in
-// `sort_mlmatches`). A match is reportable when it can be selected somewhere in
-// its region, and also when it blocks another match from being selected there --
-// dominance alone therefore justifies removing it from the selection answer,
-// while `sort_method_matches` separately keeps enough blockers to witness each
-// ambiguity it reports.
-//
 // About to remove match `D` (matching the query over `ti`), which the
 // strictly-morespecific `covers` jointly contain, so `D` can never be selected
-// there. Removing `D` also removes it as evidence against `S` being selected:
-// `S` stays visibly unselectable at a point only while some *reported* match
+// there. But removing `D` also removes it as evidence against `S` being selected:
+// `S` stays visibly unselectable at a point only while some reported match
 // that `S` does not beat still applies there, whether `D` was strictly beating
 // `S` or merely unordered with it. Check that this holds at every point of
-// `ti` ∩ `S` for the given `S`.
+// `ti` ∩ `S` for the given `S` (using the query ∩ `S` in place of `S`).
 //
 // Since the covers jointly contain `ti`, some cover applies at any such point,
 // and a cover applying at a point of `S`'s region intersects `S` there. So if
@@ -3094,12 +3083,12 @@ static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t 
 // the transfer is automatic. Only when `S` strictly beats some cover -- a
 // directed specificity cycle through `D` -- can a point be left where every
 // applicable cover is beaten by `S`: then require the union of the covers that
-// `S` does not beat to contain the region where `D` was the evidence (test
+// `S` does not beat to contain the region where `D` was the witness (test
 // `AmbigTransferRegion` requires the region check; `AmbigCycle3` fails if the
 // cycle is ignored altogether). A cover need not survive into the report
 // itself: its own removal was subject to this same check against covers
 // finalized before it, so by induction a reported blocker exists at every
-// point it took over. Returns 1 when the transfer holds, 0 otherwise.
+// point it took over.
 static int check_blocker_transfer(jl_value_t *ti, jl_value_t *ti_S, jl_method_t *S, jl_method_t **covers, size_t ncovers) JL_CANSAFEPOINT
 {
     size_t j;
@@ -3115,7 +3104,8 @@ static int check_blocker_transfer(jl_value_t *ti, jl_value_t *ti_S, jl_method_t 
     JL_GC_PUSH2(&region, &u);
     region = jl_type_intersection(ti, ti_S);
     if (region == jl_bottom_type) {
-        result = 1; // D was never evidence against S within the query
+        // D was never a witness of S within the query, so S doesn't block its removal
+        result = 1;
     }
     else {
         arraylist_t sigs;
@@ -3138,16 +3128,14 @@ static int check_blocker_transfer(jl_value_t *ti, jl_value_t *ti_S, jl_method_t 
 
 // About to remove match `D`, which the strictly-morespecific `covers` dominate
 // over all of its region `ti`, so `D` can never be selected there.
-// Dominance alone is not enough to remove it, because every member of a
+// But dominance alone is not enough to remove it, because every member of a
 // specificity cycle is dominated by another member: removing them all on that
 // basis would delete the cycle and report the call as unambiguous (test
-// `AmbigCycle3` fails if this check is skipped). And removing `D` also removes
-// it as a blocker: a match `S` that `D` was unordered with needs `D` present to
-// stay unselectable, since selection requires beating every applicable match,
-// so the removal can turn an ambiguous call into a resolved one (test
-// `AmbigNoBeatAll`). Both obligations transfer to the covers under the same
-// pointwise rule (`check_blocker_transfer`). Returns 1 when the removal is
-// silent, 0 when the caller must record an ambiguity.
+// `AmbigCycle3`). And removing `D` also removes it as a witness: a match `S`
+// that `D` was unordered with needs `D` present to stay unselectable. Since
+// selection requires beating every applicable match, the removal would turn
+// an ambiguous call into apparently a resolved one (test `AmbigNoBeatAll`).
+// Both obligations transfer to the covers under the same pointwise rule.
 static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t **covers, size_t ncovers, jl_array_t *t) JL_CANSAFEPOINT
 {
     // First, the matches D was unordered with. Both members of such a pair
@@ -3196,11 +3184,10 @@ static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t 
     return 1;
 }
 
-// Find a match that is strictly morespecific than `m` and applies over all of
-// `ti`: a witness that `m` is dominated at every point of `ti`, and so can never
-// be selected there. `visited`, if given, restricts the witness to matches the
+// Find a match `S` that is strictly morespecific than `m` and applies over all of `ti`.
+// `visited`, if given, restricts the witness to matches the
 // sort has already finalized, so that a method still tangled in the cycle being
-// resolved cannot serve as one; pass NULL to accept any applicable match. `pos`
+// resolved cannot serve as a cover; pass NULL to accept any applicable match. `pos`
 // carries an index into the interference set so a caller can resume the scan for
 // a further witness.
 static jl_method_t *find_dominating_match(jl_method_t *m, jl_value_t *ti, jl_array_t *t, arraylist_t *visited, size_t *pos) JL_CANSAFEPOINT
@@ -3230,12 +3217,12 @@ static jl_method_t *find_dominating_match(jl_method_t *m, jl_value_t *ti, jl_arr
 
 // Check if some morespecific method (or a union of them) covers the given
 // type intersection, meaning this match can never be the dispatch winner and
-// can be removed from the returned matches without anyone noticing. When the
-// removal would not go unnoticed after all (`check_dominance_transfer`), because
+// can be removed from the returned matches without any dispatch noticing. When the
+// removal would not go unnoticed after all (`check_dominance_transfer` fails), because
 // the covering relation is entangled in a specificity cycle or because this
-// match was the last one blocking another match, sets *has_ambiguity;
-// in that case the match is only reported as covered when `include_ambiguous`
-// is false, so that ambiguity-reporting consumers still see it.
+// match was blocking another match, sets *has_ambiguity; in that case the match
+// is only reported as covered when `include_ambiguous` is false, so that
+// ambiguity-reporting consumers still see it.
 static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t *t, arraylist_t *visited, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
 {
     jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
@@ -5539,6 +5526,17 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
 // is pessimistically set to 1 without attempting to prove otherwise.
 // Returns the new length of `t`, or -1 if `lim` was exceeded (in which case
 // the contents of `t` are left in an unspecified state).
+//
+// Dispatch selects a match only when it is morespecific than every other
+// applicable match, so a call is ambiguous whenever no match beats all the
+// others. That has two shapes, which the two checks will correspond to: a pair
+// that is unordered (a mutual ambiguity, `check_fully_ambiguous`) or a
+// specificity cycle, where every match is beaten by another one (the SCC pass in
+// `sort_mlmatches`). A match is reportable when it can be selected somewhere in
+// its region, and also when it blocks another match from being selected there
+// and include_ambiguous is set -- dominance alone therefore justifies removing
+// it from the selection answer, while `sort_method_matches` separately keeps
+// enough blockers to witness each ambiguity it reports.
 static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous, int approximate_ambig, int *has_ambiguity_out) JL_CANSAFEPOINT
 {
     int has_ambiguity = 0;
@@ -5682,11 +5680,8 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 // below, so visiting it would not usually learn anything new and
                 // might be a bit costly. But a match the DFS never reaches (one
                 // that strictly beats nothing is never anyone's child) would
-                // otherwise be dropped without the dominance-transfer check that
-                // every other removal runs, losing the ambiguities only it
-                // witnesses (test `AmbigMinmaxSkip`): run that check here, and
-                // sort the match normally when its blocking duties do not
-                // transfer to minmax, so it stays in the result.
+                // otherwise be dropped without the dominance-transfer check,
+                // losing the ambiguities only it witnesses (test `AmbigMinmaxSkip`).
                 assert(minmax != NULL);
                 if (visited.items[i] == (void*)1 || matc == minmax)
                     continue;
