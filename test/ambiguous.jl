@@ -280,7 +280,11 @@ end
 for f in (Ambig8.f, Ambig8.g)
     @test length(methods(f, (Integer,))) == 2 # 3 is also acceptable
     @test length(methods(f, (Signed,))) == 1 # 2 is also acceptable
-    @test length(Base.methods_including_ambiguous(f, (Signed,))) == 2
+    # all three matches are required: `Union{AbstractIrrational, Int}` is
+    # morespecific than `Signed`, so without `Union{typeof(pi), Integer}`
+    # (unordered with it) the report would read as resolved at `(Int,)`,
+    # where the call is really ambiguous
+    @test length(Base.methods_including_ambiguous(f, (Signed,))) == 3
     @test f(0x00) == 1
     @test f(Ambig8.Irrational2()) == 2
     @test f(MathConstants.γ) == 3
@@ -913,6 +917,45 @@ let A1 = AmbigTransferRegion.A1, B1 = AmbigTransferRegion.B1,
         @test m1 in [m.method for m in matches]
     end
     @test_throws MethodError AmbigTransferRegion.f(A1(), A1())
+end
+
+# A fully-covering match that strictly beats nothing is never reached by the
+# result sort's DFS (which only descends to strictly-morespecific matches), so
+# when a minmax method exists it used to be skipped -- and dropped -- without the
+# dominance-transfer check that every other removal runs. The specificity
+# triangle here (3 ≻ 1 ≻ 2, with 2 and 3 unordered) makes the skipped method 2
+# the only match blocking method 3 at `(P,)`: method 3 beats the minmax method 1,
+# so dropping method 2 leaves the report with no witness of the ambiguity at all,
+# only a strictly ordered pair reading as resolved to method 3.
+module AmbigMinmaxSkip
+abstract type Top end
+struct P <: Top end
+struct Q <: Top end
+struct R <: Top end
+f(::T, ::Vararg{T}) where {T<:Union{P,Q}} = 1  # minmax over the query below: beats 2, beaten by 3
+f(::Union{P,Q}, ::Vararg{R}) = 2               # fully covers, beats nothing, unordered with 3
+f(::P, ::Vararg{P}) = 3                        # partial, beats 1, unordered with 2
+end
+let ms = sort(collect(methods(AmbigMinmaxSkip.f)), by = m -> m.line),
+    (m1, m2, m3) = (ms[1], ms[2], ms[3]),
+    P = AmbigMinmaxSkip.P, Q = AmbigMinmaxSkip.Q
+    # the intransitive specificity triangle
+    @test Base.morespecific(m3, m1) && Base.morespecific(m1, m2)
+    @test !Base.morespecific(m2, m3) && !Base.morespecific(m3, m2)
+    let ambig = Ref{Int32}(0)
+        matches = Base._methods_by_ftype(
+            Tuple{typeof(AmbigMinmaxSkip.f), T} where T<:Union{P,Q},
+            nothing, -1, Base.get_world_counter(), true,
+            Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ambig[] == 1
+        @test Set(m.method for m in matches) == Set([m1, m2, m3])
+        # the ambiguity at `(P,)` stays witnessed by the reported matches
+        # applicable there
+        applicable_at = [m.method for m in matches if Tuple{typeof(AmbigMinmaxSkip.f), P} <: m.method.sig]
+        @test m2 in applicable_at && m3 in applicable_at
+    end
+    @test_throws MethodError AmbigMinmaxSkip.f(P())
+    @test AmbigMinmaxSkip.f(Q()) == 1
 end
 
 module NoLosersBit
