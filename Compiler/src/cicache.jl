@@ -27,7 +27,13 @@ world_at_most(w::UInt, maxw::UInt) =
     maxw == typemax(UInt) || !world_reaches(maxw + UInt(1), w)
 world_in_range(w::UInt, minw::UInt, maxw::UInt) =
     world_reaches(minw, w) && world_at_most(w, maxw)
-world_on_spine(w::UInt) = world_reaches(w, get_world_counter())
+# Whether `w` is on the spine's trunk: only trunk worlds may publish interval
+# validity, since their positions in the spine's total order are themselves.
+# Worlds of merged side branches (e.g. grafted image histories) reach the
+# spine but are not on its trunk; results computed at them publish point
+# validity instead.
+world_on_spine(w::UInt) =
+    ccall(:jl_world_on_trunk, Cint, (Csize_t, Csize_t), w, get_world_counter()) != 0
 # The earliest spine world whose history includes both `a` and `b` (the join
 # in the world DAG, projected onto the spine, where positions compare exactly
 # as integers). For comparable worlds this is simply the later of the two.

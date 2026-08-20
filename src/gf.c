@@ -1933,12 +1933,11 @@ static jl_method_instance_t *cache_result(
 {
     // caller must hold the parent->writelock, which this releases
     int8_t offs = mc ? jl_cachearg_offset() : 1;
-    // A cache entry created for a query world off the spine gets point
-    // validity: interval bounds cannot describe its DAG validity region, and
-    // lookups at exactly that world are its only consumers. (A world in the
-    // current spine segment beyond the counter -- a pending insertion world
-    // -- is on the spine, not off it.)
-    if (jl_world_seg(world) != jl_world_seg(current_world) && !jl_world_reaches(world, current_world)) {
+    // A cache entry created for a query world off the spine's trunk (a
+    // fabricated branch, or a world within a grafted image history) gets
+    // point validity: interval bounds cannot describe its DAG validity
+    // region, and lookups at exactly that world are its only consumers.
+    if (!jl_world_on_trunk(world, current_world)) {
         min_valid = world;
         max_valid = world;
     }
