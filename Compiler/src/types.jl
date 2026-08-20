@@ -158,18 +158,17 @@ mutable struct LocalInferenceProof
     const edges::SimpleVector
     function LocalInferenceProof(valid_worlds::WorldRange, edges::SimpleVector)
         # Local proofs are not registered with the global invalidation machinery.
-        # Inference states cap their range at the current world counter (or pin it to
-        # the inference world when that world is off the spine), and exact-world
-        # local-cache reuse relies on that cap to keep an unregistered proof from
-        # claiming validity in a future world.
-        @assert first(valid_worlds) <= last(valid_worlds)
+        # Inference states cap their range at the current world counter, and
+        # exact-world local-cache reuse relies on that cap to keep an
+        # unregistered proof from claiming validity in a future world.
+        @assert world_at_most(first(valid_worlds), last(valid_worlds)) # nonempty (both endpoints may lie off the spine's trunk)
         @assert world_at_most(last(valid_worlds), get_world_counter())
         for edge in edges
             edge_worlds = if edge isa LocalInferenceProof
                 edge.valid_worlds
-            elseif edge isa CodeInstance && edge.min_world <= edge.max_world
-                # Skip a provisional CI (`min_world > max_world`); an SCC fills it
-                # before any proof containing it can escape.
+            elseif edge isa CodeInstance && world_at_most(edge.min_world, edge.max_world)
+                # Skip a provisional CI (its empty world region, `(1, 0)`);
+                # an SCC fills it before any proof containing it can escape.
                 WorldRange(edge.min_world, edge.max_world)
             else
                 continue
@@ -205,7 +204,7 @@ struct LocalInferenceResult <: InferredCallResult
         if proof isa CodeInstance
             @assert proof.def === result.linfo "CodeInstance proof does not match InferenceResult"
         else
-            @assert first(proof.valid_worlds) <= last(proof.valid_worlds)
+            @assert world_at_most(first(proof.valid_worlds), last(proof.valid_worlds))
         end
         return new(result, proof)
     end

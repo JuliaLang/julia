@@ -858,17 +858,18 @@ end
     # a function that has never been called or inferred, invoked at a branch
     # world: dispatch, inference, compilation and caching must work off-spine
     @test Base.invoke_in_world(sib2, fresh_branch_fn, 21) == 42
-    # the published CodeInstance has point validity at exactly sib2
+    # the published CodeInstance covers sib2 (its interval endpoints need not
+    # both lie on the spine's trunk)
     mi = only(Base.specializations(only(methods(fresh_branch_fn))))
-    found_point_ci = false
+    found_ci = false
     ci = isdefined(mi, :cache) ? mi.cache : nothing
     while ci !== nothing
-        if ci.min_world == sib2 && ci.max_world == sib2
-            found_point_ci = true
+        if in_range(sib2, ci.min_world, ci.max_world)
+            found_ci = true
         end
         ci = isdefined(ci, :next) ? ci.next : nothing
     end
-    @test found_point_ci
+    @test found_ci
     # the spine is unaffected and can still run and infer the same function
     @test fresh_branch_fn(21) == 42
     @test Base.infer_return_type(fresh_branch_fn, (Int,); world=sib2) == Int
@@ -955,6 +956,20 @@ precompile_test_harness("WorldToken precompilation") do load_path
         # not part of the token's history: nfn resolves the dependency's
         # original definition (via off-spine inference at the token's world)
         @test Base.invoke_in_world(WTokenNested.ntok, WTokenNested.nfn) == 101
+        # that inference publishes a mixed-endpoint interval: created within
+        # the grafted history and capped by the session's spine redefinition,
+        # so it covers the token but not the latest world
+        nmi = only(Base.specializations(only(methods(WTokenNested.nfn))))
+        found_mixed = false
+        nci = isdefined(nmi, :cache) ? nmi.cache : nothing
+        while nci !== nothing
+            if in_range(WTokenNested.ntok.world, nci.min_world, nci.max_world) &&
+               !in_range(Base.get_world_counter(), nci.min_world, nci.max_world)
+                found_mixed = true
+            end
+            nci = isdefined(nci, :next) ? nci.next : nothing
+        end
+        @test found_mixed
         # the dependency's own token still works and does not see WTokenNested
         @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
         @test_throws MethodError Base.invoke_in_world(WTokenPkg.tok2, WTokenNested.nfn)

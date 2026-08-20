@@ -684,7 +684,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         uint32_t effects, jl_value_t *analysis_results,
         jl_debuginfo_t *di, jl_svec_t *edges /*, int absolute_max*/)
 {
-    assert(min_world <= max_world && "attempting to set invalid world constraints");
+    assert(jl_world_at_most(min_world, max_world) && "attempting to set invalid world constraints");
     //assert((!jl_is_method(mi->def.value) || max_world != ~(size_t)0 || min_world <= 1 || edges == NULL || jl_svec_len(edges) != 0) && "missing edges");
     jl_task_t *ct = jl_current_task;
     jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_instance_t),
@@ -730,7 +730,7 @@ JL_DLLEXPORT void jl_fill_codeinst(
         double time_infer_total, double time_infer_cache_saved, double time_infer_self,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/)
 {
-    assert(min_world <= max_world && "attempting to set invalid world constraints");
+    assert(jl_world_at_most(min_world, max_world) && "attempting to set invalid world constraints");
     //assert((!jl_is_method(codeinst->def->def.value) || max_world != ~(size_t)0 || min_world <= 1 || jl_svec_len(edges) != 0) && "missing edges");
     jl_gc_write(codeinst, codeinst->rettype, jl_value_t, rettype);
     jl_gc_write(codeinst, codeinst->exctype, jl_value_t, exctype);
@@ -1933,14 +1933,6 @@ static jl_method_instance_t *cache_result(
 {
     // caller must hold the parent->writelock, which this releases
     int8_t offs = mc ? jl_cachearg_offset() : 1;
-    // A cache entry created for a query world off the spine's trunk (a
-    // fabricated branch, or a world within a grafted image history) gets
-    // point validity: interval bounds cannot describe its DAG validity
-    // region, and lookups at exactly that world are its only consumers.
-    if (!jl_world_on_trunk(world, current_world)) {
-        min_valid = world;
-        max_valid = world;
-    }
     // short-circuit (now that we hold the lock) if this entry is already present
     if (!tt_known_absent) {
         jl_typemap_entry_t *entry = mt_find_cache_entry(cache, mc ? &mc->leafcache : NULL, tt, world, offs);
@@ -2450,7 +2442,9 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     JL_LOCK(&replaced_mi->def.method->writelock);
     size_t replacedmaxworld = jl_atomic_load_relaxed(&replaced->max_world);
     if (replacedmaxworld == ~(size_t)0) {
-        assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
+        assert((jl_world_at_most(jl_atomic_load_relaxed(&replaced->min_world), max_world) ||
+                max_world + 1 == jl_atomic_load_relaxed(&replaced->min_world)) &&
+               "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
         // recurse to all backedges to update their valid range also
         _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
@@ -5066,8 +5060,14 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     size_t max_world = jl_atomic_load_relaxed(&ml->max_world);
     if (!jl_world_at_least(closure->world, min_world)) {
         // exclude method table entries that are part of a later (or unrelated) world
-        if (closure->match.max_valid >= min_world)
-            closure->match.max_valid = min_world - 1;
+        size_t cap = jl_world_cap_meet(closure->match.max_valid, min_world - 1);
+        if (cap == 0) {
+            // incomparable exclusion cones: degrade to point validity
+            closure->match.min_valid = closure->match.max_valid = closure->world;
+        }
+        else {
+            closure->match.max_valid = cap;
+        }
         return 1;
     }
     else if (!jl_world_at_most(closure->world, max_world)) {
@@ -5075,8 +5075,13 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         closure->match.min_valid = jl_world_join(closure->match.min_valid, max_world + 1, closure->world);
         return 1;
     }
-    if (closure->match.max_valid > max_world)
-        closure->match.max_valid = max_world;
+    {
+        size_t cap = jl_world_cap_meet(closure->match.max_valid, max_world);
+        if (cap == 0)
+            closure->match.min_valid = closure->match.max_valid = closure->world;
+        else
+            closure->match.max_valid = cap;
+    }
     jl_method_t *meth = ml->func.method;
     int only = jl_atomic_load_relaxed(&meth->dispatch_status) & METHOD_SIG_LATEST_ONLY;
     if (closure->lim >= 0 && only) {
@@ -5471,8 +5476,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                 size_t min_world = jl_atomic_load_relaxed(&entry->min_world);
                 size_t max_world = jl_atomic_load_relaxed(&entry->max_world);
                 *min_valid = jl_world_join(*min_valid, min_world, world);
-                if (*max_valid > max_world)
-                    *max_valid = max_world;
+                *max_valid = jl_world_cap_meet(*max_valid, max_world);
+                assert(*max_valid != 0);
                 JL_GC_POP();
                 return env.t;
             }
@@ -5503,8 +5508,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                     env.t = (jl_value_t*)jl_alloc_vec_any(1);
                     jl_array_ptr_set(env.t, 0, env.matc);
                     *min_valid = jl_world_join(*min_valid, min_world, world);
-                    if (*max_valid > max_world)
-                        *max_valid = max_world;
+                    *max_valid = jl_world_cap_meet(*max_valid, max_world);
+                    assert(*max_valid != 0);
                     JL_GC_POP();
                     return env.t;
                 }
