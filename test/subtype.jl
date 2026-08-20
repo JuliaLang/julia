@@ -1285,8 +1285,8 @@ end
 end
 
 
-let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, Any[:T, Union{}, Any, Any, UInt32(0)], 5),
-    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, Any[:T, Union{}, Any, Core.TypeVarRef(1), UInt32(1)], 5)
+let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, Any[:T, Union{}, Any, Any, UInt32(0), UInt(0)], 6),
+    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, Any[:T, Union{}, Any, Core.TypeVarRef(1), UInt32(1), UInt(0)], 6)
     # check (T where T) == (Any where T)
     # these types are not normally valid, but check them just to make sure subtyping is robust
     @test T <: S
