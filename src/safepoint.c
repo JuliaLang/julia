@@ -309,7 +309,7 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
         while (jl_atomic_load_relaxed(&ct->ptls->suspend_count))
             uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
     }
-    // must exit gc while still holding the mutex_unlock, so we know other
+    // must exit gc while still holding the sleep_lock, so we know other
     // threads in jl_safepoint_suspend_thread will observe this thread in the
     // correct GC state, and not still stuck in JL_GC_STATE_WAITING
     jl_atomic_store_release(&ct->ptls->gc_state, state);
