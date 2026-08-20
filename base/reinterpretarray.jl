@@ -762,14 +762,28 @@ function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
     end
 end
 
+@assume_effects :foldable function isarraypacked(T)
+    !datatype_haspadding(T) && sizeof(T) == aligned_sizeof(T)
+end
+
 # Preconditions, already checked by the `reinterpret` constructors:
 # `isbitstype(T/S)` and `!has_bit_padding(T/S)`
 @assume_effects :foldable function array_subpadding(S, T)
+    # Fast path: if every byte of `T` is a non-padding byte, any byte can be
+    # read. This also covers zero-size `T`.
+    if isarraypacked(T)
+        return true
+    end
+    # `T` has at least one padding byte here. If `S` has none, the byte cycle
+    # below visits every byte of `T`, so some readable byte of `S` must land on
+    # padding in `T`. This also covers zero-size `S`.
+    if isarraypacked(S)
+        return false
+    end
     s_used, t_used = non_padding_bytes(S), non_padding_bytes(T)
-    # If T has no padding, any byte can be read.
-    # This also covers zero-size T.
-    all(t_used) && return true
-    # match previous behavior on zero-size S
+    # zero-size T and S are unreachable here (handled by the fast paths above);
+    # these guards only keep the loop below well-defined
+    isempty(t_used) && return true
     isempty(s_used) && return false
     s_n, t_n = length(s_used), length(t_used)
     s_i, t_i = 1, 1
@@ -794,17 +808,20 @@ end
     end
 end
 
-@assume_effects :foldable function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
+@assume_effects :foldable function struct_subpadding(Out, In)
     non_padding_bytes(Out) == non_padding_bytes(In)
 end
 
-@assume_effects :foldable function packedsize(::Type{T}) where T
-    count(non_padding_bytes(T))
+@assume_effects :foldable function packedsize(T)
+    if !datatype_haspadding(T)
+        sizeof(T)
+    else
+        count(non_padding_bytes(T))
+    end
 end
 
-@assume_effects :foldable function ispacked(::Type{T}) where T
-    isprimitivetype(T) && return Core.bitsizeof(T) == sizeof(T) * 8
-    return all(non_padding_bytes(T))
+@assume_effects :foldable function ispacked(T)
+    !datatype_haspadding(T)
 end
 
 @assume_effects :foldable function has_bit_padding(::Type{T}) where T
@@ -865,7 +882,7 @@ end
             " do not match; got ", outpackedsize, " and ", inpackedsize, ", respectively.")))
     in = Ref{In}(x)
     out = Ref{Out}()
-    if struct_subpadding(Out, In)
+    if (ispacked(In) && ispacked(Out)) || struct_subpadding(Out, In)
         # if packed the same, just copy
         GC.@preserve in out begin
             ptr_in = unsafe_convert(Ptr{In}, in)
