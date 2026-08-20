@@ -265,6 +265,8 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     if (!jl_safepoint_start_gc(ct)) {
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+        if (old_state == JL_GC_STATE_UNSAFE)
+            jl_gc_safepoint(); // ensure our gc_safe transition is recognized
         return;
     }
 
@@ -311,6 +313,8 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+    if (old_state == JL_GC_STATE_UNSAFE)
+        jl_gc_safepoint(); // ensure our gc_safe transition is recognized
 
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check
