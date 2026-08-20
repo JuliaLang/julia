@@ -91,7 +91,7 @@ All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b 
 
 Let's look at these types a little more closely:
 
-```jldoctest
+```jldoctest; filter = r"hash: UInt64 0x[0-9a-f]+"
 julia> dump(Array)
 UnionAll
   name: Symbol T
@@ -105,7 +105,9 @@ UnionAll
       ref::GenericMemoryRef{:not_atomic, TypeVarRef(2), Core.AddrSpace{Core}(0x00)}
       size::NTuple{TypeVarRef(1), Int64}
     flags: UInt32 0x00000007
+    hash: UInt64 0x4e621bd16d8778bd
   flags: UInt32 0x00000005
+  hash: UInt64 0xc278dfd418d847ff
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
