@@ -18,4 +18,10 @@ outdir = ARGS[1]
     @test lines[8] == "# preferences: 0"
     @test lines[9] == "finalizers: 27 32"
     @test lines[10] == "collected: 0 kept, 10 dropped"
+    @test lines[11] == "ababab"
+    @test lines[12] == "xxx"
+    @test lines[13] == "007"
+    @test lines[14] == "7**"
+    @test lines[15] == "7🍕🍕"
+    @test lines[16] == relpath("a/b/c", "a/d")
 end

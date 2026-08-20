@@ -204,6 +204,20 @@ function @main(args::Vector{String})::Cint
 
     println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
 
+    # `repeat(::String, ::Integer)` and everything built on it (`^`, `lpad`, `rpad`,
+    # `relpath`) used to fail trim verification with an unresolved invoke: the
+    # `@assume_effects` forwarder in strings/substring.jl `@invoke`s the abstract
+    # signature `repeat(::String, ::Integer)`. Use a runtime-dependent count so the
+    # calls cannot be constant-folded away.
+    let n = length(args) + 1
+        println(Core.stdout, repeat("ab", n))
+        println(Core.stdout, "x"^n)
+        println(Core.stdout, lpad("7", n, '0'))
+        println(Core.stdout, rpad("7", n, '*'))
+        println(Core.stdout, rpad("7", n + 1, '🍕')) # wide pad: remainder overshoots
+        println(Core.stdout, relpath("a/b/c", "a/d"))
+    end
+
     try
         sock = connect("localhost", 4900)
         if isopen(sock)
