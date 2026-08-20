@@ -926,15 +926,14 @@ let code = """
     @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end
 
-# The macOS exception handler must resume a safepoint-faulting thread past the
-# poll: re-executing the poll under back-to-back collections can fault again
-# every time and starve the thread (here the child's main task) indefinitely.
+# A macOS thread faulting at a safepoint must progress under back-to-back GCs.
 @testset "no starvation at safepoint polls under back-to-back collections" begin
     code = """
-    function work(n)
-        s = 0.0
-        for i in 1:n
-            s += sqrt(i)
+    function work(prec)
+        x = BigFloat(1.5, precision=prec)
+        s = BigFloat(0, precision=prec)
+        for i in 1:50
+            s += x * x + i
         end
         return s
     end
@@ -947,10 +946,9 @@ end
         nworkers = max(2, Threads.nthreads() - 1)
         t0 = time()
         for i in 1:iters
-            tasks = [Threads.@spawn work(10_000) for _ in 1:nworkers]
+            prec = 256 + 32 * i
+            tasks = [Threads.@spawn work(prec) for _ in 1:nworkers]
             foreach(wait, tasks)
-            # bound the healthy runtime on slow machines; a starved main
-            # task never gets back here, so this cannot mask the hang
             time() - t0 < budget || break
         end
         done[] = true
@@ -962,13 +960,10 @@ end
     cmd = ignorestatus(setenv(cmd; dir = @__DIR__))
     cmd = pipeline(cmd; stdout = stderr, stderr)
     proc = run(cmd; wait = false)
-    # a passing run takes a few seconds; the timeout only fires on starvation
     timeout = false
     timer = Timer(120) do t
         timeout = true
-        # a starved process ignores SIGTERM-level requests; go straight to the
-        # backtrace-dumping and then killing signals (SIGQUIT is unsupported
-        # on Windows, where kill would throw and skip the SIGKILL fallback)
+        # The deadlock does not respond to SIGTERM. Dump a backtrace, then kill.
         sigs = Sys.iswindows() ? (Base.SIGKILL,) : (Base.SIGQUIT, Base.SIGKILL)
         for sig in sigs
             for _ in 1:3

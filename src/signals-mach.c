@@ -321,18 +321,14 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     if (ct == NULL)
         return; // thread is dead, just resume
     jl_set_gc_and_wait(ct);
+    jl_safepoint_wait_gc_and_resume(ct);
     // (The sigint force-throw that lived here is gone: SIGINT is delivered
     // through the cancellation system - see jl_sigint_request_cancellation -
     // and nothing arms the sigint page anymore.)
 }
 
-// Return the length of the safepoint poll instruction at `pc`, or 0 if it is
-// not a recognized poll load (which then re-executes as before). A poll's
-// load result is dead (jl_gc_safepoint_, FinalLowerGC::lowerSafepoint), so
-// the poll may be skipped: re-executing it would fault again whenever
-// another collection arms the page before the Mach restore round-trip
-// completes, which under back-to-back collections can repeat forever and
-// starve the thread.
+// Return the poll instruction length, or 0 to re-execute an unrecognized load.
+// Safepoint poll results are unused, so recognized polls can be skipped.
 static size_t safepoint_poll_insn_len(uintptr_t pc)
 {
 #if defined(_CPU_AARCH64_)
@@ -527,8 +523,7 @@ kern_return_t catch_mach_exception_raise_state_identity(
                                              (thread_state_t)float_state, &float_count);
         HANDLE_MACH_ERROR("thread_get_state", ret);
         assert(float_count == jl_mach_float_state_info.count);
-        // Skip recognized polls so another collection cannot fault the
-        // thread again before the Mach restore round-trip completes.
+        // Avoid repeatedly faulting at the same poll under back-to-back GCs.
 #if defined(_CPU_X86_64_)
         state->__rip += safepoint_poll_insn_len(state->__rip);
 #elif defined(_CPU_AARCH64_)
