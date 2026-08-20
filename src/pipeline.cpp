@@ -105,6 +105,14 @@
 using namespace llvm;
 
 namespace {
+    static unsigned getSpeedupLevel(OptimizationLevel O) JL_NOTSAFEPOINT {
+#if JL_LLVM_VERSION >= 230000
+        return static_cast<unsigned>(O);
+#else
+        return getSpeedupLevel(O);
+#endif
+    }
+
     //Shamelessly stolen from Clang's approach to sanitizers
     //TODO do we want to enable other sanitizers?
     static void addSanitizerPasses(ModulePassManager &MPM, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
@@ -358,7 +366,7 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
       {
           FunctionPassManager FPM;
           FPM.addPass(LowerExpectIntrinsicPass());
-          if (O.getSpeedupLevel() >= 2) {
+          if (getSpeedupLevel(O) >= 2) {
               JULIA_PASS(FPM.addPass(PropagateJuliaAddrspacesPass()));
           }
           // DCE must come before simplifycfg
@@ -366,12 +374,12 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
           // and those dead statements can alter how simplifycfg optimizes the CFG
           FPM.addPass(DCEPass());
           FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
-          if (O.getSpeedupLevel() >= 1) {
+          if (getSpeedupLevel(O) >= 1) {
               FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
               FPM.addPass(EarlyCSEPass());
           }
           MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-          if (O.getSpeedupLevel() >= 1) {
+          if (getSpeedupLevel(O) >= 1) {
             FunctionPassManager GlobalFPM;
             MPM.addPass(GlobalOptPass());
             GlobalFPM.addPass(PromotePass());
@@ -391,7 +399,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
       {
           CGSCCPassManager CGPM;
           invokeCGSCCCallbacks(CGPM, PB, O);
-          if (O.getSpeedupLevel() >= 2) {
+          if (getSpeedupLevel(O) >= 2) {
               FunctionPassManager FPM;
               JULIA_PASS(FPM.addPass(AllocOptPass()));
               FPM.addPass(Float2IntPass());
@@ -400,7 +408,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
           }
           MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
       }
-      if (O.getSpeedupLevel() >= 2) {
+      if (getSpeedupLevel(O) >= 2) {
           MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
       }
       // MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
@@ -409,9 +417,9 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
           JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
       }
       JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
-      if (O.getSpeedupLevel() >= 1) {
+      if (getSpeedupLevel(O) >= 1) {
           FunctionPassManager FPM;
-          if (O.getSpeedupLevel() >= 2) {
+          if (getSpeedupLevel(O) >= 2) {
             FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
             FPM.addPass(EarlyCSEPass(true));
             FPM.addPass(InstCombinePass());
@@ -422,7 +430,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
             FPM.addPass(ReassociatePass());
             FPM.addPass(ConstraintEliminationPass());
             JULIA_PASS(FPM.addPass(AllocOptPass()));
-        } else { // if (O.getSpeedupLevel() >= 1) (exactly)
+        } else { // if (getSpeedupLevel(O) >= 1) (exactly)
             FPM.addPass(EarlyCSEPass());
             FPM.addPass(InstCombinePass());
         }
@@ -441,7 +449,7 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
         {
             LoopPassManager LPM;
             LPM.addPass(LowerSIMDLoopPass());
-            if (O.getSpeedupLevel() >= 2) {
+            if (getSpeedupLevel(O) >= 2) {
                 LPM.addPass(LoopInstSimplifyPass());
                 LPM.addPass(LoopSimplifyCFGPass());
                 LPM.addPass(BeforeLICMMarkerPass());
@@ -459,12 +467,12 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             //We don't know if the loop callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */true));
         }
-        if (O.getSpeedupLevel() >= 2)
+        if (getSpeedupLevel(O) >= 2)
             FPM.addPass(IRCEPass());
         {
             LoopPassManager LPM;
             LPM.addPass(BeforeLoopSimplificationMarkerPass());
-            if (O.getSpeedupLevel() >= 2) {
+            if (getSpeedupLevel(O) >= 2) {
                 LPM.addPass(LoopIdiomRecognizePass());
                 LPM.addPass(IndVarSimplifyPass());
                 LPM.addPass(SimpleLoopUnswitchPass(/*NonTrivial*/true, true));
@@ -487,7 +495,7 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
 static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     FPM.addPass(BeforeScalarOptimizationMarkerPass());
     if (options.enable_scalar_optimizations) {
-        if (O.getSpeedupLevel() >= 2) {
+        if (getSpeedupLevel(O) >= 2) {
             JULIA_PASS(FPM.addPass(AllocOptPass()));
             FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
             FPM.addPass(VectorCombinePass(/*TryEarlyFoldsOnly=*/true));
@@ -503,7 +511,7 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
             FPM.addPass(IRCEPass());
             FPM.addPass(JumpThreadingPass());
             FPM.addPass(ConstraintEliminationPass());
-        } else if (O.getSpeedupLevel() >= 1) {
+        } else if (getSpeedupLevel(O) >= 1) {
             JULIA_PASS(FPM.addPass(AllocOptPass()));
             FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
             FPM.addPass(MemCpyOptPass());
@@ -512,10 +520,10 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
             FPM.addPass(InstCombinePass());
             FPM.addPass(ADCEPass());
         }
-        if (O.getSpeedupLevel() >= 3) {
+        if (getSpeedupLevel(O) >= 3) {
             FPM.addPass(GVNPass());
         }
-        if (O.getSpeedupLevel() >= 2) {
+        if (getSpeedupLevel(O) >= 2) {
             FPM.addPass(DSEPass());
             invokePeepholeEPCallbacks(FPM, PB, O);
             FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
@@ -528,7 +536,7 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
             }
             FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
             FPM.addPass(InstCombinePass());
-        } else if (O.getSpeedupLevel() >= 1)
+        } else if (getSpeedupLevel(O) >= 1)
             FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
 
         invokeScalarOptimizerCallbacks(FPM, PB, O);
@@ -558,7 +566,7 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(SLPVectorizerPass());
         FPM.addPass(VectorCombinePass());
         invokeVectorizerCallbacks(FPM, PB, O);
-        FPM.addPass(LoopUnrollPass(LoopUnrollOptions(O.getSpeedupLevel(), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
+        FPM.addPass(LoopUnrollPass(LoopUnrollOptions(getSpeedupLevel(O), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
         FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
         FPM.addPass(InstSimplifyPass());
         FPM.addPass(AfterVectorizationMarkerPass());
@@ -589,9 +597,9 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
         }
         JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native, options.tls_getters)));
         MPM.addPass(RemoveJuliaAddrspacesPass()); //TODO: Make this conditional on arches (GlobalISel doesn't like our addrspaces)
-        if (O.getSpeedupLevel() >= 1) {
+        if (getSpeedupLevel(O) >= 1) {
             FunctionPassManager FPM;
-            if (O.getSpeedupLevel() >= 2) {
+            if (getSpeedupLevel(O) >= 2) {
                 FPM.addPass(DSEPass());
                 FPM.addPass(GVNPass());
                 FPM.addPass(SCCPPass());
@@ -611,7 +619,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
 static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeCleanupMarkerPass());
     if (options.cleanup) {
-        if (O.getSpeedupLevel() >= 2) {
+        if (getSpeedupLevel(O) >= 2) {
             FunctionPassManager FPM;
             FPM.addPass(DivRemPairsPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
@@ -622,7 +630,7 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
         {
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(DemoteFloat16Pass()));
-            if (O.getSpeedupLevel() >= 2) {
+            if (getSpeedupLevel(O) >= 2) {
                 FPM.addPass(GVNPass());
             }
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
@@ -641,7 +649,7 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
         FunctionPassManager FPM;
         buildLoopOptimizerPipeline(FPM, PB, O, options);
         buildScalarOptimizerPipeline(FPM, PB, O, options);
-        if (O.getSpeedupLevel() >= 2) {
+        if (getSpeedupLevel(O) >= 2) {
             buildVectorPipeline(FPM, PB, O, options);
         }
         if (options.warn_missed_transformations)
@@ -731,7 +739,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         // Register the AA manager first so that our version is the one used.
         FAM.registerPass([&]() JL_NOTSAFEPOINT {
             AAManager AA;
-            if (O.getSpeedupLevel() >= 2) {
+            if (getSpeedupLevel(O) >= 2) {
                 AA.registerFunctionAnalysis<BasicAA>();
                 AA.registerFunctionAnalysis<ScopedNoAliasAA>();
                 AA.registerFunctionAnalysis<TypeBasedAA>();
