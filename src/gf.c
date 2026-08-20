@@ -3086,26 +3086,79 @@ static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t 
 // while `sort_method_matches` separately keeps enough blockers to witness each
 // ambiguity it reports.
 //
+// About to remove match `D` (matching the query over `ti`), which the
+// strictly-morespecific `covers` jointly contain, so `D` can never be selected
+// there. Removing `D` also removes it as evidence against `S` being selected:
+// `S` stays visibly unselectable at a point only while some *reported* match
+// that `S` does not beat still applies there, whether `D` was strictly beating
+// `S` or merely unordered with it. Check that this holds at every point of
+// `ti` ∩ `S` for the given `S`.
+//
+// Since the covers jointly contain `ti`, some cover applies at any such point,
+// and a cover applying at a point of `S`'s region intersects `S` there. So if
+// `S` beats none of the covers, whichever cover applies also blocks `S`, and
+// the transfer is automatic. Only when `S` strictly beats some cover -- a
+// directed specificity cycle through `D` -- can a point be left where every
+// applicable cover is beaten by `S`: then require the union of the covers that
+// `S` does not beat to contain the region where `D` was the evidence (test
+// `AmbigTransferRegion` requires the region check; `AmbigCycle3` fails if the
+// cycle is ignored altogether). A cover need not survive into the report
+// itself: its own removal was subject to this same check against covers
+// finalized before it, so by induction a reported blocker exists at every
+// point it took over. Returns 1 when the transfer holds, 0 otherwise.
+static int check_blocker_transfer(jl_value_t *ti, jl_value_t *ti_S, jl_method_t *S, jl_method_t **covers, size_t ncovers) JL_CANSAFEPOINT
+{
+    size_t j;
+    for (j = 0; j < ncovers; j++) {
+        if (method_morespecific_recorded(S, covers[j]))
+            break;
+    }
+    if (j == ncovers)
+        return 1;
+    int result = 0;
+    jl_value_t *region = NULL;
+    jl_value_t *u = NULL;
+    JL_GC_PUSH2(&region, &u);
+    region = jl_type_intersection(ti, ti_S);
+    if (region == jl_bottom_type) {
+        result = 1; // D was never evidence against S within the query
+    }
+    else {
+        arraylist_t sigs;
+        arraylist_new(&sigs, 0);
+        for (j = 0; j < ncovers; j++) {
+            // a cover that S does not beat blocks S, whether it is strictly
+            // morespecific than S or merely unordered with it
+            if (method_in_interferences(covers[j], S))
+                arraylist_push(&sigs, (void*)covers[j]->sig);
+        }
+        if (sigs.len > 0) {
+            u = jl_type_union((jl_value_t**)sigs.items, sigs.len);
+            result = jl_subtype(region, u);
+        }
+        arraylist_free(&sigs);
+    }
+    JL_GC_POP();
+    return result;
+}
+
 // About to remove match `D`, which the strictly-morespecific `covers` dominate
-// over all of its region, so `D` can never be selected there.
+// over all of its region `ti`, so `D` can never be selected there.
 // Dominance alone is not enough to remove it, because every member of a
 // specificity cycle is dominated by another member: removing them all on that
 // basis would delete the cycle and report the call as unambiguous (test
-// `AmbigCycle3` fails if this check is skipped). So the removal is silent only
-// if the covers also dominate everything `D` beat -- otherwise a cycle leads
-// from a cover back to a method only `D` was beating, and the caller must
-// record an ambiguity. Returns 1 when the removal is silent, 0 otherwise.
-//
-// Removing `D` also removes it as a blocker: a match `S` that `D` was unordered
-// with needs `D` present to stay unselectable, since selection requires beating
-// every applicable match. So the covers must block everything `D` blocked too, or
-// the removal turns an ambiguous call into a resolved one (test `AmbigNoBeatAll`).
-static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t ncovers, jl_array_t *t) JL_CANSAFEPOINT
+// `AmbigCycle3` fails if this check is skipped). And removing `D` also removes
+// it as a blocker: a match `S` that `D` was unordered with needs `D` present to
+// stay unselectable, since selection requires beating every applicable match,
+// so the removal can turn an ambiguous call into a resolved one (test
+// `AmbigNoBeatAll`). Both obligations transfer to the covers under the same
+// pointwise rule (`check_blocker_transfer`). Returns 1 when the removal is
+// silent, 0 when the caller must record an ambiguity.
+static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t **covers, size_t ncovers, jl_array_t *t) JL_CANSAFEPOINT
 {
-    // First, only an unordered pair is at stake here: if D beats S then S was already
-    // unselectable for a stronger reason (handled by the loop below), and if S
-    // beats D then D was never blocking S. Both members of such a pair record
-    // each other, so D's own interference set is enough to enumerate them.
+    // First, the matches D was unordered with. Both members of such a pair
+    // record each other, so D's own interference set is enough to enumerate
+    // them.
     // (n.b. this scan is not required with `!include_ambiguous`, where D is
     // dropped either way and S reports the same pair from `check_fully_ambiguous`,
     // unlike the cycle detection below)
@@ -3116,21 +3169,15 @@ static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t
             continue;
         if (!method_in_interferences(D, S))
             continue; // S is morespecific than D, so D was not blocking it
-        if (find_method_in_matches(t, S) < 0)
+        int idx = find_method_in_matches(t, S);
+        if (idx < 0)
             continue;
-        size_t j;
-        for (j = 0; j < ncovers; j++) {
-            // a cover that S does not beat still blocks S, whether it is
-            // strictly morespecific than S or merely unordered with it
-            if (method_in_interferences(covers[j], S))
-                break;
-        }
-        if (j == ncovers)
+        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, idx);
+        if (!check_blocker_transfer(ti, (jl_value_t*)matc->spec_types, S, covers, ncovers))
             return 0;
     }
-    // Next, check that the `covers` take over the methods `D` was beating: any
-    // such method that the covers do not dominate must form a directed
-    // specificity cycle through them.
+    // Next, the methods `D` was beating: those stay unselectable through the
+    // covers by the same rule.
     //
     // If D is not strictly morespecific than anything it intersects
     // (METHOD_SIG_NO_LOSERS), it was beating nobody and there is nothing more to
@@ -3139,33 +3186,18 @@ static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t
         return 1;
     size_t len = jl_array_nrows(t);
     for (size_t i = 0; i < len; i++) {
-        jl_method_t *S = ((jl_method_match_t*)jl_array_ptr_ref(t, i))->method;
+        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
+        jl_method_t *S = matc->method;
         if (S == D)
             continue;
-        // An S that beats nothing can never strictly beat a cover, so it can
-        // never be part of a directed cycle: whether the covers dominate it is
-        // then irrelevant (as a fast-path)
+        // An S that beats nothing can never strictly beat a cover, so its
+        // blocking transfers automatically (as a fast-path)
         if (jl_atomic_load_relaxed(&S->dispatch_status) & METHOD_SIG_NO_LOSERS)
             continue;
         if (!method_morespecific_recorded(D, S))
             continue;
-        size_t j;
-        for (j = 0; j < ncovers; j++) {
-            if (S == covers[j] || method_morespecific_recorded(covers[j], S))
-                break;
-        }
-        if (j == ncovers) {
-            // No cover dominates S. Now check if S strictly beats one of the
-            // covers (detecting a directed specificity cycle through D); if
-            // S is merely mutually ambiguous with (or unordered against) the
-            // covers, that ambiguity is recorded on their own interference
-            // edges and remains visible to check_fully_ambiguous independent
-            // of D's removal.
-            for (j = 0; j < ncovers; j++) {
-                if (method_morespecific_recorded(S, covers[j]))
-                    return 0;
-            }
-        }
+        if (!check_blocker_transfer(ti, (jl_value_t*)matc->spec_types, S, covers, ncovers))
+            return 0;
     }
     return 1;
 }
@@ -3228,7 +3260,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
         // apparent ambiguity is real. When `!include_ambiguous` we drop `m` here
         // either way, so this only computes *has_ambiguity and can be skipped
         // once that is already known.
-        if ((include_ambiguous || !*has_ambiguity) && !check_dominance_transfer(m, &m2, 1, t)) {
+        if ((include_ambiguous || !*has_ambiguity) && !check_dominance_transfer(m, ti, &m2, 1, t)) {
             *has_ambiguity = 1;
             if (include_ambiguous)
                 continue; // another cover may still certify the removal
@@ -3270,7 +3302,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
         if (jl_subtype(ti, u)) {
             result = 1;
             if ((include_ambiguous || !*has_ambiguity) &&
-                !check_dominance_transfer(m, (jl_method_t**)covers.items, covers.len, t)) {
+                !check_dominance_transfer(m, ti, (jl_method_t**)covers.items, covers.len, t)) {
                 *has_ambiguity = 1;
                 if (include_ambiguous)
                     result = 0;
@@ -5391,7 +5423,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                         // dropped method may have been beating a partial match
                         // that minmax does not dominate (a specificity cycle)
                         if (current->m != minmaxm && (include_ambiguous || !*has_ambiguity) &&
-                            !check_dominance_transfer(current->m, &minmaxm, 1, t)) {
+                            !check_dominance_transfer(current->m, current->ti, &minmaxm, 1, t)) {
                             *has_ambiguity = 1;
                             if (!include_ambiguous)
                                 visited->items[current->idx] = (void*)1;
@@ -5451,7 +5483,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                         assert(minmaxm != NULL);
                         if (visited->items[childidx] != (void*)1 && matc->method != minmaxm &&
                             (include_ambiguous || !*has_ambiguity) &&
-                            !check_dominance_transfer(matc->method, &minmaxm, 1, t)) {
+                            !check_dominance_transfer(matc->method, (jl_value_t*)matc->spec_types, &minmaxm, 1, t)) {
                             *has_ambiguity = 1;
                             if (!include_ambiguous)
                                 visited->items[childidx] = (void*)1;
