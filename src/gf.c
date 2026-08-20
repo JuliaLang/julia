@@ -5684,9 +5684,29 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
             assert(visited.items[i] == (void*)0 || visited.items[i] == (void*)1);
             jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
             if (matc->fully_covers != NOT_FULLY_COVERS && found_minmax) {
-                // this was already handled above and below, so we won't learn anything new
-                // by visiting it and it might be a bit costly
-                continue;
+                // minmax (or a match it dominates) was already handled above and
+                // below, so visiting it would not usually learn anything new and
+                // might be a bit costly. But a match the DFS never reaches (one
+                // that strictly beats nothing is never anyone's child) would
+                // otherwise be dropped without the dominance-transfer check that
+                // every other removal runs, losing the ambiguities only it
+                // witnesses (test `AmbigMinmaxSkip`): run that check here, and
+                // sort the match normally when its blocking duties do not
+                // transfer to minmax, so it stays in the result.
+                assert(minmax != NULL);
+                if (visited.items[i] == (void*)1 || matc == minmax)
+                    continue;
+                jl_method_t *minmaxm = minmax->method;
+                if ((include_ambiguous || !has_ambiguity) &&
+                    !check_dominance_transfer(matc->method, (jl_value_t*)matc->spec_types, &minmaxm, 1, t)) {
+                    has_ambiguity = 1;
+                    if (!include_ambiguous)
+                        continue;
+                    // fall through to sort_mlmatches
+                }
+                else {
+                    continue;
+                }
             }
             int child_cycle = sort_mlmatches(t, i, &visited, &stack, &result, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, &has_ambiguity, &found_minmax, minmax == NULL ? NULL : minmax->method);
             if (child_cycle == -1) {
