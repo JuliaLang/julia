@@ -1273,7 +1273,7 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     args[1] = expr;
     args[2] = (jl_value_t*)inmodule;
     args[3] = jl_cstr_to_string(filename);
-    args[4] = jl_box_ulong(line);
+    args[4] = jl_box_long(line);
     args[5] = jl_box_ulong(world);
     args[6] = warn ? jl_true : jl_false;
     jl_task_t *ct = jl_current_task;

@@ -1314,6 +1314,8 @@ function __dot__(x::Expr)
         Expr(:let, undot(dotargs[1]), dotargs[2])
     elseif x.head === :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
+    elseif x.head === :generator || x.head === :filter
+        Expr(x.head, dotargs[1], map(undot, dotargs[2:end])...)
     elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])

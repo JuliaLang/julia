@@ -271,7 +271,7 @@ function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
         id = newleaf(src, K"Identifier", string(a))
-        id = _est_to_dst_ident(id) # support placeholders
+        id = est_to_dst_ident(SyntaxCompatContext(), id) # support placeholders
         id = @mknode(id; context=sc)
         push!(out, id)
     end
@@ -374,19 +374,8 @@ function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_count
     return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
-# "Reserve" a binding: create the binding if it doesn't exist but do not assign
-# to it.
-function reserve_module_binding(mod, name)
-    # TODO: Fix the race condition here: We should really hold the Module's
-    # binding lock during this test-and-set type operation. But the binding
-    # lock is only accessible from C. See also the C code in
-    # `fl_module_unique_name`.
-    if _get_module_binding(mod, name; create=false) === nothing
-        return _get_module_binding(mod, name; create=true) !== nothing
-    else
-        return false
-    end
-end
+const _reserve_binding_lock = ReentrantLock()
+const _reserve_binding_next = WeakKeyDict{Module,Dict{String,Int}}()
 
 # Reserve a global binding named "$basename#$i" in module `mod` for the
 # smallest `i` starting at `0`.
@@ -397,13 +386,20 @@ end
 # However, we should ideally defer it to eval-time to make lowering itself
 # completely non-mutating.
 function reserve_module_binding_i(mod, basename)
-    i = 0
-    while true
-        name = "$basename$i"
-        if reserve_module_binding(mod, Symbol(name))
-            return name
+    @lock _reserve_binding_lock begin
+        counters = get!(() -> Dict{String,Int}(), _reserve_binding_next, mod)
+        i = get(counters, basename, 0)
+        while true
+            name = "$basename$i"
+            symname = Symbol(name)
+            existing = _get_module_binding(mod, symname; create=false)
+            if existing === nothing && _get_module_binding(mod, symname; create=true) !== nothing
+                counters[basename] = i + 1
+                return name
+            end
+            i += 1
         end
-        i += 1
+
     end
 end
 
