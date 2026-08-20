@@ -181,6 +181,23 @@ static size_t world_pos(size_t w, jl_world_segment_t *obs) JL_NOTSAFEPOINT
     return p;
 }
 
+// Is `w` on the observer's trunk? Trunk worlds are exactly the worlds whose
+// position in the observer's total order is themselves, so interval bounds
+// between them compare exactly as integers; a merged side branch's worlds
+// (e.g. a grafted image history) are not on the trunk even though they reach
+// the observer.
+JL_DLLEXPORT int jl_world_on_trunk(size_t w, size_t observer) JL_NOTSAFEPOINT
+{
+    jl_world_segment_t *obs = jl_world_get_segment(jl_world_seg(observer));
+    size_t ws = jl_world_seg(w);
+    if (obs == NULL || ws == obs->id)
+        return 1; // the observer's own segment, or a fully linear history
+    if (ws < obs->anc_nbits && obs->join_pos[ws] == JL_WORLD_POS_TRUNK)
+        return 1;
+    // unmaterialized ancestors (the boot prefix) are part of every trunk
+    return ws < obs->id && jl_world_get_segment(ws) == NULL;
+}
+
 // The earliest world in the observer's total order whose history includes
 // both `a` and `b`. For comparable worlds this is simply the later of the
 // two; for worlds on different branches it is the later of their merge
