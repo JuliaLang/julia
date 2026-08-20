@@ -167,7 +167,7 @@ int pushargs_slot_pointer_assignment_roots() {
   jl_value_t **slot = &margs[1];
   *slot = (jl_value_t*)val;
   jl_gc_safepoint();
-  look_at_value(val);
+  look_at_value((jl_value_t*)val);
   JL_GC_POP();
   return 0;
 }
@@ -345,7 +345,7 @@ void rooted_exprarg_siblings_keep_roots(jl_expr_t *warning) {
   jl_value_t *level = jl_exprarg(warning, 0);
   jl_value_t *group = jl_exprarg(warning, 1);
   (void)group;
-  jl_value_t *kwargs = jl_alloc_vec_any(0);
+  jl_value_t *kwargs = (jl_value_t*)jl_alloc_vec_any(0);
   (void)kwargs;
   look_at_value(level);
   JL_GC_POP();
@@ -357,7 +357,7 @@ void rooted_returned_exprarg_siblings_keep_roots(void) {
   jl_value_t *level = jl_exprarg(warning, 0);
   jl_value_t *group = jl_exprarg(warning, 1);
   (void)group;
-  jl_value_t *kwargs = jl_alloc_vec_any(0);
+  jl_value_t *kwargs = (jl_value_t*)jl_alloc_vec_any(0);
   (void)kwargs;
   look_at_value(level);
   JL_GC_POP();
@@ -395,7 +395,7 @@ void root_outparam_after_inlined_call(void) {
 }
 
 void apply_single_rooted_value(void) {
-  jl_value_t *f = jl_svec1(NULL);
+  jl_value_t *f = (jl_value_t*)jl_svec1(NULL);
   JL_GC_PUSH1(&f);
   (void)jl_apply(&f, 1);
   JL_GC_POP();
@@ -815,7 +815,7 @@ typedef struct _varbinding {
     jl_value_t *ub;
 } jl_varbinding_t;
 
-extern void escape_vb(jl_varbinding_t **vb);
+extern void escape_vb(jl_varbinding_t *vb);
 void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNROOTED) {
     jl_varbinding_t vb = { NULL, lb, ub };
     JL_GC_PUSH2(&vb.lb, &vb.ub);
