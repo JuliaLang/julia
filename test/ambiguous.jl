@@ -280,7 +280,7 @@ end
 for f in (Ambig8.f, Ambig8.g)
     @test length(methods(f, (Integer,))) == 2 # 3 is also acceptable
     @test length(methods(f, (Signed,))) == 1 # 2 is also acceptable
-    # all three matches are required: `Union{AbstractIrrational, Int}` is
+    # all three matches are required as witnesses: `Union{AbstractIrrational, Int}` is
     # morespecific than `Signed`, so without `Union{typeof(pi), Integer}`
     # (unordered with it) the report would read as resolved at `(Int,)`,
     # where the call is really ambiguous
@@ -711,7 +711,7 @@ end
 # resolver may be rejected because a loser is `morespecific` than it globally,
 # even when the loser's overlap with it inside the intersection is itself
 # resolved by other methods. Here dispatch resolves every point of the
-# intersection of methods 1 and 2 (methods 7 and 8 rescue the only points where
+# intersection of methods 1 and 2 (methods 7 and 8 cover the only points where
 # the loser chain 2 ≻ 6 ≻ 5 ≻ 3 overlaps method 3). The region-aware
 # union-coverage resolution computes that the cycle members are fully covered
 # over this query before they can disqualify method 3, so the pair is correctly
@@ -882,9 +882,9 @@ ambig_exclusion_caller() = AmbigResolveByExclusion.g(AmbigResolveByExclusion.A1(
 # `(A1, B1)`: method 3, the cover applying there, is itself beaten by method 4,
 # so it blocks nothing. A region-blind transfer check accepts method 5 (which
 # blocks method 4, but only where it applies) and drops method 1, leaving the
-# reported subset at `(A1, B1)` reading as resolved to method 4. Method 3 also
-# sits in a specificity cycle with methods 1 and 2 (1 ≻ 2 ≻ 3 ≻ 1), which is
-# where a transfer check that ignores cycles would additionally lose the
+# reported subset at `(A1, B1)` appearing to have resolved that to method 4.
+# Method 3 also sits in a specificity cycle with methods 1 and 2 (1 ≻ 2 ≻ 3 ≻ 1),
+# which is where a transfer check that ignores cycles would additionally lose the
 # ambiguity flag.
 module AmbigTransferRegion
 abstract type Top end
@@ -902,7 +902,7 @@ f(::MidA, ::A1) = 5                              # beats 1 and 2
 end
 let A1 = AmbigTransferRegion.A1, B1 = AmbigTransferRegion.B1,
     ms = sort(collect(methods(AmbigTransferRegion.f)), by = m -> m.line),
-    (m1, m2, m3, m4, m5) = (ms[1], ms[2], ms[3], ms[4], ms[5])
+    (m1, m2, m3, m4, m5) = ms
     # the specificity cycle that makes the dominance-transfer check necessary
     @test Base.morespecific(m1, m2) && Base.morespecific(m2, m3) && Base.morespecific(m3, m1)
     # method 1 is dominated at every point of its region (by method 5 at
@@ -917,7 +917,7 @@ let A1 = AmbigTransferRegion.A1, B1 = AmbigTransferRegion.B1,
             nothing, -1, Base.get_world_counter(), true,
             Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test ambig[] == 1
-        # methods 4 and 5 witness the ambiguity at `(A1, A1)`. Method 1 is
+        # Methods 4 and 5 witness the ambiguity at `(A1, A1)`. Method 1 is
         # covered over this whole region by the union of 5 and 3, so it can
         # never be selected -- but it must stay reported anyway, because it is
         # the only match blocking method 4 at `(A1, B1)`: dropping it would make
@@ -962,8 +962,9 @@ f(::Union{P,Q}, ::Vararg{R}) = 2               # fully covers, beats nothing, un
 f(::P, ::Vararg{P}) = 3                        # partial, beats 1, unordered with 2
 end
 let ms = sort(collect(methods(AmbigMinmaxSkip.f)), by = m -> m.line),
-    (m1, m2, m3) = (ms[1], ms[2], ms[3]),
-    P = AmbigMinmaxSkip.P, Q = AmbigMinmaxSkip.Q
+    (m1, m2, m3) = ms,
+    P = AmbigMinmaxSkip.P,
+    Q = AmbigMinmaxSkip.Q
     # the intransitive specificity triangle
     @test Base.morespecific(m3, m1) && Base.morespecific(m1, m2)
     @test !Base.morespecific(m2, m3) && !Base.morespecific(m3, m2)
