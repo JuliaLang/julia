@@ -112,6 +112,8 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAF
 
 // expression evaluator
 
+static jl_value_t *interpret_call(jl_method_instance_t *mi, jl_value_t *f, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT;
+
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
@@ -120,7 +122,11 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     size_t i;
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
-    jl_value_t *result = jl_apply(argv, nargs);
+    jl_value_t *result;
+    if (__unlikely(jl_current_task->rcjulia))
+        result = jl_rc_apply(argv, nargs);
+    else
+        result = jl_apply(argv, nargs);
     JL_GC_POP();
     return result;
 }
@@ -136,6 +142,17 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     jl_value_t *c = args[0];
     assert(jl_is_code_instance(c) || jl_is_method_instance(c));
     jl_value_t *result = NULL;
+    if (__unlikely(jl_current_task->rcjulia)) {
+        // RCJulia mode never runs native code (v1): re-route the
+        // invoke target through the interpreter so its operations stay
+        // checked. (Only reachable from generated-function-produced IR;
+        // uninferred lowered source contains no :invoke.)
+        jl_method_instance_t *mi = jl_is_code_instance(c) ?
+            jl_get_ci_mi((jl_code_instance_t*)c) : (jl_method_instance_t*)c;
+        result = interpret_call(mi, argv[0], &argv[1], nargs - 2);
+        JL_GC_POP();
+        return result;
+    }
     if (jl_is_code_instance(c)) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)c;
         assert(jl_atomic_load_relaxed(&codeinst->min_world) <= jl_current_task->world_age &&
@@ -234,10 +251,16 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_quotenode_value(e);
     }
     if (jl_is_globalref(e)) {
-        return jl_eval_globalref((jl_globalref_t*)e, jl_current_task->world_age);
+        jl_task_t *ct = jl_current_task;
+        if (__unlikely(ct->rcjulia))
+            return jl_rc_globalref_value(jl_globalref_mod(e), jl_globalref_name(e), ct->world_age);
+        return jl_eval_globalref((jl_globalref_t*)e, ct->world_age);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
-        return jl_eval_global_var(s->module, (jl_sym_t*)e, jl_current_task->world_age);
+        jl_task_t *ct = jl_current_task;
+        if (__unlikely(ct->rcjulia))
+            return jl_rc_globalref_value(s->module, (jl_sym_t*)e, ct->world_age);
+        return jl_eval_global_var(s->module, (jl_sym_t*)e, ct->world_age);
     }
     if (jl_is_pinode(e)) {
         jl_value_t *val = eval_value(jl_fieldref_noalloc(e, 0), s);
@@ -311,6 +334,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
             argv[i] = eval_value(args[i], s);
+        if (__unlikely(jl_current_task->rcjulia) && jl_is_datatype(argv[0]) &&
+                jl_is_mutable_datatype(argv[0]))
+            jl_capability_error("new");
         jl_value_t *v = jl_new_structv((jl_datatype_t*)argv[0], &argv[1], nargs - 1);
         JL_GC_POP();
         return v;
@@ -320,11 +346,15 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, 2);
         argv[0] = eval_value(args[0], s);
         argv[1] = eval_value(args[1], s);
+        if (__unlikely(jl_current_task->rcjulia) && jl_is_datatype(argv[0]) &&
+                jl_is_mutable_datatype(argv[0]))
+            jl_capability_error("new");
         jl_value_t *v = jl_new_structt((jl_datatype_t*)argv[0], argv[1]);
         JL_GC_POP();
         return v;
     }
     else if (head == jl_new_opaque_closure_sym) {
+        jl_check_rc("new_opaque_closure");
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
@@ -364,6 +394,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         jl_error("could not determine static parameter value");
     }
     else if (head == jl_copyast_sym) {
+        // quoted `Expr` literals materialize a fresh mutable AST copy per
+        // evaluation: both a mutable allocation and an egal-unstable result
+        jl_check_rc("copyast");
         return jl_copy_ast(eval_value(args[0], s));
     }
     else if (head == jl_exc_sym) {
@@ -383,12 +416,15 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_nothing;
     }
     else if (head == jl_method_sym && nargs == 1) {
+        jl_check_rc("method");
         return eval_methoddef(ex, s);
     }
     else if (head == jl_foreigncall_sym) {
+        jl_check_rc("foreigncall");
         jl_error("`ccall` requires the compiler");
     }
     else if (head == jl_foreignglobal_sym) {
+        jl_check_rc("foreignglobal");
         assert(nargs == 1);
         jl_value_t *fptr = jl_exprarg(ex, 0);
         if (jl_is_quotenode(fptr)) {
@@ -423,6 +459,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return r;
     }
     else if (head == jl_cfunction_sym) {
+        jl_check_rc("cfunction");
         jl_error("`cfunction` requires the compiler");
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
@@ -858,7 +895,14 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES
     jl_value_t *ret = NULL;
     jl_code_info_t *src = NULL;
     if (jl_is_method(mi->def.value)) {
-        if (mi->def.method->source) {
+        // For dual-body (`if @generated`) methods the interpreter normally
+        // runs the fallback source, but under RCJulia mode we prefer
+        // the generated expansion: it is what compiled execution uses, and
+        // fallback bodies are commonly impure in ways the expansion is not
+        // (e.g. `ntuple`'s fallback consults `Base._return_type`). The choice
+        // is a fixed function of the mode, so it stays consistent.
+        int prefer_expansion = jl_current_task->rcjulia && mi->def.method->generator != NULL;
+        if (mi->def.method->source && !prefer_expansion) {
             jl_method_t *m = mi->def.method;
             // Acquire pairs with the release publish below: a reader that sees
             // the uncompressed CodeInfo pointer must also see its contents.
@@ -915,12 +959,209 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
     return (jl_code_info_t*)code_or_ci;
 }
 
+// RCJulia mode (`Core._rcjulia_call`)
+
+// Reject any control flow that could re-execute a statement: termination of
+// RCJulia code is structural, not proven. Statement `i` (0-based) is branch
+// label `i + 1` (1-based), so a legal (forward) branch target must be
+// strictly greater than `i + 1`. `EnterNode` catch destinations are forward
+// in front-end-lowered IR, but are checked too since generated functions may
+// return arbitrary IR.
+static void rc_check_no_backedges(jl_code_info_t *src) JL_CANSAFEPOINT
+{
+    jl_array_t *stmts = src->code;
+    size_t ns = jl_array_nrows(stmts);
+    for (size_t i = 0; i < ns; i++) {
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+        size_t target = 0;
+        if (jl_is_gotonode(stmt))
+            target = jl_gotonode_label(stmt);
+        else if (jl_is_gotoifnot(stmt))
+            target = jl_gotoifnot_label(stmt);
+        else if (jl_is_enternode(stmt))
+            target = jl_enternode_catch_dest(stmt); // 0 if no catch
+        if (target && target <= i + 1)
+            jl_capability_error("backedge");
+    }
+}
+
+// --- well-founded recursion order ---
+//
+// Re-entering a method that already has an active RCJulia frame is permitted
+// only if the arguments strictly decrease in the order defined here:
+// structurally smaller types are smaller, and at equal types, smaller values
+// interpreted as bitstypes are smaller. The order is well-founded (no
+// infinite strictly-decreasing chains), and the method table is frozen
+// inside the mode, so an infinite call chain would require infinitely many
+// occurrences of some single method — impossible when each successive
+// occurrence must decrease. Every call chain is therefore finite by
+// construction; the depth cap below is only a physical stack backstop.
+//
+// TODO: allow methods to supply a custom well-founded relation (cf.
+// `Method.recursion_relation` used by inference), checked/trusted per the
+// mode's rules.
+
+static size_t rc_type_size(jl_value_t *t) JL_NOTSAFEPOINT;
+
+static size_t rc_term_size(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (jl_is_type(t) || jl_is_vararg(t))
+        return rc_type_size(t);
+    return 1; // bits values, symbols and other leaves
+}
+
+// number of nodes in the type term, counting non-type parameters as leaves
+static size_t rc_type_size(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (jl_is_datatype(t)) {
+        size_t sz = 1;
+        jl_svec_t *p = ((jl_datatype_t*)t)->parameters;
+        for (size_t i = 0; i < jl_svec_len(p); i++)
+            sz += rc_term_size(jl_svecref(p, i));
+        return sz;
+    }
+    if (jl_is_uniontype(t))
+        return 1 + rc_type_size(((jl_uniontype_t*)t)->a) + rc_type_size(((jl_uniontype_t*)t)->b);
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        return 1 + rc_type_size(ua->var->lb) + rc_type_size(ua->var->ub) + rc_type_size(ua->body);
+    }
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *v = (jl_vararg_t*)t;
+        return 1 + (v->T ? rc_term_size(v->T) : 0) + (v->N ? rc_term_size(v->N) : 0);
+    }
+    return 1; // TypeVar occurrences and other leaves
+}
+
+// three-way comparison of two isbits values of the same concrete type:
+// primitive types compare their bit pattern as an unsigned (little-endian)
+// integer; composite types compare field-lexicographically, which never
+// looks at padding bytes. Returns -1/0/1, or 2 for incomparable (inline
+// union fields, kept out of scope for now).
+static int rc_bits_cmp(jl_datatype_t *dt, const char *pa, const char *pb) JL_NOTSAFEPOINT
+{
+    if (jl_is_primitivetype(dt)) {
+        size_t nb = jl_datatype_size(dt);
+        for (size_t i = nb; i-- > 0; ) {
+            uint8_t av = ((const uint8_t*)pa)[i], bv = ((const uint8_t*)pb)[i];
+            if (av != bv)
+                return av < bv ? -1 : 1;
+        }
+        return 0;
+    }
+    assert(jl_is_datatype(dt));
+    size_t nf = jl_datatype_nfields(dt);
+    for (size_t i = 0; i < nf; i++) {
+        jl_value_t *ft = jl_field_type_concrete(dt, i);
+        if (!jl_is_datatype(ft))
+            return 2;
+        int c = rc_bits_cmp((jl_datatype_t*)ft, pa + jl_field_offset(dt, i), pb + jl_field_offset(dt, i));
+        if (c != 0)
+            return c;
+    }
+    return 0;
+}
+
+static int rc_type_smaller(jl_value_t *t, jl_value_t *s) JL_CANSAFEPOINT;
+
+// order on type parameters: types compare as type terms; other parameter
+// values (Val payloads, tuple lengths, ...) compare as bits at equal type
+static int rc_param_smaller(jl_value_t *p, jl_value_t *q) JL_CANSAFEPOINT
+{
+    if (jl_is_type(p) && jl_is_type(q))
+        return rc_type_smaller(p, q);
+    jl_value_t *tp = jl_typeof(p);
+    if (tp == jl_typeof(q) && jl_is_datatype(tp) && jl_isbits(tp))
+        return rc_bits_cmp((jl_datatype_t*)tp, (const char*)p, (const char*)q) == -1;
+    return 0;
+}
+
+// structural order on type terms: smaller size is smaller; at equal size,
+// the same type constructor may descend lexicographically through its
+// parameters (this is what orders `Val{2}` below `Val{3}`)
+static int rc_type_smaller(jl_value_t *t, jl_value_t *s)
+{
+    size_t szt = rc_type_size(t), szs = rc_type_size(s);
+    if (szt != szs)
+        return szt < szs;
+    if (!jl_is_datatype(t) || !jl_is_datatype(s))
+        return 0;
+    jl_datatype_t *dt = (jl_datatype_t*)t, *ds = (jl_datatype_t*)s;
+    if (dt->name != ds->name)
+        return 0;
+    jl_svec_t *pt = dt->parameters, *ps = ds->parameters;
+    size_t np = jl_svec_len(pt);
+    if (np != jl_svec_len(ps))
+        return 0;
+    for (size_t i = 0; i < np; i++) {
+        jl_value_t *p = jl_svecref(pt, i), *q = jl_svecref(ps, i);
+        if (jl_egal(p, q))
+            continue;
+        return rc_param_smaller(p, q);
+    }
+    return 0; // egal
+}
+
+static int rc_value_smaller(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT
+{
+    if (jl_is_type(a) && jl_is_type(b))
+        return rc_type_smaller(a, b);
+    jl_value_t *ta = jl_typeof(a);
+    if (ta != jl_typeof(b))
+        return rc_type_smaller(ta, jl_typeof(b));
+    if (jl_is_datatype(ta) && jl_isbits(ta))
+        return rc_bits_cmp((jl_datatype_t*)ta, (const char*)a, (const char*)b) == -1;
+    return 0; // same non-bits type, not egal: no order (v1)
+}
+
+// shortlex over the argument list: fewer arguments is smaller (tuple
+// peeling through Vararg methods); at equal length, the first non-egal
+// position must decrease. An egal re-entry is never smaller — and under
+// the mode's consistency it is guaranteed to diverge, so rejecting it
+// loses no terminating program.
+static int rc_args_smaller(jl_value_t *newf, jl_value_t **newargs, uint32_t nnew,
+                           jl_value_t *oldf, jl_value_t **oldargs, uint32_t nold) JL_CANSAFEPOINT
+{
+    if (nnew != nold)
+        return nnew < nold;
+    if (!jl_egal(newf, oldf))
+        return rc_value_smaller(newf, oldf);
+    for (uint32_t i = 0; i < nnew; i++) {
+        jl_value_t *a = newargs[i], *b = oldargs[i];
+        if (jl_egal(a, b))
+            continue;
+        return rc_value_smaller(a, b);
+    }
+    return 0;
+}
+
+// Apply `args` (with args[0] the callable) under RCJulia mode.
+// Builtins and intrinsics carry their traps in their C implementations, so
+// they may run their (native) fptrs; generic methods are forced through the
+// interpreter so that every primitive operation they perform stays checked.
+JL_DLLEXPORT jl_value_t *jl_rc_apply(jl_value_t **args, size_t nargs)
+{
+    jl_task_t *ct = jl_current_task;
+    assert(ct->rcjulia);
+    assert(nargs >= 1);
+    jl_value_t *f = args[0];
+    if (jl_isa(f, (jl_value_t*)jl_builtin_type) || jl_typeof(f) == (jl_value_t*)jl_intrinsic_type)
+        return jl_apply(args, nargs);
+    if (jl_is_opaque_closure(f))
+        jl_capability_error("opaque_closure");
+    size_t world = ct->world_age;
+    jl_method_instance_t *mi = jl_method_lookup(args, nargs, world);
+    if (mi == NULL)
+        jl_method_error(f, &args[1], nargs, world);
+    JL_GC_PROMISE_ROOTED(mi); // rooted through the method's specialization cache
+    return interpret_call(mi, f, &args[1], nargs - 1);
+}
+
 // interpreter entry points
 
-jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+static jl_value_t *NOINLINE interpret_call(jl_method_instance_t *mi, jl_value_t *f, jl_value_t **args, uint32_t nargs)
 {
     interpreter_state *s;
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
     jl_code_info_t *src = NULL;
@@ -964,12 +1205,53 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->sparam_vals = mi->sparam_vals;
     s->preevaluation = 0;
     s->continue_at = 0;
+    // The RCJulia checks below may throw before eval_body ever assigns
+    // s->ip; leaving it uninitialized would put stack garbage into any
+    // captured backtrace frame.
+    s->ip = 0;
     s->mi = mi;
     s->ci = ci;
     JL_GC_ENABLEFRAME(s);
+    jl_rc_frame_t rcframe;
+    int rc = ct->rcjulia != 0;
+    if (__unlikely(rc)) {
+        rc_check_no_backedges(src);
+        uint32_t depth = ct->rc_frames ? ct->rc_frames->depth + 1 : 1;
+        if (depth > JL_RC_MAX_DEPTH)
+            jl_capability_error("depth_limit");
+        jl_method_t *method = jl_is_method(mi->def.value) ? mi->def.method : NULL;
+        if (method != NULL) {
+            // well-founded recursion: compare against the innermost active
+            // frame of the same method (adjacent decreases suffice for
+            // well-foundedness; no transitivity needed)
+            for (jl_rc_frame_t *pf = ct->rc_frames; pf != NULL; pf = pf->prev) {
+                if (pf->method == method) {
+                    if (!rc_args_smaller(f, args, nargs, pf->f, pf->args, pf->nargs))
+                        jl_capability_error("recursion");
+                    break;
+                }
+            }
+        }
+        rcframe.method = method;
+        rcframe.f = f;
+        rcframe.args = args; // rooted by the calling frame for this frame's extent
+        rcframe.nargs = nargs;
+        rcframe.depth = depth;
+        rcframe.prev = ct->rc_frames;
+        ct->rc_frames = &rcframe;
+        // exceptional exits restore ct->rc_frames via the handler chain
+        // (see jl_eh_restore_state)
+    }
     jl_value_t *r = eval_body(stmts, s, 0, 0);
+    if (__unlikely(rc))
+        ct->rc_frames = rcframe.prev;
     JL_GC_POP();
     return r;
+}
+
+jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    return interpret_call(jl_get_ci_mi(codeinst), f, args, nargs);
 }
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;

@@ -735,12 +735,14 @@ JL_CALLABLE(jl_f_ifelse)
 
 JL_CALLABLE(jl_f_current_scope)
 {
+    jl_check_rc("current_scope");
     JL_NARGS(current_scope, 0, 0);
     return jl_current_task->scope;
 }
 
 JL_CALLABLE(jl_f__new_cancel_source)
 {
+    jl_check_rc("_new_cancel_source");
     // each argument is a parent CancellationTokenSource (checked, along
     // with distinctness, by jl_new_cancel_source); no arguments makes a
     // root source
@@ -758,6 +760,7 @@ JL_CALLABLE(jl_f__new_cancel_source)
 // (reset_ctx), which has no interpreter equivalent.
 JL_CALLABLE(jl_f_cancellation_point)
 {
+    jl_check_rc("cancellation_point!");
     JL_NARGS(cancellation_point!, 1, 1);
     jl_task_t *ct = jl_current_task;
     jl_value_t *src = args[0];
@@ -826,7 +829,12 @@ JL_CALLABLE(jl_f__apply_iterate)
     assert(iterate);
     args += 1;
     nargs -= 1;
-    if (nargs == 2) {
+    // In RCJulia mode only tuple/svec/NamedTuple splatting is
+    // permitted (checked in the sizing loop below): splatting Memory/Array
+    // reads mutable memory, and the generic path calls `iterate` natively.
+    // The fast paths are skipped so the final apply stays checked.
+    int pure = jl_current_task->rcjulia != 0;
+    if (nargs == 2 && !pure) {
         // some common simple cases
         if (f == BUILTIN(svec)) {
             if (jl_is_svec(args[1]))
@@ -873,6 +881,9 @@ JL_CALLABLE(jl_f__apply_iterate)
         }
         else if (jl_is_tuple(args[i]) || jl_is_namedtuple(args[i])) {
             precount += jl_nfields(args[i]);
+        }
+        else if (pure) {
+            jl_capability_error("_apply_iterate");
         }
         else if (jl_is_genericmemory(args[i])) {
             precount += ((jl_genericmemory_t*)args[i])->length;
@@ -1038,7 +1049,7 @@ JL_CALLABLE(jl_f__apply_iterate)
         ((void**)roots)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(1);
 #endif
     }
-    jl_value_t *result = jl_apply(newargs, n);
+    jl_value_t *result = pure ? jl_rc_apply(newargs, n) : jl_apply(newargs, n);
     JL_GC_POP();
     return result;
 }
@@ -1046,6 +1057,7 @@ JL_CALLABLE(jl_f__apply_iterate)
 // this is like a regular call, but always runs in the newest world
 JL_CALLABLE(jl_f_invokelatest)
 {
+    jl_check_rc("invokelatest");
     JL_NARGSV(invokelatest, 1);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -1060,6 +1072,7 @@ JL_CALLABLE(jl_f_invokelatest)
 // If world > jl_atomic_load_acquire(&jl_world_counter), run in the latest world.
 JL_CALLABLE(jl_f_invoke_in_world)
 {
+    jl_check_rc("invoke_in_world");
     JL_NARGSV(invoke_in_world, 2);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -1075,10 +1088,49 @@ JL_CALLABLE(jl_f_invoke_in_world)
     return ret;
 }
 
+// Enter RCJulia mode: freeze the task's world age to `args[0]` and
+// apply `args[1:end]` with every impure primitive operation trapped (throwing
+// CapabilityError). Any call that completes under the mode is
+// `:foldable` by construction; `:nothrow` is deliberately not implied — a
+// consistent throw (including the traps themselves) is a foldable outcome.
+JL_CALLABLE(jl_f__rcjulia_call)
+{
+    JL_NARGSV(_rcjulia_call, 2);
+    JL_TYPECHK(_rcjulia_call, ulong, args[0]);
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    uint16_t last_rc = ct->rcjulia;
+    jl_value_t *ret = NULL;
+    size_t world = jl_unbox_ulong(args[0]);
+    size_t max_world = jl_atomic_load_acquire(&jl_world_counter);
+    if (world > max_world)
+        world = max_world;
+    // nested entries must not raise the frozen world: the outer mode's
+    // execution would otherwise observe state its own world cannot see
+    if (last_rc && world > last_age)
+        jl_capability_error("_rcjulia_call");
+    if (last_rc == UINT16_MAX)
+        jl_capability_error("depth_limit");
+    JL_TRY {
+        ct->world_age = world;
+        ct->rcjulia = last_rc + 1;
+        ret = jl_rc_apply(&args[1], nargs - 1);
+        ct->world_age = last_age;
+        ct->rcjulia = last_rc;
+    }
+    JL_CATCH {
+        ct->world_age = last_age;
+        ct->rcjulia = last_rc;
+        jl_rethrow();
+    }
+    return ret;
+}
+
 JL_CALLABLE(jl_f__call_in_world_total)
 {
     JL_NARGSV(_call_in_world_total, 2);
     JL_TYPECHK(_call_in_world_total, ulong, args[0]);
+    jl_check_rc("_call_in_world_total");
     jl_task_t *ct = jl_current_task;
     int last_in = ct->ptls->in_pure_callback;
     jl_value_t *ret = NULL;
@@ -1214,6 +1266,12 @@ JL_CALLABLE(jl_f_getfield)
         return jl_f_getglobal(NULL, args, 2); // we just ignore the atomic order and boundschecks
     jl_datatype_t *st = (jl_datatype_t*)vt;
     size_t idx = get_checked_fieldindex("getfield", st, v, args[1], 0);
+    // RCJulia mode may read `const` fields of mutable objects — the language
+    // already guarantees they never change after construction (this is what
+    // admits set-once runtime metadata such as `DataType.parameters`)
+    if (__unlikely(jl_current_task->rcjulia) && st->name->mutabl &&
+            !jl_field_isconst(st, idx))
+        jl_capability_error("getfield");
     int isatomic = jl_field_isatomic(st, idx);
     if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified)
         jl_atomic_error("getfield: non-atomic field cannot be accessed atomically");
@@ -1229,6 +1287,7 @@ JL_CALLABLE(jl_f_getfield)
 
 JL_CALLABLE(jl_f_setfield)
 {
+    jl_check_rc("setfield!");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(setfield!, 3, 4);
     if (nargs == 4) {
@@ -1253,6 +1312,7 @@ JL_CALLABLE(jl_f_setfield)
 
 JL_CALLABLE(jl_f_swapfield)
 {
+    jl_check_rc("swapfield!");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(swapfield!, 3, 4);
     if (nargs == 4) {
@@ -1272,6 +1332,7 @@ JL_CALLABLE(jl_f_swapfield)
 
 JL_CALLABLE(jl_f_modifyfield)
 {
+    jl_check_rc("modifyfield!");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(modifyfield!, 4, 5);
     if (nargs == 5) {
@@ -1291,6 +1352,7 @@ JL_CALLABLE(jl_f_modifyfield)
 
 JL_CALLABLE(jl_f_replacefield)
 {
+    jl_check_rc("replacefield!");
     enum jl_memory_order success_order = jl_memory_order_notatomic;
     JL_NARGS(replacefield!, 4, 6);
     if (nargs >= 5) {
@@ -1321,6 +1383,7 @@ JL_CALLABLE(jl_f_replacefield)
 
 JL_CALLABLE(jl_f_setfieldonce)
 {
+    jl_check_rc("setfieldonce!");
     enum jl_memory_order success_order = jl_memory_order_notatomic;
     JL_NARGS(setfieldonce!, 3, 5);
     if (nargs >= 4) {
@@ -1465,6 +1528,13 @@ JL_CALLABLE(jl_f_isdefined)
             order = jl_memory_order_unordered;
         if (order < jl_memory_order_unordered)
             jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
+        if (__unlikely(jl_current_task->rcjulia)) {
+            jl_value_t *v = NULL;
+            int kind = jl_rc_binding_constant(m, s, jl_current_task->world_age, &v);
+            if (kind < 0)
+                jl_capability_error("isdefined");
+            return kind == 1 ? jl_true : jl_false;
+        }
         int bound = jl_boundp(m, s, 1); // seq_cst always
         return bound ? jl_true : jl_false;
     }
@@ -1488,6 +1558,9 @@ JL_CALLABLE(jl_f_isdefined)
             return jl_false;
         }
     }
+    if (__unlikely(jl_current_task->rcjulia) && vt->name->mutabl &&
+            !jl_field_isconst(vt, idx))
+        jl_capability_error("isdefined");
     int isatomic = jl_field_isatomic(vt, idx);
     if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified)
         jl_atomic_error("isdefined: non-atomic field cannot be accessed atomically");
@@ -1520,6 +1593,8 @@ JL_CALLABLE(jl_f_getglobal)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
     else if (order >= jl_memory_order_seq_cst)
         jl_fence();
+    if (__unlikely(jl_current_task->rcjulia))
+        return jl_rc_globalref_value(mod, sym, jl_current_task->world_age);
     jl_value_t *v = jl_eval_global_var(mod, sym, jl_current_task->world_age); // relaxed load
     if (order >= jl_memory_order_acquire)
         jl_fence();
@@ -1549,12 +1624,22 @@ JL_CALLABLE(jl_f_isdefinedglobal)
         order = jl_memory_order_unordered;
     if (order < jl_memory_order_unordered)
         jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
+    if (__unlikely(jl_current_task->rcjulia)) {
+        // in RCJulia mode, definedness may only be observed for
+        // bindings whose state is fixed within the frozen world
+        jl_value_t *v = NULL;
+        int kind = jl_rc_binding_constant(m, s, jl_current_task->world_age, &v);
+        if (kind < 0)
+            jl_capability_error("isdefinedglobal");
+        return kind == 1 ? jl_true : jl_false;
+    }
     int bound = jl_boundp(m, s, allow_import); // seq_cst always
     return bound ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_setglobal)
 {
+    jl_check_rc("setglobal!");
     enum jl_memory_order order = jl_memory_order_release;
     JL_NARGS(setglobal!, 3, 4);
     if (nargs == 4) {
@@ -1591,6 +1676,7 @@ JL_CALLABLE(jl_f_get_binding_type)
 
 JL_CALLABLE(jl_f_swapglobal)
 {
+    jl_check_rc("swapglobal!");
     enum jl_memory_order order = jl_memory_order_release;
     JL_NARGS(swapglobal!, 3, 4);
     if (nargs == 4) {
@@ -1610,6 +1696,7 @@ JL_CALLABLE(jl_f_swapglobal)
 
 JL_CALLABLE(jl_f_modifyglobal)
 {
+    jl_check_rc("modifyglobal!");
     enum jl_memory_order order = jl_memory_order_release;
     JL_NARGS(modifyglobal!, 4, 5);
     if (nargs == 5) {
@@ -1629,6 +1716,7 @@ JL_CALLABLE(jl_f_modifyglobal)
 
 JL_CALLABLE(jl_f_replaceglobal)
 {
+    jl_check_rc("replaceglobal!");
     enum jl_memory_order success_order = jl_memory_order_release;
     JL_NARGS(replaceglobal!, 4, 6);
     if (nargs >= 5) {
@@ -1658,6 +1746,7 @@ JL_CALLABLE(jl_f_replaceglobal)
 
 JL_CALLABLE(jl_f_setglobalonce)
 {
+    jl_check_rc("setglobalonce!");
     enum jl_memory_order success_order = jl_memory_order_release;
     JL_NARGS(setglobalonce!, 3, 5);
     if (nargs >= 4) {
@@ -1689,6 +1778,7 @@ JL_CALLABLE(jl_f_setglobalonce)
 // declare_global(module::Module, name::Symbol, [strong::Bool=false, [ty::Type]])
 JL_CALLABLE(jl_f_declare_global)
 {
+    jl_check_rc("declare_global");
     JL_NARGS(declare_global, 3, 4);
     JL_TYPECHK(declare_global, module, args[0]);
     JL_TYPECHK(declare_global, symbol, args[1]);
@@ -1705,6 +1795,7 @@ JL_CALLABLE(jl_f_declare_global)
 
 JL_CALLABLE(jl_f_declare_const)
 {
+    jl_check_rc("declare_const");
     JL_NARGS(declare_const, 2, 3);
     JL_TYPECHK(declare_const, module, args[0]);
     if (nargs == 3)
@@ -1719,6 +1810,7 @@ JL_CALLABLE(jl_f_declare_const)
 // define_method(module::Module, fname_or_mt, argdata, code) - define method
 JL_CALLABLE(jl_f_define_method)
 {
+    jl_check_rc("define_method");
     if (nargs != 2 && nargs != 4)
         jl_error("define_method requires 2 or 4 arguments");
     JL_TYPECHK(define_method, module, args[0]);
@@ -1765,6 +1857,7 @@ JL_CALLABLE(jl_f_define_method)
 //     _import(to::Module, mod::Module, asname::Symbol)
 JL_CALLABLE(jl_f__import)
 {
+    jl_check_rc("_import");
     JL_NARGS(_import, 3, 5);
     JL_TYPECHK(_import, module, args[0]);
     JL_TYPECHK(_import, module, args[1]);
@@ -1788,6 +1881,7 @@ JL_CALLABLE(jl_f__import)
 // _using(to::Module, from::Module)
 JL_CALLABLE(jl_f__using)
 {
+    jl_check_rc("_using");
     JL_NARGS(_using, 2, 3);
     JL_TYPECHK(_using, module, args[0]);
     JL_TYPECHK(_using, module, args[1]);
@@ -1910,6 +2004,7 @@ JL_CALLABLE(jl_f_applicable)
 
 JL_CALLABLE(jl_f_invoke)
 {
+    jl_check_rc("invoke");
     JL_NARGSV(invoke, 2);
     jl_value_t *argtypes = args[1];
     if (jl_is_method(argtypes)) {
@@ -1974,6 +2069,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 
 JL_CALLABLE(jl_f__expr)
 {
+    jl_check_rc("_expr");
     jl_task_t *ct = jl_current_task;
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);
@@ -2015,6 +2111,7 @@ JL_CALLABLE(jl_f__typevar)
 // genericmemory ---------------------------------------------------------------------
 JL_CALLABLE(jl_f_memorynew)
 {
+    jl_check_rc("memorynew");
     JL_NARGS(memorynew, 2, 2);
     jl_datatype_t *jl_genericmemory_type_type = jl_datatype_type;
     JL_TYPECHK(memorynew, genericmemory_type, args[0]);
@@ -2100,6 +2197,7 @@ JL_CALLABLE(jl_f_memoryrefoffset)
 
 JL_CALLABLE(jl_f_memoryrefget)
 {
+    jl_check_rc("memoryrefget");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefget, 3, 3);
     JL_TYPECHK(memoryrefget, genericmemoryref, args[0]);
@@ -2125,6 +2223,7 @@ JL_CALLABLE(jl_f_memoryrefget)
 
 JL_CALLABLE(jl_f_memoryrefset)
 {
+    jl_check_rc("memoryrefset!");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefset!, 4, 4);
     JL_TYPECHK(memoryrefset!, genericmemoryref, args[0]);
@@ -2151,6 +2250,7 @@ JL_CALLABLE(jl_f_memoryrefset)
 
 JL_CALLABLE(jl_f_memoryrefunset)
 {
+    jl_check_rc("memoryrefunset!");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefunset!, 3, 3);
     JL_TYPECHK(memoryrefunset!, genericmemoryref, args[0]);
@@ -2177,6 +2277,7 @@ JL_CALLABLE(jl_f_memoryrefunset)
 
 JL_CALLABLE(jl_f_memoryref_isassigned)
 {
+    jl_check_rc("memoryref_isassigned");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryref_isassigned, 3, 3);
     JL_TYPECHK(memoryref_isassigned, genericmemoryref, args[0]);
@@ -2203,6 +2304,7 @@ JL_CALLABLE(jl_f_memoryref_isassigned)
 
 JL_CALLABLE(jl_f_memoryrefswap)
 {
+    jl_check_rc("memoryrefswap!");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefswap!, 4, 4);
     JL_TYPECHK(memoryrefswap!, genericmemoryref, args[0]);
@@ -2228,6 +2330,7 @@ JL_CALLABLE(jl_f_memoryrefswap)
 
 JL_CALLABLE(jl_f_memoryrefmodify)
 {
+    jl_check_rc("memoryrefmodify!");
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefmodify!, 5, 5);
     JL_TYPECHK(memoryrefmodify!, genericmemoryref, args[0]);
@@ -2253,6 +2356,7 @@ JL_CALLABLE(jl_f_memoryrefmodify)
 
 JL_CALLABLE(jl_f_memoryrefreplace)
 {
+    jl_check_rc("memoryrefreplace!");
     enum jl_memory_order success_order = jl_memory_order_notatomic;
     enum jl_memory_order failure_order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefreplace!, 6, 6);
@@ -2287,6 +2391,7 @@ JL_CALLABLE(jl_f_memoryrefreplace)
 
 JL_CALLABLE(jl_f_memoryrefsetonce)
 {
+    jl_check_rc("memoryrefsetonce!");
     enum jl_memory_order success_order = jl_memory_order_notatomic;
     enum jl_memory_order failure_order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefsetonce!, 5, 5);
@@ -2323,6 +2428,7 @@ JL_CALLABLE(jl_f_memoryrefsetonce)
 
 JL_CALLABLE(jl_f__structtype)
 {
+    jl_check_rc("_structtype");
     JL_NARGS(_structtype, 7, 7);
     JL_TYPECHK(_structtype, module, args[0]);
     JL_TYPECHK(_structtype, symbol, args[1]);
@@ -2342,6 +2448,7 @@ JL_CALLABLE(jl_f__structtype)
 
 JL_CALLABLE(jl_f__abstracttype)
 {
+    jl_check_rc("_abstracttype");
     JL_NARGS(_abstracttype, 3, 3);
     JL_TYPECHK(_abstracttype, module, args[0]);
     JL_TYPECHK(_abstracttype, symbol, args[1]);
@@ -2352,6 +2459,7 @@ JL_CALLABLE(jl_f__abstracttype)
 
 JL_CALLABLE(jl_f__primitivetype)
 {
+    jl_check_rc("_primitivetype");
     JL_NARGS(_primitivetype, 4, 4);
     JL_TYPECHK(_primitivetype, module, args[0]);
     JL_TYPECHK(_primitivetype, symbol, args[1]);
@@ -2385,6 +2493,7 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super) JL_CANSA
 
 JL_CALLABLE(jl_f__setsuper)
 {
+    jl_check_rc("_setsuper!");
     JL_NARGS(_setsuper!, 2, 2);
     jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
     JL_TYPECHK(_setsuper!, datatype, (jl_value_t*)dt);
@@ -2413,6 +2522,7 @@ JL_CALLABLE(jl_f_compilerbarrier)
 
 JL_CALLABLE(jl_f_finalizer)
 {
+    jl_check_rc("finalizer");
     // NOTE the compiler may temporarily insert additional argument for the later inlining pass
     JL_NARGS(finalizer, 2, 4);
     jl_task_t *ct = jl_current_task;
@@ -2469,6 +2579,7 @@ JL_CALLABLE(jl_f__svec_ref)
 
 JL_CALLABLE(jl_f__task)
 {
+    jl_check_rc("_task");
     JL_NARGS(_task, 2, 3);
     jl_value_t *start = args[0];
     JL_TYPECHK(_task, long, args[1]);
@@ -2487,6 +2598,7 @@ JL_CALLABLE(jl_f__task)
 
 JL_CALLABLE(jl_f_task_result_type)
 {
+    jl_check_rc("task_result_type");
     JL_NARGS(task_result_type, 1, 1);
     JL_TYPECHK(task_result_type, task, args[0]);
     // Without inference, this returns Any, but inference can inject other Types here
@@ -2555,6 +2667,7 @@ int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int 
 
 JL_CALLABLE(jl_f__typebody)
 {
+    jl_check_rc("_typebody!");
     JL_NARGS(_typebody!, 1, 2);
     jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
     JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
@@ -2663,6 +2776,7 @@ int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
 
 JL_CALLABLE(jl_f__equiv_typedef)
 {
+    jl_check_rc("_equiv_typedef");
     JL_NARGS(_equiv_typedef, 2, 2);
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
@@ -2678,8 +2792,12 @@ JL_CALLABLE(jl_f_intrinsic_call)
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
-    if (!fargs)
+    if (!fargs) {
+        // compiler-required intrinsics (llvmcall) run native code the mode's
+        // traps cannot see
+        jl_check_rc(jl_intrinsic_name(f));
         jl_errorf("`%s` requires the compiler", jl_intrinsic_name(f));
+    }
     JL_NARGS(intrinsic_call, fargs, fargs);
 
     union {
