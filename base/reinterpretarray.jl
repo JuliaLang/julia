@@ -213,13 +213,13 @@ function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) w
     # Note: ep typically equals elp, but a custom strided parent may define elsize differently
     ep = elsize(parent(a))
     byte_strides = map(i -> i * ep, stp)
-    IsReshaped && els < elp && return (1, _checked_strides(byte_strides, els, elp)...)
+    IsReshaped && els < elp && return (1, _checked_strides(byte_strides, els)...)
     first(byte_strides) == elp || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    st′ = _checked_strides(tail(byte_strides), els, elp)
+    st′ = _checked_strides(tail(byte_strides), els)
     return IsReshaped ? st′ : (1, st′...)
 end
 
-@inline function _checked_strides(byte_strides::Tuple, els::Integer, elp::Integer)
+@inline function _checked_strides(byte_strides::Tuple, els::Integer)
     drs = map(i -> divrem(i, els), byte_strides)
     all(i->iszero(i[2]), drs) ||
         throw(ArgumentError("Parent's strides could not be exactly divided!"))
