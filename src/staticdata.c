@@ -4075,7 +4075,7 @@ static size_t world_remap(size_t w, size_t *segmap, uint32_t maplen)
     size_t seg = jl_world_seg(w);
     if (seg >= maplen || segmap[seg] == ~(size_t)0)
         jl_error("cannot translate a serialized world with no stable segment identity");
-    return (segmap[seg] << JL_WORLD_IDX_BITS) | jl_world_idx(w);
+    return JL_WORLD_PACK(segmap[seg], jl_world_idx(w));
 }
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
@@ -4288,7 +4288,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                     size_t pseg = jl_world_seg(pw);
                     if (pseg >= i || world_segmap[pseg] == ~(size_t)0)
                         jl_error("world-segment table has an untranslatable parent");
-                    parents[p] = (world_segmap[pseg] << JL_WORLD_IDX_BITS) | jl_world_idx(pw);
+                    parents[p] = JL_WORLD_PACK(world_segmap[pseg], jl_world_idx(pw));
                 }
                 size_t base = jl_world_new_image_run(self_id, nruns++, parents, np);
                 free(parents);
@@ -4873,7 +4873,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             }
             else {
                 if (new_methods)
-                    world += 1;
+                    world = jl_world_next_locked();
                 jl_activate_methods(extext_methods, internal_methods, world, pkgname);
                 // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
                 // allow users to start running in this updated world

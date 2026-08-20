@@ -572,16 +572,18 @@ extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 // that test a stored world bound against an arbitrary query world must use
 // the predicates below.
 
-#ifdef _P64
-#define JL_WORLD_IDX_BITS 48
-#else
-#define JL_WORLD_IDX_BITS 24
-#endif
-#define JL_WORLD_IDX_MASK ((~(size_t)0) >> (8 * sizeof(size_t) - JL_WORLD_IDX_BITS))
+// 16 bits of segment id on every platform (real environments can graft
+// several segments per loaded image, so fewer is not enough), with the rest
+// of the word as the index. On 32-bit platforms a run's index space is only
+// 16 bits; when it is exhausted, jl_world_next_locked simply continues the
+// trunk in a fresh run segment.
+#define JL_WORLD_IDX_BITS (8 * sizeof(size_t) - 16)
+#define JL_WORLD_IDX_MASK ((~(size_t)0) >> 16)
 // number of allocatable segments; the top segment id is never allocated so
 // that sentinel worlds (~(size_t)0 and values near it) fall in an
 // unmaterialized segment
-#define JL_WORLD_MAX_SEGMENTS ((~(size_t)0) >> JL_WORLD_IDX_BITS)
+#define JL_WORLD_MAX_SEGMENTS ((size_t)0xffff)
+#define JL_WORLD_PACK(seg, idx) ((((size_t)(seg)) << JL_WORLD_IDX_BITS) | (size_t)(idx))
 
 STATIC_INLINE size_t jl_world_seg(size_t world) JL_NOTSAFEPOINT
 {
@@ -637,10 +639,11 @@ typedef struct {
 } jl_world_segment_t;
 
 JL_DLLEXPORT int jl_world_seg_reaches(size_t sa, size_t sb) JL_NOTSAFEPOINT;
-JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents);
-JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, size_t nextra);
-JL_DLLEXPORT void jl_world_init_runs(void);
-JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size_t *parent_worlds, size_t nparents);
+JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents) JL_CANSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, size_t nextra) JL_CANSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_next_locked(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_world_init_runs(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size_t *parent_worlds, size_t nparents) JL_CANSAFEPOINT;
 JL_DLLEXPORT size_t jl_world_image_run(uint64_t image_id, uint32_t run) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_world_segment_t *jl_world_get_segment(size_t seg) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t jl_world_nsegments(void) JL_NOTSAFEPOINT;
@@ -657,9 +660,9 @@ typedef struct {
 // i.e. is the state of the world as of `a` part of the history of `b`?
 STATIC_INLINE int jl_world_reaches(size_t a, size_t b) JL_NOTSAFEPOINT
 {
-    if ((a >> JL_WORLD_IDX_BITS) == (b >> JL_WORLD_IDX_BITS))
+    if (jl_world_seg(a) == jl_world_seg(b))
         return a <= b;
-    return jl_world_seg_reaches(a >> JL_WORLD_IDX_BITS, b >> JL_WORLD_IDX_BITS);
+    return jl_world_seg_reaches(jl_world_seg(a), jl_world_seg(b));
 }
 
 // Had an entry with the given `min_world` bound already been created as of

@@ -686,7 +686,7 @@ end
 module WorldAgeSegments
 using Test
 
-const WORLD_IDX_BITS = Sys.WORD_SIZE == 64 ? 48 : 24
+const WORLD_IDX_BITS = Sys.WORD_SIZE == 64 ? 48 : 16
 wseg(w::UInt) = w >> WORLD_IDX_BITS
 widx(w::UInt) = w & ((UInt(1) << WORLD_IDX_BITS) - UInt(1))
 seg_reaches(sa::UInt, sb::UInt) = ccall(:jl_world_seg_reaches, Cint, (Csize_t, Csize_t), sa, sb) != 0
@@ -797,6 +797,31 @@ end
     @test Base.invoke_in_world(sib, f_before_advance) == 1
     @test Base.invoke_in_world(sib, +, 1, 2) == 3
 end
+@testset "run rollover on index exhaustion" begin
+    # Force the counter near the end of its run's index space in a throwaway
+    # subprocess and check that definitions roll the trunk over into a fresh
+    # run segment (the natural path on 32-bit platforms, where indices are
+    # only 16 bits).
+    code = """
+        const IDXBITS = $(WORLD_IDX_BITS)
+        IDXMASK = (UInt(1) << IDXBITS) - UInt(1)
+        w0 = Base.get_world_counter()
+        unsafe_store!(cglobal(:jl_world_counter, UInt), (w0 & ~IDXMASK) | (IDXMASK - UInt(8)))
+        seg0 = Base.get_world_counter() >> IDXBITS
+        for i in 1:8
+            Core.eval(Main, :(\$(Symbol(:rollfn, i))() = \$i))
+        end
+        seg1 = Base.get_world_counter() >> IDXBITS
+        @assert seg1 > seg0
+        for i in 1:8
+            @assert Base.invokelatest(getglobal(Main, Symbol(:rollfn, i))) == i
+        end
+        println("ROLLOVER OK")
+        """
+    out = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
+    @test occursin("ROLLOVER OK", out)
+end
+
 @testset "three-point total order (asymmetric joins)" begin
     ordered(x, y, obs) = ccall(:jl_world_ordered_before, Cint, (Csize_t, Csize_t, Csize_t), x, y, obs) != 0
     w_pre = Base.get_world_counter()

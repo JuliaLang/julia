@@ -3006,13 +3006,14 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
     int enabled = jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0;
     if (enabled) {
         // Narrow the world age on the method to make it uncallable
-        size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+        size_t new_world = jl_world_next_locked();
+        size_t world = new_world - 1;
         assert(method == methodentry->func.method);
         jl_atomic_store_relaxed(&method->dispatch_status, 0);
         assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
         jl_atomic_store_relaxed(&methodentry->max_world, world);
         jl_method_table_invalidate(method, world);
-        jl_atomic_store_release(&jl_world_counter, world + 1);
+        jl_atomic_store_release(&jl_world_counter, new_world);
     }
     JL_UNLOCK(&world_counter_lock);
     if (!enabled)
@@ -3471,7 +3472,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     JL_LOCK(&world_counter_lock);
     if (!jl_atomic_load_relaxed(&allow_new_worlds))
         jl_error("Method changes have been disabled via a call to disable_new_worlds.");
-    size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    size_t world = jl_world_next_locked();
     jl_atomic_store_relaxed(&method->primary_world, world);
     jl_method_table_activate(newentry);
     jl_atomic_store_release(&jl_world_counter, world);
@@ -5842,12 +5843,12 @@ JL_DLLEXPORT void jl_drop_all_caches(void)
     JL_LOCK(&world_counter_lock);
 
     // Get current world age - we'll invalidate everything at this world
-    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
+    size_t new_world = jl_world_next_locked();
+    size_t current_world = new_world - 1;
 
     invalidate_all_caches(jl_method_table, current_world);
 
     // Increment world age - this forces all subsequent compilation to happen in the new world
-    size_t new_world = current_world + 1;
     jl_atomic_store_release(&jl_world_counter, new_world);
 
     JL_UNLOCK(&world_counter_lock);

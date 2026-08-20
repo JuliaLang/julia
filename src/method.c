@@ -1221,7 +1221,7 @@ JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
 JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
 {
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_t *b = jl_get_module_binding(mod, name, 1);
     jl_value_t *gf = jl_get_existing_strong_gf(b, new_world);
     if (gf) {
