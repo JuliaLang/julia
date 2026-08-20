@@ -11,7 +11,10 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Analysis/InstSimplifyFolder.h>
+#if JL_LLVM_VERSION < 230000
+// removed in LLVM 23; nothing here was used anyway
 #include <llvm/CodeGen/AtomicExpandUtils.h>
+#endif
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstIterator.h>
@@ -147,24 +150,35 @@ namespace {
 struct ReplacementIRBuilder
     : IRBuilder<InstSimplifyFolder, IRBuilderCallbackInserter> {
   MDNode *MMRAMD = nullptr;
+#if JL_LLVM_VERSION >= 230000
+  MDNode *PCSectionsMD = nullptr;
+#endif
 
   // Preserves the DebugLoc from I, and preserves still valid metadata.
   // Enable StrictFP builder mode when appropriate.
   explicit ReplacementIRBuilder(Instruction *I, const DataLayout &DL)
       : IRBuilder(I->getContext(), InstSimplifyFolder(DL),
                   IRBuilderCallbackInserter(
-                      [this](Instruction *I) { addMMRAMD(I); })) {
+                      [this](Instruction *I) { addMetadata(I); })) {
     SetInsertPoint(I);
+#if JL_LLVM_VERSION < 230000
     this->CollectMetadataToCopy(I, {LLVMContext::MD_pcsections});
+#endif
     if (BB->getParent()->getAttributes().hasFnAttr(Attribute::StrictFP))
       this->setIsFPConstrained(true);
 
     MMRAMD = I->getMetadata(LLVMContext::MD_mmra);
+#if JL_LLVM_VERSION >= 230000
+    PCSectionsMD = I->getMetadata(LLVMContext::MD_pcsections);
+#endif
   }
 
-  void addMMRAMD(Instruction *I) {
+  void addMetadata(Instruction *I) {
     if (canInstructionHaveMMRAs(*I))
       I->setMetadata(LLVMContext::MD_mmra, MMRAMD);
+#if JL_LLVM_VERSION >= 230000
+    I->setMetadata(LLVMContext::MD_pcsections, PCSectionsMD);
+#endif
   }
 };
 }  // anonymous namespace

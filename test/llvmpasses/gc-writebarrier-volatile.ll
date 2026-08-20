@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC,gvn)' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(LateLowerGCFrame,FinalLowerGC,gvn)' -S %s | FileCheck %s
 
 ; Test for issue #59547: Ensure write barrier GC tag loads are volatile
 ; This test verifies that the LateLowerGCFrame pass marks GC tag loads as volatile

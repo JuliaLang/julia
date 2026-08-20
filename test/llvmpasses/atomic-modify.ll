@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='ExpandAtomicModify' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='ExpandAtomicModify' -S %s | FileCheck %s
 
 declare {i8, i8} @julia.atomicmodify.i8(ptr, ptr, i8, i8, ...)
 declare {double, double} @julia.atomicmodify.f64(ptr, ptr, i8, i8, ...)

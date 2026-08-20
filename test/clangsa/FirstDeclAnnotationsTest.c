@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang-tidy %s --checks=-*,julia-first-decl-annotations -header-filter='.*' -load libFirstDeclAnnotationsPlugin%shlibext -- -D__clang_gcanalyzer__ -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} -x c -std=c11 | FileCheck --check-prefixes=CHECK --implicit-check-not=warning: %s
-// RUN: clang-tidy %s --checks=-*,julia-first-decl-annotations -header-filter='.*' -load libFirstDeclAnnotationsPlugin%shlibext -- -D__clang_gcanalyzer__ -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} ${CXXFLAGS} -x c++ -std=c++11 | FileCheck --check-prefixes=CHECK,CHECK-CXX --implicit-check-not=warning: %s
+// RUN: clang-tidy %s --checks=-*,julia-first-decl-annotations -header-filter='.*' -load libFirstDeclAnnotationsPlugin%{shlibext} -- -D__clang_gcanalyzer__ -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} -x c -std=c11 | FileCheck --check-prefixes=CHECK --implicit-check-not=warning: %s
+// RUN: clang-tidy %s --checks=-*,julia-first-decl-annotations -header-filter='.*' -load libFirstDeclAnnotationsPlugin%{shlibext} -- -D__clang_gcanalyzer__ -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} %{cxxflags} -x c++ -std=c++11 | FileCheck --check-prefixes=CHECK,CHECK-CXX --implicit-check-not=warning: %s
 
 // Each diagnostic carries a fix-it that moves the annotation to the first
 // declaration. Copy the test and its header into a temp directory, apply the
@@ -12,7 +12,7 @@
 // RUN: rm -rf %t && mkdir -p %t
 // RUN: cp %s %t/FirstDeclAnnotationsTest.c
 // RUN: cp %S/FirstDeclAnnotationsTest.h %t/FirstDeclAnnotationsTest.h
-// RUN: clang-tidy %t/FirstDeclAnnotationsTest.c --checks=-*,julia-first-decl-annotations -header-filter='.*' --fix -load libFirstDeclAnnotationsPlugin%shlibext -- -D__clang_gcanalyzer__ -I%t -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} -x c -std=c11
+// RUN: clang-tidy %t/FirstDeclAnnotationsTest.c --checks=-*,julia-first-decl-annotations -header-filter='.*' --fix -load libFirstDeclAnnotationsPlugin%{shlibext} -- -D__clang_gcanalyzer__ -I%t -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} -x c -std=c11
 // RUN: FileCheck --check-prefix=CHECK-FIXES --input-file=%t/FirstDeclAnnotationsTest.c %s
 // RUN: FileCheck --check-prefix=CHECK-FIXES-H --input-file=%t/FirstDeclAnnotationsTest.h %s
 
