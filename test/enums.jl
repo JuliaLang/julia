@@ -260,3 +260,29 @@ _gimmedoc(x) = strip(sprint(show, MIME"text/plain"(), Docs.doc(Docs.Binding(@__M
 @test _gimmedoc.(instances(Citrus)) == "C. " .* ("reticulata", "maxima", "medica", "japonica")
 @test _gimmedoc(Citrus) == "Ancestral species of citrus"
 end
+
+const ABI64 = 0x01000000
+@enum MachCPU::UInt32 begin
+    X86 = 7
+    X86_64 = X86 | ABI64
+    ARM = 12
+    POWERPC = 18
+    POWERPC64 = POWERPC | ABI64
+    ARM64 = ARM | ABI64
+end
+@test Integer.(instances(MachCPU)) == (0x00000007, 0x01000007, 0x0000000c, 0x00000012, 0x01000012, 0x0100000c)
+
+@enum PizzaTime begin
+    🍕 = 1
+    🍕🍕
+    @static if false
+        🌭
+    end
+    🍕🍕🍕
+    @static if true
+        🍕🍕🍕🍕
+    else
+        🍍🍕
+    end
+end
+@test instances(PizzaTime) == (🍕, 🍕🍕, 🍕🍕🍕, 🍕🍕🍕🍕) == ntuple(PizzaTime, 4)
