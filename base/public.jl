@@ -40,6 +40,8 @@ public
     is_contiguous,
     has_vec_strided_layout,
     has_contiguous_layout,
+    unsetindex!,
+    unsetindex_atomic!,
 
 # collections
     IteratorEltype,
@@ -64,6 +66,7 @@ public
     get_extension,
     isambiguous,
     isexpr,
+    isfieldatomic,
     isidentifier,
     issingletontype,
     identify_package,

@@ -374,15 +374,16 @@ function f(x)
     x
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   TestMod.f
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.f %₈
+9   (call core.define_method TestMod TestMod.f %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read) slot₅/x(!read)]
     1   (= slot₅/x slot₂/x)
     2   1

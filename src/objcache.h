@@ -35,28 +35,33 @@ public:
     ObjCache() = default;
     ~ObjCache() JL_NOTSAFEPOINT;
     std::unique_ptr<llvm::MemoryBuffer>
-    get(llvm::Module &M, CompileFn Compile) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    get(llvm::Module &M, CompileFn Compile) JL_CANSAFEPOINT_ENTER_LEAVE;
     bool isEnabled() const JL_NOTSAFEPOINT;
+    // If the cache had to be disabled for a reason the user may want to know
+    // about, returns a short description of that reason (for display in the
+    // REPL banner); otherwise returns null.  Forces initialization.
+    const char *disabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE;
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;
 
 protected:
     void writerThread();
-    void initDB() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    void initDB() JL_CANSAFEPOINT_ENTER_LEAVE;
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
     bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
 
 private:
     std::atomic<bool> Initialized = false;
+    const char *DisabledNotice = nullptr;
     MDB_env *Env = nullptr;
     MDB_dbi ObjCacheDbi;
     MDB_dbi ObjMetaDbi;
     size_t PageSize;
     uv_thread_t WriterThread;
     bool Started = false;
-    bool Exiting = false;
+    std::atomic<bool> Exiting = false;
     // Non-null MemoryBuffer -> cache miss, want to write new entry
     // Null MemoryBuffer     -> cache hit, want to update atime
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;

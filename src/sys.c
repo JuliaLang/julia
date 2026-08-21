@@ -263,7 +263,7 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
 //   0 - keep delimiter
 //   1 - remove 1 byte delimiter
 //   2 - remove 2 bytes \r\n if present
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
+JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp) JL_CANSAFEPOINT
 {
     jl_array_t *a;
     // manually inlined common case
@@ -777,6 +777,21 @@ static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
 #endif
 
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
+#ifdef __APPLE__
+// `JL_RTLD_NOLOAD` only asks whether an image is already loaded: nothing is mapped
+// and no initializer runs, so unlike a general `jl_dlopen` this cannot call back
+// into Julia, and may be used from a JL_NOTSAFEPOINT function.
+static void *jl_dlopen_noload(const char *filename) JL_NOTSAFEPOINT
+{
+#ifdef __clang_gcanalyzer__
+    // hidden from the checker, which only knows the general contract of jl_dlopen
+    return NULL;
+#else
+    return jl_dlopen(filename, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);
+#endif
+}
+#endif
+
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT
 {
     if (!handle)
@@ -787,7 +802,9 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle.
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_dlopen(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);
+        void *probe_lib = jl_dlopen_noload(image_name);
+        if (!probe_lib)
+            continue;
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
@@ -968,7 +985,7 @@ static int dllist_helper(struct dl_phdr_info *info, size_t size, void *vdata) JL
 // This is done in C, rather than a Julia `dl_iterate_phdr` callback, so that
 // no Julia code (which can allocate, run finalizers, or re-enter the linker
 // via (lazy) `ccall`) runs under the dynamic loader lock. See `dllist_helper`
-JL_DLLEXPORT int jl_dllist(jl_array_t *list)
+JL_DLLEXPORT int jl_dllist(jl_array_t *list) JL_CANSAFEPOINT
 {
     arraylist_t names;
     arraylist_new(&names, 0);

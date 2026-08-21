@@ -53,7 +53,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
     return m;
 }
 
-static jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz)
+static jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz) JL_CANSAFEPOINT
 {
     if (nel == 0) // zero-sized allocation optimization
         return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
@@ -102,7 +102,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory(jl_value_t *mtype, size_
     return _new_genericmemory_(mtype, nel, isunion, zi, elsz);
 }
 
-JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str)
+JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str) JL_CANSAFEPOINT
 {
     if (jl_string_len(str) == 0)
         return (jl_genericmemory_t*)((jl_datatype_t*)jl_memory_uint8_type)->instance;
@@ -180,7 +180,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_new_genericmemory(jl_value_t *mtype, jl_valu
     return jl_alloc_genericmemory(mtype, jl_unbox_long(nel));
 }
 
-JL_DLLEXPORT jl_genericmemory_t *jl_pchar_to_genericmemory(const char *str, size_t len)
+JL_DLLEXPORT jl_genericmemory_t *jl_pchar_to_genericmemory(const char *str, size_t len) JL_CANSAFEPOINT
 {
     jl_genericmemory_t *m = jl_alloc_genericmemory(jl_memory_uint8_type, len);
     memcpy(m->ptr, str, len);
@@ -246,9 +246,9 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         destdata = (char*)dest->ptr + elsz*(size_t)destdata;
     }
     if (layout->first_ptr != -1) {
-        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
         jl_value_t *owner = jl_genericmemory_owner(dest);
         jl_gc_wb_genericmemory_copy_ptr(owner, src, src_p, n, dt);
+        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
     }
     else {
         memmove(destdata, srcdata, n * elsz);
@@ -411,6 +411,8 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     if (layout->flags.arrayelem_isboxed) {
         assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         _Atomic(jl_value_t*) *p = (_Atomic(jl_value_t*)*)m.ptr_or_offset;
+        // Deletion barrier: snapshot the overwritten reference for SATB collectors.
+        jl_gc_wb(jl_genericmemory_owner(m.mem), NULL);
         if (isatomic)
             jl_atomic_store(p, (jl_value_t*)NULL);
         else
@@ -426,6 +428,8 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     size_t fsz = jl_datatype_size(dt);
     char *data = (char*)m.ptr_or_offset;
     int needlock = layout->flags.arrayelem_islocked;
+    // Deletion barrier: snapshot the overwritten references for SATB collectors.
+    jl_gc_wb(jl_genericmemory_owner(m.mem), NULL);
     if (isatomic && !needlock) {
         _Alignas(MAX_POINTERATOMIC_SIZE) char zero_buf[MAX_POINTERATOMIC_SIZE] = {0};
         assert(fsz <= MAX_POINTERATOMIC_SIZE);

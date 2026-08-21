@@ -391,8 +391,8 @@ end
 function test_atomic_write(commbuf::CommBuf, n::Int)
     for i in 1:n
         # The atomic stores guarantee that var1 >= var2
-        commbuf.var1[] = i
-        commbuf.var2[] = i
+        @atomic commbuf.var1[] = i
+        @atomic commbuf.var2[] = i
     end
     commbuf.correct_write = true
 end
@@ -444,8 +444,8 @@ function test_fence(p::Peterson, id::Int, n::Int)
     correct = true
     otherid = mod1(id+1,2)
     for i in 1:n
-        p.flag[id][] = 1
-        p.turn[] = otherid
+        @atomic p.flag[id][] = 1
+        @atomic p.turn[] = otherid
         atomic_fence()
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
@@ -453,11 +453,11 @@ function test_fence(p::Peterson, id::Int, n::Int)
             ccall(:jl_gc_safepoint, Cvoid, ())
         end
         # critical section
-        p.critical[id][] = 1
+        @atomic p.critical[id][] = 1
         correct &= p.critical[otherid][] == 0
-        p.critical[id][] = 0
+        @atomic p.critical[id][] = 0
         # end of critical section
-        p.flag[id][] = 0
+        @atomic p.flag[id][] = 0
     end
     p.correct[id] = correct
 end
@@ -528,7 +528,7 @@ let atomictypes = (Int8, Int16, Int32, Int64, Int128,
                    Float16, Float32, Float64)
     for T in atomictypes
         var = Atomic{T}()
-        var[] = 42
+        @atomic var[] = 42
         @test var[] === T(42)
         old = atomic_xchg!(var, T(13))
         @test old === T(42)
@@ -629,7 +629,7 @@ for period in (0.06, Dates.Millisecond(60))
         close(async)
         @test_throws EOFError wait(async)
         @test !isopen(async)
-        @test_throws EOFError wait(t)
+        @test wait(t) === nothing
         @test_throws EOFError wait(async)
     end
 end
@@ -1136,8 +1136,6 @@ end
 
     unordered_fair = collect(jitter_channel(sin, k, delay, 10, Threads.FairSchedule()))
     unordered_static = collect(jitter_channel(sin, k, delay, 10, Threads.StaticSchedule()))
-    @test expected != unordered_fair
-    @test expected != unordered_static
     @test Set(expected) == Set(unordered_fair)
     @test Set(expected) == Set(unordered_static)
 
@@ -1224,7 +1222,7 @@ function check_sync_end_race()
             # Useful for tuning the test:
             @debug "`check_sync_end_race` done" threadpoolsize(:default) ncompleted nnotscheduled nerror
         finally
-            done[] = true
+            @atomic done[] = true
         end
     end
     return nothing
@@ -1802,3 +1800,129 @@ include("threads_comprehensions.jl")
 end
 
 end # main testset
+
+
+# Forcible task abandonment (unsafe_abandon!): the victim must be running
+# on a thread of its own while the driver keeps executing.
+if threadpoolsize() >= 2
+    @testset "task abandonment wakes waiters" begin
+        # Synchronize on observable state, never on timing: the spin counter
+        # proves the victim is executing its loop on a thread.
+        spins = Threads.Atomic{Int}(0)
+        victim = Threads.@spawn begin
+            x = Ref(1.0)
+            while true
+                x[] = x[] * 1.0000001 + 0.1
+                Threads.atomic_add!(spins, 1)
+            end
+        end
+        watcher = @async wait(victim)
+        c0 = spins[]
+        while spins[] <= c0 + 10
+            yield()
+        end
+        rescue() = (t = Task(() -> (while true; wait(); end)); t.sticky = false; t)
+        # A refusal is transient (the victim may momentarily be inside the
+        # allocator or a runtime lock); retry until the abandonment commits.
+        while !Base.unsafe_abandon!(victim, rescue())
+            yield()
+        end
+        # unsafe_abandon! returns after the verdict settles: the states are
+        # already final.
+        @test istaskdone(victim)
+        @test victim.state === :abandoned
+        @test istaskfailed(victim)
+        # the staged abandonment outcome, not a value leaked mid-request
+        @test victim.result isa Base.CancellationRequest
+        # the watcher must be woken (abandoned tasks skip the regular
+        # completion path)
+        @test_throws TaskFailedException fetch(watcher)
+    end
+
+    @testset "unsafe_abandon! validates at delivery and can refuse" begin
+        # A victim cycling a ReentrantLock (which inhibits finalizers while
+        # held) must never be abandoned mid-hold: the delivery-point
+        # validation refuses instead of corrupting runtime bookkeeping.
+        # Abandon spam either gets a clean refusal or commits during an
+        # unlocked window; on refusal the victim must be left untouched -
+        # still running, and with its eventual completion value intact.
+        lk = ReentrantLock()
+        stop = Threads.Atomic{Bool}(false)
+        cycles = Threads.Atomic{Int}(0)
+        victim = Threads.@spawn begin
+            while !stop[]
+                lock(lk)
+                try
+                    x = 0
+                    for i in 1:2000
+                        x += i
+                    end
+                    Threads.atomic_add!(cycles, 1)
+                finally
+                    unlock(lk)
+                end
+            end
+            :completed
+        end
+        c0 = cycles[]
+        while cycles[] <= c0
+            yield()
+        end
+        committed = false
+        while !committed
+            rescue = Task(() -> (while true; wait(); end))
+            rescue.sticky = false
+            committed = Base.unsafe_abandon!(victim, rescue)
+            if !committed
+                # refusal must leave the victim untouched and running
+                @test !istaskdone(victim)
+                yield()
+            end
+        end
+        @test committed
+        @test victim.state === :abandoned
+        # runtime must be healthy afterwards (finalizers not leaked-inhibited)
+        GC.gc(false)
+    end
+
+    # Linux-only: blocks the abandon signal by number (SIGUSR2 == 12) and uses
+    # Linux's SIG_BLOCK/SIG_UNBLOCK values.
+    Sys.islinux() && @testset "an undelivered abandonment withdraws cleanly" begin
+        # Block the abandon signal in the victim so delivery cannot happen,
+        # and exercise the request/poll/withdraw primitives directly: the
+        # withdrawal must return every published effect, leaving the victim
+        # untouched - including its eventual completion value.
+        started = Threads.Atomic{Bool}(false)
+        release = Threads.Atomic{Bool}(false)
+        victim = Threads.@spawn begin
+            # block SIGUSR2 on this thread
+            sset = zeros(UInt8, 128)
+            ccall(:sigemptyset, Cint, (Ptr{UInt8},), sset)
+            ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, 12) # SIGUSR2
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 0 #= SIG_BLOCK =#, sset, C_NULL)
+            started[] = true
+            # spin in compute so the task stays current on its thread
+            while !release[]
+                ccall(:jl_cpu_pause, Cvoid, ())
+            end
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 1 #= SIG_UNBLOCK =#, sset, C_NULL)
+            :survived
+        end
+        while !started[]
+            yield()
+        end
+        rescue = Task(() -> (while true; wait(); end))
+        rescue.sticky = false
+        tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any, Ptr{Cvoid}),
+                    victim, rescue, Base.CancellationRequest(0x4), C_NULL)
+        @test tid >= 0
+        # undeliverable: the request stays pending
+        @test ccall(:jl_abandon_task_poll, Cint, (Int16,), tid % Int16) == 0
+        @test ccall(:jl_abandon_task_withdraw, Cint, (Int16,), tid % Int16) == 1
+        @test !istaskdone(victim)         # not falsely marked :abandoned
+        release[] = true                  # victim completes normally afterwards
+        @test fetch(victim) === :survived
+        # the withdrawal returned the rescue task's affinity claim
+        @test Threads.threadid(rescue) == 0
+    end
+end

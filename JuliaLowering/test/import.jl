@@ -297,3 +297,44 @@ end
         @test !isdefined(call_mod, :OnlyInDefs)
     end
 end
+
+@testset "(AI) all-underscore (`_`) import names" begin
+    # Names in an import/using path are symbolic references, not value reads, so
+    # an all-underscore name is a genuine (write-only) binding here rather than a
+    # discard -- matching flisp, which binds `_` for `import X as _`,
+    # `using X: a as _` and `using X: _`. Previously the desugaring assert
+    # `kind(spec[2]) == K"Identifier"` crashed on the `K"Placeholder"` rename
+    # target (e.g. SymbolicRegression's `using ConstructionBase: ... as _`).
+    U = JuliaLowering.include_string(test_mod, """
+    module Uroot
+        module Src
+            export sx
+            sx = [1]
+            sy = [2]
+        end
+        module AsTarget;   using ..Src: sx as _;   end   # rename target `_`
+        module ImportColon; import ..Src: sy as _; end   # `import X: name as _`
+        module ImportAs;   import ..Src as _;       end   # whole-module rename
+        module VarSpelling; using ..Src: sx as var"_"; end  # var"_" is the same name
+        module DoubleUnder; import ..Src as __;      end   # `__` is also write-only
+    end
+    """)
+    for m in (U.AsTarget, U.ImportColon, U.ImportAs, U.VarSpelling)
+        @test isdefined(m, :_)
+    end
+    @test isdefined(U.DoubleUnder, :__)
+    # The created `_` stays write-only: reading it is a parser-level error, not a
+    # usable value (so `as _` really is an import-for-side-effect idiom).
+    @test_throws JuliaLowering.LoweringError JuliaLowering.include_string(U.AsTarget, "_")
+
+    # Two `as _` targets and a bare `_` source name are accepted (flisp only
+    # warns -- conflicting import / undeclared binding); they must not error.
+    redirect_stderr(devnull) do
+        @test (JuliaLowering.include_string(test_mod, """
+        module TwoUnders; using Base: sum as _, prod as _; end
+        """); true)
+        @test (JuliaLowering.include_string(test_mod, """
+        module SrcUnder; module Inner; end; using .Inner: _; end
+        """); true)
+    end
+end

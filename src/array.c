@@ -56,7 +56,7 @@ static char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT
     return jl_genericmemory_typetagdata(a->ref.mem) + (uintptr_t)a->ref.ptr_or_offset;
 }
 
-STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem, const jl_datatype_layout_t *layout, uint32_t ndims, size_t *dims)
+STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem, const jl_datatype_layout_t *layout, uint32_t ndims, size_t *dims) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     size_t i;
@@ -72,7 +72,7 @@ STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem,
     return a;
 }
 
-STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
+STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims) JL_CANSAFEPOINT
 {
     size_t nel;
     if (jl_array_validate_dims(&nel, ndims, dims))
@@ -244,6 +244,9 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
     // don't leave behind deleted data
     if (jl_is_genericmemory_zeroinit(a->ref.mem) && !jl_genericmemory_isbitsunion(a->ref.mem)) {
         size_t elsz = jl_array_elsize(a);
+        // Deletion barrier: snapshot the overwritten references for SATB collectors.
+        // A single object-remembering barrier on the owner covers all cleared slots.
+        jl_gc_wb((jl_value_t*)jl_genericmemory_owner(a->ref.mem), NULL);
         memset(jl_array_data(a,char) + n * elsz, 0, elsz * dec);
     }
 }

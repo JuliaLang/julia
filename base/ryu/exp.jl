@@ -1,6 +1,9 @@
 function writeexp(buf, pos, v::T,
-    precision=-1, plus=false, space=false, hash=false,
+    precision, plus=false, space=false, hash=false,
     expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
+    pos = Int(pos)
+    precision = Int(precision)
+    precision >= 0 || throw(ArgumentError("precision must be non-negative"))
     @assert 0 < pos <= length(buf) "invalid pos"
     startpos = pos
     x = Float64(v)
@@ -49,7 +52,6 @@ function writeexp(buf, pos, v::T,
         e2 = exp - 1023 - 52
         m2 = (Int64(1) << 52) | mant
     end
-    nonzero = false
     precision += 1
     digits = zero(UInt32)
     printedDigits = 0
@@ -140,12 +142,11 @@ function writeexp(buf, pos, v::T,
     end
     lastDigit = zero(UInt32)
     if availableDigits > maximum
-        for k = 0:(availableDigits - maximum - 1)
+        for _ = 0:(availableDigits - maximum - 1)
             lastDigit = digits % UInt32(10)
             digits = div(digits, UInt32(10))
         end
     end
-    roundUp = 0
     if lastDigit != 5
         roundUp = lastDigit > 5 ? 1 : 0
     else

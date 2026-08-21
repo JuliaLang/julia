@@ -13,7 +13,7 @@ the 4th Coffman condition: circular wait).
 (`pthread_mutex_t` on Unix, `CRITICAL_SECTION` on Windows).  It may cause the
 current OS thread to block, is not reentrant, and is not a safepoint.
 
-`jl_mutex_t` is a reentrant spinlock.  `jl_mutex_t`s acquired in a `try` block
+`jl_mutex_t` is a reentrant lock that uses a parking lot approach so that we can serialize the object safely.  `jl_mutex_t`s acquired in a `try` block
 will be unlocked when we leave the block, either by reaching the end or catching
 an exception.  `JL_LOCK`/`JL_UNLOCK` are safepoints, while
 `JL_LOCK_NOGC`/`JL_UNLOCK_NOGC` are not.  `jl_mutex_t` must not be held across

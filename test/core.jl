@@ -48,7 +48,7 @@ for (T, c) in (
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
-        (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
+        (Task, [:_state, :preempt_request, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at, :waiting_on, :bound_cancel_token]),
         (Core.BindingPartition, [:min_world, :max_world, :next]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
@@ -6191,10 +6191,18 @@ end
 
 # make sure VecElement Tuple has the C alignment and ABI for supported types
 primitive type Int24 24 end
+primitive type VecUInt63 63 end
+vecuint63(x) = Core.Intrinsics.trunc_int(VecUInt63, UInt64(x))
+@noinline second_vecuint63(v) = Core.Intrinsics.zext_int(UInt64, v[2].value)
 @test Base.datatype_alignment(NTuple{10,VecElement{Int16}}) == 32
 @test Base.datatype_alignment(NTuple{10,VecElement{Int24}}) == 4
 @test Base.datatype_alignment(NTuple{10,VecElement{Int64}}) == 128
 @test Base.datatype_alignment(NTuple{10,VecElement{Int128}}) == 256
+let v = (VecElement(vecuint63(1)), VecElement(vecuint63(2)))
+    @test fieldoffset(typeof(v), 2) == 8
+    @test Core.Intrinsics.zext_int(UInt64, getfield(v, 2).value) == 2
+    @test second_vecuint63(v) == 2
+end
 
 # issue #21516
 struct T21516
@@ -6970,6 +6978,23 @@ for U in unboxedunions
             @test A[1] == initvalue2(F2)
             @test A[end] == initvalue2(F2)
         end
+    end
+end
+
+# Vector growth sizes must not wrap and leave logical length larger than backing storage.
+@testset "array growth overflow" begin
+    A = [1, 2]
+    popfirst!(A)
+    @test_throws OverflowError resize!(A, typemax(Int))
+    @test A == [2]
+    @test length(A.ref.mem) == 2
+
+    for (f, A) in ((A -> Base._growbeg!(A, typemax(Int)), [1]),
+                   (A -> Base._growend!(A, typemax(Int)), [1]),
+                   (A -> Base._growat!(A, 2, typemax(Int)), [1, 2]))
+        old = copy(A)
+        @test_throws OverflowError f(A)
+        @test A == old
     end
 end
 
@@ -8012,7 +8037,7 @@ end
 struct B40050 <: Ref{Tuple{B40050}}
 end
 @test string((B40050(),)) == "($B40050(),)"
-@test_broken isbitstype(Tuple{B40050})
+@test isbitstype(Tuple{B40050})
 
 # issue #41654
 struct X41654 <: Ref{X41654}
@@ -8499,6 +8524,14 @@ end
     @test b == Core.svec(2, 3)
 end
 
+# SimpleVector allocation must reject pointer-byte size overflow before its fill loops.
+@testset "svec allocation overflow" begin
+    n = Int(typemax(UInt) ÷ UInt(sizeof(Ptr{Cvoid})) + 1)
+    @test_throws OutOfMemoryError Tuple{Vararg{Nothing,n}}
+    mem = Memory{Nothing}(undef, n)
+    @test_throws OutOfMemoryError Core.svec(mem...)
+end
+
 @testset "setproperty! on modules" begin
     m = Module()
     @eval m global x::Int
@@ -8951,6 +8984,14 @@ end
 
 @test sizeof(Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})) == 2
 
+# Codegen of a Type{Union{}} isbits-union component.
+typeofbottom_union_constant() =
+    Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})
+code_llvm(devnull, typeofbottom_union_constant, Tuple{})
+let p = typeofbottom_union_constant()
+    @test p.first === Union{} && p.second === Union{}
+end
+
 # Make sure that Core.Compiler has enough NamedTuple infrastructure
 # to properly give error messages for basic kwargs...
 Core.eval(Core.Compiler, quote issue50174(;a=1) = a end)
@@ -9111,7 +9152,7 @@ end
 primitive type ByteString58434 (18 * 8) end
 
 @test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
-@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == !Base.ispacked(Tuple{ByteString58434})
 
 # #60659 - Behavior of using'd ambiguous bindings
 module AmbiguousUsing60659
@@ -9233,3 +9274,81 @@ pinned_gci_62001(::Type{<:PinnedSA62001{<:PinnedPL62001}}, ::Type{<:Type{Val{S}}
 # a generated function's generator receives the representative value
 @generated pinned_gg_62001(::Type{<:Type{Val{S}}}) where {S} = QuoteNode(S)
 @test pinned_gg_62001(Type{Val{pinned_schema_62001}}) === pinned_schema_62001
+
+# issue #52533: an unrelated try/catch should not keep values rooted in its PhiC
+# slots for the remainder of the enclosing function
+mutable struct Issue52533 end
+@noinline function issue52533(freed::Ref{Bool}, throw_::Bool)
+    b = nothing
+    try
+        x = Issue52533()
+        finalizer(_ -> (freed[] = true), x)
+        b = x
+        throw_ && Base.inferencebarrier(throw)(ErrorException("52533"))
+        Base.inferencebarrier(identity)(nothing)
+    catch
+        b isa Issue52533 && Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533(Ref(false), false)  # normal exit from the try region
+@test issue52533(Ref(false), true)   # exit through the catch block
+
+# ... and this holds for a value the try region never touches on the executed
+# path: slot2ssa snapshots each PhiC variable into its slot ahead of the `enter`,
+# so the region pins whatever the variable held on the way in
+@noinline issue52533_never() = Base.inferencebarrier(false)::Bool
+@noinline function issue52533_beside(freed::Ref{Bool})
+    b = Issue52533()
+    finalizer(_ -> (freed[] = true), b)
+    Base.donotdelete(b)
+    try
+        Base.inferencebarrier(identity)(nothing)
+        issue52533_never() && (b = nothing)
+    catch
+        b === nothing || Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533_beside(Ref(false))
+
+# `jl_new_method_uninit` must satisfy Method's min-initialized invariant:
+# fields in the initialized prefix (e.g. `sig`, `name`) are assumed non-null
+# by codegen, which omits undef checks when loading them.
+let m = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), @__MODULE__)
+    @test m.sig === Union{}
+    @test m.name === Symbol("")
+end
+
+# an array reached through a Union-typed value is tagged `jtbaa_value`, which must
+# still alias the `jtbaa_arrayptr` stores that initialize its header; otherwise DSE
+# deletes them and the reshaped array is left with a null `MemoryRef`
+mkunion_arrayheader(b::Bool) = b ? fill(1.0, 1, 1) : fill(1.0 + 0im, 1, 1)
+sum_reshaped_arrayheader(b::Bool, D::Int) = sum(reshape(mkunion_arrayheader(b)[:, end], D, D))
+@test sum_reshaped_arrayheader(true, 1) === 1.0
+@test sum_reshaped_arrayheader(false, 1) === 1.0 + 0.0im
+
+# jl_array_len must compute the length from the dimensions: an N-d array may be
+# backed by a Memory with excess capacity and/or a nonzero memoryref offset
+# (e.g. from `reshape` of a `sizehint!`ed vector), so reading the Memory length
+# splatted/copied too many elements (and could read out of bounds)
+let f = (x...) -> length(x)
+    v = collect(1.0:9.0)
+    sizehint!(v, 100)
+    m = reshape(v, 3, 3)
+    @test f(m...) == 9
+    @test length(Core.svec(m...)) == 9
+    m2 = ccall(:jl_array_copy, Ref{Matrix{Float64}}, (Any,), m)
+    @test m2 == m
+    @test length(m2.ref.mem) == 9
+    # nonzero memoryref offset
+    w = collect(1:9)
+    sizehint!(w, 1000; first=true)
+    m3 = reshape(w, 3, 3)
+    @test f(m3...) == 9
+    @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
+end

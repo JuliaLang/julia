@@ -5,14 +5,13 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit
 
 import Base:
     sort,
     sort!,
     issorted,
-    sortperm,
-    to_indices
+    sortperm
 
 export # also exported by Base
     # order-only:
@@ -1747,7 +1746,7 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v` is
+When calling `sort` on the [`keys`](@ref) or [`values`](@ref) of a dictionary, `v` is
 collected and then sorted.
 
 !!! compat "Julia 1.12"

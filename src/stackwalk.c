@@ -85,7 +85,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         skip--;
     }
 #endif
-    jl_lock_profile();
+    if (!jl_trylock_profile())
+        return 0;
 #endif
 #if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -320,7 +321,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
 
 static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
                              jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
-                             jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
+                             jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT) JL_CANSAFEPOINT
 {
     jl_array_t *bt, *bt2;
     if (array_ptr_void_type == NULL) {
@@ -371,7 +372,7 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 // with the top of the stack and returning up to `max_entries`. If requested by
 // setting the `include_bt` flag, backtrace data in bt,bt2 format is
 // interleaved.
-JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
+JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries) JL_CANSAFEPOINT
 {
     JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
     JL_TIMING(STACKWALK, STACKWALK_Excstack);
@@ -790,7 +791,7 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
+JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_frame_t *frames = NULL;
@@ -964,54 +965,113 @@ void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_entry) JL_NOTSAFEP
 
 
 #ifdef _OS_LINUX_
-#if defined(__GLIBC__) && defined(_CPU_AARCH64_)
+// glibc mangles the pointers in jmp_buf as `rotl(p ^ key, rot)`. Neither the
+// key's location nor the rotation is stable ABI, so derive both at runtime.
+// glibc 2.44 changed both:
+// https://sourceware.org/git/?p=glibc.git;a=commit;h=a5ec880f808ee7268d985bed4f961799bdc0a4bf
+// https://sourceware.org/git/?p=glibc.git;a=commit;h=78f1f0e39cd41d28ae771eb3498bc33780c85cfd
+// The probe follows the approach used by LLVM's aarch64 TSAN runtime:
+// https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
+#if defined(__GLIBC__) && (defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || \
+                           defined(_CPU_X86_64_) || defined(_CPU_X86_))
+// Index of the mangled SP within glibc's jmp_buf.
+#if defined(_CPU_AARCH64_)
 #define LONG_JMP_SP_ENV_SLOT 13
-static uintptr_t julia_longjmp_xor_key;
-// GLIBC mangles the function pointers in jmp_buf (used in {set,long}*jmp
-// functions) by XORing them with a random key.  For AArch64 it is a global
-// variable rather than a TCB one (as for x86_64/powerpc).  We obtain the key by
-// issuing a setjmp and XORing the SP pointer values to derive the key.
-static void JuliaInitializeLongjmpXorKey(void)
+#elif defined(_CPU_ARM_)
+#define LONG_JMP_SP_ENV_SLOT 0
+#elif defined(_CPU_X86_64_)
+#define LONG_JMP_SP_ENV_SLOT 6
+#else
+#define LONG_JMP_SP_ENV_SLOT 4
+#endif
+#define PTR_MANGLE_ROTATE (2 * sizeof(uintptr_t) + 1)
+
+// -1 unusable, 0 not probed yet, 1 usable
+static _Atomic(int) julia_longjmp_state;
+static _Atomic(uintptr_t) julia_longjmp_xor_key;
+static _Atomic(unsigned) julia_longjmp_rotate;
+
+static uintptr_t rotate_right(uintptr_t p, unsigned n) JL_NOTSAFEPOINT
 {
-    // 1. Call REAL(setjmp), which stores the mangled SP in env.
+    return n == 0 ? p : (p >> n) | (p << (8 * sizeof(uintptr_t) - n));
+}
+
+static uintptr_t rotate_left(uintptr_t p, unsigned n) JL_NOTSAFEPOINT
+{
+    return n == 0 ? p : (p << n) | (p >> (8 * sizeof(uintptr_t) - n));
+}
+
+static NOINLINE uintptr_t probe_mangled_sp(uintptr_t *sp) JL_NOTSAFEPOINT
+{
     jmp_buf env;
     _setjmp(env);
+#if defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
+    asm volatile ("mov %0, sp" : "=r" (*sp));
+#elif defined(_CPU_X86_64_)
+    asm volatile ("movq %%rsp, %0" : "=r" (*sp));
+#else
+    asm volatile ("movl %%esp, %0" : "=r" (*sp));
+#endif
+    return ((uintptr_t*)&env)[LONG_JMP_SP_ENV_SLOT];
+}
 
-    // 2. Retrieve vanilla/mangled SP.
-    uintptr_t sp;
-    asm("mov  %0, sp" : "=r" (sp));
-    uintptr_t mangled_sp = ((uintptr_t*)&env)[LONG_JMP_SP_ENV_SLOT];
+static NOINLINE uintptr_t probe_mangled_sp_deep(uintptr_t *sp) JL_NOTSAFEPOINT
+{
+    volatile char pad[512];
+    uintptr_t mangled = probe_mangled_sp(sp);
+    pad[0] = 0; // Keep the frame live and prevent a tail call.
+    (void)pad[0];
+    return mangled;
+}
 
-    // 3. xor SPs to obtain key.
-    julia_longjmp_xor_key = mangled_sp ^ sp;
+// Derive the key and rotation from two probes at different stack depths.
+// A failure disables simulated longjmp rather than resuming at a wild address.
+static int derive_longjmp_mangling(void) JL_NOTSAFEPOINT
+{
+    uintptr_t sp1, sp2;
+    uintptr_t mangled1 = probe_mangled_sp(&sp1);
+    uintptr_t mangled2 = probe_mangled_sp_deep(&sp2);
+    uintptr_t sp_delta = sp1 ^ sp2;
+    if (sp_delta == 0 || sp_delta == ~(uintptr_t)0)
+        return -1;
+    unsigned rot;
+    if ((mangled1 ^ mangled2) == sp_delta)
+        rot = 0;
+    else if (rotate_right(mangled1 ^ mangled2, PTR_MANGLE_ROTATE) == sp_delta)
+        rot = PTR_MANGLE_ROTATE;
+    else
+        return -1;
+    uintptr_t key = rotate_right(mangled1, rot) ^ sp1;
+    if (rotate_left(sp2 ^ key, rot) != mangled2)
+        return -1;
+    jl_atomic_store_relaxed(&julia_longjmp_xor_key, key);
+    jl_atomic_store_relaxed(&julia_longjmp_rotate, rot);
+    return 1;
 }
 #endif
 
-JL_UNUSED static uintptr_t ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
+// Keep lazy initialization lock-free because the first probe may run in a
+// signal handler. Racing probes derive the same process-wide values.
+JL_DLLEXPORT int jl_ptr_demangle_available(void) JL_NOTSAFEPOINT
 {
-#if defined(__GLIBC__)
-#if defined(_CPU_X86_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/pointer_guard.h
-// last changed for GLIBC_2.6 on 2007-02-01
-    asm(" rorl $9, %0\n"
-        " xorl %%gs:0x18, %0"
-        : "=r"(p) : "0"(p) : );
-#elif defined(_CPU_X86_64_)
-// from https://github.com/bminor/glibc/blob/master/sysdeps/unix/sysv/linux/x86_64/pointer_guard.h
-    asm(" rorq $17, %0\n"
-        " xorq %%fs:0x30, %0"
-        : "=r"(p) : "0"(p) : );
-#elif defined(_CPU_AARCH64_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
-// We need to use a trick like this (from GCC/LLVM TSAN) to get access to it:
-// https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
-    static pthread_once_t once = PTHREAD_ONCE_INIT;
-    pthread_once(&once, &JuliaInitializeLongjmpXorKey);
-    p ^= julia_longjmp_xor_key;
-#elif defined(_CPU_ARM_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/arm/sysdep.h
-    ; // nothing to do
+#if defined(LONG_JMP_SP_ENV_SLOT)
+    int state = jl_atomic_load_acquire(&julia_longjmp_state);
+    if (state == 0) {
+        state = derive_longjmp_mangling();
+        jl_atomic_store_release(&julia_longjmp_state, state);
+    }
+    return state > 0;
+#else
+    return 1;
 #endif
+}
+
+JL_DLLEXPORT uintptr_t jl_ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
+{
+#if defined(LONG_JMP_SP_ENV_SLOT)
+    assert(jl_atomic_load_relaxed(&julia_longjmp_state) > 0);
+    p = rotate_right(p, jl_atomic_load_relaxed(&julia_longjmp_rotate))
+        ^ jl_atomic_load_relaxed(&julia_longjmp_xor_key);
 #endif
     return p;
 }
@@ -1117,6 +1177,26 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 #endif
 
 
+// Reject values that cannot be user-space longjmp targets. A wrong mangling
+// scheme otherwise turns both values into effectively random addresses.
+#if defined(_CPU_X86_64_) || defined(_CPU_RISCV64_)
+#define JL_VA_USER_BITS 47
+#elif defined(_CPU_AARCH64_)
+// AArch64 uses its full unsigned VA range, including bit 47 on 48-bit kernels,
+// and supports a 52-bit userspace range with LVA.
+#define JL_VA_USER_BITS 52
+#endif
+JL_UNUSED static int valid_longjmp_target(uintptr_t sp, uintptr_t pc) JL_NOTSAFEPOINT
+{
+    if (sp == 0 || pc == 0 || sp % sizeof(void*) != 0)
+        return 0;
+#ifdef JL_VA_USER_BITS
+    if ((sp >> JL_VA_USER_BITS) != 0 || (pc >> JL_VA_USER_BITS) != 0)
+        return 0;
+#endif
+    return 1;
+}
+
 // Some notes: this simulates a longjmp call occurring in context `c`, as if the
 // user was to set the PC in `c` to call longjmp and the PC in the longjmp to
 // return here. This helps work around many cases where siglongjmp out of a
@@ -1126,8 +1206,9 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 // support shadow stacks, so if those are in use, you might need to use a direct
 // jl_longjmp instead to leave the signal frame instead of relying on simulating
 // it and attempting to return normally.
-int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT
 {
+    assert(val != 0); // setjmp's second return must be distinguishable
 #if (defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
     // https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/hwasan/hwasan_interceptors.cpp
     return 0;
@@ -1148,7 +1229,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     // c->MxCsr = _ctx->MxCsr;
     // c->FloatSave.ControlWord = _ctx->FpCsr;
     // c->SegGS[0] = _ctx->Frame;
-    c->Rax = 1;
+    c->Rax = val;
     c->Rsp += sizeof(void*);
     assert(c->Rsp % 16 == 0);
     return 1;
@@ -1161,14 +1242,24 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     c->Eip = _ctx->Eip;
     // c->SegFS[0] = _ctx->Registration;
     // c->FloatSave.ControlWord = _ctx->FpCsr;
-    c->Eax = 1;
+    c->Eax = val;
     c->Esp += sizeof(void*);
+    // Scrub the interrupted x87 state to all-registers-empty (see the
+    // linux i686 branch): the resumed code expects the function-boundary
+    // FPU state. Both the legacy FNSAVE area and the FXSAVE area (used by
+    // the kernel when SSE is present) are cleared.
+    c->FloatSave.StatusWord = 0;
+    c->FloatSave.TagWord = 0xffff;        // FNSAVE convention: all empty
+    c->ExtendedRegisters[2] = c->ExtendedRegisters[3] = 0; // FSW
+    c->ExtendedRegisters[4] = 0;          // abridged FTW: all empty
     assert(c->Esp % 16 == 0);
     return 1;
     #else
     #error Windows is currently only supported on x86 and x86_64
     #endif
 #elif defined(_OS_LINUX_) && defined(__GLIBC__)
+    if (!jl_ptr_demangle_available())
+        return 0;
     __jmp_buf *_ctx = &mctx->__jmpbuf;
     #if defined(_CPU_AARCH64_)
     // Only on aarch64-linux libunwind uses a different struct than system's one:
@@ -1188,11 +1279,20 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->gregs[REG_ESP] = (*_ctx)[4];
     mc->gregs[REG_EIP] = (*_ctx)[5];
     // ifdef PTR_DEMANGLE ?
-    mc->gregs[REG_ESP] = ptr_demangle(mc->gregs[REG_ESP]);
-    mc->gregs[REG_EIP] = ptr_demangle(mc->gregs[REG_EIP]);
-    mc->gregs[REG_EAX] = 1;
-    assert(mc->gregs[REG_ESP] % 16 == 0);
-    return 1;
+    mc->gregs[REG_ESP] = jl_ptr_demangle(mc->gregs[REG_ESP]);
+    mc->gregs[REG_EIP] = jl_ptr_demangle(mc->gregs[REG_EIP]);
+    mc->gregs[REG_EAX] = val;
+    // The simulated longjmp resumes code that expects the i386 ABI's
+    // function-boundary FPU state (an empty x87 register stack), but the
+    // kernel will restore the *interrupted* state - possibly mid-computation
+    // with live stack entries, which would overflow the target's x87 stack
+    // and poison every later float result with NaNs. Scrub the saved x87
+    // state to all-registers-empty (the control word is preserved).
+    if (mc->fpregs != NULL) {
+        mc->fpregs->sw = 0;               // clear TOP and exception flags
+        mc->fpregs->tag = 0xffffffffu;    // all registers empty
+    }
+    return valid_longjmp_target(mc->gregs[REG_ESP], mc->gregs[REG_EIP]);
     #elif defined(_CPU_X86_64_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/__longjmp.S
     // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/jmpbuf-offsets.h
@@ -1206,12 +1306,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->gregs[REG_RSP] = (*_ctx)[6];
     mc->gregs[REG_RIP] = (*_ctx)[7];
     // ifdef PTR_DEMANGLE ?
-    mc->gregs[REG_RBP] = ptr_demangle(mc->gregs[REG_RBP]);
-    mc->gregs[REG_RSP] = ptr_demangle(mc->gregs[REG_RSP]);
-    mc->gregs[REG_RIP] = ptr_demangle(mc->gregs[REG_RIP]);
-    mc->gregs[REG_RAX] = 1;
-    assert(mc->gregs[REG_RSP] % 16 == 0);
-    return 1;
+    mc->gregs[REG_RBP] = jl_ptr_demangle(mc->gregs[REG_RBP]);
+    mc->gregs[REG_RSP] = jl_ptr_demangle(mc->gregs[REG_RSP]);
+    mc->gregs[REG_RIP] = jl_ptr_demangle(mc->gregs[REG_RIP]);
+    mc->gregs[REG_RAX] = val;
+    return valid_longjmp_target(mc->gregs[REG_RSP], mc->gregs[REG_RIP]);
     #elif defined(_CPU_ARM_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
     // https://github.com/bminor/glibc/blame/master/sysdeps/arm/include/bits/setjmp.h
@@ -1227,12 +1326,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->arm_r10 = (*_ctx)[8]; // aka v7 aka sl
     mc->arm_fp = (*_ctx)[10]; // aka v8 aka r11
     // ifdef PTR_DEMANGLE ?
-    mc->arm_sp = ptr_demangle(mc->arm_sp);
-    mc->arm_lr = ptr_demangle(mc->arm_lr);
+    mc->arm_sp = jl_ptr_demangle(mc->arm_sp);
+    mc->arm_lr = jl_ptr_demangle(mc->arm_lr);
     mc->arm_pc = mc->arm_lr;
-    mc->arm_r0 = 1;
-    assert(mc->arm_sp % 16 == 0);
-    return 1;
+    mc->arm_r0 = val;
+    return valid_longjmp_target(mc->arm_sp, mc->arm_pc);
     #elif defined(_CPU_AARCH64_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/__longjmp.S
     // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/jmpbuf-offsets.h
@@ -1262,12 +1360,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mcfp->vregs[13] = (*_ctx)[20]; // aka d14
     mcfp->vregs[14] = (*_ctx)[21]; // aka d15
     // ifdef PTR_DEMANGLE ?
-    mc->sp = ptr_demangle(mc->sp);
-    mc->regs[30] = ptr_demangle(mc->regs[30]);
+    mc->sp = jl_ptr_demangle(mc->sp);
+    mc->regs[30] = jl_ptr_demangle(mc->regs[30]);
     mc->pc = mc->regs[30];
-    mc->regs[0] = 1;
-    assert(mc->sp % 16 == 0);
-    return 1;
+    mc->regs[0] = val;
+    return valid_longjmp_target(mc->sp, mc->pc);
     #elif defined(_CPU_RISCV64_)
     // https://github.com/bminor/glibc/blob/master/sysdeps/riscv/bits/setjmp.h
     // https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/libunwind/src/Registers.hpp -> Registers_riscv
@@ -1300,12 +1397,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->__fpregs.__d.__f[27] = (unsigned long long) (*_ctx)->__fpregs[11]; // fs11
     #endif
     // ifdef PTR_DEMANGLE ?
-    mc->__gregs[REG_SP] = ptr_demangle(mc->__gregs[REG_SP]);
-    mc->__gregs[REG_RA] = ptr_demangle(mc->__gregs[REG_RA]);
+    mc->__gregs[REG_SP] = jl_ptr_demangle(mc->__gregs[REG_SP]);
+    mc->__gregs[REG_RA] = jl_ptr_demangle(mc->__gregs[REG_RA]);
     mc->__gregs[REG_PC] = mc->__gregs[REG_RA];
-    mc->__gregs[REG_A0] = 1;
-    assert(mc->__gregs[REG_SP] % 16 == 0);
-    return 1;
+    mc->__gregs[REG_A0] = val;
+    return valid_longjmp_target(mc->__gregs[REG_SP], mc->__gregs[REG_PC]);
     #else
     #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown linux")
     (void)mc;
@@ -1330,7 +1426,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);
     mc->__rsp = _OS_PTR_UNMUNGE(mc->__rsp);
     mc->__rip = _OS_PTR_UNMUNGE(mc->__rip);
-    mc->__rax = 1;
+    mc->__rax = val;
     assert(mc->__rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)
@@ -1368,7 +1464,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     // libunwind is broken for signed-pointers, but perhaps best not to leave the signed pointer lying around either
     mc->__pc = ptrauth_strip(mc->__lr, 0);
     mc->__pad = 0; // aka __ra_sign_state = not signed
-    mc->__x[0] = 1;
+    mc->__x[0] = val;
     assert(mc->__sp % 16 == 0);
     return 1;
     #else
@@ -1388,7 +1484,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->mc_r13 = ((long*)mctx)[5];
     mc->mc_r14 = ((long*)mctx)[6];
     mc->mc_r15 = ((long*)mctx)[7];
-    mc->mc_rax = 1;
+    mc->mc_rax = val;
     mc->mc_rsp += sizeof(void*);
     assert(mc->mc_rsp % 16 == 0);
     return 1;
@@ -1414,7 +1510,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18];
     mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19];
     mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20];
-    mc->mc_gpregs.gp_x[0] = 1;
+    mc->mc_gpregs.gp_x[0] = val;
     assert(mc->mc_gpregs.gp_sp % 16 == 0);
     return 1;
     #else
@@ -1427,45 +1523,75 @@ return 0;
 #endif
 }
 
-JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size)
 {
     int16_t tid = ptls2->tid;
     jl_task_t *t = NULL;
     bt_context_t *context = NULL;
     bt_context_t c;
-    if (!jl_thread_suspend(tid, &c)) {
-        return 0;
+    size_t bt_size = 0;
+    if (jl_thread_suspend(tid, &c)) {
+        // thread is stopped, safe to read the task it was running before we stopped it
+        t = jl_atomic_load_relaxed(&ptls2->current_task);
+        context = &c;
+        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
+        jl_thread_resume(tid);
     }
-    // thread is stopped, safe to read the task it was running before we stopped it
-    t = jl_atomic_load_relaxed(&ptls2->current_task);
-    context = &c;
-    size_t bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
-    jl_thread_resume(tid);
     return bt_size;
+}
+
+static size_t rec_backtrace_task(jl_task_t *t, bt_context_t *c, int use_ctx,  jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
+{
+    if (!use_ctx && !t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL) {
+        // need to read the context from the task stored state
+        jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
+#if defined(JL_TASK_SWITCH_WINDOWS)
+        memset(c, 0, sizeof(*c));
+        if (jl_simulate_longjmp(*mctx, c, 1))
+            use_ctx = 1;
+#elif defined(JL_TASK_SWITCH_LIBUNWIND)
+        context = t->ctx.ctx;
+#elif defined(JL_TASK_SWITCH_ASM)
+        memset(c, 0, sizeof(*c));
+        if (jl_simulate_longjmp(*mctx, c, 1))
+            use_ctx = 1;
+#else
+     #pragma message("jl_record_backtrace not defined for unknown task system")
+#endif
+    }
+    if (use_ctx)
+        return rec_backtrace_ctx(bt_data, max_bt_size, c, all_tasks_profiler ? NULL : t->gcstack);
+    return 0;
 }
 
 JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
 {
-    int16_t tid = INT16_MAX;
-    jl_record_backtrace_result_t result = {0, tid};
+    jl_record_backtrace_result_t result = {0, -1};
+    int16_t tid = INT16_MAX; // assign invalid id to non-native tasks
     jl_task_t *ct = NULL;
-    jl_ptls_t ptls = NULL;
     if (!all_tasks_profiler) {
-        ct = jl_current_task;
-        ptls = ct->ptls;
-        ptls->bt_size = 0;
-        tid = ptls->tid;
+        ct = jl_get_current_task();
+        if (ct) {
+            tid = ct->ptls->tid;
+            if (t == ct) {
+                result.bt_size = rec_backtrace(bt_data, max_bt_size, 0);
+                result.tid = tid;
+                return result;
+            }
+        }
     }
-    if (t == ct) {
-        result.bt_size = rec_backtrace(bt_data, max_bt_size, 0);
-        result.tid = tid;
-        return result;
-    }
-    bt_context_t *context = NULL;
     bt_context_t c;
     int16_t old;
-    for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
-        // if this task is already running somewhere, we need to stop the thread it is running on and query its state
+    while (1) {
+        old = -1;
+        // Try to lock this task, if free, otherwise get the id of the thread running it
+        if (jl_atomic_cmpswap(&t->tid, &old, tid))
+            break; // temporary claim successful
+        if (old == INT16_MAX)
+            return result; // another (non-native) thread already claimed it
+        if (old == tid)
+            break; // already claimed by this thread
+        // Try to stop that thread
         if (!jl_thread_suspend(old, &c)) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
                 continue;
@@ -1473,43 +1599,25 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
         }
         if (jl_atomic_load_relaxed(&t->tid) == old) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[old];
+            int use_ctx = 0;
             if (ptls2->previous_task == t || // we might print the wrong stack here, since we can't know whether we executed the swapcontext yet or not, but it at least avoids trying to access the state inside uc_mcontext which might not be set yet
                 (ptls2->previous_task == NULL && jl_atomic_load_relaxed(&ptls2->current_task) == t)) { // this case should be always accurate
                 // use the thread context for the unwind state
-                context = &c;
+                use_ctx = 1;
             }
-            break;
+            result.bt_size = rec_backtrace_task(t, &c, use_ctx, bt_data, max_bt_size, all_tasks_profiler);
+            result.tid = old;
+            jl_thread_resume(old);
+            return result;
         }
         // got the wrong thread stopped, try again
         jl_thread_resume(old);
     }
-    if (context == NULL && (!t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL)) {
-        // need to read the context from the task stored state
-        jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
-#if defined(JL_TASK_SWITCH_WINDOWS)
-        memset(&c, 0, sizeof(c));
-        if (jl_simulate_longjmp(*mctx, &c))
-            context = &c;
-#elif defined(JL_TASK_SWITCH_LIBUNWIND)
-        context = t->ctx.ctx;
-#elif defined(JL_TASK_SWITCH_ASM)
-        memset(&c, 0, sizeof(c));
-        if (jl_simulate_longjmp(*mctx, &c))
-            context = &c;
-#else
-     #pragma message("jl_record_backtrace not defined for unknown task system")
-#endif
-    }
-    size_t bt_size = 0;
-    if (context) {
-        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, all_tasks_profiler ? NULL : t->gcstack);
-    }
+    // This task is locked to our thread
+    result.bt_size = rec_backtrace_task(t, &c, 0, bt_data, max_bt_size, all_tasks_profiler);
+    result.tid = old;
     if (old == -1)
         jl_atomic_store_relaxed(&t->tid, old);
-    else if (old != tid)
-        jl_thread_resume(old);
-    result.bt_size = bt_size;
-    result.tid = old;
     return result;
 }
 
@@ -1558,7 +1666,8 @@ JL_DLLEXPORT void jl_fprint_backtracet(ios_t *s, jl_task_t *t) JL_NOTSAFEPOINT
         ptls->bt_size = 0;
         bt_data = ptls->bt_data;
         max_bt_size = JL_MAX_BT_SIZE;
-    } else {
+    }
+    else {
         max_bt_size = 1024; //8kb of stack should be safe
         bt_data = (jl_bt_element_t *)alloca(max_bt_size * sizeof(jl_bt_element_t));
     }

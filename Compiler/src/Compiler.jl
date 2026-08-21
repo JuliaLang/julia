@@ -47,6 +47,7 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, Meth
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
     PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
     PARTITION_FLAG_DEPWARN,
+    JL_OPTIONS_COMPILE_OFF, JL_OPTIONS_COMPILE_MIN,
     Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,

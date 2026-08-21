@@ -50,6 +50,22 @@ let x=11
 end
 """) == 220
 
+@testset "syntactic --> <: >:" begin
+    @test jl_eval(test_mod, Expr(:<:, Int, Number))
+    @test jl_eval(test_mod, Expr(:<:, Expr(:..., Expr(:tuple, Int, Number))))
+    @test jl_eval(test_mod, Expr(:>:, Number, Int))
+    @test jl_eval(test_mod, Expr(:>:, Expr(:..., Expr(:tuple, Number, Int))))
+
+    JuliaLowering.include_string(test_mod, """
+    function var"-->"(args...; kws...)
+        (args, values(kws))
+    end
+    """)
+    @test jl_eval(test_mod, Expr(:-->, 1, 2)) == ((1,2),(;))
+    @test jl_eval(test_mod, Expr(:-->, 1, Expr(:kw, :foo, 2))) == ((1,),(;foo=2))
+    @test jl_eval(test_mod, Expr(:-->, Expr(:..., (1,)))) == ((1,),(;))
+end
+
 @testset "empty symbol" begin
     @test JuliaLowering.include_string(test_mod, """
     let var\"\"=1; 1; end
@@ -360,6 +376,15 @@ Nested.@cfunction_hygiene
 """)
 @test @ccall($cf_hygiene()::Int) == 10
 
+@test JuliaLowering.include_string(test_mod, """
+cfunction_ignores_locals() = Int32(1)
+function getptr()
+    cfunction_ignores_locals = @cfunction(cfunction_ignores_locals, Int32, ())
+    cfunction_ignores_locals
+end
+getptr() isa Ptr{Cvoid}
+""")
+
 # quoted function in cfunction
 quoted_cfn_anon = JuliaLowering.include_string(test_mod, raw"""
     @cfunction((function(x); x; end), Int, (Int,))
@@ -444,6 +469,19 @@ end
 @test test_mod.ccall_with_sparams(Int) === 1
 @test test_mod.ccall_with_sparams(Float64) === 1.0
 
+# (AI) has_fcall: sparam-dependent @cfunction must not inline into a caller
+# knowing T only abstractly. The abstract field keeps T non-constant there.
+@test JuliaLowering.include_string(test_mod, """
+cfunc_has_fcall(buf::Ptr{UInt8}, len::UInt32) = Int32(0)
+get_cf(::Type{T}) where {T} = @cfunction cfunc_has_fcall Int32 (Ref{T}, Ptr{UInt8}, UInt32)
+do_cf(stream::T) where {T <: IO} = get_cf(T)
+mutable struct Box3
+    x::IO
+end
+call_it(b::Box3) = do_cf(b.x)
+call_it(Box3(IOBuffer()))
+""") isa Ptr{Cvoid}
+
 # Test that ccall can be passed static parameters in the function name
 # Note that this only works with `@generated` functions from 1.13 onwards,
 # where the function name can be evaluated at code generation time.
@@ -458,6 +496,148 @@ ccallable_sptest_name(::Type{String}) = :strlen
 end
 """)
 @test test_mod.ccall_with_sparams_in_name("hii") == 3
+
+# Where local variables may appear in ccall / cfunction type and name positions
+@testset "(AI) local variables in ccall/cfunction type/name positions" begin
+    # fresh module per case: many of these define global methods
+    cc(code) = JuliaLowering.include_string(Module(:cc_locals), code)
+
+    # ---- ALLOWED: a top-level local interpolated into a global method ----
+    # return type
+    @test cc("""
+        begin
+            local t = Csize_t
+            g() = ccall(:strlen, t, (Cstring,), "asdfg")
+            g()
+        end""") == 5
+    # argument type
+    @test cc("""
+        begin
+            local a = Cstring
+            g(s) = ccall(:strlen, Csize_t, (a,), s)
+            g("asdfg")
+        end""") == 5
+    # library (2nd element of the name tuple): a constant string is fine
+    @test cc("""
+        begin
+            local lib = "libccalltest"
+            g() = ccall((:ctest, lib), Complex{Int}, (Complex{Int},), 10+20im)
+            g()
+        end""") == 11 + 18im
+    # still a global method (its capture still top-level) when nested in a `let`
+    @test cc("""
+        begin
+            local t = Csize_t
+            let
+                global g
+                g() = ccall(:strlen, t, (Cstring,), "asdfg")
+            end
+            g()
+        end""") == 5
+    # cfunction mirrors ccall for the return and argument types
+    @test cc("""fcb(x) = x + 1; @cfunction(fcb, Int, (Int,)) isa Ptr""")
+    @test cc("""
+        begin
+            local RT = Int
+            fcb(x) = x + 1
+            g() = @cfunction(fcb, RT, (Int,))
+            g() isa Ptr
+        end""")
+    @test cc("""
+        begin
+            local AT = Int
+            fcb(x) = x + 1
+            g() = @cfunction(fcb, Int, (AT,))
+            g() isa Ptr
+        end""")
+
+    # ---- REJECTED (`static_eval_disallowed_binding`) ----
+    @test_broken false == """
+    Note these should ideally all be LoweringError, but that's just so the error
+    prints nicely.  flisp doesn't do much validation, and leaves it to the ccall
+    machinery to reject everything it can't handle.
+    """
+
+    # A same-frame local (declared in the method that runs the ccall) is a slot.
+    @test_throws LoweringError cc("""
+        function g()
+            local rt = Csize_t
+            ccall(:strlen, rt, (Cstring,), "asdfg")
+        end
+        g()""")
+    # A genuine (local-name / escaping) closure captures the type as a *field*.
+    @test_throws ErrorException cc("""
+        let t = Csize_t
+            g() = ccall(:strlen, t, (Cstring,), "asdfg")
+            g()
+        end""")
+    @test_throws ErrorException cc("""
+        let a = Cstring
+            g(s) = ccall(:strlen, Csize_t, (a,), s)
+            g("asdfg")
+        end""")
+    # A *reassigned* (boxed) top-level local can't be baked in as a constant.
+    @test_throws LoweringError cc("""
+        begin
+            local t = Csize_t
+            t = Csize_t
+            g() = ccall(:strlen, t, (Cstring,), "asdfg")
+            g()
+        end""")
+    # cfunction rejects the same shapes.
+    @test_throws LoweringError cc("""
+        function g()
+            fcb(x) = x + 1
+            local RT = Int
+            @cfunction(fcb, RT, (Int,))
+        end
+        g()""")
+    @test_throws UndefVarError cc("""
+        let RT = Int
+            fcb(x) = x + 1
+            g() = @cfunction(fcb, RT, (Int,))
+            g()
+        end""")
+    # ...and so does the library position.
+    @test_throws LoweringError cc("""
+        function g()
+            local lib = "libccalltest"
+            ccall((:ctest, lib), Complex{Int}, (Complex{Int},), 10+20im)
+        end
+        g()""")
+    @test_throws TypeError cc("""
+        let lib = "libccalltest"
+            g() = ccall((:ctest, lib), Complex{Int}, (Complex{Int},), 10+20im)
+            g()
+        end""")
+
+    # A top-level ccall (no enclosing method) referencing a same-frame local: the
+    # static_eval can't be evaluated with no locals available.
+    @test_throws LoweringError cc("""
+        let rt = Csize_t
+            ccall(:strlen, rt, (Cstring,), "asdfg")
+        end""")
+    # The function *name* must be a literal symbol/string; a local holding a
+    # Symbol is only rejected later, at codegen.
+    @test_throws TypeError cc("""
+        function g()
+            local nm = :strlen
+            ccall(nm, Csize_t, (Cstring,), "asdfg")
+        end
+        g()""")
+    # A top-level local *library* likewise slips past lowering and fails later.
+    @test_throws LoweringError cc("""
+        let lib = "libccalltest"
+            ccall((:ctest, lib), Complex{Int}, (Complex{Int},), 10+20im)
+        end""")
+
+    @test_throws TypeError cc("""
+    begin
+        local nm = :strlen
+        g() = ccall(nm, Csize_t, (Cstring,), "asdfg")
+        g()
+    end""")
+end
 
 @testset "CodeInfo: has_image_globalref" begin
     @test lower_str(test_mod, "x + y").args[1].has_image_globalref === false

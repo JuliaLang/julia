@@ -1522,6 +1522,13 @@ end
 
 using Base: typed_hvncat
 @testset "hvncat" begin
+    # Concatenation dimensions must not wrap before allocating and filling the result.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    overflow_array = reshape(1:overflow_dim, 1, overflow_dim)
+    @test_throws OverflowError hvncat((1, 3), false, overflow_array, overflow_array, overflow_array)
+    @test_throws OverflowError hvncat(((1, 1, 1), (3,)), false,
+                                      overflow_array, overflow_array, overflow_array)
+
     a = fill(1, (2,3,2,4,5))
     b = fill(2, (1,1,2,4,5))
     c = fill(3, (1,2,2,4,5))
@@ -2358,4 +2365,17 @@ end
             @test A - B - zeros() == A - B
         end
     end
+end
+
+@testset "map on ReshapedArray" begin
+    R = reshape(1:4, 2, 2)
+    for T in [Float64, BigInt]
+        S = @inferred map(T, R)
+        @test S == R
+        @test eltype(S) == T
+        @test parent(S) isa AbstractRange
+    end
+    P = PermutedDimsArray(collect(reshape(1:6, 2, 3)), (2, 1))
+    @test map(identity, reshape(P, 2, 3)) isa Matrix{Int}
+    @test map(identity, reshape(P, 6)) isa Vector{Int}
 end

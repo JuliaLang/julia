@@ -26,7 +26,7 @@ const TESTNAMES = [
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "secretbuffer", "specificity",
+        "channels", "cancellation", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
@@ -189,7 +189,7 @@ function choosetests(choices = [])
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types", "strings/annotated"])
+                   "strings/io", "strings/types", "strings/annotated", "strings/stringview"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", ["Compiler"])

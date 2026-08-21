@@ -77,7 +77,7 @@ version = "1.8.0"
 
 [[deps.JuliaC]]
 deps = ["LazyArtifacts", "Libdl", "Mmap", "ObjectFile", "PackageCompiler", "Patchelf_jll", "Pkg", "Preferences", "RelocatableFolders", "StructIO", "TOML"]
-git-tree-sha1 = "7fe35f8ec64e3754c85673d2bfcfd35d8a322566"
+git-tree-sha1 = "e20ce4ef45c1abfcded4e0a6e2d0ca6d5d4267c4"
 repo-rev = "main"
 repo-url = "https://github.com/JuliaLang/JuliaC.jl.git"
 uuid = "acedd4c2-ced6-4a15-accc-2607eb759ba2"

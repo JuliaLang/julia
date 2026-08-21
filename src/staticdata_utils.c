@@ -119,7 +119,9 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array_any(_newly_inferred));
     if (_newly_inferred == jl_nothing)
         _newly_inferred = NULL;
+    JL_LOCK(&newly_inferred_mutex);
     newly_inferred = (jl_array_t*) _newly_inferred;
+    JL_UNLOCK(&newly_inferred_mutex);
 }
 
 // Null `CodeInstance.inferred` for native-owned CIs where it is still a raw
@@ -152,17 +154,17 @@ JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
     }
 }
 
-static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache);
+static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache) JL_CANSAFEPOINT;
 
-JL_DLLEXPORT jl_array_t* jl_compute_new_ext(void)
+JL_DLLEXPORT jl_array_t* jl_compute_new_used_ci(void) JL_CANSAFEPOINT
 {
     if (newly_inferred == NULL)
         return jl_alloc_vec_any(0);
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
-    jl_array_t *new_ext = queue_external(newly_inferred, &query_cache);
+    jl_array_t *new_used = queue_used(newly_inferred, &query_cache);
     destroy_query_cache(&query_cache);
-    return new_ext;
+    return new_used;
 }
 
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
@@ -178,9 +180,14 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
         }
     }
     JL_LOCK(&newly_inferred_mutex);
-    size_t end = jl_array_nrows(newly_inferred);
-    jl_array_grow_end(newly_inferred, 1);
-    jl_array_ptr_set(newly_inferred, end, ci);
+    // re-check under the lock: a concurrent jl_set_newly_inferred may have
+    // cleared or replaced the array since the unlocked fast-path check above
+    jl_array_t *arr = newly_inferred;
+    if (arr != NULL) {
+        size_t end = jl_array_nrows(arr);
+        jl_array_grow_end(arr, 1);
+        jl_array_ptr_set(arr, end, ci);
+    }
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
@@ -514,11 +521,11 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     return final_result;
 }
 
-// Given the list of CodeInstances or MethodInstances that were inferred during the build,
-// select those that are (1) external, (2) still valid, (3) are inferred to be called from
-// the worklist or explicitly added by a `precompile` statement, and (4) are the most
-// recently computed result for that method. These will be preserved in the image.
-static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
+// Given the list of CodeInstances or MethodInstances that were inferred during
+// the build, select those that are (1) internal or are inferred to be called
+// from the worklist or explicitly added by a `precompile` statement. This will
+// be used as roots for exploring what to include in the final image.
+static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache)
 {
     if (list == NULL)
         return NULL;
@@ -529,8 +536,8 @@ static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
     size_t n0 = jl_array_nrows(list);
     htable_new(&visited, n0);
     arraylist_new(&stack, 0);
-    jl_array_t *new_ext = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&new_ext);
+    jl_array_t *new_used = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&new_used);
     for (i = n0; i-- > 0; ) {
         jl_value_t *v = jl_array_ptr_ref(list, i);
         if (jl_is_code_instance(v)) {
@@ -540,60 +547,72 @@ static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
             int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
                 continue; // ignore replaced methods
-            if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
-                int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
+            if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m)) {
+                int found = jl_object_in_image((jl_value_t*)m->module) ? has_backedge_to_worklist(mi, &visited, &stack, query_cache) : 1;
                 assert(found == 0 || found == 1 || found == 2);
                 assert(stack.len == 0);
                 if (found == 1) {
-                    jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
+                    jl_array_ptr_1d_push(new_used, (jl_value_t*)ci);
                 }
             }
         }
         else if (jl_is_method_instance(v)) {
-            jl_array_ptr_1d_push(new_ext, v);
+            jl_array_ptr_1d_push(new_used, v);
         }
     }
     htable_free(&visited);
     arraylist_free(&stack);
     JL_GC_POP();
-    // reverse new_ext
-    n0 = jl_array_nrows(new_ext);
-    jl_value_t **news = jl_array_data(new_ext, jl_value_t*);
+    // reverse new_used
+    n0 = jl_array_nrows(new_used);
+    jl_value_t **news = jl_array_data(new_used, jl_value_t*);
     for (i = 0; i < n0 / 2; i++) {
         jl_value_t *temp = news[i];
         news[i] = news[n0 - i - 1];
         news[n0 - i - 1] = temp;
     }
-    return new_ext;
+    return new_used;
 }
 
 // For every method:
 // - if the method is owned by a worklist module, add it to the list of things to be
 //   verified on reloading
 // - if the method is extext, record that it needs to be reinserted later in the method table
-static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
+static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
     jl_array_t *s = (jl_array_t*)closure;
     jl_method_t *m = ml->func.method;
-    if (!jl_object_in_image((jl_value_t*)m->module)) {
-        if (s)
-            jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
-    }
+    if (!jl_object_in_image((jl_value_t*)m->module))
+        jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
     return 1;
 }
 
-static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
+// Collect every currently-valid method of a worklist-owned method table, whose
+// contents are dropped from the image (see jl_prune_internal_mtable)
+static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
-    if (!jl_object_in_image((jl_value_t*)mt))
-        env = NULL; // mark internal, not extext
-    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), jl_collect_methcache_from_mod, env);
+    jl_array_t *s = (jl_array_t*)closure;
+    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0)
+        jl_array_ptr_1d_push(s, (jl_value_t*)ml->func.method); // extext
+    return 1;
+}
+
+static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env) JL_CANSAFEPOINT
+{
+    // Custom method tables owned by the worklist are serialized without their
+    // contents (jl_prune_internal_mtable), so all of their methods are treated
+    // as extending an "external" table, to be re-added and re-activated on load.
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs),
+                       jl_object_in_image((jl_value_t*)mt) ? jl_collect_methcache_from_mod
+                                                           : jl_collect_methcache_internal,
+                       env);
     return 1;
 }
 
 // Collect methods of external functions defined by modules in the worklist
 // "extext" = "extending external"
 // Also collect relevant backedges
-static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array)
+static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array) JL_CANSAFEPOINT
 {
     jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, s);
 }
@@ -668,7 +687,7 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
 }
 
 // return char* from String field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld)
+static const char *git_info_string(const char *fld) JL_CANSAFEPOINT
 {
     static jl_value_t *GIT_VERSION_INFO = NULL;
     if (!GIT_VERSION_INFO)
@@ -678,14 +697,14 @@ static const char *git_info_string(const char *fld)
     return jl_string_data(f);
 }
 
-static const char *jl_git_branch(void)
+static const char *jl_git_branch(void) JL_CANSAFEPOINT
 {
     static const char *branch = NULL;
     if (!branch) branch = git_info_string("branch");
     return branch;
 }
 
-static const char *jl_git_commit(void)
+static const char *jl_git_commit(void) JL_CANSAFEPOINT
 {
     static const char *commit = NULL;
     if (!commit) commit = git_info_string("commit");
@@ -694,10 +713,16 @@ static const char *jl_git_commit(void)
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 13;
+static const int JI_FORMAT_VERSION = 15;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
-static int64_t write_header(ios_t *s, uint8_t pkgimage)
+
+// This .ji is for an incremental image and not a system image.
+static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
+// This .ji must be loaded from the associated native image (.so/.dylib/.dll).
+static const uint32_t JI_FLAG_SPLIT = 1 << 1;
+
+static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
 {
     ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
     write_uint16(s, JI_FORMAT_VERSION);
@@ -706,14 +731,18 @@ static int64_t write_header(ios_t *s, uint8_t pkgimage)
     ios_write(s, JL_BUILD_UNAME, strlen(JL_BUILD_UNAME)+1);
     ios_write(s, JL_BUILD_ARCH, strlen(JL_BUILD_ARCH)+1);
     ios_write(s, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING)+1);
-    const char *branch = jl_git_branch(), *commit = jl_git_commit();
-    ios_write(s, branch, strlen(branch)+1);
-    ios_write(s, commit, strlen(commit)+1);
-    write_uint8(s, pkgimage);
+    const char *gc_abi = jl_gc_image_abi();
+    ios_write(s, gc_abi, strlen(gc_abi)+1);
+    write_uint32(s, flags);
+    if (flags & JI_FLAG_PKGIMAGE) {
+        const char *branch = jl_git_branch(), *commit = jl_git_commit();
+        ios_write(s, branch, strlen(branch)+1);
+        ios_write(s, commit, strlen(commit)+1);
+    }
     int64_t checksumpos = ios_pos(s);
-    write_uint64(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
-    write_uint64(s, 0); // eventually will hold dataendpos
+    write_uint32(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
     write_uint64(s, 0); // eventually will hold datastartpos
+    write_uint64(s, 0); // eventually will hold dataendpos
     return checksumpos;
 }
 
@@ -755,7 +784,7 @@ static void write_module_path(ios_t *s, jl_module_t *depmod) JL_NOTSAFEPOINT
 // Serialize the global Base._require_dependencies array of pathnames that
 // are include dependencies. Also write Preferences and return
 // the location of the srctext "pointer" in the header index.
-static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t **udepsp)
+static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t **udepsp) JL_CANSAFEPOINT
 {
     int64_t initial_pos = 0;
     int64_t pos = 0;
@@ -869,7 +898,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 
 // Add methods to external (non-worklist-owned) functions
 // mutating external to point at the new methodtable entry instead of the new method
-static void jl_add_methods(jl_array_t *external)
+static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(external);
     for (i = 0; i < l; i++) {
@@ -884,7 +913,7 @@ static void jl_add_methods(jl_array_t *external)
 }
 
 extern _Atomic(int) allow_new_worlds;
-static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname)
+static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(internal);
     for (i = 0; i < l; i++) {
@@ -930,7 +959,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
     }
 }
 
-static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
+static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(method_roots_list);
     int failed = 0;
@@ -957,7 +986,7 @@ static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
     return failed;
 }
 
-static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods)
+static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAFEPOINT
 {
     if (!jl_main_module->build_id.lo) {
         return jl_get_exceptionf(jl_errorexception_type,
@@ -998,30 +1027,34 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos, int64_t *datastartpos)
+JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
 {
     uint16_t bom;
-    uint64_t checksum = 0;
-    if (readstr_verify(s, JI_MAGIC, 0) &&
-        read_uint16(s) == JI_FORMAT_VERSION &&
-        ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
-        read_uint8(s) == sizeof(void*) &&
-        readstr_verify(s, JL_BUILD_UNAME, 1) &&
-        readstr_verify(s, JL_BUILD_ARCH, 1) &&
-        readstr_verify(s, JULIA_VERSION_STRING, 1) &&
-        readstr_verify(s, jl_git_branch(), 1) &&
-        readstr_verify(s, jl_git_commit(), 1))
-    {
-        *pkgimage = read_uint8(s);
-        checksum = read_uint64(s);
-        *datastartpos = (int64_t)read_uint64(s);
-        *dataendpos = (int64_t)read_uint64(s);
-    }
-    return checksum;
+    if (!(readstr_verify(s, JI_MAGIC, 0) &&
+          read_uint16(s) == JI_FORMAT_VERSION &&
+          ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
+          read_uint8(s) == sizeof(void*) &&
+          readstr_verify(s, JL_BUILD_UNAME, 1) &&
+          readstr_verify(s, JL_BUILD_ARCH, 1) &&
+          readstr_verify(s, JULIA_VERSION_STRING, 1) &&
+          readstr_verify(s, jl_gc_image_abi(), 1)))
+        return -1;
+
+    *flags = read_uint32(s);
+
+    if ((*flags & JI_FLAG_PKGIMAGE) &&
+        !(readstr_verify(s, jl_git_branch(), 1) && readstr_verify(s, jl_git_commit(), 1)))
+        return -1;
+
+    *checksum = read_uint32(s);
+    *datastartpos = (int64_t)read_uint64(s);
+    *dataendpos = (int64_t)read_uint64(s);
+
+    return 0;
 }
 
 // Returns `depmodidxs` where `j = depmodidxs[i]` corresponds to the blob `depmods[j]` in `write_mod_list`
-static jl_array_t *image_to_depmodidx(jl_array_t *depmods)
+static jl_array_t *image_to_depmodidx(jl_array_t *depmods) JL_CANSAFEPOINT
 {
     if (!depmods)
         return NULL;
@@ -1045,7 +1078,7 @@ static jl_array_t *image_to_depmodidx(jl_array_t *depmods)
 }
 
 // Returns `imageidxs` where `j = imageidxs[i]` is the blob corresponding to `depmods[j]`
-static jl_array_t *depmod_to_imageidx(jl_array_t *depmods)
+static jl_array_t *depmod_to_imageidx(jl_array_t *depmods) JL_CANSAFEPOINT
 {
     if (!depmods)
         return NULL;

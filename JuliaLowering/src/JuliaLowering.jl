@@ -12,13 +12,12 @@ else
     using JuliaSyntax
 end
 
-using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, SyntaxGraph,
-    SyntaxList, SyntaxTree, byte_range, check_compatible_graph, children, copy_ast,
-    copy_attrs, delete_attributes, ensure_attributes!, filename, first_byte,
-    flattened_provenance, hasattr, head, highlight, is_compatible_graph,
-    is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, mkleaf, mknode, newleaf,
-    newnode, node_string, numchildren, provenance, reparent, setattr, setattr!,
-    source_location, sourcefile, sourceref, syntax_graph, tree_ids, mapindex, mktree,
+using .JuliaSyntax: @KSet_str, @stm, Kind, SourceAttrType, SourceRef,
+    SyntaxList, SyntaxTree, byte_range, children, filename, first_byte,
+    flattened_provenance, head, highlight,
+    is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, newleaf,
+    newnode, node_string, numchildren, provenance, setmeta, setmeta!, getmeta,
+    CompileHints, source_location, sourcefile, sourceref, mapindex, mktree,
     ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
     syntax_module, is_flisp_compat, adopt_scope, remove_context, fill_context!,
     fill_context, JL_NEW_SYNTAX_VERSION, JL_OLD_SYNTAX_VERSION
@@ -27,7 +26,9 @@ const DEBUG = true
 
 # Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
 # where `Core.MacroSource` is not defined.
-const MacroSource = isdefined(Core, :MacroSource) ? Core.MacroSource : Union{}
+const MacroSource = isdefinedglobal(Core, :MacroSource) ? Core.MacroSource : Union{}
+
+const TypeEqOf = isdefinedglobal(Core, :TypeEqOf) ? "TypeEqOf" : "Typeof"
 
 _include("kinds.jl")
 _register_kinds()

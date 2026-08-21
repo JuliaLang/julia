@@ -142,11 +142,13 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
         valbuf = IOBuffer()
         rows_per_value = max(1, dsize[1] ÷ (nkwargs + 1 - hasmaxlog))
         valio = IOContext(IOContext(valbuf, stream),
-                          :displaysize => (rows_per_value, dsize[2] - 5),
                           :limit => logger.show_limited)
         for (key, val) in kwargs
             key === :maxlog && continue
-            showvalue(valio, val)
+            keyio = IOContext(valio,
+                              :displaysize => (rows_per_value,
+                                               dsize[2] - 7 - textwidth(string(key))))
+            showvalue(keyio, val)
             vallines = split(takestring!(valbuf), '\n')
             if length(vallines) == 1
                 push!(msglines, (indent=2, msg=SubString("$key = $(vallines[1])")))

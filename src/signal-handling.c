@@ -10,12 +10,21 @@
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
 #endif
+#ifdef _OS_LINUX_
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <threading.h>
+
+// Native mutex (not jl_mutex_t): the paths below run on non-Julia threads
+// (the signal listener, Win32 console-ctrl handler threads), which have no
+// Julia task to derive lock ownership from.
+static uv_mutex_t sigint_state_lock;
 
 // Profiler control variables
 uv_mutex_t live_tasks_lock;
@@ -28,22 +37,34 @@ volatile int profile_running = 0;
 volatile int profile_all_tasks = 0;
 static const uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
-JL_DLLEXPORT void jl_profile_stop_timer(void);
-JL_DLLEXPORT int jl_profile_start_timer(uint8_t);
+JL_DLLEXPORT void jl_profile_stop_timer(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t) JL_NOTSAFEPOINT;
 
 ///////////////////////
 // Utility functions //
 ///////////////////////
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
+    uv_mutex_lock(&bt_data_prof_lock);
+    if (profile_running) {
+        // the sampler may be writing into the buffer we are about to free. Note this
+        // only rules out re-initializing while running: `jl_profile_stop_timer` doesn't
+        // wait for a sampler iteration already under way, and the thread samplers write
+        // without taking this lock.
+        uv_mutex_unlock(&bt_data_prof_lock);
+        return -2;
+    }
     profile_bt_size_max = maxsize;
     nsecprof = delay_nsec;
     if (profile_bt_data_prof != NULL)
         free((void*)profile_bt_data_prof);
     profile_bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (profile_bt_data_prof == NULL && maxsize > 0)
+    if (profile_bt_data_prof == NULL && maxsize > 0) {
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -1;
+    }
     profile_bt_size_cur = 0;
+    uv_mutex_unlock(&bt_data_prof_lock);
     return 0;
 }
 
@@ -94,6 +115,7 @@ DWORD debuginfo_asyncsafe_held;
 
 void jl_init_profile_lock(void)
 {
+    uv_mutex_init(&sigint_state_lock);
     uv_rwlock_init(&debuginfo_asyncsafe);
 #ifndef _OS_WINDOWS_
     pthread_key_create(&debuginfo_asyncsafe_held, NULL);
@@ -111,7 +133,13 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 #endif
 }
 
-int jl_lock_profile(void)
+void jl_lock_profile(void)
+{
+    int got = jl_trylock_profile();
+    assert(got); (void)got;
+}
+
+int jl_trylock_profile(void)
 {
     uintptr_t held = jl_lock_profile_rd_held();
     if (held == -1)
@@ -135,7 +163,7 @@ int jl_lock_profile(void)
     return 1;
 }
 
-JL_DLLEXPORT void jl_unlock_profile(void)
+JL_DLLEXPORT void jl_unlock_profile(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     uintptr_t held = jl_lock_profile_rd_held();
     assert(held && held != -1);
@@ -164,7 +192,7 @@ int jl_lock_profile_wr(void)
     return 1;
 }
 
-void jl_unlock_profile_wr(void)
+void jl_unlock_profile_wr(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     uintptr_t held = jl_lock_profile_rd_held();
     assert(held == -1);
@@ -210,7 +238,7 @@ static int *profile_get_randperm(int size)
 }
 
 
-JL_DLLEXPORT int jl_profile_is_buffer_full(void)
+JL_DLLEXPORT int jl_profile_is_buffer_full(void) JL_NOTSAFEPOINT
 {
     // Declare buffer full if there isn't enough room to sample even just the
     // thread metadata and one max-sized frame. The `+ 6` is for the two block
@@ -221,7 +249,7 @@ JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 #define PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE (0)
 #define PROFILE_TASK_DEBUG_FORCE_STOP_THREAD_FAILURE (0)
 
-void jl_profile_task(void)
+void jl_profile_task(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
 {
     if (jl_profile_is_buffer_full()) {
         // Buffer full: Delete the timer
@@ -268,7 +296,7 @@ collect_backtrace:
         return;
     }
 
-    jl_record_backtrace_result_t r = {0, INT16_MAX};
+    jl_record_backtrace_result_t r = {0, -1};
     jl_bt_element_t *bt_data_prof = (jl_bt_element_t*)(profile_bt_data_prof + profile_bt_size_cur);
     size_t bt_size_max = profile_bt_size_max - profile_bt_size_cur - 1;
     if (t == NULL || PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE) {
@@ -289,7 +317,7 @@ collect_backtrace:
     profile_bt_size_cur += r.bt_size;
 
     // store threadid but add 1 as 0 is preserved to indicate end of block
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = (uintptr_t)r.tid + 1;
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = r.tid == -1 ? -1 : (uintptr_t)r.tid + 1;
 
     // store task id (never null)
     profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)t;
@@ -310,36 +338,6 @@ collect_backtrace:
     if (got_mutex) {
         uv_mutex_unlock(&live_tasks_lock);
     }
-}
-
-static uint64_t jl_last_sigint_trigger = 0;
-static uint64_t jl_disable_sigint_time = 0;
-static void jl_clear_force_sigint(void)
-{
-    jl_last_sigint_trigger = 0;
-}
-
-static int jl_check_force_sigint(void)
-{
-    static double accum_weight = 0;
-    uint64_t cur_time = uv_hrtime();
-    uint64_t dt = cur_time - jl_last_sigint_trigger;
-    uint64_t last_t = jl_last_sigint_trigger;
-    jl_last_sigint_trigger = cur_time;
-    if (last_t == 0) {
-        accum_weight = 0;
-        return 0;
-    }
-    double new_weight = accum_weight * exp(-(dt / 1e9)) + 0.3;
-    if (!isnormal(new_weight))
-        new_weight = 0;
-    accum_weight = new_weight;
-    if (new_weight > 1) {
-        jl_disable_sigint_time = cur_time + (uint64_t)0.5e9;
-        return 1;
-    }
-    jl_disable_sigint_time = 0;
-    return 0;
 }
 
 #ifndef _OS_WINDOWS_
@@ -364,11 +362,7 @@ static int jl_ignore_sigint(void)
     if (!jl_sigint_passed)
         return 1;
 #endif
-    // Force sigint requires pressing `Ctrl-C` repeatedly.
-    // Ignore sigint for a short time after that to avoid rethrowing sigint too
-    // quickly again. (Code that has this issue is inherently racy but this is
-    // an interactive feature anyway.)
-    return jl_disable_sigint_time && jl_disable_sigint_time > uv_hrtime();
+    return 0;
 }
 
 static int exit_on_sigint = 0;
@@ -420,7 +414,7 @@ JL_DLLEXPORT void jl_set_peek_cond(uv_async_t *cond)
     JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
 }
 
-static void jl_check_profile_autostop(void)
+static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
 {
     if (profile_show_peek_cond_loc != NULL && profile_autostop_time != -1.0 && jl_hrtime() > profile_autostop_time) {
         profile_autostop_time = -1.0;
@@ -436,6 +430,246 @@ static void jl_check_profile_autostop(void)
             uv_async_send(profile_show_peek_cond_loc);
         JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
     }
+}
+
+// State for delegating SIGINT handling to a dedicated listener task (similar
+// to the profile listener above): the signal listener marks the ^C episode
+// source cancelled and pings this async condition; the Base-side listener
+// task performs the remaining delivery work.
+static _Atomic(uv_async_t *) sigint_cond_loc = NULL;
+JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
+{
+    // The lock pairs with deliver_sigint_notification: a notification in
+    // flight completes its async send before exit can clear + close the
+    // handle. (Lock-free readers only probe for NULL.)
+    uv_mutex_lock(&sigint_state_lock);
+    jl_atomic_store_relaxed(&sigint_cond_loc, cond);
+    uv_mutex_unlock(&sigint_state_lock);
+}
+
+// Set while a ^C notification has been posted to the event loop but not yet
+// picked up by the julia-side sigint listener. While set, idle threads take
+// over running the event loop if its owning thread cannot (e.g. it is blocked
+// in a long-running foreign call) - see jl_task_get_next.
+_Atomic(int) jl_sigint_dispatch_pending = 0;
+
+// Atomically claim a pending ^C notification: the sigint listener (one per
+// threadpool) that wins the claim processes the episode; others re-park.
+JL_DLLEXPORT int jl_claim_sigint_dispatch(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_exchange_relaxed(&jl_sigint_dispatch_pending, 0);
+}
+
+static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
+{
+    // Runs on a dedicated (non-Julia) thread - the signal listener thread or
+    // a Win32 console ctrl handler thread - so blocking on the lock is fine.
+    uv_mutex_lock(&sigint_state_lock);
+    uv_async_t *cond = jl_atomic_load_relaxed(&sigint_cond_loc);
+    if (cond != NULL) {
+        jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
+        uv_async_send(cond);
+        // Wake every thread: a parked thread's scheduler loop performs the
+        // dispatch pass inline on waking (see jl_dispatch_sigint_inline),
+        // so delivery does not depend on any particular thread - in
+        // particular not on the loop-owning thread, which may be stuck in
+        // a long-running foreign call. (No preemption of running tasks:
+        // the pass needs only one schedulable thread, and preempting e.g.
+        // the REPL frontend would inject a yield into innocent code on
+        // every press.)
+        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+        for (int16_t tid = 0; tid < nthreads; tid++)
+            jl_wakeup_thread_from_foreign(tid);
+    }
+    uv_mutex_unlock(&sigint_state_lock);
+}
+
+// The cancellation token source governing the current interactive foreground
+// evaluation (the "^C episode source"). The REPL backend / script driver
+// installs a fresh source per episode via jl_set_sigint_source (Base keeps
+// its own rooted reference for the episode's lifetime); the signal listener
+// thread reads this mirror lock-free and uses the object only under a GC
+// exclusion (see jl_sigint_request_cancellation).
+static _Atomic(jl_value_t *) jl_sigint_source = NULL;
+
+// Episode generation, seqlock-style (odd while a swap is in progress): a
+// press records the generation it targeted, so a press for episode A can
+// never be delivered to a later-installed episode B (the source pointer
+// alone would be ABA-prone); consumption compares generations, never
+// dereferences. Writers are serialized by `sigint_state_lock`.
+static _Atomic(uint64_t) sigint_episode_gen = 2;
+// The generation a not-yet-dispatched press targeted; 0 = none pending.
+static _Atomic(uint64_t) sigint_pending_gen = 0;
+
+JL_DLLEXPORT uint64_t jl_set_sigint_source(jl_value_t *src) JL_NOTSAFEPOINT
+{
+    // The signal thread may load the outgoing source concurrently: its use
+    // is covered by GC exclusion, not rooting, and marking a just-retired
+    // episode's subtree is the very cancellation that episode's press
+    // requested (idempotent, monotonic). The generation brackets the swap
+    // (odd = in progress) so the signal thread can snapshot a consistent
+    // (source, generation) pair.
+    uv_mutex_lock(&sigint_state_lock);
+    uint64_t g = jl_atomic_load_relaxed(&sigint_episode_gen) + 1; // odd
+    jl_atomic_store_release(&sigint_episode_gen, g);
+    jl_atomic_store(&jl_sigint_source,
+                    (src == NULL || src == jl_nothing) ? NULL : src);
+    jl_atomic_store_release(&sigint_episode_gen, g + 1); // even: complete
+    uv_mutex_unlock(&sigint_state_lock);
+    // Callers record the returned generation next to their rooted source
+    // reference; a stale press (recorded under an older generation) then
+    // self-invalidates at consumption.
+    return g + 1;
+}
+
+// Consume the pending press if (and only if) it targeted the caller's
+// episode generation; a press recorded for another generation stays
+// pending for the pass that owns that episode's view.
+JL_DLLEXPORT int jl_consume_sigint_pending(uint64_t gen) JL_NOTSAFEPOINT
+{
+    uint64_t p = jl_atomic_load_acquire(&sigint_pending_gen);
+    if (p == 0 || p != gen)
+        return 0;
+    return jl_atomic_cmpswap(&sigint_pending_gen, &p, (uint64_t)0);
+}
+
+JL_DLLEXPORT int jl_peek_sigint_dispatch(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&jl_sigint_dispatch_pending);
+}
+
+// Mark every descendant of `root` (including `root`) cancelled at `sev`
+// (CAS-max, monotonic). Only state bytes are written - waking parked waiters
+// stays with the julia-side listener - but this eager marking lets the
+// per-thread cancellation sends identify governed *running* tasks purely by
+// their bound source's state, including tasks bound to scoped descendant
+// sources (e.g. the source a `@sync` installs).
+//
+// The traversal is lock-free by the child lists' design (mutators only
+// prepend via CAS on `child_head`; the collector unlinks dead entries with
+// the world stopped), and linear in the live subtree: a node is descended
+// into only when our CAS actually advanced its state (state-advance
+// deduplication, like `Base.cancel!`'s walk), and attachment is
+// level-triggered (a child linked under a cancelled parent is born marked),
+// so no descendant is missed. The worklist may malloc: this runs on
+// ordinary threads (the unix sigwait listener thread, a Windows
+// console-handler thread), NOT in async-signal context. (The one
+// nearly-theoretical exception is a Windows CRT `raise(SIGINT)` via
+// crt_sig_handler, which runs on the raising thread - unsafe only if the
+// raise itself came from inside malloc.)
+static void jl_cancel_subtree_mark(jl_cancel_source_t *root, uint8_t sev) JL_NOTSAFEPOINT
+{
+    arraylist_t worklist;
+    arraylist_new(&worklist, 0);
+    jl_cancel_source_t *node = root;
+    while (1) {
+        // Mark the node before iterating its children (pre-order), pairing
+        // with the seq_cst attach dance (publish link, then read the
+        // parent's state): an attacher this walk misses observes the state.
+        uint8_t st = jl_atomic_load(&node->state);
+        int advanced = 0;
+        while (st < sev) {
+            if (jl_atomic_cmpswap(&node->state, &st, sev)) {
+                advanced = 1;
+                break;
+            }
+        }
+        if (advanced) {
+            jl_value_t *c = jl_atomic_load(&node->child_head);
+            while (c != NULL && c != jl_nothing) {
+                jl_cancel_source_t *cs = (jl_cancel_source_t*)c;
+                // the sibling link lives in the child's link entry for `node`
+                jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
+                size_t np = cs->nparents;
+                jl_value_t *cnext = jl_nothing;
+                for (size_t i = 0; i < np; i++) {
+                    if (links[i].parent == node) {
+                        cnext = jl_atomic_load_relaxed(&links[i].next);
+                        break;
+                    }
+                }
+                arraylist_push(&worklist, cs);
+                c = cnext;
+            }
+        }
+        if (worklist.len == 0)
+            break;
+        node = (jl_cancel_source_t*)arraylist_pop(&worklist);
+    }
+    arraylist_free(&worklist);
+}
+
+// Shared entry point for a user-initiated interrupt (^C): mark the episode
+// source cancelled, mark the interrupt as pending, and notify the sigint
+// listener task, which performs the remaining (Julia-side) delivery work.
+// Callable from non-Julia threads; must not allocate GC memory or take
+// Julia-side locks.
+static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
+{
+    // Mark the episode source cancelled (SAFE severity) here rather than
+    // leaving it to the julia-side listener: the state byte is what every
+    // cancellation point and signal-delivery gate reads, so the signal-based
+    // delivery below is sufficient on its own even if the listener never
+    // gets to run (a single-threaded session, or every thread stuck in a
+    // long foreign call) - exactly the situation ^C must cut through. When
+    // the listener does run, it finds the already-cancelled source and does
+    // the remaining bookkeeping (waking parked waiters; see
+    // `Base.redeliver!`).
+    int have_listener = jl_atomic_load_relaxed(&sigint_cond_loc) != NULL;
+    // The subtree walk dereferences sources reachable only through weak
+    // child links, and this thread does not participate in stop-the-world -
+    // exclude the collector for the walk instead. The mirror load happens
+    // inside the exclusion so the loaded object cannot have been swept.
+    jl_safepoint_exclude_gc_begin();
+    // Snapshot a consistent (source, generation) pair: seqlock read
+    // against jl_set_sigint_source's bracketed swap.
+    uint64_t gen;
+    jl_cancel_source_t *src;
+    while (1) {
+        gen = jl_atomic_load_acquire(&sigint_episode_gen);
+        if (gen & 1) {
+            jl_cpu_pause();
+            continue;
+        }
+        src = (jl_cancel_source_t*)jl_atomic_load(&jl_sigint_source);
+        if (jl_atomic_load_acquire(&sigint_episode_gen) == gen)
+            break;
+    }
+    if (src != NULL) {
+        // Mark the whole descendant subtree, so the per-thread sends below
+        // can identify a governed running task - even one bound to a scoped
+        // descendant source - by its bound source's state alone.
+        jl_cancel_subtree_mark(src, 0x1);
+        // The heavy side of the asymmetric fence pairing with the
+        // compiler-order-only publication of task token bindings at
+        // cancellation points (the light side; mirrors
+        // `Threads.atomic_fence_heavy()` in `Base.cancel!`): after this,
+        // either the sends below observe a running task's binding, or the
+        // task's next cancellation point observes the state writes above.
+        jl_membarrier();
+    }
+    jl_safepoint_exclude_gc_end();
+    // Everything below reads only per-thread state and tasks' strongly-held
+    // fields - no weakly-reachable source pointers.
+    if (src != NULL) {
+        // Mark the dispatch pending BEFORE the per-thread sends (idle
+        // threads keep the event loop moving until the listener claims it).
+        // Skipped when no listener is registered (e.g. a trimmed binary that
+        // stubs it out): nothing would ever claim the flag, and the
+        // scheduler's stay-awake gate would keep idle threads polling
+        // forever.
+        if (have_listener)
+            jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
+        // Interrupt asynchronously-interruptible regions right away, on
+        // every thread: the request-5 dispatch delivers to tasks whose own
+        // bound token source is (now) cancelled, and is a no-op for threads
+        // running unrelated (or no) work.
+        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+        for (int16_t tid = 0; tid < (int16_t)nthreads; tid++)
+            jl_send_cancellation_signal(tid);
+    }
+    jl_atomic_store_release(&sigint_pending_gen, gen);
+    deliver_sigint_notification();
 }
 
 static void stack_overflow_warning(void)
@@ -555,6 +789,54 @@ static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
 #else
 #include "signals-unix.c"
 #endif
+
+// jl_send_reset_signal is the static per-platform delivery defined by the
+// file included above; `reset_code` becomes the reset point's setjmp return.
+
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_send_reset_signal(tid, JL_RESET_CODE_CANCEL);
+}
+
+// Request a cooperative yield from the target thread's current task: mark
+// the task (honored at its next cancellation point) before kicking it out
+// of any published reset region.
+JL_DLLEXPORT void jl_send_preempt_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL)
+        return;
+    jl_atomic_store_release(&ct2->preempt_request, 1);
+    jl_send_reset_signal(tid, JL_RESET_CODE_PREEMPT);
+}
+
+// Deliver cancellation shootdowns to every thread whose current task is
+// bound to a now-cancelled token source; called by `cancel!` after
+// propagation and a heavy fence. The check is only a hint (the sender
+// re-validates; a missed task recovers level-triggered), and the unrooted
+// token read is safe because this thread runs GC-unsafe.
+JL_DLLEXPORT void jl_shootdown_cancelled_tasks(void) JL_NOTSAFEPOINT
+{
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (int16_t tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        if (ptls2 == NULL)
+            continue;
+        jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+        if (ct2 == NULL)
+            continue;
+        jl_value_t *bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (bound == NULL || bound == jl_nothing ||
+            jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+            continue;
+        jl_send_cancellation_signal(tid);
+    }
+}
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
 {
@@ -683,7 +965,7 @@ static void jl_fprint_sigill(ios_t *s, void *_ctx)
 // this is generally quite a foolish operation, but does free you up to do
 // arbitrary things on this stack now without worrying about corrupt state that
 // existed already on it
-void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
+void jl_task_frame_noreturn(jl_task_t *ct)
 {
     jl_set_safe_restore(NULL);
     if (ct) {
@@ -693,8 +975,10 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
         jl_ptls_t ptls = ct->ptls;
         small_arraylist_t *locks = &ptls->locks;
+#ifndef __clang_safetyanalysis__
         for (size_t i = locks->len; i > 0; i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
+#endif
         locks->len = 0;
         ptls->in_pure_callback = 0;
         ptls->in_finalizer = 0;
@@ -713,6 +997,9 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
     size_t i, n = ct ? *bt_size : 0;
+    // Threads unknown to Julia have no ptls, and hence no pre-allocated
+    // backtrace buffer; a small stack buffer is used for them instead.
+    jl_bt_element_t bt_data_foreign[JL_BT_MAX_ENTRY_SIZE * 8];
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jl_fprint_backtrace in jl_exit)
         // and also resets the state of ct and ptls so that some code can run on this task again
@@ -751,9 +1038,29 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
         // is properly rooted.
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
     }
+    else if (context) {
+        // The faulting thread was not created or adopted by Julia (e.g. a
+        // thread started by foreign code that crashed without ever calling
+        // into Julia), so it has no Julia task or backtrace buffer. Record a
+        // native-only backtrace into the local buffer instead, so that at
+        // least the faulting instruction pointer is reported.
+#ifdef _OS_LINUX_
+        char thread_name[16]; // the kernel limits thread names to 16 bytes (TASK_COMM_LEN)
+        if (prctl(PR_GET_NAME, (unsigned long)thread_name, 0, 0, 0) != 0)
+            thread_name[0] = '\0';
+        jl_safe_fprintf(s, "unknown thread \"%s\" (os tid %ld); this thread is not managed by Julia, no Julia backtrace available\n",
+                        thread_name, (long)syscall(SYS_gettid));
+#else
+        jl_safe_fprintf(s, "unknown thread; this thread is not managed by Julia, no Julia backtrace available\n");
+#endif
+        bt_data = bt_data_foreign;
+        n = rec_backtrace_ctx(bt_data, sizeof(bt_data_foreign) / sizeof(jl_bt_element_t), context, NULL);
+    }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
         jl_fprint_bt_entry_codeloc(s, bt_data + i);
     }
+    if (n == 0 && context)
+        jl_safe_fprintf(s, "no backtrace could be recorded from the signal context\n");
     jl_gc_debug_fprint_status(s);
     jl_gc_debug_fprint_critical_error(s);
 }
