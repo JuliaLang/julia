@@ -1302,6 +1302,32 @@ has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, 
 # loading a precompiled image) compute field types with the definition-time
 # semantics. Before that machinery is loaded (early bootstrap), the generator
 # is stored as `svec(gen)` and invoked dynamically.
+# `fieldtype` for use in the constructors of structs with computed field
+# types. Identical to `fieldtype` on the hot path (so inference const-folds it
+# and elides the field convert exactly as for a plain `fieldtype` call),
+# except that a `Union{}` slot — which for such structs usually means the
+# field generator failed and the instantiation degraded (instantiation is
+# deliberately throw-free) — re-derives the field types with errors
+# propagating, so that *construction* fails with the generator's underlying
+# error rather than an opaque convert-to-`Union{}` failure.
+function _ctor_fieldtype(@nospecialize(t), i::Int)
+    ft = fieldtype(t, i)
+    ft === Union{} && _ctor_fieldtype_degraded(t, i)
+    return ft
+end
+function _ctor_fieldtype_degraded(@nospecialize(t), i::Int)
+    isdefinedglobal(Base, :fieldtype_generator) || return nothing
+    res = fieldtype_generator(t) # rethrows the generator's own error
+    fti = getfield(res, i)
+    # the generator deliberately produced Union{}: keep the ordinary
+    # convert-to-Union{} failure path
+    fti === Union{} && return nothing
+    # the generator succeeded but produced something that is not a valid
+    # field type (a non-type value, or a type with free type variables)
+    error("field type ", i, " of ", t, " was computed as ", fti,
+          ", which is not a valid field type")
+end
+
 function _set_fieldtype_generator!(@nospecialize(ty), @nospecialize(gen))
     if isdefinedglobal(Base, :_validate_fieldtype_generator)
         fg = _validate_fieldtype_generator(ty, gen)
@@ -1484,7 +1510,9 @@ function _defaultctors(@nospecialize(ty), functionloc)
             # convert methods (e.g. convert(::Any, v::T) = v) that prevent the
             # optimizer from inlining convert(fieldtype(self, i), arg) when the
             # field type is Any after specialization.
-            ft_expr = Expr(:call, GlobalRef(Core, :fieldtype), Core.Argument(1), i)
+            ftname = isa(ft, Core.ComputedFieldType) ?
+                GlobalRef(Base, :_ctor_fieldtype) : GlobalRef(Core, :fieldtype)
+            ft_expr = Expr(:call, ftname, Core.Argument(1), i)
             ft_ssa = Expr(:ssavalue, bidx)
             cnvt_ssa = Expr(:ssavalue, bidx + 1)
             isa_check = Expr(:call, GlobalRef(Core, :isa), Core.Argument(i + 1), ft_ssa)

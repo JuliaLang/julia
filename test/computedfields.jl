@@ -131,6 +131,33 @@ global nonconst_dim::Int = 3
     @test_throws CapabilityError Base.fieldtype_generator(LoopyGrid{3})
 end
 
+# When instantiation degraded a computed field type to `Union{}` (throw-free),
+# *construction* re-derives the field types with errors propagating, so the
+# failure surfaces as the generator's underlying error instead of an opaque
+# convert-to-`Union{}` message.
+@testset "construction re-derives failed generators" begin
+    # default (generated) inner constructor
+    @eval struct CtorBadGlobal{N}
+        tup::NTuple{(N::Int)*nonconst_dim, Float64}
+    end
+    @test fieldtype(CtorBadGlobal{2}, 1) === Union{}  # instantiation stays throw-free
+    @test_throws CapabilityError CtorBadGlobal{2}((1.0, 2.0))
+    # user inner constructor with explicit `new`
+    @eval struct CtorBadInner{N}
+        tup::NTuple{(N::Int)*nonconst_dim, Float64}
+        CtorBadInner{N}(t) where {N} = new{N}(t)
+    end
+    @test_throws CapabilityError CtorBadInner{2}((1.0, 2.0))
+    # a generator that succeeds but yields a non-type gets a descriptive error
+    @eval struct CtorNonType{N}
+        tup::((N::Int); nothing)
+    end
+    err = try CtorNonType{2}(()); nothing catch e; e end
+    @test err isa ErrorException && occursin("not a valid field type", err.msg)
+    # healthy structs still construct (and convert) precisely
+    @test StaticMatrix{2,2,Int}((1, 2, 3, 4)).data === (1, 2, 3, 4)
+end
+
 # helper redefinition must not affect field types (frozen definition-time semantics)
 module FrozenSemantics
     mysize(n::Int) = 2n

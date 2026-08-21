@@ -800,7 +800,13 @@
                                                      (if (and (not selftype?) (equal? type-params params) (memq fty params) (memq fty sparams))
                                                       fty ; the field type is a simple parameter, the usage here is of a
                                                           ; local variable (currently just handles sparam) for the bijection of params to type-params
-                                                      `(call (core fieldtype) ,tn ,(+ fld 1)))
+                                                      (if (computed-field-type? fty params)
+                                                          ;; computed slots may hold Union{} because the field
+                                                          ;; generator failed and the instantiation degraded;
+                                                          ;; this helper re-derives with errors propagating so
+                                                          ;; construction reports the underlying failure
+                                                          `(call (top _ctor_fieldtype) ,tn ,(+ fld 1))
+                                                          `(call (core fieldtype) ,tn ,(+ fld 1))))
                                                       #f
                                                       #f)))))
     (cond ((> (num-non-varargs args) (length field-names))
