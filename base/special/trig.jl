@@ -35,7 +35,7 @@ function sin(x::T) where T<:Union{Float32, Float64}
     elseif isnan(x)
         return x
     elseif isinf(x)
-        throw_finite_domainerror(:sin, x)
+        return throw_finite_domainerror(:sin, x)
     end
     n, y = rem_pio2_kernel(x)
     n = n&3
@@ -103,7 +103,7 @@ function cos(x::T) where T<:Union{Float32, Float64}
     elseif isnan(x)
         return x
     elseif isinf(x)
-        throw_finite_domainerror(:cos, x)
+        return throw_finite_domainerror(:cos, x)
     else
         n, y = rem_pio2_kernel(x)
         n = n&3
@@ -180,7 +180,7 @@ function sincos(x::T) where T<:Union{Float32, Float64}
     elseif isnan(x)
         return x, x
     elseif isinf(x)
-        throw_finite_domainerror(:sincos, x)
+        return throw_finite_domainerror(:sincos, x)
     end
     n, y = rem_pio2_kernel(x)
     n = n&3
@@ -221,7 +221,7 @@ function tan(x::T) where T<:Union{Float32, Float64}
     elseif isnan(x)
         return x
     elseif isinf(x)
-        throw_finite_domainerror(:tan, x)
+        return throw_finite_domainerror(:tan, x)
     end
     n, y = rem_pio2_kernel(x)
     if iseven(n)
@@ -935,7 +935,7 @@ function sinpi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
-        throw_finite_domainerror(:sinpi, x)
+        return throw_finite_domainerror(:sinpi, x)
     end
     # For large x, answers are all 1 or zero.
     x >= maxintfloat(T) && return copysign(zero(T), _x)
@@ -969,7 +969,7 @@ function cospi(x::T) where T<:IEEEFloat
     x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
-        throw_finite_domainerror(:cospi, x)
+        return throw_finite_domainerror(:cospi, x)
     end
     # For large x, answers are all 1 or zero.
     x >= maxintfloat(T) && return one(T)
@@ -1006,7 +1006,7 @@ function sincospi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x, x
-        throw_finite_domainerror(:sincospi, x)
+        return throw_finite_domainerror(:sincospi, x)
     end
     # For large x, answers are all 1 or zero.
     x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
@@ -1047,7 +1047,7 @@ function tanpi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
-        throw_finite_domainerror(:tanpi, x)
+        return throw_finite_domainerror(:tanpi, x)
     end
     # For large x, answers are all zero.
     # All integer values for floats larger than maxintfloat are even.
