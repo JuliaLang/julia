@@ -112,8 +112,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAF
 
 // expression evaluator
 
-static jl_value_t *interpret_call(jl_method_instance_t *mi, jl_code_instance_t *pinned,
-                                  jl_value_t *f, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT;
+static jl_value_t *interpret_call(jl_method_instance_t *mi, jl_value_t *f, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT;
 
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
@@ -150,7 +149,7 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
         // uninferred lowered source contains no :invoke.)
         jl_method_instance_t *mi = jl_is_code_instance(c) ?
             jl_get_ci_mi((jl_code_instance_t*)c) : (jl_method_instance_t*)c;
-        result = interpret_call(mi, NULL, argv[0], &argv[1], nargs - 2);
+        result = interpret_call(mi, argv[0], &argv[1], nargs - 2);
         JL_GC_POP();
         return result;
     }
@@ -1168,13 +1167,12 @@ JL_DLLEXPORT jl_value_t *jl_rc_apply(jl_value_t **args, size_t nargs)
     if (mi == NULL)
         jl_method_error(f, &args[1], nargs, world);
     JL_GC_PROMISE_ROOTED(mi); // rooted through the method's specialization cache
-    return interpret_call(mi, NULL, f, &args[1], nargs - 1);
+    return interpret_call(mi, f, &args[1], nargs - 1);
 }
 
 // interpreter entry points
 
-static jl_value_t *NOINLINE interpret_call(jl_method_instance_t *mi, jl_code_instance_t *pinned,
-                                           jl_value_t *f, jl_value_t **args, uint32_t nargs)
+static jl_value_t *NOINLINE interpret_call(jl_method_instance_t *mi, jl_value_t *f, jl_value_t **args, uint32_t nargs)
 {
     interpreter_state *s;
     jl_task_t *ct = jl_current_task;
@@ -1183,22 +1181,13 @@ static jl_value_t *NOINLINE interpret_call(jl_method_instance_t *mi, jl_code_ins
     // NOTE: from here until `code`/`src` are stored into the GC frame below,
     // they may be reachable only through these locals (a concurrent thread
     // can republish m->source); this stretch must stay free of safepoints.
+    jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
     jl_code_instance_t *ci = NULL;
-    jl_value_t *inf = pinned == NULL ? NULL : jl_atomic_load_relaxed(&pinned->inferred);
-    if (pinned != NULL && pinned->owner != jl_nothing && inf != NULL && jl_is_code_info(inf)) {
-        // externally-owned instances (e.g. detached field generators) carry
-        // their own code; execute exactly that, not a world-based lookup
-        ci = pinned;
-        src = (jl_code_info_t*)inf;
-    }
-    else {
-        jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
-        if (jl_is_code_instance(code)) {
-            ci = (jl_code_instance_t*)code;
-            src = (jl_code_info_t*)jl_atomic_load_relaxed(&ci->inferred);
-        } else {
-            src = (jl_code_info_t*)code;
-        }
+    if (jl_is_code_instance(code)) {
+        ci = (jl_code_instance_t*)code;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&ci->inferred);
+    } else {
+        src = (jl_code_info_t*)code;
     }
     jl_array_t *stmts = src->code;
     assert(jl_typetagis(stmts, jl_array_any_type));
@@ -1275,7 +1264,7 @@ static jl_value_t *NOINLINE interpret_call(jl_method_instance_t *mi, jl_code_ins
 
 jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
 {
-    return interpret_call(jl_get_ci_mi(codeinst), codeinst, f, args, nargs);
+    return interpret_call(jl_get_ci_mi(codeinst), f, args, nargs);
 }
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;

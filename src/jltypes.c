@@ -3348,40 +3348,34 @@ JL_DLLEXPORT jl_value_t *jl_call_fieldtype_generator(jl_typename_t *tn, jl_svec_
 {
     size_t np = jl_svec_len(params);
     jl_value_t **args;
-    // root fg (and through it the generator and CodeInstance): tn->fieldgen is
-    // a mutable field, so reachability through it is not stable across
-    // safepoints (e.g. if the generator is re-installed)
-    JL_GC_PUSHARGS(args, np + 2);
+    // args[0] = definition world token, args[1] = generator, args[2..] =
+    // parameter values; the extra slot roots fg (tn->fieldgen is a mutable
+    // field, so reachability through it is not stable across safepoints,
+    // e.g. if the generator is re-installed)
+    JL_GC_PUSHARGS(args, np + 3);
     jl_value_t *fg = jl_atomic_load_relaxed(&tn->fieldgen);
     if (fg == NULL || fg == jl_nothing)
         jl_errorf("field generator for %s has not been installed yet",
                   jl_symbol_name(tn->name));
-    args[np + 1] = fg;
-    args[0] = jl_svecref(fg, 0);
+    args[np + 2] = fg;
+    args[1] = jl_svecref(fg, 0);
     for (size_t i = 0; i < np; i++)
-        args[i + 1] = jl_svecref(params, i);
-    jl_code_instance_t *ci = jl_svec_len(fg) < 2 ? NULL : (jl_code_instance_t*)jl_svecref(fg, 1);
-    jl_callptr_t invoke = NULL;
-    if (ci != NULL) {
-        invoke = jl_atomic_load_acquire(&ci->invoke);
-        if (invoke == NULL) {
-            // freshly created or loaded from an image: detached code is
-            // executed by the interpreter (TODO: native compilation)
-            jl_value_t *inf = jl_atomic_load_relaxed(&ci->inferred);
-            if (inf != NULL && jl_is_code_info(inf)) {
-                jl_atomic_store_release(&ci->invoke, jl_fptr_interpret_call);
-                invoke = jl_fptr_interpret_call;
-            }
-        }
-    }
+        args[i + 2] = jl_svecref(params, i);
     jl_value_t *res;
-    if (invoke != NULL) {
-        // world-age-independent detached CodeInstance
-        res = invoke(args[0], &args[1], (uint32_t)np, ci);
+    if (jl_svec_len(fg) >= 2) {
+        // The definition world was captured as a `Core.WorldToken`: run the
+        // generator in RCJulia mode at that world. Restricted-capability
+        // evaluation makes the result `:foldable` by construction (no effects
+        // proof required), and the token — remapped through precompilation
+        // into the image's preserved world segment — pins the definition-time
+        // semantics of everything the generator calls, forever.
+        args[0] = jl_svecref(fg, 1);
+        res = jl_f__rcjulia_call(NULL, args, (uint32_t)(np + 2));
     }
     else {
-        // dynamic call in the current world (pre-detachment fallback)
-        res = jl_apply(args, np + 1);
+        // bootstrap fallback (validation not yet available): dynamic call in
+        // the current world
+        res = jl_apply(&args[1], np + 1);
     }
     JL_GC_POP();
     return res;

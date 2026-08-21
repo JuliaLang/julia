@@ -1102,23 +1102,31 @@ JL_CALLABLE(jl_f_invoke_in_world)
 JL_CALLABLE(jl_f__rcjulia_call)
 {
     JL_NARGSV(_rcjulia_call, 2);
-    JL_TYPECHK(_rcjulia_call, ulong, args[0]);
+    // the world may be a plain world age or a `Core.WorldToken` (an opaque
+    // world capture that survives precompilation into the image's preserved
+    // segment — the form field generators store)
+    if (!jl_typetagis(args[0], jl_worldtoken_type)) {
+        JL_TYPECHK(_rcjulia_call, ulong, args[0]);
+    }
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     uint16_t last_rc = ct->rcjulia;
     jl_value_t *ret = NULL;
-    size_t world = jl_unbox_ulong(args[0]);
-    size_t max_world = jl_atomic_load_acquire(&jl_world_counter);
-    if (world > max_world)
-        world = max_world;
+    size_t world = jl_typetagis(args[0], jl_worldtoken_type) ?
+        ((jl_worldtoken_t*)args[0])->world : jl_unbox_ulong(args[0]);
+    // clamp to a world the runtime can evaluate in; worlds are DAG-shaped, so
+    // this is reachability, not integer comparison (cf. _call_in_world_total)
+    size_t target = jl_atomic_load_acquire(&jl_world_counter);
+    if (jl_world_at_most(world, target))
+        target = world;
     // nested entries must not raise the frozen world: the outer mode's
     // execution would otherwise observe state its own world cannot see
-    if (last_rc && world > last_age)
+    if (last_rc && !jl_world_at_most(target, last_age))
         jl_capability_error("_rcjulia_call");
     if (last_rc == UINT16_MAX)
         jl_capability_error("depth_limit");
     JL_TRY {
-        ct->world_age = world;
+        ct->world_age = target;
         ct->rcjulia = last_rc + 1;
         ret = jl_rc_apply(&args[1], nargs - 1);
         ct->world_age = last_age;

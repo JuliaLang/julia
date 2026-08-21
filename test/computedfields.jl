@@ -94,19 +94,41 @@ end
 
 global nonconst_dim::Int = 3
 
-@testset "definition-time validation" begin
-    # unconstrained parameters: `*(::Any, ::Any)` is a dynamic call, unprovable
-    @test_throws ErrorException @eval struct BadUntypedParams{R,C}
+# Generators execute in RCJulia (restricted-capability) mode, so no purity
+# proof is required at definition time: definitions that the old effects-proof
+# design rejected are now legal, and any restricted operation the generator
+# attempts traps deterministically at instantiation time instead, degrading
+# the field types to `Union{}`. Errors propagate (rather than degrade) through
+# explicit `fieldtype_generator` application.
+@testset "restricted evaluation of field generators" begin
+    # unconstrained parameters need no type annotations: dispatch resolves
+    # dynamically in the frozen definition world
+    @eval struct DynUntypedParams{R,C}
         data::NTuple{R*C, Int}
     end
-    # inconsistent generator
-    @test_throws ErrorException @eval struct BadRandom{N}
+    @test fieldtype(DynUntypedParams{2,3}, 1) === NTuple{6,Int}
+    # a parameter combination whose expression yields a non-Int degrades
+    @test fieldtype(DynUntypedParams{2,:sym}, 1) === Union{}
+    # an inconsistent generator is a legal definition, but the restricted
+    # operation (task-local RNG state) traps at instantiation time
+    @eval struct BadRandom{N}
         data::NTuple{rand(1:(N::Int)), Int}
     end
-    # non-constant global in the expression
-    @test_throws ErrorException @eval struct BadGlobal{N}
+    @test fieldtype(BadRandom{3}, 1) === Union{}
+    @test_throws CapabilityError Base.fieldtype_generator(BadRandom{3})
+    # reading a non-constant global traps likewise
+    @eval struct BadGlobal{N}
         data::NTuple{(N::Int)*nonconst_dim, Int}
     end
+    @test fieldtype(BadGlobal{3}, 1) === Union{}
+    @test_throws CapabilityError Base.fieldtype_generator(BadGlobal{3})
+    # loops have backedges; iteration in a generator must be recursion
+    @eval loopsize(n::Int) = (s = 0; for i = 1:n; s += i; end; s)
+    @eval struct LoopyGrid{N}
+        data::NTuple{loopsize(N::Int), Int}
+    end
+    @test fieldtype(LoopyGrid{3}, 1) === Union{}
+    @test_throws CapabilityError Base.fieldtype_generator(LoopyGrid{3})
 end
 
 # helper redefinition must not affect field types (frozen definition-time semantics)
@@ -133,14 +155,13 @@ end
     @test fieldtype(FrozenSemantics.BigGrid{5}, 1) === NTuple{21,Float64}
 end
 
-@testset "detached CodeInstance form" begin
+@testset "definition world token form" begin
     fg = Base.unwrap_unionall(StaticMatrix).name.fieldgen
     @test fg isa Core.SimpleVector && length(fg) == 2
-    ci = fg[2]
-    @test ci isa Core.CodeInstance
-    @test ci.owner === :computed_fieldtypes
-    @test (@atomic :monotonic ci.min_world) == 1
-    @test (@atomic :monotonic ci.max_world) == typemax(UInt)
+    tok = fg[2]
+    @test tok isa Core.WorldToken
+    # invoking the generator through the stored token reproduces the field types
+    @test Core._rcjulia_call(tok, fg[1], 2, 3, Float64) === (NTuple{6,Float64},)
 end
 
 # self-referential parameter arithmetic. n.b. mutable: for immutable types an

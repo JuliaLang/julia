@@ -421,24 +421,31 @@ end
     end
     t = trailing_zeros(p) + 1
     p >>= t
-    if square_is_useful  # avoid performing the same multiplication a second time when possible
-        if (t -= 1) > 0
-            x = convert(T, x_squared_)
-        end
+    t -= 1
+    if square_is_useful && t > 0  # avoid performing the same multiplication a second time when possible
+        x = convert(T, x_squared_)
+        t -= 1
     end
-    while (t -= 1) > 0
-        x = mul(x, x)
-    end
-    y = x
-    while p > 0
-        t = trailing_zeros(p) + 1
-        p >>= t
-        while (t -= 1) >= 0
-            x = mul(x, x)
-        end
-        y = mul(y, x)
-    end
-    return y
+    x = _power_by_squaring_square(mul, t, x)
+    return _power_by_squaring_rest(mul, p, x, x)
+end
+
+# Recursive kernels for `power_by_squaring`, expressing its loops as recursion
+# on the strictly decreasing `t`/`p` (placed first in the argument list, since
+# RCJulia mode admits same-method recursion only when the first differing
+# argument decreases in its well-founded order). This keeps integer `^` usable
+# in restricted-capability evaluation, e.g. in computed field type
+# expressions; the recursion depth is bounded by the bit width of `p`.
+@assume_effects :terminates_globally @inline function _power_by_squaring_square(mul::F, t::Int, x) where {F}
+    t <= 0 && return x
+    return _power_by_squaring_square(mul, t - 1, mul(x, x))
+end
+@assume_effects :terminates_globally function _power_by_squaring_rest(mul::F, p, y, x) where {F}
+    p > 0 || return y
+    t = trailing_zeros(p) + 1
+    p >>= t
+    x = _power_by_squaring_square(mul, t, x)
+    return _power_by_squaring_rest(mul, p, mul(y, x), x)
 end
 power_by_squaring(x::Bool, p::Unsigned) = ((p==0) | x)
 function power_by_squaring(x::Bool, p::Integer)
