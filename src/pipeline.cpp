@@ -559,7 +559,8 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(VectorCombinePass());
         invokeVectorizerCallbacks(FPM, PB, O);
         FPM.addPass(LoopUnrollPass(LoopUnrollOptions(O.getSpeedupLevel(), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
-        FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+        FPM.addPass(SROAPass(SROAOptions(
+            SROAOptions::PreserveCFG, /*AggregateToVector=*/true)));
         FPM.addPass(InstSimplifyPass());
         FPM.addPass(AfterVectorizationMarkerPass());
     }
