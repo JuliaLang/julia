@@ -464,10 +464,14 @@ JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
     return 1;
 }
 
-// Thread-local save slot bridging `jl_gc_mmtk_block_for_gc_enter`/`_leave`: this mutator's own
-// errno/last-error, so nothing the GC does while it waits (on this same thread, via
-// `jl_gc_safe_enter`/`mmtk_wait_for_new_gc_epoch`/`jl_gc_safe_leave`) can clobber what its caller
-// was about to check.
+// Thread-local save slot bridging `jl_gc_mmtk_block_for_gc_enter` and the end of
+// `jl_gc_mmtk_run_pending_finalizers`: this mutator's own errno/last-error, so nothing the GC does
+// while it waits (on this same thread, via
+// `jl_gc_safe_enter`/`mmtk_wait_for_new_gc_epoch`/`jl_gc_safe_leave`) or the pending finalizers it
+// then runs can clobber what its caller was about to check. It is restored only once the
+// finalizers have run -- matching `jl_gc_collect`'s own `last_errno`, which stays in effect across
+// its `run_finalizers` call -- rather than in `jl_gc_mmtk_block_for_gc_leave`, since finalizers are
+// arbitrary Julia code that can itself set errno.
 static _Thread_local int mmtk_saved_errno;
 #ifdef _OS_WINDOWS_
 static _Thread_local DWORD mmtk_saved_last_error;
@@ -492,10 +496,14 @@ JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_enter(void)
 }
 
 // The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
-// task's own timing (switch back from the "GC" fiber) and errno, and tell mmtk-core this task has
-// resumed (needed for concurrent marking correctness, e.g. to re-scan a stack that could have
-// changed while this task looked stopped) -- same as `jl_gc_prepare_to_collect` used to via its
-// own `jl_gc_notify_task_resume(ct)` call once its wait finished.
+// task's own timing (switch back from the "GC" fiber), and tell mmtk-core this task has resumed
+// (needed for concurrent marking correctness, e.g. to re-scan a stack that could have changed
+// while this task looked stopped) -- same as `jl_gc_prepare_to_collect` used to via its own
+// `jl_gc_notify_task_resume(ct)` call once its wait finished.
+//
+// errno/last-error are NOT restored here: pending finalizers still need to run before
+// `Collection::block_for_gc` returns (see `jl_gc_mmtk_run_pending_finalizers` below), and those are
+// arbitrary Julia code that can itself set errno, so the restore has to wait until after they run.
 JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -505,10 +513,6 @@ JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
     _jl_timing_suspend_destroy(&suspend);
 #endif
     jl_gc_notify_task_resume(ct);
-#ifdef _OS_WINDOWS_
-    SetLastError(mmtk_saved_last_error);
-#endif
-    errno = mmtk_saved_errno;
 }
 
 // The other half of `Collection::block_for_gc`'s contract: once the pause it was waiting for has
@@ -520,6 +524,13 @@ JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
 // Like `jl_gc_mmtk_defer_alloc_if_disabled`, this needs no explicit `ptls` parameter: it always
 // runs on the mutator that is calling `block_for_gc` on its own behalf, using `jl_current_task`.
 // Only ever called from a mutator (never a GC worker, which has no task to run finalizers on).
+//
+// This also restores the errno/last-error that `jl_gc_mmtk_block_for_gc_enter` saved: `errno` is
+// restored here, at the very end of `block_for_gc`, rather than in `jl_gc_mmtk_block_for_gc_leave`,
+// because the finalizers run just above are arbitrary Julia code that can itself set errno --
+// `run_finalizers` already saves/restores errno around each individual finalizer's own execution,
+// but the outer save/restore here still needs to span them, exactly like `jl_gc_collect`'s own
+// `last_errno` stays in effect across its `run_finalizers` call.
 JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -531,6 +542,10 @@ JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
         run_finalizers(ct, 0);
     }
     JL_PROBE_GC_FINALIZER();
+#ifdef _OS_WINDOWS_
+    SetLastError(mmtk_saved_last_error);
+#endif
+    errno = mmtk_saved_errno;
 }
 
 // ========================================================================= //
