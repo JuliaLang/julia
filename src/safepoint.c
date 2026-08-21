@@ -238,7 +238,16 @@ void jl_safepoint_start_gc_from_gc_thread(void) JL_NOTSAFEPOINT
     uv_mutex_lock(&safepoint_lock);
     uint32_t running = 0;
     int won = jl_atomic_cmpswap(&jl_gc_running, &running, 1);
-    assert(won && "jl_safepoint_start_gc_from_gc_thread must have no concurrent caller"); (void)won;
+    if (!won) {
+        // This must never happen: the caller's own GC backend guarantees exactly one worker
+        // thread calls this per pause. Unlike a plain `assert`, this check must still fire in a
+        // release build: if it somehow does happen, `jl_gc_running` is already set, so silently
+        // continuing (as dropping into the code below would) arms the safepoint an extra time
+        // without a matching disable, leaving mutators spinning on it forever -- a deadlock
+        // that's much harder to diagnose than a crash right here.
+        jl_safe_printf("jl_safepoint_start_gc_from_gc_thread must have no concurrent caller\n");
+        abort();
+    }
     // Unlike jl_safepoint_start_gc, there is no foreign-thread-adoption race to re-check here:
     // the caller only calls this once its own GC backend has already fully committed to running
     // this pause (which for MMTk means transitioning out of `GcStatus::Disabled` already), so
