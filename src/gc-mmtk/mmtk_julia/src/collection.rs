@@ -49,9 +49,30 @@ impl Collection<JuliaVM> for VMCollection {
     where
         F: FnMut(&'static mut Mutator<JuliaVM>),
     {
+        // We try to match MMTk's collection/pause kind to Julia's jl_gc_collection_t if it is appropriate.
+        // We can also use MMTk's pause kind to be more expressive.
+        const JL_GC_FULL: i32 = 1;
+        const JL_GC_INCREMENTAL: i32 = 2;
+        let collection: i32 = if let Some(gen_plan) = SINGLETON.get_plan().generational() {
+            // For generational plans, we can easily map to Julia's enum.
+            if gen_plan.is_current_gc_nursery() { JL_GC_INCREMENTAL } else { JL_GC_FULL }
+        } else if let Some(concurrent_plan) = SINGLETON.get_plan().concurrent() {
+            // For concurrent plans, we do a very rough mapping now.
+            match concurrent_plan.current_pause().map(|pause| pause as u8) {
+                // TODO: Switch to MMTK's PauseKind when it is public.
+                // Pause::Full
+                Some(1) => JL_GC_FULL,
+                // Pause::InitialMark / Pause::FinalMark
+                Some(_) => JL_GC_INCREMENTAL,
+                None => JL_GC_FULL,
+            }
+        } else {
+            JL_GC_FULL
+        };
+
         // Arm the safepoint and wait for every registered mutator to reach it. mmtk-core
         // guarantees this function has exactly one caller at a time for the current pause.
-        unsafe { jl_gc_mmtk_stop_the_world() };
+        unsafe { jl_gc_mmtk_stop_the_world(collection) };
 
         assert!(
             crate::api::mmtk_is_collection_enabled() != 0,

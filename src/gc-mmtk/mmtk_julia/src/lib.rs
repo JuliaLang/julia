@@ -125,7 +125,7 @@ extern "C" {
     pub fn jl_gc_get_have_pending_finalizers() -> *mut i32;
     pub fn jl_gc_scan_vm_specific_roots(closure: *mut crate::slots::RootsWorkClosure);
     pub fn jl_gc_update_inlined_array(to: Address, from: Address);
-    pub fn jl_gc_mmtk_stop_the_world();
+    pub fn jl_gc_mmtk_stop_the_world(collection: i32);
     pub fn jl_gc_mmtk_resume_the_world();
     pub fn jl_gc_mmtk_defer_alloc_if_disabled() -> i32;
     pub fn jl_gc_mmtk_block_for_gc_enter();

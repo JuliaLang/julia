@@ -397,15 +397,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
 //
 // This runs on whichever GC worker thread mmtk-core's own scheduler dedicates to running the
 // current pause's `StopMutators` work -- never on a mutator, and never with a second concurrent
-// caller, both guaranteed by mmtk-core itself. That is what makes this simpler than the mutator-
-// driven `jl_gc_prepare_to_collect` this replaces: there is no "am I the one that gets to run
-// this GC" race to resolve (`jl_safepoint_start_gc_from_gc_thread` has no such race to lose), and
-// this thread is never itself one of the mutators `jl_gc_wait_for_the_world` waits on.
-JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(void)
+// caller, both guaranteed by mmtk-core.
+JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(int collection)
 {
-    // FIXME: set to JL_GC_AUTO since we're calling it from a GC worker, not a mutator that knows
-    // why this GC was triggered -- same as the driver-mutator code this replaced.
-    JL_PROBE_GC_BEGIN(JL_GC_AUTO);
+    JL_PROBE_GC_BEGIN(collection);
 
     uint64_t t0 = jl_hrtime();
     jl_safepoint_start_gc_from_gc_thread();
