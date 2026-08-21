@@ -638,3 +638,16 @@ let ambig = Ref{Int32}(0)
 end
 
 nothing
+
+# review of the de Bruijn refactor: `has_bottom_parameter` must account for a
+# binder's `Union{}` bound per occurrence, not once at the wrapper, so a
+# `Union` arm without the variable keeps the intersection inhabited
+module AmbigBottomBound
+const C = Union{Int, Vector{T}} where T<:Union{}
+f(::Type{C}, ::Number,  ::Integer) = 1
+f(::Type{C}, ::Integer, ::Number)  = 2
+end
+let ms = collect(methods(AmbigBottomBound.f))
+    @test !Base.has_bottom_parameter(AmbigBottomBound.C)
+    @test Base.isambiguous(ms[1], ms[2])
+end

@@ -1354,7 +1354,7 @@ JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_
     if (has_refs_above(lb, 0) || has_refs_above(ub, 0) || has_refs_above(body, 1))
         flags |= JL_UNIONALL_ESCAPINGREFS;
     u->flags = flags;
-    jl_atomic_store_relaxed(&u->hash, 0); // filled lazily by the objectid walk
+    u->hash = jl_compute_unionall_hash(u);
     return (jl_value_t*)u;
 }
 
@@ -4211,9 +4211,12 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
 // definition is still in progress.
 JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT)
 {
-    // one-time lazy initialization: every consumer that can observe a deferred
-    // supertype funnels through here, so the acquire pairs with the releasing
-    // compare-and-swap below and makes the computed object graph visible
+    // one-time lazy initialization; the acquire pairs with the releasing
+    // compare-and-swap below and makes the computed object graph visible.
+    // Consumers that do not funnel through here (raw `getfield`, direct C
+    // reads) see either the published value or an undefined field: the
+    // Julia-side metadata declares `super` maybe-undefined, non-const and
+    // atomic, so an unfilled slot reads as `UndefRefError`, never as garbage
     _Atomic(jl_datatype_t*) *superp = (_Atomic(jl_datatype_t*)*)&ndt->super;
     jl_datatype_t *super = jl_atomic_load_acquire(superp);
     if (super != NULL)
@@ -4242,6 +4245,16 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
         super = (jl_datatype_t*)s;
     }
     return super;
+}
+
+// forcing accessor for Julia-visible supertype reads
+JL_DLLEXPORT jl_value_t *jl_datatype_super(jl_datatype_t *dt)
+{
+    jl_datatype_t *super = jl_datatype_compute_super(dt);
+    if (super == NULL)
+        jl_errorf("supertype of %s is not defined yet (type definition in progress)",
+                  jl_symbol_name(dt->name->name));
+    return (jl_value_t*)super;
 }
 
 static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT
@@ -4562,7 +4575,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                                jl_any_type /*jl_uint32_type*/, jl_any_type /*jl_ulong_type*/),
                                        jl_emptysvec, 0, 0, 6);
     XX(unionall);
-    const static uint32_t unionall_constfields[1] = { 0x0000001f }; // all fields constant except the memoized `hash`
+    const static uint32_t unionall_constfields[1] = { 0x0000003f }; // all fields are constant
     jl_unionall_type->name->constfields = unionall_constfields;
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_unionall_type->name->mayinlinealloc = 0;

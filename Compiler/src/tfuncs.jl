@@ -954,9 +954,15 @@ add_tfunc(has_free_typevars, 1, 1, has_free_typevars_tfunc, 1)
         # a free typevar in the lattice element stands for closed runtime values
         has_free_typevars(p) && return Bool
         return Const(Core.has_dangling_tvarrefs(p))
-    elseif t === TypeVar || t === TypeVarRef
+    elseif t === TypeVar
+        # free TypeVars are opaque leaves of the walk (their raw bounds are
+        # not descended into), so no value of this type has dangling refs
         return Const(false)
-    elseif !hasintersect(t, Type) && !hasintersect(t, TypeVar) && !hasintersect(t, TypeofVararg)
+    elseif t === TypeVarRef
+        # a bare reference is itself a dangling fragment
+        return Const(true)
+    elseif !hasintersect(t, Type) && !hasintersect(t, TypeVar) && !hasintersect(t, TypeVarRef) &&
+           !hasintersect(t, TypeofVararg)
         return Const(false)
     end
     return Bool

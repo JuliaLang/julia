@@ -1547,3 +1547,9 @@ end
 using .X1ConstConflict, .X2ConstConflict
 
 @test_throws ErrorException which(@__MODULE__, :xconstconflict)
+
+# review of the de Bruijn refactor: `argument_datatype` resolves a bound
+# binder reference through the binder's upper bound, like its typename sibling
+@test Base.argument_datatype(Type{T} where T<:Int) === Int
+@test Base.argument_datatypename(Type{T} where T<:Int) === Int.name
+@test Base.argument_datatypename(Type{T} where T<:AbstractDict{Int}) === AbstractDict.body.body.name

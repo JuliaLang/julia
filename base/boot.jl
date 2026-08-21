@@ -56,6 +56,7 @@
 #    ub
 #    inner # the wrapped type; refers to the binder by TypeVarRef position
 #    flags::UInt32
+#    hash::UInt # structural objectid hash, memoized at construction (0 = unstable)
 #end
 
 #struct TypeVarRef

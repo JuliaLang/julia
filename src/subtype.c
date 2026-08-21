@@ -1844,7 +1844,7 @@ static typeeq_varctx_t *typeeq_lookup_ref(typeeq_varctx_t *env, size_t idx) JL_N
     return idx == 1 ? env : NULL;
 }
 
-static int typeeq_vars_bound_in_env(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv, size_t nintro) JL_NOTSAFEPOINT;
+static int typeeq_vars_bound_in_env(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv, jl_varbinding_t *frame, size_t nintro) JL_NOTSAFEPOINT;
 static int typeeq_kind_mask(jl_value_t *t) JL_NOTSAFEPOINT;
 static int typeeq_mask_le(int mask, jl_value_t *y) JL_NOTSAFEPOINT;
 
@@ -1853,7 +1853,7 @@ static int typeeq_mask_le(int mask, jl_value_t *y) JL_NOTSAFEPOINT;
 // and for a dangling-var dispatch key (see `typeeq_vars_bound_in_env`). Any
 // other `Type{T}` has members of several tags and no concrete supertype, so
 // there is nothing to widen to (#33136).
-static jl_value_t *widen_pinned_Type(jl_value_t *t JL_PROPAGATES_ROOT, jl_stenv_t *e, typeeq_varctx_t *wenv) JL_NOTSAFEPOINT
+static jl_value_t *widen_pinned_Type(jl_value_t *t JL_PROPAGATES_ROOT, jl_stenv_t *e, typeeq_varctx_t *wenv, jl_varbinding_t *frame) JL_NOTSAFEPOINT
 {
     if (jl_is_typeegal(t))
         return jl_typeof(jl_typeegal_T(t));
@@ -1862,7 +1862,7 @@ static jl_value_t *widen_pinned_Type(jl_value_t *t JL_PROPAGATES_ROOT, jl_stenv_
         if (T == jl_bottom_type)
             return (jl_value_t*)jl_typeofbottom_type;
         if ((jl_has_free_typevars(T) || jl_has_dangling_tvarrefs(T)) &&
-            !typeeq_vars_bound_in_env(T, e, wenv, 0))
+            !typeeq_vars_bound_in_env(T, e, wenv, frame, 0))
             return jl_typeof(T);
     }
     return NULL;
@@ -1875,9 +1875,9 @@ static jl_value_t *widen_pinned_Type(jl_value_t *t JL_PROPAGATES_ROOT, jl_stenv_
 // existential (intersection) direction the tag instead selects the (nonempty)
 // tag-homogeneous slice of the members as the witness for the diagonal
 // variable, so the unconditional tag is a valid choice there.
-static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT, jl_stenv_t *e, typeeq_varctx_t *wenv, int existential) JL_CANSAFEPOINT
+static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT, jl_stenv_t *e, typeeq_varctx_t *wenv, jl_varbinding_t *frame, int existential) JL_CANSAFEPOINT
 {
-    jl_value_t *w = widen_pinned_Type(t, e, wenv);
+    jl_value_t *w = widen_pinned_Type(t, e, wenv, frame);
     if (w == NULL && jl_is_typeeq(t) && !jl_is_typevar(jl_typeeq_T(t)) && !jl_is_tvarref(jl_typeeq_T(t))) {
         jl_value_t *tag = jl_typeof(jl_typeeq_T(t));
         if (existential || typeeq_mask_le(typeeq_kind_mask(jl_typeeq_T(t)), tag))
@@ -1886,9 +1886,9 @@ static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT, jl_s
     if (w != NULL)
         return w;
     if (jl_is_uniontype(t)) {
-        jl_value_t *a = widen_Type_if_concrete(((jl_uniontype_t*)t)->a, e, wenv, existential);
+        jl_value_t *a = widen_Type_if_concrete(((jl_uniontype_t*)t)->a, e, wenv, frame, existential);
         JL_GC_PUSH1(&a);
-        jl_value_t *b = widen_Type_if_concrete(((jl_uniontype_t*)t)->b, e, wenv, existential);
+        jl_value_t *b = widen_Type_if_concrete(((jl_uniontype_t*)t)->b, e, wenv, frame, existential);
         JL_GC_POP();
         if (a == b)
             return a;
@@ -1897,7 +1897,7 @@ static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT, jl_s
         // vars bound by binders we walk past are not dangling
         jl_unionall_t *u = (jl_unionall_t*)t;
         typeeq_varctx_t ctx = { u->lb, u->ub, 0, wenv };
-        jl_value_t *body = widen_Type_if_concrete(u->body, e, &ctx, existential);
+        jl_value_t *body = widen_Type_if_concrete(u->body, e, &ctx, frame, existential);
         if (body != u->body && !jl_tvarref_occurs(body, 1)) {
             JL_GC_PUSH1(&body);
             jl_value_t *r = jl_shift_dangling_refs(body, -1);
@@ -2361,7 +2361,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // diagonal constraints, but not invariant matches. This is only a local
     // view for checks and envout; keep `vb.lb` structurally precise.
     int widen_lb = !vb.occurs_inv && (diagonal || (vb.occurs_cov == 1 && vb.cov_diag == 0));
-    jl_value_t *widened_lb = widen_lb ? widen_Type_if_concrete(vb.lb, e, NULL, e->intersection) : vb.lb;
+    jl_value_t *widened_lb = widen_lb ? widen_Type_if_concrete(vb.lb, e, NULL, vb.frame_prev, e->intersection) : vb.lb;
     if (ans && (vb.concrete || (diagonal && is_leaf_binder(&vb)))) {
         jl_value_t *concrete_lb = diagonal ? widened_lb : vb.lb;
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
@@ -3387,7 +3387,7 @@ static int union_has_kind_component(jl_value_t *y) JL_NOTSAFEPOINT
 // like that value: pinned to its type tag, `==`-compared as a `Type` (the same
 // hybrid `typekeyvalue_eq` uses). Method signatures always bind their vars, so
 // they still get the sound `==`-class semantics.
-static int typeeq_vars_bound_in_env(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv, size_t nintro) JL_NOTSAFEPOINT
+static int typeeq_vars_bound_in_env(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv, jl_varbinding_t *frame, size_t nintro) JL_NOTSAFEPOINT
 {
     if (jl_is_tvarref(t)) {
         size_t d = jl_tvarref_depth(t);
@@ -3395,36 +3395,37 @@ static int typeeq_vars_bound_in_env(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_
             return 0; // bound inside `t` itself
         if (typeeq_lookup_ref(wenv, d - nintro) != NULL)
             return 1;
-        // a reference bound by the walk's binder chains is not dangling
-        return frame_lookup(e->Lframe, d - nintro) != NULL ||
-               frame_lookup(e->Rframe, d - nintro) != NULL;
+        // a reference is only bound by the binder chain of the side the term
+        // came from (`frame`); a binder on the other side of the query must
+        // not capture it (it belongs to an unrelated chain)
+        return frame_lookup(frame, d - nintro) != NULL;
     }
     if (jl_is_typevar(t)) {
         int inner = 0;
         return lookup_binding(e, (jl_tvar_t*)t, &inner) != NULL || inner;
     }
     if (jl_is_uniontype(t))
-        return typeeq_vars_bound_in_env(((jl_uniontype_t*)t)->a, e, wenv, nintro) ||
-               typeeq_vars_bound_in_env(((jl_uniontype_t*)t)->b, e, wenv, nintro);
+        return typeeq_vars_bound_in_env(((jl_uniontype_t*)t)->a, e, wenv, frame, nintro) ||
+               typeeq_vars_bound_in_env(((jl_uniontype_t*)t)->b, e, wenv, frame, nintro);
     if (jl_is_unionall(t)) {
         jl_unionall_t *u = (jl_unionall_t*)t;
-        return typeeq_vars_bound_in_env(u->lb, e, wenv, nintro) ||
-               typeeq_vars_bound_in_env(u->ub, e, wenv, nintro) ||
-               typeeq_vars_bound_in_env(u->body, e, wenv, nintro + 1);
+        return typeeq_vars_bound_in_env(u->lb, e, wenv, frame, nintro) ||
+               typeeq_vars_bound_in_env(u->ub, e, wenv, frame, nintro) ||
+               typeeq_vars_bound_in_env(u->body, e, wenv, frame, nintro + 1);
     }
     if (jl_is_vararg(t)) {
         jl_vararg_t *vm = (jl_vararg_t*)t;
-        return (vm->T && typeeq_vars_bound_in_env(vm->T, e, wenv, nintro)) ||
-               (vm->N && typeeq_vars_bound_in_env(vm->N, e, wenv, nintro));
+        return (vm->T && typeeq_vars_bound_in_env(vm->T, e, wenv, frame, nintro)) ||
+               (vm->N && typeeq_vars_bound_in_env(vm->N, e, wenv, frame, nintro));
     }
     if (jl_is_some_Type(t))
-        return typeeq_vars_bound_in_env(jl_some_Type_T(t), e, wenv, nintro);
+        return typeeq_vars_bound_in_env(jl_some_Type_T(t), e, wenv, frame, nintro);
     if (jl_is_datatype(t)) {
         if (!((jl_datatype_t*)t)->hasfreetypevars && !((jl_datatype_t*)t)->hasescapingrefs)
             return 0;
         size_t i, np = jl_nparams(t);
         for (i = 0; i < np; i++) {
-            if (typeeq_vars_bound_in_env(jl_tparam(t, i), e, wenv, nintro))
+            if (typeeq_vars_bound_in_env(jl_tparam(t, i), e, wenv, frame, nintro))
                 return 1;
         }
     }
@@ -3433,10 +3434,10 @@ static int typeeq_vars_bound_in_env(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_
 
 // is `t` an internal single-object dispatch key: an open type whose free
 // typevars are all dangling in this query (see `typeeq_vars_bound_in_env`)?
-static int typeeq_is_dangling_key(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv) JL_NOTSAFEPOINT
+static int typeeq_is_dangling_key(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv, jl_varbinding_t *frame) JL_NOTSAFEPOINT
 {
     return (jl_has_free_typevars(t) || jl_has_dangling_tvarrefs(t)) &&
-           !typeeq_vars_bound_in_env(t, e, wenv, 0);
+           !typeeq_vars_bound_in_env(t, e, wenv, frame, 0);
 }
 
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
@@ -3518,7 +3519,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             jl_value_t *xp0 = typeeq_unpin_tvar(resolve_tvarref(jl_typeeq_T(x), e->Lframe, e));
             // a dangling-var dispatch key has a single tag, found by the
             // per-branch decomposition instead
-            if (!jl_is_typevar(xp0) && !typeeq_is_dangling_key(xp0, e, NULL) &&
+            if (!jl_is_typevar(xp0) && !typeeq_is_dangling_key(xp0, e, NULL, e->Lframe) &&
                 typeeq_subtype_kind_cover(xp0, y))
                 return 1;
         }
@@ -3767,7 +3768,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             // a dispatch key for one specific open type object (dangling free
             // typevars, see `typeeq_vars_bound_in_env`) is pinned to that
             // object's type tag
-            if (typeeq_is_dangling_key(tp0, e, NULL))
+            if (typeeq_is_dangling_key(tp0, e, NULL, e->Lframe))
                 return subtype(jl_typeof(tp0), y, e, param);
             // `Type{T} <: y` iff `isa(U, y)` for every `U == T`, i.e. iff every
             // possible type tag of such members lies in `y` (#33136, #62141).
@@ -5969,7 +5970,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
             // in the existential direction a `Type{X}` member of the bound
             // stands for its (nonempty) tag-homogeneous slice, so check the
             // tag-widened bound before rejecting (see `widen_Type_if_concrete`)
-            jl_value_t *wlb = widen_Type_if_concrete(vb->lb, e, NULL, 1);
+            jl_value_t *wlb = widen_Type_if_concrete(vb->lb, e, NULL, vb->frame_prev, 1);
             if (!is_leaf_bound(wlb))
                 res = jl_bottom_type;
         }
@@ -6506,7 +6507,7 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     if (!jl_is_typevar(p0)) {
         // a dispatch key for one specific open type object (dangling free
         // typevars, see `typeeq_vars_bound_in_env`) is pinned to its type tag
-        if (typeeq_is_dangling_key(p0, e, NULL))
+        if (typeeq_is_dangling_key(p0, e, NULL, R ? e->Rframe : e->Lframe))
             return (jl_typeof(p0) == y) ? x : jl_bottom_type;
         // `Type{T}`'s members can carry any type tag in the kind mask, so the
         // intersection with `y` (a kind or a kind's supertype) is nonempty

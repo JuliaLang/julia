@@ -112,11 +112,16 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
 
 // resolve a parameter extracted from directly under `origsig`'s binder chain:
 // a bound-variable reference resolves (iteratively) to its binder's upper
-// bound, re-framed to the extraction depth
-// The result is always rooted through the arguments (or stronger): it is
-// either `ty` itself, a binder bound extracted from `origsig`, `jl_any_type`,
-// or a freshly-built bound interned as a permanent global root below.
-static jl_value_t *resolve_param_ub(jl_value_t *ty JL_PROPAGATES_ROOT, jl_value_t *origsig JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+// bound, re-framed to the extraction depth.
+// The result is either `ty` itself, a binder bound extracted from `origsig`,
+// `jl_any_type`, or a freshly-built bound. A freshly-built bound is stored
+// into `*froot` (a caller-rooted slot) when one is provided; with
+// `froot == NULL` it is instead interned as a permanent global root, which is
+// only acceptable on the insertion path, where the bounds derive from the
+// (permanent) method signature — lookup paths pass arbitrary query
+// signatures, and interning those would grow the root set without bound.
+static jl_value_t *resolve_param_ub(jl_value_t *ty JL_PROPAGATES_ROOT, jl_value_t *origsig JL_PROPAGATES_ROOT,
+                                    jl_value_t **froot) JL_CANSAFEPOINT
 {
     if (!jl_is_tvarref(ty))
         return ty;
@@ -139,12 +144,13 @@ static jl_value_t *resolve_param_ub(jl_value_t *ty JL_PROPAGATES_ROOT, jl_value_
         depth = i; // the bound lives outside its own binder
     }
     if (depth < n && jl_has_dangling_tvarrefs(ty)) {
-        // re-frame the bound's own references to the extraction depth; intern
-        // the freshly-built type so callers may treat the result as rooted
-        // (the set of binder bounds reachable here is small and fixed)
+        // re-frame the bound's own references to the extraction depth
         JL_GC_PUSH1(&ty);
         ty = jl_shift_dangling_refs(ty, n - depth);
-        ty = jl_as_global_root(ty, 1);
+        if (froot == NULL)
+            ty = jl_as_global_root(ty, 1);
+        else
+            *froot = ty;
         JL_GC_POP();
     }
     return ty;
@@ -773,7 +779,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
             while (jl_is_typevar(ty))
                 ty = ((jl_tvar_t*)ty)->ub;
             JL_GC_PUSH1(&ty);
-            ty = resolve_param_ub(ty, closure->type);
+            ty = resolve_param_ub(ty, closure->type, &ty);
             // approxify the tparam until we have a valid type
             if (jl_has_free_typevars(ty) || jl_has_dangling_tvarrefs(ty))
                 ty = jl_rewrap_unionall(ty, closure->type);
@@ -1109,12 +1115,15 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
         else {
             ty = NULL;
         }
+        JL_GC_PUSH1(&ty);
         if (ty)
-            ty = resolve_param_ub(ty, (jl_value_t*)search->types);
+            ty = resolve_param_ub(ty, (jl_value_t*)search->types, &ty);
         // If there is a type at offs, look in the optimized leaf type caches
         if (ty && !subtype) {
-            if (jl_is_any(ty))
+            if (jl_is_any(ty)) {
+                JL_GC_POP();
                 return jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&cache->any), search, offs + 1, subtype);
+            }
             if (isva) // in lookup mode, want to match Vararg exactly, not as a subtype
                 ty = NULL;
         }
@@ -1131,10 +1140,10 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                             ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, a0);
                         if (ml != jl_nothing) {
                             jl_typemap_entry_t *li = jl_typemap_assoc_by_type((jl_typemap_t*)ml, search, offs + 1, subtype);
-                            if (li) return li;
+                            if (li) { JL_GC_POP(); return li; }
                         }
                     }
-                    if (!subtype) return NULL;
+                    if (!subtype) { JL_GC_POP(); return NULL; }
                 }
             }
             if (is_cache_leaf(ty, 0)) {
@@ -1146,10 +1155,10 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                         ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, ty);
                     if (ml != jl_nothing) {
                         jl_typemap_entry_t *li = jl_typemap_assoc_by_type((jl_typemap_t*)ml, search, offs + 1, subtype);
-                        if (li) return li;
+                        if (li) { JL_GC_POP(); return li; }
                     }
                 }
-                if (!subtype) return NULL;
+                if (!subtype) { JL_GC_POP(); return NULL; }
             }
         }
         if (ty || subtype) {
@@ -1164,7 +1173,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                         jl_typemap_t *ml = mtcache_hash_lookup(tname, (jl_value_t*)super->name);
                         if (ml != (void*)jl_nothing) {
                             jl_typemap_entry_t *li = jl_typemap_assoc_by_type(ml, search, offs + 1, subtype);
-                            if (li) return li;
+                            if (li) { JL_GC_POP(); return li; }
                         }
                         if (super == jl_any_type || !subtype)
                             break;
@@ -1187,6 +1196,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                             jl_typemap_entry_t *li = jl_typemap_assoc_by_type(ml, search, offs + 1, subtype);
                             if (li) {
                                 JL_GC_POP();
+                                JL_GC_POP();
                                 return li;
                             }
                         }
@@ -1206,7 +1216,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                             if (ml != (void*)jl_nothing) {
                                 jl_typemap_entry_t *li =
                                     jl_typemap_assoc_by_type(ml, search, offs + 1, subtype);
-                                if (li) return li;
+                                if (li) { JL_GC_POP(); return li; }
                             }
                             if (super == jl_any_type || !subtype)
                                 break;
@@ -1228,6 +1238,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                         jl_typemap_entry_t *li = jl_typemap_assoc_by_type(ml, search, offs + 1, subtype);
                         if (li) {
                             JL_GC_POP();
+                            JL_GC_POP();
                             return li;
                         }
                     }
@@ -1238,10 +1249,12 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
         // Always check the list (since offs doesn't always start at 0)
         if (subtype) {
             jl_typemap_entry_t *li = jl_typemap_entry_assoc_by_type(jl_atomic_load_relaxed(&cache->linear), search);
-            if (li) return li;
+            if (li) { JL_GC_POP(); return li; }
+            JL_GC_POP();
             return jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&cache->any), search, offs + 1, subtype);
         }
         else {
+            JL_GC_POP();
             return jl_typemap_entry_lookup_by_type(jl_atomic_load_relaxed(&cache->linear), search);
         }
     }
@@ -1582,7 +1595,7 @@ static void jl_typemap_level_insert_(
         t1 = NULL;
     }
     if (t1)
-        t1 = resolve_param_ub(t1, (jl_value_t*)newrec->sig);
+        t1 = resolve_param_ub(t1, (jl_value_t*)newrec->sig, NULL);
     // If the type at `offs` is Any, put it in the Any list
     if (t1 && jl_is_any(t1)) {
         jl_typemap_insert_generic(map, &cache->any, (jl_value_t*)cache, newrec, 0, offs+1, NULL);
@@ -1612,7 +1625,17 @@ static void jl_typemap_level_insert_(
         t1 = jl_unwrap_unionall(t1);
         if (jl_is_some_Type(t1)) {
             jl_value_t *tp0 = jl_some_Type_T(t1);
-            a0 = jl_type_extract_name(tp0, 1);
+            int inv = 1;
+            if (jl_is_tvarref(tp0)) {
+                // `Type{T}` with a bound binder: index by the binder's upper
+                // bound, matching the typevar case inside
+                // `jl_type_extract_name` (which drops invariance); leaving the
+                // reference unresolved would file every bounded `Type{T}`
+                // method under `Any`
+                tp0 = resolve_param_ub(tp0, (jl_value_t*)newrec->sig, NULL);
+                inv = 0;
+            }
+            a0 = jl_type_extract_name(tp0, inv);
             jl_datatype_t *super = a0 ? (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper) : jl_any_type;
             jl_typename_t *name = super->name;
             jl_typemap_memory_insert_(map, &cache->tname, (jl_value_t*)name, newrec, (jl_value_t*)cache, 1, offs, NULL);

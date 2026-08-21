@@ -630,12 +630,13 @@ typedef struct {
     jl_value_t *JL_NONNULL ub;   // upper bound
     jl_value_t *JL_NONNULL body;
     uint32_t flags;              // JL_UNIONALL_* bits; upper bits reserved
-    // memoized structural objectid hash, filled lazily by `type_object_id_`
-    // (0 = not yet computed, or not cacheable because the term hashes through
-    // session-local state such as a free TypeVar's address). Cached values are
-    // deterministic across sessions, so they may be serialized as-is. Egal
-    // ignores this field (like `flags`).
-    _Atomic(uintptr_t) hash;
+    // memoized structural objectid hash, computed at construction like `flags`
+    // and immutable afterwards (the Julia-level field is const). 0 means the
+    // hash is not memoizable because it would depend on session-local state
+    // (a free TypeVar hashed by address), so `objectid` recomputes per query.
+    // Memoized values are deterministic across sessions, so they may be
+    // serialized as-is. Egal ignores this field (like `flags`).
+    uintptr_t hash;
 } jl_unionall_t;
 #define JL_UNIONALL_VAROCCURS 0x1  // the binder occurs in `body` (memoized)
 #define JL_UNIONALL_ESCAPINGREFS 0x2  // some reference escapes this node (memoized)

@@ -732,8 +732,20 @@ static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) 
     return nth_arg_datatype_(a, n, NULL);
 }
 
-static jl_datatype_t *arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+// like `nth_arg_datatype_` this resolves bound-variable references through
+// their binders' upper bounds, but it keeps the stricter single-type
+// semantics (no Union merging by typename)
+static jl_datatype_t *arg_datatype_(jl_value_t *a JL_PROPAGATES_ROOT, struct nth_arg_binders *env) JL_NOTSAFEPOINT
 {
+    if (jl_is_tvarref(a)) {
+        size_t idx = jl_tvarref_depth(a);
+        struct nth_arg_binders *b = env;
+        while (b != NULL && --idx > 0)
+            b = b->prev;
+        if (b == NULL)
+            return NULL;
+        return arg_datatype_(b->ua->ub, b->prev);
+    }
     if (jl_is_datatype(a))
         return (jl_datatype_t*)a;
     else if (jl_is_typeeq(a)) {
@@ -743,18 +755,26 @@ static jl_datatype_t *arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEP
         if (jl_is_datatype(T))
             return (jl_datatype_t*)T;
         if (jl_is_typevar(T))
-            return arg_datatype(((jl_tvar_t*)T)->ub);
+            return arg_datatype_(((jl_tvar_t*)T)->ub, env);
+        if (jl_is_tvarref(T))
+            return arg_datatype_(T, env);
         if (jl_is_unionall(T))
-            return arg_datatype(jl_unwrap_unionall(T));
+            return arg_datatype_(T, env);
         return NULL;
     }
     else if (jl_is_typevar(a)) {
-        return arg_datatype(((jl_tvar_t*)a)->ub);
+        return arg_datatype_(((jl_tvar_t*)a)->ub, env);
     }
     else if (jl_is_unionall(a)) {
-        return arg_datatype(((jl_unionall_t*)a)->body);
+        struct nth_arg_binders newenv = { (jl_unionall_t*)a, env };
+        return arg_datatype_(((jl_unionall_t*)a)->body, &newenv);
     }
     return NULL;
+}
+
+static jl_datatype_t *arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    return arg_datatype_(a, NULL);
 }
 
 // get DataType of first tuple element (if present), or NULL if cannot be determined
