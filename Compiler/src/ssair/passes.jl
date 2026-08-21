@@ -1576,7 +1576,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             compact.ssa_rename[old_idx] = lifted_val === nothing ? nothing : lifted_val.val::AnySSAValue
             should_delete_node = true
         else
-            compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
+            compact[idx] = lifted_val.val
         end
 
         finish_phi_nest!(compact, nest)
