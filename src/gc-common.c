@@ -661,13 +661,18 @@ JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 // generally reset-safe, but our allocators are not, so unpublish the reset
 // region around them as the *_reset_safe entry points above do.
 
+// These hooks must not safepoint: GMP/MPFR call them while holding internal
+// library locks (e.g. MPFR's shared constant cache lock) that other threads
+// wait on inside GC-unsafe ccall regions, so triggering or joining a
+// collection here deadlocks the stop-the-world (#62753). The allocation is
+// still counted; the GC picks up the pressure at the next safepoint.
 JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
 {
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL || ct->ptls == NULL)
-        return jl_gc_counted_malloc(sz);
+        return jl_gc_counted_malloc_nosafepoint(sz);
     jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
-    void *data = jl_gc_counted_malloc(sz);
+    void *data = jl_gc_counted_malloc_nosafepoint(sz);
     reset_region_republish(ct, reset_ctx); // may longjmp
     return data;
 }
@@ -676,9 +681,9 @@ JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, siz
 {
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL || ct->ptls == NULL)
-        return jl_gc_counted_realloc_with_old_size(p, old, sz);
+        return jl_gc_counted_realloc_with_old_size_nosafepoint(p, old, sz);
     jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
-    void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
+    void *data = jl_gc_counted_realloc_with_old_size_nosafepoint(p, old, sz);
     reset_region_republish(ct, reset_ctx); // may longjmp
     return data;
 }

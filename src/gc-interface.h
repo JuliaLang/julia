@@ -249,6 +249,10 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
 // Wrapper around Libc realloc that updates Julia allocation counters.
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+// Counted malloc/realloc variants that never safepoint, for callers holding
+// locks the runtime knows nothing about (the GMP hooks).
+JL_DLLEXPORT void *jl_gc_counted_malloc_nosafepoint(size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size_nosafepoint(void *p, size_t old, size_t sz);
 // Special reset-safe variants of the above functions for use by GMP.
 JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;

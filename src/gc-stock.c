@@ -4137,14 +4137,15 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 
 // allocation wrappers that add to gc pressure
 
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+STATIC_INLINE void *gc_counted_malloc_(size_t sz, int maysafepoint) JL_CANSAFEPOINT
 {
     void *data = malloc(sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = memory_block_usable_size(data, 0);
         jl_ptls_t ptls = ct->ptls;
-        maybe_collect(ptls);
+        if (maysafepoint)
+            maybe_collect(ptls);
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
             jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + sz);
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.malloc,
@@ -4152,6 +4153,18 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
         jl_batch_accum_heap_size(ptls, sz);
     }
     return data;
+}
+
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+{
+    return gc_counted_malloc_(sz, 1);
+}
+
+// Accounts for the allocation without ever safepointing; see the GMP hooks
+// in gc-common.c for why.
+JL_DLLEXPORT void *jl_gc_counted_malloc_nosafepoint(size_t sz) JL_NO_SAFEPOINT_ANALYSIS
+{
+    return gc_counted_malloc_(sz, 0);
 }
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
@@ -4179,14 +4192,15 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
         jl_batch_accum_free_size(ct->ptls, sz);
 }
 
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+STATIC_INLINE void *gc_counted_realloc_with_old_size_(void *p, size_t old, size_t sz, int maysafepoint) JL_CANSAFEPOINT
 {
     void *data = realloc(p, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = memory_block_usable_size(data, 0);
         jl_ptls_t ptls = ct->ptls;
-        maybe_collect(ptls);
+        if (maysafepoint)
+            maybe_collect(ptls);
         if (!(sz < old))
             jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
                 jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + (sz - old));
@@ -4201,6 +4215,17 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         }
     }
     return data;
+}
+
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    return gc_counted_realloc_with_old_size_(p, old, sz, 1);
+}
+
+// see jl_gc_counted_malloc_nosafepoint
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size_nosafepoint(void *p, size_t old, size_t sz) JL_NO_SAFEPOINT_ANALYSIS
+{
+    return gc_counted_realloc_with_old_size_(p, old, sz, 0);
 }
 
 // allocating blocks for Arrays and Strings
