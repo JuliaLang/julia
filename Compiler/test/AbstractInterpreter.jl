@@ -613,6 +613,10 @@ let interp = SourceModeWinnerInterp()
         interp, mi, Compiler.SOURCE_MODE_ABI) === inadequate
     @test Compiler.ci_has_invoke(inadequate)
     @test iszero(@ccall jl_mi_cache_has_ci(mi::Any, ci::Any)::Cint)
+    # `inadequate` lives in the native `mi.cache` chain (an `InternalCodeCache`
+    # with a custom owner), which already roots it for the process lifetime, so
+    # the JIT handoff must not have leaked a redundant global root for it.
+    @test (@ccall jl_as_global_root(inadequate::Any, 0::Cint)::Ptr{Cvoid}) == C_NULL
 end
 
 # A source-inadequate winner with a different return ABI cannot suppress normal
@@ -655,6 +659,10 @@ let interp = SourceModeEphemeralInterp()
         interp, mi, Compiler.SOURCE_MODE_ABI) === winner
     @test Compiler.code_cache(interp)[mi] === winner
     @test Compiler.ci_has_invoke(winner)
+    # The JIT retains raw pointers to the emitted `winner` for the lifetime of
+    # the process, and this ephemeral cache dies with `interp`, so the JIT
+    # handoff must have promoted `winner` to a global root (`jit_cache_root!`).
+    @test (@ccall jl_as_global_root(winner::Any, 0::Cint)::Ptr{Cvoid}) != C_NULL
     empty!(source_mode_ephemeral_codegen)
 end
 
