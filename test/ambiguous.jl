@@ -867,6 +867,115 @@ let ambig = Ref{Int32}(0)
 end
 @test !isempty(detect_ambiguities(AmbigCycle3Reorder))
 
+# Unit tests for the pkgimage edge verifier `Compiler.ReinferUtils.verify_call`,
+# driven directly with `Method` edges: methods defined after the "recorded"
+# expected set play the role of methods loaded between image build and image
+# load, and the verifier must agree with what a fresh `ml_matches` would report.
+module VerifyCallEdge
+# The recorded state: sig below is union-split so that no single method fully
+# covers it (no minmax match shields the sort), jointly covered by fE2 and fD.
+f(::Integer, ::Vararg{Union{Int,String}}) = 1  # fE2: the Integer half
+f(::Int, ::Vararg{String}) = 2                 # fC: concrete cover with an empty interference set
+f(::Char, ::Vararg{Union{Int,String}}) = 3     # fD: the Char half, interferes with nothing
+end
+let verify_call = Base.Compiler.ReinferUtils.verify_call,
+    method_in_interferences = Base.Compiler.ReinferUtils.method_in_interferences,
+    f = VerifyCallEdge.f,
+    mE2 = which(f, Tuple{Integer, Vararg{Union{Int,String}}}),
+    mC = which(f, Tuple{Int, Vararg{String}}),
+    mD = which(f, Tuple{Char, Vararg{Union{Int,String}}}),
+    sig = Tuple{typeof(f), Union{Int,Char}, Vararg{Union{Int,String}}},
+    expecteds = Core.svec(mE2, mC, mD)
+    # the unchanged recorded state revalidates
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, Any[])
+        @test maxw == typemax(UInt)
+    end
+    # A newcomer that strictly beats an expected method but is resolved by the
+    # empty-interference-set cover mC keeps the edge valid: the fresh sort prunes
+    # it silently, and the interference fast path may accept it directly (the
+    # `Union{}` bottom-slurp shape).
+    VerifyCallEdge.eval(:(f(::Integer, ::Vararg{String}) = 4)) # N: mC ≻ N ≻ mE2
+    mN = which(f, Tuple{Integer, Vararg{String}})
+    @test Base.morespecific(mC, mN) && Base.morespecific(mN, mE2)
+    @test isempty(mC.interferences) && typeintersect(sig, mN.sig) <: mC.sig
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, Any[])
+        @test maxw == typemax(UInt)
+    end
+end
+
+# Same recorded shape, but the newcomers close a specificity cycle
+# mE2 ≻ X ≻ N ≻ mE2 through X -- invisible to the scanned interference sets,
+# since every expected method it intersects strictly beats it -- which must
+# invalidate: the fresh sort drags mE2 into the SCC (where it stops being an
+# admissible cover for X), reporting an extra match and an ambiguity. The fast
+# path cannot see X itself; it has to notice that N gained a strict beater that
+# could sit on a cycle and leave the decision to the full lookup.
+module VerifyCallCycle
+h(::Integer, ::Vararg{Union{Int,String}}) = 1  # hE2: the Integer half
+h(::Int, ::Vararg{String}) = 2                 # hC: concrete cover with an empty interference set
+h(::Char, ::Vararg{Union{Int,String}}) = 3     # hD: the Char half, interferes with nothing
+end
+let verify_call = Base.Compiler.ReinferUtils.verify_call,
+    method_in_interferences = Base.Compiler.ReinferUtils.method_in_interferences,
+    h = VerifyCallCycle.h,
+    mE2 = which(h, Tuple{Integer, Vararg{Union{Int,String}}}),
+    mC = which(h, Tuple{Int, Vararg{String}}),
+    mD = which(h, Tuple{Char, Vararg{Union{Int,String}}}),
+    sig = Tuple{typeof(h), Union{Int,Char}, Vararg{Union{Int,String}}},
+    expecteds = Core.svec(mE2, mC, mD)
+    VerifyCallCycle.eval(:(h(::T, ::Vararg{T}) where {T<:Integer} = 5)) # X
+    VerifyCallCycle.eval(:(h(::Integer, ::Vararg{String}) = 4))         # N
+    mX = which(h, Tuple{T, Vararg{T}} where T<:Integer)
+    mN = which(h, Tuple{Integer, Vararg{String}})
+    @test Base.morespecific(mC, mN) && Base.morespecific(mN, mE2)
+    @test Base.morespecific(mE2, mX) && Base.morespecific(mX, mN)
+    @test isempty(mC.interferences) && isempty(mD.interferences)
+    @test !method_in_interferences(mX, mE2) # X is invisible to the scan
+    @test typeintersect(sig, mN.sig) <: mC.sig
+    # The ground truth the verifier must agree with. Note the fresh sort's
+    # treatment of the cycle is sensitive to the match-list order, hence to the
+    # definition order of the newcomers: defined the other way around, it
+    # happens to prune the cycle cleanly. If a sort change makes this assertion
+    # fail, the construction needs re-arming, not the verifier weakening.
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(sig, nothing, -1, Base.get_world_counter(), false,
+                                    Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test length(ms) == 4 && ambig[] == 1
+    end
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, Any[])
+        @test maxw == 0
+    end
+end
+
+# A new method that is ambiguous with the expected one must invalidate even when
+# the include_ambiguous=false match set is unchanged (the newcomer is pruned
+# because the expected method covers their overlap, yet dispatch in the contested
+# region now throws a MethodError the compiled code never accounted for): the
+# fast path bails on the mutual pair and the fallback rejects on has_ambig.
+module VerifyCallAmbig
+g(x::Integer, y) = 1
+end
+let verify_call = Base.Compiler.ReinferUtils.verify_call,
+    g = VerifyCallAmbig.g,
+    mS = which(g, Tuple{Integer, Any}),
+    sig = Tuple{typeof(g), Int, Any},
+    expecteds = Core.svec(mS)
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, Any[])
+        @test maxw == typemax(UInt)
+    end
+    VerifyCallAmbig.eval(:(g(x, y::String) = 2))
+    mN = which(g, Tuple{Any, String})
+    @test Base.isambiguous(mS, mN)
+    let ambig = Ref{Int32}(0) # match set unchanged, only the flag reports the change
+        ms = Base._methods_by_ftype(sig, nothing, -1, Base.get_world_counter(), false,
+                                    Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test length(ms) == 1 && (ms[1]::Core.MethodMatch).method === mS && ambig[] == 1
+    end
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, Any[])
+        @test maxw == 0
+    end
+end
+
 # A method is selected only when it is more specific than every other
 # applicable method, so a match that is itself dominated can still make a call
 # ambiguous by blocking the would-be winner. Here 3 ≻ 2, 2 ≻ 1 and 3 is unordered
