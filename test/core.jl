@@ -9499,3 +9499,16 @@ let root = Base.unwrap_unionall(DeferredSuper62272.T)
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
 end
+
+# issue #61347 (field-type half; the supertype half is covered above): a
+# structurally increasing recursive field type must not hang instantiation.
+# Under the positional representation such a definition's fragments defer
+# their field types and complete them lazily, one level per demand.
+module Issue61347FieldTypes
+abstract type A{T} end
+struct S1{T}; x::S1{A{T}}; end
+end
+let A = Issue61347FieldTypes.A, S1 = Issue61347FieldTypes.S1
+    @test fieldtype(S1{Int}, 1) === S1{A{Int}}
+    @test fieldtype(fieldtype(S1{Int}, 1), 1) === S1{A{A{Int}}}
+end
