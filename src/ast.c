@@ -135,9 +135,13 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
 static int jl_is_number(jl_value_t *v)
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-    for (; t->super != t; t = t->super)
-        if (t == jl_number_type)
+    // only the typename lineage matters here, so walk the wrapper supertypes,
+    // which are set at definition and never deferred
+    while (t != NULL && t != jl_any_type) {
+        if (t->name == jl_number_type->name)
             return 1;
+        t = ((jl_datatype_t*)jl_unwrap_unionall(t->name->wrapper))->super;
+    }
     return 0;
 }
 

@@ -24,7 +24,9 @@ for (T, c) in (
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
-        (DataType, [:name, :super, :parameters, :instance, :hash]),
+        # `super` is filled lazily for instantiations of self-referential
+        # definitions (issue #61347), so it is deliberately non-const (and atomic)
+        (DataType, [:name, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
@@ -45,7 +47,7 @@ for (T, c) in (
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
         (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args, :cache_entry_count]),
-        (DataType, [:types, :layout]),
+        (DataType, [:super, :types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
         (Task, [:_state, :preempt_request, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at, :waiting_on, :bound_cancel_token]),
@@ -9351,4 +9353,41 @@ let f = (x...) -> length(x)
     m3 = reshape(w, 3, 3)
     @test f(m3...) == 9
     @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
+end
+
+# issue #61347 (supertype half): every level of a structurally increasing
+# recursive supertype graph must be correct independently of instantiation
+# order, and deferred (lazily computed) supertypes must present the same
+# field-access semantics to compiled and interpreted code. (The field-type
+# analogue `struct S1{T}; x::S1{A{T}}; end` still hangs on instantiation;
+# a concrete type must publish with its layout, so its fix needs more.)
+module Issue61347
+abstract type A{T} end
+struct S2{T} <: A{S2{A{T}}} end
+end
+let A = Issue61347.A, S2 = Issue61347.S2
+    @test supertype(S2{Int}) === A{S2{A{Int}}}
+    # deep levels materialize lazily, one per demand, and stay correct
+    deep = S2{A{A{Int}}}
+    @test supertype(deep) === A{S2{A{A{A{Int}}}}}
+    # reaching the same interned type by walking or by direct construction
+    # yields the same supertype
+    walked = getfield(supertype(S2{Int}), :parameters)[1]
+    walked = getfield(supertype(walked), :parameters)[1]
+    @test walked === S2{A{A{Int}}}
+    @test supertype(walked) === supertype(deep)
+    @test S2{A{A{A{Int}}}} <: A
+    # compiled and interpreted field access agree on the deferred slot. The
+    # slot can be filled at any moment by unrelated activity, so bracket the
+    # interpreted read with compiled reads and require monotone agreement
+    # (an unfilled slot can only become filled, never the reverse)
+    lazy = getfield(supertype(S2{A{A{A{A{Int}}}}}), :parameters)[1]
+    @noinline compiled_isdef(x::DataType) = isdefined(x, :super)
+    c1 = compiled_isdef(Base.inferencebarrier(lazy))
+    itp = Core.eval(@__MODULE__, :(isdefined($lazy, :super)))
+    c2 = compiled_isdef(Base.inferencebarrier(lazy))
+    @test c1 <= itp <= c2
+    @test supertype(lazy) isa Type # forcing accessor
+    @test isdefined(lazy, :super)
+    @test getfield(lazy, :super) === supertype(lazy)
 end

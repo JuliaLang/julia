@@ -896,12 +896,12 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
                 }
                 else {
                     while (1) {
-                        jl_datatype_t *super = dt->super;
+                        jl_datatype_t *super = jl_datatype_compute_super(dt);
                         if (super == jl_function_type) {
                             *facts |= HAVE_FUNCTION;
                             break;
                         }
-                        if (super == jl_any_type || super->super == dt)
+                        if (super == NULL || super == jl_any_type || super->super == dt)
                             break;
                         dt = super;
                     }
