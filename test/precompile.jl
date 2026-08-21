@@ -1218,6 +1218,265 @@ precompile_test_harness("precompiletools") do dir
     end
 end
 
+# `@cfunction` must be able to re-enter the interpreter as needed, even if codegen is not available
+precompile_test_harness("cfunction without codegen") do dir
+    write(joinpath(dir, "CFunc61949A.jl"),
+          """
+          module CFunc61949A
+              llvm_version() = ccall(:jl_get_LLVM_VERSION, UInt32, ())       # 0 = no-codegen stub
+              match_target(x::Integer) = Cint(x + 1)                         # specsig Cint -> Cint, no adapter
+              wide_target(x::Integer) = Cint(x + 1)                          # site declares rt Any (needs a boxing adapter)
+              nospec_target(x::Integer) = Cint(x + 1)                        # B adds a @nospecialize method (specTypes != sigt)
+              boxed_target(@nospecialize(a), @nospecialize(b), @nospecialize(c), @nospecialize(d)) = a  # jl_fptr_args, no adapter (image only:
+                  # no `@cfunction` retarget can reach a compiled jl_fptr_args target, a more specific method makes the site ambiguous)
+              box_target(x::Cint) = x                                        # well-inferred Cint
+              any_target(x::Cint) = Core.compilerbarrier(:type, x + Cint(1)) # inferred ::Any
+              const_target(x::Cint) = Cint(42)                               # const-return
+              unresolved_target(x::Float64) = x                              # no method for (Cint,)
+              partial_target(x::Float32) = x + Float32(1)                    # partially covers (Any,)
+              function run_match(x::Cint)
+                  cf = @cfunction(match_target, Cint, (Cint,))
+                  ccall(cf, Cint, (Cint,), x)
+              end
+              function run_wide(x::Cint)
+                  cf = @cfunction(wide_target, Any, (Cint,))
+                  ccall(cf, Any, (Cint,), x)
+              end
+              function run_nospec(x::Cint)
+                  cf = @cfunction(nospec_target, Cint, (Cint,))
+                  ccall(cf, Cint, (Cint,), x)
+              end
+              function run_boxed(@nospecialize(a), @nospecialize(b), @nospecialize(c), @nospecialize(d))
+                  cf = @cfunction(boxed_target, Any, (Any, Any, Any, Any))
+                  ccall(cf, Any, (Any, Any, Any, Any), a, b, c, d)
+              end
+              function run_widen(x::Cint)
+                  cf = @cfunction(box_target, Any, (Cint,))
+                  ccall(cf, Any, (Cint,), x)
+              end
+              function run_narrow(x::Cint)
+                  cf = @cfunction(any_target, Cint, (Cint,))
+                  ccall(cf, Cint, (Cint,), x)
+              end
+              function run_const(x::Cint)
+                  cf = @cfunction(const_target, Cint, (Cint,))
+                  ccall(cf, Cint, (Cint,), x)
+              end
+              function run_unresolved(x::Cint)
+                  cf = @cfunction(unresolved_target, Cint, (Cint,))
+                  ccall(cf, Cint, (Cint,), x)
+              end
+              function run_dispatch(x::Cint)      # abstract `Any` arg, single partially-covering method -> dynamic-dispatch adapter
+                  cf = @cfunction(box_target, Any, (Any,))
+                  ccall(cf, Any, (Any,), x)
+              end
+              function run_partial(x)             # likewise, and uncovered arguments must raise MethodError (#62246)
+                  cf = @cfunction(partial_target, Any, (Any,))
+                  ccall(cf, Any, (Any,), x)
+              end
+              call_box(x::Cint) = box_target(x)   # ordinary caller, with a backedge to `box_target`
+              precompile(call_box, (Cint,))
+              precompile(run_match, (Cint,))
+              precompile(match_target, (Cint,))
+              precompile(run_wide, (Cint,))
+              precompile(wide_target, (Cint,))
+              precompile(run_nospec, (Cint,))
+              precompile(nospec_target, (Cint,))
+              precompile(run_boxed, (Any, Any, Any, Any))
+              precompile(boxed_target, (Any, Any, Any, Any))
+              precompile(run_widen, (Cint,))
+              precompile(run_narrow, (Cint,))
+              precompile(run_const, (Cint,))
+              precompile(run_unresolved, (Cint,))
+              precompile(run_dispatch, (Cint,))
+              precompile(run_partial, (Float32,))
+              precompile(run_partial, (Cint,))
+              precompile(partial_target, (Float32,))
+              precompile(llvm_version, ())
+
+              # Newest CodeInstance of method `m` specialized exactly on `argtypes`.
+              function method_ci(m::Method, argtypes)
+                  sig = Tuple{m.sig.parameters[1], argtypes...}
+                  mi = only(mi for mi in Base.specializations(m) if mi.specTypes === sig)
+                  return mi.cache
+              end
+              ci_valid(ci::Core.CodeInstance) = ci.max_world == typemax(UInt)
+              ci_interpreted(ci::Core.CodeInstance) = ci.specptr == C_NULL &&
+                  ci.invoke == unsafe_load(cglobal(:jl_fptr_interpret_call_addr, Ptr{Cvoid}))
+              precompile(method_ci, (Method, Tuple{DataType}))
+              precompile(ci_valid, (Core.CodeInstance,))
+              precompile(ci_interpreted, (Core.CodeInstance,))
+          end
+          """)
+    # A second image with more specific, compiled targets for A's `@cfunction` sites: one whose
+    # specptr matches the site's ABI exactly, and two that must not be called directly (a
+    # wrong ABI-match check would call them with the wrong ABI and misbehave).
+    write(joinpath(dir, "CFunc61949B.jl"),
+          """
+          module CFunc61949B
+              using CFunc61949A
+              CFunc61949A.match_target(x::Cint) = x + Cint(100)                    # specsig (Cint) -> Cint == site ABI
+              CFunc61949A.wide_target(x::Cint) = x + Cint(100)                     # returns Cint, but the site expects a boxed Any
+              CFunc61949A.nospec_target(@nospecialize(x::Signed)) = Cint(x + 100)  # specTypes (Signed) != site sigt (Cint)
+              precompile(CFunc61949A.match_target, (Cint,))
+              precompile(CFunc61949A.wide_target, (Cint,))
+              precompile(CFunc61949A.nospec_target, (Cint,))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CFunc61949A"))
+    Base.compilecache(Base.PkgId("CFunc61949B"))
+    M = Base.require(Main, :CFunc61949A)
+    # invokelatest: the run_* methods are defined in a world newer than this function's.
+    @test Base.invokelatest(M.run_match, Cint(3)) == Cint(4)
+    @test Base.invokelatest(M.run_wide, Cint(3)) === Cint(4)
+    @test Base.invokelatest(M.run_nospec, Cint(3)) == Cint(4)
+    @test Base.invokelatest(M.run_boxed, 1, 2, 3, 4) === 1
+    @test Base.invokelatest(M.run_widen, Cint(5)) === Cint(5)
+    @test Base.invokelatest(M.run_narrow, Cint(7)) == Cint(8)
+    @test Base.invokelatest(M.run_const, Cint(3)) == Cint(42)
+    @test_throws MethodError Base.invokelatest(M.run_unresolved, Cint(3))
+    @test Base.invokelatest(M.run_dispatch, Cint(5)) === Cint(5)
+    @test Base.invokelatest(M.run_partial, Float32(1.5)) === Float32(2.5)
+    @test_throws MethodError Base.invokelatest(M.run_partial, Cint(3))
+    if Bool(Base.JLOptions().use_pkgimages)
+        # Now with codegen disabled: reuse the image adapters, retarget to an ABI-compatible
+        # specptr from B's image without a JIT, and fall back to the image's dynamic-dispatch
+        # adapter after redefinition instead of trying (and failing) to JIT a new one.
+        # `--trace-dispatch` records the first dynamic dispatch to each MethodInstance, which is
+        # how we can tell a direct specptr call from a call through the dynamic-dispatch adapter.
+        sep = Sys.iswindows() ? ";" : ":"
+        dispatch_log = joinpath(dir, "dispatch.log")
+        script = """
+            using CFunc61949A
+            const M = CFunc61949A
+            println("llvm=", M.llvm_version())
+            println("match=", M.run_match(Cint(3)))
+            println("wide=", M.run_wide(Cint(3)))
+            println("nospec=", M.run_nospec(Cint(3)))
+            println("boxed=", M.run_boxed(1, 2, 3, 4))
+            println("widen=", M.run_widen(Cint(5)))
+            println("narrow=", M.run_narrow(Cint(7)))
+            println("const=", M.run_const(Cint(3)))
+            # Image adapters and image specptrs call their targets directly, without dynamic dispatch
+            dispatched = read($(repr(dispatch_log)), String)
+            println("image_dispatched=", any(t -> occursin(t * ")", dispatched),
+                ("match_target", "wide_target", "nospec_target", "boxed_target", "box_target", "any_target", "const_target")))
+            println("dispatch=", M.run_dispatch(Cint(5)))
+            println("partial=", M.run_partial(Float32(1.5)) === Float32(2.5))
+            println("partial_miss=", try; M.run_partial(Cint(3)); "no-error"; catch e; e isa MethodError ? "MethodError" : "other-error"; end)
+            println("unresolved=", try; M.run_unresolved(Cint(3)); "no-error"; catch e; e isa MethodError ? "MethodError" : "other-error"; end)
+            # ... whereas the partially-covering sites are dynamic-dispatch adapters (#62246)
+            dispatched = read($(repr(dispatch_log)), String)
+            println("partial_dispatched=", (occursin("box_target), Int32})", dispatched), occursin("partial_target), Float32})", dispatched)))
+            using CFunc61949B
+            println("cross_match=", M.run_match(Cint(3)))
+            println("cross_wide=", M.run_wide(Cint(3)))
+            println("cross_nospec=", M.run_nospec(Cint(3)))
+            dispatched = read($(repr(dispatch_log)), String)
+            println("cross_dispatched=", (occursin("match_target), Int32})", dispatched),
+                                          occursin("wide_target), Int32})", dispatched),
+                                          occursin("nospec_target), Signed})", dispatched)))
+            # Image CodeInstances of the targets and of the `@cfunction` sites, before redefinition
+            m_match = which(M.match_target, (Cint,)); ci_match = M.method_ci(m_match, (Cint,))
+            m_box = which(M.box_target, (Cint,)); ci_box = M.method_ci(m_box, (Cint,))
+            ci_caller = M.method_ci(which(M.call_box, (Cint,)), (Cint,))
+            ci_sites = map(f -> M.method_ci(which(f, (Cint,)), (Cint,)), (M.run_match, M.run_widen, M.run_dispatch, M.run_unresolved))
+            println("pre_valid=", (M.ci_valid(ci_match), M.ci_valid(ci_box), M.ci_valid(ci_caller), all(M.ci_valid, ci_sites)))
+            @eval M match_target(x::Cint) = x + Cint(200)
+            @eval M box_target(x::Cint) = x + Cint(100)
+            @eval M unresolved_target(x::Cint) = x + Cint(100)
+            # Dispatch now resolves to the new methods and the ordinary caller was invalidated
+            # through its backedge, but the `@cfunction` sites' CodeInstances must survive: they
+            # have no backedge (retargeting is a runtime world check) and nothing could recompile them.
+            println("target_replaced=", (which(M.match_target, (Cint,)) !== m_match, which(M.box_target, (Cint,)) !== m_box))
+            println("caller_invalidated=", !M.ci_valid(ci_caller))
+            println("sites_valid=", all(M.ci_valid, ci_sites))
+            println("caller=", Base.invokelatest(M.call_box, Cint(5)))
+            println("redef_match=", Base.invokelatest(M.run_match, Cint(3)))
+            println("redef_widen=", Base.invokelatest(M.run_widen, Cint(5)))
+            println("redef_dispatch=", Base.invokelatest(M.run_dispatch, Cint(5)))
+            println("redef_unresolved=", Base.invokelatest(M.run_unresolved, Cint(3)))
+            # ... all of which went through the dynamic-dispatch adapter
+            dispatched = read($(repr(dispatch_log)), String)
+            println("redef_dispatched=", (occursin("match_target), Int32})", dispatched),
+                                          occursin("box_target), Int32})", dispatched),
+                                          occursin("unresolved_target), Int32})", dispatched)))
+            # The new targets are running in the interpreter (no specptr anywhere for the fallback to use)
+            ci_new = map(f -> M.method_ci(which(f, (Cint,)), (Cint,)), (M.match_target, M.box_target, M.unresolved_target))
+            println("new_distinct=", (ci_new[1] !== ci_match, ci_new[2] !== ci_box))
+            println("new_valid=", all(M.ci_valid, ci_new))
+            println("new_interpreted=", all(M.ci_interpreted, ci_new))
+            println("sites_still_valid=", all(M.ci_valid, ci_sites))
+            """
+        function run_child(script; codegen::Bool)
+            outbuf = IOBuffer(); errbuf = IOBuffer()
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --trace-dispatch=$dispatch_log -e $script`,
+                         "JULIA_LOAD_CODEGEN_LIB" => codegen ? "1" : "0",
+                         "JULIA_LOAD_PATH" => dir * sep * "@stdlib",
+                         "JULIA_DEPOT_PATH" => first(DEPOT_PATH) * sep)
+            proc = run(pipeline(ignorestatus(cmd), stdout=outbuf, stderr=errbuf))
+            out = String(take!(outbuf))
+            success(proc) || println(stderr, "child (codegen=$codegen) failed:\n", String(take!(errbuf)))
+            @test success(proc)
+            return out
+        end
+        out = run_child(script; codegen=false)
+        @test occursin("llvm=0", out)              # codegen really was absent
+        @test occursin("image_dispatched=false", out)   # image adapters / specptrs: no dynamic dispatch
+        @test occursin("match=4", out)             # image specptr used directly
+        @test occursin("wide=4", out)              # image boxing adapter
+        @test occursin("nospec=4", out)            # image specptr used directly
+        @test occursin("boxed=1", out)
+        @test occursin("widen=5", out)             # image specsig-widening adapter
+        @test occursin("narrow=8", out)            # image narrowing adapter
+        @test occursin("const=42", out)            # image const-return adapter
+        @test occursin("dispatch=5", out)          # image dynamic-dispatch adapter
+        @test occursin("partial=true", out)        # image dynamic-dispatch adapter
+        @test occursin("partial_miss=MethodError", out)
+        @test occursin("partial_dispatched=(true, true)", out)
+        @test occursin("unresolved=MethodError", out)
+        @test occursin("cross_match=103", out)     # B's image specptr, matching ABI, no JIT
+        @test occursin("cross_wide=103", out)      # B's specptr returns Cint, site wants Any: dynamic-dispatch adapter
+        @test occursin("cross_nospec=103", out)    # B's specptr takes a boxed Signed, site passes Cint: dynamic-dispatch adapter
+        @test occursin("cross_dispatched=(false, true, true)", out)  # only the mismatches went through dynamic dispatch
+        @test occursin("pre_valid=(true, true, true, true)", out)
+        @test occursin("target_replaced=(true, true)", out)
+        @test occursin("caller_invalidated=true", out)
+        @test occursin("sites_valid=true", out)
+        @test occursin("caller=105", out)          # interpreted after invalidation
+        @test occursin("redef_match=203", out)     # retargeted via the dynamic-dispatch adapter
+        @test occursin("redef_widen=105", out)
+        @test occursin("redef_dispatch=105", out)
+        @test occursin("redef_unresolved=103", out)
+        @test occursin("redef_dispatched=(true, true, true)", out)  # via the dynamic-dispatch adapter
+        @test occursin("new_distinct=(true, true)", out)
+        @test occursin("new_valid=true", out)
+        @test occursin("new_interpreted=true", out)
+        @test occursin("sites_still_valid=true", out)
+
+        # With codegen available, the same cross-image retargets get JIT-built adapters that call
+        # B's specptr directly, so none of the targets are ever dynamically dispatched to.
+        rm(dispatch_log)
+        out = run_child("""
+            using CFunc61949A, CFunc61949B
+            const M = CFunc61949A
+            println("llvm_nonzero=", M.llvm_version() != 0)
+            println("jit_match=", M.run_match(Cint(3)))
+            println("jit_wide=", M.run_wide(Cint(3)))
+            println("jit_nospec=", M.run_nospec(Cint(3)))
+            dispatched = read($(repr(dispatch_log)), String)
+            println("jit_dispatched=", (occursin("match_target), Int32})", dispatched),
+                                        occursin("wide_target), Int32})", dispatched),
+                                        occursin("nospec_target), Signed})", dispatched)))
+            """; codegen=true)
+        @test occursin("llvm_nonzero=true", out)
+        @test occursin("jit_match=103", out)
+        @test occursin("jit_wide=103", out)
+        @test occursin("jit_nospec=103", out)
+        @test occursin("jit_dispatched=(false, false, false)", out)
+    end
+end
+
 precompile_test_harness("invoke") do dir
     InvokeModule = :Invoke0x030e7e97c2365aad
     CallerModule = :Caller0x030e7e97c2365aad
