@@ -65,6 +65,12 @@ Language changes
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
 
+* `Core.sizeof` of a `primitive type` is now its allocation size rather than its bit size
+  rounded up to a byte, so it always equals `Base.aligned_sizeof`, following C23's
+  `_BitInt(N)`. For example `primitive type Int24 24 end` now has `sizeof` 4 rather than 3.
+  Such types now report `Base.datatype_haspadding`; the trailing padding is not part of the
+  value and does not affect `===` or `objectid` ([#61361]).
+
 Compiler/Runtime improvements
 -----------------------------
 
