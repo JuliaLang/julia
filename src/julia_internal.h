@@ -1378,11 +1378,9 @@ void jl_safepoint_init(void) JL_NOTSAFEPOINT;
 // it should also wait for the mutator threads to hit a safepoint **AFTER**
 // this function returns
 int jl_safepoint_start_gc(jl_task_t *ct) JL_CANSAFEPOINT;
-// Like `jl_safepoint_start_gc`, but for a GC worker thread (no `ptls`/`ct` of its own).
-// This is intended for GC impls that does not use mutator threads for GCs.
-// The caller of this function needs to guarantee it is the only
-// such caller for the current pause. The caller should wait
-// for mutator threads to hit a safepoint **AFTER** this function returns, same as above.
+// Like `jl_safepoint_start_gc`, but for a GC worker thread (no `ptls`/`ct` of its own), for GC
+// implementations that don't drive GCs from mutator threads. The caller must guarantee it is
+// the only such caller for the current pause.
 void jl_safepoint_start_gc_from_gc_thread(void) JL_NOTSAFEPOINT;
 // Can only be called by the thread that have got a `1` return value from
 // `jl_safepoint_start_gc()` (or that called `jl_safepoint_start_gc_from_gc_thread()`). This

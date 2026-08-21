@@ -49,8 +49,7 @@ impl Collection<JuliaVM> for VMCollection {
     where
         F: FnMut(&'static mut Mutator<JuliaVM>),
     {
-        // We try to match MMTk's collection/pause kind to Julia's jl_gc_collection_t if it is appropriate.
-        // We can also use MMTk's pause kind to be more expressive.
+        // Map MMTk's pause kind to Julia's `jl_gc_collection_t` where appropriate.
         const JL_GC_FULL: i32 = 1;
         const JL_GC_INCREMENTAL: i32 = 2;
         let collection: i32 = if let Some(gen_plan) = SINGLETON.get_plan().generational() {
@@ -132,13 +131,10 @@ impl Collection<JuliaVM> for VMCollection {
         // Disarm the safepoint and let mutators run again.
         unsafe { jl_gc_mmtk_resume_the_world() };
 
-        // `resume_mutators()` is called after every stop-the-world pause, including the pause
-        // that ends a concurrent GC's background-work phase (there's no more targeted mmtk-core
-        // hook for that specifically). Advance the GC epoch to wake every waiter: a mutator
+        // Advance the GC epoch to wake every waiter: a mutator
         // retrying `mmtk_disable_collection()` after it failed with
         // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`, and `block_for_gc` below, both waiting
-        // on the same pause finishing (the retry/return is cheap either way; if disable still
-        // fails, or another pause is already needed, the waiter just waits again).
+        // on the same pause finishing.
         let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
         let mut epoch = lock.lock().unwrap();
         *epoch = epoch.wrapping_add(1);
@@ -171,9 +167,8 @@ impl Collection<JuliaVM> for VMCollection {
         unsafe { jl_gc_safe_leave(gc_state) };
         unsafe { jl_gc_mmtk_block_for_gc_leave() };
 
-        // `GC.gc()` must run pending finalizers before returning (see
-        // `jl_gc_mmtk_run_pending_finalizers`'s doc comment), so run them now. This also restores
-        // the errno/last-error `jl_gc_mmtk_block_for_gc_enter` saved above.
+        // `GC.gc()` must run pending finalizers before returning, so run them now.
+        // This also restores the errno/last-error `jl_gc_mmtk_block_for_gc_enter` saved above.
         unsafe { jl_gc_mmtk_run_pending_finalizers(saved_errno) };
     }
 

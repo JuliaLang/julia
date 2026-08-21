@@ -424,13 +424,10 @@ JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(int collection)
 }
 
 // The other half of `jl_gc_mmtk_stop_the_world`: disarm the safepoint and let mutators run again,
-// on behalf of `Collection::resume_mutators`. Runs on the same GC worker thread, after the pause's
-// actual GC work is done.
+// on behalf of `Collection::resume_mutators`, once the pause's GC work is done.
 //
-// Note this drops the inline `run_finalizers` call that used to happen here (on whichever mutator
-// happened to have triggered the just-finished GC): a GC worker thread has no `jl_current_task`
-// to run finalizers on. `jl_gc_mmtk_run_pending_finalizers` below now runs them instead, from
-// `Collection::block_for_gc` on the mutator that's waiting for this pause.
+// Finalizers no longer run here: a GC worker thread has no `jl_current_task` to run them on.
+// `jl_gc_mmtk_run_pending_finalizers` runs them instead, from the waiting mutator itself.
 JL_DLLEXPORT void jl_gc_mmtk_resume_the_world(void)
 {
     gc_n_threads = 0;
@@ -439,14 +436,9 @@ JL_DLLEXPORT void jl_gc_mmtk_resume_the_world(void)
     JL_PROBE_GC_END();
 }
 
-// `Collection::block_for_gc` in the mmtk_julia binding is called on the current thread's own
-// behalf (mirroring `jl_gc_safe_enter`/`jl_gc_safe_leave` above, this needs no explicit `ptls`
-// parameter): by the time a mutator actually gets to block for the GC it was told is needed, the
-// GC may have already been disabled in the meantime (mmtk-core's own `poll()` already checked
-// this once, but nothing prevents a race between that check and this call). If so, there is
-// nothing to wait for; defer the pending allocation instead of waiting on a GC that will not run,
-// the same way `jl_gc_collect` already does for a user-requested collection that arrives disabled.
-// Returns whether collection is disabled (i.e. whether the caller should skip waiting).
+// By the time a mutator gets here, collection may have been disabled. If so, defer the
+// allocation instead of waiting on a GC that won't run -- same as `jl_gc_collect` does.
+// Returns whether the caller should skip waiting.
 JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
 {
     if (mmtk_is_collection_enabled())
@@ -459,18 +451,16 @@ JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
     return 1;
 }
 
-// Pass saved error no before a pause and restore it after a pause.
+// Saved errno/last-error, passed from `jl_gc_mmtk_block_for_gc_enter` to
+// `jl_gc_mmtk_run_pending_finalizers`, which restores it.
 typedef struct {
     int saved_errno;
-    uint32_t saved_last_error; // Only used by windows. Otherwise this field remains to be 0.
+    uint32_t saved_last_error; // Windows only; always 0 elsewhere.
 } jl_gc_mmtk_saved_errno_t;
 
-// Called by `Collection::block_for_gc` right before it waits for the pause it was told is coming
-// (`jl_gc_safe_enter`/`mmtk_wait_for_new_gc_epoch`/`jl_gc_safe_leave`), mirroring what
+// Called by `Collection::block_for_gc` right before it waits for the pause, mirroring what
 // `jl_gc_prepare_to_collect` used to do around the same wait when it ran on this same mutator:
-// save errno, and mark this task's own timing as suspended (e.g. under Tracy, switches this
-// thread's active fiber to "GC") so the wait isn't misattributed to whatever the task was doing
-// when its allocation triggered this.
+// save errno, and mark this task's own timing as suspended.
 JL_DLLEXPORT jl_gc_mmtk_saved_errno_t jl_gc_mmtk_block_for_gc_enter(void)
 {
     jl_gc_mmtk_saved_errno_t saved;
@@ -488,14 +478,11 @@ JL_DLLEXPORT jl_gc_mmtk_saved_errno_t jl_gc_mmtk_block_for_gc_enter(void)
 }
 
 // The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
-// task's own timing (switch back from the "GC" fiber), and tell mmtk-core this task has resumed
-// (needed for concurrent marking correctness, e.g. to re-scan a stack that could have changed
-// while this task looked stopped) -- same as `jl_gc_prepare_to_collect` used to via its own
-// `jl_gc_notify_task_resume(ct)` call once its wait finished.
+// task's own timing, and tell mmtk-core this task has resumed.
 //
-// errno/last-error are NOT restored here: pending finalizers still need to run before
-// `Collection::block_for_gc` returns (see `jl_gc_mmtk_run_pending_finalizers` below), and those are
-// arbitrary Julia code that can itself set errno, so the restore has to wait until after they run.
+// errno/last-error are NOT restored here -- pending finalizers still need to run first, and they
+// can set errno themselves, so the restore waits until after them (see
+// `jl_gc_mmtk_run_pending_finalizers` below).
 JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -507,22 +494,9 @@ JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
     jl_gc_notify_task_resume(ct);
 }
 
-// The other half of `Collection::block_for_gc`'s contract: once the pause it was waiting for has
-// completed, run this mutator's own pending finalizers before returning, exactly as
-// `jl_gc_prepare_to_collect` used to at the end of the pause it drove. `GC.gc()` and friends are
-// documented/tested (e.g. test/misc.jl, test/channels.jl) to have run pending finalizers by the
-// time they return.
-//
-// Like `jl_gc_mmtk_defer_alloc_if_disabled`, this needs no explicit `ptls` parameter: it always
-// runs on the mutator that is calling `block_for_gc` on its own behalf, using `jl_current_task`.
-// Only ever called from a mutator (never a GC worker, which has no task to run finalizers on).
-//
-// This also restores the errno/last-error that `jl_gc_mmtk_block_for_gc_enter` saved and passed
-// through as `saved`: `errno` is restored here, at the very end of `block_for_gc`, rather than in
-// `jl_gc_mmtk_block_for_gc_leave`, because the finalizers run just above are arbitrary Julia code
-// that can itself set errno -- `run_finalizers` already saves/restores errno around each individual
-// finalizer's own execution, but the outer save/restore here still needs to span them, exactly like
-// `jl_gc_collect`'s own `last_errno` stays in effect across its `run_finalizers` call.
+// Runs this mutator's pending finalizers before `Collection::block_for_gc` returns --
+// `GC.gc()` is documented/tested to have run pending finalizers by the time they
+// return. Also restores the errno/last-error `saved` carries from `jl_gc_mmtk_block_for_gc_enter`.
 JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(jl_gc_mmtk_saved_errno_t saved)
 {
     jl_task_t *ct = jl_current_task;

@@ -80,21 +80,15 @@ lazy_static! {
         Arc::new((Mutex::new(0), Condvar::new()));
 
     // The GC epoch: notified by `VMCollection::resume_mutators()` every time a stop-the-world
-    // pause ends (including the pause that ends a concurrent GC's background-work phase). Two
-    // independent waiters use this, both because mmtk-core has no more targeted hook for "a pause
-    // or concurrent GC just ended" specifically:
-    // - A mutator retrying `mmtk_disable_collection()` after it failed with
-    //   `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH` (status `InPause`/`InConcurrentGC`; see
-    //   `mmtk_wait_for_new_gc_epoch()`).
-    // - `Collection::block_for_gc`, waiting for whatever pause mmtk-core already told it is
-    //   coming (see there for why that's all it needs to do).
+    // pause ends (including a concurrent GC's background-work phase, since there's no more
+    // targeted hook for that). Two independent waiters use it:
+    // - A mutator retrying `mmtk_disable_collection()` after
+    //   `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH` (see `mmtk_wait_for_new_gc_epoch()`).
+    // - `Collection::block_for_gc`, waiting for the pause mmtk-core already told it is coming.
     //
-    // The guarded `u64` is the epoch counter, incremented on every notification: a waiter should
-    // capture its current value (`mmtk_gc_epoch()`) before giving up (on `mmtk_disable_collection()`,
-    // or on the collection-required check that led to `block_for_gc` being called at all), then
-    // wait until the epoch differs from that captured value, rather than waiting unconditionally
-    // -- this avoids missing a notification that arrives between that check and the start of the
-    // wait.
+    // The guarded `u64` is an epoch counter: a waiter must capture it (`mmtk_gc_epoch()`) before
+    // giving up, then wait until it differs from that value -- waiting unconditionally could miss
+    // a notification that arrives between the check and the start of the wait.
     pub static ref GC_EPOCH_COND: Arc<(Mutex<u64>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
 

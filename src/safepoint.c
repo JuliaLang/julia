@@ -166,8 +166,8 @@ extern void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_thre
                     if (ret == UV_ETIMEDOUT) {
                         jl_safe_printf("===== Thread %d failed to reach safepoint after %d seconds, printing backtrace below =====\n", ptls2->tid + 1, jl_options.timeout_for_safepoint_straggler_s);
                         if (jl_get_pgcstack() == NULL) {
-                            // This may happen if the function is called on a GC thread rather than a Julia thread (for third party GCs such as MMTk).
-                            // Skip the backtrace rather than dereferencing that in this case.
+                            // Not a Julia thread (e.g. an MMTk GC worker) -- no ptls/bt_data to
+                            // record a backtrace into, so just report that instead.
                             jl_safe_printf("(backtrace unavailable: the thread waiting for this safepoint is not a Julia thread)\n");
                         }
                         else {
@@ -224,34 +224,21 @@ int jl_safepoint_start_gc(jl_task_t *ct)
 
 // Arm the GC safepoint on behalf of a GC worker thread -- one that is not itself a registered
 // Julia mutator (no `ptls`/`jl_current_task` of its own) and is never among the threads a pause
-// stops. Used by third-party GC backends (e.g. MMTk) whose own scheduler already guarantees
-// that exactly one of its worker threads calls this per pause, with no other concurrent caller
-// to arbitrate against.
+// stops. Used by third-party GC backends (e.g. MMTk). Only one GC thread should call this per pause.
 //
 // This is `jl_safepoint_start_gc` without the parts that only make sense for a mutator calling
-// on its own behalf: there is no `ct`/`suspend_count` to check (a GC worker cannot be the target
-// of `jl_safepoint_suspend_thread`, which only ever addresses threads registered in
-// `jl_all_tls_states`), and no need to retry-or-defer on `jl_gc_running`, since the caller is
-// already guaranteed unique.
+// on its own behalf: there is no `ct`/`suspend_count` to check, and no need to retry-or-defer on
+// `jl_gc_running`, since the caller is already guaranteed unique.
 void jl_safepoint_start_gc_from_gc_thread(void) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&safepoint_lock);
     uint32_t running = 0;
     int won = jl_atomic_cmpswap(&jl_gc_running, &running, 1);
     if (!won) {
-        // This must never happen: the caller's own GC backend guarantees exactly one worker
-        // thread calls this per pause. Unlike a plain `assert`, this check must still fire in a
-        // release build: if it somehow does happen, `jl_gc_running` is already set, so silently
-        // continuing (as dropping into the code below would) arms the safepoint an extra time
-        // without a matching disable, leaving mutators spinning on it forever -- a deadlock
-        // that's much harder to diagnose than a crash right here.
+        // Must never happen: the caller guarantees exactly one worker thread calls this per pause.
         jl_safe_printf("jl_safepoint_start_gc_from_gc_thread must have no concurrent caller\n");
         abort();
     }
-    // Unlike jl_safepoint_start_gc, there is no foreign-thread-adoption race to re-check here:
-    // the caller only calls this once its own GC backend has already fully committed to running
-    // this pause (which for MMTk means transitioning out of `GcStatus::Disabled` already), so
-    // collection cannot be globally disabled by the time we get here.
     jl_safepoint_enable(1);
     jl_safepoint_enable(2);
     uv_mutex_unlock(&safepoint_lock);
