@@ -3421,8 +3421,13 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             dispatch_bits &= ~METHOD_SIG_NO_LOSERS;
             // Clear METHOD_SIG_LATEST_WHICH bit
             jl_atomic_store_relaxed(&m->dispatch_status, 0);
-            // Take over the interference list from the replaced method
-            // (TODO: we should consider recomputing it instead, since type-equal doesn't imply more-specific-equal)
+            // Take over the interference list from the replaced method.
+            // (TODO: we should consider recomputing it instead, since type-equal
+            // doesn't imply more-specific-equal: an inherited edge may misstate
+            // this method's specificity against a third method, silently making
+            // the interference records diverge from ground truth. When debugging
+            // a suspected missed ambiguity, re-enable the expensive cross-check
+            // in `method_morespecific_recorded` to detect such divergence.)
             jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
             if (interferences->length == 0) {
                 interferences = jl_genericmemory_copy(m_interferences);
@@ -5564,6 +5569,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
     // ambiguity, else an ambiguous call would be reported as having no applicable
     // method (see test `AmbigNoBeatAll`).
     jl_method_match_t *minmax = NULL;
+    size_t minmax_idx = 0;
     int minmax_dominates = 0;
     int any_subtypes = 0;
     if (len > 1) {
@@ -5582,6 +5588,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 // without exploring the list any further.
                 if (jl_atomic_load_relaxed(&m->interferences)->length == 0) {
                     minmax = matc;
+                    minmax_idx = i;
                     minmax_dominates = 1;
                     break;
                 }
@@ -5598,6 +5605,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 if (j == len) {
                     // Found the minmax method.
                     minmax = matc;
+                    minmax_idx = i;
                     break;
                 }
             }
@@ -5669,13 +5677,11 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
         jl_method_t *minmaxm = NULL;
         if (minmax != NULL) {
             minmaxm = minmax->method;
-            for (i = 0; i < len; i++) {
-                if ((jl_method_match_t*)jl_array_ptr_ref(t, i) == minmax) {
-                    visited.items[i] = (void*)1;
-                    break;
-                }
-            }
-            assert(i < len);
+            // `t` is unchanged since `minmax_idx` was recorded: the only
+            // reorder above (the all-subtypes fast path) leaves len == 1,
+            // which skips this block.
+            assert((jl_method_match_t*)jl_array_ptr_ref(t, minmax_idx) == minmax);
+            visited.items[minmax_idx] = (void*)1;
         }
         if (approximate_ambig) // if we don't care about the result, set it now so we won't bother attempting to compute it accurately later
             has_ambiguity = 1;
@@ -5754,9 +5760,8 @@ JL_DLLEXPORT int jl_sort_method_matches(jl_array_t *t, int include_ambiguous) JL
 //
 // See below for the meaning of lim.
 //
-// fully-covers is a Bool indicating subtyping, though temporarily it may be
-// tri-values, with `nothing` indicating a match that is not a subtype, but
-// which is dominated by one which is (and thus should be excluded unless ambiguous)
+// fully-covers is a Bool indicating whether the queried type is a subtype of
+// the method signature.
 static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               int intersections, size_t world, int cache_result_recursion,
