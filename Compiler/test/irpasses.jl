@@ -2174,21 +2174,42 @@ let src = code_typed1(foosvalconstprop, ())
     @test count(is_constfield_load, src.code) == 0
 end
 
-# JuliaLang/julia#58330: fold scoped value reads after setting the same key
+# JuliaLang/julia#58330: propagate SROA type refinements through scoped value reads and comparisons
 const sval58330 = ScopedValue(1)
-let (ir, _) = only(Base.code_ircode(()) do
-        @with sval58330 => 2 sval58330[]
-    end)
-    ret = only(filter(isreturn, ir.stmts.stmt))
-    @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+struct SROAEgalNonConst
+    x::Any
 end
-let (ir, _) = only(Base.code_ircode(()) do
-        with(sval58330 => 2) do
-            sval58330[]
-        end
-    end)
-    ret = only(filter(isreturn, ir.stmts.stmt))
-    @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+
+@testset "SROA type refinement propagation" begin
+    let (ir, _) = only(Base.code_ircode(()) do
+            @with sval58330 => 2 sval58330[]
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+    end
+
+    let (ir, _) = only(Base.code_ircode(()) do
+            with(sval58330 => 2) do
+                sval58330[]
+            end
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+    end
+
+    let (ir, _) = only(Base.code_ircode(
+            (Bool, Int, Float64, String); optimize_until="CC: SROA") do b, x, y, z
+            local val
+            if b
+                val = SROAEgalNonConst(x)
+            else
+                val = SROAEgalNonConst(y)
+            end
+            val.x === z
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === false
+    end
 end
 # JuliaLang/julia #59548
 # Rewrite `Core._apply_iterate` to use `Core.svec` instead of `tuple` to better match
