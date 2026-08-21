@@ -716,6 +716,87 @@ let m1 = which(AmbigLoserRegion.s, Tuple{Union{AmbigLoserRegion.LikeSigned,Ambig
     @test !Base.isambiguous(m1, m2)
 end
 
+# the order the dominating covers are consulted in must not affect the answer:
+# here the first recorded cover of method 1 (method 2) fails the dominance
+# transfer because the mutual partner (method 3) beats it, but the later cover
+# (method 4) certifies every removal, so the query is resolved and no ambiguity
+# may be reported
+module AmbigCoverRetry
+abstract type LikeSigned end
+struct LikeInt <: LikeSigned end
+abstract type LikeString end
+struct LikeStr <: LikeString end
+struct LikeMissing end
+struct Unrelated end
+s(x::Union{LikeSigned,LikeMissing}, y::LikeInt...) = 1         # m1: mutual with m3
+s(x::T, y::T...) where {T<:Union{LikeInt,LikeString}} = 2      # m2: first cover of m1, loses to m3
+s(x::Union{LikeSigned,LikeStr,LikeMissing}, y::LikeStr...) = 3 # m3: mutual with m1, beats m2
+s(x::LikeInt) = 4                                              # m4: beats m1, m2 and m3, certifying their removal
+s(x::Unrelated) = 5                                            # keeps the query below from being fully covered
+end
+@test AmbigCoverRetry.s(AmbigCoverRetry.LikeInt()) == 4
+@test AmbigCoverRetry.s(AmbigCoverRetry.Unrelated()) == 5
+@test_throws MethodError AmbigCoverRetry.s(AmbigCoverRetry.LikeMissing()) # m1~m3 is genuinely ambiguous outside the query below
+for include_ambiguous in (false, true)
+    ambig = Ref{Int32}(0)
+    matches = Base._methods_by_ftype(
+        Tuple{typeof(AmbigCoverRetry.s), Union{AmbigCoverRetry.LikeInt, AmbigCoverRetry.Unrelated}},
+        nothing, -1, Base.get_world_counter(), include_ambiguous,
+        Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ambig[] == 0
+    @test length(matches) == 2
+    @test Set(m.method for m in matches) ==
+        Set([which(AmbigCoverRetry.s, Tuple{AmbigCoverRetry.LikeInt}), which(AmbigCoverRetry.s, Tuple{AmbigCoverRetry.Unrelated})])
+end
+
+# a dominance-dropped match must still report the mutual pairs it witnesses even
+# when the partner is the minmax method, which the sort never visits (so
+# `check_fully_ambiguous` never runs for it): here method 2 is mutually
+# ambiguous with method 1 (the minmax) and is dropped because method 3 covers
+# it, but method 1 beats method 3, so removing method 2 leaves nothing blocking
+# method 1 over the contested region -- the unordered-blockers scan in
+# `check_dominance_transfer` is the only witness of this genuine ambiguity
+module AmbigMinmaxPartner
+abstract type LikeSigned end
+struct LikeInt <: LikeSigned end
+abstract type LikeString end
+struct LikeStr <: LikeString end
+struct LikeMissing end
+s(x::LikeInt, y::LikeInt...) = 1                               # m1: minmax
+s(x::Union{LikeInt,LikeMissing,LikeString}, y::LikeStr...) = 2 # m2: partial, mutual with m1
+s(x::Union{LikeInt,LikeStr}, y::LikeInt...) = 3                # m3: m1 ≻ m3 ≻ m2 (non-transitive)
+end
+module AmbigMinmaxPartnerReorder # same set, m3 inserted before m2
+abstract type LikeSigned end
+struct LikeInt <: LikeSigned end
+abstract type LikeString end
+struct LikeStr <: LikeString end
+struct LikeMissing end
+s(x::LikeInt, y::LikeInt...) = 1                               # m1
+s(x::Union{LikeInt,LikeStr}, y::LikeInt...) = 3                # m3
+s(x::Union{LikeInt,LikeMissing,LikeString}, y::LikeStr...) = 2 # m2
+end
+for M in (AmbigMinmaxPartner, AmbigMinmaxPartnerReorder)
+    m1 = which(M.s, Tuple{M.LikeInt, Vararg{M.LikeInt}})
+    m2 = which(M.s, Tuple{Union{M.LikeInt,M.LikeMissing,M.LikeString}, Vararg{M.LikeStr}})
+    m3 = which(M.s, Tuple{Union{M.LikeInt,M.LikeStr}, Vararg{M.LikeInt}})
+    @test Base.morespecific(m1, m3) && Base.morespecific(m3, m2)
+    @test !Base.morespecific(m3, m1) && !Base.morespecific(m2, m3)
+    @test !Base.morespecific(m1, m2) && !Base.morespecific(m2, m1) # unordered
+    @test_throws MethodError M.s(M.LikeInt())
+    @test Base.isambiguous(m1, m2)
+    for include_ambiguous in (false, true)
+        ambig = Ref{Int32}(0)
+        matches = Base._methods_by_ftype(
+            Tuple{typeof(M.s), M.LikeInt, Vararg{M.LikeInt}}, nothing, -1,
+            Base.get_world_counter(), include_ambiguous,
+            Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ambig[] == 1
+        # under include_ambiguous the dropped method 2 is kept to witness the pair
+        @test Set(m.method for m in matches) == (include_ambiguous ? Set([m1, m2]) : Set([m1]))
+    end
+end
+
 # complement of #62262: if the more specific methods only cover part of the
 # intersection, the uncovered part is still a genuine ambiguity (so the union
 # check must not over-resolve)

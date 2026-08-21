@@ -466,7 +466,9 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     end
                 end
                 # Fast path is legal when fully_covers=true
-                if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                # (an empty interference set is the Method-level equivalent of
+                # METHOD_SIG_LATEST_ONLY: the method beats everything it intersects)
+                if fully_covers && isempty(meth.interferences)
                     minworld = meth.primary_world
                     @assert minworld ≤ world "expected method not present in verification world"
                     maxworld = typemax(UInt)
