@@ -291,45 +291,6 @@ end
     end
 end
 
-# a primitive type with padding
-primitive type Int24 24 end
-primitive type AlsoInt24 24 end
-# This is all very broken right now
-@testset "check_strided_traits with padded primitive eltype" begin
-    a = reinterpret(Int24, collect(UInt8, 1:12))
-    z = reinterpret(Int24, zeros(UInt8, 12))
-    check_strided_traits(a)
-    @test_broken Base.is_strided(a)
-    @test !is_ptr_storable(a)
-    b = collect(a)
-    check_strided_traits(b)
-    @test is_ptr_loadable(b)
-    @test is_ptr_storable(b)
-    @test Base.is_strided(b)
-    c = reinterpret(AlsoInt24, b)
-    check_strided_traits(c)
-    @test_broken Base.is_strided(c) # elsize is currently incorrect: https://github.com/JuliaLang/julia/issues/62398
-    for N in 1:4
-        d = reinterpret(NTuple{N,UInt8}, b)
-        # b has padding that should not be exposed
-        @test !is_ptr_loadable(d)
-        check_strided_traits(d)
-        @test_broken Base.is_strided(d)
-        # check_strided_set(
-        #     deepcopy(d),
-        #     deepcopy(d),
-        #     rand(NTuple{N,UInt8}, length(d)),
-        #     (a, b) -> @test_broken(parent(a) == parent(b)),
-        # )
-        # check_strided_set(
-        #     deepcopy(d),
-        #     deepcopy(d),
-        #     fill(ntuple(Returns(0x00), N), length(d)),
-        #     (a, b) -> @test_broken(parent(a) == parent(b) == z),
-        # )
-    end
-end
-
 # IndexStyle
 test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     a = deepcopy(a_)
@@ -831,16 +792,28 @@ end
     a = reinterpret(RInt24, collect(UInt8, 1:12))
     @test length(a) == 3
     z = reinterpret(RInt24, zeros(UInt8, 12))
+    check_strided_traits(a)
+    @test Base.is_strided(a)
+    @test !is_ptr_storable(a)
     check_strided_get(a)
     b = collect(a)
     @test b == a
+    check_strided_traits(b)
+    @test is_ptr_loadable(b)
+    @test is_ptr_storable(b)
+    @test Base.is_strided(b)
     check_strided_get(b)
     c = reinterpret(RAlsoInt24, b)
+    check_strided_traits(c)
+    @test Base.is_strided(c)
     check_strided_get(c)
     for N in 1:4
         local d = reinterpret(NTuple{N,UInt8}, b)
         # b has padding that should not be exposed
+        @test !is_ptr_loadable(d)
         @test_throws Base.PaddingError d[1]
+        check_strided_traits(d)
+        @test Base.is_strided(d)
         check_strided_set(
             deepcopy(d),
             deepcopy(d),

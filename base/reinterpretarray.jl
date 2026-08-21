@@ -212,13 +212,13 @@ function is_ptr_storable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
     is_ptr_storable(P) && array_subpadding(S, T)
 end
 function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S,P,IsReshaped}
-    if !is_strided(P) || sizeof(T) != elsize(Array{T}) || sizeof(S) != elsize(Array{S})
+    if !is_strided(P)
         return false
     end
     if has_contiguous_layout(P)
         return true
     end
-    els::Int, elp::Int = sizeof(T), sizeof(S)
+    els::Int, elp::Int = aligned_sizeof(T), aligned_sizeof(S)
     if els == elp
         return true
     end
@@ -228,10 +228,7 @@ function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S
     # Unknown if parent is contiguous in the 1st dimension.
     return false
 end
-# A reinterpret array stores elements packed at `sizeof(T)` spacing, which only
-# matches the `Array{T}` layout if `T` has no alignment padding.
-is_contiguous(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P} =
-    has_contiguous_layout(P) && sizeof(T) == elsize(Array{T}) && sizeof(S) == elsize(Array{S})
+is_contiguous(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P} = has_contiguous_layout(P)
 
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
@@ -440,30 +437,20 @@ unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} =
     end
 end
 
-function check_ptr_indexable(a::ReinterpretArray{T,<:Any,S}) where {T,S}
-    aligned_sizeof(T) === aligned_sizeof(S) && return false
-    return check_ptr_indexable(parent(a))
-end
-check_ptr_indexable(a::ReshapedArray) = check_ptr_indexable(parent(a))
-check_ptr_indexable(a::FastContiguousSubArray) = check_ptr_indexable(parent(a))
-check_ptr_indexable(a::Union{Array, Memory}) = true
-check_ptr_indexable(a::AbstractArray) = false
-
 @propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
-@propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
+@propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) # that is not entirely true, but computing exactly which indexes will be accessed in the parent requires a lot of duplication from the _getindex_ra code
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
-@propagate_inbounds _isassigned_ra(a::ReinterpretArray, inds...) = true # that is not entirely true, but computing exactly which indexes will be accessed in the parent requires a lot of duplication from the _getindex_ra code
 
 @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)
-    check_ptr_indexable(a) && return _getindex_ptr(a, inds...)
+    aligned_sizeof(T) !== aligned_sizeof(S) && is_ptr_loadable(a) && return _getindex_ptr(a, inds...)
     _getindex_ra(a, inds[1], tail(inds))
 end
 
 @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i::Int) where {T,N,S}
     check_readable(a)
-    check_ptr_indexable(a) && return _getindex_ptr(a, i)
+    aligned_sizeof(T) !== aligned_sizeof(S) && is_ptr_loadable(a) && return _getindex_ptr(a, i)
     if isa(IndexStyle(a), IndexLinear)
         return _getindex_ra(a, i, ())
     end
@@ -603,13 +590,13 @@ end
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
-    check_ptr_indexable(a) && return _setindex_ptr!(a, v, inds...)
+    aligned_sizeof(T) !== aligned_sizeof(S) && is_ptr_storable(a) && return _setindex_ptr!(a, v, inds...)
     _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i::Int) where {T,N,S}
     check_writable(a)
-    check_ptr_indexable(a) && return _setindex_ptr!(a, v, i)
+    aligned_sizeof(T) !== aligned_sizeof(S) && is_ptr_storable(a) && return _setindex_ptr!(a, v, i)
     if isa(IndexStyle(a), IndexLinear)
         return _setindex_ra!(a, v, i, ())
     end

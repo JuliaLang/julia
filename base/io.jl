@@ -1055,7 +1055,7 @@ function read!(s::IO, B::BitArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
     end
     return B
 end
-  
+
 function _read_array_fallback!(s::IO, A::AbstractArray{T}) where {T}
     r = Ref{T}()
     for i in eachindex(A)
