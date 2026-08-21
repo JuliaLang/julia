@@ -1162,6 +1162,11 @@ precompilation:
   is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to CPU_THREADS + 1).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
+# Include only cache files that are ready for workers.
+function preresolved_snapshot(s::PrecompileSession)
+    @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
+end
+
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -2194,7 +2199,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     end
                 end
                 if !is_stale
-                    push!(freshpaths, freshpath)
+                    @lock s.cache_lock push!(freshpaths, freshpath)
                 end
                 if !circular && is_stale
                     Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s))
@@ -2236,7 +2241,8 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             t = @elapsed ret = begin
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch, report_timing=true)
+                                                  pid_channel=pid_ch, report_timing=true,
+                                                  preresolved=preresolved_snapshot(s))
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
@@ -2253,7 +2259,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                                 local is_stale = freshpath === nothing
                                 if !is_stale
-                                    push!(freshpaths, freshpath)
+                                    @lock s.cache_lock push!(freshpaths, freshpath)
                                     return nothing
                                 end
                                 s.logcalls === CoreLogging.Debug && @lock s.print_lock begin
@@ -2261,7 +2267,8 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 end
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch, report_timing=true)
+                                                  pid_channel=pid_ch, report_timing=true,
+                                                  preresolved=preresolved_snapshot(s))
                             end
                         end
                         if ret isa Exception
@@ -2282,10 +2289,12 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             if ret !== nothing
                                 mark_recompiled!(job)
                                 cachefile, _ = ret::Tuple{String, Union{Nothing, String}}
-                                push!(freshpaths, cachefile)
                                 build_id, _ = Base.parse_cache_buildid(cachefile)
                                 stale_cache_key = (pkg, build_id, sourcespec, cachefile, s.ignore_loaded, cacheflags)::StaleCacheKey
-                                @lock s.cache_lock s.stale_cache[stale_cache_key] = false
+                                @lock s.cache_lock begin
+                                    push!(freshpaths, cachefile)
+                                    s.stale_cache[stale_cache_key] = false
+                                end
                                 if loaded && Base.module_build_id(Base.loaded_modules[pkg]) != build_id
                                     @lock s.print_lock begin
                                         s.n_loaded += 1
