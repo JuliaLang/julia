@@ -3324,8 +3324,6 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
     if (include_ambiguous && *has_ambiguity)
         return 0; // this can only compute *has_ambiguity, which is already known
     int result = 0;
-    // Root the snapshot across the `jl_subtype` safepoints (see
-    // `check_dominance_transfer`).
     jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
     JL_GC_PUSH1(&interferences);
     for (size_t i = 0; i < interferences->length; i++) {
@@ -3414,10 +3412,8 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             // Take over the interference list from the replaced method.
             // (TODO: we should consider recomputing it instead, since type-equal
             // doesn't imply more-specific-equal: an inherited edge may misstate
-            // this method's specificity against a third method, silently making
-            // the interference records diverge from ground truth. When debugging
-            // a suspected missed ambiguity, re-enable the expensive cross-check
-            // in `method_morespecific_recorded` to detect such divergence.)
+            // this method's specificity against a third method, making the
+            // interference records incorrect.
             jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
             if (interferences->length == 0) {
                 interferences = jl_genericmemory_copy(m_interferences);
@@ -5371,13 +5367,6 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 }
 
                 // Process interferences iteratively.
-                // The set is reloaded on every iteration rather than cached in
-                // the frame: the frame lives in malloc'd memory that no GC scan
-                // can see, and a concurrent method definition may swap in a
-                // grown copy of the set, leaving a cached snapshot unreachable
-                // across the safepoints below. The entries already present are
-                // a stable prefix of any replacement, so the cached count and
-                // cursor stay valid.
                 while (current->interference_index < current->interference_count) {
                     jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&current->m->interferences);
                     jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, current->interference_index);
@@ -5435,13 +5424,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
             case STATE_CHECK_COVERS: {
                 // There is some probability that this method is already fully covered
                 // now, and we can delete this vertex now without anyone noticing.
-                // A match dominated by the minmax method needs no special case
-                // here: minmax is pre-marked visited (it is unconditionally
-                // reported), so `check_interferences_covers` can use it as a
-                // cover like any other finalized match -- together with the
-                // other covers and their union, which a lone minmax transfer
-                // could not consult (test `AmbigMinmaxUnion`).
-                if (check_interferences_covers(current->m, current->ti, t, visited, minmaxm, include_ambiguous, has_ambiguity)) {
+               if (check_interferences_covers(current->m, current->ti, t, visited, minmaxm, include_ambiguous, has_ambiguity)) {
                     visited->items[current->idx] = (void*)1;
                 }
                 else if (check_fully_ambiguous(current->m, current->ti, t, include_ambiguous, has_ambiguity)) {
@@ -5667,9 +5650,6 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
         jl_method_t *minmaxm = NULL;
         if (minmax != NULL) {
             minmaxm = minmax->method;
-            // `t` is unchanged since `minmax_idx` was recorded: the only
-            // reorder above (the all-subtypes fast path) leaves len == 1,
-            // which skips this block.
             assert((jl_method_match_t*)jl_array_ptr_ref(t, minmax_idx) == minmax);
             visited.items[minmax_idx] = (void*)1;
         }
