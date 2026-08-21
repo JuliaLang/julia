@@ -1428,7 +1428,20 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
         else
             return jl_bottom_type;
     }
-    return jl_field_type(st, field_index);
+    jl_value_t *ft = jl_field_type(st, field_index);
+    if (jl_is_computedfieldtype(ft)) {
+        // computed field type of a partial instantiation: there is no type to
+        // return until the parameters are fully concrete (n.b. deliberately
+        // not represented in the type system; use `Base.fieldtype_generator`
+        // for the partially applied form)
+        if (dothrow)
+            jl_errorf("fieldtype: field type of %s is computed from the values of the "
+                      "type parameters and is only available for fully concrete types; "
+                      "see `Base.fieldtype_generator` for partial application",
+                      jl_symbol_name(st->name->name));
+        return jl_bottom_type;
+    }
+    return ft;
 }
 
 JL_CALLABLE(jl_f_fieldtype)
@@ -1880,6 +1893,11 @@ JL_CALLABLE(jl_f_apply_type)
             JL_NARGS(apply_type, 2, 2);
             return (jl_value_t*)jl_wrap_vararg(vm->T, args[1], 1, 0);
         }
+    }
+    else if (jl_is_fieldtypegenerator(args[0])) {
+        // partially applied field generator: applied like a partially applied
+        // UnionAll (see Base.fieldtype_generator)
+        return jl_apply_fieldtype_generator(args[0], &args[1], nargs - 1);
     }
     else if (jl_is_unionall(args[0])) {
         for(i=1; i < nargs; i++) {

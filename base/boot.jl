@@ -422,6 +422,30 @@ struct TypeApp
     end
 end
 
+# Marker stored in the declared field-type slot of a struct whose field type is
+# a computed expression of the type parameters (e.g. `data::NTuple{(R::Int)*(C::Int),T}`).
+# Holds the quoted source expression for printing/reflection. The actual field
+# types of concrete instantiations are produced by the type's field generator
+# (see `Base._set_fieldtype_generator!`).
+struct ComputedFieldType
+    expr::Any
+    function ComputedFieldType(@nospecialize(expr))
+        return new(expr)
+    end
+end
+
+# The partially applied field generator of a type with computed field types
+# (see `Base.fieldtype_generator`). A plain reflection object, deliberately
+# not part of the type system. Applied with `apply_type` like a partially
+# applied UnionAll: applying some of the remaining parameters yields another
+# FieldtypeGenerator, applying all of them yields the tuple of field types.
+struct FieldtypeGenerator
+    ty::Type
+    function FieldtypeGenerator(@nospecialize(ty::Type))
+        return new(ty)
+    end
+end
+
 # Check if a value contains a TypeApp anywhere in its structure
 function _contains_typeapp(@nospecialize(x))
     if x isa TypeApp

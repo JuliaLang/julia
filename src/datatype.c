@@ -94,6 +94,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     jl_atomic_store_relaxed(&tn->cache_entry_count, 0);
     tn->constprop_heustic = 0;
     tn->concrete_only = 0;
+    jl_atomic_store_relaxed(&tn->fieldgen, NULL);
     return tn;
 }
 
@@ -2787,12 +2788,64 @@ void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name)
     size_t nf = jl_svec_len(ftypes);
     for (size_t i = 0; i < nf; i++) {
         jl_value_t *elt = jl_svecref(ftypes, i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+        if (!jl_is_type(elt) && !jl_is_typevar(elt) && !jl_is_computedfieldtype(elt)) {
             jl_type_error_rt(jl_symbol_name(type_name),
                              "type definition",
                              (jl_value_t*)jl_type_type, elt);
         }
     }
+}
+
+// Return whether any declared field-type slot is a Core.ComputedFieldType marker.
+int jl_svec_has_computedfields(jl_svec_t *types) JL_NOTSAFEPOINT
+{
+    size_t nf = jl_svec_len(types);
+    for (size_t i = 0; i < nf; i++) {
+        if (jl_is_computedfieldtype(jl_svecref(types, i)))
+            return 1;
+    }
+    return 0;
+}
+
+// Structural equality for the quoted source ASTs stored in ComputedFieldType
+// markers (jl_egal on Expr is identity, which would defeat the redefinition
+// equivalence check).
+static int computed_field_ast_equal(jl_value_t *a, jl_value_t *b)
+{
+    if (a == b)
+        return 1;
+    if (jl_typeof(a) != jl_typeof(b))
+        return 0;
+    if (jl_is_expr(a)) {
+        jl_expr_t *ea = (jl_expr_t*)a, *eb = (jl_expr_t*)b;
+        if (ea->head != eb->head)
+            return 0;
+        size_t l = jl_expr_nargs(ea);
+        if (l != jl_expr_nargs(eb))
+            return 0;
+        for (size_t i = 0; i < l; i++) {
+            if (!computed_field_ast_equal(jl_exprarg(ea, i), jl_exprarg(eb, i)))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_quotenode(a))
+        return computed_field_ast_equal(jl_quotenode_value(a), jl_quotenode_value(b));
+    return jl_egal(a, b);
+}
+
+// Install the field generator for a type with computed field types. Called by
+// Base._set_fieldtype_generator! shortly after the type definition.
+JL_DLLEXPORT void jl_set_fieldtype_generator(jl_value_t *ty, jl_value_t *fieldgen)
+{
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(ty);
+    if (!jl_is_datatype(dt))
+        jl_type_error("_set_fieldtype_generator!", (jl_value_t*)jl_datatype_type, (jl_value_t*)dt);
+    jl_typename_t *tn = dt->name;
+    if (dt->types == NULL || !jl_svec_has_computedfields(dt->types))
+        jl_errorf("type %s does not have computed field types", jl_symbol_name(tn->name));
+    jl_atomic_store_release(&tn->fieldgen, fieldgen);
+    jl_gc_wb(tn, fieldgen);
 }
 
 // Resolve multiple typegroup types atomically into real DataTypes
@@ -3115,6 +3168,17 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             for (size_t j = 0; j < nf; j++) {
                 jl_value_t *old_ft = jl_svecref(old_dt->types, j);
                 new_ft = jl_svecref(new_dt->types, j);
+                // Computed field types compare by their quoted source AST
+                // (marker objects are freshly allocated on each definition).
+                if (jl_is_computedfieldtype(old_ft) || jl_is_computedfieldtype(new_ft)) {
+                    if (!jl_is_computedfieldtype(old_ft) || !jl_is_computedfieldtype(new_ft) ||
+                        !computed_field_ast_equal(((jl_computedfieldtype_t*)old_ft)->expr,
+                                                  ((jl_computedfieldtype_t*)new_ft)->expr)) {
+                        fields_match = 0;
+                        break;
+                    }
+                    continue;
+                }
                 // Self-references in the new fields point at the new type; map
                 // them to the old type so an identical redefinition compares
                 // equal (issues #21816, #61789).

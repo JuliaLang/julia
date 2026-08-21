@@ -937,6 +937,27 @@
                               (thismodule) ,name))))
         field-types))
 
+;; Does expression e reference (syntactically) any of the symbols in syms?
+(define (expr-references-any? e syms)
+  (cond ((symbol? e) (if (memq e syms) #t #f))
+        ((and (pair? e) (not (quoted? e)))
+         (any (lambda (x) (expr-references-any? x syms)) (cdr e)))
+        (else #f)))
+
+;; A field type expression is "computed" if it contains a function call or a
+;; typeassert that references one of the struct's type parameters. Such an
+;; expression cannot be evaluated at definition time (the parameters are bound
+;; to TypeVars there); it is instead kept as a quoted AST in the declared field
+;; type slot (Core.ComputedFieldType) and evaluated by the type's field
+;; generator when a concrete instantiation is created.
+(define (computed-field-type? e params)
+  (cond ((not (pair? e)) #f)
+        ((quoted? e) #f)
+        ((and (memq (car e) '(call |::|))
+              (expr-references-any? e params))
+         #t)
+        (else (any (lambda (x) (computed-field-type? x params)) (cdr e)))))
+
 ;; Generate struct definition info and constructor definitions.
 ;; All struct definitions use the typegroup mechanism (resolve_typegroup).
 ;;
@@ -973,9 +994,19 @@
           (field-names (map decl-var fields))
           (field-types (map decl-type fields))
           (min-initialized (min (ctors-min-initialized defs) (length fields)))
-          (ftypes-expr (if use-shim
-                           (insert-struct-shim field-types name)
-                           field-types)))
+          (computed-flags (map (lambda (ft) (computed-field-type? ft params)) field-types))
+          (has-computed   (any (lambda (x) x) computed-flags))
+          (ftypes-expr (map (lambda (ft cf orig)
+                              ;; computed field types are kept as a quoted AST
+                              ;; marker; the field generator evaluates them
+                              (if cf
+                                  `(call (core ComputedFieldType) (inert ,orig))
+                                  ft))
+                            (if use-shim
+                                (insert-struct-shim field-types name)
+                                field-types)
+                            computed-flags
+                            field-types)))
      (let ((dups (has-dups field-names)))
        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
@@ -996,12 +1027,25 @@
              ,mut ,min-initialized ,super (call (core svec) ,@ftypes-expr)))))
        ;; Constructor definitions: always define ctors so they are available
        ;; alongside (replacing) old ones during redefinition.
-       ,(if (null? defs)
-          `(call (top _defaultctors) ,name (inert ,loc))
-          `(scope-block
-            (block
-             (hardscope)
-             ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types)) defs))))))))
+       ,(let ((ctors (if (null? defs)
+                         `(call (top _defaultctors) ,name (inert ,loc))
+                         `(scope-block
+                           (block
+                            (hardscope)
+                            ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types)) defs))))))
+          (if has-computed
+              ;; Install the field generator: a function mapping the type
+              ;; parameter values to the tuple of field types. Validated (and
+              ;; eventually detached from the world age) by Base. n.b. the
+              ;; generator returns a tuple, not an svec: svec egality is
+              ;; identity, which would preclude proving the generator
+              ;; `:consistent`.
+              `(block
+                (call (top _set_fieldtype_generator!) ,name
+                      (-> (tuple ,@params)
+                          (block ,loc (call (core tuple) ,@field-types))))
+                ,ctors)
+              ctors))))))
 
 (define (abstract-type-def-expr name params super)
   (receive

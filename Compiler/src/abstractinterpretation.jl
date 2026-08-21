@@ -3435,7 +3435,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
             local allconst = isconcretedispatch(rt)
             for i = 1:nargs
                 at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], sstate, sv))
-                ft = fieldtype(rt, i)
+                ft = fieldtype_widened(rt, i)
                 nothrow && (nothrow = ⊑(𝕃ᵢ, at, ft))
                 at = tmeet(𝕃ᵢ, at, ft)
                 at === Bottom && return RTEffects(Bottom, TypeError, EFFECTS_THROWS)
@@ -3464,7 +3464,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                 undefs = Union{Nothing,Bool}[false for _ in 1:nargs]
                 if nargs < fcount # fill in uninitialized fields
                     for i = (nargs+1):fcount
-                        ft = fieldtype(rt, i)
+                        ft = fieldtype_widened(rt, i)
                         push!(ats, ft)
                         if ft === Union{} # `Union{}`-typed field is never initialized
                             push!(undefs, true)

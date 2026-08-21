@@ -649,6 +649,10 @@ typedef struct {
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
     uint8_t concrete_only; // Bool: inference refuses to commit (records no backedge) at non-concrete call sites
+    // field generator for types with computed field types (declared slots hold
+    // Core.ComputedFieldType markers): NULL or svec(genfunction) or
+    // svec(genfunction, detached CodeInstance). Set once, shortly after definition.
+    _Atomic(jl_value_t*) fieldgen;
 } jl_typename_t;
 
 typedef struct {
