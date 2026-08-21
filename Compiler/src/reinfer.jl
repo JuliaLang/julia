@@ -403,13 +403,31 @@ function get_method_from_edge(@nospecialize t)
     end
 end
 
+# Iterate a method's `interferences` set. The set is an idset used append-only
+# (`jl_idset_pop` is never called on it), so its keys form a packed prefix --
+# no interior holes -- in insertion order, which is method-definition order,
+# making `primary_world` non-decreasing along the prefix (see
+# `jl_idset_put_key` in idset.c). Iteration therefore stops at the first
+# unassigned slot and, given a `world` cutoff, at the first entry defined in a
+# future world (which hides all later ones too).
+struct EachInterference
+    interferences::Memory{Any}
+    world::UInt # typemax(UInt) means no world cutoff
+end
+eachinterference(m::Method, world::UInt=typemax(UInt)) = EachInterference(m.interferences, world)
+function Base.iterate(ei::EachInterference, k::Int=1)
+    interferences = ei.interferences
+    k > length(interferences) && return nothing
+    isassigned(interferences, k) || return nothing # no more entries
+    interference_method = interferences[k]::Method
+    ei.world < interference_method.primary_world && return nothing # this and later entries are for a future world
+    return interference_method, k + 1
+end
+
 # Check if method2 is in method1's interferences set
 # Returns true if method2 is found (meaning !morespecific(method1, method2))
 function method_in_interferences(method2::Method, method1::Method)
-    interferences = method1.interferences
-    for k = 1:length(interferences)
-        isassigned(interferences, k) || break
-        interference_method = interferences[k]::Method
+    for interference_method in eachinterference(method1)
         if interference_method === method2
             return true
         end
@@ -421,6 +439,87 @@ end
 # `ml_matches`: the scan probes every member with `typeintersect`, so above this size the
 # pruned `ml_matches` lookup is cheaper (~8 is the empirical crossover).
 const VERIFY_INTERF_CAP = 8
+
+# The unexpected `interference_method`, recorded in expected method `meth`'s
+# interference set, intersects the queried `sig` over the nonempty `ti`.
+# Decide whether the sort provably prunes it silently: acceptance implies the
+# full `ml_matches` lookup would return exactly the expected methods
+# `expecteds[i:i+n-1]` with no ambiguity flag.
+function newcomer_prunes_silently(meth::Method, interference_method::Method, @nospecialize(ti),
+                                  expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
+    if method_in_interferences(meth, interference_method)
+        # Mutually ambiguous with the expected method whose set is being
+        # scanned: the fresh sort always flags this pair (both stay in the
+        # intersecting-match list), so only the full lookup can decide this
+        # edge.
+        return false
+    end
+    # This method strictly beats the scanned set's owner. Look for a
+    # different expected method that covers it over this intersection
+    # and provably certifies the removal as silent: only an expected
+    # with an EMPTY interference set qualifies, since such a method
+    # beats everything it intersects, so:
+    #  - nothing beats or ties it, so it can never sit in a
+    #    specificity cycle and always finalizes before the sort
+    #    needs it as a cover;
+    #  - every blocker transfer through it passes automatically;
+    #  - being recorded in the set of every method it intersects, it
+    #    patches any blocker-transfer region inside its signature
+    #    for the other drops too.
+    # The `Union{}` bottom-slurp methods are exactly this shape,
+    # keeping verification fast when a later-added method intersects
+    # sig only at the `Type{Union{}}` corner they resolve. Any other
+    # unexpected entry is left to the full lookup (the sort's
+    # dominance-transfer protocol): anything weaker re-opens the
+    # cycle counterexamples, where a cover tangled in a specificity
+    # cycle certifies a drop it must not.
+    local cover_found = false
+    for j = 1:n
+        meth2 = get_method_from_edge(expecteds[i+j-1])
+        if isempty(meth2.interferences) &&
+            method_in_interferences(meth2, interference_method) &&
+            ti <: meth2.sig
+            cover_found = true
+            break
+        end
+    end
+    # This cheap search is the common bail, so it runs before the beater
+    # scan below (each probe of which is a linear set scan of its own).
+    cover_found || return false
+    # Additionally require every strict beater of this method to
+    # have an empty interference set itself (like the cover, such a
+    # beater cannot continue a specificity cycle). This is what
+    # makes accepting purely conservative -- an acceptance implies
+    # the full lookup would return exactly the expected methods with
+    # no ambiguity -- because scanning only the expected methods'
+    # sets then witnesses every dangerous change:
+    #  - fully_covers means every method intersecting sig intersects
+    #    some expected pointwise;
+    #  - methods invisible here (strictly beaten by every expected
+    #    they intersect, hence in no expected's set) always prune
+    #    silently: the union of their intersecting expecteds covers
+    #    them, and a failing blocker transfer would need a blocker
+    #    that beats an expected cover -- visible by recording;
+    #  - any cycle that could flag or change the result must thread
+    #    an expected, entering through a visible strict beater of
+    #    it -- an entry of this scan, which is either rejected here
+    #    or, by the beater condition, provably not on any cycle.
+    # Without the beater condition, a cycle through invisible
+    # methods could re-enter the beaten expected behind this scan's
+    # back (dragging it into an SCC mid-sort, where it stops
+    # covering the invisible members and they survive into the
+    # result): detecting that re-entry edge directly would mean
+    # intersecting this method's own set against sig -- the full
+    # lookup's price.
+    for beater in eachinterference(interference_method, world)
+        if !isempty(beater.interferences) &&
+            !method_in_interferences(interference_method, beater)
+            # a strict beater that could itself sit on a cycle
+            return false
+        end
+    end
+    return true
+end
 
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, matches::Vector{Any})
     # verify that these edges intersect with the same methods as before
@@ -490,6 +589,9 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                 if interference_minworld < meth.primary_world
                     interference_minworld = meth.primary_world
                 end
+                # manual `eachinterference(meth, world)`: the deleted-entry check
+                # below runs before the world cutoff, so a deleted future-world
+                # entry conservatively fails the fast path instead of being hidden
                 interferences = meth.interferences
                 for k = 1:length(interferences)
                     isassigned(interferences, k) || break # no more entries
@@ -515,85 +617,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                             # pruned result below would compare equal), it can make `ml_matches`
                             # flag an ambiguity -- a mutual pair or a specificity cycle with a
                             # reported match -- which must invalidate below.
-                            if method_in_interferences(meth, interference_method)
-                                # Mutually ambiguous with the expected method whose set is
-                                # being scanned: the fresh sort always flags this pair (both
-                                # stay in the intersecting-match list), so only the full
-                                # lookup can decide this edge.
-                                interference_fast_path_success = false
-                                break
-                            end
-                            # This method strictly beats the scanned set's owner. Look for a
-                            # different expected method that covers it over this intersection
-                            # and provably certifies the removal as silent: only an expected
-                            # with an EMPTY interference set qualifies, since such a method
-                            # beats everything it intersects, so:
-                            #  - nothing beats or ties it, so it can never sit in a
-                            #    specificity cycle and always finalizes before the sort
-                            #    needs it as a cover;
-                            #  - every blocker transfer through it passes automatically;
-                            #  - being recorded in the set of every method it intersects, it
-                            #    patches any blocker-transfer region inside its signature
-                            #    for the other drops too.
-                            # The `Union{}` bottom-slurp methods are exactly this shape,
-                            # keeping verification fast when a later-added method intersects
-                            # sig only at the `Type{Union{}}` corner they resolve. Any other
-                            # unexpected entry is left to the full lookup (the sort's
-                            # dominance-transfer protocol): anything weaker re-opens the
-                            # cycle counterexamples, where a cover tangled in a specificity
-                            # cycle certifies a drop it must not.
-                            #
-                            # Additionally require every strict beater of this method to
-                            # have an empty interference set itself (like the cover, such a
-                            # beater cannot continue a specificity cycle). This is what
-                            # makes accepting purely conservative -- an acceptance implies
-                            # the full lookup would return exactly the expected methods with
-                            # no ambiguity -- because scanning only the expected methods'
-                            # sets then witnesses every dangerous change:
-                            #  - fully_covers means every method intersecting sig intersects
-                            #    some expected pointwise;
-                            #  - methods invisible here (strictly beaten by every expected
-                            #    they intersect, hence in no expected's set) always prune
-                            #    silently: the union of their intersecting expecteds covers
-                            #    them, and a failing blocker transfer would need a blocker
-                            #    that beats an expected cover -- visible by recording;
-                            #  - any cycle that could flag or change the result must thread
-                            #    an expected, entering through a visible strict beater of
-                            #    it -- an entry of this scan, which is either rejected here
-                            #    or, by the beater condition, provably not on any cycle.
-                            # Without the beater condition, a cycle through invisible
-                            # methods could re-enter the beaten expected behind this scan's
-                            # back (dragging it into an SCC mid-sort, where it stops
-                            # covering the invisible members and they survive into the
-                            # result): detecting that re-entry edge directly would mean
-                            # intersecting this method's own set against sig -- the full
-                            # lookup's price.
-                            local beaters_safe = true
-                            let interferences2 = interference_method.interferences
-                                for k2 = 1:length(interferences2)
-                                    isassigned(interferences2, k2) || break # no more entries
-                                    beater = interferences2[k2]::Method
-                                    world < beater.primary_world && break # this and later entries are for a future world
-                                    if !isempty(beater.interferences) &&
-                                        !method_in_interferences(interference_method, beater)
-                                        # a strict beater that could itself sit on a cycle
-                                        beaters_safe = false
-                                        break
-                                    end
-                                end
-                            end
-                            if beaters_safe
-                                for j2 = 1:n
-                                    meth2 = get_method_from_edge(expecteds[i+j2-1])
-                                    if isempty(meth2.interferences) &&
-                                        method_in_interferences(meth2, interference_method) &&
-                                        ti <: meth2.sig
-                                        found_in_expecteds = true
-                                        break
-                                    end
-                                end
-                            end
-                            if !found_in_expecteds
+                            if !newcomer_prunes_silently(meth, interference_method, ti, expecteds, i, n, world)
                                 interference_fast_path_success = false
                                 break
                             end
