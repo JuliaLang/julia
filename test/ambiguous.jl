@@ -1001,6 +1001,78 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
     end
 end
 
+# The mutual-pair shape: the canonical `Type{Union{}}`-slurp recovery.
+# Where the newcomer is mutually ambiguous with the fully-covering expected owner
+# (their only overlap is the corner the slurp resolves), and the fresh sort
+# keeps the pair silent through the owner's minmax exemption; the fast path
+# must certify exactly that and accept without the full lookup.
+module VerifyCallSlurp
+abstract type QA end
+abstract type QB end
+q(::Type{<:QA}) = 1        # qA: the recorded owner, fully covers the edge below
+q(::Type{Union{}}) = 0     # qS: the slurp, with an empty interference set
+# the control family: same shape, but no slurp to resolve the corner
+abstract type UA end
+abstract type UB end
+u(::Type{<:UA}) = 1        # uA
+end
+let verify_call = Base.Compiler.ReinferUtils.verify_call,
+    method_in_interferences = Base.Compiler.ReinferUtils.method_in_interferences,
+    q = VerifyCallSlurp.q,
+    mA = which(q, Tuple{Type{VerifyCallSlurp.QA}}),
+    mS = which(q, Tuple{Type{Union{}}}),
+    sig = Tuple{typeof(q), Type{T}} where T<:VerifyCallSlurp.QA,
+    expecteds = Core.svec(mS, mA)
+    # the unchanged recorded state revalidates
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 2, Base.get_world_counter(), true, Any[])
+        @test maxw == typemax(UInt)
+    end
+    VerifyCallSlurp.eval(:(q(::Type{<:QB}) = 2))
+    mB = which(q, Tuple{Type{VerifyCallSlurp.QB}})
+    # the mutual pair is recorded on both edges; the slurp beats both
+    @test method_in_interferences(mA, mB) && method_in_interferences(mB, mA)
+    @test isempty(mS.interferences) && method_in_interferences(mS, mB)
+    # ground truth: the fresh sort prunes the newcomer silently (the owner's
+    # minmax exemption is what keeps the mutual pair from being flagged)
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(sig, nothing, -1, Base.get_world_counter(), false,
+                                    Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test length(ms) == 2 && ambig[] == 0
+    end
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 2, Base.get_world_counter(), true, Any[])
+        @test maxw == typemax(UInt)
+    end
+    # the fallback would also revalidate this edge (the pruned match set is
+    # unchanged), so additionally pin that the fast-path predicate itself
+    # accepts, and that it rejects when the owner does not fully cover the query
+    let newcomer_prunes_silently = Base.Compiler.ReinferUtils.newcomer_prunes_silently,
+        ti = typeintersect(sig, mB.sig)
+        @test newcomer_prunes_silently(mA, mB, ti, sig, expecteds, 1, 2, Base.get_world_counter())
+        let sig2 = Tuple{typeof(q), Type{T}} where T, ti2 = typeintersect(sig2, mB.sig)
+            @test !newcomer_prunes_silently(mA, mB, ti2, sig2, Core.svec(mS, mA, mB), 1, 3, Base.get_world_counter())
+        end
+    end
+end
+# The control: the same mutual corner pair with no slurp cover must invalidate due to the added ambiguity.
+let verify_call = Base.Compiler.ReinferUtils.verify_call,
+    u = VerifyCallSlurp.u,
+    uA = which(u, Tuple{Type{VerifyCallSlurp.UA}}),
+    sig = Tuple{typeof(u), Type{T}} where T<:VerifyCallSlurp.UA,
+    expecteds = Core.svec(uA)
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, Any[])
+        @test maxw == typemax(UInt)
+    end
+    VerifyCallSlurp.eval(:(u(::Type{<:UB}) = 2))
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(sig, nothing, -1, Base.get_world_counter(), false,
+                                    Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test length(ms) == 1 && ambig[] == 1
+    end
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, Any[])
+        @test maxw == 0
+    end
+end
+
 # A method is selected only when it is more specific than every other
 # applicable method, so a match that is itself dominated can still make a call
 # ambiguous by blocking the would-be winner. Here 3 ≻ 2, 2 ≻ 1 and 3 is unordered
