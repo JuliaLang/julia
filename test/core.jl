@@ -9442,6 +9442,7 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test supertype(lazy) isa Type # forcing accessor
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
+end
 
 @testset "detached TypeVarRef values through apply_type and dispatch keys" begin
     r = TypeVarRef(1)
@@ -9524,3 +9525,38 @@ let P = ShiftFragPH{Float64, Vector{Float64}, Int}
     @test frag === ShiftFragVP{Core.TypeVarRef(3)}
     @test getfield(frag, :super) === ShiftFragVRep{Core.TypeVarRef(3)}
 end
+
+# review of the de Bruijn refactor: a deferred (lazily computed) supertype must
+# present the same field-access semantics to compiled and interpreted code
+module DeferredSuper62272
+struct T{A} <: AbstractArray{T{Tuple{A}}, 1} end
+end
+let root = Base.unwrap_unionall(DeferredSuper62272.T)
+    d1 = supertype(root).parameters[1]
+    lazy = supertype(d1).parameters[1]
+    @noinline compiled_isdef(x::DataType) = isdefined(x, :super)
+    # the slot can be filled at any moment by unrelated activity, so bracket
+    # the interpreted read with compiled reads and require monotone agreement
+    c1 = compiled_isdef(Base.inferencebarrier(lazy))
+    itp = Core.eval(@__MODULE__, :(isdefined($lazy, :super)))
+    c2 = compiled_isdef(Base.inferencebarrier(lazy))
+    @test c1 <= itp <= c2
+    @test supertype(lazy) isa Type # forcing accessor
+    @test isdefined(lazy, :super)
+    @test getfield(lazy, :super) === supertype(lazy)
+end
+
+# typemap: a `Type{<:S{T}} where T` argument's local binder must not be keyed
+# by the signature's binder of the same de Bruijn index (indexed typemaps)
+module TypemapLocalBinder
+abstract type E end
+struct PI{T} end
+struct RR <: AbstractArray{Int,1} end
+for i in 1:20
+    @eval struct $(Symbol(:S, i)){T} end
+    @eval E(::Type{$(Symbol(:S, i)){T}}) where {T} = $i
+end
+E(::Type{PI{T}}) where {T<:AbstractArray} = :AA
+E(::Type{<:PI{T}}) where {T<:RR} = :RR
+end
+@test TypemapLocalBinder.E(TypemapLocalBinder.PI{TypemapLocalBinder.RR}) === :RR

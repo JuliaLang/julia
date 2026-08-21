@@ -3556,3 +3556,33 @@ end
         end
     end
 end
+
+# review of the de Bruijn refactor: a detached fragment's dangling reference
+# must not be captured by a binder on the other side of the query
+let raw = getfield(Vector, :inner),
+    X = Type{raw},
+    S = TypeVar(:S),
+    Y = UnionAll(S, Union{DataType, Ref{S}})
+    @test raw isa X
+    @test raw isa Y
+    @test X <: DataType
+    @test DataType <: Y
+    @test X <: Y
+    @test typeintersect(X, Y) === X
+    f_dangling_key(::Union{DataType, Ref{S2}}) where {S2} = 1
+    @test f_dangling_key(raw) == 1
+    @test hasmethod(f_dangling_key, Tuple{Type{raw}})
+    @test invoke(f_dangling_key, Tuple{Type{raw}}, raw) == 1
+end
+
+# typejoin must return an upper bound when the operands' bodies are
+# structurally identical raw terms under different binder bounds; occurrences
+# join through their own binder's bound
+let a = Tuple{T, T} where T<:Number,
+    b = Tuple{S, S} where S<:AbstractString
+    j = typejoin(a, b)
+    @test a <: j
+    @test b <: j
+    @test typejoin(a, a) === a
+    @test typejoin(Tuple{T, Int} where T<:Signed, Tuple{UInt8, Int}) === Tuple{Integer, Int}
+end
