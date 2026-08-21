@@ -195,6 +195,25 @@ end
         @test v::T === Core.Intrinsics.trunc_int(T, typemax(UInt64))
     end
 
+    # A 1-bit primitive is not a Bool: boxing must keep its own type.
+    primitive type TestUInt1 1 end
+    box1(n::UInt8) = Ref{Any}(Core.Intrinsics.trunc_int(TestUInt1, n))[]
+    let one = Ref(0x01)[], zero = Ref(0x00)[]
+        @test box1(one) isa TestUInt1
+        @test box1(one) === Core.Intrinsics.trunc_int(TestUInt1, one)
+        @test box1(one) !== box1(zero)
+    end
+    # Bool keeps boxing to the `jl_true`/`jl_false` singletons, which `===` on
+    # Bool depends on (`jl_pointer_egal`); `===` alone compares by value here,
+    # so check the address. Both boxing paths: plain and via a union.
+    addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+    boxbool(b::Bool) = Ref{Any}(b)[]
+    boxboolunion(x::Union{Bool,Int}) = Ref{Any}(x)[]
+    let t = Ref(true)[], f = Ref(false)[]
+        @test addr(boxbool(t)) === addr(true) && addr(boxbool(f)) === addr(false)
+        @test addr(boxboolunion(t)) === addr(true) && addr(boxboolunion(f)) === addr(false)
+    end
+
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
 
