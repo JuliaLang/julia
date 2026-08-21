@@ -1,0 +1,34 @@
+From de3e1f5e11f533d8678474eb9234ba35efa960d6 Mon Sep 17 00:00:00 2001
+From: Breno Rodrigues Guimaraes <brenorg@gmail.com>
+Date: Mon, 20 Feb 2023 18:22:17 -0300
+Subject: [PATCH] Add one extra page to avoid overlapping with next page if its
+ rounded down
+
+Backport of https://github.com/NixOS/patchelf/pull/469 (released in
+patchelf 0.18.0) to 0.17.2, which we are pinned to because of
+https://github.com/NixOS/patchelf/issues/492.
+
+When `--set-rpath` has to grow `.dynstr`, patchelf moves the affected
+sections into a new segment placed just before the first PT_LOAD. If the
+size of that new segment is not a multiple of the page size, its last
+page can overlap with the (rounded-down) first page of the following
+segment. Linux tolerates that, but the FreeBSD ELF image activator maps
+segments with MAP_CHECK_EXCL and execve() then fails after the point of
+no return, killing the process with an (uncatchable, coreless) SIGABRT.
+This is what happened to the `lld` we ship with LLVM 22 on FreeBSD.
+
+diff --git a/src/patchelf.cc b/src/patchelf.cc
+index ca247c12..b78210c4 100644
+--- a/src/patchelf.cc
++++ b/src/patchelf.cc
+@@ -914,7 +914,9 @@ void ElfFile<ElfFileParamNames>::rewriteSectionsExecutable()
+ 
+         /* Calculate how many bytes are needed out of the additional pages. */
+         size_t extraSpace = neededSpace - startOffset; 
+-        unsigned int neededPages = roundUp(extraSpace, getPageSize()) / getPageSize();
++        // Always give one extra page to avoid colliding with segments that start at
++        // unaligned addresses and will be rounded down when loaded
++        unsigned int neededPages = 1 + roundUp(extraSpace, getPageSize()) / getPageSize();
+         debug("needed pages is %d\n", neededPages);
+         if (neededPages * getPageSize() > firstPage)
+             error("virtual address space underrun!");
