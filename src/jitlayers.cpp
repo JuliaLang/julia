@@ -2874,6 +2874,26 @@ const char *jl_objcache_disabled_notice_impl(void) JL_CANSAFEPOINT_ENTER_LEAVE
     return jl_ExecutionEngine->objCacheDisabledNotice();
 }
 
+extern "C" JL_DLLEXPORT_CODEGEN
+jl_value_t *jl_objcache_kv_get_impl(const char *ns, const uint8_t *key,
+                                    size_t keylen) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCacheKVGet(ns, key, keylen);
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+int jl_objcache_kv_put_impl(const char *ns, const uint8_t *key, size_t keylen,
+                            const uint8_t *val, size_t vallen) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCacheKVPut(ns, key, keylen, val, vallen);
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+int jl_objcache_kv_enabled_impl(void) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCacheKVEnabled();
+}
+
 // API for adding bytes to record being owned by the JIT
 void jl_jit_add_bytes(size_t bytes)
 {

@@ -101,6 +101,24 @@ JL_DLLEXPORT const char *jl_objcache_disabled_notice_fallback(void)
     return NULL;
 }
 
+JL_DLLEXPORT jl_value_t *jl_objcache_kv_get_fallback(const char *ns, const uint8_t *key,
+                                                     size_t keylen)
+{
+    return jl_nothing;
+}
+
+JL_DLLEXPORT int jl_objcache_kv_put_fallback(const char *ns, const uint8_t *key,
+                                             size_t keylen, const uint8_t *val,
+                                             size_t vallen)
+{
+    return 0;
+}
+
+JL_DLLEXPORT int jl_objcache_kv_enabled_fallback(void)
+{
+    return 0;
+}
+
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
 {
 }
