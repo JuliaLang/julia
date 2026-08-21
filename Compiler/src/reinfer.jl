@@ -441,20 +441,58 @@ const VERIFY_INTERF_CAP = 8
 # interference set, intersects the queried `sig` over the nonempty `ti`.
 # Decide whether the sort provably prunes it silently: acceptance implies the
 # full `ml_matches` lookup would return exactly the expected methods
-# `expecteds[i:i+n-1]` with no ambiguity flag.
-function newcomer_prunes_silently(meth::Method, interference_method::Method, @nospecialize(ti),
+# `expecteds[i:i+n-1]` with no ambiguity flag caused by the new method.
+# Returns `false` conservative when a full lookup is necessary to decide.
+function newcomer_prunes_silently(meth::Method, interference_method::Method, @nospecialize(ti), @nospecialize(sig),
                                   expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
     if method_in_interferences(meth, interference_method)
         # Mutually ambiguous with the expected method whose set is being
-        # scanned: the fresh sort always flags this pair (both stay in the
-        # intersecting-match list), so only the full lookup can decide this
-        # edge.
-        return false
+        # scanned. This is the canonical `Type{Union{}}`-slurp recovery shape --
+        # f(::Type{<:A}) and f(::Type{<:B}) overlap only at the corner the
+        # slurp resolves -- so it must stay on the fast path. The fresh sort
+        # keeps the pair silent only through the minmax exemption: the sort
+        # pre-marks the minmax match finalized and never visits it, so its
+        # `check_fully_ambiguous` scan (which would flag any mutual partner
+        # still in the raw match list, dropped or not) never runs. Certify
+        # set-locally that `meth` is that minmax:
+        #  - `meth` must fully cover sig (a visited owner always flags the
+        #    pair, since the partner intersects sig and so sits in the raw
+        #    match list);
+        #  - the partner must NOT fully cover sig: minmax discovery runs over
+        #    the raw list before any drop, so a fully-covering mutual partner
+        #    disqualifies `meth` there even though it is later pruned;
+        #  - `meth` must recorded-beat every other fully-covering expected
+        #    (minmax is unique: recorded strict-beat is antisymmetric, and
+        #    this check also rejects the owner of any second mutual pair);
+        #  - a fully-covering newcomer that `meth` does not beat would steal
+        #    minmax, but needs no check here: it is itself a visible entry of
+        #    `meth`'s set, and its own certification fails -- as a mutual
+        #    entry by the partner-covers-sig condition above, and as a strict
+        #    beater because its empty-set cover would have to fully cover sig,
+        #    and an expected with those properties would have dropped `meth`
+        #    from the recorded result in the first place.
+        # The drop of the partner and its blocker-transfer obligations are
+        # then certified by the shared conditions below, exactly as for a
+        # strict beater: an empty-set cover's transfers are all automatic
+        # (nothing beats it, and it patches any transfer region inside its
+        # signature), and the beater scan keeps the partner off any
+        # specificity cycle.
+        sig <: meth.sig || return false
+        sig <: interference_method.sig && return false
+        for j = 1:n
+            meth2 = get_method_from_edge(expecteds[i+j-1])
+            meth2 === meth && continue
+            if sig <: meth2.sig
+                if !(method_in_interferences(meth, meth2) && !method_in_interferences(meth2, meth))
+                    return false
+                end
+            end
+        end
     end
-    # This method strictly beats the scanned set's owner. Look for a
-    # different expected method that covers it over this intersection
-    # and provably certifies the removal as silent: only an expected
-    # with an EMPTY interference set qualifies, since such a method
+    # Otherwise this method strictly beats the scanned set's owner. Either
+    # way, look for a different expected method that covers it over this
+    # intersection and provably certifies the removal as silent: only an
+    # expected with an empty interference set qualifies, since such a method
     # beats everything it intersects, so:
     #  - nothing beats or ties it, so it can never sit in a
     #    specificity cycle and always finalizes before the sort
@@ -614,7 +652,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                             # pruned result below would compare equal), it can make `ml_matches`
                             # flag an ambiguity -- a mutual pair or a specificity cycle with a
                             # reported match -- which must invalidate below.
-                            if !newcomer_prunes_silently(meth, interference_method, ti, expecteds, i, n, world)
+                            if !newcomer_prunes_silently(meth, interference_method, ti, sig, expecteds, i, n, world)
                                 interference_fast_path_success = false
                                 break
                             end
