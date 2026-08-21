@@ -1226,42 +1226,38 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         has_ambig = Ref{Int32}(0)
         ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector{Any}
         has_ambig[] == 0 && return false
-        if !ambiguous_bottom
-            filter!(ms) do m
-                return !has_bottom_parameter((m::Core.MethodMatch).spec_types)
-            end
-        end
         # if ml-matches reported the existence of an ambiguity over their
         # intersection, see if both m1 and m2 seem to be involved in it
         # (if one was fully dominated by a different method, we want to
         # report the other ambiguous pair)
-        have_m1 = have_m2 = false
-        for match in ms
-            m = (match::Core.MethodMatch).method
-            m === m1 && (have_m1 = true)
-            m === m2 && (have_m2 = true)
-        end
-        if !have_m1 || !have_m2
-            # ml-matches did not need both methods to expose the reported ambiguity
-            return false
-        end
-        if !ambiguous_bottom
-            # Since we're intentionally ignoring certain ambiguities (via the
-            # filter call above), re-run the runtime's match sort on the
-            # remaining matches and see if the solution is still holding an ambiguity
-            # and m1 and m2 are both still reported in the solution
-            if ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0
-                return false
-            end
+        function involves_both(ms)
             have_m1 = have_m2 = false
             for match in ms
                 m = (match::Core.MethodMatch).method
                 m === m1 && (have_m1 = true)
                 m === m2 && (have_m2 = true)
             end
-            if !have_m1 || !have_m2
+            return have_m1 && have_m2
+        end
+        nms = length(ms)
+        if !ambiguous_bottom
+            filter!(ms) do m
+                return !has_bottom_parameter((m::Core.MethodMatch).spec_types)
+            end
+        end
+        # ml-matches did not need both methods to expose the reported ambiguity
+        involves_both(ms) || return false
+        if length(ms) != nms
+            # Since we intentionally removed certain ambiguities (via the
+            # filter call above), re-run the runtime's match sort on the
+            # remaining matches and see if the solution is still holding an ambiguity
+            # and m1 and m2 are both still reported in the solution. When the filter
+            # removed nothing, `ms` is exactly the sorted result from above and the
+            # re-sort could only recompute the same answer.
+            if ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0
                 return false
             end
+            involves_both(ms) || return false
         end
         return true
     end

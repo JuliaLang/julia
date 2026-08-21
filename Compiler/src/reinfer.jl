@@ -417,13 +417,6 @@ function method_in_interferences(method2::Method, method1::Method)
     return false
 end
 
-# Check if method1 is more specific than method2 via the interference graph
-# equivalent to: ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{}
-function method_morespecific_recorded(method1::Method, method2::Method)
-    method1 === method2 && return false
-    return method_in_interferences(method1, method2) && !method_in_interferences(method2, method1)
-end
-
 # Max interference-set size for which n==1 uses the interference fast path instead of
 # `ml_matches`: the scan probes every member with `typeintersect`, so above this size the
 # pruned `ml_matches` lookup is cheaper (~8 is the empirical crossover).
@@ -517,16 +510,90 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     if !found_in_expecteds
                         ti = typeintersect(sig, interference_method.sig)
                         if !(ti === Union{})
-                            # try looking for a different expected method that fully covers this interference_method anyways over their intersection
-                            for j = 1:n
-                                meth2 = get_method_from_edge(expecteds[i+j-1])
-                                if method_morespecific_recorded(meth2, interference_method) && ti <: meth2.sig
-                                    found_in_expecteds = true
-                                    break
+                            # An unexpected method intersecting sig can change more than the
+                            # match set: even when an expected method fully covers it (so the
+                            # pruned result below would compare equal), it can make `ml_matches`
+                            # flag an ambiguity -- a mutual pair or a specificity cycle with a
+                            # reported match -- which must invalidate below.
+                            if method_in_interferences(meth, interference_method)
+                                # Mutually ambiguous with the expected method whose set is
+                                # being scanned: the fresh sort always flags this pair (both
+                                # stay in the intersecting-match list), so only the full
+                                # lookup can decide this edge.
+                                interference_fast_path_success = false
+                                break
+                            end
+                            # This method strictly beats the scanned set's owner. Look for a
+                            # different expected method that covers it over this intersection
+                            # and provably certifies the removal as silent: only an expected
+                            # with an EMPTY interference set qualifies, since such a method
+                            # beats everything it intersects, so:
+                            #  - nothing beats or ties it, so it can never sit in a
+                            #    specificity cycle and always finalizes before the sort
+                            #    needs it as a cover;
+                            #  - every blocker transfer through it passes automatically;
+                            #  - being recorded in the set of every method it intersects, it
+                            #    patches any blocker-transfer region inside its signature
+                            #    for the other drops too.
+                            # The `Union{}` bottom-slurp methods are exactly this shape,
+                            # keeping verification fast when a later-added method intersects
+                            # sig only at the `Type{Union{}}` corner they resolve. Any other
+                            # unexpected entry is left to the full lookup (the sort's
+                            # dominance-transfer protocol): anything weaker re-opens the
+                            # cycle counterexamples, where a cover tangled in a specificity
+                            # cycle certifies a drop it must not.
+                            #
+                            # Additionally require every strict beater of this method to
+                            # have an empty interference set itself (like the cover, such a
+                            # beater cannot continue a specificity cycle). This is what
+                            # makes accepting purely conservative -- an acceptance implies
+                            # the full lookup would return exactly the expected methods with
+                            # no ambiguity -- because scanning only the expected methods'
+                            # sets then witnesses every dangerous change:
+                            #  - fully_covers means every method intersecting sig intersects
+                            #    some expected pointwise;
+                            #  - methods invisible here (strictly beaten by every expected
+                            #    they intersect, hence in no expected's set) always prune
+                            #    silently: the union of their intersecting expecteds covers
+                            #    them, and a failing blocker transfer would need a blocker
+                            #    that beats an expected cover -- visible by recording;
+                            #  - any cycle that could flag or change the result must thread
+                            #    an expected, entering through a visible strict beater of
+                            #    it -- an entry of this scan, which is either rejected here
+                            #    or, by the beater condition, provably not on any cycle.
+                            # Without the beater condition, a cycle through invisible
+                            # methods could re-enter the beaten expected behind this scan's
+                            # back (dragging it into an SCC mid-sort, where it stops
+                            # covering the invisible members and they survive into the
+                            # result): detecting that re-entry edge directly would mean
+                            # intersecting this method's own set against sig -- the full
+                            # lookup's price.
+                            local beaters_safe = true
+                            let interferences2 = interference_method.interferences
+                                for k2 = 1:length(interferences2)
+                                    isassigned(interferences2, k2) || break # no more entries
+                                    beater = interferences2[k2]::Method
+                                    world < beater.primary_world && break # this and later entries are for a future world
+                                    if !isempty(beater.interferences) &&
+                                        !method_in_interferences(interference_method, beater)
+                                        # a strict beater that could itself sit on a cycle
+                                        beaters_safe = false
+                                        break
+                                    end
+                                end
+                            end
+                            if beaters_safe
+                                for j2 = 1:n
+                                    meth2 = get_method_from_edge(expecteds[i+j2-1])
+                                    if isempty(meth2.interferences) &&
+                                        method_in_interferences(meth2, interference_method) &&
+                                        ti <: meth2.sig
+                                        found_in_expecteds = true
+                                        break
+                                    end
                                 end
                             end
                             if !found_in_expecteds
-                                meth2 = get_method_from_edge(expecteds[i])
                                 interference_fast_path_success = false
                                 break
                             end
@@ -555,6 +622,15 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         empty!(matches)
         maxworld[] = 0
     else
+        # A method added after this edge was recorded can be ambiguous with an expected
+        # match without changing this include_ambiguous=false result: the newcomer is
+        # pruned when an expected match fully covers their overlap, yet dispatch in the
+        # contested region now throws a MethodError that inference never accounted for.
+        # Until edges record that inference itself saw an ambiguity
+        # (JuliaLang/julia#62322), any ambiguity over sig must invalidate.
+        if has_ambig[] != 0
+            maxworld[] = 0
+        end
         # setdiff!(result, expected)
         if length(result) ≠ n
             maxworld[] = 0
