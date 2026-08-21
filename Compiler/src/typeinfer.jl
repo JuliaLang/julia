@@ -1321,7 +1321,11 @@ function ci_has_source(interp::AbstractInterpreter, code::CodeInstance)
     if isa(inf, String)
         inf = _uncompressed_ir(code, inf)
     end
-    if code.owner === nothing
+    if code.owner === nothing || code.owner === :trim
+        # `:trim`-owned instances (see `typeinf_ext_toplevel`) are plain
+        # NativeInterpreter results in an isolated cache namespace; codegen
+        # must see them like unowned ones, or `compile!` cannot find source
+        # for edges discovered through them.
         if isa(inf, CodeInfo)
             codegen[code] = inf
             return true
@@ -1673,7 +1677,10 @@ const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
-    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
+    # back to `nothing` at serialization time (see `src/staticdata.c`).
+    cache_owner = trim_mode == TRIM_NO ? nothing : :trim
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO, cache_owner)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
     # invokelatest calls such as from `Core.finalizer` and `ccallable`
