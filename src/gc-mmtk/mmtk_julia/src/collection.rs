@@ -165,15 +165,16 @@ impl Collection<JuliaVM> for VMCollection {
 
         // Get the current epoch and wait for it to advance.
         let epoch = crate::api::mmtk_gc_epoch();
-        unsafe { jl_gc_mmtk_block_for_gc_enter() };
+        let saved_errno = unsafe { jl_gc_mmtk_block_for_gc_enter() };
         let gc_state = unsafe { jl_gc_safe_enter() };
         crate::api::mmtk_wait_for_new_gc_epoch(epoch);
         unsafe { jl_gc_safe_leave(gc_state) };
         unsafe { jl_gc_mmtk_block_for_gc_leave() };
 
         // `GC.gc()` must run pending finalizers before returning (see
-        // `jl_gc_mmtk_run_pending_finalizers`'s doc comment), so run them now.
-        unsafe { jl_gc_mmtk_run_pending_finalizers() };
+        // `jl_gc_mmtk_run_pending_finalizers`'s doc comment), so run them now. This also restores
+        // the errno/last-error `jl_gc_mmtk_block_for_gc_enter` saved above.
+        unsafe { jl_gc_mmtk_run_pending_finalizers(saved_errno) };
     }
 
     fn spawn_gc_thread(_tls: VMThread, ctx: GCThreadContext<JuliaVM>) {

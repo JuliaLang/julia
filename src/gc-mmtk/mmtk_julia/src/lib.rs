@@ -107,6 +107,13 @@ lazy_static! {
 
 type ProcessSlotFn = *const extern "C" fn(closure: Address, slot: Address);
 
+// Mirrors `jl_gc_mmtk_saved_errno_t` in gc-mmtk.c
+#[repr(C)]
+pub struct SavedErrno {
+    pub saved_errno: i32,
+    pub saved_last_error: u32,
+}
+
 #[allow(improper_ctypes)]
 extern "C" {
     pub fn jl_gc_scan_julia_exc_obj(obj: Address, closure: Address, process_slot: ProcessSlotFn);
@@ -128,9 +135,9 @@ extern "C" {
     pub fn jl_gc_mmtk_stop_the_world(collection: i32);
     pub fn jl_gc_mmtk_resume_the_world();
     pub fn jl_gc_mmtk_defer_alloc_if_disabled() -> i32;
-    pub fn jl_gc_mmtk_block_for_gc_enter();
+    pub fn jl_gc_mmtk_block_for_gc_enter() -> SavedErrno;
     pub fn jl_gc_mmtk_block_for_gc_leave();
-    pub fn jl_gc_mmtk_run_pending_finalizers();
+    pub fn jl_gc_mmtk_run_pending_finalizers(saved_errno: SavedErrno);
     pub fn jl_gc_safe_enter() -> i8;
     pub fn jl_gc_safe_leave(state: i8);
     pub fn jl_gc_get_owner_address_to_mmtk(m: Address) -> Address;

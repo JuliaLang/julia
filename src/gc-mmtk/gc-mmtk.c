@@ -459,18 +459,11 @@ JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
     return 1;
 }
 
-// Thread-local save slot bridging `jl_gc_mmtk_block_for_gc_enter` and the end of
-// `jl_gc_mmtk_run_pending_finalizers`: this mutator's own errno/last-error, so nothing the GC does
-// while it waits (on this same thread, via
-// `jl_gc_safe_enter`/`mmtk_wait_for_new_gc_epoch`/`jl_gc_safe_leave`) or the pending finalizers it
-// then runs can clobber what its caller was about to check. It is restored only once the
-// finalizers have run -- matching `jl_gc_collect`'s own `last_errno`, which stays in effect across
-// its `run_finalizers` call -- rather than in `jl_gc_mmtk_block_for_gc_leave`, since finalizers are
-// arbitrary Julia code that can itself set errno.
-static _Thread_local int mmtk_saved_errno;
-#ifdef _OS_WINDOWS_
-static _Thread_local DWORD mmtk_saved_last_error;
-#endif
+// Pass saved error no before a pause and restore it after a pause.
+typedef struct {
+    int saved_errno;
+    uint32_t saved_last_error; // Only used by windows. Otherwise this field remains to be 0.
+} jl_gc_mmtk_saved_errno_t;
 
 // Called by `Collection::block_for_gc` right before it waits for the pause it was told is coming
 // (`jl_gc_safe_enter`/`mmtk_wait_for_new_gc_epoch`/`jl_gc_safe_leave`), mirroring what
@@ -478,16 +471,20 @@ static _Thread_local DWORD mmtk_saved_last_error;
 // save errno, and mark this task's own timing as suspended (e.g. under Tracy, switches this
 // thread's active fiber to "GC") so the wait isn't misattributed to whatever the task was doing
 // when its allocation triggered this.
-JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_enter(void)
+JL_DLLEXPORT jl_gc_mmtk_saved_errno_t jl_gc_mmtk_block_for_gc_enter(void)
 {
-    mmtk_saved_errno = errno;
+    jl_gc_mmtk_saved_errno_t saved;
+    saved.saved_errno = errno;
 #ifdef _OS_WINDOWS_
-    mmtk_saved_last_error = GetLastError();
+    saved.saved_last_error = GetLastError();
+#else
+    saved.saved_last_error = 0;
 #endif
 #if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
     jl_timing_suspend_t suspend;
     _jl_timing_suspend_ctor(&suspend, "GC", jl_current_task);
 #endif
+    return saved;
 }
 
 // The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
@@ -520,13 +517,13 @@ JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
 // runs on the mutator that is calling `block_for_gc` on its own behalf, using `jl_current_task`.
 // Only ever called from a mutator (never a GC worker, which has no task to run finalizers on).
 //
-// This also restores the errno/last-error that `jl_gc_mmtk_block_for_gc_enter` saved: `errno` is
-// restored here, at the very end of `block_for_gc`, rather than in `jl_gc_mmtk_block_for_gc_leave`,
-// because the finalizers run just above are arbitrary Julia code that can itself set errno --
-// `run_finalizers` already saves/restores errno around each individual finalizer's own execution,
-// but the outer save/restore here still needs to span them, exactly like `jl_gc_collect`'s own
-// `last_errno` stays in effect across its `run_finalizers` call.
-JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
+// This also restores the errno/last-error that `jl_gc_mmtk_block_for_gc_enter` saved and passed
+// through as `saved`: `errno` is restored here, at the very end of `block_for_gc`, rather than in
+// `jl_gc_mmtk_block_for_gc_leave`, because the finalizers run just above are arbitrary Julia code
+// that can itself set errno -- `run_finalizers` already saves/restores errno around each individual
+// finalizer's own execution, but the outer save/restore here still needs to span them, exactly like
+// `jl_gc_collect`'s own `last_errno` stays in effect across its `run_finalizers` call.
+JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(jl_gc_mmtk_saved_errno_t saved)
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -538,9 +535,9 @@ JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
     }
     JL_PROBE_GC_FINALIZER();
 #ifdef _OS_WINDOWS_
-    SetLastError(mmtk_saved_last_error);
+    SetLastError(saved.saved_last_error);
 #endif
-    errno = mmtk_saved_errno;
+    errno = saved.saved_errno;
 }
 
 // ========================================================================= //
