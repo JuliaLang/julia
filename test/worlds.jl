@@ -680,3 +680,60 @@ let ci = method_instance(iter61667, ()).cache
     Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
     @test ci.max_world == typemax(UInt)
 end
+
+# extension-point declarations and world splitting
+default_f62292(x::Int) = 1
+default_g62292(y) = default_f62292(y)
+
+ext_f62292(x::Int) = 1
+Base.Experimental.@extension_point ext_f62292
+ext_g62292(y) = ext_f62292(y)
+ext_h62292(y::Int) = ext_f62292(y)
+
+@test Base.infer_return_type(default_g62292, (Any,)) == Int
+if !Base.Compiler.BuildSettings.WORLD_SPLITTING
+    @test Base.infer_return_type(ext_g62292, (Any,)) == Any
+end
+@test Base.infer_return_type(ext_h62292, (Int,)) == Int
+
+# a new subtype of a foreign abstract type invalidates nothing; only a new method
+# on the function itself does
+abstract type Fruit62292 end
+struct Apple62292 <: Fruit62292 end
+struct Banana62292 <: Fruit62292 end
+describe62292(::Apple62292) = 1
+describe62292(::Banana62292) = 2
+fruitvec62292() = Base.inferencebarrier(Fruit62292[Apple62292()])::Vector{Fruit62292}
+describe_first62292() = describe62292(fruitvec62292()[1])
+@test precompile(describe_first62292, ())
+let ci = method_instance(describe_first62292, ()).cache
+    @test ci.max_world == typemax(UInt)
+    Core.eval(@__MODULE__, :(struct Cherry62292 <: Fruit62292 end))
+    @test ci.max_world == typemax(UInt)
+    Core.eval(@__MODULE__, :(describe62292(::Cherry62292) = 3))
+    @test ci.max_world != typemax(UInt)
+end
+
+let n0 = length(Base.Experimental.undeclared_extensions())
+    Core.eval(@__MODULE__, quote
+        struct LoggedT62292 end
+        Base.show(io::IO, ::LoggedT62292) = print(io, "t")
+    end)
+    entries = Base.Experimental.undeclared_extensions()
+    @test length(entries) == n0 + 1
+    @test entries[end].method.module === @__MODULE__
+    @test entries[end].owns_argument_type
+end
+
+let code = "struct T end; Base.show(io::IO, ::T) = print(io, 1)"
+    for (mode, expect) in (("all", true), ("piracy", false), ("Base", true), ("SomeOtherPkg", false))
+        errbuf = IOBuffer()
+        run(pipeline(addenv(`$(Base.julia_cmd()) --startup-file=no -e $code`,
+                            "JULIA_WARN_EXTENSION" => mode),
+                     stderr = errbuf))
+        @test occursin("extends Base.show, which is not declared an extension point", String(take!(errbuf))) == expect
+    end
+    errored = !success(pipeline(addenv(`$(Base.julia_cmd()) --startup-file=no -e $code`,
+                                       "JULIA_WARN_EXTENSION" => "error"), stderr = devnull))
+    @test errored
+end
