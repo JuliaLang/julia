@@ -182,8 +182,15 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
                 if (auto VTy = dyn_cast<VectorType>(II->getType())) {
                     if (hasLoadedTy(VTy->getElementType())) {
+#if JL_LLVM_VERSION >= 220000
+                        // LLVM 22 dropped the alignment operand from masked.load/gather,
+                        // shifting mask and passthrough down by one.
+                        Value *Mask = II->getArgOperand(1);
+                        Value *Passthrough = II->getArgOperand(2);
+#else
                         Value *Mask = II->getOperand(2);
                         Value *Passthrough = II->getOperand(3);
+#endif
                         if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
                             assert(isa<UndefValue>(Passthrough) && "unimplemented");
                             (void)Passthrough;
@@ -838,40 +845,6 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
     }
 }
 
-static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset)
-{
-    if (!TBAA)
-        return false;
-    while (TBAA->getNumOperands() > 1) {
-        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
-        auto str = cast<MDString>(TBAA->getOperand(0))->getString();
-        for (auto str2 : strset) {
-            if (str == str2) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-// Check if this is a load from an immutable value. The easiest
-// way to do so is to look at the tbaa and see if it derives from
-// jtbaa_immut.
-static bool isLoadFromImmut(LoadInst *LI)
-{
-    if (LI->getMetadata(LLVMContext::MD_invariant_load))
-        return true;
-    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
-        return true;
-    return false;
-}
-
-static bool isConstGV(GlobalVariable *gv)
-{
-    return gv->isConstant() || gv->getMetadata("julia.constgv");
-}
-
 typedef llvm::SmallPtrSet<PHINode*, 1> PhiSet;
 
 static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen = nullptr);
@@ -1218,9 +1191,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             if (CountTrackedPointers(VTy->getElementType()).count) {
                                 // LLVM sometimes tries to materialize these operations with undefined pointers in our non-integral address space.
                                 // Hopefully LLVM didn't already propagate that information and poison our users. Set those to NULL now.
-                                Value *passthru = II->getArgOperand(3);
+                                // LLVM 22 dropped the alignment operand from masked.load/gather,
+                                // shifting the passthrough operand from index 3 down to 2.
+#if JL_LLVM_VERSION >= 220000
+                                unsigned passthruIdx = 2;
+#else
+                                unsigned passthruIdx = 3;
+#endif
+                                Value *passthru = II->getArgOperand(passthruIdx);
                                 if (isa<UndefValue>(passthru)) {
-                                    II->setArgOperand(3, Constant::getNullValue(passthru->getType()));
+                                    II->setArgOperand(passthruIdx, Constant::getNullValue(passthru->getType()));
                                 }
                             }
                             if (hasLoadedTy(VTy->getElementType())) {
@@ -1909,7 +1889,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     LI->setMetadata(LLVMContext::MD_invariant_load, NULL);
             }
             if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
-                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memoryptr", "jtbaa_memorylen", "tbaa_memoryown"})) {
+                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memory"})) {
                     MDNode *MutableTBAA = createMutableTBAAAccessTag(TBAA);
                     if (MutableTBAA != TBAA)
                         I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
@@ -2572,37 +2552,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
 
     pgcstack = getPGCstack(F);
     if (pgcstack) {
-      // Strip optimistic memory attrs added by add_fn_attrs_for_effects.
-      // Must happen before LocalScan (which uses memory effects for
-      // safepoint identification) and before post-GC passes (DSE/GVN).
-      if (F.hasFnAttribute("julia.safepoint")) {
-          F.setMemoryEffects(MemoryEffects::unknown());
-          for (unsigned i = 0; i < F.arg_size(); i++) {
-              if (F.hasParamAttribute(i, "gcstack"))
-                  F.removeParamAttr(i, Attribute::ReadNone);
-          }
-      }
-      for (auto &BB : F) {
-          for (auto &I : BB) {
-              if (auto *CI = dyn_cast<CallInst>(&I)) {
-                  Function *Callee = CI->getCalledFunction();
-                  if (!Callee || Callee->hasFnAttribute("julia.safepoint")) {
-                      CI->setMemoryEffects(MemoryEffects::unknown());
-                      for (unsigned i = 0; i < CI->arg_size(); i++) {
-                          if (CI->getParamAttr(i, "gcstack").isValid())
-                              CI->removeParamAttr(i, Attribute::ReadNone);
-                      }
-                      if (Callee) {
-                          Callee->setMemoryEffects(MemoryEffects::unknown());
-                          for (unsigned i = 0; i < Callee->arg_size(); i++) {
-                              if (Callee->hasParamAttribute(i, "gcstack"))
-                                  Callee->removeParamAttr(i, Attribute::ReadNone);
-                          }
-                      }
-                  }
-              }
-          }
-      }
       State S = LocalScan(F);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),

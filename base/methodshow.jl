@@ -308,7 +308,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
         printstyled(io, tn.module, color=col)
     elseif '#' in sname
         print(io, " for anonymous function ", namedisplay)
-    elseif tn === _TYPE_NAME || iskindtype(tn.wrapper)
+    elseif iskindtype(tn.wrapper)
         print(io, " for type constructor")
     else
         print(io, " for callable object")

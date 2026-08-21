@@ -137,7 +137,7 @@ begin # @deprecate
     @noinline deprecated_parentmodule(T) = parentmodule(T)
     @noinline deprecated_isabstracttype(T) = isabstracttype(T)
     deprecated_type_ref = Ref{Any}(Type{Int})
-    @test @test_warn "calling `typename` on `Type` is deprecated" deprecated_typename(deprecated_type_ref[]) === TypeEq.name
+    @test @test_warn "calling `typename` on `Type` is deprecated" deprecated_typename(deprecated_type_ref[]) === Core.AnyType.name
     @test @test_warn "calling `nameof` on `Type` is deprecated" deprecated_nameof(deprecated_type_ref[]) === :Type
     @test @test_warn "calling `parentmodule` on `Type` is deprecated" deprecated_parentmodule(deprecated_type_ref[]) === Core
     @test @test_warn "calling `isabstracttype` on a `Type{...}` is deprecated" deprecated_isabstracttype(deprecated_type_ref[]) === true
@@ -347,4 +347,89 @@ module DeprecatedReexportTest
     @test_warn "importing deprecated binding" eval(ex)
     @test (@test_nowarn Consumer.getdep()) === Src._c
     @test !Base.isdeprecated(Consumer, :DepC)
+end
+
+# Defining a new binding over a deprecated implicit import must not warn: binding
+# resolution in a method definition (or a new `const`/`global`) exists precisely to create
+# a fresh binding when the name was not explicitly imported, and the fresh binding is not
+# deprecated (issue #62721).
+module DeprecatedShadowTest
+    using Test
+    module Src
+        export old_foo, OldC, OldG
+        foo() = "foo"
+        Base.@deprecate_binding old_foo foo
+        const _newc = 0x4321
+        Base.@deprecate_binding OldC _newc
+        newg() = 1
+        Base.@deprecate_binding OldG newg true ", use newg instead." false
+    end
+    using .Src
+
+    # A method definition creates a new generic function; neither the definition itself
+    # nor later uses of the new function warn.
+    @test_nowarn @eval old_foo() = "old foo"
+    @test (@test_nowarn old_foo()) == "old foo"
+    @test !Base.isdeprecated(@__MODULE__, :old_foo)
+
+    # Same for a new `const`, including when the deprecated implicit resolution has
+    # already been materialized on this module's binding by a prior query.
+    @test Base.isdeprecated(@__MODULE__, :OldC)
+    @test_nowarn @eval const OldC = 0x9999
+    @test (@test_nowarn OldC) === 0x9999
+    @test !Base.isdeprecated(@__MODULE__, :OldC)
+
+    # And for a global declaration and assignment shadowing a deprecated global.
+    @test Base.isdeprecated(@__MODULE__, :OldG)
+    @test_nowarn @eval global OldG = 5
+    @test (@test_nowarn OldG) === 5
+    @test !Base.isdeprecated(@__MODULE__, :OldG)
+
+    # Deprecating the source after the importer's implicit partition has already been
+    # materialized re-resolves and marks it deprecated, un-deprecating clears it again, and
+    # a method definition over the halfway-deprecated import still creates a fresh binding.
+    module SrcH
+        export HCon, old_h
+        const HCon = 0x33
+        h() = "src h"
+        const old_h = h
+    end
+    using .SrcH
+    @test !Base.isdeprecated(@__MODULE__, :HCon)        # materialize, not deprecated yet
+    @test (@test_nowarn Base.invokelatest(old_h)) == "src h"
+    Base.deprecate(SrcH, :HCon)
+    Base.deprecate(SrcH, :old_h)
+    @test Base.isdeprecated(@__MODULE__, :HCon)
+    @test (@test_warn "HCon is deprecated" Base.invokelatest(() -> HCon)) === 0x33
+    Base.deprecate(SrcH, :HCon, 0)                      # un-deprecate again
+    @test !Base.isdeprecated(@__MODULE__, :HCon)
+    @test (@test_nowarn Base.invokelatest(() -> HCon)) === 0x33
+    @test_nowarn @eval old_h() = "my old_h"
+    @test (@test_nowarn Base.invokelatest(old_h)) == "my old_h"
+    @test !Base.isdeprecated(@__MODULE__, :old_h)
+
+    # By contrast, deprecation explicitly set on the importing module's own binding (not
+    # set by resolution) is preserved when the binding is replaced by a definition.
+    module SrcE
+        export ECon
+        const ECon = 0x11
+    end
+    using .SrcE
+    Base.deprecate(@__MODULE__, :ECon)
+    @test Base.isdeprecated(@__MODULE__, :ECon)
+    @eval const ECon = 0x22
+    @test Base.isdeprecated(@__MODULE__, :ECon)
+    @test (@test_warn "ECon is deprecated" @eval(ECon)) === 0x22
+
+    # An explicit import over an already-materialized deprecated implicit resolution warns
+    # at the import site only; the use site stays quiet and is not reported deprecated.
+    ex = :(module Consumer
+        using ..Src, Test
+        @test Base.isdeprecated(@__MODULE__, :OldC)     # materialize the implicit resolution
+        import ..Src: OldC
+        getdep() = OldC
+    end)
+    @test_warn "importing deprecated binding" eval(ex)
+    @test (@test_nowarn Consumer.getdep()) === Src._newc
+    @test !Base.isdeprecated(Consumer, :OldC)
 end

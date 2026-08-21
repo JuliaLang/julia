@@ -18,6 +18,17 @@
     #error Only LLVM versions >= 19.0.0 are supported by Julia on RISC-V
 #endif
 
+// clang 22 destroys a by-value parameter both in the callee, at any `return`
+// statement, and again in the caller (llvm/llvm-project#169320), so the static
+// analyzer sees a double free whenever ownership of a pointer is passed by
+// value: notably any `llvm::Error` handed to a `unique_function`. Statements
+// that trip over this have to be hidden from the analyzer while this is
+// defined. Fixed in LLVM 23 by llvm/llvm-project#177363, which moved the
+// parameter destructors behind a CFG option that the analyzer does not set.
+#if defined(__clang_analyzer__) && JL_LLVM_VERSION >= 220000 && JL_LLVM_VERSION < 230000
+#define JL_SA_BROKEN_PARAM_DTORS 1
+#endif
+
 #ifdef __cplusplus
 #if defined(__GNUC__) && (__GNUC__ >= 9)
 // Added in GCC 9, this warning is annoying

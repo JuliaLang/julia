@@ -6981,6 +6981,23 @@ for U in unboxedunions
     end
 end
 
+# Vector growth sizes must not wrap and leave logical length larger than backing storage.
+@testset "array growth overflow" begin
+    A = [1, 2]
+    popfirst!(A)
+    @test_throws OverflowError resize!(A, typemax(Int))
+    @test A == [2]
+    @test length(A.ref.mem) == 2
+
+    for (f, A) in ((A -> Base._growbeg!(A, typemax(Int)), [1]),
+                   (A -> Base._growend!(A, typemax(Int)), [1]),
+                   (A -> Base._growat!(A, 2, typemax(Int)), [1, 2]))
+        old = copy(A)
+        @test_throws OverflowError f(A)
+        @test A == old
+    end
+end
+
 @testset "array _growatend!" begin
 
 # start w/ array, set & check elements, grow it, check that elements stayed correct, set & check elements
@@ -8507,6 +8524,14 @@ end
     @test b == Core.svec(2, 3)
 end
 
+# SimpleVector allocation must reject pointer-byte size overflow before its fill loops.
+@testset "svec allocation overflow" begin
+    n = Int(typemax(UInt) ÷ UInt(sizeof(Ptr{Cvoid})) + 1)
+    @test_throws OutOfMemoryError Tuple{Vararg{Nothing,n}}
+    mem = Memory{Nothing}(undef, n)
+    @test_throws OutOfMemoryError Core.svec(mem...)
+end
+
 @testset "setproperty! on modules" begin
     m = Module()
     @eval m global x::Int
@@ -8959,6 +8984,14 @@ end
 
 @test sizeof(Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})) == 2
 
+# Codegen of a Type{Union{}} isbits-union component.
+typeofbottom_union_constant() =
+    Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})
+code_llvm(devnull, typeofbottom_union_constant, Tuple{})
+let p = typeofbottom_union_constant()
+    @test p.first === Union{} && p.second === Union{}
+end
+
 # Make sure that Core.Compiler has enough NamedTuple infrastructure
 # to properly give error messages for basic kwargs...
 Core.eval(Core.Compiler, quote issue50174(;a=1) = a end)
@@ -9119,7 +9152,7 @@ end
 primitive type ByteString58434 (18 * 8) end
 
 @test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
-@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == !Base.ispacked(Tuple{ByteString58434})
 
 # #60659 - Behavior of using'd ambiguous bindings
 module AmbiguousUsing60659
@@ -9289,4 +9322,33 @@ end
 let m = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), @__MODULE__)
     @test m.sig === Union{}
     @test m.name === Symbol("")
+end
+
+# an array reached through a Union-typed value is tagged `jtbaa_value`, which must
+# still alias the `jtbaa_arrayptr` stores that initialize its header; otherwise DSE
+# deletes them and the reshaped array is left with a null `MemoryRef`
+mkunion_arrayheader(b::Bool) = b ? fill(1.0, 1, 1) : fill(1.0 + 0im, 1, 1)
+sum_reshaped_arrayheader(b::Bool, D::Int) = sum(reshape(mkunion_arrayheader(b)[:, end], D, D))
+@test sum_reshaped_arrayheader(true, 1) === 1.0
+@test sum_reshaped_arrayheader(false, 1) === 1.0 + 0.0im
+
+# jl_array_len must compute the length from the dimensions: an N-d array may be
+# backed by a Memory with excess capacity and/or a nonzero memoryref offset
+# (e.g. from `reshape` of a `sizehint!`ed vector), so reading the Memory length
+# splatted/copied too many elements (and could read out of bounds)
+let f = (x...) -> length(x)
+    v = collect(1.0:9.0)
+    sizehint!(v, 100)
+    m = reshape(v, 3, 3)
+    @test f(m...) == 9
+    @test length(Core.svec(m...)) == 9
+    m2 = ccall(:jl_array_copy, Ref{Matrix{Float64}}, (Any,), m)
+    @test m2 == m
+    @test length(m2.ref.mem) == 9
+    # nonzero memoryref offset
+    w = collect(1:9)
+    sizehint!(w, 1000; first=true)
+    m3 = reshape(w, 3, 3)
+    @test f(m3...) == 9
+    @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
 end

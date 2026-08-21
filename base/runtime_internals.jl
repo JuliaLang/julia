@@ -233,7 +233,6 @@ function binding_module(m::Module, s::Symbol)
 end
 
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
-const _TYPE_NAME = TypeEq.name
 
 function _fieldnames(@nospecialize t)
     if t.name === _NAMEDTUPLE_NAME
@@ -264,9 +263,10 @@ const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
 const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
+const PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100
 
 const PARTITION_MASK_KIND         = 0x0f
-const PARTITION_MASK_FLAG         = 0xf0
+const PARTITION_MASK_FLAG         = 0x1f0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
 
@@ -1629,7 +1629,7 @@ get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 """
     tls_world_age()
 
-Return the world the [current_task()](@ref) is executing within.
+Return the world the [`current_task`](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 

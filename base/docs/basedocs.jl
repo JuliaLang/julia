@@ -3291,7 +3291,9 @@ Array{T,N}(::Missing, dims)
 Singleton type used in array initialization, indicating the array-constructor-caller
 would like an uninitialized array.
 
-See also [`undef`](@ref), an alias for `UndefInitializer()`.
+See the section in the manual on uninitialized memory.
+
+See also: [`undef`](@ref), an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
@@ -3311,7 +3313,9 @@ Alias for `UndefInitializer()`, which constructs an instance of the singleton ty
 [`UndefInitializer`](@ref), used in array initialization to indicate the
 array-constructor-caller would like an uninitialized array.
 
-See also [`missing`](@ref), [`similar`](@ref).
+See the section in the manual on uninitialized memory.
+
+See also: [`missing`](@ref), [`similar`](@ref).
 
 # Examples
 ```julia-repl
@@ -4145,7 +4149,7 @@ Base.donotdelete
 """
     Base.blackbox(x) -> x
 
-Return `x` unchanged but the returned value will be treated as if it
+This function returns `x` unchanged, but treats the returned value as if it
 came from an unknowable black-box source. The optimizer may not make any
 assumptions about the output: it cannot be constant-folded, common-subexpression
 eliminated (CSE'd), or treated as loop-invariant.

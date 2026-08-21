@@ -965,54 +965,113 @@ void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_entry) JL_NOTSAFEP
 
 
 #ifdef _OS_LINUX_
-#if defined(__GLIBC__) && defined(_CPU_AARCH64_)
+// glibc mangles the pointers in jmp_buf as `rotl(p ^ key, rot)`. Neither the
+// key's location nor the rotation is stable ABI, so derive both at runtime.
+// glibc 2.44 changed both:
+// https://sourceware.org/git/?p=glibc.git;a=commit;h=a5ec880f808ee7268d985bed4f961799bdc0a4bf
+// https://sourceware.org/git/?p=glibc.git;a=commit;h=78f1f0e39cd41d28ae771eb3498bc33780c85cfd
+// The probe follows the approach used by LLVM's aarch64 TSAN runtime:
+// https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
+#if defined(__GLIBC__) && (defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || \
+                           defined(_CPU_X86_64_) || defined(_CPU_X86_))
+// Index of the mangled SP within glibc's jmp_buf.
+#if defined(_CPU_AARCH64_)
 #define LONG_JMP_SP_ENV_SLOT 13
-static uintptr_t julia_longjmp_xor_key;
-// GLIBC mangles the function pointers in jmp_buf (used in {set,long}*jmp
-// functions) by XORing them with a random key.  For AArch64 it is a global
-// variable rather than a TCB one (as for x86_64/powerpc).  We obtain the key by
-// issuing a setjmp and XORing the SP pointer values to derive the key.
-static void JuliaInitializeLongjmpXorKey(void)
+#elif defined(_CPU_ARM_)
+#define LONG_JMP_SP_ENV_SLOT 0
+#elif defined(_CPU_X86_64_)
+#define LONG_JMP_SP_ENV_SLOT 6
+#else
+#define LONG_JMP_SP_ENV_SLOT 4
+#endif
+#define PTR_MANGLE_ROTATE (2 * sizeof(uintptr_t) + 1)
+
+// -1 unusable, 0 not probed yet, 1 usable
+static _Atomic(int) julia_longjmp_state;
+static _Atomic(uintptr_t) julia_longjmp_xor_key;
+static _Atomic(unsigned) julia_longjmp_rotate;
+
+static uintptr_t rotate_right(uintptr_t p, unsigned n) JL_NOTSAFEPOINT
 {
-    // 1. Call REAL(setjmp), which stores the mangled SP in env.
+    return n == 0 ? p : (p >> n) | (p << (8 * sizeof(uintptr_t) - n));
+}
+
+static uintptr_t rotate_left(uintptr_t p, unsigned n) JL_NOTSAFEPOINT
+{
+    return n == 0 ? p : (p << n) | (p >> (8 * sizeof(uintptr_t) - n));
+}
+
+static NOINLINE uintptr_t probe_mangled_sp(uintptr_t *sp) JL_NOTSAFEPOINT
+{
     jmp_buf env;
     _setjmp(env);
+#if defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
+    asm volatile ("mov %0, sp" : "=r" (*sp));
+#elif defined(_CPU_X86_64_)
+    asm volatile ("movq %%rsp, %0" : "=r" (*sp));
+#else
+    asm volatile ("movl %%esp, %0" : "=r" (*sp));
+#endif
+    return ((uintptr_t*)&env)[LONG_JMP_SP_ENV_SLOT];
+}
 
-    // 2. Retrieve vanilla/mangled SP.
-    uintptr_t sp;
-    asm("mov  %0, sp" : "=r" (sp));
-    uintptr_t mangled_sp = ((uintptr_t*)&env)[LONG_JMP_SP_ENV_SLOT];
+static NOINLINE uintptr_t probe_mangled_sp_deep(uintptr_t *sp) JL_NOTSAFEPOINT
+{
+    volatile char pad[512];
+    uintptr_t mangled = probe_mangled_sp(sp);
+    pad[0] = 0; // Keep the frame live and prevent a tail call.
+    (void)pad[0];
+    return mangled;
+}
 
-    // 3. xor SPs to obtain key.
-    julia_longjmp_xor_key = mangled_sp ^ sp;
+// Derive the key and rotation from two probes at different stack depths.
+// A failure disables simulated longjmp rather than resuming at a wild address.
+static int derive_longjmp_mangling(void) JL_NOTSAFEPOINT
+{
+    uintptr_t sp1, sp2;
+    uintptr_t mangled1 = probe_mangled_sp(&sp1);
+    uintptr_t mangled2 = probe_mangled_sp_deep(&sp2);
+    uintptr_t sp_delta = sp1 ^ sp2;
+    if (sp_delta == 0 || sp_delta == ~(uintptr_t)0)
+        return -1;
+    unsigned rot;
+    if ((mangled1 ^ mangled2) == sp_delta)
+        rot = 0;
+    else if (rotate_right(mangled1 ^ mangled2, PTR_MANGLE_ROTATE) == sp_delta)
+        rot = PTR_MANGLE_ROTATE;
+    else
+        return -1;
+    uintptr_t key = rotate_right(mangled1, rot) ^ sp1;
+    if (rotate_left(sp2 ^ key, rot) != mangled2)
+        return -1;
+    jl_atomic_store_relaxed(&julia_longjmp_xor_key, key);
+    jl_atomic_store_relaxed(&julia_longjmp_rotate, rot);
+    return 1;
 }
 #endif
 
-JL_UNUSED static uintptr_t ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
+// Keep lazy initialization lock-free because the first probe may run in a
+// signal handler. Racing probes derive the same process-wide values.
+JL_DLLEXPORT int jl_ptr_demangle_available(void) JL_NOTSAFEPOINT
 {
-#if defined(__GLIBC__)
-#if defined(_CPU_X86_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/pointer_guard.h
-// last changed for GLIBC_2.6 on 2007-02-01
-    asm(" rorl $9, %0\n"
-        " xorl %%gs:0x18, %0"
-        : "=r"(p) : "0"(p) : );
-#elif defined(_CPU_X86_64_)
-// from https://github.com/bminor/glibc/blob/master/sysdeps/unix/sysv/linux/x86_64/pointer_guard.h
-    asm(" rorq $17, %0\n"
-        " xorq %%fs:0x30, %0"
-        : "=r"(p) : "0"(p) : );
-#elif defined(_CPU_AARCH64_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
-// We need to use a trick like this (from GCC/LLVM TSAN) to get access to it:
-// https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
-    static pthread_once_t once = PTHREAD_ONCE_INIT;
-    pthread_once(&once, &JuliaInitializeLongjmpXorKey);
-    p ^= julia_longjmp_xor_key;
-#elif defined(_CPU_ARM_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/arm/sysdep.h
-    ; // nothing to do
+#if defined(LONG_JMP_SP_ENV_SLOT)
+    int state = jl_atomic_load_acquire(&julia_longjmp_state);
+    if (state == 0) {
+        state = derive_longjmp_mangling();
+        jl_atomic_store_release(&julia_longjmp_state, state);
+    }
+    return state > 0;
+#else
+    return 1;
 #endif
+}
+
+JL_DLLEXPORT uintptr_t jl_ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
+{
+#if defined(LONG_JMP_SP_ENV_SLOT)
+    assert(jl_atomic_load_relaxed(&julia_longjmp_state) > 0);
+    p = rotate_right(p, jl_atomic_load_relaxed(&julia_longjmp_rotate))
+        ^ jl_atomic_load_relaxed(&julia_longjmp_xor_key);
 #endif
     return p;
 }
@@ -1118,6 +1177,26 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 #endif
 
 
+// Reject values that cannot be user-space longjmp targets. A wrong mangling
+// scheme otherwise turns both values into effectively random addresses.
+#if defined(_CPU_X86_64_) || defined(_CPU_RISCV64_)
+#define JL_VA_USER_BITS 47
+#elif defined(_CPU_AARCH64_)
+// AArch64 uses its full unsigned VA range, including bit 47 on 48-bit kernels,
+// and supports a 52-bit userspace range with LVA.
+#define JL_VA_USER_BITS 52
+#endif
+JL_UNUSED static int valid_longjmp_target(uintptr_t sp, uintptr_t pc) JL_NOTSAFEPOINT
+{
+    if (sp == 0 || pc == 0 || sp % sizeof(void*) != 0)
+        return 0;
+#ifdef JL_VA_USER_BITS
+    if ((sp >> JL_VA_USER_BITS) != 0 || (pc >> JL_VA_USER_BITS) != 0)
+        return 0;
+#endif
+    return 1;
+}
+
 // Some notes: this simulates a longjmp call occurring in context `c`, as if the
 // user was to set the PC in `c` to call longjmp and the PC in the longjmp to
 // return here. This helps work around many cases where siglongjmp out of a
@@ -1179,6 +1258,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     #error Windows is currently only supported on x86 and x86_64
     #endif
 #elif defined(_OS_LINUX_) && defined(__GLIBC__)
+    if (!jl_ptr_demangle_available())
+        return 0;
     __jmp_buf *_ctx = &mctx->__jmpbuf;
     #if defined(_CPU_AARCH64_)
     // Only on aarch64-linux libunwind uses a different struct than system's one:
@@ -1198,8 +1279,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_ESP] = (*_ctx)[4];
     mc->gregs[REG_EIP] = (*_ctx)[5];
     // ifdef PTR_DEMANGLE ?
-    mc->gregs[REG_ESP] = ptr_demangle(mc->gregs[REG_ESP]);
-    mc->gregs[REG_EIP] = ptr_demangle(mc->gregs[REG_EIP]);
+    mc->gregs[REG_ESP] = jl_ptr_demangle(mc->gregs[REG_ESP]);
+    mc->gregs[REG_EIP] = jl_ptr_demangle(mc->gregs[REG_EIP]);
     mc->gregs[REG_EAX] = val;
     // The simulated longjmp resumes code that expects the i386 ABI's
     // function-boundary FPU state (an empty x87 register stack), but the
@@ -1211,8 +1292,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
         mc->fpregs->sw = 0;               // clear TOP and exception flags
         mc->fpregs->tag = 0xffffffffu;    // all registers empty
     }
-    assert(mc->gregs[REG_ESP] % 16 == 0);
-    return 1;
+    return valid_longjmp_target(mc->gregs[REG_ESP], mc->gregs[REG_EIP]);
     #elif defined(_CPU_X86_64_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/__longjmp.S
     // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/jmpbuf-offsets.h
@@ -1226,12 +1306,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_RSP] = (*_ctx)[6];
     mc->gregs[REG_RIP] = (*_ctx)[7];
     // ifdef PTR_DEMANGLE ?
-    mc->gregs[REG_RBP] = ptr_demangle(mc->gregs[REG_RBP]);
-    mc->gregs[REG_RSP] = ptr_demangle(mc->gregs[REG_RSP]);
-    mc->gregs[REG_RIP] = ptr_demangle(mc->gregs[REG_RIP]);
+    mc->gregs[REG_RBP] = jl_ptr_demangle(mc->gregs[REG_RBP]);
+    mc->gregs[REG_RSP] = jl_ptr_demangle(mc->gregs[REG_RSP]);
+    mc->gregs[REG_RIP] = jl_ptr_demangle(mc->gregs[REG_RIP]);
     mc->gregs[REG_RAX] = val;
-    assert(mc->gregs[REG_RSP] % 16 == 0);
-    return 1;
+    return valid_longjmp_target(mc->gregs[REG_RSP], mc->gregs[REG_RIP]);
     #elif defined(_CPU_ARM_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
     // https://github.com/bminor/glibc/blame/master/sysdeps/arm/include/bits/setjmp.h
@@ -1247,12 +1326,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->arm_r10 = (*_ctx)[8]; // aka v7 aka sl
     mc->arm_fp = (*_ctx)[10]; // aka v8 aka r11
     // ifdef PTR_DEMANGLE ?
-    mc->arm_sp = ptr_demangle(mc->arm_sp);
-    mc->arm_lr = ptr_demangle(mc->arm_lr);
+    mc->arm_sp = jl_ptr_demangle(mc->arm_sp);
+    mc->arm_lr = jl_ptr_demangle(mc->arm_lr);
     mc->arm_pc = mc->arm_lr;
     mc->arm_r0 = val;
-    assert(mc->arm_sp % 16 == 0);
-    return 1;
+    return valid_longjmp_target(mc->arm_sp, mc->arm_pc);
     #elif defined(_CPU_AARCH64_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/__longjmp.S
     // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/jmpbuf-offsets.h
@@ -1282,12 +1360,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mcfp->vregs[13] = (*_ctx)[20]; // aka d14
     mcfp->vregs[14] = (*_ctx)[21]; // aka d15
     // ifdef PTR_DEMANGLE ?
-    mc->sp = ptr_demangle(mc->sp);
-    mc->regs[30] = ptr_demangle(mc->regs[30]);
+    mc->sp = jl_ptr_demangle(mc->sp);
+    mc->regs[30] = jl_ptr_demangle(mc->regs[30]);
     mc->pc = mc->regs[30];
     mc->regs[0] = val;
-    assert(mc->sp % 16 == 0);
-    return 1;
+    return valid_longjmp_target(mc->sp, mc->pc);
     #elif defined(_CPU_RISCV64_)
     // https://github.com/bminor/glibc/blob/master/sysdeps/riscv/bits/setjmp.h
     // https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/libunwind/src/Registers.hpp -> Registers_riscv
@@ -1320,12 +1397,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->__fpregs.__d.__f[27] = (unsigned long long) (*_ctx)->__fpregs[11]; // fs11
     #endif
     // ifdef PTR_DEMANGLE ?
-    mc->__gregs[REG_SP] = ptr_demangle(mc->__gregs[REG_SP]);
-    mc->__gregs[REG_RA] = ptr_demangle(mc->__gregs[REG_RA]);
+    mc->__gregs[REG_SP] = jl_ptr_demangle(mc->__gregs[REG_SP]);
+    mc->__gregs[REG_RA] = jl_ptr_demangle(mc->__gregs[REG_RA]);
     mc->__gregs[REG_PC] = mc->__gregs[REG_RA];
     mc->__gregs[REG_A0] = val;
-    assert(mc->__gregs[REG_SP] % 16 == 0);
-    return 1;
+    return valid_longjmp_target(mc->__gregs[REG_SP], mc->__gregs[REG_PC]);
     #else
     #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown linux")
     (void)mc;

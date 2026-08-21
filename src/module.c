@@ -96,7 +96,8 @@ struct implicit_search_resolution {
     // If non-null, the unique binding imported. For PARTITION_KIND_IMPLICIT_GLOBAL, always matches binding_or_const.
     // Must have trust_cache = 0.
     jl_binding_t *debug_only_ultimate_binding;
-    // Deprecation flags (PARTITION_FLAG_DEPRECATED / _DEPWARN) to stamp onto the resolved
+    // Deprecation flags (PARTITION_FLAG_DEPRECATED / _DEPWARN, together with
+    // _IMPLICITLY_DEPRECATED to mark their provenance) to set on the resolved
     // partition. A deprecated constant imported through `using` resolves to IMPLICIT_CONST
     // (its value), so -- unlike a deprecated global, whose flag lives on the leaf the depwarn
     // walk reaches -- there is no leaf to carry the deprecation. Recording it here and OR-ing
@@ -106,7 +107,18 @@ struct implicit_search_resolution {
     size_t deprecation_flags;
 };
 
-static const size_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN;
+static const size_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN | PARTITION_FLAG_IMPLICITLY_DEPRECATED;
+
+// Flags to carry over when replacing a partition. Deprecation set by implicit resolution
+// belongs to the imported binding, so it does not survive replacement; explicitly set
+// deprecation does.
+size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
+{
+    size_t flags = bpart->kind & PARTITION_MASK_FLAG;
+    if (flags & PARTITION_FLAG_IMPLICITLY_DEPRECATED)
+        flags &= ~DEPWARN_FLAGS;
+    return flags;
+}
 
 static size_t WORLDMAX(size_t a, size_t b) { return a > b ? a : b; }
 static size_t WORLDMIN(size_t a, size_t b) { return a > b ? b : a; }
@@ -360,8 +372,11 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
             imp_resolution.should_be_reexported = 0;
         } else {
             enum jl_partition_kind kind = jl_binding_kind(tempbpart);
-            // Copy the imported binding's deprecation onto the importer's partition.
+            // Copy the imported binding's deprecation onto the importer's partition,
+            // marked implicit so it is dropped again if the partition is replaced.
             imp_resolution.deprecation_flags = tempbpart_flags & DEPWARN_FLAGS;
+            if (imp_resolution.deprecation_flags)
+                imp_resolution.deprecation_flags |= PARTITION_FLAG_IMPLICITLY_DEPRECATED;
             if (kind == PARTITION_KIND_IMPLICIT_GLOBAL) {
                 imp_resolution.binding_or_const = tempbpart->restriction;
                 imp_resolution.debug_only_ultimate_binding = (jl_binding_t*)tempbpart->restriction;
@@ -729,7 +744,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                       jl_symbol_name(mod->name), jl_symbol_name(var));
         }
         if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
-            bpart->kind = constant_kind | (bpart->kind & PARTITION_MASK_FLAG);
+            bpart->kind = constant_kind | jl_carried_binding_flags(bpart);
             jl_gc_write(bpart, bpart->restriction, jl_value_t, val);
             new_bpart = bpart;
         } else {
@@ -1918,7 +1933,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world)
 {
     // Copy flags from old bpart
-    return jl_replace_binding_locked2(b, old_bpart, restriction_val, (size_t)kind | (size_t)(old_bpart->kind & PARTITION_MASK_FLAG),
+    return jl_replace_binding_locked2(b, old_bpart, restriction_val, (size_t)kind | jl_carried_binding_flags(old_bpart),
         new_world);
 }
 
@@ -2109,7 +2124,7 @@ static int should_depwarn(jl_binding_t *b, uint8_t flag) JL_CANSAFEPOINT
     // We do not consider it deprecated when reached through an explicit import (`import`/
     // `using M: x`): the thing that should be adjusted is the import, not the use, and the
     // import site already warned. Implicit resolution records both of these on the importer's
-    // own partition -- it stamps the deprecation flag onto the resolved partition for every
+    // own partition -- it sets the deprecation flag on the resolved partition for every
     // implicitly-imported deprecated binding (constant or global, transparently through
     // reexports), while explicit imports never take that path and so carry no flag. Checking
     // the top partition therefore suffices, and matches codegen's const-fold `maybe_depwarn`.

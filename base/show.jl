@@ -1132,7 +1132,9 @@ end
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
-function isvisible(sym::Symbol, parent::Module, from::Module)
+# `@constprop :none` so concrete-eval doesn't bake binding edges (often on `Main.sym`)
+# into the show machinery, where any rebinding of the name would invalidate it (#61667)
+@constprop :none function isvisible(sym::Symbol, parent::Module, from::Module)
     isdeprecated(parent, sym) && return false
     isdefinedglobal(from, sym) || return false
     isdefinedglobal(parent, sym) || return false
@@ -3442,6 +3444,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0 && push!(flags, "re-exported")
         (partition.kind & PARTITION_FLAG_DEPRECATED)          != 0 && push!(flags, "deprecated")
         (partition.kind & PARTITION_FLAG_DEPWARN)             != 0 && push!(flags, "depwarn")
+        (partition.kind & PARTITION_FLAG_IMPLICITLY_DEPRECATED) != 0 && push!(flags, "implicitly-deprecated")
         print(io, " [", join(flags, ","), "]")
     end
     print(io, " - ")

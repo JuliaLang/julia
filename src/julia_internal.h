@@ -39,22 +39,16 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#ifdef _OS_LINUX_
+JL_DLLEXPORT int jl_ptr_demangle_available(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uintptr_t jl_ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT;
+#endif
 #ifdef _COMPILER_ASAN_ENABLED_
 #if defined(__GLIBC__) && defined(_CPU_X86_64_)
-/* TODO: This is terrible - we're reaching deep into glibc internals here.
-   We should probably just switch to our own setjmp/longjmp implementation. */
 #define JB_RSP 6
-static inline uintptr_t demangle_ptr(uintptr_t var)
-{
-    asm ("ror $17, %0\n\t"
-         "xor %%fs:0x30, %0\n\t"
-        : "=r" (var)
-        : "0" (var));
-    return var;
-}
 static inline uintptr_t jmpbuf_sp(jl_jmp_buf *buf)
 {
-    return demangle_ptr((uintptr_t)(*buf)[0].__jmpbuf[JB_RSP]);
+    return jl_ptr_demangle((uintptr_t)(*buf)[0].__jmpbuf[JB_RSP]);
 }
 #else
 #error Need to implement jmpbuf_sp for this architecture
@@ -69,9 +63,22 @@ static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf)
     /* Unpoison everything from the base of the stack allocation to the address
        that we're resetting to. The idea is to remove the poison from the frames
        that we're skipping over, since they won't be unwound. */
-    uintptr_t top = jmpbuf_sp(buf);
-    uintptr_t bottom = (uintptr_t)(ct->ctx.copy_stack ? (char*)ct->ptls->stackbase  - ct->ptls->stacksize : (char*)ct->ctx.stkbuf);
-    //uintptr_t bottom = (uintptr_t)&top;
+    uintptr_t bottom;
+    uintptr_t stacktop;
+    if (ct->ctx.copy_stack) {
+        stacktop = (uintptr_t)ct->ptls->stackbase;
+        bottom = stacktop - ct->ptls->stacksize;
+    }
+    else {
+        bottom = (uintptr_t)ct->ctx.stkbuf;
+        stacktop = bottom + ct->ctx.bufsz;
+    }
+    uintptr_t top = stacktop;
+    if (jl_ptr_demangle_available()) {
+        top = jmpbuf_sp(buf);
+        if (top < bottom || top > stacktop)
+            top = stacktop;
+    }
     __asan_unpoison_stack_memory(bottom, top - bottom);
 }
 static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) {
@@ -1196,9 +1203,11 @@ STATIC_INLINE int jl_bkind_is_real_constant(enum jl_partition_kind kind) JL_NOTS
     return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT;
 }
 
-STATIC_INLINE int jl_bpart_is_exported(uint8_t flags) JL_NOTSAFEPOINT {
-    return flags & (PARTITION_FLAG_EXPORTED | PARTITION_FLAG_IMPLICITLY_EXPORTED);
+STATIC_INLINE int jl_bpart_is_exported(size_t flags) JL_NOTSAFEPOINT {
+    return (flags & (PARTITION_FLAG_EXPORTED | PARTITION_FLAG_IMPLICITLY_EXPORTED)) != 0;
 }
+
+size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *previous_part, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
@@ -2155,6 +2164,9 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi) JL_CANSAFEPOINT;
 int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT;
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;

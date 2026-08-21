@@ -1338,6 +1338,28 @@ let err = nothing
     end
 end
 
+# expands inline, without the `do`-block forms of `mktemp`/`redirect_stderr`: a
+# StackOverflowError is only reliably catchable from the interpreted top-level
+# `@testset` body, not from within a compiled closure
+macro capture_stack_overflow(ex)
+    return quote
+        local path, warning_output = mktemp()
+        local prev_stderr = stderr
+        redirect_stderr(warning_output)
+        local bt = try
+            $(esc(ex))
+        catch
+            catch_backtrace()
+        finally
+            redirect_stderr(prev_stderr)
+            close(warning_output)
+        end
+        local warning = read(path, String)
+        rm(path)
+        bt, warning
+    end
+end
+
 # issue #37587
 # TODO: enable on more platforms
 if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
@@ -1346,20 +1368,14 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
     pair_repeater_b() = pair_repeater_a()
 
     @testset "repeated stack frames" begin
-        let bt = try
-                single_repeater()
-            catch
-                catch_backtrace()
-            end
+        let (bt, warning) = @capture_stack_overflow(single_repeater())
+            @test occursin("Warning: detected a stack overflow", warning)
             bt_str = sprint(Base.show_backtrace, bt)
             @test occursin(r"repeated \d+ times", bt_str)
         end
 
-        let bt = try
-                pair_repeater_a()
-            catch
-                catch_backtrace()
-            end
+        let (bt, warning) = @capture_stack_overflow(pair_repeater_a())
+            @test occursin("Warning: detected a stack overflow", warning)
             bt_str = sprint(Base.show_backtrace, bt)
             @test occursin(r"repeated \d+ times", bt_str)
         end

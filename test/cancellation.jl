@@ -307,6 +307,103 @@ end
                                           CANCEL_TOKEN => CancellationToken(qchild))
 end
 
+@testset "scoped-default token cache" begin
+    # The per-task cache (Task.bound_cancel_default over bound_cancel_token)
+    # must be invisible: default_cancel_token() always resolves to what the
+    # CANCEL_TOKEN scoped lookup would return under the current scope.
+    src = CancellationTokenSource()
+    tok = CancellationToken(src)
+
+    # the ambient default outside our scopes (the test harness may itself
+    # run under a governing token, e.g. the ^C episode source)
+    ambient = Base.default_cancel_token()
+
+    # warm lookups agree with the scope, and the cache invariant holds
+    with(CANCEL_TOKEN => tok) do
+        t1 = Base.default_cancel_token()
+        t2 = Base.default_cancel_token()
+        @test t1 === tok && t2 === tok
+        ct = current_task()
+        @test getfield(ct, :bound_cancel_default) === 0x01
+        @test (@atomic :monotonic ct.bound_cancel_token) === src
+    end
+    # after the scope exits, the ambient default is back
+    @test Base.default_cancel_token() === ambient
+
+    # a cancellation point that publishes a *different* explicit source must
+    # not leave the cache claiming it as the scoped default
+    other = CancellationTokenSource()
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok      # warm the cache
+        Base.@cancel_check CancellationToken(other)    # rebind to `other`
+        @test Base.default_cancel_token() === tok      # still the scoped one
+        Base.@cancel_check nothing                     # explicit clear
+        @test Base.default_cancel_token() === tok
+    end
+
+    # the same-source cancellation point keeps a warm cache intact
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        Base.@cancel_check
+        @test getfield(current_task(), :bound_cancel_default) === 0x01
+        @test Base.default_cancel_token() === tok
+    end
+
+    # scope changes that do not touch CANCEL_TOKEN still resolve correctly
+    sv = ScopedValue(0)
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        with(sv => 1) do
+            @test Base.default_cancel_token() === tok
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # nesting and shielding, with warm caches at every level
+    inner = CancellationTokenSource()
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        with(CANCEL_TOKEN => CancellationToken(inner)) do
+            @test Base.default_cancel_token() === CancellationToken(inner)
+        end
+        @test Base.default_cancel_token() === tok
+        with(CANCEL_TOKEN => nothing) do
+            @test Base.default_cancel_token() === nothing
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # an exceptional unwind out of an inner scope restores the outer default
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        try
+            with(CANCEL_TOKEN => CancellationToken(inner)) do
+                @test Base.default_cancel_token() === CancellationToken(inner)
+                error("unwind")
+            end
+        catch err
+            @test err == ErrorException("unwind")
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # a task spawned under the scope resolves its inherited default
+    with(CANCEL_TOKEN => tok) do
+        t = Threads.@spawn Base.default_cancel_token()
+        @test fetch(t) === tok
+    end
+
+    # a warm cache still observes cancellation promptly (the cache holds the
+    # source; its state is what the check reads)
+    psrc = CancellationTokenSource()
+    with(CANCEL_TOKEN => CancellationToken(psrc)) do
+        @test Base.default_cancel_token() === CancellationToken(psrc)
+        Base.@cancel_check
+        cancel!(psrc)
+        @test_throws CancellationRequest Base.@cancel_check
+    end
+end
+
 @testset "cooperative cancellation of running tasks" begin
     # a @cancel_check polling loop is stopped cross-thread by cancel!
     started = Threads.Atomic{Bool}(false)
@@ -1112,13 +1209,14 @@ end
     @lock cond notify(cond) # still functional (no waiters)
 
     # Task blocked in wait(::Base.Process); the process itself keeps running
-    p = run(sleep_cmd(1000); wait=false)
+    p = open(`$(Base.julia_cmd()) --startup-file=no -e "read(stdin)"`, "w")
     t, src = cancellable(() -> wait(p))
     spin()
     cancel!(src)
     expect_cancelled(t)
     @test process_running(p)
-    kill(p); wait(p)
+    close(p); wait(p)
+    @test success(p)
 
     # Task blocked in waitany; the awaited tasks live in different scopes and
     # remain unaffected by the waiter's cancellation
@@ -1838,8 +1936,7 @@ end
     # it through the annotated MPZ entry points - either their own
     # cancellation point, an asynchronous reset landing inside audited
     # libgmp compute (the reset region stays published across the annotated
-    # call), or the deferring allocation hooks chaining into the reset on
-    # exit.
+    # call), or the allocation hooks republishing the region on exit.
     function bigmul_loop(nbits)
         b = big(3)^(nbits ÷ 2)
         m = big(10)^(nbits ÷ 8)
@@ -1859,10 +1956,10 @@ end
         @test string(big(2)^128) == "340282366920938463463374607431768211456"
 
         # Allocation-churn storm: small, allocation-dominated BigInt work
-        # hammered by cancellation. Deliveries frequently land inside the
-        # deferring jl_gmp_counted_* hooks (the handler region), exercising
-        # the defer-and-chain path; correctness is "no crash, no corruption,
-        # clean arithmetic afterwards".
+        # hammered by cancellation. Deliveries frequently race the
+        # jl_gmp_counted_* hooks, exercising their unpublish/republish path;
+        # correctness is "no crash, no corruption, clean arithmetic
+        # afterwards".
         deadline = time() + 8
         rounds = 0
         while time() < deadline
@@ -2561,9 +2658,9 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     # delivery could (corrupting the heap - issue #56545): the loop is
     # deliberately checkless, so delivery lands on an MPZ entry point's own
     # cancellation point, inside audited libgmp compute (unwound via the
-    # published reset region), or inside the allocation hooks (deferred and
-    # chained into the reset on exit) - and BigInt arithmetic in the
-    # session works correctly afterwards
+    # published reset region), or when an allocation hook republishes the
+    # region on exit - and BigInt arithmetic in the session works correctly
+    # afterwards
     sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
     expect("EVAL-6")
     sleep(0.5)

@@ -697,7 +697,9 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
+    redirect_stderr(devnull) do
+        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
+    end
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
@@ -711,7 +713,9 @@ precompile_test_harness(false) do dir
         $code
         end
         """)
-        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
+        redirect_stderr(devnull) do
+            @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
+        end
     end
 
     # Declaring an already-existing generic function of a closed module is a
@@ -1192,6 +1196,38 @@ precompile_test_harness("precompiletools") do dir
             success += sig.parameters[3] === Vector{M.MyType}
         end
         @test success == 1
+    end
+end
+
+precompile_test_harness("dispatch edge") do dir
+    KindDispatch = :KindDispatch_0x5e0bd2a4c1f7
+    write(joinpath(dir, "$KindDispatch.jl"),
+        """
+        module $KindDispatch
+            # Inference through a kind (`Type{T}`) reaches calls that match several
+            # methods, and no cached source is available for them, so the optimizer has to
+            # synthesize the call target. The dispatch edge recorded for it must not claim
+            # that the target's signature has a single fully-covering match: nothing about
+            # dispatch changes between precompiling this and loading it, so `f` must stay
+            # valid.
+            f(v::Vector{Any}) = Base.aligned_sizeof(v[1]::Type{<:Real})
+            precompile(f, (Vector{Any},))
+        end
+        """
+    )
+    pkgid = Base.PkgId(string(KindDispatch))
+    Base.compilecache(pkgid)
+    @eval using $KindDispatch
+    M = invokelatest(getglobal, @__MODULE__, KindDispatch)
+    invokelatest() do
+        world = Base.get_world_counter()
+        mi = only(Base.specializations(only(methods(M.f))))
+        @test mi.specTypes === Tuple{typeof(M.f), Vector{Any}}
+        ci = mi.cache
+        while ci.max_world < world && isdefined(ci, :next)
+            ci = ci.next
+        end
+        @test ci.max_world == typemax(UInt)
     end
 end
 

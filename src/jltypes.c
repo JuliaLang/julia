@@ -1223,12 +1223,6 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
 static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t **key, size_t n) JL_CANSAFEPOINT
 {
     JL_TIMING(TYPE_CACHE_LOOKUP, TYPE_CACHE_LOOKUP);
-    if (tn == jl_type_typename) {
-        assert(n == 1);
-        jl_value_t *uw = jl_unwrap_unionall(key[0]);
-        if (jl_is_datatype(uw) && key[0] == ((jl_datatype_t*)uw)->name->wrapper)
-            return jl_atomic_load_acquire(&((jl_datatype_t*)uw)->name->Typeofwrapper);
-    }
     unsigned hv = typekey_hash(tn, key, n, 0);
     if (hv) {
         jl_svec_t *cache = jl_atomic_load_relaxed(&tn->cache);
@@ -1366,15 +1360,6 @@ void jl_cache_type_(jl_datatype_t *type)
     assert(is_cacheable(type));
     jl_value_t **key = jl_svec_data(type->parameters);
     int n = jl_svec_len(type->parameters);
-    if (type->name == jl_type_typename) {
-        assert(n == 1);
-        jl_value_t *uw = jl_unwrap_unionall(key[0]);
-        if (jl_is_datatype(uw) && key[0] == ((jl_datatype_t*)uw)->name->wrapper) {
-            jl_typename_t *tn2 = ((jl_datatype_t*)uw)->name;
-            jl_gc_write_atomic(tn2, tn2->Typeofwrapper, jl_value_t, (jl_value_t*)type, release);
-            return;
-        }
-    }
     unsigned hv = typekey_hash(type->name, key, n, 0);
     if (hv) {
         assert(hv == type->hash);
@@ -1444,7 +1429,7 @@ static int has_concrete_supertype(jl_value_t *kj) JL_NOTSAFEPOINT
     jl_value_t *uw = jl_is_unionall(kj) ? jl_unwrap_unionall(kj) : kj;
     if (jl_is_datatype(uw)) {
         jl_datatype_t *dt = (jl_datatype_t*)uw;
-        if (dt->name->abstract && dt->name != jl_type_typename)
+        if (dt->name->abstract)
             return 0;
         if (!dt->maybe_subtype_of_cache)
             return 0;
@@ -2171,16 +2156,6 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
         }
     }
     assert(dt->isconcretetype || dt->isdispatchtuple ? dt->maybe_subtype_of_cache : 1);
-    if (dt->name == jl_type_typename) {
-        jl_value_t *p = jl_tparam(dt, 0);
-        if (!jl_is_type(p) && !jl_is_typevar(p)) // Type{v} has no subtypes, if v is not a Type
-            dt->has_concrete_subtype = 0;
-        dt->maybe_subtype_of_cache = 1;
-        jl_value_t *uw = jl_unwrap_unionall(p);
-        // n.b. the cache for Type ignores parameter normalization except for Typeofwrapper, so it can't be used to make a stable hash value
-        if (!jl_is_datatype(uw) || ((jl_datatype_t*)uw)->name->wrapper != p)
-            cacheable = 0;
-    }
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
 
@@ -2535,20 +2510,15 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 continue;
             if (!cacheable && jl_has_free_typevars(pi))
                 continue;
-            // normalize types equal to wrappers (prepare for Typeofwrapper)
+            // normalize types equal to wrappers
             jl_value_t *tw = extract_wrapper(pi);
-            if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
+            if (tw && tw != pi &&
                     !jl_has_free_typevars(pi) && jl_types_equal(pi, tw)) {
                 if (p)
                     jl_gc_write(p, iparams[i], jl_value_t, tw);
                 else
                     iparams[i] = tw;
             }
-        }
-        if (tn == jl_type_typename && jl_is_typeeq(iparams[0]) &&
-            jl_typeeq_T(iparams[0]) == jl_bottom_type) {
-            // normalize Type{Type{Union{}}} to Type{TypeofBottom}
-            iparams[0] = (jl_value_t*)jl_typeofbottom_type;
         }
     }
     // then check the cache again, if applicable
@@ -2623,7 +2593,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     assert(jl_is_svec(p) && iparams == jl_svec_data(p));
 
     // try to simplify some type parameters
-    if (check && tn != jl_type_typename) {
+    if (check) {
         int changed = 0;
         if (istuple) // normalization might change Tuple's, but not other types's, cacheable status
             cacheable = 1;
@@ -4388,7 +4358,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "priority",
                                         "_isexception",
                                         "preempt_request",
-                                        "pad01",
+                                        "bound_cancel_default",
                                         "pad02",
                                         "rngState0",
                                         "rngState1",
@@ -4446,6 +4416,12 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(task);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
+    // Declare bound_cancel_token as Union{Nothing, CancellationTokenSource}
+    // so reads narrow with a `=== nothing` check instead of a type-tag load
+    // (the tag load is a volatile unsafe point that would tear a published
+    // reset region on every cache-hit token lookup).
+    jl_value_t *boundt = jl_new_struct(jl_uniontype_type, (jl_value_t*)jl_cancel_source_type, jl_nothing_type);
+    jl_svecset(jl_task_type->types, 31, boundt);
     // Set field 20 (metrics_enabled) as const
     // Set fields 8 (_state), 12 (preempt_request), 24-27 (metric counters),
     // 28 (waiting_on) and 32 (bound_cancel_token) as atomic

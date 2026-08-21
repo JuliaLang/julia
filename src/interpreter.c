@@ -533,14 +533,97 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     return ip;
 }
 
+// Resolve interpreter coverage frames like codegen's append_lineinfo and
+// coverageVisitStmt. Deeply nested expansions may lose innermost frames.
+#define COVERAGE_MAX_FRAMES 12
+typedef struct {
+    const char *file[COVERAGE_MAX_FRAMES];
+    int32_t line[COVERAGE_MAX_FRAMES];
+    int32_t edgeid[COVERAGE_MAX_FRAMES];
+    int tracked[COVERAGE_MAX_FRAMES];
+    int n;
+} coverage_frames_t;
+
+// On failure, `out` may contain a partial frame list and must be discarded.
+static int coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
+                            jl_module_t *enclosing, int32_t to, size_t pc,
+                            coverage_frames_t *out) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (!jl_is_symbol(debuginfo->def))
+            func = debuginfo->def;
+        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
+        int32_t i = lineidx.loc;
+        if (i < 0)
+            return 0;
+        if (i == 0 && lineidx.to == 0)
+            return 0;
+        if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
+            if (!coverage_collect((jl_debuginfo_t*)debuginfo->linetable, func, enclosing, to, i, out))
+                return 0;
+        }
+        else if (i > 0 && out->n < COVERAGE_MAX_FRAMES) {
+            const char *file = jl_cdi_file(debuginfo);
+            jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
+            // Sysimage source paths are relative; other source paths are absolute.
+            if (modu == NULL && jl_isabspath(file))
+                modu = enclosing;
+            int n = out->n++;
+            out->file[n] = file;
+            out->line[n] = i;
+            out->edgeid[n] = to;
+            out->tracked[n] = jl_coverage_enabled_for(modu, file);
+        }
+        to = lineidx.to;
+        if (to == 0)
+            return 1;
+        pc = lineidx.pc;
+        debuginfo = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, to - 1);
+        func = NULL;
+    }
+}
+
+static int coverage_visit_stmt(jl_code_info_t *src, jl_module_t *module,
+                               jl_method_instance_t *mi, size_t pc,
+                               coverage_frames_t *prev,
+                               coverage_frames_t *cur) JL_CANSAFEPOINT
+{
+    cur->n = 0;
+    if (!coverage_collect(src->debuginfo, mi ? (jl_value_t*)mi : NULL, module, 0, pc, cur))
+        return 0;
+    int d = 0;
+    // Keep this in sync with codegen's DebugLineTable::sameframe.
+    while (d < cur->n && d < prev->n &&
+           cur->line[d] == prev->line[d] && cur->edgeid[d] == prev->edgeid[d])
+        d++;
+    for (int k = d; k < cur->n; k++)
+        if (cur->tracked[k])
+            jl_coverage_visit_line(cur->file[k], strlen(cur->file[k]), cur->line[k]);
+    return 1;
+}
+
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
     size_t ns = jl_array_nrows(stmts);
     jl_task_t *ct = jl_current_task;
+    // Top-level coverage is recorded in jl_toplevel_eval_flex.
+    int track_coverage = !toplevel && jl_options.code_coverage != JL_LOG_NONE &&
+                         !jl_generating_output() && s->src->debuginfo != NULL;
+    coverage_frames_t coverage_frames[2];
+    coverage_frames_t *prev_coverage = &coverage_frames[0];
+    coverage_frames_t *cur_coverage = &coverage_frames[1];
+    prev_coverage->n = 0;
 
     while (1) {
         s->ip = ip;
+        if (track_coverage && ip < ns &&
+                coverage_visit_stmt(s->src, s->module, s->mi, ip + 1,
+                                    prev_coverage, cur_coverage)) {
+            coverage_frames_t *tmp = prev_coverage;
+            prev_coverage = cur_coverage;
+            cur_coverage = tmp;
+        }
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
@@ -612,6 +695,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
                 jl_gc_wb_current_task(ct, new_scope);
                 ct->scope = new_scope;
+                // Installing a new scope invalidates the cached scoped-default
+                // cancellation token (see bound_cancel_default); the handler
+                // restore brackets bring the flag back with the scope.
+                ct->bound_cancel_default = 0;
                 if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
@@ -773,7 +860,9 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES
     if (jl_is_method(mi->def.value)) {
         if (mi->def.method->source) {
             jl_method_t *m = mi->def.method;
-            src = (jl_code_info_t*)m->source;
+            // Acquire pairs with the release publish below: a reader that sees
+            // the uncompressed CodeInfo pointer must also see its contents.
+            src = (jl_code_info_t*)jl_atomic_load_acquire((_Atomic(jl_value_t*)*)&m->source);
             if (!jl_is_code_info(src)) {
                 // Root the compressed blob across the (allocating) decode:
                 // another thread interpreting the same method concurrently can
@@ -789,7 +878,8 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES
                 // access it frequently. TODO: Have some sort of usage-based
                 // cache here. (Concurrent publishes store equivalent copies;
                 // last one wins.)
-                jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
+                jl_gc_write_atomic(m, *(_Atomic(jl_value_t*)*)&m->source, jl_value_t,
+                                   (jl_value_t*)src, release);
             }
             ret = (jl_value_t*)src;
         }

@@ -101,7 +101,9 @@
 #include "clang/Lex/Lexer.h"
 #include "clang-tidy/ClangTidyCheck.h"
 #include "clang-tidy/ClangTidyModule.h"
+#if LLVM_VERSION_MAJOR < 22
 #include "clang-tidy/ClangTidyModuleRegistry.h"
+#endif
 #include "llvm/ADT/StringSet.h"
 
 #include "HelpersCommon.hpp"

@@ -1530,7 +1530,8 @@ end
     @test JL.include_string(test_mod,
         "f_kwdef_sp(y::T; k=T) where T = (y, k); f_kwdef_sp(1)") == (1, Int)
     # ... but an sparam unused in the signature is undetermined at dispatch
-    JL.include_string(test_mod, "f_kwdef_sp_undet(y; k=T) where T = (y, k)")
+    @test_warn r"declares type variable T but does not use it" JL.include_string(
+        test_mod, "f_kwdef_sp_undet(y; k=T) where T = (y, k)")
     @test_throws UndefVarError test_mod.f_kwdef_sp_undet(1)
 end
 
