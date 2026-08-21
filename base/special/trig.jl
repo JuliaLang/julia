@@ -926,6 +926,8 @@ const _cospi_kernel_f64 = Base.Fix2(_cospi_kernel, _cospi_kernel_polynomial_f64)
 const _sinpi_kernel_f32 = Base.Fix2(_sinpi_kernel, _sinpi_kernel_polynomial_f32)
 const _sinpi_kernel_f64 = Base.Fix2(_sinpi_kernel, _sinpi_kernel_polynomial_f64)
 
+@noinline sinpi_domain_error(x) = throw(DomainError(x, "`sinpi(x)` is only defined for finite `x`."))
+
 """
     sinpi(x::T) where T -> float(T)
 
@@ -939,7 +941,7 @@ function sinpi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError(x, "`sinpi(x)` is only defined for finite `x`."))
+        sinpi_domain_error(x)
     end
     # For large x, answers are all 1 or zero.
     x >= maxintfloat(T) && return copysign(zero(T), _x)
@@ -959,6 +961,9 @@ function sinpi(_x::T) where T<:IEEEFloat
     end
     return ifelse(signbit(_x), -res, res)
 end
+
+@noinline cospi_domain_error(x) = throw(DomainError(x, "`cospi(x)` is only defined for finite `x`."))
+
 """
     cospi(x::T) where T -> float(T)
 
@@ -972,7 +977,7 @@ function cospi(x::T) where T<:IEEEFloat
     x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError(x, "`cospi(x)` is only defined for finite `x`."))
+        cospi_domain_error(x)
     end
     # For large x, answers are all 1 or zero.
     x >= maxintfloat(T) && return one(T)
@@ -991,6 +996,9 @@ function cospi(x::T) where T<:IEEEFloat
         return sinpi_kernel(rx)
     end
 end
+
+@noinline sincospi_domain_error(x) = throw(DomainError(x, "`sincospi(x)` is only defined for finite `x`."))
+
 """
     sincospi(x::T) where T -> Tuple{float(T),float(T)}
 
@@ -1008,7 +1016,7 @@ function sincospi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x, x
-        throw(DomainError(x, "`sincospi(x)` is only defined for finite `x`."))
+        sincospi_domain_error(x)
     end
     # For large x, answers are all 1 or zero.
     x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
@@ -1031,6 +1039,8 @@ function sincospi(_x::T) where T<:IEEEFloat
     return si, co
 end
 
+@noinline tanpi_domain_error(x) = throw(DomainError(x, "`tanpi(x)` is only defined for finite `x`."))
+
 """
     tanpi(x::T) where T -> float(T)
 
@@ -1049,7 +1059,7 @@ function tanpi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError(x, "`tanpi(x)` is only defined for finite `x`."))
+        tanpi_domain_error(x)
     end
     # For large x, answers are all zero.
     # All integer values for floats larger than maxintfloat are even.
@@ -1472,9 +1482,11 @@ end
 deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(Float64(x)))
 deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
+@noinline sind_domain_error(x) = throw(DomainError(x, "`sind(x)` is only defined for finite `x`."))
+
 function sind(x::Real)
     if isinf(x)
-        return throw(DomainError(x, "`sind(x)` is only defined for finite `x`."))
+        return sind_domain_error(x)
     elseif isnan(x)
         return x
     end
@@ -1503,9 +1515,11 @@ function sind(x::Real)
     end
 end
 
+@noinline cosd_domain_error(x) = throw(DomainError(x, "`cosd(x)` is only defined for finite `x`."))
+
 function cosd(x::Real)
     if isinf(x)
-        return throw(DomainError(x, "`cosd(x)` is only defined for finite `x`."))
+        return cosd_domain_error(x)
     elseif isnan(x)
         return x
     end
