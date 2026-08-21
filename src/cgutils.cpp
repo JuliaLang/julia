@@ -3895,8 +3895,6 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     jl_value_t *jt = vinfo.typ;
     if (jt == (jl_value_t*)jl_bool_type)
         return track_pjlvalue(ctx, julia_bool(ctx, ctx.builder.CreateTrunc(as_value(ctx, t, vinfo), getInt1Ty(ctx.builder.getContext()))));
-    if (t == getInt1Ty(ctx.builder.getContext()))
-        return track_pjlvalue(ctx, julia_bool(ctx, as_value(ctx, t, vinfo)));
 
     if (ctx.linfo && jl_is_method(ctx.linfo->def.method) && vinfo.V && vinfo.inline_roots.empty() && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
