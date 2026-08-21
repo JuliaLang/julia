@@ -98,19 +98,25 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
     return 1;
 }
 
+// Bytes of a primitive type that hold value bits, and the mask of the last of them.
+// The remaining bytes up to jl_datatype_size are padding.
+static inline size_t used_bytes(jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    return (jl_datatype_nbits(dt) + 7) / 8;
+}
+
 static inline uint8_t last_byte_mask(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    uint32_t unused = jl_datatype_unusedbits(dt);
-    return (uint8_t)(0xff >> unused);
+    return (uint8_t)(0xff >> (used_bytes(dt) * 8 - jl_datatype_nbits(dt)));
 }
 
 static inline int primitive_bits_equal(const void *a, const void *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    size_t sz = jl_datatype_size(dt);
-    if (sz == 0)
+    size_t nb = used_bytes(dt);
+    if (nb == 0)
         return 1;
-    return (sz <= 1 || bits_equal(a, b, sz - 1)) &&
-           ((((const uint8_t*)a)[sz - 1] ^ ((const uint8_t*)b)[sz - 1]) & last_byte_mask(dt)) == 0;
+    return (nb <= 1 || bits_equal(a, b, nb - 1)) &&
+           ((((const uint8_t*)a)[nb - 1] ^ ((const uint8_t*)b)[nb - 1]) & last_byte_mask(dt)) == 0;
 }
 
 // See comment above for an explanation of NOINLINE.
@@ -491,10 +497,12 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         // which may affect the stability of the objectid hash, even though
         // they don't affect egal comparison
         if (nf == 0 && dt->layout->flags.haspadding) {
-            void *buf = alloca(sz);
-            memcpy(buf, v, sz);
-            ((uint8_t*)buf)[sz - 1] &= last_byte_mask(dt);
-            return bits_hash(buf, sz) ^ h;
+            // hash only the value bits, so padding cannot perturb the hash
+            size_t nb = used_bytes(dt);
+            void *buf = alloca(nb);
+            memcpy(buf, v, nb);
+            ((uint8_t*)buf)[nb - 1] &= last_byte_mask(dt);
+            return bits_hash(buf, nb) ^ h;
         }
         return bits_hash(v, sz) ^ h;
     }
