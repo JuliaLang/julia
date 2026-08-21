@@ -1335,6 +1335,11 @@ void jl_init_runtime_ccall(void) JL_NOTSAFEPOINT;
 void jl_init_intrinsic_functions(void) JL_CANSAFEPOINT JL_GC_DISABLED;
 void jl_init_intrinsic_properties(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_staticdata(void) JL_NOTSAFEPOINT;
+// BUILD_PATH_PREFIX_MAP remapping of serialized source paths (staticdata_utils.c)
+jl_value_t *jl_maybe_map_build_path_jlstr(jl_value_t *str) JL_CANSAFEPOINT;
+JL_DLLEXPORT char *jl_maybe_map_build_path_cstr(const char *path, size_t len, size_t *outlen) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_map_build_path(jl_value_t *str) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_test_map_build_path(jl_value_t *map, jl_value_t *path) JL_CANSAFEPOINT;
 // TypeApp: immutable struct with head::Any, param::Any
 // Represents a single lazy type application step (like UnionAll for where bindings).
 typedef struct {
