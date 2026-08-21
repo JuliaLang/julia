@@ -67,14 +67,8 @@ static ssize_t idset_compact(jl_genericmemory_t *keys)
     return rehash ? -j : j;
 }
 
-// Insert `key` into the first free slot at the end of the packed prefix of
-// `keys` (growing, and compacting order-preservingly, if there is none). On a
-// set that never sees `jl_idset_pop`, the keys therefore form a packed prefix
-// -- no interior holes -- in insertion order. `Method.interferences` consumers
-// rely on exactly that: iteration may stop at the first empty slot, and
-// entries appear in method-definition (world) order (see the stable-prefix
-// reload in `sort_mlmatches` in gf.c and `eachinterference` in
-// Compiler/src/reinfer.jl).
+// Insert `key` into the first free slot at the end of the ordered set
+// `keys` (growing and compacting are insertion-order-preserving).
 jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, ssize_t *newidx)
 {
     ssize_t l = keys->length;
@@ -119,11 +113,11 @@ jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_
     return jl_atomic_load_relaxed(&newidxs);
 }
 
-/* returns idx if key is in hash, otherwise -1 */
 // Removal NULLs the key's slot in place, leaving an interior hole until a
-// later insertion happens to compact the prefix. That breaks the packed-prefix
-// guarantee documented at `jl_idset_put_key`, so this must not be used on
-// sets whose consumers rely on it (notably `Method.interferences`).
+// later insertion compacts the list. That breaks the packed-prefix guarantee
+// of the ordered-set insertion, so this must not be used on sets whose
+// consumers rely on that property for lock-free iteration (such as `Method.interferences`).
+// Returns idx if key is in hash, otherwise -1.
 ssize_t jl_idset_pop(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT
 {
     uintptr_t hv = jl_object_id(key);

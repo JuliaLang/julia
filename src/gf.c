@@ -3186,9 +3186,6 @@ static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t 
     // exempt from that scan -- notably when S is the minmax method, which the
     // sort never visits -- leaving this check as the only witness of the pair
     // when D's only cover is a match that S beats (test `AmbigMinmaxPartner`))
-    // Root the interference-set snapshot: a concurrent method definition may
-    // swap in a grown copy, leaving this one unreachable across the safepoints
-    // in `check_blocker_transfer`.
     jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&D->interferences);
     JL_GC_PUSH1(&interferences);
     for (size_t i = 0; i < interferences->length; i++) {
@@ -3241,51 +3238,50 @@ static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t 
 // match was blocking another match, sets *has_ambiguity; in that case the match
 // is only reported as covered when `include_ambiguous` is false, so that
 // ambiguity-reporting consumers still see it.
+//
+// The return value certifies whether to drop m from the reported matches.
 static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t *t, arraylist_t *visited, jl_method_t *minmaxm, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
 {
-    int transfer_failed = 0;
+    // Outcome of the cover analysis for one match `m` over its region `ti`, in
+    // increasing strength -- each step of the analysis only ever raises it:
+    enum {
+        COVER_NONE = 0,      // no strictly-morespecific cover contains ti: m may still be selectable
+        COVER_AMBIGUOUS = 1, // covers contain ti (so m can never win) but could not take over the
+                             // roles m had in the sort, so the apparent ambiguity is real
+        COVER_CERTIFIED = 2, // covers contain ti and took over m's roles: dropping m is silent
+    } status = COVER_NONE;
+
+    // Optimization: when ambiguity is already known and the caller does not want ambiguous
+    // matches reported, m is dropped either way, so skip the transfer proofs.
+    int prove_transfer = include_ambiguous || !*has_ambiguity;
+
+    // The minmax method contains every match's region, is reported unconditionally,
+    // and is pre-finalized, so whenever it strictly beats `m` it is an admissible cover:
+    // probe it directly before scanning the interference set in storage order.
     int probed_minmax = 0;
-    // The minmax method contains every match's region (it fully covers the
-    // query, and `ti` normally is contained in the query -- though an imprecise
-    // intersection still requires the explicit subtype check), is reported
-    // unconditionally, and is pre-finalized, so whenever it strictly beats `m`
-    // it is an admissible cover: probe it directly before scanning the
-    // interference set in storage order.
     if (minmaxm != NULL && method_morespecific_recorded(minmaxm, m) &&
         jl_subtype(ti, (jl_value_t*)minmaxm->sig)) {
         probed_minmax = 1;
-        // minmaxm is strictly morespecific than m (a one-directional recorded
-        // edge) and fully covers ti, so m can never win dispatch here. Dropping
-        // m is only safe if minmaxm also takes over the roles m had in the
-        // sort: a specificity cycle may lead back from a cover to a method only
+        // m can never win dispatch here.
+        // Drop m if minmaxm also takes over the roles m had in the sort:
+        // a specificity cycle may lead back from a cover to a method that only
         // m beat, or m may be the last match blocking another one, and either
-        // way the apparent ambiguity is real. When `!include_ambiguous` we drop
-        // `m` here either way, so this only computes *has_ambiguity and can be
-        // skipped once that is already known.
-        if ((include_ambiguous || !*has_ambiguity) && !check_dominance_transfer(m, ti, &minmaxm, 1, t)) {
-            // Do not latch *has_ambiguity yet: another cover (or the union of
-            // covers below) may still certify the removal cleanly, in which
-            // case this failure was moot.
-            transfer_failed = 1;
-        }
-        else {
-            return 1;
-        }
+        // way the apparent ambiguity is real.
+        if (prove_transfer && !check_dominance_transfer(m, ti, &minmaxm, 1, t))
+            status = COVER_AMBIGUOUS;
+        else
+            return 1; // COVER_CERTIFIED
     }
-    // Scan the interference set once: each admissible cover (recorded
+    // Scan the interference set: each admissible cover (recorded
     // strictly-morespecific interference the sort has already finalized) is
     // both attempted as a single cover of ti and collected for the union check
-    // below -- neither `t` nor `visited` changes here, so one pass serves
-    // both. (The transfer obligations are the same as for the minmax probe
+    // below. (The transfer obligations are the same as for the minmax probe
     // above.)
-    int result = 0;
     arraylist_t covers;
     arraylist_new(&covers, 0);
-    // Root the interference-set snapshot across the safepoints below (see
-    // `check_dominance_transfer`).
     jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
     JL_GC_PUSH1(&interferences);
-    for (size_t i = 0; !result && i < interferences->length; i++) {
+    for (size_t i = 0; status != COVER_CERTIFIED && i < interferences->length; i++) {
         jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
         if (!admissible_cover(m, m2, t, visited))
             continue;
@@ -3294,11 +3290,8 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
             continue; // its transfer already failed above
         if (!jl_subtype(ti, (jl_value_t*)m2->sig))
             continue;
-        if ((include_ambiguous || !*has_ambiguity) && !check_dominance_transfer(m, ti, &m2, 1, t)) {
-            transfer_failed = 1;
-            continue;
-        }
-        result = 1;
+        status = (prove_transfer && !check_dominance_transfer(m, ti, &m2, 1, t)) ?
+                 COVER_AMBIGUOUS : COVER_CERTIFIED;
     }
     JL_GC_POP();
     // No single morespecific method certified covering ti, but a union of them
@@ -3307,26 +3300,23 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
     // `check_dominance_transfer` again: a cover may be tangled in a specificity
     // cycle that leads back to `m`, or may fail to block what `m` was blocking
     // (test `AmbigUnionCycle`).
-    if (!result && covers.len > 1 && union_of_sigs_covers(ti, (jl_method_t**)covers.items, covers.len)) {
-        result = 1;
-        if ((include_ambiguous || !*has_ambiguity) &&
-            !check_dominance_transfer(m, ti, (jl_method_t**)covers.items, covers.len, t)) {
-            *has_ambiguity = 1;
-            if (include_ambiguous)
-                result = 0;
-        }
+    if (status != COVER_CERTIFIED && covers.len > 1 &&
+        union_of_sigs_covers(ti, (jl_method_t**)covers.items, covers.len)) {
+        status = (prove_transfer &&
+                  !check_dominance_transfer(m, ti, (jl_method_t**)covers.items, covers.len, t)) ?
+                 COVER_AMBIGUOUS : COVER_CERTIFIED;
     }
     arraylist_free(&covers);
-    if (!result && transfer_failed) {
-        // Some single cover dominated m over all of ti, but neither it, any
-        // other cover, nor their union could take over the roles m had in the
-        // sort: the apparent ambiguity is real. Per the contract above, the
-        // dominated m is still dropped when `!include_ambiguous`, but kept as
-        // a witness when ambiguity-reporting consumers need to see it.
+    if (status == COVER_AMBIGUOUS) {
+        // Some cover, or the union of the covers, dominated m over all of ti,
+        // but none of them could take over the roles m had in the sort: the
+        // apparent ambiguity is real. Per the contract above, the dominated m
+        // is still dropped when `!include_ambiguous`, but kept as a witness
+        // when ambiguity-reporting consumers need to see it.
         *has_ambiguity = 1;
-        result = !include_ambiguous;
+        return !include_ambiguous;
     }
-    return result;
+    return status == COVER_CERTIFIED;
 }
 
 static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
