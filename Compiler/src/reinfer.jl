@@ -403,24 +403,21 @@ function get_method_from_edge(@nospecialize t)
     end
 end
 
-# Iterate a method's `interferences` set. The set is an idset used append-only
-# (`jl_idset_pop` is never called on it), so its keys form a packed prefix --
-# no interior holes -- in insertion order, which is method-definition order,
-# making `primary_world` non-decreasing along the prefix (see
-# `jl_idset_put_key` in idset.c). Iteration therefore stops at the first
-# unassigned slot and, given a `world` cutoff, at the first entry defined in a
+# Iterate a method's `interferences` set. The set is an idset used append-only,
+# in method-definition order. Iteration therefore stops at the first
+# unassigned slot and, given a world cutoff, at the first entry defined in a
 # future world (which hides all later ones too).
 struct EachInterference
     interferences::Memory{Any}
-    world::UInt # typemax(UInt) means no world cutoff
+    cutoff::UInt # typemax(UInt) means no world cutoff
 end
-eachinterference(m::Method, world::UInt=typemax(UInt)) = EachInterference(m.interferences, world)
+eachinterference(m::Method, cutoff::UInt=typemax(UInt)) = EachInterference(m.interferences, cutoff)
 function Base.iterate(ei::EachInterference, k::Int=1)
     interferences = ei.interferences
     k > length(interferences) && return nothing
     isassigned(interferences, k) || return nothing # no more entries
     interference_method = interferences[k]::Method
-    ei.world < interference_method.primary_world && return nothing # this and later entries are for a future world
+    ei.cutoff < interference_method.primary_world && return nothing # this and later entries are for a future world
     return interference_method, k + 1
 end
 

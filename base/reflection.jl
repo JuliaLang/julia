@@ -1248,12 +1248,10 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # ml-matches did not need both methods to expose the reported ambiguity
         involves_both(ms) || return false
         if length(ms) != nms
-            # Since we intentionally removed certain ambiguities (via the
+            # If we intentionally removed certain ambiguities (via the
             # filter call above), re-run the runtime's match sort on the
             # remaining matches and see if the solution is still holding an ambiguity
-            # and m1 and m2 are both still reported in the solution. When the filter
-            # removed nothing, `ms` is exactly the sorted result from above and the
-            # re-sort could only recompute the same answer.
+            # and m1 and m2 are both still reported in the solution.
             if ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0
                 return false
             end
