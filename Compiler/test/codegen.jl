@@ -544,8 +544,8 @@ let a = Core.Intrinsics.trunc_int(UInt24, 3),
     @test f((a, true)) === true
     @test f((a, false)) === false
     @test sizeof(Tuple{UInt24,Bool}) == 8
-    @test sizeof(UInt24) == 3
-    @test sizeof(Union{UInt8,UInt24}) == 3
+    @test sizeof(UInt24) == 4 # sized to its alignment, so 1 byte of padding
+    @test sizeof(Union{UInt8,UInt24}) == 4
     @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
 end
 

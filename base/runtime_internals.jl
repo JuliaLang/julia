@@ -618,8 +618,8 @@ struct DataTypeLayout
     # arrayelem_isatomic : 1;
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
-    # unused_bits : 3;
-    # padding : 5;
+    # unused_bits : 7;
+    # padding : 1;
 end
 
 function DataTypeLayout(dt::DataType)
