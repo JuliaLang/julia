@@ -419,6 +419,11 @@ JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(int collection)
     uint64_t duration = t1 - t0;
     if (duration > gc_num.max_time_to_safepoint)
         gc_num.max_time_to_safepoint = duration;
+    // time_to_safepoint is computed in the same way as stock GC, and it only counts
+    // the time to bring all the threads to safepoint.
+    // TODO: We may want to count from the time when we request the STW in MMTk,
+    // until all the threads are stopped (this would include the time for MMTk scheduler to schedule a stop-the-world packet).
+    // Either add a on_pause_requested callback in MMTk, or let MMTk measure time_to_safepoint and report it back here to Julia.
     gc_num.time_to_safepoint = duration;
     gc_num.total_time_to_safepoint += duration;
 }
