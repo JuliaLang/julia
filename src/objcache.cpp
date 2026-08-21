@@ -42,6 +42,15 @@ static constexpr size_t OBJCACHE_DEFAULT_CAPACITY = 32 << 20;
 static const size_t OBJCACHE_CAPACITY =
     parseEnvU64("JULIA_OBJCACHE_CAPACITY", OBJCACHE_DEFAULT_CAPACITY);
 
+static constexpr size_t OBJCACHE_EVICT_PAGE_BUDGET = 128;
+static constexpr size_t OBJCACHE_EVICT_ENTRY_BUDGET = 64;
+static constexpr size_t OBJCACHE_EVICT_MAX_ENTRY_PAGES = 8192;
+
+static size_t objectPageEstimate(size_t Bytes, size_t PageSize) JL_NOTSAFEPOINT
+{
+    return Bytes / PageSize + 4;
+}
+
 static FILE *getLogFile()
 {
     const char *Path = getenv("JULIA_OBJCACHE_LOG");
@@ -159,7 +168,8 @@ void ObjCache::initDB()
     if (Initialized.load(memory_order_acquire))
         return;
 
-    if (!CachePath || (Enable && !strcmp(Enable, "0")))
+    if (Exiting.load(memory_order_acquire) ||
+        !CachePath || (Enable && !strcmp(Enable, "0")))
         goto done;
 
     // Exiting processes with no live tasks can have mmap()ped files, which
@@ -422,13 +432,18 @@ const char *ObjCache::disabledNotice()
 
 void ObjCache::shutdown()
 {
+    if (Exiting.exchange(true, memory_order_acq_rel))
+        return;
+
     if (Started) {
         {
             std::unique_lock<std::mutex> Lock{Mutex};
-            Exiting = true;
+            // Cache writes are opportunistic; do not drain queued work at exit.
+            ObjQueue.clear();
         }
         QueueCond.notify_one();
         uv_thread_join(&WriterThread);
+        Started = false;
     }
 
     if (LogFile) {
@@ -448,25 +463,37 @@ void ObjCache::writerThread()
         LocalQueue.clear();
         {
             std::unique_lock Lock{Mutex};
-            QueueCond.wait(Lock, [this]() { return Exiting || !ObjQueue.empty(); });
+            QueueCond.wait(Lock, [this]() {
+                return Exiting.load(memory_order_relaxed) || !ObjQueue.empty();
+            });
+            if (Exiting.load(memory_order_relaxed))
+                return;
             std::swap(LocalQueue, ObjQueue);
         }
-        if (LocalQueue.empty())
-            return;
 
         MDBTxn Txn{Env};
         if (!Txn.Txn)
             continue;
+        if (Exiting.load(memory_order_acquire))
+            return;
 
         uv_timeval_t Tv;
         uv_gettimeofday(&Tv);
         auto I = LocalQueue.begin();
+        size_t InTxn = 0;
         for (; I < LocalQueue.end(); ++I) {
+            if (Exiting.load(memory_order_acquire))
+                return;
             auto &[H, Obj] = *I;
             auto ObjKey = toObjKey(H);
             MDB_val Key = mdbVal(ObjKey);
             if (Obj) {
                 // Cache miss - write object
+                if (objectPageEstimate(Obj->getBufferSize(), PageSize) >
+                    OBJCACHE_EVICT_MAX_ENTRY_PAGES) {
+                    Obj.reset();
+                    continue;
+                }
                 if (!maybeEvictLRU(Txn, Obj->getBufferSize()))
                     goto abort;
                 MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
@@ -490,11 +517,34 @@ void ObjCache::writerThread()
                 if (!updateATime(Txn, H, Tv.tv_sec | (1LL << 62), false))
                     goto abort;
             }
+            if (++InTxn == OBJCACHE_EVICT_ENTRY_BUDGET && I + 1 != LocalQueue.end()) {
+                if (Exiting.load(memory_order_acquire))
+                    return;
+                int Err = Txn.commit();
+                if (Err) {
+                    if (Err != MDB_MAP_FULL && Err != MDB_TXN_FULL)
+                        checkMDB(Err);
+                    goto abort;
+                }
+                Txn = MDBTxn{Env};
+                if (!Txn.Txn)
+                    goto abort;
+                InTxn = 0;
+            }
         }
-        Txn.commit();
+        if (Exiting.load(memory_order_acquire))
+            return;
+        if (int Err = Txn.commit()) {
+            if (Err != MDB_MAP_FULL && Err != MDB_TXN_FULL)
+                checkMDB(Err);
+        }
         continue;
 abort:;
+        if (Exiting.load(memory_order_acquire))
+            return;
         std::unique_lock Lock{Mutex};
+        if (Exiting.load(memory_order_relaxed))
+            return;
         std::move(++I, LocalQueue.end(), std::back_inserter(ObjQueue));
     }
 }
@@ -563,36 +613,143 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
     if (Used() <= OBJCACHE_CAPACITY)
         return true;
 
-    MDB_cursor *MetaCur;
-    if (checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur)))
+    // Keep eviction separate from earlier queue writes so a failed retry does
+    // not roll unrelated cache work back with it.
+    if (Exiting.load(memory_order_acquire))
+        return false;
+    if (int Err = Txn.commit()) {
+        if (Err != MDB_MAP_FULL && Err != MDB_TXN_FULL)
+            checkMDB(Err);
+        return false;
+    }
+    Txn = MDBTxn{Env};
+    if (!Txn.Txn)
         return false;
 
-    auto LowMeta = toMetaKey(0, {});
-    MDB_val MetaKey = mdbVal(LowMeta);
-    int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
-    while (!Ret && ShouldEvict() && ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
-        auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
-        NEvicted.fetch_add(1, memory_order_relaxed);
-        if (LogFile) {
-            std::unique_lock<std::mutex> Lock{LogMutex};
-            fprintf(LogFile, "evict,%s,,,,,\n", llvm::toHex(Hash, true).c_str());
+    size_t EntryLimit = OBJCACHE_EVICT_ENTRY_BUDGET;
+    bool ForceSingleton = false;
+    while (ShouldEvict()) {
+        if (Exiting.load(memory_order_acquire))
+            return false;
+
+        MDB_cursor *MetaCur;
+        if (checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur)))
+            return false;
+
+        auto LowMeta = toMetaKey(0, {});
+        MDB_val MetaKey = mdbVal(LowMeta);
+        int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
+        std::vector<Hash> Evicted;
+        size_t EstimatedPages = 0;
+        int BatchErr = 0;
+
+        while (Ret == 0 && ShouldEvict() && MetaKey.mv_size == METAKEY_SIZE &&
+               ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+            if (Exiting.load(memory_order_acquire))
+                return false;
+
+            auto Parsed = fromMetaKey((const char *)MetaKey.mv_data);
+            const Hash &Hash = Parsed.second;
+            auto ObjKey = toObjKey(Hash);
+            MDB_val Key = mdbVal(ObjKey);
+            MDB_val Data;
+            int Err = mdb_get(Txn.Txn, ObjCacheDbi, &Key, &Data);
+            if (Err != 0 && Err != MDB_NOTFOUND) {
+                checkMDB(Err);
+                return false;
+            }
+            // The value dominates the pages freed by an entry. A little extra
+            // room accounts for its object and metadata tree nodes.
+            size_t EntryPages = Err == MDB_NOTFOUND ? 4 :
+                objectPageEstimate(Data.mv_size, PageSize);
+            if (EntryPages > OBJCACHE_EVICT_MAX_ENTRY_PAGES) {
+                Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
+                continue;
+            }
+            if (!Evicted.empty() &&
+                (ForceSingleton || Evicted.size() >= EntryLimit ||
+                 EntryPages > OBJCACHE_EVICT_PAGE_BUDGET - EstimatedPages))
+                break;
+            if (Evicted.empty() && !ForceSingleton &&
+                EntryPages > OBJCACHE_EVICT_PAGE_BUDGET) {
+                ForceSingleton = true;
+                Txn.abort();
+                break;
+            }
+
+            Key = mdbVal(ObjKey);
+            Err = mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr);
+            if (Err != 0 && Err != MDB_NOTFOUND) {
+                BatchErr = Err;
+                break;
+            }
+            Key = mdbVal(ObjKey);
+            Err = mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr);
+            if (Err != 0 && Err != MDB_NOTFOUND) {
+                BatchErr = Err;
+                break;
+            }
+            if ((BatchErr = mdb_cursor_del(MetaCur, 0)))
+                break;
+
+            EstimatedPages += EntryPages;
+            Evicted.push_back(Hash);
+            if (ForceSingleton)
+                break;
+            Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
         }
 
-        auto ObjKey = toObjKey(Hash);
-        MDB_val Key = mdbVal(ObjKey);
-        checkMDB(mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr));
-        Key = mdbVal(ObjKey);
-        checkMDB(mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr));
-        checkMDB(mdb_cursor_del(MetaCur, 0));
-        Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
-        if (Ret != MDB_NOTFOUND)
+        if (!Txn.Txn) {
+            Txn = MDBTxn{Env};
+            if (!Txn.Txn)
+                return false;
+            continue;
+        }
+        if (Ret != 0 && Ret != MDB_NOTFOUND) {
             checkMDB(Ret);
-    }
+            return false;
+        }
+        if (Evicted.empty()) {
+            if (BatchErr)
+                checkMDB(BatchErr);
+            return false;
+        }
 
-    // Start a new transaction to release our lock on all the pages that
-    // are now free.
-    Txn.commit();
-    Txn = MDBTxn{Env};
+        int Err = BatchErr ? BatchErr : Txn.commit();
+        if (BatchErr)
+            Txn.abort();
+        if (Err == MDB_MAP_FULL || Err == MDB_TXN_FULL) {
+            if (ForceSingleton)
+                return false;
+            if (Evicted.size() == 1)
+                ForceSingleton = true;
+            else
+                EntryLimit = std::max<size_t>(1, Evicted.size() / 2);
+            Txn = MDBTxn{Env};
+            if (!Txn.Txn)
+                return false;
+            continue;
+        }
+        if (Err) {
+            checkMDB(Err);
+            return false;
+        }
+
+        NEvicted.fetch_add(Evicted.size(), memory_order_relaxed);
+        if (LogFile) {
+            std::unique_lock<std::mutex> Lock{LogMutex};
+            for (const Hash &Hash : Evicted)
+                fprintf(LogFile, "evict,%s,,,,,\n", llvm::toHex(Hash, true).c_str());
+            fprintf(LogFile, "evict_batch,%zu\n", Evicted.size());
+        }
+        if (Exiting.load(memory_order_acquire))
+            return false;
+        Txn = MDBTxn{Env};
+        if (!Txn.Txn)
+            return false;
+        EntryLimit = OBJCACHE_EVICT_ENTRY_BUDGET;
+        ForceSingleton = false;
+    }
 
     return true;
 }
