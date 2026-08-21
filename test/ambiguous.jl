@@ -1065,6 +1065,42 @@ let ms = sort(collect(methods(AmbigMinmaxSkip.f)), by = m -> m.line),
     @test AmbigMinmaxSkip.f(Q()) == 1
 end
 
+# the same triangle plus a method 4 resolving the contested region: certifying
+# the removal of method 2 needs the union of the minmax method 1 (blocked over
+# `(P,)` where method 3 beats it) and method 4 (which blocks method 3 there), so
+# a dominance transfer consulting only the minmax method would report a spurious
+# ambiguity for a query dispatch fully resolves
+module AmbigMinmaxUnion
+abstract type Top end
+struct P <: Top end
+struct Q <: Top end
+struct R <: Top end
+f(::T, ::Vararg{T}) where {T<:Union{P,Q}} = 1  # minmax over the query below: beats 2, beaten by 3 and 4
+f(::Union{P,Q}, ::Vararg{R}) = 2               # fully covers, beats nothing, unordered with 3
+f(::P, ::Vararg{P}) = 3                        # partial, beats 1, unordered with 2, beaten by 4
+f(::P) = 4                                     # beats 1, 2 and 3; covers the contested region `(P,)`
+end
+let ms = sort(collect(methods(AmbigMinmaxUnion.f)), by = m -> m.line),
+    (m1, m2, m3, m4) = ms,
+    P = AmbigMinmaxUnion.P,
+    Q = AmbigMinmaxUnion.Q
+    @test Base.morespecific(m3, m1) && Base.morespecific(m1, m2)
+    @test !Base.morespecific(m2, m3) && !Base.morespecific(m3, m2)
+    @test Base.morespecific(m4, m1) && Base.morespecific(m4, m2) && Base.morespecific(m4, m3)
+    # dispatch resolves every point of the query
+    @test AmbigMinmaxUnion.f(P()) == 4
+    @test AmbigMinmaxUnion.f(Q()) == 1
+    for include_ambiguous in (false, true)
+        ambig = Ref{Int32}(0)
+        matches = Base._methods_by_ftype(
+            Tuple{typeof(AmbigMinmaxUnion.f), T} where T<:Union{P,Q},
+            nothing, -1, Base.get_world_counter(), include_ambiguous,
+            Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ambig[] == 0
+        @test Set(m.method for m in matches) == Set([m1, m4])
+    end
+end
+
 module NoLosersBit
 f(::Any) = 1
 end

@@ -5276,7 +5276,6 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 //  * `lim`: either -1 for unlimited matches, or the maximum length for `result` before returning failure (return -1).
 //  * `include_ambiguous`: whether to filter out fully ambiguous matches from `result`
 //  * `*has_ambiguity`: whether the algorithm does not need to compute if there is an unresolved ambiguity
-//  * `*found_minmax`: whether there is a minmax method already found, so future fully_covers matches should be ignored
 // Outputs:
 //  * `*has_ambiguity`: whether there are any ambiguities that mean the sort order is not exact
 // Stack frame for iterative sort_mlmatches implementation
@@ -5296,7 +5295,6 @@ typedef struct {
     jl_method_match_t *matc;       // Current method match
     jl_method_t *m;                // Current method
     jl_value_t *ti;                // Type intersection
-    int subt;                      // Subtype flag
     jl_genericmemory_t *interferences; // Method interferences
     int child_result;              // Result from child recursive call
     enum sort_state state;
@@ -5306,7 +5304,7 @@ typedef struct {
 //  * -1: too many matches for lim, other outputs are undefined
 //  *  0: the child(ren) have been added to the output
 //  * 1+: the children are part of this SCC (up to this depth)
-static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, int lim, int include_ambiguous, int *has_ambiguity, int *found_minmax, jl_method_t *minmaxm) JL_CANSAFEPOINT
+static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, int lim, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
 {
     // Use arraylist_t for explicit stack of processing frames
     arraylist_t frame_stack;
@@ -5322,7 +5320,6 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
         .matc = NULL,
         .m = NULL,
         .ti = NULL,
-        .subt = 0,
         .interferences = NULL,
         .child_result = 0,
         .state = STATE_VISITING
@@ -5351,7 +5348,6 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 current->matc = (jl_method_match_t*)jl_array_ptr_ref(t, current->idx);
                 current->m = current->matc->method;
                 current->ti = (jl_value_t*)current->matc->spec_types;
-                current->subt = current->matc->fully_covers != NOT_FULLY_COVERS;
                 current->interferences = jl_atomic_load_relaxed(&current->m->interferences);
                 current->cycle = current->depth;
                 current->interference_count = current->interferences->length;
@@ -5415,8 +5411,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                             .matc = NULL,
                             .m = NULL,
                             .ti = NULL,
-                            .subt = 0,
-                            .interferences = NULL,
+                                            .interferences = NULL,
                             .child_result = 0,
                             .state = STATE_VISITING
                         };
@@ -5432,24 +5427,13 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
             case STATE_CHECK_COVERS: {
                 // There is some probability that this method is already fully covered
                 // now, and we can delete this vertex now without anyone noticing.
-                if (current->subt && *found_minmax) {
-                    assert(minmaxm != NULL);
-                    if (*found_minmax == 2) {
-                        // minmax dominates all fully-covering methods, but this
-                        // dropped method may have been beating a partial match
-                        // that minmax does not dominate (a specificity cycle)
-                        if (current->m != minmaxm && (include_ambiguous || !*has_ambiguity) &&
-                            !check_dominance_transfer(current->m, current->ti, &minmaxm, 1, t)) {
-                            *has_ambiguity = 1;
-                            if (!include_ambiguous)
-                                visited->items[current->idx] = (void*)1;
-                        }
-                        else {
-                            visited->items[current->idx] = (void*)1;
-                        }
-                    }
-                }
-                else if (check_interferences_covers(current->m, current->ti, t, visited, include_ambiguous, has_ambiguity)) {
+                // A match dominated by the minmax method needs no special case
+                // here: minmax is pre-marked visited (it is unconditionally
+                // reported), so `check_interferences_covers` can use it as a
+                // cover like any other finalized match -- together with the
+                // other covers and their union, which a lone minmax transfer
+                // could not consult (test `AmbigMinmaxUnion`).
+                if (check_interferences_covers(current->m, current->ti, t, visited, include_ambiguous, has_ambiguity)) {
                     visited->items[current->idx] = (void*)1;
                 }
                 else if (check_fully_ambiguous(current->m, current->ti, t, include_ambiguous, has_ambiguity)) {
@@ -5493,21 +5477,6 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 // copy this cycle into the results
                 for (size_t i = current->depth - 1; i < stack->len; i++) {
                     size_t childidx = (size_t)stack->items[i];
-                    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
-                    int subt = matc->fully_covers != NOT_FULLY_COVERS;
-                    if (subt && *found_minmax) {
-                        assert(minmaxm != NULL);
-                        if (visited->items[childidx] != (void*)1 && matc->method != minmaxm &&
-                            (include_ambiguous || !*has_ambiguity) &&
-                            !check_dominance_transfer(matc->method, (jl_value_t*)matc->spec_types, &minmaxm, 1, t)) {
-                            *has_ambiguity = 1;
-                            if (!include_ambiguous)
-                                visited->items[childidx] = (void*)1;
-                        }
-                        else {
-                            visited->items[childidx] = (void*)1;
-                        }
-                    }
                     if ((size_t)visited->items[childidx] == 1)
                         continue;
                     assert(visited->items[childidx] == (void*)(2 + i));
@@ -5523,12 +5492,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 // now finally cleanup the stack
                 while (stack->len >= current->depth) {
                     size_t childidx = (size_t)arraylist_pop(stack);
-                    // always remove fully_covers matches after the first minmax ambiguity group is handled
-                    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
-                    int subt = matc->fully_covers == FULLY_COVERS;
-                    if (subt && *found_minmax == 1)
-                        *found_minmax = 2;
-                    assert(visited->items[childidx] == (void*)1);
+                    assert(visited->items[childidx] == (void*)1); (void)childidx;
                 }
 
                 final_result = 0;
@@ -5690,49 +5654,30 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
         arraylist_new(&visited, len);
         arraylist_grow(&visited, len);
         memset(visited.items, 0, len * sizeof(size_t));
-        // if we had a minmax method (any subtypes), now may now be able to
-        // quickly cleanup some of methods
-        int found_minmax = 0;
-        if (has_ambiguity)
-            found_minmax = 1;
-        else if (minmax != NULL)
-            found_minmax = 2;
-        // n.b. we cannot shortcut `any_subtypes && !include_ambiguous` to
-        // found_minmax = 1 here: that assumes the absence of a `minmax` method
-        // means no fully-covering method can win, which is false when the
-        // beat-everything comparison was merely blocked by a match that is
-        // itself dominated (see AmbigTransferRegion in test/ambiguous.jl). It
-        // also loses *has_ambiguity, reporting an ambiguous call as having no
-        // applicable method at all.
+        // minmax is reported unconditionally (appended after the sort below),
+        // so pre-mark it as finalized: the sort then never visits it, and it is
+        // admissible as a cover for every dominance check, so a match it
+        // dominates is certified against it together with the other finalized
+        // covers and their union -- a lone minmax transfer could consult
+        // neither (tests `AmbigMinmaxSkip`, `AmbigMinmaxUnion`). n.b. the
+        // pre-scan's `has_ambiguity` was only a hint for choosing minmax: the
+        // sort recomputes the flag, rediscovering any real, uncertified
+        // ambiguity through `check_dominance_transfer`/`check_fully_ambiguous`.
+        if (minmax != NULL) {
+            for (i = 0; i < len; i++) {
+                if ((jl_method_match_t*)jl_array_ptr_ref(t, i) == minmax) {
+                    visited.items[i] = (void*)1;
+                    break;
+                }
+            }
+            assert(i < len);
+        }
         has_ambiguity = 0;
         if (approximate_ambig) // if we don't care about the result, set it now so we won't bother attempting to compute it accurately later
             has_ambiguity = 1;
         for (i = 0; i < len; i++) {
             assert(visited.items[i] == (void*)0 || visited.items[i] == (void*)1);
-            jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
-            if (matc->fully_covers != NOT_FULLY_COVERS && found_minmax) {
-                // minmax (or a match it dominates) was already handled above and
-                // below, so visiting it would not usually learn anything new and
-                // might be a bit costly. But a match the DFS never reaches (one
-                // that strictly beats nothing is never anyone's child) would
-                // otherwise be dropped without the dominance-transfer check,
-                // losing the ambiguities only it witnesses (test `AmbigMinmaxSkip`).
-                assert(minmax != NULL);
-                if (visited.items[i] == (void*)1 || matc == minmax)
-                    continue;
-                jl_method_t *minmaxm = minmax->method;
-                if ((include_ambiguous || !has_ambiguity) &&
-                    !check_dominance_transfer(matc->method, (jl_value_t*)matc->spec_types, &minmaxm, 1, t)) {
-                    has_ambiguity = 1;
-                    if (!include_ambiguous)
-                        continue;
-                    // fall through to sort_mlmatches
-                }
-                else {
-                    continue;
-                }
-            }
-            int child_cycle = sort_mlmatches(t, i, &visited, &stack, &result, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, &has_ambiguity, &found_minmax, minmax == NULL ? NULL : minmax->method);
+            int child_cycle = sort_mlmatches(t, i, &visited, &stack, &result, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, &has_ambiguity);
             if (child_cycle == -1) {
                 arraylist_free(&visited);
                 arraylist_free(&stack);
