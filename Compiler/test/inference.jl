@@ -8427,4 +8427,17 @@ irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
 @test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
 @test irinterp_scan_d2(2) == 2
 
+# review of the de Bruijn refactor: `has_dangling_tvarrefs` tfunc must not
+# constant-fold `TypeVarRef` values (a bare reference is a dangling fragment)
+let tfunc(t) = Compiler.has_dangling_tvarrefs_tfunc(Compiler.fallback_lattice, t)
+    @test tfunc(Core.TypeVarRef) === Core.Const(true)
+    @test tfunc(TypeVar) === Core.Const(false)
+    @test tfunc(Union{Core.TypeVarRef, Int}) === Bool
+    @test tfunc(Int) === Core.Const(false)
+end
+let f(x) = Core.has_dangling_tvarrefs(x)
+    @test f(Base.inferencebarrier(Core.TypeVarRef(1)))
+    @test f(Base.inferencebarrier(1)) === false
+end
+
 end # module inference
