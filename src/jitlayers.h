@@ -11,7 +11,6 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
-#include <llvm/IR/Attributes.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassTimingInfo.h>
@@ -83,79 +82,6 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModul
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
-
-// N.B.: kept in sync with Compiler/src/effects.jl (encode_effects); 0 means
-// "no recorded effects" and is treated conservatively.
-inline bool effects_ipo_reset_safe(uint32_t effects) JL_NOTSAFEPOINT
-{
-    return effects != 0 &&
-           ((effects >> 3) & 0x03u) == 0u && // is_effect_free
-           ((effects >> 15) & 0x03u) == 0u;  // is_reset_safe
-}
-
-// Translate Julia's inferred ipo_purity_bits into LLVM function attributes.
-// Optimistic attrs (memory(argmem: read), readnone on gcstack) are added for
-// pre-GC passes; LateLowerGCFrame widens them before safepoint analysis.
-// Applied to the CallInst, and also to the callee declaration if present.
-inline void add_fn_attrs_for_effects(CallInst *CI, uint32_t effects) JL_NOTSAFEPOINT
-{
-    if (effects == 0)
-        return;
-    bool is_consistent   = (effects & 0x07u) == 0u;
-    bool is_effect_free  = ((effects >> 3) & 0x03u) == 0u;
-    bool is_nothrow      = (effects >> 5) & 0x01u;
-    bool is_terminates   = (effects >> 6) & 0x01u;
-    bool is_notaskstate  = (effects >> 7) & 0x01u;
-    AttrBuilder attrs(CI->getContext());
-    attrs.addAttribute("julia.safepoint");
-    if (is_nothrow)
-        attrs.addAttribute(Attribute::NoUnwind);
-    if (is_terminates)
-        attrs.addAttribute(Attribute::MustProgress);
-    if (is_nothrow && is_terminates)
-        attrs.addAttribute(Attribute::WillReturn);
-    // True if the signature contains a pointer that isn't a Julia-internal gcstack slot.
-    // Only when false can we safely emit memory(argmem: read).
-    bool has_user_ptr = true;
-    if (is_consistent && is_effect_free) {
-        FunctionType *ft = CI->getFunctionType();
-        has_user_ptr = ft->getReturnType()->isPointerTy();
-        if (!has_user_ptr) {
-            for (unsigned i = 0; i < ft->getNumParams(); i++) {
-                if (ft->getParamType(i)->isPointerTy()) {
-                    if (CI->getParamAttr(i, "gcstack").isValid()) {
-                        if (is_notaskstate)
-                            CI->addParamAttr(i, Attribute::ReadNone);
-                        continue;
-                    }
-                    has_user_ptr = true;
-                    break;
-                }
-            }
-        }
-        if (!has_user_ptr)
-            attrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref));
-    }
-    CI->setAttributes(CI->getAttributes().addFnAttributes(CI->getContext(), attrs));
-    // Also apply to the callee declaration.
-    if (auto *F = dyn_cast_or_null<Function>(CI->getCalledFunction())) {
-        if (F->isDeclaration()) {
-            F->addFnAttrs(attrs);
-            // N.B. We do not emit `speculatable` here: it allows SimplifyCFG
-            // to hoist calls past branches unconditionally, which can cause
-            // regressions when pure-but-expensive functions (e.g. exp()) get
-            // speculated onto hot paths.
-            if (is_nothrow && !F->hasUWTable())
-                F->addFnAttr(Attribute::get(F->getContext(), Attribute::UWTable, uint64_t(llvm::UWTableKind::Async)));
-            if (!has_user_ptr && is_notaskstate) {
-                for (unsigned i = 0; i < F->arg_size(); i++) {
-                    if (F->hasParamAttribute(i, "gcstack"))
-                        F->addParamAttr(i, Attribute::ReadNone);
-                }
-            }
-        }
-    }
-}
 
 struct OptimizationOptions {
     bool lower_intrinsics;
@@ -371,7 +297,6 @@ struct jl_returninfo_t {
     size_t union_minalign;
     unsigned return_roots;
     bool all_roots;
-    uint32_t effects = 0;  // ipo_purity_bits, applied to CallInst and Function
 };
 
 struct jl_codegen_call_target_t {
@@ -419,7 +344,10 @@ private:
 
 struct jl_linker_info_t {
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
-    DenseMap<std::pair<jl_code_instance_t *, jl_invoke_api_t>, orc::SymbolStringPtr>
+    // Key on the enum's underlying integer type: LLVM's DenseMapInfo requires
+    // sentinel keys outside the key's value range, which an unfixed C enum
+    // (jl_invoke_api_t) cannot represent (see LLVM 22 DenseMapInfo<Enum>).
+    DenseMap<std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>, orc::SymbolStringPtr>
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;
 };
@@ -465,7 +393,9 @@ public:
 
 public:
     // outputs
-    DenseMap<std::pair<jl_code_instance_t *, jl_invoke_api_t>, jl_codegen_call_target_t>
+    // See the note on jl_linker_info_t::call_targets: keyed on the enum's
+    // underlying integer type so DenseMapInfo has valid sentinel keys.
+    DenseMap<std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>, jl_codegen_call_target_t>
         call_targets;
     DenseMap<jl_code_instance_t *, jl_llvm_functions_t> ci_funcs;
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
@@ -652,7 +582,7 @@ class JLMaterializationUnit;
 class JLTrampolineMaterializationUnit;
 
 struct JITObjectInfo {
-    std::unique_ptr<MemoryBuffer> BackingBuffer;
+    std::unique_ptr<WritableMemoryBuffer> BackingBuffer;
     std::unique_ptr<object::ObjectFile> Object;
     StringMap<uint64_t> SectionLoadAddresses;
     std::unique_ptr<jl_linker_info_t> LinkerInfo;
@@ -661,11 +591,24 @@ struct JITObjectInfo {
 class JLDebuginfoPlugin : public orc::ObjectLinkingLayer::Plugin {
     std::mutex PluginMutex;
     std::map<orc::MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
+    // Address of llvm_orc_registerJITLoaderGDBAllocAction while the GDB JIT
+    // interface is enabled, and the debug objects handed to it (the GDB JIT
+    // interface does not copy them, so they have to be kept alive).
+    orc::ExecutorAddr GDBRegistrar;
+    SmallVector<std::unique_ptr<WritableMemoryBuffer>> GDBObjects;
+    void registerWithGDB(orc::ExecutionSession &ES, JITObjectInfo &Info) JL_NOTSAFEPOINT;
 public:
+    // Register every emitted object with the GDB JIT interface, using the given
+    // address of llvm_orc_registerJITLoaderGDBAllocAction. Must be called before
+    // anything is compiled.
+    void enableGDBRegistration(orc::ExecutorAddr Registrar) JL_NOTSAFEPOINT;
     void notifyMaterializingWithInfo(orc::MaterializationResponsibility &MR,
                                      jitlink::LinkGraph &G, MemoryBufferRef InputObject,
                                      std::unique_ptr<jl_linker_info_t> LinkerInfo)
         JL_NOTSAFEPOINT;
+    void notifyMaterializing(orc::MaterializationResponsibility &MR,
+                             jitlink::LinkGraph &G, jitlink::JITLinkContext &Ctx,
+                             MemoryBufferRef InputObject) override;
     Error notifyEmitted(orc::MaterializationResponsibility &MR) override JL_CANSAFEPOINT_ENTER_LEAVE; // NOLINT[julia-first-decl-annotations]
     Error notifyFailed(orc::MaterializationResponsibility &MR) override;
     Error notifyRemovingResources(orc::JITDylib &JD, orc::ResourceKey K) override;

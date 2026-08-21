@@ -18,7 +18,7 @@ declare {}* @julia.pointer_from_objref({} addrspace(11)*)
 
 ; OPAQUE: %var1 = alloca i64, align 16, addrspace(5)
 ; OPAQUE: %1 = addrspacecast ptr addrspace(5) %var1 to ptr
-; OPAQUE: call void @llvm.lifetime.start.p5(i64 4, ptr addrspace(5) %var1)
+; OPAQUE: call void @llvm.lifetime.start.p5(ptr addrspace(5) %var1)
 
 ; CHECK: ret void
 define void @non_zero_addrspace() {

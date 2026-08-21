@@ -4048,9 +4048,6 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     }
     if (jl_is_typevar(t))
         return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
-    if (jl_is_datatype(t))
-        if (((jl_datatype_t*)t)->name == jl_type_typename)
-            return 1;
     return 0;
 }
 
