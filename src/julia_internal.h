@@ -818,9 +818,16 @@ typedef union {
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
 
+// dispatch_status bits.
+// - LATEST_WHICH: invoke of this mi's exact specTypes yields exactly this result.
+// - LATEST_ONLY: dispatch of this mi's exact specTypes yields only this result);
+//   the corresponding Method-level fact is the method's `interferences` set being empty.
+// - NO_LOSERS: this method is not strictly morespecific than any method it
+//   intersects (its strict out-neighborhood is empty, the opposite pole from an
+//   empty interference set, which means it beats everything it intersects).
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
-#define METHOD_SIG_PRECOMPILE_MANY          0b0100
+#define METHOD_SIG_NO_LOSERS                0b0100
 
 void jl_init_engine(void) JL_NOTSAFEPOINT;
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
