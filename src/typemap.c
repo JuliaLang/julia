@@ -422,7 +422,7 @@ int jl_typemap_visitor(jl_typemap_t *cache, jl_typemap_visitor_fptr fptr, void *
 {
     if (jl_typeof(cache) == (jl_value_t*)jl_typemap_level_type) {
         jl_typemap_level_t *node = (jl_typemap_level_t*)cache;
-        jl_genericmemory_t *a;
+        jl_genericmemory_t *a = NULL;
         JL_GC_PUSH1(&a);
         a = jl_atomic_load_relaxed(&node->targ);
         if (a != (jl_genericmemory_t*)jl_an_empty_memory_any)
