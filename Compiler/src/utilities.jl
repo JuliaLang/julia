@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# supertype access that forces a deferred supertype (an instantiation of a
+# self-referential definition fills `super` lazily, see issue #61347); a
+# plain field read on such an instantiation would see an undefined field
+datatype_super(x::DataType) = ccall(:jl_datatype_super, Any, (Any,), x)::DataType
+
 ###########
 # generic #
 ###########

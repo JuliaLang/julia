@@ -1015,7 +1015,7 @@ done_fields: ;
         // which would order the supertype before its own parameters in the queue. Defer it
         // until the recursion unwinds; any forward reference this creates in the image is
         // handled at load time by the uniquing_super/delay_list machinery.
-        if (jl_needs_serialization(s, (jl_value_t*)dt->super))
+        if (dt->super && jl_needs_serialization(s, (jl_value_t*)dt->super))
             arraylist_push(&deferred_supers, (void*)dt->super);
         immediate = 0;
         char *data = (char*)jl_data_ptr(v);
@@ -1947,7 +1947,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                         ios_write(s->const_data, (char*)&dyn, sizeof(jl_fielddescdyn_t));
                     }
                 }
-                void *superidx = ptrhash_get(&serialization_order, dt->super);
+                void *superidx = dt->super ? ptrhash_get(&serialization_order, dt->super) : HT_NOTFOUND;
                 if (s->incremental && superidx != HT_NOTFOUND && from_seroder_entry(superidx) > item && needs_uniquing((jl_value_t*)dt->super, s->query_cache))
                     arraylist_push(&s->uniquing_super, dt->super);
             }
