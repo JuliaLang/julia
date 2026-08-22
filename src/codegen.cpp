@@ -990,6 +990,11 @@ static const auto jlinvoke_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto japplyiterateci_func = new JuliaFunction<>{
+    XSTR(jl_apply_iterate_codeinst),
+    get_func_sig,
+    get_func_attrs,
+};
 static const auto jlinvokeoc_func = new JuliaFunction<>{
     XSTR(jl_invoke_oc),
     get_func2_sig,
@@ -4595,8 +4600,19 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
             }
         }
-        // optimization for _apply_iterate when there is one argument and it is a SimpleVector
+        // Fast path for a single concrete tuple: extract its fields and call f directly.
         const jl_cgval_t &arg = argv[3];
+        if (jl_is_concrete_type(arg.typ) && jl_is_tuple_type(arg.typ)) {
+            size_t nf = jl_datatype_nfields(arg.typ);
+            SmallVector<jl_cgval_t, 8> call_args;
+            call_args.push_back(argv[2]);
+            for (size_t i = 0; i < nf; i++)
+                call_args.push_back(emit_getfield_knownidx(ctx, arg, i, (jl_datatype_t*)arg.typ, jl_memory_order_notatomic));
+            Value *r = emit_jlcall(ctx, jlapplygeneric_func, nullptr, call_args, nf + 1, julia_call);
+            *ret = mark_julia_type(ctx, r, true, jl_any_type);
+            return true;
+        }
+        // optimization for _apply_iterate when there is one argument and it is a SimpleVector
         if (arg.typ == (jl_value_t*)jl_simplevector_type) {
             Value *theF = boxed(ctx, argv[2]);
             Value *svec_val = boxed(ctx, arg);
@@ -5898,6 +5914,41 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt) 
         argv[i] = emit_expr(ctx, args[i + 1]);
         if (argv[i].typ == jl_bottom_type)
             return jl_cgval_t();
+    }
+    // Here `ci` targets flattened `f(xs...)`, while the physical operands still use
+    // `_apply_iterate(iterate, f, xs...)`. Flatten the tuples to match `ci`'s ABI.
+    if (nargs >= 4 && argv[0].constant == BUILTIN(_apply_iterate)) {
+        size_t nflat = 1;
+        bool all_tuples = true;
+        for (size_t i = 3; i < nargs; i++) {
+            const jl_cgval_t &tup = argv[i];
+            if (!tup.typ || !jl_is_concrete_type(tup.typ) || !jl_is_tuple_type(tup.typ)) {
+                all_tuples = false;
+                break;
+            }
+            nflat += jl_datatype_nfields(tup.typ);
+        }
+        if (all_tuples) {
+            SmallVector<jl_cgval_t, 8> flat;
+            flat.reserve(nflat);
+            flat.push_back(argv[2]);
+            for (size_t i = 3; i < nargs; i++) {
+                const jl_cgval_t &tup = argv[i];
+                size_t nf = jl_datatype_nfields(tup.typ);
+                for (size_t j = 0; j < nf; j++)
+                    flat.push_back(emit_getfield_knownidx(ctx, tup, j, (jl_datatype_t*)tup.typ, jl_memory_order_notatomic));
+            }
+            return emit_invoke(ctx, lival, flat, flat.size(), rt, false);
+        }
+        // Never pass unflattened arguments to `ci`; flatten at runtime instead,
+        // preserving `ci` as the call target.
+        if (lival.constant && jl_is_code_instance(lival.constant)) {
+            Value *r = emit_jlcall(ctx, japplyiterateci_func, boxed(ctx, lival),
+                                   ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
+            return mark_julia_type(ctx, r, true, rt);
+        }
+        Value *r = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
+        return mark_julia_type(ctx, r, true, rt);
     }
     return emit_invoke(ctx, lival, argv, nargs, rt, false);
 }
@@ -10870,6 +10921,7 @@ static void init_jit_functions(void)
         add_named_global(jl_builtin_f_names[i], jl_builtin_f_addrs[i]);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
+    add_named_global(japplyiterateci_func, &jl_apply_iterate_codeinst);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);

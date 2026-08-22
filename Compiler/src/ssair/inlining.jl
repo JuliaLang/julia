@@ -1007,7 +1007,8 @@ end
 
 invoke_rewrite!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); expr)
 
-function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
+function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams,
+                                         from_tuple_call::Bool=false)
     if isa(typ, Const) && (v = typ.val; isa(v, SimpleVector))
         length(v) > params.max_tuple_splat && return false
         for p in v
@@ -1022,10 +1023,37 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Optimizatio
     end
     isa(typ, DataType) || return false
     if typ.name === Tuple.name
-        return !isvatuple(typ) && length(typ.parameters) <= params.max_tuple_splat
+        isvatuple(typ) && return false
+        # Flatten locally constructed tuples at any length; this also elides their
+        # construction.
+        from_tuple_call && return true
+        return length(typ.parameters) <= params.max_tuple_splat
     else
         return false
     end
+end
+
+# When concrete tuple splats are too long to flatten in IR, encode the resolved call
+# as `Expr(:invoke, ci, _apply_iterate, iterate, f, xs...)`. The code instance is for
+# the flattened `f(xs[1]..., xs[2]..., ...)` signature; codegen unpacks the tuples,
+# while the interpreters execute an ordinary apply.
+function try_invoke_apply!(ir::IRCode, idx::Int, stmt::Expr, argtypes::Vector{Any},
+                           info::ApplyCallInfo, state::InliningState)
+    length(argtypes) >= 4 || return nothing
+    for i = 4:length(argtypes)
+        ti = widenconst(argtypes[i])
+        isa(ti, DataType) && ti.name === Tuple.name && isconcretetype(ti) || return nothing
+    end
+    call = info.call
+    isa(call, MethodMatchInfo) || return nothing
+    (call.fullmatch && length(call.edges) == 1) || return nothing
+    ci = call.edges[1]
+    isa(ci, CodeInstance) || return nothing
+    add_inlining_edge!(InliningEdgeTracker(state), ci)
+    stmt.head = :invoke
+    pushfirst!(stmt.args, ci)
+    ir.stmts[idx][:info] = NoCallInfo()
+    return nothing
 end
 
 function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(rt), state::InliningState)
@@ -1124,11 +1152,13 @@ function inline_apply!(todo::Vector{Pair{Int,Any}},
         arginfos = MaybeAbstractIterationInfo[]
         for i = (arg_start+1):length(argtypes)
             thisarginfo = nothing
-            if !is_valid_type_for_apply_rewrite(argtypes[i], OptimizationParams(state.interp))
+            arg = stmt.args[i]
+            from_tuple_call = isa(arg, SSAValue) && is_known_call(ir[arg][:stmt], Core.tuple, ir)
+            if !is_valid_type_for_apply_rewrite(argtypes[i], OptimizationParams(state.interp), from_tuple_call)
                 isa(info, ApplyCallInfo) || return nothing
                 thisarginfo = info.arginfo[i-arg_start]
                 if thisarginfo === nothing || !thisarginfo.complete
-                    return nothing
+                    return try_invoke_apply!(ir, idx, stmt, argtypes, info, state)
                 end
             end
             push!(arginfos, thisarginfo)
