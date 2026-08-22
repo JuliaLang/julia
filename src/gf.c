@@ -3313,6 +3313,68 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
     return status == COVER_CERTIFIED;
 }
 
+// `m` and `m2` are unordered with each other, but that only makes the query
+// ambiguous if some point where both apply has no other winner. Look for a
+// match that beats them both over the whole region they contest, `ti` ∩ `ti2`:
+// dispatch selects that method there, so the pair is resolved rather than
+// ambiguous.
+//
+// Only a cover with an empty interference set is admitted as that witness,
+// since such a method is strictly morespecific than every method it intersects,
+// and therefore
+//  - wins at every point of the contested region, whatever else applies there,
+//    so no further check of the rest of the match list is needed;
+//  - can never be dropped from the report (no method covers it, as a cover must
+//    beat it), so the resolution stays visible to the caller;
+//  - cannot sit on a specificity cycle, unlike a merely-morespecific cover,
+//    whose own selectability could depend on the ordering this sort is still
+//    computing (compare the admissibility rules in `check_interferences_covers`).
+// A cover that beats `m` is recorded in `m`'s interference set, so scanning that
+// set (the one the caller is already walking) finds every candidate. `ambig10`
+// in test/ambiguous.jl is this shape: `Vararg` methods with pairwise-disjoint
+// element types are unordered with each other, yet they overlap only at the
+// empty tuple, which the nullary method covers and beats.
+static int pair_resolved_by_empty_cover(jl_method_t *m, jl_method_t *m2, jl_value_t *ti, jl_value_t *ti2, jl_array_t *t) JL_CANSAFEPOINT
+{
+    int result = 0;
+    jl_value_t *region = NULL;
+    jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
+    JL_GC_PUSH2(&region, &interferences);
+    for (size_t i = 0; i < interferences->length; i++) {
+        jl_method_t *r = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
+        if (r == NULL)
+            continue;
+        // the emptiness test is the O(1) bail; it also implies `r` beats `m`,
+        // which recorded it here
+        if (jl_atomic_load_relaxed(&r->interferences)->length != 0)
+            continue;
+        if (find_method_in_matches(t, r) < 0)
+            continue; // not applicable to this query in this world
+        if (!method_morespecific_recorded(r, m2))
+            continue; // `r` must beat the partner too
+        if (region == NULL) {
+            // Computed only once a candidate exists, since the whole point of
+            // the interference graph is to answer these questions without a
+            // `typeintersect` per pair.
+            region = jl_type_intersection(ti, ti2);
+            if (region == jl_bottom_type) {
+                // the pair is recorded as overlapping, but not anywhere inside
+                // this query, so nothing here can dispatch to either of them
+                result = 1;
+                break;
+            }
+        }
+        // An over-approximated `region` only makes this containment harder to
+        // satisfy, so the imprecision costs acceptances, never soundness.
+        if (jl_subtype(region, (jl_value_t*)r->sig)) {
+            result = 1;
+            break;
+        }
+    }
+    JL_GC_POP();
+    return result;
+}
+
 static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
 {
     if (include_ambiguous && *has_ambiguity)
@@ -3329,9 +3391,23 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
             continue;
         if (!method_in_interferences(m, m2))
             continue;
-        *has_ambiguity = 1;
-        if (include_ambiguous)
-            break; // the rest of the scan could only set *has_ambiguity again
+        // Once the flag is set, the search for a resolving cover cannot change
+        // anything, so only pay for it while the answer is still open.
+        if (!*has_ambiguity) {
+            jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx);
+            if (!pair_resolved_by_empty_cover(m, m2, ti, (jl_value_t*)matc2->spec_types, t))
+                *has_ambiguity = 1;
+        }
+        if (include_ambiguous) {
+            if (*has_ambiguity)
+                break; // the rest of the scan could only set *has_ambiguity again
+            continue; // a resolved pair reports nothing, but a later one may
+        }
+        // Whether or not the pair was resolved, `m` is unselectable wherever the
+        // partner it cannot beat applies, so a partner covering all of `ti`
+        // removes it: for a resolved pair the empty-set cover contains `ti` too
+        // (and its blocker-transfer obligations are automatic), and otherwise the
+        // ambiguity is now recorded.
         if (jl_subtype(ti, m2->sig)) {
             result = 1;
             break;
