@@ -34,6 +34,14 @@ function deepcopy(@nospecialize x)
     return deepcopy_internal(x, IdDict())::typeof(x)
 end
 
+"""
+    deepcopy_internal(x, stackdict::IdDict)
+
+If necessary this function can be specialized to override Julia's deepcopy
+behaviour.
+
+See also: [`deepcopy`](@ref).
+"""
 deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex,
                            Core.CancellationTokenSource},
                   stackdict::IdDict) = x
