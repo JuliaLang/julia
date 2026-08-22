@@ -1719,9 +1719,12 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 extern "C" JL_DLLEXPORT_CODEGEN
 uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr) JL_NOTSAFEPOINT
 {
-    // Might be called from unmanaged thread
+    // Might be called from unmanaged thread.
+    // Runs inside the StackWalk64 callbacks with jl_in_stackwalk held, so it
+    // must not wait for the debug-info lock (deadlocks against
+    // jl_register_jit_object). Failing costs one frame's module base.
     uint64_t ipstart = 0;
-    if (!jl_trylock_profile())
+    if (!jl_trylock_profile_nowait())
         return ipstart;
     auto &objmap = getJITDebugRegistry().getObjectMap();
     auto it = objmap.lower_bound(dwAddr);
