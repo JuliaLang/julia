@@ -639,7 +639,9 @@ function session_cancel_source!()
     try
         ses = _session_cancel_source[]
         if ses === nothing
-            ses = CancellationTokenSource()
+            # A child of the process root source, so a termination request
+            # (SIGTERM) sweeps the session's work along with everything else.
+            ses = CancellationTokenSource(process_cancel_token())
             _session_cancel_source[] = ses
         end
         return ses
@@ -687,10 +689,12 @@ function _start()
     # The whole foreground execution runs as a ^C episode: a SIGINT (with
     # exit-on-sigint disabled) cancels the episode token's scope. An
     # interactive session installs its own per-evaluation episodes later
-    # (see REPL.repl_backend_loop), superseding this one. Deliberately a
-    # standalone root, not a session child - see the `sigint_new_episode!`
-    # docstring.
-    sigint_tok = sigint_new_episode!()
+    # (see REPL.repl_backend_loop), superseding this one. Deliberately not a
+    # session child (see the `sigint_new_episode!` docstring), but a child
+    # of the process root source, so a termination request (SIGTERM) unwinds
+    # the foreground work and the process exits through the ordinary exit
+    # path.
+    sigint_tok = sigint_new_episode!(CancellationTokenSource(process_cancel_token()))
     @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
@@ -714,21 +718,29 @@ function _start()
         end
     catch
         ret = Cint(1)
-        # report the error in a fresh ^C epoch (the script's epoch may be
-        # the very cancellation being reported; level-triggered checks in
-        # the printing path would re-throw it mid-report)
-        local errs = scrub_repl_backtrace(current_exceptions())
-        try
-            ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
-                               invokelatest(display_error, errs))
-        catch
-            # The report itself failed - e.g. a further ^C cancelled the
-            # display epoch, or a user-defined `show` method errored. The
-            # exit code already reflects the original failure; leave a bare
-            # note rather than dying with an unhandled exception.
-            Core.print(Core.stderr, "\nSYSTEM: displaying the error report failed\n")
-        finally
+        if process_terminating()
+            # A termination signal unwound the foreground work: exit quietly
+            # through the ordinary exit path - the atexit hooks run next
+            # (shielded, see `_atexit`) and `jl_atexit_hook` then re-raises
+            # the signal, so the exit status reports the signal death.
             sigint_close_episode!()
+        else
+            # report the error in a fresh ^C epoch (the script's epoch may be
+            # the very cancellation being reported; level-triggered checks in
+            # the printing path would re-throw it mid-report)
+            local errs = scrub_repl_backtrace(current_exceptions())
+            try
+                ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
+                                   invokelatest(display_error, errs))
+            catch
+                # The report itself failed - e.g. a further ^C cancelled the
+                # display epoch, or a user-defined `show` method errored. The
+                # exit code already reflects the original failure; leave a bare
+                # note rather than dying with an unhandled exception.
+                Core.print(Core.stderr, "\nSYSTEM: displaying the error report failed\n")
+            finally
+                sigint_close_episode!()
+            end
         end
     end
     if is_interactive && get(stdout, :color, false)

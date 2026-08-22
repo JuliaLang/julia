@@ -78,6 +78,8 @@ Base.@cancel_check
 Base.CANCEL_REQUEST_SAFE
 Base.CANCEL_REQUEST_ABANDON_EXTERNAL
 Base.CANCEL_REQUEST_ABANDON_ALL
+Base.is_terminate_request
+Base.process_terminating
 ```
 
 ## Channels
