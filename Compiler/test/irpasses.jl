@@ -94,6 +94,77 @@ mutable struct SafeRef{T}; x::T; end
 Base.getindex(s::SafeRef) = getfield(s, 1)
 Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
 
+mutable struct Mutable53013; x; end
+@testset "#53013: SROA after CFG compaction" begin
+    code = Any[
+        Expr(:new, GlobalRef(@__MODULE__, :Mutable53013), Argument(2)),
+        GotoIfNot(false, 5),
+        Expr(:call, GlobalRef(Base, :getfield), SSAValue(1), QuoteNode(:x)),
+        ReturnNode(SSAValue(3)),
+        Expr(:call, GlobalRef(Base, :getfield), SSAValue(1), QuoteNode(:x)),
+        Expr(:call, GlobalRef(Base, :+), SSAValue(5), 1),
+        Expr(:call, GlobalRef(Base, :setfield!), SSAValue(1), QuoteNode(:x), SSAValue(6)),
+        GotoNode(3),
+    ]
+    ir = make_ircode(code; slottypes=Any[Tuple{}, Int],
+        ssavaluetypes=Any[Mutable53013, Any, Any, Any, Any, Any, Any, Any])
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+    ir = Compiler.sroa_pass!(ir, Compiler.InliningState(Compiler.NativeInterpreter()))
+    @test Compiler.verify_ir(ir) === nothing
+    ir = Compiler.compact!(ir)
+    @test Compiler.verify_ir(ir) === nothing
+    oc = Core.OpaqueClosure(ir)
+    @test oc(15) == 16
+    @test oc(-1) == 0
+end
+
+mutable struct Mutable53011; x; end
+function issue53011(x)
+    data = Mutable53011(x)
+    if false
+        @label a
+        false && @goto b
+    else
+        @label b
+        data.x += 1
+        @goto a
+    end
+    return data.x
+end
+function issue53011_try(x)
+    data = Mutable53011(x)
+    try
+        if false
+            @label a
+            false && @goto b
+        else
+            @label b
+            data.x += 1
+            @goto a
+        end
+    catch
+        return 0
+    end
+    return data.x
+end
+@testset "#53011: compaction after SROA" begin
+    @testset "$f" for f in (issue53011, issue53011_try)
+        ir = first(only(Base.code_ircode(f, (Int,); optimize_until="CC: COMPACT_3")))
+        @test Compiler.verify_ir(ir) === nothing
+        ir.argtypes[1] = Tuple{}
+        oc = Core.OpaqueClosure(ir)
+        @test oc(15) == 16
+        @test oc(-1) == 0
+    end
+    ir = first(only(Base.code_ircode(issue53011_try, (Any,); optimize_until="CC: COMPACT_3")))
+    @test Compiler.verify_ir(ir) === nothing
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir)
+    @test oc(15) == 16
+    @test oc("not a number") == 0
+end
+
 # simple immutability
 # -------------------
 
@@ -2111,14 +2182,14 @@ let code = Any[
         # block 8
         ReturnNode(nothing),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}], verify=true)
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}], verify=false)
     @test length(ir.cfg.blocks) == 8
 
-    # The IR should remain valid after domsorting
-    # (esp. including the insertion of new BasicBlocks for any fix-ups)
     domtree = Compiler.construct_domtree(ir)
+    @test_throws "IR verification failed." Compiler.verify_ir(ir, false)
+
     ir = Compiler.domsort_ssa!(ir, domtree)
-    Compiler.verify_ir(ir)
+    @test Compiler.verify_ir(ir) === nothing
 end
 
 # https://github.com/JuliaLang/julia/issues/57141
