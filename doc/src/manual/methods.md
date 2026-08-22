@@ -764,7 +764,7 @@ type for a more complex sequence of operations.
 This is often performed by the following steps:
 
 1. Write a small function `op` that expresses the set of operations performed by the kernel of the algorithm.
-2. Compute the element type `R` of the result matrix as `promote_op(op, argument_types...)`,
+2. Compute the element type `R` of the result matrix as `Base.promote_op(op, argument_types...)`,
    where `argument_types` is computed from `eltype` applied to each input array.
 3. Build the output matrix as `similar(R, dims)`, where `dims` are the desired dimensions of the output array.
 
@@ -789,25 +789,21 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
     # R = Base.return_types(op, (eltype(a), eltype(b)))
 
     ## but, finally, this works:
-    R = promote_op(op, eltype(a), eltype(b))
+    R = Base.promote_op(op, eltype(a), eltype(b))
     ## although sometimes it may give a larger type than desired
     ## it will always give a correct type
 
-    output = similar(b, R, (size(a, 1), size(b, 2)))
-    if size(a, 2) > 0
-        for j in 1:size(b, 2)
-            for i in 1:size(a, 1)
-                ## here we don't use `ab = zero(R)`,
-                ## since `R` might be `Any` and `zero(Any)` is not defined
-                ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
-                ## since it is possible that typeof(a * b) != typeof(a * b + a * b) == R
-                ab::R = a[i, 1] * b[1, j]
-                for k in 2:size(a, 2)
-                    ab += a[i, k] * b[k, j]
-                end
-                output[i, j] = ab
-            end
+    output = similar(b, R, (axes(a, 1), axes(b, 2)))
+    for j in axes(b, 2), i in axes(a, 1)
+        ## here we don't use `ab = zero(R)`,
+        ## since `R` might be `Any` and `zero(Any)` is not defined
+        ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
+        ## since it is possible that typeof(a * b) != typeof(a * b + a * b) == R
+        ab::R = a[i, first(axes(a, 2))] * b[first(axes(b, 1)), j]
+        for k in Iterators.drop(axes(a, 2), 1)
+            ab += a[i, k] * b[k, j]
         end
+        output[i, j] = ab
     end
     return output
 end
