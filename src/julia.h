@@ -2573,6 +2573,11 @@ struct _jl_handler_t {
     // Published ccall handler (if any). Used if we must unwind across a C function
     // that calls back into julia.
     struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
+    // The innermost RCJulia-mode interpreter frame at handler entry
+    // (see `jl_task_t->rc_frames`). Restored on unwind so an exception
+    // thrown out of interpreted pure frames does not leave the chain pointing
+    // into C stack frames the unwind destroyed.
+    struct _jl_rc_frame_t *rc_frames;
     sig_atomic_t defer_signal;
     int8_t gc_state;
     // Saved `bound_cancel_default` flag, restored with `bound_cancel_token`

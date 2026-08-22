@@ -239,7 +239,7 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError, ConcurrencyViolationError, FieldError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError, CapabilityError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
@@ -507,6 +507,10 @@ end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
     ConcurrencyViolationError(msg::AbstractString) = new(msg)
+end
+struct CapabilityError <: Exception
+    op::Symbol
+    CapabilityError(op::Symbol) = new(op)
 end
 struct MissingCodeError <: Exception
     mi::MethodInstance

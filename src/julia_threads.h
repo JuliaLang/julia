@@ -554,12 +554,17 @@ typedef struct _jl_task_t {
     // Bit 1-2: 0-3 counter of how many times we've reentered inference
     // Bit 3: 1 if we are writing the image and inference is illegal
     uint8_t reentrant_timing;
-    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
-    // uint16_t padding2_32;
-    // uint48_t padding2_64;
+    // nonzero while this task executes inside RCJulia mode
+    // (`Core._rcjulia_call`); counts the nesting depth of mode entries
+    uint16_t rcjulia;
+    // 2 bytes of padding
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
+    // innermost interpreter frame executing under RCJulia mode, or
+    // NULL; the chain (through the C stack) implements the recursion-cycle
+    // and depth traps of the mode
+    struct _jl_rc_frame_t *rc_frames;
     // quick lookup for current ptls
     jl_ptls_t ptls; // == jl_all_tls_states[tid]
 #ifdef USE_TRACY

@@ -4295,6 +4295,56 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    CapabilityError(op::Symbol) <: Exception
+
+An error thrown when code executing in RCJulia — restricted-capability
+evaluation, see [`Core._rcjulia_call`](@ref) — attempts an operation whose
+capability the mode withholds, such as reading or writing mutable memory,
+performing I/O, or using unrestricted recursion. `op` names the offending
+operation.
+
+The trap itself is deterministic — it depends only on the operation attempted
+and its operands — so even a computation that throws this error has a
+consistent, foldable outcome.
+"""
+CapabilityError
+
+"""
+    Core._rcjulia_call(world::UInt, f, args...)
+
+Call `f(args...)` in *RCJulia* (restricted-capability Julia) mode: the task's
+world age is frozen to `world` and every operation whose result could depend
+on mutable state, or whose effects could be observed from outside, throws a
+[`CapabilityError`](@ref) instead of executing. Any call that completes
+(or throws) under the mode is therefore `:foldable` by construction — the
+outcome is a pure function of the arguments and `world` — with no requirement
+of `:nothrow`: "consistently throws" is a foldable outcome.
+
+The withheld capabilities include: reading fields of mutable objects (except
+fields declared `const`, which never change after construction — this is what
+admits set-once runtime metadata such as `DataType.parameters`), reading
+non-`const` globals, all mutation and all allocation of mutable memory,
+`ccall`/`cfunction`, task and scheduler operations, and method definition and
+other world-mutating reflection. Generic calls execute through the
+interpreter so that every primitive operation stays checked.
+
+Termination is structural: loop backedges are rejected, and re-entering a
+method that is already executing is permitted only when its arguments
+strictly decrease in a built-in well-founded order — structurally smaller
+types are smaller, and at equal types, smaller values interpreted as
+bitstypes are smaller. Since the order admits no infinite descending chains
+and the method table is frozen, every call chain is finite; a fixed
+platform-independent frame cap additionally bounds physical stack use.
+
+!!! warning
+    This is an internal interface primarily intended as runtime
+    infrastructure (e.g. for computed struct field types). Its exact
+    restrictions may be extended or relaxed (for example with per-method
+    custom recursion orders).
+"""
+Core._rcjulia_call
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
