@@ -609,6 +609,22 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(covfile)
         @test occursin(expected, got) context=(expected, got)
 
+        # workers must drop sysimage caches before entering their event loop under coverage
+        worker_covfile = joinpath(replace(dir, "%" => "%%"), "worker-%p.info")
+        worker_code = """
+            let p = only(workers())
+                pid = remotecall_fetch(getpid, p)
+                remotecall_fetch(cbrt, p, 2.7)
+                pid
+            end
+            """
+        worker_pid = readchomp(`$cov_exename -p1 -E $worker_code
+            --code-coverage=$worker_covfile --code-coverage=all`)
+        worker_got = read(joinpath(dir, "worker-$worker_pid.info"), String)
+        record = only(filter(contains("SF:special/cbrt.jl"),
+                             split(worker_got, "end_of_record")))
+        @test any(m -> parse(Int, m[1]) > 0, eachmatch(r"^DA:\d+,(\d+)$"m, record))
+
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
         @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
