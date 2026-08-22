@@ -286,8 +286,8 @@ julia> .5
 julia> -1.23
 -1.23
 
-julia> 1e10
-1.0e10
+julia> 1e15
+1.0e15
 
 julia> 2.5e-4
 0.00025
