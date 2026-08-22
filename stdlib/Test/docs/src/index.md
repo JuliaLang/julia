@@ -296,6 +296,15 @@ in the test set reporting. The test will not run but gives a `Broken` `Result`.
 Test.@test_skip
 ```
 
+## Macro Hygiene Tests
+
+`@test_hygienic` checks that a macro expansion does not introduce unhygienic names —
+either leaked bindings or captured variable references.
+
+```@docs
+Test.@test_hygienic
+```
+
 ## Test result types
 
 ```@docs

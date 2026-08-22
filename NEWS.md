@@ -235,6 +235,9 @@ Standard library changes
   all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback), or
   whose lowered bodies never read the possibly-unbound parameters.
 
+* New macro `@test_hygienic` checks that a macro expansion does not contain unhygienic
+  names, detecting both leaked bindings and captured variable references.
+
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
