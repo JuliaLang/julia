@@ -286,10 +286,20 @@ julia> fetch(t)
 
 In addition to tasks, opaque closures also capture their world age at creation. See [`Base.Experimental.@opaque`](@ref).
 
+## World tokens
+
+A raw world age is only meaningful within the session that produced it. To capture a world
+age that remains meaningful after precompilation, use [`Base.world_token`](@ref), which
+returns an opaque token that can be passed to [`Base.invoke_in_world`](@ref) in place of a
+raw world age. When a token is serialized into a package image, the loading process grafts
+the image's world history into the world-age graph and rebases the token onto it, so that
+invoking at the token continues to see exactly the state that was captured.
+
 ```@docs
 Base.@world
 Base.get_world_counter
 Base.tls_world_age
 Base.invoke_in_world
+Base.world_token
 Base.Experimental.@opaque
 ```

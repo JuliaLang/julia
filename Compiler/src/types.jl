@@ -158,22 +158,23 @@ mutable struct LocalInferenceProof
     const edges::SimpleVector
     function LocalInferenceProof(valid_worlds::WorldRange, edges::SimpleVector)
         # Local proofs are not registered with the global invalidation machinery.
-        # Inference states cap their range at the current world counter, and exact-world
-        # local-cache reuse relies on that cap to keep an unregistered proof from
-        # claiming validity in a future world.
-        @assert first(valid_worlds) <= last(valid_worlds) <= get_world_counter()
+        # Inference states cap their range at the current world counter, and
+        # exact-world local-cache reuse relies on that cap to keep an
+        # unregistered proof from claiming validity in a future world.
+        @assert world_at_most(first(valid_worlds), last(valid_worlds)) # nonempty (both endpoints may lie off the spine's trunk)
+        @assert world_at_most(last(valid_worlds), get_world_counter())
         for edge in edges
             edge_worlds = if edge isa LocalInferenceProof
                 edge.valid_worlds
-            elseif edge isa CodeInstance && edge.min_world <= edge.max_world
-                # Skip a provisional CI (`min_world > max_world`); an SCC fills it
-                # before any proof containing it can escape.
+            elseif edge isa CodeInstance && world_at_most(edge.min_world, edge.max_world)
+                # Skip a provisional CI (its empty world region, `(1, 0)`);
+                # an SCC fills it before any proof containing it can escape.
                 WorldRange(edge.min_world, edge.max_world)
             else
                 continue
             end
-            @assert (first(edge_worlds) <= first(valid_worlds) &&
-                last(valid_worlds) <= last(edge_worlds))
+            @assert (world_reaches(first(edge_worlds), first(valid_worlds)) &&
+                world_at_most(last(valid_worlds), last(edge_worlds)))
         end
         return new(valid_worlds, edges)
     end
@@ -203,7 +204,7 @@ struct LocalInferenceResult <: InferredCallResult
         if proof isa CodeInstance
             @assert proof.def === result.linfo "CodeInstance proof does not match InferenceResult"
         else
-            @assert first(proof.valid_worlds) <= last(proof.valid_worlds)
+            @assert world_at_most(first(proof.valid_worlds), last(proof.valid_worlds))
         end
         return new(result, proof)
     end
@@ -543,8 +544,10 @@ function NativeInterpreter(world::UInt = get_world_counter();
         world = curr_max_world
     end
     # If they didn't pass typemax(UInt) but passed something more subtly
-    # incorrect, fail out loudly.
-    @assert world <= curr_max_world
+    # incorrect, fail out loudly. (Worlds on closed sibling branches of the
+    # world DAG are legal inference worlds; only unrealized future worlds
+    # are not.)
+    @assert world_at_most(world, curr_max_world)
     method_table = CachedMethodTable(InternalMethodTable(world))
     inf_cache = InferenceCache() # Initially empty cache
     codegen = IdDict{CodeInstance,CodeInfo}()

@@ -3,7 +3,7 @@
 using ..Compiler.Base
 using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
     _methods_by_ftype, get_methodtable, get_ci_mi, should_instrument,
-    morespecific, RefValue, get_require_world, Vector, IdDict
+    morespecific, RefValue, get_require_world, Vector, IdDict, world_on_spine
 using .Core: CodeInstance, MethodInstance
 
 const CI_FLAGS_NATIVE_CACHE_VALID = 0b1000
@@ -200,6 +200,15 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
             # unable to backdate before require_world, since Bindings are not able to track that information
             minworld, maxworld = get_require_world(), validation_world
+            ci_minworld = @atomic :monotonic initial.codeinst.min_world
+            if !world_on_spine(ci_minworld)
+                # This CodeInstance came from a grafted image history: its
+                # (translated) creation world stays authoritative, so that it is
+                # not considered valid at earlier worlds of that same history --
+                # e.g. at a world token captured before a method whose dispatch
+                # result it embeds was defined.
+                minworld = max(minworld, ci_minworld)
+            end
 
             # Check for invalidation of GlobalRef edges
             if (initial.def.did_scan_source & 0x1) == 0x0
