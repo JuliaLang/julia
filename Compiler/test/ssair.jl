@@ -199,6 +199,17 @@ let code = Any[
     @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
 end
 
+# Verify that definitions cannot dominate uses from a later basic block.
+let code = Any[
+        GotoNode(3),
+        ReturnNode(SSAValue(3)),
+        Argument(1),
+        GotoNode(2),
+    ]
+    ir = make_ircode(code; verify=false)
+    @test_throws "IR verification failed." Compiler.verify_ir(ir, false)
+end
+
 # Issue #29107
 let code = Any[
         # Block 1
@@ -229,6 +240,22 @@ let code = Any[
             end
         end
     end
+end
+
+# Drop a newly unreachable block while restoring dominance order during compaction.
+let code = Any[
+        GotoIfNot(false, 6),
+        GotoNode(3),
+        Argument(1),
+        GotoNode(5),
+        ReturnNode(SSAValue(3)),
+        GotoNode(3),
+    ]
+    ir = make_ircode(code)
+    @test length(ir.cfg.blocks) == 5
+    ir = Compiler.compact!(ir, true)
+    @test length(ir.cfg.blocks) == 4
+    @test Compiler.verify_ir(ir) === nothing
 end
 
 # Make sure dead blocks that are removed are not still referenced in live phi nodes
