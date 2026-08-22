@@ -1289,7 +1289,7 @@ function prod(arr::AbstractArray{BigInt})
         end
         return acc
     end
-    # Otherwise multiply pairwise, keeping both operands of comparable size 
+    # Otherwise multiply pairwise, keeping both operands of comparable size
     # DFS leaves 1 partial product live per level, so one scratch per level is enough
     # plus a spare to multiply into
     depth = top_set_bit(n)
