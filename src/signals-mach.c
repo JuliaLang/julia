@@ -321,9 +321,49 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     if (ct == NULL)
         return; // thread is dead, just resume
     jl_set_gc_and_wait(ct);
+    jl_safepoint_wait_gc_and_resume(ct);
     // (The sigint force-throw that lived here is gone: SIGINT is delivered
     // through the cancellation system - see jl_sigint_request_cancellation -
     // and nothing arms the sigint page anymore.)
+}
+
+// Return the poll instruction length, or 0 to re-execute an unrecognized load.
+// Safepoint poll results are unused, so recognized polls can be skipped.
+static size_t safepoint_poll_insn_len(uintptr_t pc)
+{
+#if defined(_CPU_AARCH64_)
+    uint32_t insn = *(const uint32_t*)pc;
+    if ((insn & 0xFFC00000u) == 0xF9400000u || // LDR Xt, [Xn, #pimm]
+        (insn & 0xFFE00C00u) == 0xF8400000u || // LDUR Xt, [Xn, #simm]
+        (insn & 0xFFE00C00u) == 0xF8600800u)   // LDR Xt, [Xn, Xm{, extend}]
+        return 4;
+    return 0;
+#elif defined(_CPU_X86_64_)
+    // MOV r64, r/m64 (REX.W + 8B /r), the only form our polls compile to
+    const uint8_t *p = (const uint8_t*)pc;
+    size_t i = 0;
+    if ((p[i] & 0xF8) == 0x48) // REX.W prefix
+        i++;
+    if (p[i++] != 0x8B)
+        return 0;
+    uint8_t modrm = p[i++];
+    uint8_t mod = modrm >> 6;
+    uint8_t rm = modrm & 0x7;
+    if (mod == 3) // register source: not a load
+        return 0;
+    if (rm == 4) { // SIB byte
+        uint8_t sib = p[i++];
+        if (mod == 0 && (sib & 0x7) == 5)
+            i += 4; // no base: disp32 follows
+    }
+    if (mod == 1)
+        i += 1; // disp8
+    else if (mod == 2 || (mod == 0 && rm == 5))
+        i += 4; // disp32 / RIP-relative
+    return i;
+#else
+    return 0;
+#endif
 }
 
 #if defined(_CPU_AARCH64_)
@@ -483,6 +523,12 @@ kern_return_t catch_mach_exception_raise_state_identity(
                                              (thread_state_t)float_state, &float_count);
         HANDLE_MACH_ERROR("thread_get_state", ret);
         assert(float_count == jl_mach_float_state_info.count);
+        // Avoid repeatedly faulting at the same poll under back-to-back GCs.
+#if defined(_CPU_X86_64_)
+        state->__rip += safepoint_poll_insn_len(state->__rip);
+#elif defined(_CPU_AARCH64_)
+        state->__pc += safepoint_poll_insn_len(state->__pc);
+#endif
         // Hijack the faulting thread to handle the safepoint on its own
         // stack, using the same jl_set_gc_and_wait() codepath as Unix signals.
         jl_call_in_state(state, (void (*)(void))&mach_safepoint_trampoline,
