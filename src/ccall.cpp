@@ -1132,7 +1132,7 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
 {
     // XXX: need to handle parameterized zero-byte types (singleton)
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
-    unsigned nb = DL.getTypeStoreSize(result->getType());
+    unsigned nb = DL.getTypeAllocSize(result->getType());
     unsigned align = sizeof(void*); // Allocations are at least pointer aligned
     MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);

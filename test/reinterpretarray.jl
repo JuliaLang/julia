@@ -678,12 +678,15 @@ end
     primitive type RUInt23 23 end
     primitive type RUInt63 63 end
 
-    @test Base.ispacked(RUInt24)
-    @test Base.ispacked(RUInt40)
-    @test Base.ispacked(RUInt48)
-    @test !Base.datatype_haspadding(RUInt24)
-    @test !Base.datatype_haspadding(RUInt40)
-    @test !Base.datatype_haspadding(RUInt48)
+    @test !Base.ispacked(RUInt24)
+    @test !Base.ispacked(RUInt40)
+    @test !Base.ispacked(RUInt48)
+    @test Base.datatype_haspadding(RUInt24)
+    @test Base.datatype_haspadding(RUInt40)
+    @test Base.datatype_haspadding(RUInt48)
+    @test Base.non_padding_bytes(RUInt24) == Bool[1, 1, 1, 0]
+    @test Base.non_padding_bytes(RUInt40) == Bool[1, 1, 1, 1, 1, 0, 0, 0]
+    @test Base.non_padding_bytes(RUInt48) == Bool[1, 1, 1, 1, 1, 1, 0, 0]
     @test Base.packedsize(RUInt24) == 3
     @test Base.packedsize(RUInt40) == 5
     @test Base.packedsize(RUInt48) == 6
@@ -723,7 +726,7 @@ end
 
     # Dense odd-bit arrays use allocation-size strides and reject byte reinterpretation.
     for (T, W, storage_size, allocation_size) in (
-        (RUInt23, UInt32, 3, 4),
+        (RUInt23, UInt32, 4, 4),
         (RUInt63, UInt64, 8, 8),
     )
         values = Core.Intrinsics.trunc_int.(T, W[1, 2, 3])

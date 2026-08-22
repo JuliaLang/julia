@@ -9151,8 +9151,14 @@ end
 #58434 bitsegal comparison of oddly sized fields
 primitive type ByteString58434 (18 * 8) end
 
-@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434})
 @test Base.datatype_haspadding(Tuple{ByteString58434}) == !Base.ispacked(Tuple{ByteString58434})
+# padding must not affect egality or hashing
+let mk = t -> reinterpret(ByteString58434, t), x = ntuple(i -> UInt8(i), 18)
+    @test mk(x) === mk(x)
+    @test mk(x) !== mk(ntuple(i -> UInt8(i == 18 ? 0 : i), 18))
+    @test objectid(mk(x)) == objectid(mk(x))
+end
 
 # #60659 - Behavior of using'd ambiguous bindings
 module AmbiguousUsing60659
