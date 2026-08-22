@@ -662,10 +662,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     initial_incoming_vals = Pair{Any, Any}[
         if 0 in defuses[x].defs
             Pair{Any, Any}(Argument(x), true)
-        elseif !defuses[x].any_newvar
-            Pair{Any, Any}(UNDEF_TOKEN, false)
         else
-            Pair{Any, Any}(SSAValue(-2), false)
+            Pair{Any, Any}(UNDEF_TOKEN, false)
         end for x in 1:length(ci.slotflags)
     ]
     worklist = Tuple{Int, Int, Vector{Pair{Any, Any}}}[(1, 0, initial_incoming_vals)]
@@ -727,7 +725,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for slot in live_slots[item]
             (ival, idef) = incoming_vals[slot]
             (ival === SSAValue(-1)) && continue
-            (ival === SSAValue(-2)) && continue
             (ival === UNDEF_TOKEN) && continue
 
             bbstate = sv.bb_states[item]
