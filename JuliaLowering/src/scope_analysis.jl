@@ -430,6 +430,9 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         if getmeta(ex, :nospecialize, false) && b.kind === :argument
             b.is_nospecialize = true
         end
+        if getmeta(ex, :is_called, false)
+            b.is_called = true
+        end
         newleaf(ex, K"BindingId", b.id)
     elseif k === K"BindingId"
         ex
