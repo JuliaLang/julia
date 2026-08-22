@@ -152,6 +152,10 @@ New library functions
   `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
   image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
   original transform when an `include(mapexpr, …)`-ed file is edited.
+* `constructors(T)` lists the constructor methods of `T` and of all its parameterizations.
+  `methods(T)` only covers the type object `T` itself, so for a parametric type it reports
+  neither the inner constructors nor those written for a specific parameterization such as
+  `T{Int}`. `constructors` is exported from `Base` to parallel `methods`.
 
 New library features
 --------------------
