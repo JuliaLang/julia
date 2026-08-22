@@ -2142,9 +2142,16 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = f_name.consume_front("extern ");
             llvmf = NULL;
             if (f_extern) {
-                llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
-                if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
-                    llvmf = NULL;
+                // An "extern" name is never allowed to be an intrinsic. Check that
+                // before creating the declaration: `getOrInsertFunction` on an
+                // overloaded intrinsic's base name would leave an ill-formed
+                // (unmangled) intrinsic declaration behind in the module even
+                // though we go on to reject the call.
+                if (!f_name.starts_with("llvm.")) {
+                    llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
+                    if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
+                        llvmf = NULL;
+                }
             }
             else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
@@ -2157,6 +2164,10 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
                     SmallVector<Type*, 4> overloadTys;
+#if JL_LLVM_VERSION >= 230000
+                    if (Intrinsic::isSignatureValid(ID, functype, overloadTys)) {
+                        {
+#else
                     SmallVector<Intrinsic::IITDescriptor, 8> Table;
                     getIntrinsicInfoTableEntries(ID, Table);
                     ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
@@ -2164,6 +2175,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     if (res == Intrinsic::MatchIntrinsicTypes_Match) {
                         bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
                         if (matchvararg) {
+#endif
 #if JL_LLVM_VERSION >= 200000
                             Function *intrinsic = Intrinsic::getOrInsertDeclaration(jl_Module, ID, overloadTys);
 #else

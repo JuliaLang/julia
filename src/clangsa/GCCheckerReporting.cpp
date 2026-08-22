@@ -17,14 +17,14 @@ PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
   unsigned OldGCDepth = PrevN->getState()->get<GCDepth>();
   if (NewGCDepth != OldGCDepth) {
     PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
-                               BRC.getSourceManager(), N->getLocationContext());
+                               BRC.getSourceManager(), N->getStackFrame());
     return makePDP(Pos, "GC frame changed here.");
   }
   unsigned NewGCState = N->getState()->get<GCDisabledAt>();
   unsigned OldGCState = PrevN->getState()->get<GCDisabledAt>();
   if (false /*NewGCState != OldGCState*/) {
     PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
-                               BRC.getSourceManager(), N->getLocationContext());
+                               BRC.getSourceManager(), N->getStackFrame());
     return makePDP(Pos, "GC enabledness changed here.");
   }
   return nullptr;
@@ -47,7 +47,7 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
         return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
       }
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
-          N->getLocationContext(), BRC.getSourceManager());
+          N->getStackFrame(), BRC.getSourceManager());
       if (Pos.isValid())
         return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
     } else if (NewSafepointDisabled == (unsigned)-1) {
@@ -57,7 +57,7 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
         return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
       }
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
-          N->getLocationContext(), BRC.getSourceManager());
+          N->getStackFrame(), BRC.getSourceManager());
       if (Pos.isValid())
         return makePDP(Pos, "Safepoints re-enabled here");
     }
@@ -71,7 +71,7 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(
     const clang::Expr *FromWhere, const ExplodedNode *N,
     PathDiagnosticLocation Pos, BugReporterContext &BRC, PathSensitiveBugReport &BR) {
   const MemRegion *Region =
-      N->getState()->getSVal(FromWhere, N->getLocationContext()).getAsRegion();
+      N->getState()->getSVal(FromWhere, N->getStackFrame()).getAsRegion();
   SymbolRef Parent = walkToRoot(
       [&](SymbolRef Sym, const LivenessState *OldVState) { return !OldVState; },
       N->getState(), Region);
@@ -174,9 +174,9 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
   PathDiagnosticLocation Pos;
   if (Stmt)
     Pos = PathDiagnosticLocation{Stmt, BRC.getSourceManager(),
-                                 N->getLocationContext()};
+                                 N->getStackFrame()};
   else
-    Pos = PathDiagnosticLocation::createDeclEnd(N->getLocationContext(),
+    Pos = PathDiagnosticLocation::createDeclEnd(N->getStackFrame(),
                                                 BRC.getSourceManager());
   if (!NewSymbolState)
     return nullptr;

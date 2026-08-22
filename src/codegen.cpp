@@ -209,6 +209,20 @@ static void setNameWithField(jl_codegen_output_t &out, Value *V, std::function<S
     }
 }
 
+
+// LLVM 23 redefined BasicBlock::getTerminator() to assume a well-formed block
+// (it asserts and returns the last instruction unconditionally) and introduced
+// getTerminatorOrNull() for the old null-returning behavior. Codegen inspects
+// blocks while they are still under construction, so it needs the latter.
+static Instruction *getTerminatorOrNull(BasicBlock *BB) JL_NOTSAFEPOINT
+{
+#if JL_LLVM_VERSION >= 230000
+    return BB->getTerminatorOrNull();
+#else
+    return BB->getTerminator();
+#endif
+}
+
 STATISTIC(EmittedAllocas, "Number of allocas emitted");
 STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
 STATISTIC(ModulesCreated, "Number of LLVM Modules created");
@@ -9918,7 +9932,7 @@ static jl_llvm_functions_t
         if (seq_next >= 0 && (unsigned)seq_next < stmtslen) {
             workstack.push_back(seq_next);
         }
-        else if (ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
+        else if (ctx.builder.GetInsertBlock() && !getTerminatorOrNull(ctx.builder.GetInsertBlock())) {
             CreateTrap(ctx.builder, false);
         }
         while (!workstack.empty()) {
@@ -9930,13 +9944,13 @@ static jl_llvm_functions_t
                 cursor = item;
                 return;
             }
-            if (seq_next != -1 && ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
+            if (seq_next != -1 && ctx.builder.GetInsertBlock() && !getTerminatorOrNull(ctx.builder.GetInsertBlock())) {
                 come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
                 ctx.builder.CreateBr(nextbb->second);
             }
             seq_next = -1;
             // if this BB is non-empty, we've visited it before so skip it
-            if (!nextbb->second->getTerminator()) {
+            if (!getTerminatorOrNull(nextbb->second)) {
                 // New BB
                 ctx.builder.SetInsertPoint(nextbb->second);
                 cursor = item;
@@ -10283,7 +10297,7 @@ static jl_llvm_functions_t
 
     // Delete any unreachable blocks
     for (auto &item : BB) {
-        if (!item.second->getTerminator())
+        if (!getTerminatorOrNull(item.second))
             item.second->eraseFromParent();
     }
 

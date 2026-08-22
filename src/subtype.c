@@ -488,11 +488,17 @@ static void free_env(jl_savedenv_t *se) JL_NOTSAFEPOINT
 {
     if (se->gcframe.nroots) {
         assert(jl_current_task->gcstack == &se->gcframe);
+#ifndef __clang_gcanalyzer__
+        // `alloc_env` pushes this frame by hand rather than with JL_GC_PUSH*,
+        // and the GC analyzer models only the macros, so it never sees that
+        // push. Hide the matching pop from it as well.
         JL_GC_POP();
+#endif
     }
     if (se->buf != se->_space)
         free(se->buf);
     se->buf = NULL;
+    se->gcframe.nroots = 0;
 }
 
 static void free_stenv(jl_stenv_t *e) JL_NOTSAFEPOINT
