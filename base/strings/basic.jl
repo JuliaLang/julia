@@ -803,6 +803,9 @@ write(io::IO, s::CodeUnits) = write(io, s.s)
 cconvert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = cconvert(Ptr{T}, s.s)
 cconvert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = cconvert(Ptr{Int8}, s.s)
 
+is_ptr_loadable(::Type{CodeUnits{UInt8, String}}) = true
+is_contiguous(::Type{CodeUnits{UInt8, String}}) = true
+
 similar(::Type{<:CodeUnits{T}}, dims::Dims) where {T} = similar(Array{T}, dims)
 
 """
