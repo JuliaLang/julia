@@ -180,6 +180,9 @@ New library features
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
 * The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
   heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
+* `resize!` now supports N-dimensional `Array`s, preserving the elements in their linear
+  (column-major) order. The new size can be given as a tuple, `resize!(A, (6, 6))`, or as
+  varargs, `resize!(A, 6, 6)`.
 
 Standard library changes
 ------------------------
