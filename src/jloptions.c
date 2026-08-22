@@ -166,6 +166,8 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // target_sanitize_memory
                         0, // target_sanitize_thread
                         0, // target_sanitize_address
+                        NULL, // restore_file
+                        0, // restore_session
     };
     jl_options_initialized = 1;
 }
@@ -189,6 +191,10 @@ static const char opts[]  =
     "                                               from the programfile or a path relative to\n"
     "                                               programfile.\n"
     " -J, --sysimage <file>                         Start up with the given system image file\n"
+    " --restore[=<file|name>]                       Restore a session saved by `save_session`; names\n"
+    "                                               match saved sessions exactly, by prefix, or as a\n"
+    "                                               substring (newest wins), defaulting to the most\n"
+    "                                               recent session in <depot>/sessions/v#.#/\n"
     " -H, --home <dir>                              Set location of `julia` executable\n"
     " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
     "                                               if `JULIA_DEPOT_PATH` environment variable is unset,\n"
@@ -433,6 +439,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_experimental_features,
            opt_compress_sysimage,
            opt_target_sanitize,
+           opt_restore,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:P:";
     static const struct option longopts[] = {
@@ -489,6 +496,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "task-metrics",    required_argument, 0, opt_task_metrics },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
+        { "restore",         optional_argument, 0, opt_restore },
         // hidden command line options
         { "experimental",    no_argument,       0, opt_experimental_features },
         { "worker",          optional_argument, 0, opt_worker },
@@ -996,6 +1004,14 @@ restart_switch:
             if (optarg != NULL) {
                 jl_options.cookie = strdup(optarg);
                 if (!jl_options.cookie)
+                    jl_error("julia: failed to allocate memory");
+            }
+            break;
+        case opt_restore:
+            jl_options.restore_session = 1;
+            if (optarg != NULL) {
+                jl_options.restore_file = strdup(optarg);
+                if (!jl_options.restore_file)
                     jl_error("julia: failed to allocate memory");
             }
             break;

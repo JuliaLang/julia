@@ -886,6 +886,7 @@ export
     atreplinit,
     exit,
     ntuple,
+    save_session,
     splat,
     tap,
 
