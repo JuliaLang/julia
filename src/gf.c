@@ -2669,6 +2669,12 @@ struct _typename_add_backedge {
     jl_value_t *caller;
 };
 
+// Missing-method backedges are recorded as a two-level map
+//     typename => (sig => Vector{CodeInstance})
+// so that adding an edge is a hash lookup (jl_object_id hashes types
+// structurally), rather than a linear scan through every recorded edge with
+// `jl_types_equal`, and so that invalidation intersects each distinct
+// signature only once, no matter how many callers recorded it.
 static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
 {
     struct _typename_add_backedge *env = (struct _typename_add_backedge*)env0;
@@ -2677,40 +2683,32 @@ static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL
     if (!explct)
         return;
     jl_genericmemory_t *allbackedges = jl_method_table->backedges;
-    jl_array_t *backedges = (jl_array_t*)jl_eqtable_get(allbackedges, (jl_value_t*)tn, NULL);
-    if (backedges == NULL) {
-        backedges = jl_alloc_vec_any(2);
-        JL_GC_PUSH1(&backedges);
-        jl_array_del_end(backedges, 2);
-        jl_genericmemory_t *newtable = jl_eqtable_put(allbackedges, (jl_value_t*)tn, (jl_value_t*)backedges, NULL);
+    jl_genericmemory_t *table = (jl_genericmemory_t*)jl_eqtable_get(allbackedges, (jl_value_t*)tn, NULL);
+    jl_array_t *callers = table == NULL ? NULL : (jl_array_t*)jl_eqtable_get(table, env->typ, NULL);
+    if (callers == NULL) {
+        // first edge for this signature: add a callers list to the
+        // per-typename table, creating the table itself if necessary
+        jl_array_t *newcallers = jl_alloc_vec_any(0);
+        jl_genericmemory_t *oldtable = table;
+        JL_GC_PUSH2(&newcallers, &table);
+        if (table == NULL)
+            table = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        table = jl_eqtable_put(table, env->typ, (jl_value_t*)newcallers, NULL);
+        if (table != oldtable) {
+            jl_genericmemory_t *newtable = jl_eqtable_put(allbackedges, (jl_value_t*)tn, (jl_value_t*)table, NULL);
+            if (newtable != allbackedges) {
+                jl_gc_write(jl_method_table, jl_method_table->backedges, jl_genericmemory_t, newtable);
+            }
+        }
         JL_GC_POP();
-        if (newtable != allbackedges) {
-            jl_gc_write(jl_method_table, jl_method_table->backedges, jl_genericmemory_t, newtable);
-        }
+        callers = newcallers;
     }
-    // check if the edge is already present and avoid adding a duplicate
-    size_t i, l = jl_array_nrows(backedges);
-    // reuse an already cached instance of this type, if possible
-    // TODO: use jl_cache_type_(tt) like cache_insert does, instead of this linear scan?
-    // TODO: use as_global_root and de-dup edges array too
-    for (i = 1; i < l; i += 2) {
-        if (jl_array_ptr_ref(backedges, i) == env->caller) {
-            if (jl_types_equal(jl_array_ptr_ref(backedges, i - 1), env->typ)) {
-                env->typ = jl_array_ptr_ref(backedges, i - 1);
-                return; // this edge already recorded
-            }
-        }
-    }
-    for (i = 1; i < l; i += 2) {
-        if (jl_array_ptr_ref(backedges, i) != env->caller) {
-            if (jl_types_equal(jl_array_ptr_ref(backedges, i - 1), env->typ)) {
-                env->typ = jl_array_ptr_ref(backedges, i - 1);
-                break;
-            }
-        }
-    }
-    jl_array_ptr_1d_push(backedges, env->typ);
-    jl_array_ptr_1d_push(backedges, env->caller);
+    // avoid adding a duplicate edge; a single caller records each signature at
+    // most once in immediate succession, so checking the last entry suffices
+    size_t n = jl_array_nrows(callers);
+    if (n > 0 && jl_array_ptr_ref(callers, n - 1) == env->caller)
+        return; // this edge already recorded
+    jl_array_ptr_1d_push(callers, env->caller);
 }
 
 // add a backedge from a non-existent signature to caller
@@ -2746,15 +2744,19 @@ static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *
     JL_GC_PROMISE_ROOTED(env->type);
     JL_GC_PROMISE_ROOTED(env->isect); // isJuliaType considers jl_value_t** to be a julia object too
     JL_GC_PROMISE_ROOTED(env->isect2); // isJuliaType considers jl_value_t** to be a julia object too
-    jl_array_t *backedges = (jl_array_t*)jl_eqtable_get(jl_method_table->backedges, (jl_value_t*)tn, NULL);
-    if (backedges == NULL)
+    jl_genericmemory_t *table = (jl_genericmemory_t*)jl_eqtable_get(jl_method_table->backedges, (jl_value_t*)tn, NULL);
+    if (table == NULL)
         return;
-    jl_value_t **d = jl_array_ptr_data(backedges);
-    size_t i, na = jl_array_nrows(backedges);
-    size_t ins = 0;
-    for (i = 1; i < na; i += 2) {
-        jl_value_t *backedgetyp = d[i - 1];
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)table->ptr;
+    size_t i, na = table->length;
+    size_t alive = 0;
+    for (i = 0; i < na; i += 2) {
+        jl_value_t *backedgetyp = jl_atomic_load_relaxed(&tab[i]);
+        jl_value_t *callers = jl_atomic_load_relaxed(&tab[i + 1]);
+        if (callers == NULL)
+            continue; // empty or deleted slot
         JL_GC_PROMISE_ROOTED(backedgetyp);
+        JL_GC_PROMISE_ROOTED(callers);
         int missing = 0;
         if (jl_type_intersection2(backedgetyp, (jl_value_t*)env->type, env->isect, env->isect2)) {
             // See if the intersection was actually already fully
@@ -2784,22 +2786,26 @@ static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *
         }
         *env->isect = *env->isect2 = NULL;
         if (missing) {
-            jl_code_instance_t *backedge = (jl_code_instance_t*)d[i];
-            JL_GC_PROMISE_ROOTED(backedge);
-            invalidate_code_instance(backedge, env->max_world, 0);
-            env->invalidated = 1;
-            if (_jl_debug_method_invalidation)
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
+            size_t j, l = jl_array_nrows(callers);
+            for (j = 0; j < l; j++) {
+                jl_code_instance_t *backedge = (jl_code_instance_t*)jl_array_ptr_ref(callers, j);
+                JL_GC_PROMISE_ROOTED(backedge);
+                invalidate_code_instance(backedge, env->max_world, 0);
+                env->invalidated = 1;
+                if (_jl_debug_method_invalidation)
+                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
+            }
+            // remove this entry (cf. `jl_eqtable_pop`)
+            jl_gc_wb(table, NULL); // deletion barrier: snapshot the overwritten key/value for SATB collectors
+            jl_atomic_store_relaxed(&tab[i], jl_nothing); // clear the key
+            jl_atomic_store_relaxed(&tab[i + 1], NULL); // and the value
         }
         else {
-            d[ins++] = d[i - 1];
-            d[ins++] = d[i - 0];
+            alive++;
         }
     }
-    if (ins == 0)
+    if (alive == 0)
         jl_eqtable_pop(jl_method_table->backedges, (jl_value_t*)tn, NULL, NULL);
-    else if (na != ins)
-        jl_array_del_end(backedges, na - ins);
 }
 
 struct invalidate_mt_env {
