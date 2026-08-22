@@ -519,6 +519,19 @@ end
     """) == (1, 2, 3, 4)
     @test only(methods(test_mod.f_nospecialize_multi_body)).nospecialize == 0b1101
 
+    # @nospecialize tuple in function body
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nospecialize_body_tuple(a, b, c, d)
+            @nospecialize a,c,d
+            (a, b, c, d)
+        end
+
+        f_nospecialize_body_tuple(1, 2, 3, 4)
+    end
+    """) == (1, 2, 3, 4)
+    @test only(methods(test_mod.f_nospecialize_body_tuple)).nospecialize == 0b1101
+
     # @nospecialize with single arg in function body
     @test JuliaLowering.include_string(test_mod, """
     begin
