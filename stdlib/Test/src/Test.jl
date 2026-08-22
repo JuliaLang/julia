@@ -656,6 +656,10 @@ function _should_escape_call(@nospecialize ex)
     return length(args) > 0
 end
 
+# Convert any splattable keyword argument group into an iterator over Pairs.
+# We can't use `pairs(kw)` because that fails for e.g. `kw = [(:atol, 0.1)]`
+_to_pair_iterator(; kw...) = (k => v for (k, v) in kw)
+
 # Escapes all of the positional arguments and keywords of a function such that we can call
 # the function at runtime.
 function _escape_call(@nospecialize ex)
@@ -710,7 +714,8 @@ function _escape_call(@nospecialize ex)
             if isa(kw, Expr) && kw.head === :kw
                 push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(kw.args[1]), esc(kw.args[2])))
             elseif isa(kw, Expr) && kw.head === :...
-                push!(escaped_kwargs, Expr(:..., esc(kw.args[1])))
+                kw_splatted = Expr(:..., esc(kw.args[1]))
+                push!(escaped_kwargs, Expr(:..., Expr(:call, _to_pair_iterator, Expr(:parameters, kw_splatted))))
             elseif isa(kw, Expr) && kw.head === :.
                 push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(kw.args[2].value), esc(Expr(:., kw.args[1], QuoteNode(kw.args[2].value)))))
             elseif isa(kw, Symbol)
