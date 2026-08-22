@@ -99,7 +99,11 @@ function getproperty(T::DataType, s::Symbol)
     s === :super && return supertype(T)
     return getfield(T, s)
 end
-supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
+function supertype(T::UnionAll)
+    @_foldable_meta
+    # a fragment's supertype is framed for the same binder chain
+    return rewrap_unionall_one(supertype(getfield(T, :inner)), T)
+end
 
 ## generic comparison ##
 

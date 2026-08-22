@@ -55,9 +55,21 @@ has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often comp
 # For example, Type{v} is not valid if v is a value
 # Accepts TypeVars and has_free_typevar also, since it assumes the user will rewrap it correctly
 # If astag is true, then also requires that it be a possible type tag for a valid object
+# whether `t` contains de Bruijn references into enclosing (stripped) binders
+has_dangling_typevar_refs(@nospecialize t) =
+    ccall(:jl_has_dangling_tvarrefs, Cint, (Any,), t) !== Int32(0)
+
+# does the binder `d` levels out occur in `t`? (the positional counterpart of
+# `has_typevar`; binders nested inside `t` are accounted for)
+tvarref_occurs(@nospecialize(t), d::Int) =
+    ccall(:jl_tvarref_occurs, Cint, (Any, Csize_t), t, d) !== Int32(0)
+
 function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     x === Bottom && false
     x isa TypeVar && return valid_as_lattice(x.ub, astag)
+    # a bound-variable reference (from an unwrapped UnionAll body): treat like
+    # a TypeVar whose bound is unknown here; callers rewrap into its binder
+    x isa TypeVarRef && return true
     x isa UnionAll && (x = unwrap_unionall(x))
     if x isa Union
         # the Union constructor ensures this (and we'll recheck after
@@ -66,7 +78,7 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     end
     if isType(x)
         p = type_parameter(x)
-        p isa Type || p isa TypeVar || return false
+        p isa Type || p isa TypeVar || p isa TypeVarRef || return false
         return true
     end
     if x isa DataType
@@ -162,6 +174,7 @@ end
 
 _typename(@nospecialize a) = Union{}
 _typename(::TypeVar) = Core.TypeName
+_typename(::TypeVarRef) = Core.TypeName # dangling bound-variable reference: unknown type
 function _typename(a::Union)
     ta = _typename(a.a)
     tb = _typename(a.b)
@@ -170,7 +183,7 @@ function _typename(a::Union)
     (ta isa Const && tb isa Const) && return Union{} # will throw an error (different type-names)
     return Core.TypeName # uncertain result
 end
-_typename(union::UnionAll) = _typename(union.body)
+_typename(union::UnionAll) = _typename(union.inner)
 _typename(a::DataType) = Const(a.name)
 _typename(a::TypeEq) = Core.TypeName
 
@@ -404,7 +417,7 @@ function _unioncomplexity(@nospecialize x)
     elseif isa(x, Union)
         return unioncomplexity(x.a) + unioncomplexity(x.b) + 1
     elseif isa(x, UnionAll)
-        return max(unioncomplexity(x.body), unioncomplexity(x.var.ub))
+        return max(unioncomplexity(x.inner), unioncomplexity(x.ub))
     elseif isa(x, TypeofVararg)
         return isdefined(x, :T) ? unioncomplexity(x.T) + 1 : 1
     else
@@ -416,7 +429,7 @@ function unionall_depth(@nospecialize ua) # aka subtype_env_size
     depth = 0
     while ua isa UnionAll
         depth += 1
-        ua = ua.body
+        ua = ua.inner
     end
     return depth
 end

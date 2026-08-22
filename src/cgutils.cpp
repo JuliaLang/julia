@@ -3220,7 +3220,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         return true;
     }
     if (nfields == 1) {
-        if (jl_has_free_typevars(jl_field_type(stt, 0))) {
+        if (jl_has_free_or_dangling_typevars(jl_field_type(stt, 0))) {
             return false;
         }
         (void)idx0();
@@ -3642,7 +3642,7 @@ static Value *emit_genericmemoryelsize(jl_codectx_t &ctx, Value *v, jl_value_t *
 {
     ++EmittedArrayElsize;
     jl_datatype_t *sty = (jl_datatype_t*)jl_unwrap_unionall(typ);
-    if (jl_is_datatype(sty) && !jl_has_free_typevars((jl_value_t*)sty) && sty->layout) {
+    if (jl_is_datatype(sty) && !jl_has_free_or_dangling_typevars((jl_value_t*)sty) && sty->layout) {
         if (jl_is_genericmemoryref_type(sty))
             sty = (jl_datatype_t*)jl_field_type_concrete(sty, 1);
         size_t sz = sty->layout->size;
@@ -3663,7 +3663,7 @@ static Value *emit_genericmemoryelsize(jl_codectx_t &ctx, Value *v, jl_value_t *
 static ssize_t genericmemoryype_constelsize(jl_value_t *typ)
 {
     jl_datatype_t *sty = (jl_datatype_t*)jl_unwrap_unionall(typ);
-    if (jl_is_datatype(sty) && !jl_has_free_typevars((jl_value_t*)sty) && sty->layout) {
+    if (jl_is_datatype(sty) && !jl_has_free_or_dangling_typevars((jl_value_t*)sty) && sty->layout) {
         if (jl_is_array_type(sty))
             sty = (jl_datatype_t*)jl_field_type_concrete(sty, 0);
         if (jl_is_genericmemoryref_type(sty))

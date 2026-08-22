@@ -208,23 +208,36 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         return 1;
     }
     if (dtag == jl_tvar_tag << 4) {
-        jl_typeenv_t *pe = env;
-        while (pe != NULL) {
-            if (pe->var == (jl_tvar_t*)a)
-                return pe->val == b;
-            pe = pe->prev;
-        }
+        // TypeVars only occur free; identity was already checked above
         return 0;
+    }
+    if (dtag == jl_tvarref_tag << 4) {
+        return jl_tvarref_depth(a) == jl_tvarref_depth(b);
     }
     if (dtag == jl_unionall_tag << 4) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (tvar_names && ua->var->name != ub->var->name)
+        // the binder name is observable (display, reflection), so `===`
+        // distinguishes alpha-renamed binders; `jl_types_struct_equiv`
+        // (`tvar_names == 0`) compares the structure only
+        if (tvar_names) {
+            // differing memoized objectid hashes decide inequality without a
+            // structural walk. Only valid on this path: the hash covers the
+            // binder names that `tvar_names == 0` ignores. Memoized hashes
+            // exist only for terms without free TypeVars, whose egality is
+            // also independent of `env`.
+            uintptr_t ha = ua->hash;
+            if (ha) {
+                uintptr_t hb = ub->hash;
+                if (hb && ha != hb)
+                    return 0;
+            }
+            if (ua->name != ub->name)
+                return 0;
+        }
+        if (!(egal_types(ua->lb, ub->lb, env, tvar_names) && egal_types(ua->ub, ub->ub, env, tvar_names)))
             return 0;
-        if (!(egal_types(ua->var->lb, ub->var->lb, env, tvar_names) && egal_types(ua->var->ub, ub->var->ub, env, tvar_names)))
-            return 0;
-        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
-        return egal_types(ua->body, ub->body, &e, tvar_names);
+        return egal_types(ua->body, ub->body, env, tvar_names);
     }
     if (dtag == jl_uniontype_tag << 4) {
         return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
@@ -316,6 +329,8 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
             return compare_fields(a, b, jl_quotenode_type);
         case jl_unionall_tag:
             return egal_types(a, b, NULL, 1);
+        case jl_tvarref_tag:
+            return jl_tvarref_depth(a) == jl_tvarref_depth(b);
         case jl_uniontype_tag:
             return compare_fields(a, b, jl_uniontype_type);
         case jl_typeeq_tag:
@@ -416,12 +431,44 @@ typedef struct _varidx {
     struct _varidx *prev;
 } jl_varidx_t;
 
-static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
+static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env, int *cacheable) JL_NOTSAFEPOINT;
+
+// hash of a UnionAll binder and its subterms; shared by the objectid walk
+// and the construction-time memoization
+static uintptr_t unionall_hash_(jl_unionall_t *u, jl_varidx_t *env, int *cacheable) JL_NOTSAFEPOINT
+{
+    // the binder name is observable (display, reflection) and therefore
+    // part of the object's identity, like the rest of the binder
+    uintptr_t h = u->name->hash;
+    h = bitmix(h, type_object_id_(u->lb, env, cacheable));
+    h = bitmix(h, type_object_id_(u->ub, env, cacheable));
+    h = bitmix(h, type_object_id_(u->body, env, cacheable));
+    if (h == 0)
+        h = 0x55c5b06e; // deterministic substitute: 0 means "not memoized"
+    return h;
+}
+
+// the value for `jl_unionall_t::hash`, computed at construction: the
+// deterministic structural hash, or 0 if it would depend on session-local
+// state (a free TypeVar hashed by address)
+uintptr_t jl_compute_unionall_hash(jl_unionall_t *u) JL_NOTSAFEPOINT
+{
+    int cacheable = 1;
+    uintptr_t h = unionall_hash_(u, NULL, &cacheable);
+    return cacheable ? h : 0;
+}
+
+// `*cacheable` is cleared when the computed hash depends on session-local
+// state (a free TypeVar's address or in-image id, or an opaque immutable
+// with object references), so that it must not be memoized on UnionAll nodes
+// (the memoization is serialized into images and must be deterministic).
+static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env, int *cacheable) JL_NOTSAFEPOINT
 {
     if (v == NULL)
         return 0;
     jl_datatype_t *tv = (jl_datatype_t*)jl_typeof(v);
     if (tv == jl_tvar_type) {
+        *cacheable = 0;
         jl_varidx_t *pe = env;
         int i = 0;
         while (pe != NULL) {
@@ -437,20 +484,26 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     }
     if (tv == jl_uniontype_type) {
         return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
-                             type_object_id_(((jl_uniontype_t*)v)->a, env)),
-                      type_object_id_(((jl_uniontype_t*)v)->b, env));
+                             type_object_id_(((jl_uniontype_t*)v)->a, env, cacheable)),
+                      type_object_id_(((jl_uniontype_t*)v)->b, env, cacheable));
     }
     if (tv == jl_typeeq_type || tv == jl_typeegal_type) {
         return bitmix(jl_object_id((jl_value_t*)tv),
-                      type_object_id_(((jl_typeeq_t*)v)->T, env));
+                      type_object_id_(((jl_typeeq_t*)v)->T, env, cacheable));
     }
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
-        uintptr_t h = u->var->name->hash;
-        h = bitmix(h, type_object_id_(u->var->lb, env));
-        h = bitmix(h, type_object_id_(u->var->ub, env));
-        jl_varidx_t e = { u->var, env };
-        return bitmix(h, type_object_id_(u->body, &e));
+        uintptr_t h = u->hash;
+        if (h)
+            return h;
+        // no memoized hash (unstable term, or a hand-built raw object):
+        // compute per query; the parent then cannot memoize either
+        *cacheable = 0;
+        int subcacheable = 1;
+        return unionall_hash_(u, env, &subcacheable);
+    }
+    if (tv == jl_tvarref_type) {
+        return inthash(jl_tvarref_depth(v)) ^ 0x171717aabb00cc55;
     }
     if (tv == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
@@ -459,7 +512,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         uintptr_t h = ~dtv->name->hash;
         size_t i, l = jl_nparams(v);
         for (i = 0; i < l; i++) {
-            h = bitmix(h, type_object_id_(jl_tparam(v, i), env));
+            h = bitmix(h, type_object_id_(jl_tparam(v, i), env, cacheable));
         }
         return h;
     }
@@ -467,14 +520,20 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         jl_vararg_t *vm = (jl_vararg_t*)v;
         jl_value_t *t = vm->T ? vm->T : (jl_value_t*)jl_any_type;
         jl_value_t *n = vm->N ? vm->N : jl_nothing;
-        return bitmix(type_object_id_(t, env),
-            type_object_id_(n, env));
+        return bitmix(type_object_id_(t, env, cacheable),
+            type_object_id_(n, env, cacheable));
     }
     if (tv == jl_symbol_type)
         return ((jl_sym_t*)v)->hash;
     if (tv == jl_module_type)
         return ((jl_module_t*)v)->hash;
     assert(!tv->name->mutabl);
+    // an immutable parameter value: plain bits hash deterministically, but
+    // object references inside it escape this walk's determinism tracking
+    const jl_datatype_layout_t *layout = tv->layout;
+    assert(layout != NULL); // an instantiated value's type always has a layout
+    if (layout->npointers > 0)
+        *cacheable = 0;
     return immut_id_(tv, v, tv->hash);
 }
 
@@ -498,8 +557,10 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         }
         return bits_hash(v, sz) ^ h;
     }
-    if (dt == jl_unionall_type)
-        return type_object_id_(v, NULL);
+    if (dt == jl_unionall_type) {
+        int cacheable = 1;
+        return type_object_id_(v, NULL, &cacheable);
+    }
     for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)v + offs;
@@ -608,6 +669,12 @@ JL_CALLABLE(jl_f_has_free_typevars)
 {
     JL_NARGS(has_free_typevars, 1, 1);
     return jl_has_free_typevars(args[0]) ? jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f_has_dangling_tvarrefs)
+{
+    JL_NARGS(has_dangling_tvarrefs, 1, 1);
+    return jl_has_dangling_tvarrefs(args[0]) ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_sizeof)
@@ -1349,15 +1416,24 @@ JL_CALLABLE(jl_f_setfieldonce)
     return success ? jl_true : jl_false;
 }
 
-static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_CANSAFEPOINT
+static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow, jl_binderenv_t *env) JL_CANSAFEPOINT
 {
     if (jl_is_unionall(t)) {
-        jl_value_t *u = t;
-        JL_GC_PUSH1(&u);
-        u = get_fieldtype(((jl_unionall_t*)t)->body, f, dothrow);
-        u = jl_type_unionall(((jl_unionall_t*)t)->var, u);
+        // extract from the raw body: the field slot sits at the body's own
+        // binder depth, so its references transfer verbatim; the binder is
+        // then re-formed around the result (or dropped when it does not
+        // occur, or -- when the field type is exactly the bound variable --
+        // normalized to the binder's upper bound). The environment carries
+        // the binder chain so that a union-typed field's merge can chase
+        // reference bounds (see `jl_type_union_env`).
+        jl_binderenv_t newenv = { (jl_unionall_t*)t, env };
+        jl_value_t *body = get_fieldtype(((jl_unionall_t*)t)->body, f, dothrow, &newenv);
+        if (body == NULL)
+            return NULL;
+        JL_GC_PUSH1(&body);
+        body = jl_rewrap_unionall_one(body, (jl_unionall_t*)t);
         JL_GC_POP();
-        return u;
+        return body;
     }
     if (jl_is_uniontype(t)) {
         jl_value_t **u;
@@ -1365,14 +1441,14 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
         jl_value_t *a = ((jl_uniontype_t*)t)->a;
         jl_value_t *b = ((jl_uniontype_t*)t)->b;
         JL_GC_PUSHARGS(u, 2);
-        u[0] = jl_is_some_Type(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
-        u[1] = jl_is_some_Type(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
+        u[0] = jl_is_some_Type(a) ? jl_bottom_type : get_fieldtype(a, f, 0, env);
+        u[1] = jl_is_some_Type(b) ? jl_bottom_type : get_fieldtype(b, f, 0, env);
         if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
             // error if all types in the union might have
-            get_fieldtype(a, f, 1);
-            get_fieldtype(b, f, 1);
+            get_fieldtype(a, f, 1, env);
+            get_fieldtype(b, f, 1, env);
         }
-        r = jl_type_union(u, 2);
+        r = jl_type_union_env(u, 2, env);
         JL_GC_POP();
         return r;
     }
@@ -1402,8 +1478,28 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
             }
         }
         jl_value_t *tt = jl_tparam1(st);
-        while (jl_is_typevar(tt))
-            tt = ((jl_tvar_t*)tt)->ub;
+        while (1) {
+            if (jl_is_typevar(tt)) {
+                tt = ((jl_tvar_t*)tt)->ub;
+            }
+            else if (jl_is_tvarref(tt)) {
+                // chase the binder's declared bound through the environment
+                size_t d = jl_tvarref_depth(tt);
+                jl_binderenv_t *node = env;
+                while (node != NULL && d > 1) {
+                    node = node->prev;
+                    d--;
+                }
+                if (node == NULL || jl_has_dangling_tvarrefs(node->u->ub))
+                    // detached, or a bound expressed in an outer frame:
+                    // the tuple type is unknown here
+                    return (jl_value_t*)jl_any_type;
+                tt = node->u->ub;
+            }
+            else {
+                break;
+            }
+        }
         if (tt == (jl_value_t*)jl_any_type)
             return (jl_value_t*)jl_any_type;
         if (tt == (jl_value_t*)jl_bottom_type)
@@ -1411,7 +1507,7 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
         JL_GC_PUSH1(&f);
         if (jl_is_symbol(f))
             f = jl_box_long(field_index+1);
-        jl_value_t *ft = get_fieldtype(tt, f, dothrow);
+        jl_value_t *ft = get_fieldtype(tt, f, dothrow, env);
         JL_GC_POP();
         return ft;
     }
@@ -1437,7 +1533,8 @@ JL_CALLABLE(jl_f_fieldtype)
     if (nargs == 3) {
         JL_TYPECHK(fieldtype, bool, args[2]);
     }
-    return get_fieldtype(args[0], args[1], 1);
+    jl_value_t *r = get_fieldtype(args[0], args[1], 1, NULL);
+    return r;
 }
 
 JL_CALLABLE(jl_f_nfields)
@@ -1989,6 +2086,21 @@ JL_CALLABLE(jl_f__expr)
     return (jl_value_t*)ex;
 }
 
+// TypeVar constructor without bound validation, for internal protocols that
+// carry raw de Bruijn bounds in the lb/ub slots (the method-definition tvars
+// materialized by `_defaultctors` in base/essentials.jl); such variables must
+// not escape into ordinary types
+JL_DLLEXPORT jl_tvar_t *jl_new_typevar_raw(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
+    jl_set_typetagof(tv, jl_tvar_tag, 0);
+    tv->name = name;
+    tv->lb = lb;
+    tv->ub = ub;
+    return tv;
+}
+
 // Typevar constructor for internal use
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {
@@ -2385,10 +2497,30 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super) JL_CANSA
 
 JL_CALLABLE(jl_f__setsuper)
 {
-    JL_NARGS(_setsuper!, 2, 2);
+    JL_NARGS(_setsuper!, 2, 3);
     jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
     JL_TYPECHK(_setsuper!, datatype, (jl_value_t*)dt);
-    jl_set_datatype_super(dt, args[1]);
+    jl_value_t *super = args[1];
+    if (nargs == 3 && args[2] != jl_nothing) {
+        // the supertype expression was evaluated against the given (free)
+        // definition TypeVars; rebind them as de Bruijn references to the
+        // wrapper's binders before storing it on the template. Validate first,
+        // while the expression is still in TypeVar form.
+        JL_TYPECHK(_setsuper!, simplevector, args[2]);
+        jl_svec_t *tvars = (jl_svec_t*)args[2];
+        const char *type_name = jl_symbol_name(dt->name->name);
+        if (dt->super != NULL)
+            jl_errorf("invalid subtyping in definition of %s: type already has a supertype.", type_name);
+        if (jl_is_datatype(super) && dt->name == ((jl_datatype_t*)super)->name)
+            jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
+        jl_check_valid_supertype(super, type_name);
+        JL_GC_PUSH1(&super);
+        super = jl_translate_vars_to_refs(super, tvars, jl_svec_len(tvars));
+        jl_gc_write(dt, dt->super, jl_datatype_t, (jl_datatype_t*)super);
+        JL_GC_POP();
+        return jl_nothing;
+    }
+    jl_set_datatype_super(dt, super);
     return jl_nothing;
 }
 
@@ -2505,11 +2637,11 @@ JL_CALLABLE(jl_f_task_result_type)
 // freevars is a (conservative) analysis of what calling jl_has_bound_typevars from name->wrapper gives (TODO: just call this instead?)
 int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT
 {
-    if (freevars && !jl_has_free_typevars(p))
+    if (freevars && !jl_has_free_typevars(p) && !jl_has_dangling_tvarrefs(p))
         freevars = 0;
     while (jl_is_unionall(p)) {
-        if (references_name((jl_value_t*)((jl_unionall_t*)p)->var->lb, name, 0, freevars) ||
-            references_name((jl_value_t*)((jl_unionall_t*)p)->var->ub, name, 0, freevars))
+        if (references_name(((jl_unionall_t*)p)->lb, name, 0, freevars) ||
+            references_name(((jl_unionall_t*)p)->ub, name, 0, freevars))
             return 1;
        p = ((jl_unionall_t*)p)->body;
     }
@@ -2537,7 +2669,10 @@ int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int 
             size_t i, l = jl_svec_len(types);
             for (i = 0; i < l; i++) {
                 jl_value_t *ft = jl_svecref(types, i);
-                if (!jl_is_typevar(ft) && jl_has_free_typevars(ft)) {
+                // template field types reference the wrapper's binders as
+                // dangling TypeVarRefs (they used to be free TypeVars)
+                if (!jl_is_typevar(ft) && !jl_is_tvarref(ft) &&
+                    (jl_has_free_typevars(ft) || jl_has_dangling_tvarrefs(ft))) {
                     affects_layout = 1;
                     break;
                 }
@@ -2555,17 +2690,40 @@ int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int 
 
 JL_CALLABLE(jl_f__typebody)
 {
-    JL_NARGS(_typebody!, 1, 2);
+    JL_NARGS(_typebody!, 1, 3);
     jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
     JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
-    if (nargs == 2) {
+    if (nargs >= 2) {
         jl_value_t *ft = args[1];
         JL_TYPECHK(_typebody!, simplevector, ft);
         size_t nf = jl_svec_len(ft);
         jl_check_field_types((jl_svec_t*)ft, dt->name->name);
         if (dt->types != NULL)
             jl_errorf("Internal Error: Expected type fields to be unset");
+        // The field type expressions were evaluated against the definition's
+        // (free) TypeVars; rebind those as de Bruijn references to the
+        // wrapper's binders before storing them on the template.
+        if (nargs == 3 && args[2] != jl_nothing) {
+            JL_TYPECHK(_typebody!, simplevector, args[2]);
+            jl_svec_t *tvars = (jl_svec_t*)args[2];
+            size_t ntv = jl_svec_len(tvars);
+            if (ntv > 0 && nf > 0) {
+                jl_svec_t *ft2 = NULL;
+                jl_value_t *elt = NULL;
+                JL_GC_PUSH2(&ft2, &elt);
+                ft2 = jl_svec_copy((jl_svec_t*)ft);
+                for (size_t i = 0; i < nf; i++) {
+                    elt = jl_translate_vars_to_refs(jl_svecref(ft2, i), tvars, ntv);
+                    jl_svecset(ft2, i, elt);
+                }
+                ft = (jl_value_t*)ft2;
+                JL_GC_POP();
+            }
+        }
+        jl_svec_t *ftr = (jl_svec_t*)ft; // rooted below across allocations
+        JL_GC_PUSH1(&ftr);
         jl_gc_write(dt, dt->types, jl_svec_t, (jl_svec_t*)ft);
+        JL_GC_POP();
         // If a supertype can reference the same type, then we may not be
         // able to compute the layout of the object before needing to
         // publish it, so we must assume it cannot be inlined, if that
@@ -2648,10 +2806,11 @@ int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
     while (jl_is_unionall(a)) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (!jl_types_struct_equiv(ua->var->lb, ub->var->lb) || !jl_types_struct_equiv(ua->var->ub, ub->var->ub) ||
-            ua->var->name != ub->var->name)
+        if (!jl_types_struct_equiv(ua->lb, ub->lb) || !jl_types_struct_equiv(ua->ub, ub->ub) ||
+            ua->name != ub->name)
             goto no;
-        a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
+        // the bodies' bound variables are positional; no renaming is needed
+        a = ua->body;
         b = ub->body;
     }
     JL_GC_POP();
@@ -2807,6 +2966,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
+    add_builtin("TypeVarRef", (jl_value_t*)jl_tvarref_type);
     add_builtin("UnionAll", (jl_value_t*)jl_unionall_type);
     add_builtin("Union", (jl_value_t*)jl_uniontype_type);
     add_builtin("Intersect", (jl_value_t*)jl_intersect_type);

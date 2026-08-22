@@ -680,3 +680,35 @@ let ci = method_instance(iter61667, ()).cache
     Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
     @test ci.max_world == typemax(UInt)
 end
+# the typename facts scan must account for a bound-variable reference at the
+# scanned slot by walking the binder's declared bound: inserting a
+# constructor-style method with a bounded `Type` argument has to invalidate
+# missing-match backedges keyed under the bound's typename
+abstract type AbsCtor65 end
+struct ConcCtor65 <: AbsCtor65 end
+callctor65(x) = AbsCtor65(x)
+@test_throws MethodError callctor65(1)
+(::Type{T})(x) where {T<:AbsCtor65} = ConcCtor65()
+@test callctor65(1) === ConcCtor65()
+# a dependent bound resolves through the parent binder chain
+abstract type AbsCtor66{T} end
+struct ConcCtor66 <: AbsCtor66{Int} end
+callctor66(x) = AbsCtor66{Int}(x)
+@test_throws MethodError callctor66(1)
+(::Type{T})(x::S) where {S, T<:AbsCtor66{S}} = ConcCtor66()
+@test callctor66(1) === ConcCtor66()
+# a kind-typed slot admits type objects, whose canonical backedge keys come
+# from their payload class; the insertion must widen to the `Type` umbrella
+# to find edges like this one (key stability, see jl_foreach_top_typename_for)
+struct KindCtor67 end
+struct KindArg67 end  # private argument type so the pirate method stays inert
+callctor67(x) = KindCtor67(x)
+@test_throws MethodError callctor67(KindArg67())
+(t::DataType)(x::KindArg67) = t === KindCtor67 ? 67 : 0
+@test callctor67(KindArg67()) === 67
+# delete the pirate so it cannot leak into other suites on this worker (it
+# makes any DataType-constructor call with a KindArg67 argument ambiguous,
+# e.g. Core.Const(::KindArg67) in the compiler itself); deletion must
+# invalidate through the same widened umbrella key as the insertion did
+Base.delete_method(which(Tuple{DataType, KindArg67}))
+@test_throws MethodError callctor67(KindArg67())
