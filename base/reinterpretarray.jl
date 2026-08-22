@@ -223,7 +223,10 @@ function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S
         return true
     end
     if IsReshaped && els < elp
-        return true
+        # `strides` divides the parent's byte strides (`strides(parent) .* elsize(P)`)
+        # by `els`; that division is only guaranteed to be exact if the parent's
+        # element size is a multiple of `els`.
+        return iszero(elsize(P) % els)
     end
     # Unknown if parent is contiguous in the 1st dimension.
     return false
