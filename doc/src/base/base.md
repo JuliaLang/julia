@@ -294,6 +294,7 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
+Base.FixNullaryCallable
 Base.Fix
 Base.Fix1
 Base.Fix2
