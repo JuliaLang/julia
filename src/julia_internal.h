@@ -2164,8 +2164,27 @@ JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT _Atomic(uint64_t) *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_coverage_register_counter(_Atomic(uint64_t) *slot, _Atomic(uint64_t) *counter) JL_NOTSAFEPOINT;
+
+// Coverage counters compiled into an image (sysimage or pkgimage), exposed by
+// the image as the `jl_image_coverage` symbol. `scope` and `mode` record the
+// `code_coverage` and `code_coverage_mode` options the image was built with.
+typedef struct {
+    const char *file;
+    _Atomic(uint64_t) *counter;
+    int32_t line;
+    int32_t _pad;
+} jl_image_coverage_entry_t;
+typedef struct {
+    uint32_t scope;
+    uint32_t mode;
+    uint64_t nentries;
+    const jl_image_coverage_entry_t *entries;
+} jl_image_coverage_t;
+void jl_register_image_coverage(const void *table, int is_sysimg) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_image_coverage_trusted(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT _Atomic(uint64_t) *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT;

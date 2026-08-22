@@ -313,6 +313,22 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
         info->global_targets[val] = intern(gv->getName());
     }
 
+    if (!coverage_counters.empty()) {
+        // llvm.compiler.used keeps the write-only counters alive. Sort the
+        // globals so pointer-dependent DenseMap iteration cannot affect the
+        // module hash.
+        SmallVector<GlobalValue*, 0> counters;
+        for (auto &[slot, counter] : coverage_counters) {
+            counters.push_back(counter);
+            info->coverage_counters[slot] = intern(counter->getName());
+        }
+        std::sort(counters.begin(), counters.end(),
+                  [](GlobalValue *a, GlobalValue *b) JL_NOTSAFEPOINT {
+                      return a->getName() < b->getName();
+                  });
+        appendToCompilerUsed(*mod, counters);
+    }
+
     return {std::move(ctx), std::move(mod), std::move(info)};
 }
 
@@ -795,11 +811,29 @@ void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     auto NewObj =
         cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
 
+    SmallVector<std::pair<_Atomic(uint64_t) *, jitlink::Symbol *>, 0> CoverageCounters;
+    if (!LinkerInfo->coverage_counters.empty()) {
+        StringMap<jitlink::Symbol *> DefinedSymbols;
+        for (auto *Sym : G.defined_symbols()) {
+            if (Sym->hasName())
+                DefinedSymbols[*Sym->getName()] = Sym;
+        }
+        for (auto &[slot, name] : LinkerInfo->coverage_counters) {
+            auto It = DefinedSymbols.find(*name);
+            assert(It != DefinedSymbols.end());
+            // Relocations can target an anonymous section symbol, leaving the
+            // named counter with no incoming edges for the prune pass.
+            It->second->setLive(true);
+            CoverageCounters.push_back({slot, It->second});
+        }
+    }
+
     {
         std::lock_guard<std::mutex> lock{PluginMutex};
         assert(PendingObjs.count(&MR) == 0);
         PendingObjs[&MR] = std::unique_ptr<JITObjectInfo>(new JITObjectInfo{
-            std::move(NewBuffer), std::move(NewObj), {}, std::move(LinkerInfo)});
+            std::move(NewBuffer), std::move(NewObj), {}, std::move(LinkerInfo),
+            std::move(CoverageCounters)});
     }
 }
 
@@ -917,6 +951,10 @@ void JLDebuginfoPlugin::modifyPassConfig(MaterializationResponsibility &MR, jitl
             unpoisonLinkGraphBlocks(Sec);
             // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
             Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
+        }
+        for (auto &[slot, counter] : Info.CoverageCounters) {
+            jl_coverage_register_counter(
+                slot, (_Atomic(uint64_t)*)counter->getAddress().getValue());
         }
         return Error::success();
     });

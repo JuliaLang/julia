@@ -7,6 +7,34 @@ using Core.IR
 include("setup_Compiler.jl")
 include("irutils.jl")
 
+# Hit-mode coverage effects are removed only when an identical location dominates them.
+let code = Any[
+        Expr(:code_coverage_effect),
+        Expr(:code_coverage_effect),
+        GotoIfNot(Argument(1), 6),
+        Expr(:code_coverage_effect),
+        GotoNode(7),
+        Expr(:code_coverage_effect),
+        GotoIfNot(Argument(2), 10),
+        Expr(:code_coverage_effect),
+        GotoNode(11),
+        Expr(:code_coverage_effect),
+        Expr(:code_coverage_effect),
+        ReturnNode(nothing),
+    ]
+    ir = make_ircode(code; verify=false)
+    location_a = (Int32(1), Int32(0), Int32(0))
+    location_b = (Int32(2), Int32(0), Int32(0))
+    for idx in (1, 2, 4, 6)
+        ir.stmts[idx][:line] = location_a
+    end
+    for idx in (8, 10, 11)
+        ir.stmts[idx][:line] = location_b
+    end
+    Compiler.deduplicate_coverage_effects!(ir)
+    @test findall(stmt -> isexpr(stmt, :code_coverage_effect), ir.stmts.stmt) == [1, 8, 10, 11]
+end
+
 # domsort
 # =======
 

@@ -909,6 +909,28 @@ function may_have_fcalls(m::Method)
     return ccall(:jl_ir_flag_has_fcall, Bool, (Any,), src)
 end
 
+function strip_coverage_effects!(src::CodeInfo)
+    for idx in eachindex(src.code)
+        isexpr(src.code[idx], :code_coverage_effect) && (src.code[idx] = nothing)
+    end
+    return src
+end
+
+function strip_coverage_effects!(ir::IRCode)
+    for idx in 1:length(ir.stmts)
+        isexpr(ir.stmts[idx][:stmt], :code_coverage_effect) &&
+            (ir.stmts[idx][:stmt] = nothing)
+    end
+    return ir
+end
+
+function strip_untracked_coverage_effects!(mi::MethodInstance, src::Union{CodeInfo,IRCode},
+                                           debuginfo::DebugInfo)
+    method = mi.def::Method
+    should_insert_coverage(method.module, debuginfo) && return src
+    return strip_coverage_effects!(src)
+end
+
 function analyze_method!(
         call_result::Union{Nothing,LocalInferenceResult},
         call_edge::Union{Nothing,MethodInstance,CodeInstance},
@@ -950,27 +972,35 @@ end
 
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::String)
     src = _uncompressed_ir(cached_result, src)
-    return inflate_ir!(src, get_ci_mi(cached_result)), SpecInfo(src), src.debuginfo
+    mi = get_ci_mi(cached_result)
+    strip_untracked_coverage_effects!(mi, src, src.debuginfo)
+    return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::CodeInfo)
-    return inflate_ir!(copy(src), get_ci_mi(cached_result)), SpecInfo(src), src.debuginfo
+    mi = get_ci_mi(cached_result)
+    src = copy(src)
+    strip_untracked_coverage_effects!(mi, src, src.debuginfo)
+    return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool)
     if preserve_local_sources
         src = copy(src)
     end
+    strip_untracked_coverage_effects!(mi, src, src.debuginfo)
     return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode, preserve_local_sources::Bool)
     if preserve_local_sources
         ir = copy(ir)
     end
+    ir.debuginfo.def = mi
+    debuginfo = DebugInfo(ir.debuginfo, length(ir.stmts))
+    strip_untracked_coverage_effects!(mi, ir, debuginfo)
     # COMBAK this is not correct, we should make `InferenceResult` propagate `SpecInfo`
     spec_info = let m = mi.def::Method
         SpecInfo(Int(m.nargs), m.isva, false, nothing)
     end
-    ir.debuginfo.def = mi
-    return ir, spec_info, DebugInfo(ir.debuginfo, length(ir.stmts))
+    return ir, spec_info, debuginfo
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, opt::OptimizationState, preserve_local_sources::Bool)
     result = opt.optresult

@@ -212,16 +212,21 @@ Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)
 
 .TP
 --code-coverage[={none*|user|all}]
-Count executions of source lines (omitting setting is equivalent to `user`)
+Record coverage for source lines (omitting setting is equivalent to `user`)
 
 .TP
 --code-coverage=@<path>
-Count executions of source lines in a file or files under a given directory. A `@` must
+Record coverage for source lines in a file or files under a given directory. A `@` must
 be placed before the path to indicate this option. A `@` with no path will track the current directory.
 
 .TP
 --code-coverage=tracefile.info
 Append coverage information to the LCOV tracefile (filename supports format tokens)
+
+.TP
+--code-coverage-mode={hit*|count}
+Record whether each line ran (`hit`, the default) or its execution count (`count`, which
+may be approximate when code runs on multiple threads)
 
 .TP
 --track-allocation[={none*|user|all}]

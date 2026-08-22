@@ -379,7 +379,10 @@ end
 inlining_enabled() = (JLOptions().can_inline == 1)
 
 function instrumentation_enabled(m::Module, only_if_affects_optimizer::Bool)
-    generating_output() && return false # don't alter caches
+    if generating_output()
+        # Only coverage statements may alter code emitted into an image.
+        return only_if_affects_optimizer && JLOptions().code_coverage == 2
+    end
     cov = JLOptions().code_coverage
     if cov == 1 # user
         m = moduleroot(m)
