@@ -919,7 +919,7 @@ function write(s::IO, A::AbstractArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
-    if is_ptr_loadable(T) && is_strided(T)
+    if is_ptr_loadable(A) && is_strided(A)
         _write_array_strided(s, A)
     else
         _write_array_fallback(s, A)

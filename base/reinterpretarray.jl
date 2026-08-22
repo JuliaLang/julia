@@ -437,20 +437,30 @@ unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} =
     end
 end
 
+function check_ptr_indexable(a::ReinterpretArray{T,<:Any,S}) where {T,S}
+    aligned_sizeof(T) === aligned_sizeof(S) && return false
+    return check_ptr_indexable(parent(a))
+end
+check_ptr_indexable(a::ReshapedArray) = check_ptr_indexable(parent(a))
+check_ptr_indexable(a::FastContiguousSubArray) = check_ptr_indexable(parent(a))
+check_ptr_indexable(a::Union{Array, Memory}) = true
+check_ptr_indexable(a::AbstractArray) = false
+
 @propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
-@propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) # that is not entirely true, but computing exactly which indexes will be accessed in the parent requires a lot of duplication from the _getindex_ra code
+@propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
+@propagate_inbounds _isassigned_ra(a::ReinterpretArray, inds...) = true # that is not entirely true, but computing exactly which indexes will be accessed in the parent requires a lot of duplication from the _getindex_ra code
 
 @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)
-    aligned_sizeof(T) !== aligned_sizeof(S) && is_ptr_loadable(a) && return _getindex_ptr(a, inds...)
+    check_ptr_indexable(a) && return _getindex_ptr(a, inds...)
     _getindex_ra(a, inds[1], tail(inds))
 end
 
 @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i::Int) where {T,N,S}
     check_readable(a)
-    aligned_sizeof(T) !== aligned_sizeof(S) && is_ptr_loadable(a) && return _getindex_ptr(a, i)
+    check_ptr_indexable(a) && return _getindex_ptr(a, i)
     if isa(IndexStyle(a), IndexLinear)
         return _getindex_ra(a, i, ())
     end
@@ -590,13 +600,13 @@ end
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
-    aligned_sizeof(T) !== aligned_sizeof(S) && is_ptr_storable(a) && return _setindex_ptr!(a, v, inds...)
+    check_ptr_indexable(a) && return _setindex_ptr!(a, v, inds...)
     _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i::Int) where {T,N,S}
     check_writable(a)
-    aligned_sizeof(T) !== aligned_sizeof(S) && is_ptr_storable(a) && return _setindex_ptr!(a, v, i)
+    check_ptr_indexable(a) && return _setindex_ptr!(a, v, i)
     if isa(IndexStyle(a), IndexLinear)
         return _setindex_ra!(a, v, i, ())
     end
