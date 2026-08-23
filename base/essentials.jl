@@ -1287,12 +1287,49 @@ length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
 const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
 
-# Default constructor generation for structs without explicit inner constructors.
-# Called by lowered code from struct definitions (both flisp and JuliaLowering).
-# Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
+# Check whether all type parameters are constrained by fields or other constrained tvars.
+# `tvars` must be ordered from outermost to innermost `UnionAll`.
+function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVector)
+    nparams = length(tvars)
+    n = length(fts)
+    i = nparams
+    while i !== 0
+        @inbounds tv = tvars[i]::TypeVar
+        constrained = false
+        j = 1
+        while j !== n + 1
+            ft = fts[j]
+            if has_typevar(ft, tv)
+                constrained = true
+                break
+            end
+            j += 1
+        end
+        if !constrained
+            j = i + 1
+            remaining = nparams - i
+            while remaining !== 0
+                @inbounds tv2 = tvars[j]::TypeVar
+                if has_typevar(tv2.ub, tv)
+                    constrained = true
+                    break
+                end
+                if tv2 === tv
+                    constrained = false
+                    break
+                end
+                j += 1
+                remaining = remaining - 1
+            end
+        end
+        constrained || return false
+        i -= 1
+    end
+    return true
+end
 
-function _defaultctors(@nospecialize(ty), functionloc)
-    # Walk the UnionAll chain to collect type variables and get the DataType
+# Return the DataType, outer-to-inner type variables, and field types for `ty`.
+function _defaultctor_typeinfo(@nospecialize(ty::Type))
     nparams = 0
     ua = ty
     while isa(ua, UnionAll)
@@ -1308,9 +1345,21 @@ function _defaultctors(@nospecialize(ty), functionloc)
         ua = (ua::UnionAll).body
         i = i + 1
     end
+    fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
+    return dt, tvars, fts
+end
+
+# Default constructor generation for structs without explicit inner constructors.
+# Called by lowered code from struct definitions (both flisp and JuliaLowering).
+# Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
+function _defaultctors(@nospecialize(ty), functionloc)
+    typeinfo = _defaultctor_typeinfo(ty)
+    dt = getfield(typeinfo, 1)
+    tvars = getfield(typeinfo, 2)
+    fts = getfield(typeinfo, 3)
+    nparams = length(tvars)
 
     mod = dt.name.module
-    fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
     n = length(fts)
     names = dt.name.names::Core.SimpleVector
     src_file = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), functionloc.file)
@@ -1334,46 +1383,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
         i = i + 1
     end
 
-    # Check if all type params are constrained by fields or other constrained tvars
-    constrains_all = true
-    i = nparams
-    while i !== 0
-        @inbounds tv = tvars[i]::TypeVar
-        constrained = false
-        j = 1
-        while j !== n + 1
-            ft = fts[j]
-            if has_typevar(ft, tv)
-                constrained = true
-                break
-            end
-            j = j + 1
-        end
-        if !constrained
-            j = i + 1
-            remaining = nparams - i
-            while remaining !== 0
-                @inbounds tv2 = tvars[j]::TypeVar
-                if has_typevar(tv2.ub, tv)
-                    constrained = true
-                    break
-                end
-                if tv2 === tv
-                    constrained = false
-                    break
-                end
-                j = j + 1
-                remaining = remaining - 1
-            end
-        end
-        if !constrained
-            constrains_all = false
-            break
-        end
-        i = i - 1
-    end
-
-    if constrains_all
+    if _fieldtypes_constrain_typevars(tvars, fts)
         # Outer constructor: T(x::FT1, y::FT2, ...) = new{A,B,...}(x, y, ...)
         # Build lambda body with direct `new`, no convert calls
         if is_parametric
