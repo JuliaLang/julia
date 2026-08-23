@@ -111,13 +111,14 @@ function emit_struct_info!(ctx::TypeEmitter, @nospecialize(dt::DataType); indent
     end
 end
 
-function emit_primitive_type!(ctx::TypeEmitter, @nospecialize(dt::DataType); indent::Int = 0)
+function emit_primitive_type!(ctx::TypeEmitter, @nospecialize(dt::DataType); indent::Int = 0,
+                              name_json::String = type_name_json(dt))
     type_id = ctx.type_ids[dt]
     let indented_println(args...) = println(ctx.io, " " ^ indent, args...)
         indented_println("{")
         indented_println("  \"id\": ", type_id, ",")
         indented_println("  \"kind\": \"primitive\",")
-        indented_println("  \"name\": ", type_name_json(dt), ",")
+        indented_println("  \"name\": ", name_json, ",")
         indented_println("  \"signed\": ", (dt <: Signed), ",")
         indented_println("  \"bits\": ", 8 * Base.packedsize(dt), ",") # size for reinterpret / in-register
         indented_println("  \"size\": ", Base.aligned_sizeof(dt), ",") # size with padding / in-memory
@@ -129,6 +130,10 @@ end
 function emit_type_info!(ctx::TypeEmitter, @nospecialize(dt::DataType); indent::Int = 0)
     if dt.name === Ptr.body.name
         emit_pointer_info!(ctx, dt; indent)
+    elseif dt === Cvoid
+        # `Nothing` is a fieldless struct rather than a `primitive type`, but we treat
+        # it the same way we handle primitives (but call it `Cvoid`)
+        emit_primitive_type!(ctx, dt; indent, name_json = escape_string_json("Cvoid"))
     elseif Base.isprimitivetype(dt)
         emit_primitive_type!(ctx, dt; indent)
     else
