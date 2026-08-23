@@ -79,6 +79,19 @@ static void setResetSafeMetadata(Instruction *I) {
 // computations - are exempted by the callers of this predicate, and
 // allocations/write barriers are handled by the *_reset_safe runtime entry
 // points selected in FinalLowerGC instead.)
+// Neither observes nor publishes state a reset could tear, so the region may
+// span it. Dropping it here is not merely wasted work: in a loop the volatile
+// clear and its fence defeat LICM.
+static bool isPureComputation(CallInst *CI) {
+    return CI->doesNotAccessMemory() && !CI->mayHaveSideEffects();
+}
+
+// Liveness bookkeeping that LateLowerGCFrame deletes outright.
+static bool isGCPreserveMarker(Function *Callee) {
+    return Callee && (Callee->getName() == "llvm.julia.gc_preserve_begin" ||
+                      Callee->getName() == "llvm.julia.gc_preserve_end");
+}
+
 static bool isImplicitRuntimeCall(CallInst *CI) {
     Function *Callee = CI->getCalledFunction();
     if (!Callee || Callee->isIntrinsic())
@@ -538,6 +551,13 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     continue;
                 if (CI->isLifetimeStartOrEnd())
                     continue;
+                // memcpy/memmove/memset are the program's own stores in bulk
+                // form, so they follow the store rule above, not the call rule.
+                if (isa<MemIntrinsic>(CI)) {
+                    if (instrumented && !hasResetSafeMetadata(CI))
+                        UnsafePoints.push_back(CI);
+                    continue;
+                }
 
                 // Check for reset_safe metadata (in both walks: an untagged
                 // call in a merely-reset_safe function may invoke code whose
@@ -563,7 +583,11 @@ bool CancellationLowering::runOnFunction(Function &F) {
                             ID == Intrinsic::prefetch) {
                             continue;
                         }
+                        if (isPureComputation(CI))
+                            continue;
                     }
+                    if (isGCPreserveMarker(Callee))
+                        continue;
                     // Skip the setjmp and safepoint calls we just created
                     if (Callee && (Callee->getName() == jl_setjmp_name ||
                                    Callee->getName() == "julia.safepoint"))
