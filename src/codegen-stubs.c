@@ -202,7 +202,8 @@ JL_DLLEXPORT void* JLJITGetIRCompileLayer_fallback(void* JIT) UNAVAILABLE
 //LLVM C api to the julia LLVM dialect
 JL_DLLEXPORT void* JLDialectsAttachContext_fallback(void* C) UNAVAILABLE
 JL_DLLEXPORT void JLDialectsDisposeContext_fallback(void* DC) UNAVAILABLE
-JL_DLLEXPORT int JLDialectsVerifyModule_fallback(void* M) UNAVAILABLE
+JL_DLLEXPORT int JLDialectsVerifyModule_fallback(void* M, char **OutMessage) UNAVAILABLE
+JL_DLLEXPORT void* JLDialectsGCAllocBytesSizeType_fallback(void* M) UNAVAILABLE
 JL_DLLEXPORT void* JLBuildGetPGCStack_fallback(void* B) UNAVAILABLE
 JL_DLLEXPORT void* JLBuildGetPGCStackOrNew_fallback(void* B) UNAVAILABLE
 JL_DLLEXPORT void* JLBuildGCLoaded_fallback(void* B, void* base, void* tracked) UNAVAILABLE

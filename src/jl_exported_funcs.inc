@@ -585,6 +585,7 @@
     YY(JLDialectsAttachContext) \
     YY(JLDialectsDisposeContext) \
     YY(JLDialectsVerifyModule) \
+    YY(JLDialectsGCAllocBytesSizeType) \
     YY(JLBuildGetPGCStack) \
     YY(JLBuildGetPGCStackOrNew) \
     YY(JLBuildGCLoaded) \

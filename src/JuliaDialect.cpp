@@ -106,11 +106,30 @@ JL_DLLEXPORT_CODEGEN void JLDialectsDisposeContext_impl(JLDialectContextRef DC)
 }
 
 // Verify that a module only uses ops of the Julia dialect in a well-formed
-// way. Returns 1 on success. Diagnostics are printed to stderr.
-JL_DLLEXPORT_CODEGEN LLVMBool JLDialectsVerifyModule_impl(LLVMModuleRef M)
+// way. Follows the LLVMVerifyModule convention: returns 0 on success, 1 on a
+// broken module. If OutMessage is non-null, *OutMessage receives the
+// diagnostics (empty on success; always dispose it with LLVMDisposeMessage);
+// otherwise they are printed to stderr.
+JL_DLLEXPORT_CODEGEN LLVMBool JLDialectsVerifyModule_impl(LLVMModuleRef M, char **OutMessage)
 {
     julia::ScopedDialects dialects(unwrap(M)->getContext());
-    return llvm_dialects::verify(*unwrap(M), errs());
+    if (!OutMessage)
+        return !llvm_dialects::verify(*unwrap(M), errs());
+    std::string msg;
+    raw_string_ostream os(msg);
+    bool ok = llvm_dialects::verify(*unwrap(M), os);
+    *OutMessage = LLVMCreateMessage(msg.c_str());
+    return !ok;
+}
+
+// The integer type of julia.gc_alloc_bytes' size and type-tag arguments,
+// which is target dependent (the module datalayout's pointer-sized integer).
+// The op verifies with any integer width, but this is the type the GC
+// lowering itself produces and the runtime expects.
+JL_DLLEXPORT_CODEGEN LLVMTypeRef JLDialectsGCAllocBytesSizeType_impl(LLVMModuleRef M)
+{
+    Module *mod = unwrap(M);
+    return wrap(mod->getDataLayout().getIntPtrType(mod->getContext()));
 }
 
 // Op builders. Each of these creates the op at the insertion point of `B`,
