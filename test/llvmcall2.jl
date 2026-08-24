@@ -144,6 +144,8 @@ f_nt4i(x, y) = ccall("llvm.sadd.with.overflow", llvmcall, Pair{NT4I, NT4B}, (NT4
     @test dc != C_NULL
 
     mod = ccall((:LLVMModuleCreateWithNameInContext, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Cstring, Ptr{Cvoid}), "dialect_test", ctx)
+    # the size-type query below is defined by the module datalayout
+    ccall((:LLVMSetDataLayout, libLLVM_jll.libLLVM), Cvoid, (Ptr{Cvoid}, Cstring), mod, "e-p:$(8*sizeof(Int)):$(8*sizeof(Int))")
     voidty = ccall((:LLVMVoidTypeInContext, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid},), ctx)
     fnty = ccall((:LLVMFunctionType, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Cuint, Cint), voidty, C_NULL, 0, 0)
     fn = ccall((:LLVMAddFunction, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid}, Cstring, Ptr{Cvoid}), mod, "f", fnty)
@@ -164,7 +166,17 @@ f_nt4i(x, y) = ccall("llvm.sadd.with.overflow", llvmcall, Pair{NT4I, NT4B}, (NT4
     ccall(:JLBuildPopGCFrame, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), builder, frame)
     ccall((:LLVMBuildRetVoid, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid},), builder)
 
-    @test ccall(:JLDialectsVerifyModule, Cint, (Ptr{Cvoid},), mod) == 1
+    # 0 = success, matching the LLVMVerifyModule convention; captured
+    # diagnostics must be empty for a well-formed module
+    msgref = Ref{Ptr{Cchar}}(C_NULL)
+    @test ccall(:JLDialectsVerifyModule, Cint, (Ptr{Cvoid}, Ptr{Ptr{Cchar}}), mod, msgref) == 0
+    @test isempty(unsafe_string(msgref[]))
+    ccall((:LLVMDisposeMessage, libLLVM_jll.libLLVM), Cvoid, (Ptr{Cchar},), msgref[])
+    @test ccall(:JLDialectsVerifyModule, Cint, (Ptr{Cvoid}, Ptr{Ptr{Cchar}}), mod, C_NULL) == 0
+
+    sizety = ccall(:JLDialectsGCAllocBytesSizeType, Ptr{Cvoid}, (Ptr{Cvoid},), mod)
+    sizety_str = ccall((:LLVMPrintTypeToString, libLLVM_jll.libLLVM), Cstring, (Ptr{Cvoid},), sizety)
+    @test unsafe_string(sizety_str) == "i$(8*sizeof(Int))"
 
     irp = ccall((:LLVMPrintModuleToString, libLLVM_jll.libLLVM), Cstring, (Ptr{Cvoid},), mod)
     ir = unsafe_string(irp)
