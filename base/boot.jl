@@ -197,7 +197,7 @@
 #    priority::UInt16
 #    @atomic _isexception::UInt8
 #    @atomic preempt_request::UInt8
-#    pad01::UInt8
+#    bound_cancel_default::UInt8
 #    pad02::UInt8
 #    rngState0::UInt64
 #    rngState1::UInt64
@@ -216,7 +216,7 @@
 #    cached_wait_entry::Any
 #    cached_cancel_entry::Any
 #    invoked::Any
-#    @atomic bound_cancel_token::Any
+#    @atomic bound_cancel_token::Union{Nothing, CancellationTokenSource}
 #end
 
 export

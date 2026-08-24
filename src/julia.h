@@ -251,7 +251,7 @@ JL_EXTENSION typedef struct {
 JL_EXTENSION typedef struct {
     JL_DATA_TYPE
     jl_genericmemoryref_t ref;
-    size_t dimsize[]; // length for 1-D, otherwise length is mem->length
+    size_t dimsize[]; // dimension sizes; mem may hold more than prod(dimsize) elements
 } jl_array_t;
 
 
@@ -1361,7 +1361,19 @@ STATIC_INLINE jl_value_t *jl_svecset(
 #define jl_array_nrows(a) (((jl_array_t*)(a))->dimsize[0])
 #define jl_array_ndims(a) (*(size_t*)jl_tparam1(jl_typetagof(a)))
 #define jl_array_maxsize(a) (((jl_array_t*)(a))->ref.mem->length)
-#define jl_array_len(a)   (jl_array_ndims(a) == 1 ? jl_array_nrows(a) : jl_array_maxsize(a))
+STATIC_INLINE size_t jl_array_len(void *a) JL_NOTSAFEPOINT
+{
+    size_t ndims = jl_array_ndims(a);
+    if (ndims == 1)
+        return jl_array_nrows(a);
+    // an N-d array may be backed by a Memory with excess capacity (e.g. from
+    // `reshape` of a `sizehint!`ed vector), so the length must be computed
+    // from the dimensions rather than read from the Memory
+    size_t len = 1;
+    for (size_t i = 0; i < ndims; i++)
+        len *= jl_array_dim(a, i);
+    return len;
+}
 
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
@@ -2563,6 +2575,9 @@ struct _jl_handler_t {
     struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
+    // Saved `bound_cancel_default` flag, restored with `bound_cancel_token`
+    // (the pair is only coherent together; see julia_threads.h).
+    uint8_t bound_cancel_default;
 };
 
 #define JL_TASK_STATE_RUNNABLE  0

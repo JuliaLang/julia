@@ -373,14 +373,6 @@ extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
 // Global *atomic* integer controlling *process-wide* task timing.
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled;
 
-// Set (release) once jl_init has fully completed (image restored, module
-// initializers run). The exit-signal paths consult it: before this point the
-// graceful teardown (running `jl_atexit_hook` on a hijacked thread 0) is
-// unsafe - the image may be half-restored and the interrupted thread may
-// hold runtime locks the teardown needs - and no Julia atexit hooks can
-// have been registered yet, so an exit signal just dies abruptly instead.
-extern JL_DLLEXPORT _Atomic(int) jl_initialization_complete;
-
 #define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
 STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
@@ -1042,6 +1034,8 @@ typedef struct {
     htable_t group;   // the in-flight group's datatypes
 } jl_deferred_typecache_t;
 void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_datatype_super(jl_datatype_t *dt) JL_CANSAFEPOINT;
 jl_value_t *jl_apply_type_deferred(jl_value_t *tc, jl_value_t **params, size_t n, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
 int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT;
 int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT;
@@ -1395,9 +1389,13 @@ void jl_safepoint_init(void) JL_NOTSAFEPOINT;
 // it should also wait for the mutator threads to hit a safepoint **AFTER**
 // this function returns
 int jl_safepoint_start_gc(jl_task_t *ct) JL_CANSAFEPOINT;
+// Like `jl_safepoint_start_gc`, but for a GC worker thread (no `ptls`/`ct` of its own), for GC
+// implementations that don't drive GCs from mutator threads. The caller must guarantee it is
+// the only such caller for the current pause.
+void jl_safepoint_start_gc_from_gc_thread(void) JL_NOTSAFEPOINT;
 // Can only be called by the thread that have got a `1` return value from
-// `jl_safepoint_start_gc()`. This disables the safepoint (for GC) and wakes
-// up waiting threads if there's any.
+// `jl_safepoint_start_gc()` (or that called `jl_safepoint_start_gc_from_gc_thread()`). This
+// disables the safepoint (for GC) and wakes up waiting threads if there's any.
 // The caller should restore `gc_state` **AFTER** calling this function.
 void jl_safepoint_end_gc(void) JL_CANSAFEPOINT;
 // Wait for the GC to finish

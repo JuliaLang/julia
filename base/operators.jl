@@ -83,7 +83,22 @@ julia> supertype(Vector)
 DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
-supertype(T::DataType) = (@_total_meta; T.super)
+function supertype(T::DataType)
+    @_foldable_meta
+    # force the computation of a deferred supertype (an instantiation of a
+    # self-referential definition materializes its supertype graph lazily,
+    # one level per demand, see issue #61347); idempotent, so still foldable.
+    # The subsequent plain field read keeps `getfield`'s inference precision.
+    ccall(:jl_datatype_compute_super, Ptr{Cvoid}, (Any,), T)
+    return getfield(T, :super)
+end
+function getproperty(T::DataType, s::Symbol)
+    @inline
+    # fill the deferred supertype cache on access, so raw `.super` reads keep
+    # working for instantiations of self-referential definitions (#61347)
+    s === :super && return supertype(T)
+    return getfield(T, s)
+end
 supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##

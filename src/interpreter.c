@@ -695,6 +695,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
                 jl_gc_wb_current_task(ct, new_scope);
                 ct->scope = new_scope;
+                // Installing a new scope invalidates the cached scoped-default
+                // cancellation token (see bound_cancel_default); the handler
+                // restore brackets bring the flag back with the scope.
+                ct->bound_cancel_default = 0;
                 if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);

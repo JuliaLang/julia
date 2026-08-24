@@ -392,51 +392,23 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
 }
 
 
-// Based on jl_gc_collect from gc-stock.c
-// called when stopping the thread in `mmtk_block_for_gc`
-JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
+// Arm the GC safepoint and wait for every currently-registered mutator to reach it, on behalf of
+// `Collection::stop_all_mutators` in the mmtk_julia binding.
+//
+// This runs on whichever GC worker thread mmtk-core's own scheduler dedicates to running the
+// current pause's `StopMutators` work -- never on a mutator, and never with a second concurrent
+// caller, both guaranteed by mmtk-core.
+JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(int collection)
 {
-    // FIXME: set to JL_GC_AUTO since we're calling it from mmtk
-    // maybe just remove this?
-    JL_PROBE_GC_BEGIN(JL_GC_AUTO);
+    JL_PROBE_GC_BEGIN(collection);
 
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    if (!mmtk_is_collection_enabled()) {
-        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
-        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
-        static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
-        return;
-    }
-
-    int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
-    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
-    // `jl_safepoint_start_gc()` makes sure only one thread can run the GC.
     uint64_t t0 = jl_hrtime();
-    if (!jl_safepoint_start_gc(ct)) {
-        jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
-        jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
-        jl_gc_notify_task_resume(ct);
-        return;
-    }
+    jl_safepoint_start_gc_from_gc_thread();
 
-    JL_TIMING_SUSPEND_TASK(GC, ct);
-    JL_TIMING(GC, GC);
-
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
-    // Now we are ready to wait for other threads to hit the safepoint,
-    // we can do a few things that doesn't require synchronization.
-    //
     // We must sync here with the tls_lock operations, so that we have a
     // seq-cst order between these events now we know that either the new
     // thread must run into our safepoint flag or we must observe the
     // existence of the thread in the jl_n_threads count.
-    //
-    // TODO: concurrently queue objects
     jl_fence();
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
@@ -447,39 +419,104 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     uint64_t duration = t1 - t0;
     if (duration > gc_num.max_time_to_safepoint)
         gc_num.max_time_to_safepoint = duration;
+    // time_to_safepoint is computed in the same way as stock GC, and it only counts
+    // the time to bring all the threads to safepoint.
+    // TODO: We may want to count from the time when we request the STW in MMTk,
+    // until all the threads are stopped (this would include the time for MMTk scheduler to schedule a stop-the-world packet).
+    // Either add a on_pause_requested callback in MMTk, or let MMTk measure time_to_safepoint and report it back here to Julia.
     gc_num.time_to_safepoint = duration;
     gc_num.total_time_to_safepoint += duration;
+}
 
-    if (mmtk_is_collection_enabled()) {
-        JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
-#ifndef __clang_gcanalyzer__
-        mmtk_block_thread_for_gc();
-#endif
-        JL_UNLOCK_NOGC(&finalizers_lock);
-    }
-
-    jl_gc_notify_task_resume(ct);
-
+// The other half of `jl_gc_mmtk_stop_the_world`: disarm the safepoint and let mutators run again,
+// on behalf of `Collection::resume_mutators`, once the pause's GC work is done.
+//
+// Finalizers no longer run here: a GC worker thread has no `jl_current_task` to run them on.
+// `jl_gc_mmtk_run_pending_finalizers` runs them instead, from the waiting mutator itself.
+JL_DLLEXPORT void jl_gc_mmtk_resume_the_world(void)
+{
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     jl_safepoint_end_gc();
-    jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
-    jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+}
 
-    // Only disable finalizers on current thread
-    // Doing this on all threads is racy (it's impossible to check
-    // or wait for finalizers on other threads without dead lock).
+// By the time a mutator gets here, collection may have been disabled. If so, defer the
+// allocation instead of waiting on a GC that won't run -- same as `jl_gc_collect` does.
+// Returns whether the caller should skip waiting.
+JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
+{
+    if (mmtk_is_collection_enabled())
+        return 0;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+    static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
+    jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
+    return 1;
+}
+
+// Saved errno/last-error, passed from `jl_gc_mmtk_block_for_gc_enter` to
+// `jl_gc_mmtk_run_pending_finalizers`, which restores it.
+typedef struct {
+    int saved_errno;
+    uint32_t saved_last_error; // Windows only; always 0 elsewhere.
+} jl_gc_mmtk_saved_errno_t;
+
+// Called by `Collection::block_for_gc` right before it waits for the pause, mirroring what
+// `jl_gc_prepare_to_collect` used to do around the same wait when it ran on this same mutator:
+// save errno, and mark this task's own timing as suspended.
+JL_DLLEXPORT jl_gc_mmtk_saved_errno_t jl_gc_mmtk_block_for_gc_enter(void)
+{
+    jl_gc_mmtk_saved_errno_t saved;
+    saved.saved_errno = errno;
+#ifdef _OS_WINDOWS_
+    saved.saved_last_error = GetLastError();
+#else
+    saved.saved_last_error = 0;
+#endif
+#if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
+    jl_timing_suspend_t suspend;
+    _jl_timing_suspend_ctor(&suspend, "GC", jl_current_task);
+#endif
+    return saved;
+}
+
+// The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
+// task's own timing, and tell mmtk-core this task has resumed.
+//
+// errno/last-error are NOT restored here -- pending finalizers still need to run first, and they
+// can set errno themselves, so the restore waits until after them (see
+// `jl_gc_mmtk_run_pending_finalizers` below).
+JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
+{
+    jl_task_t *ct = jl_current_task;
+#if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
+    jl_timing_suspend_t suspend;
+    suspend.ct = ct;
+    _jl_timing_suspend_destroy(&suspend);
+#endif
+    jl_gc_notify_task_resume(ct);
+}
+
+// Runs this mutator's pending finalizers before `Collection::block_for_gc` returns --
+// `GC.gc()` is documented/tested to have run pending finalizers by the time they
+// return. Also restores the errno/last-error `saved` carries from `jl_gc_mmtk_block_for_gc_enter`.
+JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(jl_gc_mmtk_saved_errno_t saved)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    // Only disable finalizers on current thread. Doing this on all threads is racy (it's
+    // impossible to check or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
         JL_TIMING(GC, GC_Finalizers);
         run_finalizers(ct, 0);
     }
     JL_PROBE_GC_FINALIZER();
-
 #ifdef _OS_WINDOWS_
-    SetLastError(last_error);
+    SetLastError(saved.saved_last_error);
 #endif
-    errno = last_errno;
+    errno = saved.saved_errno;
 }
 
 // ========================================================================= //

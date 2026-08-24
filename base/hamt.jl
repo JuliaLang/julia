@@ -91,16 +91,21 @@ struct HashState{K}
     shift::Int
 end
 HashState(key) = HashState(key, objectid(key), 0, 0)
-# Reconstruct
-Base.@assume_effects :terminates_locally function HashState(other::HashState, key)
-    h = HashState(key)
+# Reconstruct with an explicitly pinned key type. `key` can come from a trie Leaf
+# whose K is abstract (e.g. the ScopedValues scope HAMT keys); letting the implicit
+# constructor re-infer the parameter per call produces UnionAll-typed HashStates and
+# dynamic dispatch on every hop — unresolvable under static compilation
+# (`juliac --trim`). Pinning K keeps everything one concrete wrapper type.
+Base.@assume_effects :terminates_locally function HashState{K}(@nospecialize(other::HashState), @nospecialize(key)) where {K}
+    h = HashState{K}(key, objectid(key), 0, 0)
     while h.depth !== other.depth
         h = next(h)
     end
     return h
 end
+Base.@assume_effects :terminates_locally HashState(other::HashState, key) = HashState{typeof(key)}(other, key)
 
-function next(h::HashState)
+function next(h::HashState{K}) where {K}
     depth = h.depth + 1
     shift = h.shift + BITS_PER_LEVEL
     # Assert disabled for effect precision
@@ -113,7 +118,7 @@ function next(h::HashState)
     else
         h_hash = h.hash
     end
-    return HashState(h.key, h_hash, depth, shift)
+    return HashState{K}(h.key, h_hash, depth, shift)
 end
 
 struct BitmapIndex
@@ -202,7 +207,7 @@ or grows the HAMT by inserting a new trie instead.
         @assert present "!found && !present"
         # collision -> grow
         leaf = @inbounds trie.data[i]::Leaf{K,V}
-        leaf_h = HashState(h, leaf.key)
+        leaf_h = HashState{K}(h, leaf.key)
         if leaf_h.hash == h.hash
             error("Perfect hash collision")
         end

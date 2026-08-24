@@ -211,6 +211,11 @@ b = @inferred mmap(s, BitArray, (17,13))
 @test Test._check_bitarray_consistency(b)
 @test b == trues(17,13)
 @test_throws ArgumentError mmap(s, BitArray, (7,3))
+
+# Memory-mapped BitArray dimensions must be checked before computing the mapped size.
+overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+@test_throws ArgumentError mmap(IOBuffer(), BitArray, (3, overflow_dim))
+@test_throws ArgumentError mmap(BitMatrix, (3, overflow_dim))
 close(s)
 s = open(file, "r+")
 b = mmap(s, BitArray, (17,19))
@@ -380,6 +385,9 @@ elseif Sys.isfreebsd()
 end
 
 @testset "SharedMemory" begin
+    # Keep machine-global shared memory names unique to this test process.
+    shm_name = "/jlsharedsegment_$(Base.Libc.getpid())_$(string(rand(UInt32), base=16))"
+
     @testset "Properties" begin
         io = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
         @test io.name == ""
@@ -403,7 +411,7 @@ end
         close(io)
         @test !isopen(io)
 
-        name = "/jlsharedsegment"
+        name = shm_name
         io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
         @test io.name == name
         @test io.handle != Base.INVALID_OS_HANDLE
@@ -419,7 +427,7 @@ end
         @test_throws ArgumentError mmap(io, Vector{UInt8}, 12)
         close(io); finalize(m); m = nothing; GC.gc()
 
-        io = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
+        io = open(Mmap.SharedMemory, shm_name, 12; readonly = false, create = true)
         m = mmap(io, Vector{UInt8}, 12)
         @test_throws ArgumentError mmap(io, Vector{UInt8}, 12)
         close(io); finalize(m); m = nothing; GC.gc()
@@ -441,11 +449,11 @@ end
     @testset "SharedMemory modes" begin
         @test_throws ArgumentError open(Mmap.SharedMemory, "", 12; readonly = false, create = false)
         @test_throws ArgumentError open(Mmap.SharedMemory, "", 12; readonly = true, create = true)
-        @test_throws Base.IOError open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = false)
+        @test_throws Base.IOError open(Mmap.SharedMemory, shm_name, 12; readonly = false, create = false)
 
-        io1 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
-        @test_throws Base.IOError open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
-        io2 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = true, create = false)
+        io1 = open(Mmap.SharedMemory, shm_name, 12; readonly = false, create = true)
+        @test_throws Base.IOError open(Mmap.SharedMemory, shm_name, 12; readonly = false, create = true)
+        io2 = open(Mmap.SharedMemory, shm_name, 12; readonly = true, create = false)
         m = mmap(io2, Vector{UInt8}, 12)
         if !(Sys.isfreebsd() && Sys.ARCH === :aarch64)
             @test_throws ReadOnlyMemoryError m .= 1
@@ -455,7 +463,7 @@ end
 
     @static if Sys.islinux()
         @testset "Opening an existing region with an oversized declared size is rejected at mmap()" begin
-            name = "/jlsharedsegment"
+            name = shm_name
             io1 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
 
             io2 = open(Mmap.SharedMemory, name, 13; readonly = false, create = false)
@@ -474,7 +482,7 @@ end
         end
     elseif Sys.isapple() || Sys.iswindows()
         @testset "Opening an existing region with a declared size beyond the real page allocation still fails safely at mmap()" begin
-            name = "/jlsharedsegment"
+            name = shm_name
             io1 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
 
             io2 = open(Mmap.SharedMemory, name, 1_000_000; readonly = false, create = false)
@@ -495,8 +503,8 @@ end
     end
 
     @testset "Named SharedMemory mmaps are shared" begin
-        io1 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
-        io2 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = false)
+        io1 = open(Mmap.SharedMemory, shm_name, 12; readonly = false, create = true)
+        io2 = open(Mmap.SharedMemory, shm_name, 12; readonly = false, create = false)
         m1 = mmap(io1, Vector{UInt8}, 12)
         m2 = mmap(io2, Vector{UInt8}, 12)
         @test all(m1 .== 0)
@@ -508,7 +516,7 @@ end
     end
 
     @testset "Resource cleanup" begin
-        name = "/jlsharedsegment"
+        name = shm_name
 
         @static if !Sys.isapple()
 
@@ -529,7 +537,7 @@ end
     end
 
     @testset "SharedMemory handles/fds are not inherited by child processes" begin
-        name = "/jlsharedsegment"
+        name = shm_name
 
         @static if Sys.islinux()
 
@@ -553,16 +561,17 @@ end
             # would keep the kernel object alive after we close our own handle, and
             # recreating the segment here would fail with ERROR_ALREADY_EXISTS.
             io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
-            child = run(`$(Base.julia_cmd()) -e "sleep(5)"`; wait = false)
+            child = open(`$(Base.julia_cmd()) -e "read(stdin)"`, "w")
             try
                 sleep(0.5)
                 close(io)
                 io2 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
                 close(io2)
             finally
-                kill(child)
+                close(child)
                 wait(child)
             end
+            @test success(child)
 
         else # macOS, tests TODO
 
@@ -570,7 +579,7 @@ end
     end
 
     @testset "String mode" begin
-        name = "/jlsharedsegment"
+        name = shm_name
         io1 = open(Mmap.SharedMemory, name, 12, "w+")
         @test isreadable(io1)
         @test iswritable(io1)

@@ -1381,6 +1381,25 @@ end
 
 @test add_one57190!() == 1
 
+# A field reached only by a read-modify-write gets a stack slot when `AllocOpt` splits
+# the non-escaping allocation
+mutable struct Atomic52575
+    @atomic x::Int
+    y::Int
+end
+replace52575!() = (r = Atomic52575(1, 2); @atomicreplace r.x 1 => 2)
+@test replace52575!() === (old = 1, success = true)
+modify52575!() = (r = Atomic52575(1, 2); @atomic r.x += 10)
+@test modify52575!() === 11
+swap52575!() = (r = Atomic52575(1, 2); @atomicswap r.x = 5)
+@test swap52575!() === 1
+mutable struct AtomicAny52575
+    @atomic x::Any
+    y::Any
+end
+replaceany52575!() = (r = AtomicAny52575(1, 2); @atomicreplace r.x 1 => 2)
+@test replaceany52575!() == (old = 1, success = true)
+
 # Test atomic Float16 operations at all optimization levels (GlobalISel miscompile on AArch64)
 # See https://github.com/JuliaLang/julia/pull/54140#issuecomment-2855794363
 for opt in 0:3

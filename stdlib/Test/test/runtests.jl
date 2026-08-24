@@ -264,8 +264,10 @@ end
     end
 
     # @test_nowarn with broken=true when test fails (has warning) should be Broken
-    let results = @testset NoThrowTestSet begin
-            @test_nowarn (println(stderr, "oops"); 1) broken=true
+    let results = redirect_stderr(devnull) do
+            @testset NoThrowTestSet begin
+                @test_nowarn (println(stderr, "oops"); 1) broken=true
+            end
         end
         @test length(results) == 1
         @test results[1] isa Test.Broken
@@ -348,8 +350,10 @@ end
     end
 
     # @test_nowarn failure shows expected "" and captured stderr
-    let results = @testset NoThrowTestSet begin
-            @test_nowarn println(stderr, "oops")
+    let results = redirect_stderr(devnull) do
+            @testset NoThrowTestSet begin
+                @test_nowarn println(stderr, "oops")
+            end
         end
         @test length(results) == 1
         fail = results[1]

@@ -519,11 +519,6 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         default: sig = SIGTERM; break;
     }
     if (!jl_ignore_sigint()) {
-        // Before initialization has completed, the orderly teardown
-        // (jl_atexit_hook) is unsafe against the half-restored runtime and
-        // there are no Julia atexit hooks to honor - exit abruptly.
-        if (sig != SIGINT && !jl_atomic_load_acquire(&jl_initialization_complete))
-            _exit(128 + sig);
         if (exit_on_sigint)
             jl_exit(128 + sig); // 128 + SIGINT
         if (sig == SIGINT) {

@@ -80,7 +80,7 @@ AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
 }
 
 bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
-                                       Type *elty, bool isstore, const DataLayout &DL)
+                                       Type *elty, bool isload, bool isstore, const DataLayout &DL)
 {
     MemOp memop(inst, opno);
     memop.offset = offset;
@@ -93,15 +93,13 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
 
     if (!field.second.accesses.empty() && field.second.hasobjref != memop.isobjref)
         field.second.multiloc = true; // can't split this field, since it contains a mix of references and bits
-    if (!isstore)
+    if (isload)
         field.second.hasload = true;
     if (memop.isobjref) {
-        if (isstore) {
+        if (isstore)
             refstore = true;
-        }
-        else {
+        if (isload)
             refload = true;
-        }
         if (memop.isaggr)
             field.second.hasaggr = true;
         field.second.hasobjref = true;
@@ -209,7 +207,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 required.use_info.hasunknownmem = true;
             } else if (!required.use_info.addMemOp(inst, 0, cur.offset,
                                                                inst->getType(),
-                                                               false, required.DL))
+                                                               true, false, required.DL))
                 required.use_info.hasunknownmem = true;
             return true;
         }
@@ -313,7 +311,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 required.use_info.hasunknownmem = true;
             } else if (!required.use_info.addMemOp(inst, use->getOperandNo(),
                                                                cur.offset, storev->getType(),
-                                                               true, required.DL))
+                                                               false, true, required.DL))
                 required.use_info.hasunknownmem = true;
             return true;
         }
@@ -335,9 +333,10 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             required.use_info.hasload = true;
             auto storev = isa<AtomicCmpXchgInst>(inst) ? cast<AtomicCmpXchgInst>(inst)->getNewValOperand() : cast<AtomicRMWInst>(inst)->getValOperand();
             Type *elty = storev->getType();
+            // read-modify-write: this both loads and stores the field
             if (cur.offset == UINT32_MAX || !required.use_info.addMemOp(inst, use->getOperandNo(),
                                                                cur.offset, elty,
-                                                               true, required.DL)) {
+                                                               true, true, required.DL)) {
                 LLVM_DEBUG(dbgs() << "Atomic inst has unknown offset\n");
                 required.use_info.has_unknown_objref |= hasObjref(elty);
                 required.use_info.has_unknown_objrefaggr |= hasObjref(elty) && !isa<PointerType>(elty);

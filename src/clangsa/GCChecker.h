@@ -337,7 +337,11 @@ public:
   void checkPostStmt(const UnaryOperator *UO, CheckerContext &C) const;
   void checkDerivingExpr(const Expr *Result, const Expr *Parent,
                          CheckerContext &C) const;
+#if LLVM_VERSION_MAJOR >= 22
+  void checkBind(SVal Loc, SVal Val, const Stmt *S, bool AtDeclInit, CheckerContext &) const;
+#else
   void checkBind(SVal Loc, SVal Val, const Stmt *S, CheckerContext &) const;
+#endif
   void checkLocation(SVal Loc, bool IsLoad, const Stmt *S,
                      CheckerContext &) const;
 

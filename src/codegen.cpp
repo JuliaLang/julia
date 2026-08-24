@@ -2387,6 +2387,17 @@ static bool current_stmt_is_reset_safe(jl_codectx_t &ctx)
     return (flag & IR_FLAG_RESET_SAFE) != 0;
 }
 
+// Check whether a set of encoded ipo_purity_bits proves the callee's own IPO
+// effects reset-safe. N.B.: kept in sync with Compiler/src/effects.jl
+// (encode_effects); 0 means "no recorded effects" and is treated
+// conservatively.
+static bool effects_ipo_reset_safe(uint32_t effects) JL_NOTSAFEPOINT
+{
+    return effects != 0 &&
+           ((effects >> 3) & 0x03u) == 0u && // is_effect_free
+           ((effects >> 15) & 0x03u) == 0u;  // is_reset_safe
+}
+
 // Mark a call instruction with reset_safe metadata if the current statement has the flag
 static void mark_reset_safe(jl_codectx_t &ctx, CallInst *call)
 {
@@ -5585,6 +5596,7 @@ isdefined_unknown_idx:
         Value *ct = get_current_task(ctx);
         Value *src = boxed(ctx, argv[1]);
         Value *bound_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_token), "bound_cancel_token");
+        Value *bound_default_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
         jl_aliasinfo_t ai = ctx.alias().gcframe;
         Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
         Type *T_int8 = getInt8Ty(ctx.builder.getContext());
@@ -5614,6 +5626,9 @@ isdefined_unknown_idx:
         StoreInst *clear_store = ctx.builder.CreateAlignedStore(nothing_val, bound_ptr, ctx.types().alignof_ptr);
         clear_store->setOrdering(AtomicOrdering::Monotonic);
         ai.decorateInst(clear_store);
+        // The binding is now an explicit `nothing`, not the scoped-default
+        // cache (the skip path above keeps a matching cache intact).
+        ai.decorateInst(ctx.builder.CreateAlignedStore(ConstantInt::get(T_int8, 0), bound_default_ptr, Align(1)));
         ctx.builder.CreateBr(point_bb);
 
         // src is a token source: publish the binding (store only on rebind,
@@ -5632,6 +5647,10 @@ isdefined_unknown_idx:
         StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
         bind_store->setOrdering(AtomicOrdering::Release);
         ai.decorateInst(bind_store);
+        // A rebind publishes an explicit source: it may differ from the
+        // scoped default, so the cache flag must drop (the same-source skip
+        // path keeps a matching cache intact).
+        ai.decorateInst(ctx.builder.CreateAlignedStore(ConstantInt::get(T_int8, 0), bound_default_ptr, Align(1)));
         emit_write_barrier(ctx, ct, src);
         ctx.builder.CreateBr(point_bb);
 
@@ -5722,7 +5741,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value 
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
 
-static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, ArrayRef<jl_cgval_t> argv, size_t nargs) JL_CANSAFEPOINT
+static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, ArrayRef<jl_cgval_t> argv, size_t nargs, uint32_t effects = 0) JL_CANSAFEPOINT
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
@@ -5830,15 +5849,13 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     call->setAttributes(returninfo.attrs);
     if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
-    if (returninfo.effects != 0)
-        add_fn_attrs_for_effects(call, returninfo.effects);
     // Mark as reset_safe only if the current statement has that flag AND the
     // invoked code's own IPO effects agree: the statement flag may stem from
     // a constant-propagation refinement stronger than the generic code being
     // invoked here, and only callees whose own effects are reset_safe have
     // their implicit runtime machinery instrumented to participate in a
     // spanned reset region (see llvm-cancellation-lowering.cpp).
-    if (effects_ipo_reset_safe(returninfo.effects))
+    if (effects_ipo_reset_safe(effects))
         mark_reset_safe(ctx, call);
 
     jl_cgval_t retval;
@@ -5884,16 +5901,14 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject,
                                           ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty,
-                                          std::optional<uint32_t> effects = std::nullopt) JL_CANSAFEPOINT
+                                          uint32_t effects = 0) JL_CANSAFEPOINT
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
     jl_returninfo_t returninfo = get_specsig_function(ctx.emission_context, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure);
     *cc = returninfo.cc;
     *nreturn_roots = returninfo.return_roots;
-    if (effects.has_value())
-        returninfo.effects = *effects;
-    jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, argv, nargs);
+    jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, argv, nargs, effects);
     // see if inference has a different / better type for the call than the lambda
     return update_julia_type(ctx, retval, inferred_retty);
 }
@@ -6924,6 +6939,13 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 #endif
             ctx.alias().gcframe.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
+            // This inline restore is the only scope swap not bracketed by the
+            // exception-handler save/restore, so it must invalidate the
+            // task's cached scoped-default cancellation token itself (see
+            // bound_cancel_default in julia_threads.h).
+            Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
+            ctx.alias().gcframe.decorateInst(
+                ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
             // NOTE: post-wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
         }
     }
@@ -10292,6 +10314,12 @@ static jl_llvm_functions_t
                 // NOTE: wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
                 ctx.alias().gcframe.decorateInst(current_scope);
                 ctx.alias().gcframe.decorateInst(scope_store);
+                // Installing a new scope invalidates the task's cached
+                // scoped-default cancellation token (see bound_cancel_default
+                // in julia_threads.h).
+                Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
+                ctx.alias().gcframe.decorateInst(
+                    ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
                 // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.
                 Value *scope_token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {current_scope});
@@ -10751,7 +10779,7 @@ jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci)
 void emit_always_inline(jl_codegen_output_t &out,
                         unique_function<jl_code_info_t *(jl_code_instance_t *)> get_src)
 {
-    SmallVector<std::pair<jl_code_instance_t *, jl_invoke_api_t>> queue;
+    SmallVector<std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>> queue;
     // We don't want to define externally-visible functions for CodeInstances
     // that are here for inlining only, so we'll restore the original ci_funcs
     // map after emitting everything necessary for inlining.

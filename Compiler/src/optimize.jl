@@ -1161,10 +1161,10 @@ function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
         edge === prev[2] || return true # change to this edge
         linetable = di.linetable
         # check for change to line number here
-        if linetable === nothing || line == 0
+        if !(linetable isa DebugInfo) || line == 0
             line == prevline || return true
         else
-            changed_lineinfo(linetable::DebugInfo, Int(line), Int(prevline)) && return true
+            changed_lineinfo(linetable, Int(line), Int(prevline)) && return true
         end
         # check for change to edge here
         edge == 0 && return false # no edge here
