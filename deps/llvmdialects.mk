@@ -26,6 +26,14 @@ LLVMDIALECTS_SRC_PATH := $(SRCCACHE)/$(LLVMDIALECTS_SRC_DIR)
 
 $(LLVMDIALECTS_BUILDDIR_withtype)/build-configured: $(LLVMDIALECTS_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
+# The LLVM tarballs do not ship every artifact that LLVMExports.cmake
+# references (libLTO, libRemarks, some tools), which fails any
+# find_package(LLVM) against the installed tree. llvm-dialects only needs
+# the core libraries, so satisfy the export checks with placeholder
+# symlinks for whatever is missing.
+	grep -oh '{_IMPORT_PREFIX}/[^"]*' $(build_libdir)/cmake/llvm/LLVMExports*.cmake | sed 's|^{_IMPORT_PREFIX}||' | sort -u | while read -r f; do \
+		[ -e "$(build_prefix)$$f" ] || ln -s $(build_depsbindir)/llvm-config "$(build_prefix)$$f"; \
+	done
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LLVMDIALECTS_OPTS)
 	echo 1 > $@
