@@ -308,12 +308,17 @@ const install_packages_hooks = Any[]
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
 # We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
 # code to run (and error).
-__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
-    Core._lower(ast, mod, toplevel_file[], toplevel_line[])[1]
-__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
-    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Csize_t}), mod, ast, 1, 1, toplevel_file, toplevel_line)
+__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
+    Core._lower(ast, mod, unsafe_string(toplevel_file[]), Int(toplevel_line[]))[1]
+__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
+    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
+__repl_entry_jl_eval(mod, @nospecialize(ast)) =
+    Base.JuliaLowering.eval(mod, ast; soft_scope=true, expr_compat_mode=true)
 
-function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Csize_t}(1))
+function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
+    if Core._lower !== Base.fl_lower
+        return __repl_entry_jl_eval(mod, ast)
+    end
     if !isexpr(ast, :toplevel)
         ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
         check_for_missing_packages_and_run_hooks(ast)
@@ -338,9 +343,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true); cancel=nothing)
             else
                 backend.in_eval = true
-                for xf in backend.ast_transforms
-                    ast = Base.invokelatest(xf, ast)
-                end
+                # for xf in backend.ast_transforms
+                    # ast = Base.invokelatest(xf, ast)
+                # end
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
@@ -1179,6 +1184,17 @@ end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function parse_repl_input_line(line::String, repl; kwargs...)
+    if Core._lower != Base.fl_lower
+        version = if isdefined(mod, Symbol("#_internal_julia_parse"))
+            vp = getglobal(mod, Symbol("#_internal_julia_parse"))
+            vp isa Base.VersionedParse ? vp.ver : Base.JuliaSyntax.JL_NEW_SYNTAX_VERSION
+        else
+            Base.JuliaSyntax.JL_NEW_SYNTAX_VERSION
+        end
+        return Base.JuliaSyntax.parseall(Base.JuliaSyntax.SyntaxTree, line;
+                                         filename="REPL", version,
+                                         ignore_warnings=true)
+    end
     # N.B.: This re-latches the syntax version for `Main`. If `Base.active_module` is not `Main`,
     # then this does not affect the parser used for that module. We could probably skip this step
     # in that case, but let's just be consistent on the off chance that the active module tries
@@ -1189,7 +1205,7 @@ end
 
 function return_callback(s)
     ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
-    return !(isa(ast, Expr) && ast.head === :incomplete)
+    return !(isa(ast, Expr) && !isa(ast, Base.JuliaSyntax.SyntaxTree) && ast.head === :incomplete)
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
