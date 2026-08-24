@@ -245,7 +245,7 @@ def JuliaCall3 : JuliaOp<"call3", []> {
 
 def GCAllocObj : JuliaOp<"gc_alloc_obj",
                       [Memory<[(read ArgMem), (readwrite InaccessibleMem)]>,
-                       NoUnwind, WillReturn]> {
+                       NoUnwind, WillReturn, AllocKind<["alloc"]>]> {
   let results = (outs TrackedPtr:$result);
   let arguments = (ins Ptr:$ptls, (IntegerType any):$size, TrackedPtr:$type);
 
@@ -327,7 +327,7 @@ def GetGCFrameSlot : JuliaOp<"get_gc_frame_slot", [Memory<[]>, NoUnwind]> {
 
 def GCAllocBytes : JuliaOp<"gc_alloc_bytes",
                         [Memory<[(read ArgMem), (readwrite InaccessibleMem)]>,
-                         NoUnwind, WillReturn]> {
+                         NoUnwind, WillReturn, AllocKind<["alloc"]>]> {
   let results = (outs TrackedPtr:$result);
   let arguments = (ins Ptr:$ptls, (IntegerType any):$size, (IntegerType any):$type);
 
@@ -340,10 +340,10 @@ def GCAllocBytes : JuliaOp<"gc_alloc_bytes",
     Allocates `size` bytes (not including the object header) with object tag
     `type`. Lowered by `FinalLowerGC` to a call to the appropriate runtime
     allocation function based on the size. The declaration additionally
-    carries `allocsize(1)` and `allockind("alloc")` attributes, which cannot
-    yet be expressed as llvm-dialects traits; because `allocsize` also
-    requires a non-varargs declaration and the size type is target
-    dependent, `LateLowerGCFrame` creates this op through a runtime-typed
+    carries an `allocsize(1)` attribute, which cannot be expressed as an
+    llvm-dialects trait: `allocsize` requires a non-varargs declaration,
+    but the target-dependent size type forces a varargs one. For that
+    reason `LateLowerGCFrame` creates this op through a runtime-typed
     declaration rather than the generated builder.
   }];
 }
