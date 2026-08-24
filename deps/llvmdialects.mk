@@ -1,8 +1,8 @@
 ## LLVMDialects
 include $(SRCDIR)/llvm-options.mk
 
-LLVMDIALECTS_GIT_URL := https://github.com/GPUOpen-Drivers/llvm-dialects.git
-LLVMDIALECTS_TAR_URL = https://api.github.com/repos/GPUOpen-Drivers/llvm-dialects/tarball/$1
+LLVMDIALECTS_GIT_URL := https://github.com/JuliaLang/llvm-dialects.git
+LLVMDIALECTS_TAR_URL = https://api.github.com/repos/JuliaLang/llvm-dialects/tarball/$1
 $(eval $(call git-external,llvmdialects,LLVMDIALECTS,CMakeLists.txt,,$(SRCCACHE)))
 
 LLVMDIALECTS_BUILDDIR_withtype := $(BUILDDIR)/$(LLVMDIALECTS_SRC_DIR)/build_$(LLVM_BUILDTYPE)
