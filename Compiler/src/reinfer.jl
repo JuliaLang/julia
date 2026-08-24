@@ -500,9 +500,9 @@ method_is_latest_which(m::Method) = !iszero(m.dispatch_status & METHOD_SIG_LATES
 # pruned `ml_matches` lookup is cheaper (~8 is the empirical crossover).
 const VERIFY_INTERF_CAP = 8
 
-# The unexpected `interference_method` (the newcomer), recorded in expected method
+# The unexpected `interference_method` (the new method), recorded in expected method
 # `meth`'s interference set, intersects the queried `sig` over the nonempty `ti`. Decide
-# whether the sort provably prunes it silently: acceptance implies the full `ml_matches`
+# whether the sort provably removes it: acceptance implies the full `ml_matches`
 # lookup would return exactly the expected methods `expecteds[i:i+n-1]` with no ambiguity
 # flag caused by the new method. Returns `false` conservative when a full lookup is
 # necessary to decide.
@@ -511,32 +511,32 @@ const VERIFY_INTERF_CAP = 8
 # methods recorded in the expected methods' own sets, because that scan witnesses every
 # visible change:
 #  - fully_covers means every method intersecting sig intersects some expected pointwise;
-#  - methods invisible to it (strictly beaten by every expected they intersect, hence in no
-#    expected's set) always prune silently: the union of their intersecting expecteds
-#    covers them, and a failing blocker transfer would need a blocker that beats an
-#    expected cover -- which recording makes visible;
-#  - any cycle that could flag or change the result must thread an expected, entering
-#    through a visible strict beater of it -- an entry of that scan, which is either
-#    rejected by the conditions below or, by `beaters_cannot_cycle`, provably not on any
-#    cycle.
-function newcomer_prunes_silently(meth::Method, interference_method::Method, @nospecialize(ti), @nospecialize(sig),
+#  - methods invisible to it (strictly less-specific than every expected they intersect,
+#    hence in no expected's set) always removed silently: the union of their intersecting
+#    expecteds covers them, and a failing blocker transfer would need a blocker that beats
+#    an expected cover -- which recording makes visible;
+#  - any cycle that could flag or change the result must thread an expected, entering through
+#    a visible interference method strictly morespecific than it -- an entry of that scan,
+#    which is either rejected by the conditions below or by `morespecific_cannot_cycle`,
+#    are provably not on any cycle.
+function newmethod_removed_silently(meth::Method, interference_method::Method, @nospecialize(ti), @nospecialize(sig),
                                   expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
     # the caller's scan supplies `interference_method ∈ meth`'s set, so this single probe
     # decides `method_morespecific_recorded(interference_method, meth)`: found means the
-    # two are mutually ambiguous, absent means the newcomer strictly beats `meth`
+    # two are mutually ambiguous, absent means the new method strictly beats `meth`
     if method_in_interferences(meth, interference_method)
         expected_is_minmax(meth, interference_method, sig, expecteds, i, n) || return false
     end
     # Either way, the drop needs a certifying cover. This cheap search is the common
-    # bail, so it runs before the beater scan (each probe of which is a linear set scan
-    # of its own).
+    # bail, so it runs before the morespecific list scan (each probe of which is a linear set
+    # scan of its own).
     has_empty_set_cover(interference_method, ti, expecteds, i, n) || return false
-    return beaters_cannot_cycle(interference_method, world)
+    return morespecific_cannot_cycle(interference_method, world)
 end
 
-# The mutually ambiguous case of `newcomer_prunes_silently`, where `meth` (the owner of
-# the interference set being scanned) neither beats nor is beaten by the newcomer, its
-# ambiguity partner. This is the canonical `Type{Union{}}`-slurp recovery shape --
+# The mutually ambiguous case of `newmethod_removed_silently`, where `meth` (the owner of
+# the interference set being scanned) is neither more nor less specific than the new method `interference_method`,
+# its ambiguity partner. This is the canonical `Type{Union{}}`-slurp recovery shape --
 # f(::Type{<:A}) and f(::Type{<:B}) overlap only at the corner the slurp resolves -- so it
 # must stay on the fast path. The fresh sort keeps the pair silent only through the minmax
 # exemption: the sort pre-marks the minmax match finalized and never visits it, so its
@@ -546,19 +546,20 @@ end
 #    intersects sig and so sits in the raw match list);
 #  - the partner must NOT fully cover sig: minmax discovery runs over the raw list before
 #    any drop, so a fully-covering mutual partner disqualifies `meth` there even though it
-#    is later pruned;
+#    is later removed;
 #  - `meth` must recorded-beat every other fully-covering expected (minmax is unique:
 #    recorded strict-beat is antisymmetric, and this check also rejects the owner of any
 #    second mutual pair);
-#  - a fully-covering newcomer that `meth` does not beat would steal minmax, but needs no
+#  - a fully-covering new method that `meth` does not beat would steal minmax, but needs no
 #    check here: it is itself a visible entry of `meth`'s set, and its own certification
 #    fails -- as a mutual entry by the partner-covers-sig condition above, and as a strict
-#    beater because its empty-set cover would have to fully cover sig, and an expected with
+#    morespecific choice because its empty-set cover would have to fully cover sig, and an expected with
 #    those properties would have dropped `meth` from the recorded result in the first place.
 # The drop of the partner and its blocker-transfer obligations are then certified by the
-# caller's two remaining conditions, exactly as for a strict beater: an empty-set cover's
-# transfers are all automatic (nothing beats it, and it patches any transfer region inside
-# its signature), and the beater scan keeps the partner off any specificity cycle.
+# caller's two remaining conditions, exactly as for a strictly morespecific method: an empty-set
+# cover's transfers are all automatic (nothing is morespecific than it, and it patches any transfer
+# region inside its signature), and the morespecific scan of expected ensures the partner is not
+# tangled in a specificity cycle.
 function expected_is_minmax(meth::Method, interference_method::Method, @nospecialize(sig),
                             expecteds::Core.SimpleVector, i::Int, n::Int)
     sig <: meth.sig || return false                 # `meth` fully covers sig
@@ -572,7 +573,7 @@ function expected_is_minmax(meth::Method, interference_method::Method, @nospecia
     return true
 end
 
-# Look for an expected method that covers the pruned `interference_method` over their
+# Look for an expected method that covers the removed `interference_method` over their
 # intersection `ti` and provably certifies the removal as silent: only an expected with an
 # empty interference set qualifies, since such a method beats everything it intersects, so:
 #  - nothing beats or ties it, so it can never sit in a specificity cycle and always
@@ -599,24 +600,24 @@ function has_empty_set_cover(interference_method::Method, @nospecialize(ti),
     return false
 end
 
-# Require every strict beater of the pruned `interference_method` to have an empty
-# interference set itself: like the cover found by `has_empty_set_cover`, such a beater
+# Require every strictly morespecific method of the removed `interference_method` to have an empty
+# interference set itself: like the cover found by `has_empty_set_cover`, such a method
 # cannot continue a specificity cycle. This is the condition the last bullet above
-# `newcomer_prunes_silently` relies on to keep an acceptance conservative.
+# `newmethod_removed_silently` relies on to keep an acceptance conservative.
 #
-# Without it, a cycle through invisible methods could re-enter the beaten expected behind
+# Without it, a cycle through invisible methods could encounter the less-specific expected behind
 # the caller's scan's back (dragging it into an SCC mid-sort, where it stops covering the
 # invisible members and they survive into the result): detecting that re-entry edge
 # directly would mean intersecting `interference_method`'s own set against sig -- the full
 # lookup's price.
-function beaters_cannot_cycle(interference_method::Method, world::UInt)
-    for beater in eachinterference(interference_method, world)
-        # the iteration supplies `beater ∈ interference_method`'s set, which is the first
-        # half of `method_morespecific_recorded(beater, interference_method)`, so this only
+function morespecific_cannot_cycle(interference_method::Method, world::UInt)
+    for msp in eachinterference(interference_method, world)
+        # the iteration supplies `msp ∈ interference_method`'s set, which is the first
+        # half of `method_morespecific_recorded(msp, interference_method)`, so this only
         # needs to now check the second half
-        if !isempty(beater.interferences) &&
-            !method_in_interferences(interference_method, beater)
-            # a strict beater that could itself sit on a cycle
+        if !isempty(msp.interferences) &&
+            !method_in_interferences(interference_method, msp)
+            # a strict morespecific method that could itself sit on a cycle
             return false
         end
     end
@@ -689,10 +690,10 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                         if !(ti === Union{})
                             # An unexpected method intersecting sig can change more than the
                             # match set: even when an expected method fully covers it (so the
-                            # pruned result below would compare equal), it can make `ml_matches`
+                            # sorted result below would compare equal), it can make `ml_matches`
                             # flag an ambiguity -- a mutual pair or a specificity cycle with a
                             # reported match -- which must invalidate below.
-                            if !newcomer_prunes_silently(meth, interference_method, ti, sig, expecteds, i, n, world)
+                            if !newmethod_removed_silently(meth, interference_method, ti, sig, expecteds, i, n, world)
                                 interference_fast_path_success = false
                                 break
                             end
@@ -721,8 +722,8 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         maxworld[] = 0
     else
         # A method added after this edge was recorded can be ambiguous with an expected
-        # match without changing this include_ambiguous=false result: the newcomer is
-        # pruned when an expected match fully covers their overlap, yet dispatch in the
+        # match without changing this include_ambiguous=false result: the new method is
+        # removed when an expected match fully covers their overlap, yet dispatch in the
         # contested region now throws a MethodError that inference never accounted for.
         # Until edges record that inference itself saw an ambiguity
         # (JuliaLang/julia#62322), any ambiguity over sig must invalidate.

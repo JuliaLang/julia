@@ -5685,7 +5685,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
         // Since a dominated match may only be dropped above when the matches that
         // certified the removal also block everything it was blocking
         // (`check_dominance_transfer`), the last blocker of the survivor
-        // should not have been removed silently.
+        // should not have been removed.
         // (n.b. `approximate_ambig` sets `has_ambiguity` without computing it)
         assert(!(include_ambiguous && !approximate_ambig && has_ambiguity && result.len == 1) &&
                "dropped the last witness of an ambiguity");
