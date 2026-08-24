@@ -1342,7 +1342,7 @@ end
         end
         """
         ref_ci = find_method_ci(fl_lower(test_mod, Meta.parse(prog)))
-        our_ci = find_method_ci(jlower_e(prog_def))
+        our_ci = find_method_ci(jlower_e(prog))
         @test ref_ci.purity === our_ci.purity
     end
 end
