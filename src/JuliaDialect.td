@@ -249,9 +249,15 @@ def JuliaCall3 : JuliaOp<"call3", []> {
 
 def GCAllocObj : JuliaOp<"gc_alloc_obj",
                       [Memory<[(read ArgMem), (readwrite InaccessibleMem)]>,
-                       NoUnwind, WillReturn]> {
+                       NoUnwind, WillReturn, AllocSize<1>, AllocKind<["alloc"]>]> {
   let results = (outs TrackedPtr:$result);
   let arguments = (ins Ptr:$ptls, (IntegerType any):$size, TrackedPtr:$type);
+
+  // The size type is target dependent (the datalayout's pointer-sized
+  // integer), so the argument is type-overloaded; a typed declaration keeps
+  // the allocsize(1) attribute expressible. All emitters within a module
+  // agree on the size type.
+  let typedArgOverloadDeclaration = 1;
 
   let value_traits = [
     (NoAlias $result), (NonNull $result),
@@ -262,9 +268,6 @@ def GCAllocObj : JuliaOp<"gc_alloc_obj",
     Allocates `size` bytes (not including the object header) tagged with the
     Julia type `type`, in the thread described by `ptls`. Lowered by
     `LateLowerGCFrame` to `julia.gc_alloc_bytes` plus the store of the tag.
-    The declaration additionally carries `allocsize(1)` and
-    `allockind("alloc")` attributes, which cannot yet be expressed as
-    llvm-dialects traits.
   }];
 }
 
@@ -331,9 +334,13 @@ def GetGCFrameSlot : JuliaOp<"get_gc_frame_slot", [Memory<[]>, NoUnwind]> {
 
 def GCAllocBytes : JuliaOp<"gc_alloc_bytes",
                         [Memory<[(read ArgMem), (readwrite InaccessibleMem)]>,
-                         NoUnwind, WillReturn]> {
+                         NoUnwind, WillReturn, AllocSize<1>, AllocKind<["alloc"]>]> {
   let results = (outs TrackedPtr:$result);
   let arguments = (ins Ptr:$ptls, (IntegerType any):$size, (IntegerType any):$type);
+
+  // See GCAllocObj: the size and tag types are target dependent, and the
+  // typed declaration keeps allocsize(1) expressible.
+  let typedArgOverloadDeclaration = 1;
 
   let value_traits = [
     (NoAlias $result), (NonNull $result),
@@ -343,12 +350,7 @@ def GCAllocBytes : JuliaOp<"gc_alloc_bytes",
   let description = [{
     Allocates `size` bytes (not including the object header) with object tag
     `type`. Lowered by `FinalLowerGC` to a call to the appropriate runtime
-    allocation function based on the size. The declaration additionally
-    carries `allocsize(1)` and `allockind("alloc")` attributes, which cannot
-    yet be expressed as llvm-dialects traits; because `allocsize` also
-    requires a non-varargs declaration and the size type is target
-    dependent, `LateLowerGCFrame` creates this op through a runtime-typed
-    declaration rather than the generated builder.
+    allocation function based on the size.
   }];
 }
 
