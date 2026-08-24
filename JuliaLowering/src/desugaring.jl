@@ -2453,7 +2453,6 @@ function prepend_function_body(ctx, body, ex)
         end
         _ -> @ast ctx body [K"block" ex body]
     end
-    # Preserve metadata needed if this body later produces wrappers.
     mm = getmeta(body, :method_metas, nothing)
     isnothing(mm) || setmeta!(out, :method_metas, mm)
     out
@@ -2621,12 +2620,11 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             # fill-all-defaults case.  note that the final default may be a
             # splat, and doesn't have further args referring to it by name, so
             # we put it directly in the call (see #50563 for some notes)
-            @ast ctx src [K"block"
-                scope_nest(
-                    ctx,
-                    make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1]),
-                    @ast ctx src [K"call" mapindex(passed, 1)...
-                        opt_names[i:end-1]... opt_defaults[end]])]
+            scope_nest(
+                ctx,
+                make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1]),
+                @ast ctx src [K"call" mapindex(passed, 1)...
+                    opt_names[i:end-1]... opt_defaults[end]])
         else
             @ast ctx src [K"block"
                 [K"call" mapindex(passed, 1)... opt_defaults[i]]]
@@ -2712,7 +2710,6 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     (kw_decls, kw_names, kw_syms, kw_defaults, restkw) = expand_kw_args(ctx, kws)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
     pos_sparams = used_typevars(pargl, sparams)
-    # Sorter bodies may recursively produce optional-argument wrappers.
     prop_metas = getmeta(body, :method_metas, nothing)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),

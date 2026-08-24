@@ -1334,6 +1334,16 @@ end
         ref_ci = find_method_ci(Meta.lower(test_mod, Meta.parse(prog_def)))
         our_ci = find_method_ci(jlower_e(prog_def))
         @test ref_ci.purity === our_ci.purity
+
+        prog = """
+        Base.@assume_effects :total function f_assume_nospecialize(x)
+            @nospecialize x
+            x
+        end
+        """
+        ref_ci = find_method_ci(fl_lower(test_mod, Meta.parse(prog)))
+        our_ci = find_method_ci(jlower_e(prog_def))
+        @test ref_ci.purity === our_ci.purity
     end
 end
 
@@ -1925,4 +1935,21 @@ end
               which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fd), Tuple{Int,Int})))
         @test Base.uncompressed_ast(m).inlining == 0x01
     end
+
+    # @nospecializeinfer
+    local f = JuliaLowering.include_string(@newmod(), raw"""
+    Base.@nospecializeinfer function f(@nospecialize(x), y::Int=1)
+        (x, y)
+    end
+    """)
+    @test which(f, (Any, Int)).nospecializeinfer == true
+    @test which(f, (Any,)).nospecializeinfer == true
+
+    local f = JuliaLowering.include_string(@newmod(), raw"""
+    Base.@nospecializeinfer function f(@nospecialize(x); k::Int=1)
+        (x, k)
+    end
+    """)
+    local sorter = x->which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(x), Any))
+    @test sorter(f).nospecializeinfer == true
 end

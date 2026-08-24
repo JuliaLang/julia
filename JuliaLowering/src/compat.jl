@@ -454,9 +454,6 @@ function apply_32026_hack(st, orig)
     _apply_32026_hack(st, orig.context::SyntaxContext)
 end
 
-# Collect leading function-body metadata. Argument metadata is absorbed into
-# the argument list; method metadata is copied to wrappers, matching flisp's
-# `propagate-method-meta`.
 function collect_body_meta(st)
     argmeta_all = nothing
     argmeta = nothing
@@ -475,27 +472,25 @@ function collect_body_meta(st)
                     kind(id) === K"Identifier" && (argmeta[syntax_name(id)] = meta)
                 end
             end
-            continue
-        end
-        for m in children(c)
-            km = kind(m)
-            if km === K"purity"
+        else
+            for m in children(c)
                 isnothing(mmetas) && (mmetas = SyntaxList())
-                push!(mmetas, m)
-            elseif (km === K"Identifier" || km === K"Symbol") &&
-                    syntax_name(m) in ("inline", "noinline",
-                        "propagate_inbounds", "aggressive_constprop",
-                        "no_constprop")
-                isnothing(mmetas) && (mmetas = SyntaxList())
-                push!(mmetas, km === K"Symbol" ? m :
-                    @mknode(m; kind=K"Symbol"))
+                km = kind(m)
+                if km === K"purity"
+                    push!(mmetas, m)
+                elseif syntax_name(m) in (
+                    "inline", "noinline", "propagate_inbounds",
+                    "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                    push!(mmetas, @mknode(m; kind=K"Symbol"))
+                end
             end
         end
     end
     (isnothing(argmeta_all) ? argmeta : argmeta_all), mmetas
 end
 
-# Convert a function body and retain metadata for wrapper generation.
+# Absorb `meta` nodes from arguments and the function body into syntax `.meta`
+# for easier desugaring.
 function _dst_function_body(st, r, method_metas)
     r2 = if has_if_generated(r)
         gen, nongen = split_generated(r, true), split_generated(r, false)
