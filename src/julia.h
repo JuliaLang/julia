@@ -2954,6 +2954,109 @@ typedef struct {
     int emit_metadata;
 } jl_emission_params_t;
 
+// specsig ABI introspection --------------------------------------------------
+// These let out-of-tree code generators (GPUCompiler.jl, Enzyme.jl) ask how a
+// signature is lowered to an LLVM function signature, rather than re-deriving
+// the rules and drifting from codegen.
+
+// The signature a CodeInstance is compiled against (see Core.ABIOverride).
+JL_DLLEXPORT jl_value_t *jl_get_ci_abi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+
+// Whether codegen can stack-allocate values of this type, and hence whether
+// arguments/returns of this type are passed boxed. These require no LLVM
+// context, so unlike jl_get_specsig_layout they live in libjulia proper.
+JL_DLLEXPORT int jl_is_concrete_immutable(jl_value_t *t) JL_NOTSAFEPOINT;
+// n.b. these may compute a lazy layout, and so can safepoint
+JL_DLLEXPORT int jl_deserves_stack(jl_value_t *t) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_deserves_argbox(jl_value_t *t) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_deserves_retbox(jl_value_t *t) JL_CANSAFEPOINT;
+
+// The full specsig layout of a signature: how the return value is passed, and
+// where each Julia argument lands in the LLVM parameter list. Answered by
+// running the same code that emits the signature, so it cannot drift.
+//
+// This interface is not covered by the usual API stability promise. Callers
+// MUST set `version` to JL_ABI_LAYOUT_VERSION; a mismatch is reported through
+// the return value rather than asserted, so that a caller built against an
+// older Julia degrades cleanly.
+#define JL_ABI_LAYOUT_VERSION 1
+
+// mirrors jl_returninfo_t::CallingConv in src/jitlayers.h; same numeric values
+typedef enum {
+    JL_ABI_RET_BOXED    = 0, // returns jl_value_t addrspace(10)*
+    JL_ABI_RET_REGISTER = 1, // returned directly (possibly `void`, for a ghost or Union{})
+    JL_ABI_RET_SRET     = 2, // returned through a leading alloca-AS sret pointer
+    JL_ABI_RET_UNION    = 3, // leading buffer pointer; returns {addrspace(10)*, i8}
+    JL_ABI_RET_GHOSTS   = 4  // returns only the i8 union selector
+} jl_abi_retcc_t;
+
+typedef enum {
+    JL_ABI_ARG_ELIDED   = 0, // not passed at all
+    JL_ABI_ARG_VALUE    = 1, // passed directly by value
+    JL_ABI_ARG_INDIRECT = 2, // aggregate: passed as ptr addrspace(11), nocapture readonly
+    JL_ABI_ARG_BOXED    = 3  // passed as jl_value_t addrspace(10)*
+} jl_abi_argcc_t;
+
+typedef enum {
+    JL_ABI_ELIDE_NONE      = 0,
+    JL_ABI_ELIDE_GHOST     = 1, // the LLVM type is empty
+    JL_ABI_ELIDE_UNIQUEREP = 2  // the value is exactly its type (see jl_is_typeegal)
+} jl_abi_elide_t;
+
+typedef struct {
+    jl_value_t *typ;      // jl_tparam(sigt, i); rooted by sigt
+    int32_t cc;           // jl_abi_argcc_t
+    int32_t param_idx;    // 0-based index into the LLVM parameter list, or -1 if elided
+    int32_t roots_idx;    // 0-based index of the extra `.roots.` shadow parameter, or -1
+    int32_t elide_reason; // jl_abi_elide_t
+    int32_t _reserved;
+} jl_abi_arginfo_t;
+
+typedef struct {
+    uint32_t version;         // in: JL_ABI_LAYOUT_VERSION
+    int32_t specsig;          // if 0, the jlcall ABI applies and the fields below are zeroed
+    int32_t needsparams;      // static parameters are required (jl_fptr_sparam)
+    jl_value_t *sigt;         // the signature used (see jl_get_ci_abi)
+    jl_value_t *rettype;
+    int32_t rettype_cc;       // jl_abi_retcc_t
+    uint32_t return_roots;
+    int32_t all_roots;
+    size_t union_bytes;
+    size_t union_align;
+    size_t union_minalign;
+    int32_t sret_idx;         // sret_return / union_bytes_return parameter, or -1
+    int32_t return_roots_idx; // return_roots parameter, or -1
+    int32_t pgcstack_idx;     // pgcstack_arg parameter, or -1
+    int32_t nprefix_params;   // how many of the three above are present
+    int32_t nargs;            // jl_nparams(sigt); the required capacity of `args`
+    int32_t nparams;          // total LLVM parameter count
+} jl_abi_layout_t;
+
+typedef struct {
+    uint32_t version;              // in: JL_ABI_LAYOUT_VERSION
+    jl_code_instance_t *ci;        // optional; supersedes sigt/rt/is_opaque_closure
+    jl_value_t *sigt;              // required if ci == NULL
+    jl_value_t *rt;                // required if ci == NULL
+    int32_t is_opaque_closure;
+    const jl_cgparams_t *cgparams; // NULL means &jl_default_cgparams
+    void *mod;                     // LLVMModuleRef to declare into, or NULL for a scratch module
+    const char *datalayout;        // only used when mod == NULL; NULL means the host JIT's
+    const char *triple;            // only used when mod == NULL; NULL means the host JIT's
+    const char *name;              // declaration name; only used when mod != NULL
+    void **decl_out;               // LLVMValueRef out-param; only used when mod != NULL
+} jl_abi_query_t;
+
+// Pass args == NULL to ask only for the layout; otherwise `args` must have room
+// for jl_nparams(sigt) entries, which the caller already knows.
+// Returns 0 on success, or:
+//   -1 version mismatch (layout->version is set to the supported version)
+//   -2 args != NULL and args_capacity < layout->nargs (layout is still filled in)
+//   -3 invalid input
+JL_DLLIMPORT int jl_get_specsig_layout(const jl_abi_query_t *query,
+                                       jl_abi_layout_t *layout,
+                                       jl_abi_arginfo_t *args,
+                                       int32_t args_capacity);
+
 #ifdef __cplusplus
 }
 #endif
