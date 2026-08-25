@@ -18,6 +18,29 @@ let infos = Any[]
     @test isempty(parents)
 end
 
+struct ScopedTrimEnv
+    value::Int
+end
+
+const scoped_trim_env = Base.ScopedValues.ScopedValue(ScopedTrimEnv(1))
+
+# Scope updates must keep the abstract-key HAMT traversal statically resolvable.
+function scoped_trim_read()
+    return Base.ScopedValues.with(scoped_trim_env => ScopedTrimEnv(2)) do
+        scoped_trim_env[].value
+    end
+end
+
+let infos = typeinf_ext_toplevel(
+    Any[Base.method_instance(scoped_trim_read, ())],
+    [Base.get_world_counter()],
+    TRIM_UNSAFE,
+)[1]
+    errors, _ = get_verify_typeinf_trim(infos)
+    @test scoped_trim_read() == 2
+    @test isempty(errors)
+end
+
 finalizer(@nospecialize(f), @nospecialize(o)) = Core.finalizer(f, o)
 
 let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer), typeof(identity), Any})], [Base.get_world_counter()], TRIM_UNSAFE)[1]

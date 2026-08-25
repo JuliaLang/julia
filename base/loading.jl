@@ -2139,7 +2139,7 @@ function isrelocatable(pkg::PkgId)
     isnothing(path) && return false
     io = open(path, "r")
     try
-        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $path."))
         _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
         for inc in includes
             !startswith(inc.filename, "@depot") && return false
@@ -2159,11 +2159,11 @@ function parse_cache_buildid(cachepath::String)
     f = open(cachepath, "r")
     try
         checksum = isvalid_cache_header(f)
-        checksum === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
-        flags = read(f, UInt8)
-        syntax_version = read(f, UInt8)
+        checksum === nothing && throw(ArgumentError("Incompatible header in cache file $cachepath."))
+        read(f, UInt8) # flags
+        read(f, UInt8) # syntax_version
         n = read(f, Int32)
-        n == 0 && error("no module defined in $cachefile")
+        n == 0 && error("no module defined in $cachepath")
         skip(f, n) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
         build_id = (UInt128(checksum) << 64) | read(f, UInt64)
@@ -2957,7 +2957,7 @@ function __require_prelocked(pkg::PkgId, env)
     end
 
     if JLOptions().use_compiled_modules == 3
-        error("Precompiled image $pkg not available with flags $(CacheFlags())")
+        error("Precompiled image $pkg not available with flags $(CacheFlags())$(list_reasons(reasons; full=true))")
     end
 
     # if the module being required was supposed to have a particular version
@@ -4400,7 +4400,7 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :dep_buildid_mismatch    => :internal    => "different dependency build identifier",
 )
 
-function list_reasons(reasons::Dict{Symbol,Int})
+function list_reasons(reasons::Dict{Symbol,Int}; full::Bool=false)
     isempty(reasons) && return ""
     actionable = String[]
     wrong_julia = false
@@ -4415,6 +4415,7 @@ function list_reasons(reasons::Dict{Symbol,Int})
         end
     end
     @debug "Caches not reused: $(join(verbose, ", "))"
+    full && return " (cache not reused: $(join(sort!(verbose), ", ")))"
     if !isempty(actionable)
         return " (cache not reused: $(join(sort!(actionable), ", ")))"
     elseif wrong_julia
@@ -4423,7 +4424,7 @@ function list_reasons(reasons::Dict{Symbol,Int})
         return ""
     end
 end
-list_reasons(::Nothing) = ""
+list_reasons(::Nothing; full::Bool=false) = ""
 
 function in_package_store(path::String)
     for depot in DEPOT_PATH

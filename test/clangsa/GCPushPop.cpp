@@ -22,6 +22,13 @@ void superfluousPop() {
   JL_GC_POP(); // expected-warning{{JL_GC_POP without corresponding push}}
 }              // expected-note@-1{{JL_GC_POP without corresponding push}}
 
+void uninitializedValuePush() {
+  jl_value_t *x;
+  JL_GC_PUSH1(&x); // expected-warning{{Pushing an uninitialized value to the GC root stack}}
+                   // expected-note@-1{{Pushing an uninitialized value to the GC root stack}}
+  JL_GC_POP();
+}
+
 extern void JL_NORETURN no_return_error(void);
 void noreturnAfterPush() {
   jl_value_t *x = NULL;

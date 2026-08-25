@@ -616,6 +616,12 @@ function to_code_info(ex::SyntaxTree)
     )
 end
 
+"""
+This pass convert's JuliaLowering's internal representation of untyped IR into
+a form the Julia runtime understands. This is a necessary decoupling which
+separates the development of JuliaLowering.jl from the evolution of the Julia
+runtime itself.
+"""
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
     @jl_assert kind(ex) in KSet"thunk code_info" ex
     add_debuginfo!(kind(ex) === K"thunk" ? ex[1] : ex)

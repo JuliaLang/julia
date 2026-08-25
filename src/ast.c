@@ -62,7 +62,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
 #ifdef __clang_gcanalyzer__
 // this definition causes bugs in the new gc-analyzer (because it tracks e->args instead of e)
 #undef jl_exprargset
-extern void jl_exprargset(jl_array_t *a, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
+extern void jl_exprargset(jl_expr_t *ex, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
 #endif
 
 static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
@@ -135,9 +135,13 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
 static int jl_is_number(jl_value_t *v)
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-    for (; t->super != t; t = t->super)
-        if (t == jl_number_type)
+    // only the typename lineage matters here, so walk the wrapper supertypes,
+    // which are set at definition and never deferred
+    while (t != NULL && t != jl_any_type) {
+        if (t->name == jl_number_type->name)
             return 1;
+        t = ((jl_datatype_t*)jl_unwrap_unionall(t->name->wrapper))->super;
+    }
     return 0;
 }
 
@@ -1137,24 +1141,24 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, &lineinfo, world, throw_load_error);
         if (!need_esc_node(result))
             return result;
-        jl_value_t *wrap = NULL;
+        jl_expr_t *wrap = NULL;
         JL_GC_PUSH4(&result, &wrap, &newctx.m, &lineinfo);
         // copy and wrap the result in `(hygienic-scope ,result ,newctx)
         if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
             result = jl_exprarg(result, 0);
         else
-            wrap = (jl_value_t*)jl_exprn(jl_hygienicscope_sym, 3);
+            wrap = jl_exprn(jl_hygienicscope_sym, 3);
         result = jl_copy_ast(result);
         if (!onelevel)
             result = jl_expand_macros(result, inmodule, wrap ? &newctx : macroctx, onelevel, world, throw_load_error);
         if (wrap && need_esc_node(result)) {
             jl_exprargset(wrap, 0, result);
-            jl_exprargset(wrap, 1, newctx.m);
+            jl_exprargset(wrap, 1, (jl_value_t*)newctx.m);
             jl_exprargset(wrap, 2, lineinfo);
             if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
                 result = jl_exprarg(result, 0);
             else
-                result = wrap;
+                result = (jl_value_t*)wrap;
         }
         JL_GC_POP();
         return result;

@@ -474,8 +474,9 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     // increase that limit, we'll need to
     // allocate another bit for the counter.
     ct->reentrant_timing += 0b10;
-    // An asynchronous InterruptException delivered in the middle of inference
-    // corrupts the compiler's state; defer it until inference has finished.
+    // An asynchronous interruption in the middle of inference corrupts the
+    // compiler's state; sigatomic defers asynchronous unwinds (e.g. task
+    // abandonment) until inference has finished.
     JL_SIGATOMIC_BEGIN();
     JL_TRY {
         ci = (jl_code_instance_t*)jl_apply(fargs, 5);
@@ -519,8 +520,8 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         JL_GC_POP();
     }
 
-    // may rethrow a deferred InterruptException, now that the compiler state
-    // is consistent again; keep `ci` rooted across the safepoint
+    // end the deferral region, now that the compiler state is consistent
+    // again; keep `ci` rooted across the safepoint
     fargs[0] = (jl_value_t*)ci;
     JL_SIGATOMIC_END();
     JL_GC_POP();
@@ -895,12 +896,12 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
                 }
                 else {
                     while (1) {
-                        jl_datatype_t *super = dt->super;
+                        jl_datatype_t *super = jl_datatype_compute_super(dt);
                         if (super == jl_function_type) {
                             *facts |= HAVE_FUNCTION;
                             break;
                         }
-                        if (super == jl_any_type || super->super == dt)
+                        if (super == NULL || super == jl_any_type || super->super == dt)
                             break;
                         dt = super;
                     }

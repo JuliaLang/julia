@@ -3,6 +3,18 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+function with_output_on_failure(f)
+    mktemp() do _, child_stderr
+        try
+            return f(child_stderr)
+        catch
+            seekstart(child_stderr)
+            write(stderr, read(child_stderr))
+            rethrow()
+        end
+    end
+end
+
 @test isempty(Test.detect_closure_boxes(Profile))
 
 @test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
@@ -496,7 +508,10 @@ end
                     fname = cd(tmpdir) do
                         chmod(tmpdir, 0o555)
                         try
-                            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+                            cmd = `$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`
+                            with_output_on_failure() do child_stderr
+                                read(pipeline(cmd; stderr=child_stderr), String)
+                            end
                         finally
                             chmod(tmpdir, 0o777)
                         end

@@ -276,7 +276,6 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=fa
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @info repr(s)
         @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
             startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] "),
             skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
@@ -604,6 +603,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # test that history_first jumps to beginning of current session's history
         @test hp.start_idx == 11
         hp.start_idx -= 5 # temporarily alter history
+        @test REPL.repl_filename(repl, hp) == "REPL[5]"
         LineEdit.history_first(s, hp)
         @test hp.cur_idx == 6
         # we are at the beginning of current session's history, so history_first
@@ -1712,11 +1712,16 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     LineEdit.edit_input(s, input_f)
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
+    write(stdin_write, '\x04')
+    wait(repltask)
 end
 
-# Non standard output_prefix, tested via `numbered_prompt!`
+# Test that numbered prompts start at one with initialized session history.
 fake_repl() do stdin_write, stdout_read, repl
     repl.interface = REPL.setup_interface(repl)
+    hp = repl.interface.modes[1].hist
+    @test hp.start_idx == 1
+    @test REPL.history_do_initialize(hp)
 
     backend = REPL.REPLBackend()
     repltask = @async begin

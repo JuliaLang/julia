@@ -318,6 +318,31 @@ end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
+"""
+    @deprecate_binding old new [export_old=true] [dep_message] [constant=true]
+
+Deprecate the binding `old`, making it an alias for `new` and printing a deprecation warning
+on access to `old` (when `julia` is run with `--depwarn=yes`). This is for deprecating a
+renamed or relocated global/constant, whereas [`@deprecate`](@ref) is for deprecating methods.
+
+`old` must be a symbol and `new` the replacement it forwards to. By default `old` is defined
+as a `const`; pass `false` for `constant` to define it as a non-constant global instead.
+
+To prevent `old` from being exported, set `export_old` to `false`. A custom `dep_message`
+string (printed after "<module>.old is deprecated") may be given.
+
+See also [`@deprecate`](@ref) and [`Base.depwarn`](@ref).
+
+# Examples
+```jldoctest
+julia> const dep_new = 42;
+
+julia> Base.@deprecate_binding dep_old dep_new false;
+
+julia> dep_old
+42
+```
+"""
 macro deprecate_binding(old, new, export_old=true, dep_message=:nothing, constant=true)
     dep_message === :nothing && (dep_message = ", use $new instead.")
     return Expr(:toplevel,
@@ -610,7 +635,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -620,7 +645,7 @@ end
 
 @noinline function typename(x::TypeEq)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::TypeEq)
@@ -644,7 +669,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -654,7 +679,7 @@ end
 
 @noinline function typename(x::Core.TypeEgal)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::Core.TypeEgal)
@@ -694,6 +719,9 @@ end
     ss = @inbounds raw_substring(s, i + 1, j)
     SubString{T}(ss)
 end
+
+@deprecate _unsetindex!(A) Base.unsetindex!(A) false
+@deprecate _unsetindex!(A, i) Base.unsetindex!(A, i) false
 
 # `a[] = v` on a `Threads.Atomic` (the `setindex!` form) is a footgun: read-modify-write
 # expressions such as `a[] += 1` look atomic but expand to a separate non-atomic load and

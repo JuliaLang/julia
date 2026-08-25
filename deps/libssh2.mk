@@ -32,48 +32,68 @@ endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-extracted
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2025-15661.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2025-15661.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2025-15661.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55199.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2025-15661.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55199.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2025-15661.patch-applied
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55199.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55200.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55199.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55200.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55199.patch-applied
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55200.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-58050-3449752.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55200.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58050-3449752.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55200.patch-applied
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-58050-3449752.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-58051-a9758da.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-58050-3449752.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58051-a9758da.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58050-3449752.patch-applied
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-58051-a9758da.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-unconst-backport.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-58051-a9758da.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58051-a9758da.patch-applied
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-unconst-backport.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-unconst-backport.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66032.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66032.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66033.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66032.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66033.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66034.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66033.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66034.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66034.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66035.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/source-patched: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.patch-applied
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(CMAKE_GENERATOR_COMMAND) $(dir $<) $(LIBSSH2_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(LIBSSH2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured

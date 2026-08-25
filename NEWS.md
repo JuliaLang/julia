@@ -24,6 +24,36 @@ New language features
   operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
   in the default operators ([#50790]).
 
+* `@sync`, `Threads.@threads` and `Experimental.@sync` blocks now scope a cancellation source
+  (see `Base.CancellationTokenSource`) over their children, so cancelling an enclosing scope
+  reaches everything spawned within, and the blocks' teardown awaits internal tasks per the
+  requested cancellation severity ([#60281]).
+* Task cancellation is now supported, organized around cancellation tokens:
+  `Base.CancellationTokenSource` is a level-triggered, tree-structured cancellation scope
+  (cancelling a source cancels its whole subtree, at monotonically escalating severities), and
+  `Base.CancellationToken` is its observe/wait view. The token governing a computation is carried
+  as a scoped value (`Base.CANCEL_TOKEN`, established with the standard `ScopedValues` API) that
+  propagates to child tasks; blocking operations
+  (`wait`, `lock`, Channel operations, `sleep`, stream and command I/O, Sockets, FileWatching,
+  ...) accept a `cancel` keyword argument defaulting to the scoped token and throw a
+  `Base.CancellationRequest` while it is cancelled. Cancellation is uniformly level-triggered:
+  cleanup code that must block under a cancelled scope shields itself with `cancel = nothing`
+  (or by scoping `Base.CANCEL_TOKEN => nothing` over a whole block). Compute-bound code can opt into cancellation with the
+  `Base.@cancel_check` cancellation point.
+  A long-running foreign call can be made cancellable with
+  `@ccall cancel_handler=(fn, state) ...`: cancelling the governing token runs the
+  C-callable `fn(state, severity)` on the thread executing the call, signal-handler-style,
+  so it can tell the library to return early (the pending cancellation is then thrown at
+  the next cancellation point). Calls into libraries audited for asynchronous unwinding
+  can be annotated `@ccall reset_safe=true ...` instead, letting a cancellation unwind
+  the foreign computation at an arbitrary instruction; `BigInt` (GMP) arithmetic uses
+  this, so checkless bignum loops now cancel cleanly at the first ^C.
+  In interactive sessions, ^C now cancels the current evaluation's cancellation scope
+  (instead of throwing an `InterruptException` into whatever code happened to be running),
+  and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
+  cancellation continues under the cancelled scope unless it re-arms one itself
+  (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
+
 Language changes
 ----------------
 
@@ -55,11 +85,24 @@ Compiler/Runtime improvements
   the LLVM threads each spawns to compile its native image, sharing a single thread budget so idle cores are
   filled during the long tail without oversubscribing the machine when many packages compile at once. The total
   budget can be set with the new `JULIA_PRECOMPILE_THREADS` environment variable ([#61958]).
+* Coverage reports now include code executed by the interpreter, such as top-level statements and method
+  bodies run with `--compile=min`. Consequently, LCOV output and `.cov` files may contain source lines that
+  were absent in earlier releases ([#62514]).
+* Coverage and allocation tracking no longer update counters atomically. This reduces the overhead of
+  instrumented code, but counter values may be inaccurate when the same source line runs concurrently on
+  multiple threads ([#62514]).
+* `--code-coverage=user` no longer includes inlined Base methods whose module cannot be recovered from debug
+  information. This prevents coverage from writing `.cov` files for Base sources into the Julia installation
+  ([#62514]).
 
 Command-line option changes
 ---------------------------
 
 * `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
+* `--code-coverage=@<path>` and `--track-allocation=@<path>` now restrict tracking to the specified file or
+  directory tree. For example, `@/src/Foo` tracks `/src/Foo/x.jl`, but not `/src/Foobar/x.jl`. Specifying the
+  filesystem root as `@/` tracks every absolute path. `Base.is_file_tracked` now returns `false` when Julia was
+  not started with either `@<path>` option ([#62514]).
 
 Multi-threading changes
 -----------------------
@@ -128,11 +171,15 @@ New library features
   along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
   etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
+* New public but unexported function `Base.unsetindex!` unsets the reference from an array
+  or a `MemoryRef` to its value, making it as if it was uninitialized.
 * Calls to `wait` on one-shot `Timer`s that have already triggered no longer throw `EOFError`. Previously
   only the first `wait` returned and subsequent `wait` calls would throw ([#62539])
 * When the display height is too small to show any array entries, the `text/plain` array display
   (used e.g. by the REPL and when logging values with `@info` etc.) now shows as many entries as
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
+* The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
+  heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
 
 Standard library changes
 ------------------------
@@ -158,6 +205,13 @@ Standard library changes
 
 #### REPL
 
+#### SharedArrays
+
+* `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the
+  array on all processes, e.g. so the file backing a file-backed `SharedArray` can be deleted
+  immediately ([#62488]).
+
+#### Test
 * Pressing `^C` twice at an empty `julia>` prompt now cancels all still-running
   work started by earlier evaluations (e.g. a runaway `@async` task spewing
   output): each REPL evaluation runs under its own cancellation source, linked
@@ -173,6 +227,14 @@ Standard library changes
 * New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that allocate `Core.Box`
   in their lowered code, which can indicate performance issues from captured variables in closures ([#60478]).
 
+* `detect_unbound_args` now uses a conservative rule derived from how subtyping assigns values
+  to static parameters, instead of older heuristics. It detects previously missed
+  possibly-unbound parameters (such as `f(::Type{<:T}) where {T}`, which leaves `T`
+  unbound when called with `Union{}`, or `f(::Vector{<:T}) where {T}` with a
+  `Vector{Union{}}` argument), and no longer reports methods whose problematic calls are
+  all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback), or
+  whose lowered bodies never read the possibly-unbound parameters.
+
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
@@ -184,6 +246,13 @@ Standard library changes
   the given arguments, e.g. `@methods isvalid('a', 1)` or `@methods isvalid(::AbstractChar, ::Integer)` ([#62311]).
 
 #### Dates
+
+#### TOML
+
+* The parsing functions (`TOML.parsefile`, `TOML.parse`, and their `try` variants) can now capture
+  the comments of a document into a `TOML.Comments` object via the new `comments` keyword argument,
+  and `TOML.print` can write them back out via its new `comments` keyword argument. This allows
+  modifying a TOML file without losing its comments ([#62672]).
 
 External dependencies
 ---------------------

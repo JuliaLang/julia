@@ -699,6 +699,27 @@ function cancel!(src::CancellationTokenSource,
     return raised
 end
 
+"""
+    Base.redeliver!(src::CancellationTokenSource) -> Bool
+
+Re-run the delivery pass for an already-cancelled source at its current
+severity: wakes waiters that registered without observing the cancellation
+and re-sends the interruption signal to bound running computations (the
+signal-based delivery is best-effort and can be missed while a reset point
+is unpublished). Used by the ^C machinery when a press finds the episode
+source already marked cancelled (e.g. by the C-side fast path in
+`jl_sigint_request_cancellation`, which cannot wake parked waiters itself).
+Returns whether the source was cancelled at all.
+"""
+function redeliver!(src::CancellationTokenSource)
+    st = @atomic :acquire src.state
+    st == 0x00 && return false
+    _cancel_walk!(src, st)
+    Threads.atomic_fence_heavy()
+    ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
+    return true
+end
+
 function _cancel_walk!(src::CancellationTokenSource, sev::UInt8)
     # Iterative worklist (no recursion): a deep source chain must not
     # overflow the canceller's stack, and a reconverging ("linked") graph
@@ -1018,12 +1039,45 @@ function _birth_cancel_source(t::Task)
     return (tok::CancellationToken).source
 end
 
+# The scoped-default resolution, with a per-task cache: when the task's
+# `bound_cancel_default` flag is set, `bound_cancel_token` holds the source
+# this lookup would resolve to under the task's current scope (or `nothing`),
+# placed there by the slow path below. The flag is dropped wherever a scope
+# is installed (`with` enter and its inline exit) and by cancellation points
+# publishing a different source, and travels with the token through the
+# exception-handler and finalizer save/restore brackets, so a set flag
+# always describes the current scope (see bound_cancel_default in
+# src/julia_threads.h). Reconstructing the token from the cached source is
+# exact: `CancellationToken` is an immutable wrapper, so the copy is egal to
+# the token in the scope.
 @inline function default_cancel_token()
+    ct = current_task()
+    if getfield(ct, :bound_cancel_default) !== 0x00
+        # the field's declared type (Union{Nothing, CancellationTokenSource})
+        # narrows through the `=== nothing` check without a type-tag load
+        s = @atomic :monotonic ct.bound_cancel_token
+        s === nothing && return nothing
+        return CancellationToken(s)
+    end
+    return _default_cancel_token_slow(ct)
+end
+
+@noinline function _default_cancel_token_slow(ct::Task)
+    tok = nothing
     scope = Core.current_scope()::Union{Scope, Nothing}
-    scope === nothing && return nothing
-    v = KeyValue.get(scope.values, CANCEL_TOKEN)
-    v === nothing && return nothing
-    return something(v)::Union{Nothing, CancellationToken}
+    if scope !== nothing
+        v = KeyValue.get(scope.values, CANCEL_TOKEN)
+        if v !== nothing
+            tok = something(v)::Union{Nothing, CancellationToken}
+        end
+    end
+    # Cache the resolution for the current scope. The store is an untagged
+    # unsafe point for CancellationLowering, so it cannot break a published
+    # reset region's (region, token) coherence: any live region is torn down
+    # before the store and re-established at the next cancellation point.
+    @atomic :monotonic ct.bound_cancel_token = tok === nothing ? nothing : tok.source
+    setfield!(ct, :bound_cancel_default, 0x01)
+    return tok
 end
 
 @inline function default_cancel_source()

@@ -428,7 +428,11 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
-#if JL_LLVM_VERSION >= 200000
+#if JL_LLVM_VERSION >= 220000
+    // LLVM 22 dropped the size operand from the lifetime intrinsics.
+    (void)sz;
+    CallInst::Create(pass.lifetime_end, {ptr}, "", insert->getIterator());
+#elif JL_LLVM_VERSION >= 200000
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert->getIterator());
 #else
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
@@ -437,7 +441,11 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
 
 void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 {
-#if JL_LLVM_VERSION >= 200000
+#if JL_LLVM_VERSION >= 220000
+    // LLVM 22 dropped the size operand from the lifetime intrinsics.
+    (void)sz;
+    CallInst::Create(pass.lifetime_start, {ptr}, "", orig->getIterator());
+#elif JL_LLVM_VERSION >= 200000
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig->getIterator());
 #else
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
