@@ -28,8 +28,9 @@ CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
 LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs) -ljulia-internal
 
-# get the JuliaC build script
-JULIAC_BUILDSCRIPT := $(shell $(JULIA) --startup-file=no -e 'print(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "juliac", "juliac-buildscript.jl"))')
+# the juliac build script, maintained here as test infrastructure
+# (JuliaC.jl is the user-facing tool)
+JULIAC_BUILDSCRIPT := $(SRCDIR)/juliac-buildscript.jl
 
 #=============================================================================
 
