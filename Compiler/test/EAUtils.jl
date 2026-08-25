@@ -131,6 +131,10 @@ function get_name_color(x::EscapeInfo, symbol::Bool = false)
     if name !== nothing && !isa(x.AliasInfo, Bool)
         name = string(name, "′")
     end
+    if name !== nothing && EA.has_heap_capture(x) && !EA.has_all_escape(x)
+        # `†` implies `↓` (`FinalizerEscape` implies `HeapCapture`), so show only one
+        name = string(name, EA.has_finalizer_escape(x) ? "†" : "↓")
+    end
     return name, color
 end
 
@@ -158,25 +162,16 @@ function get_sym_color(x::ArgEscapeInfo)
         if !iszero(escape_bits & EA.ARG_THROWN_ESCAPE)
             color = :yellow
         end
+        if !iszero(escape_bits & EA.ARG_HEAP_CAPTURE)
+            # `†` implies `↓` (`ARG_FINALIZER_ESCAPE` implies `ARG_HEAP_CAPTURE`), so show only one
+            sym = string(sym, !iszero(escape_bits & EA.ARG_FINALIZER_ESCAPE) ? "†" : "↓")
+        end
     end
     return sym, color
 end
 
 function Base.show(io::IO, x::ArgEscapeInfo)
-    escape_bits = x.escape_bits
-    if escape_bits == EA.ARG_ALL_ESCAPE
-        color, sym = :red, "X"
-    elseif escape_bits == 0x00
-        color, sym = :green, "✓"
-    else
-        color, sym = :bold, "*"
-        if !iszero(escape_bits & EA.ARG_RETURN_ESCAPE)
-            color, sym = :blue, "↑"
-        end
-        if !iszero(escape_bits & EA.ARG_THROWN_ESCAPE)
-            color = :yellow
-        end
-    end
+    sym, color = get_sym_color(x)
     printstyled(io, "ArgEscapeInfo(", sym, ")"; color)
 end
 
