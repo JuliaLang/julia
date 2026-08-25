@@ -372,7 +372,7 @@ fn recheck_live_closure_after_sweep() {
     let mut examples: Vec<String> = vec![];
     for &(addr, header) in &snapshot {
         let a = unsafe { mmtk::util::Address::from_usize(addr) };
-        let o = a.to_object_reference::<JuliaVM>();
+        let o = unsafe { mmtk::util::ObjectReference::from_raw_address_unchecked(a) };
         let now = unsafe { (a - 8usize).load::<usize>() };
         let count_zero = lxr.is_rc_object(o) && lxr.rc.count(o) == 0;
         // The mutator overwrites live data only after the GC ends, so catching it needs
@@ -446,7 +446,11 @@ fn audit_reference_counts(lxr: &mmtk::plan::lxr::LXR<JuliaVM>, snapshot: &[(usiz
         if !intact(addr, header) {
             continue;
         }
-        let o = unsafe { mmtk::util::Address::from_usize(addr).to_object_reference::<JuliaVM>() };
+        let o = unsafe {
+            mmtk::util::ObjectReference::from_raw_address_unchecked(mmtk::util::Address::from_usize(
+                addr,
+            ))
+        };
         o.iterate_fields::<JuliaVM, _>(mmtk::util::VMThread::UNINITIALIZED, |s| {
             if s.is_derived() {
                 return;
@@ -467,7 +471,11 @@ fn audit_reference_counts(lxr: &mmtk::plan::lxr::LXR<JuliaVM>, snapshot: &[(usiz
         if !intact(addr, header) {
             continue;
         }
-        let o = unsafe { mmtk::util::Address::from_usize(addr).to_object_reference::<JuliaVM>() };
+        let o = unsafe {
+            mmtk::util::ObjectReference::from_raw_address_unchecked(mmtk::util::Address::from_usize(
+                addr,
+            ))
+        };
         if !lxr.is_rc_object(o) {
             continue;
         }
