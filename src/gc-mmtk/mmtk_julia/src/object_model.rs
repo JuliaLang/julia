@@ -68,64 +68,72 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         semantics: CopySemantics,
         copy_context: &mut GCWorkerCopyContext<JuliaVM>,
     ) -> ObjectReference {
-        trace!("Attempting to copy object {}", from);
-
-        let bytes = Self::get_current_size(from);
-        let from_addr = from.to_raw_address();
-        let from_start = Self::ref_to_object_start(from);
-        let header_offset = from_addr - from_start;
-
-        let dst = if header_offset == 8 {
-            // regular object
-            // Note: The `from` reference is not used by any allocator currently in MMTk core.
-            copy_context.alloc_copy(from, bytes, 16, 8, semantics)
-        } else if header_offset == 16 {
-            // buffer should not be copied
-            unimplemented!();
-        } else {
-            unimplemented!()
-        };
-        // `alloc_copy` should never return zero.
-        debug_assert!(!dst.is_zero());
-
-        let src = from_start;
-        unsafe {
-            std::ptr::copy_nonoverlapping::<u8>(src.to_ptr(), dst.to_mut_ptr(), bytes);
-        }
-        let to_obj = unsafe { ObjectReference::from_raw_address_unchecked(dst + header_offset) };
-
-        copy_context.post_copy(to_obj, bytes, semantics);
-
-        trace!("Copied object {} into {}", from, to_obj);
-
-        unsafe {
-            let vt = mmtk_jl_typeof(from.to_raw_address());
-
-            if (*vt).name == jl_genericmemory_typename {
-                jl_gc_update_inlined_array(from.to_raw_address(), to_obj.to_raw_address())
-            }
-        }
-
-        // zero from_obj (for debugging purposes)
-        #[cfg(debug_assertions)]
-        {
-            use atomic::Ordering;
-            unsafe {
-                libc::memset(from_start.to_mut_ptr(), 0, bytes);
-            }
-
-            Self::LOCAL_FORWARDING_BITS_SPEC.store_atomic::<JuliaVM, u8>(
-                from,
-                0b10_u8, // BEING_FORWARDED
-                None,
-                Ordering::SeqCst,
-            );
-        }
-
-        to_obj
+        // `alloc_copy` should never return zero here.
+        Self::julia_copy(from, semantics, copy_context).unwrap()
     }
 
     fn try_copy(
+        from: ObjectReference,
+        semantics: CopySemantics,
+        copy_context: &mut GCWorkerCopyContext<JuliaVM>,
+    ) -> Option<ObjectReference> {
+        Self::julia_copy(from, semantics, copy_context)
+    }
+
+    fn copy_to(_from: ObjectReference, _to: ObjectReference, _region: Address) -> Address {
+        unimplemented!()
+    }
+
+    fn get_current_size(object: ObjectReference) -> usize {
+        // not being called by objects in LOS
+        debug_assert!(!is_object_in_los(&object));
+
+        unsafe { get_so_object_size(object) }
+    }
+
+    fn get_size_when_copied(_object: ObjectReference) -> usize {
+        unimplemented!()
+    }
+
+    fn get_align_when_copied(_object: ObjectReference) -> usize {
+        unimplemented!()
+    }
+
+    fn get_align_offset_when_copied(_object: ObjectReference) -> usize {
+        unimplemented!()
+    }
+
+    fn get_reference_when_copied_to(_from: ObjectReference, _to: Address) -> ObjectReference {
+        unimplemented!()
+    }
+
+    fn get_type_descriptor(_reference: ObjectReference) -> &'static [i8] {
+        unimplemented!()
+    }
+
+    #[inline(always)]
+    fn ref_to_object_start(object: ObjectReference) -> Address {
+        if is_object_in_los(&object) {
+            object.to_raw_address() - 48
+        } else {
+            unsafe { get_object_start_ref(object) }
+        }
+    }
+
+    #[inline(always)]
+    fn ref_to_header(object: ObjectReference) -> Address {
+        object.to_raw_address()
+    }
+
+    fn dump_object(_object: ObjectReference) {
+        unimplemented!()
+    }
+}
+
+impl VMObjectModel {
+    /// Shared implementation for `copy` and `try_copy`. Returns `None` if the allocator failed
+    /// to reserve space for the copy (which can only happen for `try_copy`), otherwise the reference to the copy.
+    fn julia_copy(
         from: ObjectReference,
         semantics: CopySemantics,
         copy_context: &mut GCWorkerCopyContext<JuliaVM>,
@@ -186,55 +194,6 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         }
 
         Some(to_obj)
-    }
-
-    fn copy_to(_from: ObjectReference, _to: ObjectReference, _region: Address) -> Address {
-        unimplemented!()
-    }
-
-    fn get_current_size(object: ObjectReference) -> usize {
-        // not being called by objects in LOS
-        debug_assert!(!is_object_in_los(&object));
-
-        unsafe { get_so_object_size(object) }
-    }
-
-    fn get_size_when_copied(_object: ObjectReference) -> usize {
-        unimplemented!()
-    }
-
-    fn get_align_when_copied(_object: ObjectReference) -> usize {
-        unimplemented!()
-    }
-
-    fn get_align_offset_when_copied(_object: ObjectReference) -> usize {
-        unimplemented!()
-    }
-
-    fn get_reference_when_copied_to(_from: ObjectReference, _to: Address) -> ObjectReference {
-        unimplemented!()
-    }
-
-    fn get_type_descriptor(_reference: ObjectReference) -> &'static [i8] {
-        unimplemented!()
-    }
-
-    #[inline(always)]
-    fn ref_to_object_start(object: ObjectReference) -> Address {
-        if is_object_in_los(&object) {
-            object.to_raw_address() - 48
-        } else {
-            unsafe { get_object_start_ref(object) }
-        }
-    }
-
-    #[inline(always)]
-    fn ref_to_header(object: ObjectReference) -> Address {
-        object.to_raw_address()
-    }
-
-    fn dump_object(_object: ObjectReference) {
-        unimplemented!()
     }
 }
 
