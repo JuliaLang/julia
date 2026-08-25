@@ -723,8 +723,6 @@ function expand_dotcall(ctx, ex)
     k = kind(ex)
     if k == K"dotcall"
         @jl_assert numchildren(ex) >= 1 ex
-        # Preserve SLOT_CALLED when the callee becomes an argument of
-        # broadcasted() or broadcasted_kwsyntax().
         farg = setmeta(ex[1], :is_called, true)
         args = SyntaxList()
         append!(args, ex[2:end])
