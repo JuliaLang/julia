@@ -9,6 +9,7 @@ inference
 inline
 interpreter_exec
 invalidation
+precompile
 irpasses
 newinterp
 ssair

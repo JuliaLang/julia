@@ -56,8 +56,9 @@ function compile_all_tvar_union(methsig)
             tv = tv.ub
         end
 
-        if isa(tv, DataType) && isabstracttype(tv) && !isa(tv, Type)
-            return false  # Any as TypeVar is common and not useful here
+        # Any as TypeVar is common and not useful here to try to analyze further
+        if isabstracttype(tv) && !isType(tv)
+            return false
         end
 
         env[2*i] = tv
