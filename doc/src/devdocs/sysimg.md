@@ -169,7 +169,7 @@ debug info, respectively, and so will make debugging more difficult.
 - Use tools like [JET.jl](https://github.com/aviatesk/JET.jl),
   [Cthulhu.jl](https://github.com/JuliaDebug/Cthulhu.jl), and/or
   [SnoopCompile](https://github.com/timholy/SnoopCompile.jl)
-  to identify failures of type-inference, and follow our [Performance Tips](@ref) to fix them.
+  to identify failures of type-inference, and follow our [Performance Tips](@ref man-performance-tips) to fix them.
 
 ### Compatibility concerns
 
