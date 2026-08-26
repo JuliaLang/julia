@@ -22,7 +22,6 @@ function _value_string(ex)
           k == K"static_parameter" ? "static_parameter" :
           k == K"symboliclabel" ? "label:$(syntax_name(ex))" :
           k == K"symbolicgoto" ? "goto:$(syntax_name(ex))" :
-          k == K"oldsymbolicgoto" ? "goto:$(syntax_name(ex))" :
           k == K"SourceLocation" ?
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
               k == K"Value" ?
@@ -161,7 +160,7 @@ end
 
 function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, ex)
-    if ex.source !== nothing
+    if ex.jl_source !== nothing
         printstyled(io, " @$(ex.jl_source)", color=:light_black)
     end
     prov = provenance(ex)

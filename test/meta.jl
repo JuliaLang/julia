@@ -286,3 +286,21 @@ end
 @testset "Base.Meta docstrings" begin
     @test isempty(Docs.undocumented_names(Meta))
 end
+
+@testset "Meta.parse uses VERSION by default" begin
+    tg = "typegroup struct MetaTG end end"
+
+    @test Meta.isexpr(Meta.parse(tg), :typegroup)
+    @test Meta.isexpr(Meta.parseall(tg).args[end], :typegroup)
+    @test Meta.isexpr(Meta.parse(tg; mod=Module(:MetaTGDefault)), :typegroup)
+
+    # 1.13 parser
+    p13 = Base.VersionedParse(v"1.13")
+    @test_throws Meta.ParseError Meta.parse(tg; _parse=p13)
+    @test Meta.isexpr(Meta.parse(tg; raise=false, _parse=p13), :error)
+
+    # 1.13 module
+    m13 = Module(:MetaTG13)
+    Base.set_syntax_version(m13, v"1.13")
+    @test_throws Meta.ParseError invokelatest(Meta.parse, tg; mod=m13)
+end

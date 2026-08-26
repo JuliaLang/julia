@@ -598,7 +598,7 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
+const main_parser = Base.ScopedValues.ScopedValue{Any}(Base.VersionedParse(VERSION))
 function var"#_internal_julia_parse"(args...)
     main_parser[](args...)
 end

@@ -2433,9 +2433,8 @@ JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t *inference_ent
 JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t *ci) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_write_compiler_output(void) JL_CANSAFEPOINT;
 
-// parsing
-JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
-                                      const char *filename, size_t filename_len, size_t lineno) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
+                                  jl_module_t *inmodule) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *file, int line, size_t world,
                                   bool_t warn) JL_CANSAFEPOINT;

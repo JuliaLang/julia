@@ -242,7 +242,7 @@ struct SourceByteTable
         if !isempty(spans)
             @assert !isempty(line_starts)
             min_byte = spans[begin][begin]
-            max_byte = maximum(last, spans)
+            max_byte = maximum(maximum, spans)
             @assert line_starts[begin] <= min_byte
             for ls in line_starts[begin+1:end]
                 @assert min_byte < ls
@@ -265,7 +265,7 @@ function SourceByteTable(sf::SourceFile, spans::Vector{Tuple{Int32, Int32}})
         popfirst!(line_starts)
         first_line += 1
     end
-    max_byte = maximum(last, spans)
+    max_byte = maximum(maximum, spans)
     while !isempty(line_starts) && max_byte < line_starts[end]
         pop!(line_starts)
     end
@@ -851,11 +851,12 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
     # TODO: fix this hack.  The normal way of getting the parser for this module
     # only gives us Expr.  We probably want the parser to always create
     # SyntaxTree, then convert it to Expr if the version is too low.
-    version = if isnothing(version) && isdefined(mod, Symbol("#_internal_julia_parse"))
-        vp = getglobal(mod, Symbol("#_internal_julia_parse"))
-        vp isa Base.VersionedParse ? vp.ver : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+    version = if isnothing(version) && invokelatest(
+            isdefined, mod, Symbol("#_internal_julia_parse"))
+        vp = invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
+        vp isa Base.VersionedParse ? vp.ver : VERSION
     else
-        version isa VersionNumber ? version : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+        version isa VersionNumber ? version : VERSION
     end
     st = parseall(SyntaxTree, code; filename, version, ignore_warnings=true)
     @jl_assert kind(st) === K"toplevel" st
