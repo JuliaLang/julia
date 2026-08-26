@@ -3612,19 +3612,50 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
     }
 }
 
+#ifdef JL_LIBRARY_STATIC
+// When libjulia-internal is linked statically, the system image is linked into
+// the same binary (see aotcompile.cpp), so its contents can be referenced
+// directly instead of looking them up through the dynamic linker.
+extern const char jl_system_image_data[];
+extern const size_t jl_system_image_size;
+extern const uint32_t jl_system_image_checksum;
+extern const jl_image_pointers_t jl_image_pointers;
+#endif
+
+// Look up a data symbol of an image. A NULL `handle` denotes the system image
+// that was statically linked into this binary.
+static void jl_image_sym(void *handle, const char *name, void **out, const void *static_addr) JL_NOTSAFEPOINT
+{
+#ifdef JL_LIBRARY_STATIC
+    if (handle == NULL) {
+        *out = (void*)static_addr;
+        return;
+    }
+#else
+    (void)static_addr;
+#endif
+    jl_dlsym(handle, name, out, 1, 0);
+}
+
+#ifdef JL_LIBRARY_STATIC
+#define JL_IMAGE_SYM(handle, name, out) jl_image_sym(handle, #name, (void **)(out), &name)
+#else
+#define JL_IMAGE_SYM(handle, name, out) jl_image_sym(handle, #name, (void **)(out), NULL)
+#endif
+
 static void jl_image_load_metadata(void *handle, jl_image_buf_t *image)
 {
-    jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1, 0);
+    JL_IMAGE_SYM(handle, jl_image_pointers, &image->pointers);
     uint32_t *pchecksum;
-    jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
+    JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
     image->heap_checksum = *pchecksum;
 }
 
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
-    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
-    jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1, 0);
+    JL_IMAGE_SYM(handle, jl_system_image_size, &plen);
+    JL_IMAGE_SYM(handle, jl_system_image_data, &image->data);
     image->size = *plen;
     jl_image_load_metadata(handle, image);
 }
@@ -3717,8 +3748,8 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 {
     size_t *plen;
     char *data;
-    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
-    jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1, 0);
+    JL_IMAGE_SYM(handle, jl_system_image_size, &plen);
+    JL_IMAGE_SYM(handle, jl_system_image_data, &data);
     jl_image_load_metadata(handle, image);
     jl_image_decompress(image, data, *plen);
 
@@ -3816,6 +3847,56 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
     free(comp_data);
 }
 
+// Compute the load address of the image containing `pointers`
+static intptr_t jl_image_base(void *handle, const void *pointers) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    (void)pointers;
+    return (intptr_t)handle;
+#else
+    (void)handle;
+    Dl_info dlinfo;
+    if (dladdr((void*)pointers, &dlinfo) != 0)
+        return (intptr_t)dlinfo.dli_fbase;
+    return 0;
+#endif
+}
+
+#ifdef JL_LIBRARY_STATIC
+// The system image is linked into the same binary as libjulia-internal, so its
+// symbols are referenced directly (see jl_image_sym). Package images are still
+// shared libraries and are looked up through the dynamic linker.
+static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOINT
+{
+    jl_image_buf_t image = {
+        .kind = JL_IMAGE_KIND_SO,
+        .pointers = NULL,
+        .data = NULL,
+        .size = 0,
+        .base = 0,
+        .is_split = 0,
+    };
+
+    if (is_pkgimage) {
+        jl_image_unpack_func_t *unpack;
+        jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1, 0);
+        (*unpack)(handle, &image);
+        image.base = jl_image_base(handle, image.pointers);
+        return image;
+    }
+
+    // the sysimage is part of this binary: no consistency check is needed and
+    // `handle` is only used to compute the load address
+    (*jl_image_unpack)(NULL, &image);
+    assert(image.pointers == &jl_image_pointers);
+#ifdef _OS_WINDOWS_
+    if (handle == NULL)
+        handle = jl_RTLD_DEFAULT_handle;
+#endif
+    image.base = jl_image_base(handle, image.pointers);
+    return image;
+}
+#else
 // From a shared library handle, verify consistency and return a jl_image_buf_t
 static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOINT
 {
@@ -3839,30 +3920,13 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOI
     };
 
     // verification passed, lookup the buffer pointers
-    if (jl_image_unpack == NULL || is_pkgimage) {
-        // in the usual case, the sysimage was not statically linked to libjulia-internal
-        // look up the external sysimage symbols via the dynamic linker
-        jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1, 0);
-    }
-    else {
-        // the sysimage was statically linked directly against libjulia-internal
-        // use the internal symbols
-        unpack = &jl_image_unpack;
-    }
+    jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1, 0);
     (*unpack)(handle, &image);
-
-#ifdef _OS_WINDOWS_
-    image.base = (intptr_t)handle;
-#else
-    Dl_info dlinfo;
-    if (dladdr((void*)image.pointers, &dlinfo) != 0)
-        image.base = (intptr_t)dlinfo.dli_fbase;
-    else
-        image.base = 0;
-#endif
+    image.base = jl_image_base(handle, image.pointers);
 
     return image;
 }
+#endif
 
 // Allow passing in a module handle directly, rather than a path
 JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
