@@ -1378,6 +1378,7 @@ it may use a more specialized function type (such as `f ∘ tuple` via [`∘`](@
 for improved clarity or efficiency, rather than creating a new anonymous function.
 
 `unsplat` is the inverse of [`splat`](@ref): `unsplat(splat(f)) === f` and `splat(unsplat(f)) === f`.
+This operation is also sometimes referred to as "slurp".
 
 # Examples
 ```jldoctest
