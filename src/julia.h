@@ -251,7 +251,7 @@ JL_EXTENSION typedef struct {
 JL_EXTENSION typedef struct {
     JL_DATA_TYPE
     jl_genericmemoryref_t ref;
-    size_t dimsize[]; // length for 1-D, otherwise length is mem->length
+    size_t dimsize[]; // dimension sizes; mem may hold more than prod(dimsize) elements
 } jl_array_t;
 
 
@@ -648,6 +648,7 @@ typedef struct {
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
+    uint8_t concrete_only; // Bool: inference refuses to commit (records no backedge) at non-concrete call sites
 } jl_typename_t;
 
 typedef struct {
@@ -714,7 +715,8 @@ typedef struct {
         // If set, this type's egality can be determined entirely by comparing
         // the non-padding bits of this datatype.
         uint16_t isbitsegal : 1;
-        uint16_t padding : 8;
+        uint16_t unused_bits : 3;
+        uint16_t padding : 5;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -859,7 +861,7 @@ enum jl_partition_kind {
 };
 
 static const uint8_t PARTITION_MASK_KIND = 0x0f;
-static const uint8_t PARTITION_MASK_FLAG = 0xf0;
+static const uint16_t PARTITION_MASK_FLAG = 0x1f0;
 
 //// These are flags that get anded into the above
 //
@@ -876,6 +878,11 @@ static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 // _IMPLICITLY_EXPORTED: This binding partition is implicitly exported via @reexport. Unlike _EXPORTED,
 // this flag is set during implicit resolution and can be removed if the resolution changes.
 static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
+// _IMPLICITLY_DEPRECATED: The _DEPRECATED/_DEPWARN flags on this partition were set by
+// implicit resolution from the imported binding, rather than set explicitly on this binding.
+// Like _IMPLICITLY_EXPORTED, it is recomputed on re-resolution, and it does not survive
+// replacement of the partition by a definition or an explicit import.
+static const uint16_t PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100;
 
 #if defined(_COMPILER_MICROSOFT_)
 #define JL_ALIGNED_ATTR(alignment) \
@@ -899,7 +906,10 @@ typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     jl_value_t *restriction;
     _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
-    _Atomic(struct _jl_binding_partition_t *) next;
+    // The next (older) partition in the chain. The last (oldest) partition in
+    // the chain instead stores a backreference to the owning `jl_binding_t`, so
+    // the chain can be walked circularly.
+    _Atomic(struct _jl_binding_partition_t *) next; // more precisely, _Atomic( union { jl_binding_partition_t *pb; jl_binding_t *b; } )
     size_t kind;
 } jl_binding_partition_t;
 
@@ -1116,6 +1126,8 @@ typedef struct {
     XX(quotenode) \
     XX(typeeq) \
     XX(typeegal) \
+    XX(cancel_source) \
+    XX(wait_entry) \
     /* Add new tags here to keep existing builds ABI stable - we don't guarantee ABI \
        stability, but it'll help PkgEval to not break it unnecessarily */ \
     /* end of JL_SMALL_TYPEOF */
@@ -1349,7 +1361,19 @@ STATIC_INLINE jl_value_t *jl_svecset(
 #define jl_array_nrows(a) (((jl_array_t*)(a))->dimsize[0])
 #define jl_array_ndims(a) (*(size_t*)jl_tparam1(jl_typetagof(a)))
 #define jl_array_maxsize(a) (((jl_array_t*)(a))->ref.mem->length)
-#define jl_array_len(a)   (jl_array_ndims(a) == 1 ? jl_array_nrows(a) : jl_array_maxsize(a))
+STATIC_INLINE size_t jl_array_len(void *a) JL_NOTSAFEPOINT
+{
+    size_t ndims = jl_array_ndims(a);
+    if (ndims == 1)
+        return jl_array_nrows(a);
+    // an N-d array may be backed by a Memory with excess capacity (e.g. from
+    // `reshape` of a `sizehint!`ed vector), so the length must be computed
+    // from the dimensions rather than read from the Memory
+    size_t len = 1;
+    for (size_t i = 0; i < ndims; i++)
+        len *= jl_array_dim(a, i);
+    return len;
+}
 
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
@@ -1573,8 +1597,16 @@ STATIC_INLINE const jl_datatype_layout_t *jl_datatype_layout(jl_datatype_t *t) J
 }
 #define jl_datatype_size(t)    (jl_datatype_layout((jl_datatype_t*)(t))->size)
 #define jl_datatype_align(t)   (jl_datatype_layout((jl_datatype_t*)(t))->alignment)
-#define jl_datatype_nbits(t)   ((jl_datatype_layout((jl_datatype_t*)(t))->size)*8)
 #define jl_datatype_nfields(t) (jl_datatype_layout((jl_datatype_t*)(t))->nfields)
+STATIC_INLINE uint32_t jl_datatype_unusedbits(jl_datatype_t *t) JL_NOTSAFEPOINT
+{
+    return jl_datatype_layout(t)->flags.unused_bits;
+}
+STATIC_INLINE uint32_t jl_datatype_nbits(jl_datatype_t *t) JL_NOTSAFEPOINT
+{
+    const jl_datatype_layout_t *layout = jl_datatype_layout(t);
+    return layout->size * 8 - layout->flags.unused_bits;
+}
 
 JL_DLLEXPORT void *jl_symbol_name(jl_sym_t *s);
 // inline version with strong type check to detect typos in a `->name` chain
@@ -1757,6 +1789,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
 #define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
+#define jl_is_cancel_source(v) jl_typetagis(v,jl_cancel_source_tag<<4)
+#define jl_is_wait_entry(v)  jl_typetagis(v,jl_wait_entry_tag<<4)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
@@ -2355,7 +2389,8 @@ typedef struct {
     const char *data;
     size_t size;
     uint64_t base;
-    uint32_t checksum;
+    uint32_t heap_checksum;
+    bool_t is_split;
 } jl_image_buf_t;
 
 struct _jl_image_t;
@@ -2380,7 +2415,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, bool_t compress, ios_t **s, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
@@ -2525,18 +2560,49 @@ struct _jl_handler_t {
     size_t locks_len;
     jl_timing_block_t *timing_stack;
     size_t world_age;
+    // The published reset context and its governing token binding at handler
+    // entry. Restored together when the handler is left or entered
+    // exceptionally, so that an exception thrown out of a reset region does
+    // not leave a context dangling whose establishing frame the unwind
+    // destroyed, and a republished region is never paired with a token that
+    // nested cancellation points rebound in the meantime. (The token is kept
+    // alive by the reachability contract on `Core.cancellation_point!`; the
+    // handler chain is not GC-scanned.)
+    struct _jl_reset_ctx_t *reset_ctx;
+    jl_value_t *bound_cancel_token;
+    // Published ccall handler (if any). Used if we must unwind across a C function
+    // that calls back into julia.
+    struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
+    // Saved `bound_cancel_default` flag, restored with `bound_cancel_token`
+    // (the pair is only coherent together; see julia_threads.h).
+    uint8_t bound_cancel_default;
 };
 
-#define JL_TASK_STATE_RUNNABLE 0
-#define JL_TASK_STATE_DONE     1
-#define JL_TASK_STATE_FAILED   2
+#define JL_TASK_STATE_RUNNABLE  0
+#define JL_TASK_STATE_DONE      1
+#define JL_TASK_STATE_FAILED    2
+#define JL_TASK_STATE_ABANDONED 3
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t nparents) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_cancel_source_parent(jl_cancel_source_t *src, size_t i);
+JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_owner(jl_value_t *w, size_t i) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_wait_entry_set_slot_owner(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_next(jl_value_t *w, size_t i) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_wait_entry_set_slot_next(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_wait_entry_slot_aux(jl_value_t *w, size_t i) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_wait_entry_set_slot_aux(jl_value_t *w, size_t i, uint64_t v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_cancel_source_next_child(jl_cancel_source_t *parent, jl_cancel_source_t *child) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_CANSAFEPOINT_ENTER_LEAVE;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_send_preempt_signal(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_shootdown_cancelled_tasks(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);

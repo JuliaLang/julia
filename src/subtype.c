@@ -743,12 +743,20 @@ int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFE
         jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
         if (ad->name != bd->name) {
             jl_datatype_t *temp = ad;
-            while (temp != jl_any_type && temp->name != bd->name)
+            while (temp != jl_any_type && temp->name != bd->name) {
+                // raw read: this heuristic must not reach a safepoint, so a
+                // deferred (unset) supertype conservatively proves nothing
                 temp = temp->super;
+                if (temp == NULL)
+                    return 0;
+            }
             if (temp == jl_any_type) {
                 temp = bd;
-                while (temp != jl_any_type && temp->name != ad->name)
+                while (temp != jl_any_type && temp->name != ad->name) {
                     temp = temp->super;
+                    if (temp == NULL)
+                        return 0;
+                }
                 if (temp == jl_any_type)
                     return 1;
                 bd = temp;
@@ -1420,47 +1428,87 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
 
 // wrap a TypeVar env entry as svec(tvar, constrained): preserves TypeVar
 // identity while carrying the "constrained by any concrete subtype" bit.
-// `tvar` is the uncertain value (typically a TypeVar); `constrained` is 1
-// iff any concrete subtype of the LHS will pin this var to a definite value.
+// `tvar` is the uncertain value (something with has_free_typevars)
+// `constrained` is 1 if all concrete subtypes of the LHS will pin this var to a definite value.
 static jl_value_t *wrap_tvar_env(jl_value_t *tvar, int constrained) JL_CANSAFEPOINT
 {
     return (jl_value_t*)jl_svec2(tvar, constrained ? jl_true : jl_false);
 }
 
-static int unionall_is_Type_range(jl_unionall_t *ua) JL_NOTSAFEPOINT
+// See `Core.Compiler.pin_grade`: is `v` pinned to a `typeof`-produced argument
+// type (concrete, in particular not `Union{}`) by every call matching `t`?
+// True for a required covariant argument slot (directly, under nested
+// `Tuple`s, or in all arms of a `Union`), or as the sole upper bound of
+// another variable in such a slot. A false return is always conservative.
+static int pins_typeof_static(jl_tvar_t *v, jl_value_t *t) JL_NOTSAFEPOINT
 {
-    return jl_is_some_Type(ua->body) && jl_some_Type_T(ua->body) == (jl_value_t*)ua->var;
+    if (t == (jl_value_t*)v)
+        return 1;
+    while (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        if (ua->var->ub == (jl_value_t*)v && ua->var->lb == jl_bottom_type &&
+            pins_typeof_static(ua->var, ua->body))
+            // the least solution for `v` is the other variable's value
+            return 1;
+        if (ua->var == v)
+            return 0; // `v` is rebound
+        t = ua->body;
+    }
+    if (jl_is_uniontype(t)) {
+        return pins_typeof_static(v, ((jl_uniontype_t*)t)->a) &&
+               pins_typeof_static(v, ((jl_uniontype_t*)t)->b);
+    }
+    if (!jl_is_datatype(t) || jl_is_abstracttype(t))
+        return 0;
+    jl_datatype_t *dt = (jl_datatype_t*)t;
+    if (dt->name == jl_tuple_typename) {
+        size_t fc = jl_nparams(dt);
+        for (size_t i = 0; i < fc; i++) {
+            jl_value_t *p = jl_tparam(dt, i);
+            // a `Vararg` tail may match zero arguments
+            if (!jl_is_vararg(p) && pins_typeof_static(v, p))
+                return 1;
+        }
+    }
+    return 0;
 }
 
-// Static check mirroring Core.Compiler.constrains_param: is `var` guaranteed
-// to be pinned by any concrete leaftype subtype of `typ`? Conservative: a
-// false return is always safe. Used only on fast paths where we don't have
-// dynamic varbinding state to draw from.
+// Static check mirroring a conservative subset of
+// Core.Compiler.constrains_var: is `var` guaranteed to be pinned by any
+// concrete leaftype subtype of `typ`? A false return is always safe; a true
+// return must also hold under `constrains_var`. Used where a path-independent
+// answer is wanted: the env-copy fast paths in `jl_subtype_env`/`intersect`,
+// which have no dynamic varbinding state to draw from, and
+// `mark_required_tuple_element`, whose answer must not depend on the
+// in-progress dynamic bounds even though `e->vars` is available there.
 static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covariant) JL_NOTSAFEPOINT
 {
     if (typ == (jl_value_t*)var)
-        return 1;
+        // a covariant occurrence contributes `typeof` of an argument as a
+        // lower bound, which determines the least solution only when the
+        // declared lower bound does not also union into it
+        return !covariant || var->lb == jl_bottom_type;
     while (jl_is_unionall(typ)) {
         jl_unionall_t *ua = (jl_unionall_t*)typ;
-        // A Type{<:...} range can be inhabited by Union{}, which does not
-        // expose the structure of the range bound to static parameters.
-        if (covariant && !unionall_is_Type_range(ua) &&
-            constrains_param_static(var, ua->var->ub, covariant))
+        // occurrences in the inner variable's declared bound pin `var` only
+        // when every call pins that variable to a `typeof`-produced argument
+        // type, satisfying its bounds without constraining them.
+        if (covariant && ua->var->lb == jl_bottom_type &&
+            jl_has_typevar(ua->var->ub, var) &&
+            pins_typeof_static(ua->var, ua->body) &&
+            constrains_param_static(var, ua->var->ub, 1))
             return 1;
-        // ua->var->lb doesn't constrain var
+        if (ua->var == var) // `var` is rebound
+            return 0;
         typ = ua->body;
     }
     if (jl_is_uniontype(typ)) {
-        // both alternatives must constrain var
+        // conservatively, both alternatives must constrain var
         return constrains_param_static(var, ((jl_uniontype_t*)typ)->a, covariant) &&
                constrains_param_static(var, ((jl_uniontype_t*)typ)->b, covariant);
     }
-    else if (jl_is_some_Type(typ)) {
-        jl_value_t *T = jl_some_Type_T(typ);
-        if (T == (jl_value_t*)var && var->ub == (jl_value_t*)jl_any_type) {
-            return 0;
-        }
-        return constrains_param_static(var, T, 0);
+    else if (jl_is_typeeq(typ)) {
+        return constrains_param_static(var, jl_typeeq_T(typ), 0);
     }
     else if (jl_is_datatype(typ)) {
         jl_datatype_t *dt = (jl_datatype_t*)typ;
@@ -1630,7 +1678,7 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var, int covarian
 
 // A (closed) type value bound only through equality (`Type{X}`) positions is
 // only known up to `==` (#61323); record it as a pinned (lb == ub) typevar
-// marker. A BOUND_EQ channel still marks it *defined* (constrained) for every
+// marker. A BOUND_EQ channel still marks it defined (constrained) for every
 // `==`-equal call. Returns NULL for other values: free-typevar values keep the
 // legacy plain binding (#61242), egality-certain values stay unwrapped.
 static jl_value_t *eq_pinned_envout_marker(jl_unionall_t *u, jl_varbinding_t *vb, jl_value_t *lb,
@@ -1846,14 +1894,12 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
                 if (jl_has_typevar(ivar->lb, old_tvar)) {
                     lb = ivar->lb;
                     lb = jl_substitute_var(lb, old_tvar, (jl_value_t*)new_tvar);
-                    ivar->lb = lb;
-                    jl_gc_wb((jl_value_t*)ivar, lb);
+                    jl_gc_write((jl_value_t*)ivar, ivar->lb, jl_value_t, lb);
                 }
                 if (jl_has_typevar(ivar->ub, old_tvar)) {
                     ub = ivar->ub;
                     ub = jl_substitute_var(ub, old_tvar, (jl_value_t*)new_tvar);
-                    ivar->ub = ub;
-                    jl_gc_wb((jl_value_t*)ivar, ub);
+                    jl_gc_write((jl_value_t*)ivar, ivar->ub, jl_value_t, ub);
                 }
                 JL_GC_POP();
             }
@@ -2903,7 +2949,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             return 1;
         jl_datatype_t *xd = (jl_datatype_t*)ux, *yd = (jl_datatype_t*)uy;
         while (xd != NULL && xd != jl_any_type && xd->name != yd->name) {
-            xd = xd->super;
+            xd = jl_datatype_compute_super(xd);
         }
         if (xd == jl_any_type)
             return 0;
@@ -3029,11 +3075,12 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         if (y == (jl_value_t*)jl_any_type) return 1;
         jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
         while (xd != jl_any_type && xd->name != yd->name) {
-            if (xd->super == NULL) {
+            jl_datatype_t *xsuper = jl_datatype_compute_super(xd);
+            if (xsuper == NULL) {
                 assert(xd->parameters && jl_is_typename(xd->name));
                 jl_errorf("circular type parameter constraint in definition of %s", jl_symbol_name(xd->name->name));
             }
-            xd = xd->super;
+            xd = xsuper;
         }
         if (xd == jl_any_type) return 0;
         if (xd->name == jl_tuple_typename)
@@ -3601,8 +3648,11 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
             if (((jl_datatype_t*)x)->name != ((jl_datatype_t*)y)->name) {
                 jl_datatype_t *temp = (jl_datatype_t*)x;
                 while (temp->name != ((jl_datatype_t*)y)->name) {
+                    // raw read: this heuristic must not reach a safepoint, so
+                    // a deferred (unset) supertype stays undecided and the
+                    // full algorithm resolves it
                     temp = temp->super;
-                    if (temp == NULL) // invalid state during type declaration
+                    if (temp == NULL)
                         return 0;
                     if (temp == jl_any_type) {
                         *subtype = 0;
@@ -4010,9 +4060,6 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     }
     if (jl_is_typevar(t))
         return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
-    if (jl_is_datatype(t))
-        if (((jl_datatype_t*)t)->name == jl_type_typename)
-            return 1;
     return 0;
 }
 
@@ -5448,8 +5495,11 @@ static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, 
     // if that attempt fails, then return bottom
     // otherwise return xd (finish_unionall will later handle propagating those constraints)
     assert(e->Loffset == 0);
-    jl_value_t *isuper = R ? intersect((jl_value_t*)yd, (jl_value_t*)xd->super, e, param) :
-                             intersect((jl_value_t*)xd->super, (jl_value_t*)yd, e, param);
+    jl_datatype_t *xdsuper = jl_datatype_compute_super(xd);
+    if (xdsuper == NULL)
+        return jl_bottom_type; // definition in progress
+    jl_value_t *isuper = R ? intersect((jl_value_t*)yd, (jl_value_t*)xdsuper, e, param) :
+                             intersect((jl_value_t*)xdsuper, (jl_value_t*)yd, e, param);
     if (isuper == jl_bottom_type)
         return jl_bottom_type;
     return (jl_value_t*)xd;
@@ -5964,13 +6014,13 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
             return res;
         }
         if (param == PARAM_INVARIANT) return jl_bottom_type;
-        while (xd != jl_any_type && xd->name != yd->name)
-            xd = xd->super;
-        if (xd == jl_any_type) {
+        while (xd != NULL && xd != jl_any_type && xd->name != yd->name)
+            xd = jl_datatype_compute_super(xd);
+        if (xd == NULL || xd == jl_any_type) {
             xd = (jl_datatype_t*)x;
-            while (yd != jl_any_type && yd->name != xd->name)
-                yd = yd->super;
-            if (yd == jl_any_type)
+            while (yd != NULL && yd != jl_any_type && yd->name != xd->name)
+                yd = jl_datatype_compute_super(yd);
+            if (yd == NULL || yd == jl_any_type)
                 return jl_bottom_type;
             return intersect_sub_datatype((jl_datatype_t*)y, xd, e, 1, param);
         }
@@ -7251,7 +7301,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                     return 0;
                 return ascore > bscore || adiag > bdiag;
             }
-            tta = tta->super; super = 1;
+            tta = jl_datatype_compute_super(tta); super = 1;
+            if (tta == NULL)
+                return 0; // definition in progress
         }
         return 0;
     }

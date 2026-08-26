@@ -43,22 +43,29 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
  * which the user can delete to save space if generating new code is not necessary.
  * However, if it exists and cannot be loaded, that's a problem. So, we alert the user
  * and abort the process. */
-static void * load_library(const char * rel_path, const char * src_dir, int err) {
+/* If allow_basename, then any library already loaded with the same basename is treated
+ * as a duplicate and a handle to the loaded library is returned. Otherwise already-loaded
+ * libraries are detected by full filepath / inode. */
+static void *load_library(const char * rel_path, const char * src_dir, int allow_basename, int err) {
     void * handle = NULL;
-    // See if a handle is already open to the basename
-    const char *basename = rel_path + strlen(rel_path);
-    while (basename-- > rel_path)
-        if (*basename == PATHSEPSTRING[0] || *basename == '/')
-            break;
-    basename++;
+    if (allow_basename) {
+        // See if a handle is already open to the basename
+        const char *basename = rel_path + strlen(rel_path);
+        while (basename-- > rel_path)
+            if (*basename == PATHSEPSTRING[0] || *basename == '/')
+                break;
+        basename++;
 #if defined(_OS_WINDOWS_)
-    if ((handle = GetModuleHandleA(basename)))
-        return handle;
+        if ((handle = GetModuleHandleA(basename)))
+            return handle;
+        SetLastError(0);
 #else
-    // if err == 0 the library is optional, so don't allow global lookups to see it
-    if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL))))
-        return handle;
+        // if err == 0 the library is optional, so don't allow global lookups to see it
+        if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL))))
+            return handle;
+        (void) dlerror();
 #endif
+    }
 
     char path[2*JL_PATH_MAX + 1] = {0};
     strncat(path, src_dir, sizeof(path) - 1);
@@ -85,7 +92,10 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
     else {
         if (!err && !PATH_EXISTS()) {
 #if defined(_OS_WINDOWS_)
+            SetLastError(0);
             free(wpath);
+#else
+            (void) dlerror();
 #endif
             return NULL;
         }
@@ -117,11 +127,51 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
     return handle;
 }
 
+// case-insensitive strcmp
+static int istrcmp(const char *val, const char *token) {
+    for (; *token; val++, token++) {
+        char c = *val;
+        if (c >= 'A' && c <= 'Z')
+            c += 'a' - 'A';
+        if (c != *token)
+            return 0;
+    }
+    return *val == '\0';
+}
+
+// intended to match Base.get_bool_env
+static int env_var_bool(const char *name, int *value) {
+#if defined(_OS_WINDOWS_)
+    char val[8];
+    DWORD val_len = GetEnvironmentVariableA(name, val, sizeof(val));
+    if (val_len == 0 || val_len >= sizeof(val)) /* unset, or too long to be a token */
+        return 0;
+#else
+    const char *val = getenv(name);
+    if (val == NULL)
+        return 0;
+#endif
+    if (istrcmp(val, "t") || istrcmp(val, "true") || istrcmp(val, "y") || istrcmp(val, "yes") || istrcmp(val, "1")) {
+        *value = 1;
+        return 1;
+    }
+    if (istrcmp(val, "f") || istrcmp(val, "false") || istrcmp(val, "n") || istrcmp(val, "no") || istrcmp(val, "0")) {
+        *value = 0;
+        return 1;
+    }
+    return 0;
+}
+
 static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 #ifdef _OS_WINDOWS_
-    return GetProcAddress((HMODULE) lib_handle, symbol_name);
+    void *sym = GetProcAddress((HMODULE) lib_handle, symbol_name);
+    SetLastError(0); // clear error, if any
+    return sym;
 #else
-    return dlsym((void *)lib_handle, symbol_name);
+    void *sym = dlsym((void *)lib_handle, symbol_name);
+    if (sym == NULL)
+        (void) dlerror(); // clear dlerror
+    return sym;
 #endif
 }
 
@@ -323,13 +373,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                 int probe_successful = 0;
 
                 // Check to see if the user has disabled libstdc++ probing
-                char *probevar = getenv("JULIA_PROBE_LIBSTDCXX");
-                if (probevar) {
-                    if (strcmp(probevar, "1") == 0 || strcmp(probevar, "yes") == 0)
-                        do_probe = 1;
-                    else if (strcmp(probevar, "0") == 0 || strcmp(probevar, "no") == 0)
-                        do_probe = 0;
-                }
+                env_var_bool("JULIA_PROBE_LIBSTDCXX", &do_probe);
                 if (do_probe) {
                     const char *cxxpath = libstdcxxprobe();
                     if (cxxpath) {
@@ -351,23 +395,26 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 # ifdef RT_STATIC_LIBSTDCXX
                     // If we have a statically-linked libstdc++, it is ok for
                     // this to fail.
-                    load_library(curr_dep, lib_dir, 0);
+                    load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 0);
 # else
-                    load_library(curr_dep, lib_dir, 1);
+                    load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 1);
 # endif
                 }
 #endif
             } else if (special_idx == 1) {
                 // This special library is `libjulia-internal`
-                libjulia_internal = load_library(curr_dep, lib_dir, 1);
+                libjulia_internal = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 1);
             } else if (special_idx == 2) {
                 // This special library is `libjulia-codegen`
-                libjulia_codegen = load_library(curr_dep, lib_dir, 0);
+                int load_codegen = 1;
+                env_var_bool("JULIA_LOAD_CODEGEN_LIB", &load_codegen);
+                if (load_codegen)
+                    libjulia_codegen = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 0);
             }
             special_idx++;
         } else {
             // Otherwise, just load it as "normal"
-            load_library(curr_dep, lib_dir, 1);
+            load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 1);
         }
 
         // Skip ahead to next dependency

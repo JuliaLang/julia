@@ -158,6 +158,8 @@ timesofar("promotions")
     end
 
     @testset "copyto!" begin
+        # BitArray copy bounds must not wrap their computed end indices.
+        @test_throws BoundsError copyto!(falses(2), Int8(2), trues(2), Int8(2), typemax(Int8))
         let b1 = trues(1)
             @test all(copyto!(b1, []))
         end
@@ -204,6 +206,11 @@ timesofar("promotions")
         @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
         gr(b) = (resize!(b, v1)[(v1÷2):end] .= 1; b)
         @check_bit_operation gr(b1) BitVector
+
+        # Chunk rounding and reshape products must remain valid at the Int limit.
+        @test Base.num_bit_chunks(typemax(Int)) == div(typemax(Int), 64) + 1
+        overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+        @test_throws ArgumentError reshape(trues(2), 3, overflow_dim)
     end
 
     @testset "sizeof (issue #7515)" begin
@@ -226,6 +233,10 @@ timesofar("utils")
             @test b1 == b2
         end
     end
+
+    # BitArray constructors must reject dimensions whose product overflows.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws ArgumentError BitMatrix(undef, 3, overflow_dim)
 
     @testset "constructors from iterables" begin
         for g in ((x%7==3 for x = 1:v1),
@@ -1509,6 +1520,22 @@ timesofar("reductions")
             @test map!(>, b, b1, b2)  == map!((x,y)->x>y, b, b1, b2)  == (b1 .> b2)  == b
             @test map!(!=, b, b1, b2) == map!((x,y)->x!=y, b, b1, b2) == (b1 .!= b2) == b
         end
+    end
+
+    # Constant maps preserve destination bits beyond the input collection.
+    @testset "map! with a longer destination" begin
+        for l in [0, 1, 63, 64, 65, 127, 128, 129]
+            src = bitrand(l)
+            dest = trues(l + 65)
+            @test map!(zero, dest, src) === dest
+            @test dest == vcat(falses(l), trues(65))
+
+            dest = falses(l + 65)
+            @test map!(one, dest, src) === dest
+            @test dest == vcat(trues(l), falses(65))
+        end
+        @test_throws DimensionMismatch map!(zero, falses(1), bitrand(2))
+        @test_throws DimensionMismatch map!(one, falses(1), bitrand(2))
     end
 
     @testset "Issue #17970" begin

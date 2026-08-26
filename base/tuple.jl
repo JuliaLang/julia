@@ -371,6 +371,18 @@ const All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          Vararg{T,N}}
+
+function front(t::NTuple{32, Any})
+    @inline
+    _front(t...)
+end
+
+function front(t::Any32)
+    n = length(t) - 1
+    r = ntuple(i -> getfield(t, i), n)
+    return r::Tuple{Vararg{eltype(typeof(t))}}
+end
+
 function map(f, t::Any32)
     n = length(t)
     A = Vector{Any}(undef, n)

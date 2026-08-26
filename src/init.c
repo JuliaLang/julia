@@ -537,9 +537,7 @@ int jl_isabspath(const char *in) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
 {
-    const char* path_ = jl_symbol_name(path);
-    int tpath_len = strlen(jl_options.tracked_path);
-    return (strlen(path_) >= tpath_len) && (strncmp(path_, jl_options.tracked_path, tpath_len) == 0);
+    return jl_path_is_tracked(jl_symbol_name(path));
 }
 
 static void jl_set_io_wait(int v)
@@ -596,10 +594,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
     }
-
-    // Initialize TypeApp type reference (needed for recursive type support)
-    // This must be set after Core module is available, whether from sysimage or boot.jl
-    jl_typeapp_type = (jl_datatype_t*)jl_get_global(jl_core_module, jl_symbol("TypeApp"));
 
     jl_init_flisp();
     jl_init_serializer();

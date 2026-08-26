@@ -73,21 +73,23 @@ pub static mut JULIA_HEADER_SIZE: usize = 0;
 pub static mut JULIA_BUFF_TAG: usize = 0;
 
 #[no_mangle]
-pub static BLOCK_FOR_GC: AtomicBool = AtomicBool::new(false);
-
-#[no_mangle]
-pub static WORLD_HAS_STOPPED: AtomicBool = AtomicBool::new(false);
-
-#[no_mangle]
-pub static DISABLED_GC: AtomicBool = AtomicBool::new(false);
-
-#[no_mangle]
 pub static USER_TRIGGERED_GC: AtomicIsize = AtomicIsize::new(0);
 
 lazy_static! {
-    pub static ref STW_COND: Arc<(Mutex<usize>, Condvar)> =
-        Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
+        Arc::new((Mutex::new(0), Condvar::new()));
+
+    // The GC epoch: notified by `VMCollection::resume_mutators()` every time a stop-the-world
+    // pause ends (including a concurrent GC's background-work phase, since there's no more
+    // targeted hook for that). Two independent waiters use it:
+    // - A mutator retrying `mmtk_disable_collection()` after
+    //   `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH` (see `mmtk_wait_for_new_gc_epoch()`).
+    // - `Collection::block_for_gc`, waiting for the pause mmtk-core already told it is coming.
+    //
+    // The guarded `u64` is an epoch counter: a waiter must capture it (`mmtk_gc_epoch()`) before
+    // giving up, then wait until it differs from that value -- waiting unconditionally could miss
+    // a notification that arrives between the check and the start of the wait.
+    pub static ref GC_EPOCH_COND: Arc<(Mutex<u64>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
 
     // We create a boxed mutator with MMTk core, and we mem copy its content to jl_tls_state_t (shallow copy).
@@ -99,13 +101,20 @@ lazy_static! {
 
 type ProcessSlotFn = *const extern "C" fn(closure: Address, slot: Address);
 
+// Mirrors `jl_gc_mmtk_saved_errno_t` in gc-mmtk.c
+#[repr(C)]
+pub struct SavedErrno {
+    pub saved_errno: i32,
+    pub saved_last_error: u32,
+}
+
 #[allow(improper_ctypes)]
 extern "C" {
     pub fn jl_gc_scan_julia_exc_obj(obj: Address, closure: Address, process_slot: ProcessSlotFn);
     pub fn jl_gc_get_stackbase(tid: i16) -> usize;
     pub fn jl_throw_out_of_memory_error();
-    pub fn jl_get_gc_disable_counter() -> u32;
     pub fn jl_gc_mmtk_sweep_malloced_memory();
+    pub fn jl_gc_sweep_weak_processing();
     pub fn jl_gc_sweep_stack_pools_and_mtarraylist_buffers();
     pub fn jl_hrtime() -> u64;
     pub fn jl_gc_update_stats(t: u64, mmtk_live_bytes: usize, is_nursery: bool);
@@ -117,7 +126,14 @@ extern "C" {
     pub fn jl_gc_get_have_pending_finalizers() -> *mut i32;
     pub fn jl_gc_scan_vm_specific_roots(closure: *mut crate::slots::RootsWorkClosure);
     pub fn jl_gc_update_inlined_array(to: Address, from: Address);
-    pub fn jl_gc_prepare_to_collect();
+    pub fn jl_gc_mmtk_stop_the_world(collection: i32);
+    pub fn jl_gc_mmtk_resume_the_world();
+    pub fn jl_gc_mmtk_defer_alloc_if_disabled() -> i32;
+    pub fn jl_gc_mmtk_block_for_gc_enter() -> SavedErrno;
+    pub fn jl_gc_mmtk_block_for_gc_leave();
+    pub fn jl_gc_mmtk_run_pending_finalizers(saved_errno: SavedErrno);
+    pub fn jl_gc_safe_enter() -> i8;
+    pub fn jl_gc_safe_leave(state: i8);
     pub fn jl_gc_get_owner_address_to_mmtk(m: Address) -> Address;
     pub fn jl_gc_genericmemory_how(m: Address) -> usize;
     pub fn jl_gc_get_max_memory() -> usize;

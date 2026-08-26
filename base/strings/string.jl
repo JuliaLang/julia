@@ -256,7 +256,7 @@ typemin(::String) = typemin(String)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds b = codeunit(s, i)
     (b & 0xc0 == 0x80) & (i-1 > 0) || return i
-    (@noinline function _thisind_continued(s, i, n) # mark the rest of the function as a slow-path
+    (@noinline function _thisind_continued(s, i) # mark the rest of the function as a slow-path
         local b
         @inbounds b = codeunit(s, i-1)
         between(b, 0b11000000, 0b11110111) && return i-1
@@ -267,7 +267,7 @@ typemin(::String) = typemin(String)
         @inbounds b = codeunit(s, i-3)
         between(b, 0b11110000, 0b11110111) && return i-3
         return i
-    end)(s, i, n)
+    end)(s, i)
 end
 
 @propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
@@ -372,7 +372,6 @@ const _UTF8DFAState = UInt32
 const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute base
     num_classes=12
     num_states=10
-    bit_per_state = 6
 
     # These shifts were derived using a SMT solver
     state_shifts = [0, 4, 10, 14, 18, 24, 8, 20, 12, 26]
@@ -687,6 +686,7 @@ function repeat(c::AbstractChar, r::Integer)
     r == 0 && return ""
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
+    r > typemax(UInt) ÷ UInt(n) && throw(OutOfMemoryError())
     s = _string_n(n*r)
     p = pointer(s)
     GC.@preserve s if n == 1

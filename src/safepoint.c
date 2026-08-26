@@ -15,14 +15,13 @@
 extern "C" {
 #endif
 
-// 0: no sigint is pending
-// 1: at least one sigint is pending, only the sigint page is enabled.
-// 2: at least one sigint is pending, both safepoint pages are enabled.
-JL_DLLEXPORT sig_atomic_t jl_signal_pending = 0;
 _Atomic(uint32_t) jl_gc_running = 0;
 char *jl_safepoint_pages = NULL;
 // The number of safepoints enabled on the three pages.
-// The first page, is the SIGINT page, only used by the master thread.
+// The first page was the legacy SIGINT force-throw page; nothing arms it
+// anymore (SIGINT is delivered through the cancellation system), but it is
+// kept in the layout so the GC pages' addresses and the tls safepoint
+// pointer arithmetic stay unchanged.
 // The second page, is the GC page for the master thread, this is where
 // the `safepoint` tls pointer points to for the master thread.
 // The third page is the GC page for the other threads. The thread's
@@ -37,7 +36,6 @@ uint16_t jl_safepoint_enable_cnt[4] = {0, 0, 0, 0};
 // or accessing one of the following variables:
 //
 // * jl_gc_running
-// * jl_signal_pending
 // * jl_safepoint_enable_cnt
 //
 // Additionally accessing `jl_gc_running` should use acquire/release
@@ -122,7 +120,7 @@ void jl_safepoint_init(void)
 //    (void)r; //if (r) perror("mprotect");
 //#endif
     // The signal page is for the gc safepoint.
-    // The page before it is the sigint pending flag.
+    // The page before it is the legacy (never armed) SIGINT page.
     jl_safepoint_pages = addr;
 }
 
@@ -167,12 +165,19 @@ extern void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_thre
                     // If we woke up because of a timeout, print the backtrace of the straggler
                     if (ret == UV_ETIMEDOUT) {
                         jl_safe_printf("===== Thread %d failed to reach safepoint after %d seconds, printing backtrace below =====\n", ptls2->tid + 1, jl_options.timeout_for_safepoint_straggler_s);
-                        // Try to record the backtrace of the straggler using `jl_try_record_thread_backtrace`
-                        jl_ptls_t ptls = jl_current_task->ptls;
-                        size_t bt_size = jl_try_record_thread_backtrace(ptls2, ptls->bt_data, JL_MAX_BT_SIZE);
-                        // Print the backtrace of the straggler
-                        for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(ptls->bt_data + i)) {
-                            jl_fprint_bt_entry_codeloc(ios_safe_stderr, ptls->bt_data + i);
+                        if (jl_get_pgcstack() == NULL) {
+                            // Not a Julia thread (e.g. an MMTk GC worker) -- no ptls/bt_data to
+                            // record a backtrace into, so just report that instead.
+                            jl_safe_printf("(backtrace unavailable: the thread waiting for this safepoint is not a Julia thread)\n");
+                        }
+                        else {
+                            // Try to record the backtrace of the straggler using `jl_try_record_thread_backtrace`
+                            jl_ptls_t ptls = jl_current_task->ptls;
+                            size_t bt_size = jl_try_record_thread_backtrace(ptls2, ptls->bt_data, JL_MAX_BT_SIZE);
+                            // Print the backtrace of the straggler
+                            for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(ptls->bt_data + i)) {
+                                jl_fprint_bt_entry_codeloc(ios_safe_stderr, ptls->bt_data + i);
+                            }
                         }
                     }
                 }
@@ -206,7 +211,7 @@ int jl_safepoint_start_gc(jl_task_t *ct)
     // Foreign thread adoption disables the GC and waits for it to finish, however, that may
     // introduce a race between it and this thread checking if the GC is enabled and only
     // then setting jl_gc_running. To avoid that, check again now that we won that race.
-    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (!jl_gc_is_globally_enabled()) {
         jl_atomic_store_release(&jl_gc_running, 0);
         uv_mutex_unlock(&safepoint_lock);
         return 0;
@@ -215,6 +220,28 @@ int jl_safepoint_start_gc(jl_task_t *ct)
     jl_safepoint_enable(2);
     uv_mutex_unlock(&safepoint_lock);
     return 1;
+}
+
+// Arm the GC safepoint on behalf of a GC worker thread -- one that is not itself a registered
+// Julia mutator (no `ptls`/`jl_current_task` of its own) and is never among the threads a pause
+// stops. Used by third-party GC backends (e.g. MMTk). Only one GC thread should call this per pause.
+//
+// This is `jl_safepoint_start_gc` without the parts that only make sense for a mutator calling
+// on its own behalf: there is no `ct`/`suspend_count` to check, and no need to retry-or-defer on
+// `jl_gc_running`, since the caller is already guaranteed unique.
+void jl_safepoint_start_gc_from_gc_thread(void) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&safepoint_lock);
+    uint32_t running = 0;
+    int won = jl_atomic_cmpswap(&jl_gc_running, &running, 1);
+    if (!won) {
+        // Must never happen: the caller guarantees exactly one worker thread calls this per pause.
+        jl_safe_printf("jl_safepoint_start_gc_from_gc_thread must have no concurrent caller\n");
+        abort();
+    }
+    jl_safepoint_enable(1);
+    jl_safepoint_enable(2);
+    uv_mutex_unlock(&safepoint_lock);
 }
 
 void jl_safepoint_end_gc(void)
@@ -241,8 +268,30 @@ void jl_set_gc_and_wait(jl_task_t *ct)
     uv_cond_broadcast(&safepoint_cond_begin);
     uv_mutex_unlock(&safepoint_lock);
     jl_safepoint_wait_gc(ct);
+    jl_gc_notify_task_resume(ct);
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+}
+
+// Exclude garbage collection for a brief critical section on a thread that
+// does not participate in stop-the-world (the SIGINT listener thread, a
+// Windows console-ctrl handler thread). Holding `safepoint_lock` blocks
+// `jl_safepoint_start_gc`; a collection already in flight is waited out on
+// `safepoint_cond_end` (broadcast by `jl_safepoint_end_gc`), which releases
+// the lock while waiting so the collection can finish. Between `begin` and
+// `end` no collection can run - the regime the weak cancellation-source
+// child lists are designed for (the collector splices them only with the
+// world stopped). Keep such sections short and free of other locks.
+void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER
+{
+    uv_mutex_lock(&safepoint_lock);
+    while (jl_atomic_load_acquire(&jl_gc_running))
+        uv_cond_wait(&safepoint_cond_end, &safepoint_lock);
+}
+
+void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE
+{
+    uv_mutex_unlock(&safepoint_lock);
 }
 
 // this is the core of jl_set_gc_and_wait
@@ -264,6 +313,8 @@ void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
             uv_cond_wait(&safepoint_cond_end, &safepoint_lock);
         uv_mutex_unlock(&safepoint_lock);
     }
+    if (ct != NULL)
+        jl_gc_notify_task_resume(ct);
 }
 
 // equivalent to jl_set_gc_and_wait, but waiting on resume-thread lock instead
@@ -287,11 +338,12 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
         while (jl_atomic_load_relaxed(&ct->ptls->suspend_count))
             uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
     }
-    // must exit gc while still holding the mutex_unlock, so we know other
+    // must exit gc while still holding the sleep_lock, so we know other
     // threads in jl_safepoint_suspend_thread will observe this thread in the
     // correct GC state, and not still stuck in JL_GC_STATE_WAITING
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     uv_mutex_unlock(&ct->ptls->sleep_lock);
+    jl_gc_notify_task_resume(ct);
 }
 // This takes the sleep lock and puts the thread in GC_SAFE
 void jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
@@ -397,61 +449,6 @@ int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
     return suspend_count;
 }
 
-void jl_safepoint_enable_sigint(void)
-{
-    uv_mutex_lock(&safepoint_lock);
-    // Make sure both safepoints are enabled exactly once for SIGINT.
-    switch (jl_signal_pending) {
-    default:
-        assert(0 && "Shouldn't happen.");
-    case 0:
-        // Enable SIGINT page
-        jl_safepoint_enable(0);
-        // fall through
-    case 1:
-        // SIGINT page is enabled, enable GC page
-        jl_safepoint_enable(1);
-        // fall through
-    case 2:
-        jl_signal_pending = 2;
-    }
-    uv_mutex_unlock(&safepoint_lock);
-}
-
-void jl_safepoint_defer_sigint(void)
-{
-    uv_mutex_lock(&safepoint_lock);
-    // Make sure the GC safepoint is disabled for SIGINT.
-    if (jl_signal_pending == 2) {
-        jl_safepoint_disable(1);
-        jl_signal_pending = 1;
-    }
-    uv_mutex_unlock(&safepoint_lock);
-}
-
-int jl_safepoint_consume_sigint(void)
-{
-    int has_signal = 0;
-    uv_mutex_lock(&safepoint_lock);
-    // Make sure both safepoints are disabled for SIGINT.
-    switch (jl_signal_pending) {
-    default:
-        assert(0 && "Shouldn't happen.");
-    case 2:
-        // Disable gc page
-        jl_safepoint_disable(1);
-        // fall through
-    case 1:
-        // GC page is disabled, disable SIGINT page
-        jl_safepoint_disable(0);
-        has_signal = 1;
-        // fall through
-    case 0:
-        jl_signal_pending = 0;
-    }
-    uv_mutex_unlock(&safepoint_lock);
-    return has_signal;
-}
 
 #ifdef __cplusplus
 }

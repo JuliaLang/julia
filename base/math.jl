@@ -23,7 +23,7 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_max, exponent_raw_max, clamp, clamp!, two_mul
+            exponent_raw_max, clamp, clamp!, two_mul
 
 using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
@@ -36,6 +36,9 @@ end
 @noinline function throw_complex_domainerror_neg1(f::Symbol, x)
     throw(DomainError(x,
         LazyString(f," was called with a real argument < -1 but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
+end
+@noinline function throw_finite_domainerror(f::Symbol, x)
+    throw(DomainError(x, LazyString("`", f, "(x)` is only defined for finite `x`.")))
 end
 @noinline function throw_exp_domainerror(x)
     throw(DomainError(x, LazyString(
@@ -108,13 +111,13 @@ function evalpoly(z::Complex, p::Tuple)
         end
         ai = :a0
         push!(as, :($ai = $a))
-        C = Expr(:block,
-                 :(x = real(z)),
-                 :(y = imag(z)),
-                 :(r = x + x),
-                 :(s = muladd(x, x, y*y)),
-                 as...,
-                 :(muladd($ai, z, $b)))
+        Expr(:block,
+             :(x = real(z)),
+             :(y = imag(z)),
+             :(r = x + x),
+             :(s = muladd(x, x, y*y)),
+             as...,
+             :(muladd($ai, z, $b)))
     else
         _evalpoly(z, p)
     end
@@ -742,7 +745,7 @@ function _hypot(x, y)
 
     # Order the operands
     if ay > ax
-        axu, ayu = ayu, axu
+        axu = ayu
         ax, ay = ay, ax
     end
 

@@ -12,7 +12,8 @@
 
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        ios_t *z, ios_t *s, jl_emission_params_t *params) UNAVAILABLE
+        ios_t *z, uint32_t checksum, const char *unpack_func,
+        jl_emission_params_t *params) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, size_t *num, void **gvs) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gv_inits_fallback(void *native_code, size_t *num, void **inits) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, size_t *num_els, jl_code_instance_t *fns) UNAVAILABLE
@@ -93,6 +94,11 @@ JL_DLLEXPORT void jl_decorate_llvm_module_fallback(LLVMModuleRef m) JL_NOTSAFEPO
 JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
 {
     return 0;
+}
+
+JL_DLLEXPORT const char *jl_objcache_disabled_notice_fallback(void)
+{
+    return NULL;
 }
 
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)

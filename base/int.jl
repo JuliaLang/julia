@@ -304,7 +304,7 @@ exceptions, see note below).
     type, and so rounding error may occur. In particular, if the exact result is very
     close to `y`, then it may be rounded to `y`.
 
-See also: [`rem`](@ref), [`div`](@ref), [`fld`](@ref), [`mod1`](@ref), [`invmod`](@ref).
+See also: [`rem`](@ref), [`fld`](@ref), [`mod1`](@ref), [`fldmod`](@ref), [`invmod`](@ref).
 
 ```jldoctest
 julia> mod(8, 3)

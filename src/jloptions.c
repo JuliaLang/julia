@@ -225,10 +225,17 @@ static const char opts[]  =
     "                                               interface if supported (Linux and Windows) or to the\n"
     "                                               number of CPU threads if not supported (MacOS) or if\n"
     "                                               process affinity is not configured, and sets M to 1.\n"
+#if defined(WITH_THIRD_PARTY_HEAP) && WITH_THIRD_PARTY_HEAP == 1 // MMTk
+    " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M\n"
+    "                                               (0 <= M <= N) threads for concurrent GC work.\n"
+    "                                               N is set to the number of compute threads and\n"
+    "                                               M is set to 0 if unspecified.\n"
+#else
     " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M (0 or 1)\n"
     "                                               threads for the concurrent sweeping phase of GC.\n"
     "                                               N is set to the number of compute threads and\n"
     "                                               M is set to 0 if unspecified.\n"
+#endif
     " -p, --procs {N|auto}                          Integer value N launches N additional local worker\n"
     "                                               processes `auto` launches as many workers as the\n"
     "                                               number of local CPU threads (logical cores).\n"
@@ -561,10 +568,14 @@ restart_switch:
             jl_safe_fprintf(ios_stdout, "julia version %s\n", JULIA_VERSION_STRING);
             exit(0);
         case 'h': // help
-            jl_safe_fprintf(ios_stdout, "%s%s", usage, opts);
+            ios_puts(usage, ios_stdout);
+            ios_puts(opts, ios_stdout);
+            ios_flush(ios_stdout);
             exit(0);
         case opt_help_hidden:
-            jl_safe_fprintf(ios_stdout, "%s%s", usage, opts_hidden);
+            ios_puts(usage, ios_stdout);
+            ios_puts(opts_hidden, ios_stdout);
+            ios_flush(ios_stdout);
             exit(0);
         case 'g': // debug info
             if (optarg != NULL) {
@@ -1044,8 +1055,16 @@ restart_switch:
                 errno = 0;
                 char *endptri;
                 long nsweepthreads = strtol(&endptr[1], &endptri, 10);
+#if defined(WITH_THIRD_PARTY_HEAP) && WITH_THIRD_PARTY_HEAP == 1 // MMTk
+                // MMTk uses `m` as the number of concurrent GC threads, which may be any
+                // count up to the number of mark (GC) threads.
+                if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 ||
+                    nsweepthreads > nmarkthreads || nsweepthreads > INT8_MAX)
+                    jl_errorf("julia: --gcthreads=<n>,<m>; m must be an integer with 0 <= m <= n");
+#else
                 if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
                     jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
+#endif
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
         }
@@ -1129,6 +1148,13 @@ restart_switch:
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
+    bool_t emit_native = jl_options.outputo || jl_options.outputbc ||
+                         jl_options.outputunoptbc || jl_options.outputasm;
+    if (jl_options.compress_sysimage && !emit_native && jl_options.outputji) {
+        jl_safe_printf(
+            "WARNING: --compress-sysimage=yes is unsupported when emitting non-split .ji; disabling.\n");
+        jl_options.compress_sysimage = 0;
+    }
     int proc_args = *argcp < optind ? *argcp : optind;
     *argvp += proc_args;
     *argcp -= proc_args;

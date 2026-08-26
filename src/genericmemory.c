@@ -246,9 +246,9 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         destdata = (char*)dest->ptr + elsz*(size_t)destdata;
     }
     if (layout->first_ptr != -1) {
-        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
         jl_value_t *owner = jl_genericmemory_owner(dest);
         jl_gc_wb_genericmemory_copy_ptr(owner, src, src_p, n, dt);
+        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
     }
     else {
         memmove(destdata, srcdata, n * elsz);
@@ -411,6 +411,8 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     if (layout->flags.arrayelem_isboxed) {
         assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         _Atomic(jl_value_t*) *p = (_Atomic(jl_value_t*)*)m.ptr_or_offset;
+        // Deletion barrier: snapshot the overwritten reference for SATB collectors.
+        jl_gc_wb(jl_genericmemory_owner(m.mem), NULL);
         if (isatomic)
             jl_atomic_store(p, (jl_value_t*)NULL);
         else
@@ -426,6 +428,8 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     size_t fsz = jl_datatype_size(dt);
     char *data = (char*)m.ptr_or_offset;
     int needlock = layout->flags.arrayelem_islocked;
+    // Deletion barrier: snapshot the overwritten references for SATB collectors.
+    jl_gc_wb(jl_genericmemory_owner(m.mem), NULL);
     if (isatomic && !needlock) {
         _Alignas(MAX_POINTERATOMIC_SIZE) char zero_buf[MAX_POINTERATOMIC_SIZE] = {0};
         assert(fsz <= MAX_POINTERATOMIC_SIZE);

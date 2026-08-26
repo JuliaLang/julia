@@ -235,7 +235,6 @@ function lookup(ip::Base.InterpreterIP)
     end
     res = Vector{StackFrame}(undef, length(scopes))
     inlined = false
-    def_local = def
     for i in eachindex(scopes)
         lno = scopes[i]
         if inlined

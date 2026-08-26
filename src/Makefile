@@ -94,6 +94,7 @@ CODEGEN_SRCS_HASH := codegen.cpp jitlayers.cpp aotcompile.cpp debuginfo.cpp disa
 	llvm-pass-helpers.cpp llvm-ptls.cpp llvm-propagate-addrspaces.cpp \
 	llvm-multiversioning.cpp llvm-alloc-opt.cpp llvm-alloc-helpers.cpp cgmemmgr.cpp llvm-remove-addrspaces.cpp \
 	llvm-remove-ni.cpp llvm-julia-licm.cpp llvm-demote-float16.cpp llvm-cpufeatures.cpp llvm-expand-atomic-modify.cpp \
+	llvm-cancellation-lowering.cpp \
 	pipeline.cpp llvm_api.cpp \
 	cgutils.cpp intrinsics.cpp ccall.cpp \
 	abi_llvm.cpp abi_arm.cpp abi_aarch64.cpp abi_riscv.cpp abi_ppc64le.cpp abi_win32.cpp abi_win64.cpp abi_x86_64.cpp abi_x86.cpp \
@@ -101,11 +102,13 @@ CODEGEN_SRCS_HASH := codegen.cpp jitlayers.cpp aotcompile.cpp debuginfo.cpp disa
 	debug-registry.h debuginfo.h intrinsics.h jitlayers.h julia-task-dispatcher.h \
 	llvm-alloc-helpers.h llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-pass-helpers.h \
 	llvm-version.h passes.h \
+	julia.h julia_threads.h julia_internal.h julia_fasttls.h \
 	$(GC_CODEGEN_SRCS_HASH)
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
+	llvm-cancellation-lowering \
 	pipeline llvm_api objcache \
 	$(GC_CODEGEN_SRCS)
 FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
@@ -594,6 +597,11 @@ libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_
 libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-internal-debug libjulia-internal-release: $(PUBLIC_HEADER_TARGETS)
 
+ifneq ($(USE_SYSTEM_LMDB),1)
+$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIBLMDB)
+$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIBLMDB)
+endif
+
 $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(CODEGEN_OBJS) $(BUILDDIR)/support/libsupport.a $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
 		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS) $(BOLT_LDFLAGS), \
@@ -759,16 +767,18 @@ SA_EXCEPTIONS-gc-stock.c                    := -Xanalyzer -analyzer-config -Xana
  # these need to be annotated (and possibly fixed)
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 
+CLANGSA_GC_CHECKERS := core,julia.GCChecker,apiModeling,unix.cstring.CStringModeling,unix.DynamicMemoryModeling,nullability.NullPassedToNonnull,nullability.NullReturnedFromNonnull
+
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
 clang-sagc-%: JCPPFLAGS_COMMON += -UNDEBUG
 clang-sagc-%: $(SRCDIR)/%.c $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
-		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=$(CLANGSA_GC_CHECKERS) \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -x c $<)
 clang-sagc-%: $(SRCDIR)/%.cpp $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
-		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=$(CLANGSA_GC_CHECKERS) \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -x c++ $<)
 
@@ -840,6 +850,7 @@ analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(C
 analyze: analyzesrc analyzegc tidysrc safesrc
 
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-sa-%
+$(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-safety-%
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-tidy-%
 $(addprefix analyze-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS))) : analyze-% : clang-sagc-%
 

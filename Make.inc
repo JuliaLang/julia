@@ -890,15 +890,18 @@ JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 
 # Use StickyImmix as the default MMTk plan.
 MMTK_PLAN ?= StickyImmix
-# Must specify a supported MMTk plan: Immix or StickyImmix
+# Must specify a supported MMTk plan: Immix, StickyImmix, or ConcurrentImmix
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
 JCFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
 else ifeq (${MMTK_PLAN},StickyImmix)
 JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
+else ifeq (${MMTK_PLAN}, ConcurrentImmix)
+JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\"
+JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\"
 else
-$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix or StickyImmix.")
+$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, or ConcurrentImmix.")
 endif
 
 # Julia's MMTk support does not support moving just yet
@@ -1297,11 +1300,11 @@ LIBUNWIND:=
 else
 LIBUNWIND:=-lunwind
 ifneq ($(findstring $(OS),Darwin OpenBSD),)
-JCPPFLAGS+=-DLLVMLIBUNWIND
+JCPPFLAGS_COMMON+=-DLLVMLIBUNWIND
 else ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 # Only for linux and freebsd since we want to use not yet released gnu libunwind features
 JCFLAGS+=-DSYSTEM_LIBUNWIND
-JCPPFLAGS+=-DSYSTEM_LIBUNWIND
+JCPPFLAGS_COMMON+=-DSYSTEM_LIBUNWIND
 endif
 endif
 
@@ -1321,7 +1324,7 @@ endif
 endif # LLVM_CONFIG undefined
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-JCPPFLAGS+=-DSYSTEM_LLVM
+JCPPFLAGS_COMMON+=-DSYSTEM_LLVM
 endif # SYSTEM_LLVM
 
 # Windows builds need a little help finding the LLVM libraries for llvm-config
@@ -1539,9 +1542,13 @@ endif
 endif
 
 # Warn if the user tries to build something that requires `gfortran` but they don't have it installed.
+# Goals that only download or repackage sources never run the fortran compiler and are exempt.
+FC_EXEMPT_GOALS := get getall light-source-dist full-source-dist print-%
+ifneq (,$(filter-out $(FC_EXEMPT_GOALS),$(or $(MAKECMDGOALS),x)))
 ifeq ($(FC_VERSION),)
 ifneq ($(USE_BINARYBUILDER_OPENBLAS)$(USE_BINARYBUILDER_LIBSUITESPARSE),11)
 $(error "Attempting to build OpenBLAS or SuiteSparse without a functioning fortran compiler!")
+endif
 endif
 endif
 
@@ -1601,7 +1608,7 @@ OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -latomic -Wl,--export-dynamic,-
 # Detect if ifunc is supported
 IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
-JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
+JCPPFLAGS_COMMON += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
 JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -Wl,--version-script=$(BUILDROOT)/src/julia.expmap
@@ -1683,7 +1690,7 @@ WIN_LD_CRT_END_OBJ := $(build_private_libdir)/crtend.o
 WIN_LD_CRT_END := $(WIN_MINGW_CRT_LIBS) $(WIN_LD_CRT_END_OBJ)
 WIN_LD_STDCXX := $(build_shlibdir)/$(call versioned_libname,libstdc++,6)
 WIN_LD_ATOMIC := $(build_shlibdir)/$(call versioned_libname,libatomic,1)
-WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 $(WIN_LD_ATOMIC) -lole32
+WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -lsynchronization $(WIN_LD_ATOMIC) -lole32
 WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32
 OSLIBS += --export-all-symbols --version-script=$(BUILDROOT)/src/julia.expmap \
 	--no-whole-archive $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS)
@@ -1693,7 +1700,7 @@ JLDFLAGS += --stack 8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += --large-address-aware
 endif
-JCPPFLAGS += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
+JCPPFLAGS_COMMON += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
 UNTRUSTED_SYSTEM_LIBM := 1
 # Use hard links for files on windows, rather than soft links
 #   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
@@ -1719,30 +1726,30 @@ endif
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
-JCPPFLAGS += -DJULIA_NUM_THREADS=$(JULIA_THREADS)
+JCPPFLAGS_COMMON += -DJULIA_NUM_THREADS=$(JULIA_THREADS)
 endif
 
 # Intel VTune Amplifier
 ifeq ($(USE_INTEL_JITEVENTS), 1)
-JCPPFLAGS += -DJL_USE_INTEL_JITEVENTS
+JCPPFLAGS_COMMON += -DJL_USE_INTEL_JITEVENTS
 endif
 
 # OProfile
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
-JCPPFLAGS += -DJL_USE_OPROFILE_JITEVENTS
+JCPPFLAGS_COMMON += -DJL_USE_OPROFILE_JITEVENTS
 endif
 
 ifeq ($(DISABLE_LIBUNWIND), 1)
-JCPPFLAGS += -DJL_DISABLE_LIBUNWIND
+JCPPFLAGS_COMMON += -DJL_DISABLE_LIBUNWIND
 endif
 
 # perf
 ifeq ($(USE_PERF_JITEVENTS), 1)
-JCPPFLAGS += -DJL_USE_PERF_JITEVENTS
+JCPPFLAGS_COMMON += -DJL_USE_PERF_JITEVENTS
 endif
 
 ifeq ($(HAVE_SSP),1)
-JCPPFLAGS += -DHAVE_SSP=1
+JCPPFLAGS_COMMON += -DHAVE_SSP=1
 ifeq ($(USEGCC),1)
 OSLIBS += -lssp
 endif

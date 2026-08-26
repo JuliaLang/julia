@@ -7,7 +7,7 @@ Interface to libc, the C standard library.
 
 import Base: transcode, windowserror, show
 # these need to be defined separately for bootstrapping but belong to Libc
-import Base: memcpy, memmove, memset, memcmp
+import Base: memcmp, memcpy, memmove, memset
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,

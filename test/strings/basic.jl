@@ -788,6 +788,17 @@ end
             @test repeat(S, T(3)) === S*S*S
         end
     end
+    # Repetition byte counts must not wrap before allocation.
+    @test repeat("", typemax(Csize_t)) === ""
+    for c in ('α', '∀', '🍕')
+        s = string(c)
+        n = Csize_t(ncodeunits(c))
+        r = typemax(Csize_t) ÷ n + one(Csize_t)
+        @test_throws OutOfMemoryError repeat(c, r)
+        @test_throws OutOfMemoryError repeat(s, r)
+        @test_throws OutOfMemoryError repeat(SubString(s, 1), r)
+        @test_throws OutOfMemoryError repeat(GenericString(s), r)
+    end
     # Issue #32160 (string allocation unsigned overflow)
     @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))
 end
@@ -1574,4 +1585,27 @@ end
 
     u = b"hello"
     @test eltype(u) === UInt8
+end
+
+@testset "codeunits dataids delegate to the wrapped string" begin
+    s = "Hello, world!"
+    cu = codeunits(s)
+    # dataids must not hit the `objectid` fallback (which content-hashes the
+    # whole wrapped string, making every aliasing-checked chunked `copyto!`
+    # quadratic in the string length); `String` memory is immutable, so
+    # `codeunits` alias no mutable memory
+    @test Base.dataids(cu) === Base.dataids(s) === ()
+    @test !Base.mightalias(cu, Vector{UInt8}(undef, 4))
+    @test !Base.mightalias(Vector{UInt8}(undef, 4), cu)
+    @test Base.unalias(Vector{UInt8}(undef, 4), cu) === cu
+    # copyto! correctness through the (formerly aliasing-checked) generic path
+    dest = zeros(UInt8, ncodeunits(s))
+    @test copyto!(dest, 1, cu, 1, ncodeunits(s)) == Vector{UInt8}(s)
+    dest2 = zeros(UInt8, 5)
+    @test copyto!(dest2, 2, cu, 8, 4) == UInt8[0x00; codeunits("worl");]
+    # SubString-backed CodeUnits delegate too
+    ss = SubString(s, 8, 12)
+    @test Base.dataids(codeunits(ss)) === ()
+    @test !Base.mightalias(dest, codeunits(ss))
+    @test copyto!(zeros(UInt8, 5), codeunits(ss)) == Vector{UInt8}(codeunits(ss))
 end

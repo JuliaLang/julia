@@ -63,3 +63,42 @@ define i64 @nullptr() {
     %load = load i64, i64 addrspace(11)* %casted
     ret i64 %load
 }
+
+@gbox = private unnamed_addr constant { i64, i64 } { i64 42, i64 42 }, align 16
+
+; A phi between an alloca (addrspace 5) and a global constant (addrspace 0):
+; there is no single address space the phi can be lifted into, so it must be
+; left alone (lifting it used to produce a phi with mismatched operand types).
+define i64 @phi_mixed_addrspace(i1 %cond) {
+; CHECK-LABEL: @phi_mixed_addrspace
+; CHECK: phi ptr addrspace(11)
+; CHECK: load i64, ptr addrspace(11)
+top:
+    %stack = alloca i64, addrspace(5)
+    %stack_casted = addrspacecast ptr addrspace(5) %stack to ptr addrspace(11)
+    br i1 %cond, label %A, label %B
+A:
+    %global_casted = addrspacecast ptr getelementptr inbounds (i8, ptr @gbox, i64 8) to ptr addrspace(11)
+    br label %B
+B:
+    %phi = phi ptr addrspace(11) [ %stack_casted, %top ], [ %global_casted, %A ]
+    %load = load i64, ptr addrspace(11) %phi
+    ret i64 %load
+}
+
+; A phi between a global constant (addrspace 0) and null: lifting is fine, but
+; must lift into the address space of the global, not the alloca address space.
+define i64 @phi_global_null(i1 %cond) {
+; CHECK-LABEL: @phi_global_null
+; CHECK: phi ptr [
+; CHECK-NOT: addrspace(11)
+top:
+    br i1 %cond, label %A, label %B
+A:
+    %global_casted = addrspacecast ptr getelementptr inbounds (i8, ptr @gbox, i64 8) to ptr addrspace(11)
+    br label %B
+B:
+    %phi = phi ptr addrspace(11) [ null, %top ], [ %global_casted, %A ]
+    %load = load i64, ptr addrspace(11) %phi
+    ret i64 %load
+}

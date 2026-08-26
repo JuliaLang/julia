@@ -206,29 +206,41 @@ end
     end
 end
 
-let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
+    pathsep = Sys.iswindows() ? ";" : ":"
     # tests for handling of ENV errors
-    let
-        io = IOBuffer()
-        v = writereadpipeline(
-            "println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
-            setenv(`$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
-                    "JULIA_LOAD_PATH" => "",
-                    "JULIA_DEPOT_PATH" => ";:",
-                    "HOME" => homedir());
-            stderr=io)
-        # @which is undefined
-        @test_broken v == ("false\nREPL: InteractiveUtilstrue\n", true)
-        stderr = String(take!(io))
-        @test_broken isempty(stderr)
-    end
-    let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
-                setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
-                    "JULIA_LOAD_PATH" => ";;;:::",
-                    "JULIA_DEPOT_PATH" => ";;;:::",
-                    "HOME" => homedir()))
-        # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InteractiveUtils`
-        @test v == ("REPL: 3\n", true)
+    mktempdir() do child_cwd
+        let
+            io = IOBuffer()
+            cmd = setenv(
+                `$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
+                "JULIA_LOAD_PATH" => "",
+                "JULIA_DEPOT_PATH" => pathsep,
+                "HOME" => homedir(),
+            )
+            v = writereadpipeline(
+                "println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
+                Cmd(cmd; dir=child_cwd);
+                stderr=io,
+            )
+            # @which is undefined
+            @test_broken v == ("false\nREPL: InteractiveUtilstrue\n", true)
+            stderr = String(take!(io))
+            @test_broken isempty(stderr)
+        end
+        let
+            cmd = setenv(
+                `$exename -i -e 'const InteractiveUtils = 3'`,
+                "JULIA_LOAD_PATH" => pathsep^3,
+                "JULIA_DEPOT_PATH" => pathsep^3,
+                "HOME" => homedir(),
+            )
+            v = writereadpipeline(
+                "println(\"REPL: \", InteractiveUtils)", Cmd(cmd; dir=child_cwd))
+            # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InteractiveUtils`
+            @test v == ("REPL: 3\n", true)
+        end
+        @test isempty(readdir(child_cwd))
     end
     @testset let v = readchomperrors(`$exename -i -e '
             empty!(LOAD_PATH)
@@ -484,19 +496,28 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             read(`$exename -t auto -e $code`, String)
         for nt in (nothing, "1")
             withenv("JULIA_NUM_GC_THREADS" => nt) do
-                @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+                @test test_read_success(`$exename --gcthreads=2 -e $code`) == "2"
             end
             withenv("JULIA_NUM_GC_THREADS" => nt) do
-                @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+                @test test_read_success(`$exename --gcthreads=2,1 -e $code`) == "3"
             end
         end
 
         withenv("JULIA_NUM_GC_THREADS" => 2) do
-            @test read(`$exename -e $code`, String) == "2"
+            @test test_read_success(`$exename -e $code`) == "2"
         end
 
         withenv("JULIA_NUM_GC_THREADS" => "2,1") do
-            @test read(`$exename -e $code`, String) == "3"
+            @test test_read_success(`$exename -e $code`) == "3"
+        end
+
+        # invalid JULIA_NUM_GC_THREADS values must be rejected at startup
+        # like `--gcthreads`, not crash the GC later (e.g. `=0` used to
+        # underflow the mark-thread count and segfault at the first collection)
+        for ngc in ("0", "-1", "abc", "32767", "2,2", "2,-1", "2,1x")
+            withenv("JULIA_NUM_GC_THREADS" => ngc) do
+                @test errors_not_signals(`$exename -e $code`)
+            end
         end
     end
 
@@ -649,6 +670,135 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isempty(got)
         rm(covfile)
 
+        # a tracked path only matches at a path component boundary
+        mktempdir() do parent
+            foo = realpath(mkdir(joinpath(parent, "Foo")))
+            foobar = realpath(mkdir(joinpath(parent, "Foobar")))
+            srcfile = joinpath(foobar, "boundary.jl")
+            write(srcfile, "f(x) = x + 1\nf(1)\n")
+            outfile = joinpath(dir, "boundary.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo $srcfile`)
+            @test !contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foobar $srcfile`)
+            @test contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+        end
+
+        # constructs that have regressed before; see testhelpers/coverage_constructs.jl
+        let constructs = realpath(joinpath(helperdir, "coverage_constructs.jl"))
+            outfile = joinpath(dir, "constructs.info")
+            @test success(`$cov_exename --code-coverage=$outfile --code-coverage=@$constructs $constructs`)
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                        for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
+            rm(outfile)
+            covered = [
+                8, 9, 10,       # `local` without an assignment (#39307)
+                14, 15, 16,     # `let` without an assignment (#39307)
+                22, 23,         # lines a macro adds (#41043)
+                28,
+                33, 35,         # implicit returns (#53557)
+                40, 41,         # a :foldable body that is also concrete-evaluated (#61175)
+                47,
+                54,             # the branch @static keeps (#43237)
+            ]
+            for ln in covered
+                @test get(hits, ln, 0) > 0 context=ln
+            end
+            # compiled-out branch
+            @test !haskey(hits, 56)
+        end
+
+        # coverage for a macro defined in another user file
+        let macrofile = realpath(joinpath(helperdir, "coverage_macros.jl")),
+            usefile = realpath(joinpath(helperdir, "coverage_macrouse.jl"))
+            counts = Dict()
+            for extra in (``, `--compile=min`), mode in (`--code-coverage=user`, `--code-coverage=all`)
+                outfile = joinpath(dir, "macro.info")
+                @test success(`$cov_exename $extra --code-coverage=$outfile $mode $usefile`)
+                record = only(filter(contains("SF:" * macrofile),
+                                     split(read(outfile, String), "end_of_record")))
+                rm(outfile)
+                hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                            for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+                for ln in (11, 12)
+                    @test get(hits, ln, 0) > 0 context=(extra, mode, ln)
+                end
+                # Exclude line 9, which is also counted as a top-level statement.
+                counts[(string(extra), string(mode))] = [get(hits, ln, 0) for ln in 10:12]
+            end
+            @test allequal(values(counts)) context=counts
+        end
+
+        # interpreted code is tracked too, including under --compile=min (#37059)
+        let topfile = realpath(joinpath(helperdir, "coverage_toplevel.jl"))
+            for extra in (``, `--compile=min`)
+                outfile = joinpath(dir, "toplevel.info")
+                @test success(`$cov_exename $extra --code-coverage=$outfile --code-coverage=@$topfile $topfile`)
+                hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                            for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
+                rm(outfile)
+                for ln in (5, 6, 7, 12) # every top-level statement that runs
+                    @test get(hits, ln, 0) > 0 context=(extra, ln)
+                end
+                # The top-level `if` thunk has no line information for its body.
+                @test !haskey(hits, 8)
+            end
+        end
+
+        # --code-coverage=user excludes inlined Base code (#26573)
+        mktempdir() do tdir
+            srcfile = joinpath(tdir, "user.jl")
+            # `sort` inlines generated `Base.merge` code with no recorded module.
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "user.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=user $srcfile`)
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test !isempty(source_files)
+            @test all(isabspath, source_files) context=source_files
+        end
+
+        # The unknown-module heuristic requires relative sysimage source paths.
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "paths.jl")
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "paths.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=all $srcfile`)
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test any(!isabspath, source_files)
+            @test srcfile in source_files
+        end
+
+        # the .cov writer must reproduce source lines of any length
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "longline.jl")
+            long = "x" ^ 4000
+            write(srcfile, "f(x) = x + 1 # $long\nf(1)\n")
+            pid = readchomp(`$cov_exename -E "getpid()" -L $srcfile --code-coverage=@$tdir`)
+            covfile = "$srcfile.$pid.cov"
+            got = readlines(covfile)
+            rm(covfile)
+            @test length(got) == 2
+            @test endswith(got[1], " f(x) = x + 1 # $long")
+            @test endswith(got[2], " f(1)")
+        end
+
+        # `@/` tracks absolute paths only.
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "root.jl")
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "root.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@/ $srcfile`)
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test all(isabspath, source_files) context=source_files
+        end
+
+        # is_file_tracked must not read an unset tracked path
+        @test readchomp(`$cov_exename -E "Base.is_file_tracked(:foo)"`) == "false"
+
         function coverage_info_for(src::String)
             mktemp(dir) do srcfile, io
                 write(io, src); close(io)
@@ -673,14 +823,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             do_test()
             """), """
+            DA:1,1
             DA:2,1
             DA:3,1
             DA:5,1
             DA:6,0
-            DA:9,1
+            DA:9,2
             DA:10,1
-            LH:5
-            LF:6
+            DA:12,1
+            LH:7
+            LF:8
             """)
         @test contains(coverage_info_for("""
             function cov_bug()
@@ -699,7 +851,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             cov_bug()
             """), """
-            DA:1,1
+            DA:1,2
             DA:2,1
             DA:3,1
             DA:4,1
@@ -707,9 +859,24 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             DA:8,0
             DA:11,0
             DA:13,1
-            LH:5
-            LF:8
+            DA:15,1
+            LH:6
+            LF:9
             """)
+
+        # counters must survive being driven from many threads at once (#59355, #62424)
+        let threadfile = realpath(joinpath(helperdir, "coverage_threads.jl"))
+            outfile = joinpath(dir, "threads.info")
+            @test success(`$cov_exename -t4 --code-coverage=$outfile $threadfile`)
+            record = only(filter(contains(threadfile),
+                                 split(read(outfile, String), "end_of_record")))
+            rm(outfile)
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                        for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+            for ln in 5:10
+                @test get(hits, ln, 0) > 0
+            end
+        end
     end
 
     # --track-allocation
@@ -1307,6 +1474,23 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test startswith(txt, r"ERROR: (syntax: incomplete|ParseError:)")
 end
 
+# uncaught errors in `-e` and script files must not leak driver frames
+# (exec_options, _start, eval/include machinery) into the printed backtrace
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+    script = tempname() * ".jl"
+    write(script, "f() = error(\"boom\")\nf()\n")
+    for cmd in (`$exename -e 'f() = error("boom"); f()'`, `$exename $script`)
+        (success, out, err) = readchomperrors(cmd)
+        @test !success
+        @test occursin("boom", err)
+        @test occursin("top-level scope", err)
+        @test !occursin("exec_options", err)
+        @test !occursin("_start", err)
+        @test !occursin("__script_entry", err)
+    end
+    rm(script; force=true)
+end
+
 # Issue #29855
 for yn in ("no", "yes")
     exename = `$(Base.julia_cmd()) --inline=no --startup-file=no --color=no --inline=$yn`
@@ -1491,8 +1675,113 @@ end
     end
 end
 
+# Build and use a system image, exercising both split (--output-o together with
+# --output-ji, heap goes into the .ji) and non-split (--output-o only, heap goes
+# into the .so) layouts, with --compress-sysimage on and off in each.
+#=
+These tests are disabled because they significantly increase CI time.
+@testset "system image: split=$split compress=$compress" for split in (true, false), compress in (true, false)
+    mktempdir() do dir
+        o_file  = joinpath(dir, "sys.o.a")
+        ji_file = joinpath(dir, "sys.ji")
+        so_file = joinpath(dir, "sys.so")
+        cmd = `$(Base.julia_cmd()) --strip-metadata -t1,0
+               --compress-sysimage=$(compress ? "yes" : "no")
+               --output-o=$o_file`
+        if split
+            cmd = `$cmd --output-ji=$ji_file`
+        end
+        cmd = `$cmd -e 0`
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == ""
+        # Compression on/off must not trigger the non-split .ji warning here:
+        # a native output is being produced (and, when split, paired with --output-ji).
+        @test !occursin("--compress-sysimage=yes is unsupported", err)
+        if isfile(o_file)
+            @test isfile(ji_file) == split
+            Base.Linking.link_image(o_file, so_file)
+            @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $so_file -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
+        end
+    end
+end
+=#
+
+# Precompile and load a package, exercising the split pkgimage layout
+# (--pkgimages=yes: native code goes into the ocachefile, the heap stays in the
+# .ji) and the plain serialized .ji (--pkgimages=no), with --compress-sysimage
+# (which precompile workers inherit through julia_cmd) on and off in each.
+# Compression requires the split layout, so with --pkgimages=no the worker must
+# warn and emit an uncompressed heap.
+@testset "pkgimage: native=$native compress=$compress" for native in (true, false), compress in (true, false)
+    mktempdir() do dir
+        pkgdir = joinpath(dir, "CompressMe")
+        mkpath(joinpath(pkgdir, "src"))
+        write(joinpath(pkgdir, "Project.toml"),
+            """
+            name = "CompressMe"
+            uuid = "d1cd1848-32b7-4b19-a4d5-11c4de8b4381"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkgdir, "src", "CompressMe.jl"),
+            """
+            module CompressMe
+            f() = 42
+            end
+            """)
+        cmd = addenv(`$(Base.julia_cmd()) --pkgimages=$(native ? "yes" : "no")
+                      --compress-sysimage=$(compress ? "yes" : "no")
+                      --startup-file=no -E 'using CompressMe; CompressMe.f()'`,
+                     "JULIA_DEPOT_PATH" => joinpath(dir, "depot"),
+                     "JULIA_LOAD_PATH" => join((dir, "@stdlib"), Sys.iswindows() ? ";" : ":"))
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == "42"
+        @test occursin("--compress-sysimage=yes is unsupported", err) == (compress && !native)
+
+        compiled = joinpath(dir, "depot", "compiled", "v$(VERSION.major).$(VERSION.minor)", "CompressMe")
+        ji_file = only(filter(endswith(".ji"), readdir(compiled; join=true)))
+        @test isfile(Base.ocachefile_from_cachefile(ji_file)) == native
+
+        # The heap payload in the .ji must be zstd-compressed exactly when a
+        # compressed split pkgimage was requested.
+        open(ji_file) do io
+            flags = Ref{UInt32}()
+            checksum = Ref{UInt32}()
+            dataendpos = Ref{Int64}()
+            datastartpos = Ref{Int64}()
+            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), io.ios, flags, checksum, dataendpos, datastartpos)
+            @test err == 0
+            @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
+            @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native
+            seek(io, datastartpos[])
+            zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
+            @test (read(io, 4) == zstd_magic) == (native && compress)
+        end
+
+        # Load again in a fresh process from the existing cache, without
+        # recompiling (which would rewrite the .ji, e.g. with a new build_id).
+        cache_bytes = read(ji_file)
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == "42"
+        @test read(ji_file) == cache_bytes
+    end
+end
+
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
-@test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+# Compiling a single entry point whose inferred call graph contains thousands of
+# CodeInstances used to overflow the stack in the JIT linker's recursive task
+# dispatcher (threshold ~4k with an 8MB stack); `--inline=no` keeps every callee as a
+# separately-linked function so they all land in one lookup batch.
+let n = 6000
+    code = """
+    f(x, ::Val{i}) where {i} = x + i
+    @eval g(x) = +(\$((:(f(x, Val(\$i))) for i in 1:$n)...))
+    print(g(1))
+    """
+    @test test_read_success(`$(Base.julia_cmd()) --startup-file=no --inline=no -e $code`) == string(sum(1:n) + n)
+end
 
 # https://github.com/JuliaLang/julia/issues/59103
 @test test_read_success(setenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"

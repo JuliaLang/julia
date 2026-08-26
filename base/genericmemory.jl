@@ -88,8 +88,99 @@ memoryindex(ref::GenericMemoryRef) = memoryrefoffset(ref)
 
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
-_unsetindex!(A::Memory, i::Int) = (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)
-_unsetindex!(A::MemoryRef) = (@_propagate_inbounds_meta; Core.memoryrefunset!(A, :not_atomic, @_boundscheck); A)
+"""
+    Base.unsetindex!(ref::MemoryRef) -> ref
+
+Unset the reference from `ref` to its underlying value, leaving it
+as if uninitialized, and return `ref`.
+This is equivalent to `Base.unsetindex!(parent(ref), Base.memoryindex(ref))`.
+
+See the section of uninitialized memory in the manual for more details.
+
+# Examples
+```jldoctest
+julia> ref = memoryref(fill!(Memory{Int}(undef, 3), 4)); ref[]
+4
+
+julia> Base.unsetindex!(ref); ref[] isa Int # specific value not guaranteed
+true
+
+julia> ref = memoryref(fill!(Memory{String}(undef, 3), "abc")); ref[]
+"abc"
+
+julia> Base.unsetindex!(ref); ref[]
+ERROR: UndefRefError: access to undefined reference
+[...]
+```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+unsetindex!(A::MemoryRef) = (@_propagate_inbounds_meta; Core.memoryrefunset!(A, :not_atomic, @_boundscheck); A)
+
+"""
+    unsetindex!(A::Union{Memory, Array}, i::Integer) -> A
+
+Unset the reference from `A` at index `i` to its underlying value and return `A`.
+This leaves the slot as it was uninitialized.
+
+See the section of uninitialized memory in the manual for more details.
+
+# Examples
+```jldoctest
+julia> A = [6, 7, 8]; A[2]
+7
+
+julia> Base.unsetindex!(A, 2); A[2] isa Int # specific value not guaranteed
+true
+
+julia> A = ["abc", "def", "ghi"]; A[2]
+"def"
+
+julia> Base.unsetindex!(A, 2); A[2]
+ERROR: UndefRefError: access to undefined reference
+[...]
+```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+unsetindex!(A::Memory, i::Int) = (@_propagate_inbounds_meta; unsetindex!(memoryref(A, i)); A)
+unsetindex!(A::Union{Array, Memory}, i::Integer) = unsetindex!(A, to_index(i))
+
+"""
+    unsetindex_atomic!(ref::AtomicMemoryRef, ordering::Symbol) -> ref
+
+Same as `unsetindex!(::MemoryRef)`, but the index is atomically unset with the
+atomic memory ordering set by `ordering`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+function unsetindex_atomic!(A::AtomicMemoryRef, order::Symbol)
+    @_propagate_inbounds_meta
+    Core.memoryrefunset!(A, order, @_boundscheck)
+    return A
+end
+
+"""
+    unsetindex_atomic!(A::AtomicMemory, order::Symbol, i::Integer) -> A
+
+Same as `unsetindex!(::Memory, ::Integer)`, but the index is atomically unset with the
+atomic memory ordering set by `ordering`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+function unsetindex_atomic!(A::AtomicMemory, order::Symbol, i::Int)
+    @_propagate_inbounds_meta
+    unsetindex_atomic!(memoryref(A, i), order)
+    return A
+end
+
+function unsetindex_atomic!(A::AtomicMemory, order::Symbol, i::Integer)
+    return unsetindex_atomic!(A, order, to_index(i))
+end
 
 elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T) # XXX: probably supposed to be the stride?
 sizeof(a::GenericMemory) = Core.sizeof(a)
@@ -148,7 +239,7 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
             if isassigned(src, soffs + i - 1)
                 dest[doffs + i - 1] = src[soffs + i - 1]
             else
-                _unsetindex!(dest, doffs + i - 1)
+                unsetindex!(dest, doffs + i - 1)
             end
         end
     else
@@ -156,7 +247,7 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
             if isassigned(src, soffs + i - 1)
                 dest[doffs + i - 1] = src[soffs + i - 1]
             else
-                _unsetindex!(dest, doffs + i - 1)
+                unsetindex!(dest, doffs + i - 1)
             end
         end
     end
@@ -236,8 +327,9 @@ getindex(A::Memory, c::Colon) = copy(A)
 ## Indexing: setindex! ##
 
 function _setindex!(A::Memory{T}, x::T, i1::Int) where {T}
-    ref = memoryrefnew(memoryref(A), i1, @_boundscheck)
-    memoryrefset!(ref, x, :not_atomic, @_boundscheck)
+    @_noub_if_noinbounds_meta
+    (@_boundscheck) && checkbounds(A, i1)
+    memoryrefset!(memoryrefnew(memoryref(A), i1, false), x, :not_atomic, false)
     return A
 end
 

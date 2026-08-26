@@ -9,24 +9,24 @@ baremodule Iterators
 import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
+    @inline, Pair, Pairs, IndexLinear, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
+    @propagate_inbounds, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
-    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
-    any, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
+    :, |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
+    any, eachindex, ntuple, zero, identity, reduce, in, firstindex, lastindex,
+    tail, fieldtypes, min, max, zero, oneunit, promote, promote_shape, LazyString,
     afoldl, mod1, @default_eltype
 using .Core
 using Core: @doc
 
 using Base:
-    cld, fld, resize!, IndexCartesian, Checked
+    cld, resize!, IndexCartesian, Checked
 using .Checked: checked_mul
 
 import Base:
     first, last,
-    isempty, length, size, axes, ndims,
+    length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype, promote_typejoin,
     haskey, keys, values, pairs,
     getindex, setindex!, get, iterate,
@@ -276,7 +276,7 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also [`IndexStyle`](@ref), [`axes`](@ref).
+See also [`Base.IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 
@@ -863,7 +863,7 @@ length(d::Drop) = _diff_length(d.xs, 1:d.n, IteratorSize(d.xs), HasLength())
 
 function iterate(it::Drop)
     y = iterate(it.xs)
-    for i in 1:it.n
+    for _ in 1:it.n
         y === nothing && return y
         y = iterate(it.xs, y[2])
     end
@@ -1302,7 +1302,7 @@ IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(
 
 flatten_length(f, T::Type{Union{}}, slurp...) = 0
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
-    return N * length(f.it)
+    return checked_mul(N, length(f.it))
 end
 flatten_length(f, ::Type{<:Number}) = length(f.it)
 flatten_length(f, T) = throw(ArgumentError(
@@ -1569,7 +1569,7 @@ approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate
 # having to typesplit on Nothing
 function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
     valstate === nothing && return nothing
-    val, st = valstate
+    _, st = valstate
     return iterate(itr, st)
 end
 function _approx_iter_type(itrT::Type, vstate::Type)

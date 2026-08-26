@@ -22,6 +22,21 @@ fl_eval(test_mod, :(global mvar = "global mvar"))
     @test JuliaLowering.include_string(
         test_mod, "JuliaLowering.@syntax_version"; expr_compat_mode=true) ==
         JuliaSyntax.JL_OLD_SYNTAX_VERSION
+
+    # TODO: test the version of returned syntax
+    @test JuliaLowering.include_string(@newmod(), """
+    JuliaLowering.@syntax_version JuliaSyntax.JL_NEW_SYNTAX_VERSION macro m(); end
+    """; expr_compat_mode=false) isa Function
+    @test JuliaLowering.include_string(@newmod(), """
+    JuliaLowering.@syntax_version JuliaSyntax.JL_NEW_SYNTAX_VERSION macro m(); end
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(@newmod(), """
+    JuliaLowering.@syntax_version JuliaSyntax.JL_OLD_SYNTAX_VERSION macro m(); end
+    """; expr_compat_mode=false) isa Function
+    @test JuliaLowering.include_string(@newmod(), """
+    JuliaLowering.@syntax_version JuliaSyntax.JL_OLD_SYNTAX_VERSION macro m(); end
+    """; expr_compat_mode=true) isa Function
 end
 
 # Basic checks that arbitrary nesting of transparent macros (no new syntax in new
@@ -510,7 +525,7 @@ end
     JuliaLowering.include_string(test_mod, raw"""
     macro mk_toplevel(x, y, z)
         JuliaSyntax.newnode(
-            x._graph, __context__.macrocall, K"toplevel",
+            __context__.macrocall, K"toplevel",
             JuliaSyntax.SyntaxList(x, y, z))
     end
     macro toplevel_first_child(x)
@@ -1044,8 +1059,11 @@ end
 @testset "macros producing meta forms" for expr_compat_mode in [true, false]
     function find_method_ci(thunk)
         ci = thunk.args[1]::Core.CodeInfo
-        m = findfirst(x->(x isa Expr && x.head === :method && length(x.args) === 3), ci.code)
-        ci.code[m].args[3]
+        m = findfirst(ci.code) do x
+            x isa Expr && x.head === :call && length(x.args) >= 5 &&
+                x.args[1] isa GlobalRef && x.args[1].name === :define_method
+        end
+        ci.code[m].args[5]
     end
     jlower_e(s) = JuliaLowering.to_lowered_expr(
         JuliaLowering.lower(
@@ -1147,8 +1165,11 @@ end
 
     function find_method_ci(thunk)
         ci = thunk.args[1]::Core.CodeInfo
-        m = findfirst(x->(x isa Expr && x.head === :method && length(x.args) === 3), ci.code)
-        ci.code[m].args[3]
+        m = findfirst(ci.code) do x
+            x isa Expr && x.head === :call && length(x.args) >= 5 &&
+                x.args[1] isa GlobalRef && x.args[1].name === :define_method
+        end
+        ci.code[m].args[5]
     end
     jlower_e(s) = JuliaLowering.to_lowered_expr(
         JuliaLowering.lower(
@@ -1313,6 +1334,16 @@ end
         ref_ci = find_method_ci(Meta.lower(test_mod, Meta.parse(prog_def)))
         our_ci = find_method_ci(jlower_e(prog_def))
         @test ref_ci.purity === our_ci.purity
+
+        prog = """
+        Base.@assume_effects :total function f_assume_nospecialize(x)
+            @nospecialize x
+            x
+        end
+        """
+        ref_ci = find_method_ci(fl_lower(test_mod, Meta.parse(prog)))
+        our_ci = find_method_ci(jlower_e(prog))
+        @test ref_ci.purity === our_ci.purity
     end
 end
 
@@ -1388,7 +1419,7 @@ end
             $init
             ($y, x)
         end)
-        @ast q._graph q [K"syntaxinert" q]
+        @ast _ q [K"syntaxinert" q]
     end
     """)
     code = JuliaLowering.include_string(test_mod, """@make_quoted_code(x="outer x", x)""")
@@ -1875,4 +1906,50 @@ end
     """; expr_compat_mode=true)
     @test !isdefined(test_mod, :a)
     @test !isdefined(macro_mod, :a)
+end
+
+# Method annotations propagate from the body to positional-default wrappers
+# and the `Core.kwcall` sorter (matching flisp's `propagate-method-meta`).
+@testset "method meta propagation" begin
+    JuliaLowering.include_string(test_mod, raw"""
+    @inline function _test_opts_kw(x::Int, y::Int=1; k::Int=2)
+        x + y + k
+    end
+    """)
+    fkw = test_mod._test_opts_kw
+    @test fkw(1) == 4
+    for m in (which(fkw, (Int,)), which(fkw, (Int, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fkw), Int)))
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # Destructuring prepends assignments but must retain the metadata.
+    JuliaLowering.include_string(test_mod, raw"""
+    @inline function _test_opts_destr((a, b)::Tuple{Int,Int}, y::Int=1; k::Int=2)
+        a + b + y + k
+    end
+    """)
+    fd = test_mod._test_opts_destr
+    @test fd((1, 2)) == 6
+    for m in (which(fd, (Tuple{Int,Int},)), which(fd, (Tuple{Int,Int}, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fd), Tuple{Int,Int})))
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # @nospecializeinfer
+    local f = JuliaLowering.include_string(@newmod(), raw"""
+    Base.@nospecializeinfer function f(@nospecialize(x), y::Int=1)
+        (x, y)
+    end
+    """)
+    @test which(f, (Any, Int)).nospecializeinfer == true
+    @test which(f, (Any,)).nospecializeinfer == true
+
+    local f = JuliaLowering.include_string(@newmod(), raw"""
+    Base.@nospecializeinfer function f(@nospecialize(x); k::Int=1)
+        (x, k)
+    end
+    """)
+    local sorter = x->which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(x), Any))
+    @test sorter(f).nospecializeinfer == true
 end

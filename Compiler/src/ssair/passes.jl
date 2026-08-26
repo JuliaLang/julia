@@ -567,6 +567,13 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     lhs, rhs = args[2], args[3]
     vl = argextype(lhs, compact)
     vr = argextype(rhs, compact)
+    result = egal_tfunc(𝕃ₒ, vl, vr)
+    if isa(result, Const)
+        compact[idx] = result.val
+        compact[SSAValue(idx)][:type] = result
+        add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+        return
+    end
     if isa(vl, Const)
         isa(vr, Const) && return
         val = rhs
@@ -1098,9 +1105,11 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
         KeyValueWalker(compact))
 
     if lifted_val !== nothing
-        compact[idx] = Expr(:new, wrapper_typ, lifted_val.val)
+        newexpr = Expr(:new, wrapper_typ, lifted_val.val)
+        compact[idx] = newexpr
         compact[SSAValue(idx)][:type] = wrapper_typ
         add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+        refine_new_effects!(𝕃ₒ, compact, idx, newexpr)
     else
         compact[idx] = nothing
     end
@@ -1558,6 +1567,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         line = compact[SSAValue(idx)][:line]
         if lifted_val !== nothing && !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
             compact[idx] = lifted_val.val
+            compact[SSAValue(idx)][:type] = result_t
             add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
         elseif lifted_val === nothing || isa(lifted_val.val, AnySSAValue)
             # Save some work in a later compaction, by inserting this into the renamer now,
@@ -1566,7 +1576,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             compact.ssa_rename[old_idx] = lifted_val === nothing ? nothing : lifted_val.val::AnySSAValue
             should_delete_node = true
         else
-            compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
+            compact[idx] = lifted_val.val
         end
 
         finish_phi_nest!(compact, nest)
@@ -1785,7 +1795,7 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
 
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    flag = isa(info, FinalizerInfo) ? flags_for_effects(info.effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing

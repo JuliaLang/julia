@@ -27,6 +27,47 @@ const EOF_CHAR = typemax(Char)
 
 const TOMLDict  = Dict{String, Any}
 
+############
+# Comments #
+############
+
+# The empty path identifies the root table.
+# TODO: Formatting choices (e.g. which tables print inline, indentation) could
+# be retained for full round-tripping the same way as comments: captured into a
+# sibling side-channel keyed by these item paths and passed back to `print`.
+const CommentPath = Tuple{Vararg{String}}
+
+# Text excludes `#`; `nothing` means no inline comment and `""` a bare `#`.
+mutable struct CommentBlock
+    above::Vector{String}
+    inline::Union{String, Nothing}
+end
+CommentBlock() = CommentBlock(String[], nothing)
+
+"""
+    Comments()
+
+A container for comments captured while parsing a TOML document. Pass it via
+the `comments` keyword argument to the parsing functions to populate it, and
+via the `comments` keyword argument to the printing functions to write the
+comments back out. See the TOML stdlib documentation for the rules of how
+comments are associated with items of the document.
+"""
+struct Comments
+    items::Dict{CommentPath, CommentBlock}
+    floating::Dict{CommentPath, Vector{String}}
+end
+Comments() = Comments(Dict{CommentPath, CommentBlock}(), Dict{CommentPath, Vector{String}}())
+
+Base.isempty(c::Comments) = isempty(c.items) && isempty(c.floating)
+function Base.empty!(c::Comments)
+    empty!(c.items)
+    empty!(c.floating)
+    return c
+end
+Base.:(==)(a::CommentBlock, b::CommentBlock) = a.above == b.above && a.inline == b.inline
+Base.:(==)(a::Comments, b::Comments) = a.items == b.items && a.floating == b.floating
+
 ##########
 # Parser #
 ##########
@@ -82,10 +123,19 @@ mutable struct Parser{Dates}
 
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
+
+    comments::Union{Comments, Nothing}
+    pending_comments::Vector{String}
+    captured_comment::String
+    active_table_path::Vector{String}
+    last_item_path::Union{CommentPath, Nothing}
+    # Paths cannot distinguish array-of-tables elements, so their comments are ignored.
+    in_array_table::Bool
 end
 
-function Parser{Dates}(str::String; filepath=nothing) where {Dates}
+function Parser{Dates}(str::String; filepath=nothing, comments::Union{Comments, Nothing}=nothing) where {Dates}
     root = TOMLDict()
+    comments === nothing || empty!(comments)
     l = Parser{Dates}(
             str,                  # str
             EOF_CHAR,             # current_char
@@ -102,7 +152,13 @@ function Parser{Dates}(str::String; filepath=nothing) where {Dates}
             IdSet{TOMLDict}(),    # defined_tables
             IdSet{TOMLDict}(),    # implicit_tables
             root,
-            filepath
+            filepath,
+            comments,             # comments
+            String[],             # pending_comments
+            "",                   # captured_comment
+            String[],             # active_table_path
+            nothing,              # last_item_path
+            false,                # in_array_table
         )
     startup(l)
     return l
@@ -123,7 +179,8 @@ Parser{Dates}(io::IO) where {Dates} = Parser{Dates}(read(io, String))
 
 # Parser(...) will be defined by TOML stdlib
 
-function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
+function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing,
+                 comments::Union{Comments, Nothing}=nothing)
     p.str = str
     p.current_char = EOF_CHAR
     p.pos = firstindex(str)
@@ -140,6 +197,13 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     empty!(p.defined_tables)
     empty!(p.implicit_tables)
     p.filepath = filepath
+    comments === nothing || empty!(comments)
+    p.comments = comments
+    empty!(p.pending_comments)
+    p.captured_comment = ""
+    empty!(p.active_table_path)
+    p.last_item_path = nothing
+    p.in_array_table = false
     startup(p)
     return p
 end
@@ -394,7 +458,7 @@ end
 
 # Return true if `f` was accepted `n` times
 @inline function accept_n(l::Parser, n, f::F)::Bool where {F}
-    for i in 1:n
+    for _ in 1:n
         if !accept(l, f)
             return false
         end
@@ -414,9 +478,46 @@ function skip_ws_nl(l::Parser)::Bool
     while true
         skipped_ws = accept_batch(l, x -> iswhitespace(x) || isnewline(x))
         skipped_comment = skip_comment(l)
+        if skipped_comment && l.comments !== nothing
+            push!(l.pending_comments, l.captured_comment)
+        end
         if !skipped_ws && !skipped_comment
             break
         end
+        skipped = true
+    end
+    return skipped
+end
+
+# A blank line makes pending comments float rather than attach to the next item.
+function skip_ws_nl_toplevel(l::Parser)::Bool
+    l.comments === nothing && return skip_ws_nl(l)
+    skipped = false
+    nlines = 0 # newlines seen since the last comment (or the previous item)
+    while true
+        progress = false
+        while true
+            c = peek(l)
+            if iswhitespace(c)
+                eat_char(l)
+                progress = true
+            elseif isnewline(c)
+                if c == '\n'
+                    nlines += 1
+                    nlines == 2 && flush_pending_comments!(l)
+                end
+                eat_char(l)
+                progress = true
+            else
+                break
+            end
+        end
+        if skip_comment(l)
+            push!(l.pending_comments, l.captured_comment)
+            nlines = 0
+            progress = true
+        end
+        progress || break
         skipped = true
     end
     return skipped
@@ -426,12 +527,59 @@ end
 function skip_comment(l::Parser)::Bool
     found_comment = accept(l, '#')
     if found_comment
-        accept_batch(l, !isnewline)
+        if l.comments === nothing
+            accept_batch(l, !isnewline)
+        else
+            start = l.prevpos
+            accept_batch(l, !isnewline)
+            l.captured_comment = String(SubString(l.str, start:(l.prevpos-1)))
+        end
     end
     return found_comment
 end
 
-skip_ws_comment(l::Parser) = skip_ws(l) && skip_comment(l)
+function skip_ws_comment(l::Parser)::Bool
+    skip_ws(l)
+    return skip_comment(l)
+end
+
+function flush_pending_comments!(l::Parser)
+    isempty(l.pending_comments) && return
+    comments = l.comments
+    if comments !== nothing && !l.in_array_table
+        floating = get!(() -> String[], comments.floating, Tuple(l.active_table_path))
+        append!(floating, l.pending_comments)
+    end
+    empty!(l.pending_comments)
+    return
+end
+
+function attach_pending_comments!(l::Parser, path::CommentPath)
+    isempty(l.pending_comments) && return
+    block = get!(CommentBlock, (l.comments::Comments).items, path)
+    append!(block.above, l.pending_comments)
+    empty!(l.pending_comments)
+    return
+end
+
+function attach_inline_comment!(l::Parser)
+    path = l.last_item_path
+    path === nothing && return
+    block = get!(CommentBlock, (l.comments::Comments).items, path)
+    block.inline = l.captured_comment
+    return
+end
+
+function path_traverses_array(l::Parser, keys::AbstractVector{String})
+    d = l.root
+    for k in keys
+        v = get(d, k, nothing)
+        v isa Vector && return true
+        v isa TOMLDict || return false
+        d = v
+    end
+    return false
+end
 
 @inline set_marker!(l::Parser) = l.marker = l.prevpos
 take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
@@ -450,7 +598,7 @@ end
 
 function tryparse(l::Parser)::Err{TOMLDict}
     while true
-        skip_ws_nl(l)
+        skip_ws_nl_toplevel(l)
         peek(l) == EOF_CHAR && break
         v = parse_toplevel(l)
         if v isa ParserError
@@ -463,6 +611,7 @@ function tryparse(l::Parser)::Err{TOMLDict}
             return v
         end
     end
+    l.comments === nothing || flush_pending_comments!(l)
     return l.root
 end
 
@@ -472,17 +621,21 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     if accept(l, '[')
         l.active_table = l.root
         @try parse_table(l)
-        skip_ws_comment(l)
+        if skip_ws_comment(l) && l.comments !== nothing
+            attach_inline_comment!(l)
+        end
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
     else
         @try parse_entry(l, l.active_table)
-        skip_ws_comment(l)
+        if skip_ws_comment(l) && l.comments !== nothing
+            attach_inline_comment!(l)
+        end
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
-            c = eat_char(l)
+            eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
     end
@@ -539,6 +692,19 @@ function parse_table(l)
         return ParserError(ErrDuplicatedKey)
     end
     push!(l.defined_tables, l.active_table)
+    if l.comments !== nothing
+        l.in_array_table = path_traverses_array(l, table_key)
+        empty!(l.active_table_path)
+        append!(l.active_table_path, table_key)
+        if l.in_array_table
+            empty!(l.pending_comments)
+            l.last_item_path = nothing
+        else
+            path = Tuple(table_key)
+            attach_pending_comments!(l, path)
+            l.last_item_path = path
+        end
+    end
     return
 end
 
@@ -559,15 +725,32 @@ function parse_array_table(l)::Union{Nothing, ParserError}
         return ParserError(ErrArrayTreatedAsDictionary)
     end
     d_new = TOMLDict()
+    first_element = isempty(old::Vector{Any})
     push!(old::Vector{Any}, d_new)
     push!(l.defined_tables, d_new)
     l.active_table = d_new
 
+    if l.comments !== nothing
+        # Only the first header has an unambiguous path.
+        if first_element && !path_traverses_array(l, @view(table_key[1:end-1]))
+            attach_pending_comments!(l, Tuple(table_key))
+        else
+            empty!(l.pending_comments)
+        end
+        empty!(l.active_table_path)
+        append!(l.active_table_path, table_key)
+        l.last_item_path = nothing
+        l.in_array_table = true
+    end
     return
 end
 
 function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     key = @try parse_key(l)
+    # `key` aliases `dotted_keys`, which parsing an inline table may overwrite.
+    capture_comments = l.comments !== nothing && !(d in l.inline_tables)
+    entry_path = (capture_comments && !l.in_array_table) ?
+        (l.active_table_path..., key...) : nothing
     skip_ws(l)
     if !accept(l, '=')
         return ParserError(ErrExpectedEqualAfterKey)
@@ -593,6 +776,15 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     end
     # TODO: Performance, hashing `last_key_part` again here
     d[last_key_part] = value
+    if capture_comments
+        if entry_path === nothing
+            empty!(l.pending_comments)
+            l.last_item_path = nothing
+        else
+            attach_pending_comments!(l, entry_path)
+            l.last_item_path = entry_path
+        end
+    end
     return
 end
 
@@ -822,9 +1014,6 @@ function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=tru
 end
 
 function parse_number_or_date_start(l::Parser)
-    integer = true
-    read_dot = false
-
     set_marker!(l)
     sgn = 1
     parsed_sign = false
@@ -913,8 +1102,7 @@ function parse_number_or_date_start(l::Parser)
         accept(l, x-> x == '+' || x == '-')
         # SPEC: (which follows the same rules as decimal integer values but may include leading zeros)
         read_digit = accept_batch(l, isdigit)
-        ate, read_underscore = @try accept_batch_underscore(l, isdigit, !read_digit)
-        contains_underscore |= read_underscore
+        _, read_underscore = @try accept_batch_underscore(l, isdigit, !read_digit)
     end
     if !ok_end_value(peek(l))
         eat_char(l)
@@ -1145,7 +1333,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
         if accept(l, '.')
             set_marker!(l)
             found_fractional_digit = false
-            for i in 1:3
+            for _ in 1:3
                 found_fractional_digit |= accept(l, isdigit)
             end
             if !found_fractional_digit

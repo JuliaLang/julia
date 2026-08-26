@@ -24,6 +24,11 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         @noinline
         throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T, "` which is a singleton type")))
     end
+    function throwbitpadding(S::Type, T::Type, U::Type)
+        @noinline
+        throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T,
+            "` because type `", U, "` contains non-byte-aligned primitive fields")))
+    end
 
     global reinterpret
 
@@ -79,14 +84,16 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
-        (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T, "different")
-        if N != 0 && sizeof(S) != sizeof(T)
+        has_bit_padding(T) && throwbitpadding(S, T, T)
+        has_bit_padding(S) && throwbitpadding(S, T, S)
+        (N != 0 || aligned_sizeof(T) == aligned_sizeof(S)) || throwsize0(S, T, "different")
+        if N != 0 && aligned_sizeof(S) != aligned_sizeof(T)
             ax1 = axes(a)[1]
             dim = length(ax1)
             if issingletontype(T)
                 issingletontype(S) || throwsingleton(S, T)
             else
-                rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
+                rem(dim*aligned_sizeof(S),aligned_sizeof(T)) == 0 || thrownonint(S, T, dim)
             end
             first(ax1) == 1 || throwaxes1(S, T, ax1)
         end
@@ -100,14 +107,14 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     function reinterpret(::typeof(reshape), ::Type{T}, a::A) where {T,S,A<:AbstractArray{S}}
         function throwintmult(S::Type, T::Type)
             @noinline
-            throw(ArgumentError(LazyString("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got ",
-                sizeof(T), ") and `sizeof(eltype(a))` (got ", sizeof(S), ") be an integer multiple of the other")))
+            throw(ArgumentError(LazyString("`reinterpret(reshape, T, a)` requires that one of `Base.elsize(Array{T})` (got ",
+                aligned_sizeof(T), ") and `Base.elsize(Array{eltype(a)})` (got ", aligned_sizeof(S), ") be an integer multiple of the other")))
         end
         function throwsize1(a::AbstractArray, T::Type)
             @noinline
             throw(ArgumentError(LazyString("`reinterpret(reshape, ", T, ", a)` where `eltype(a)` is ", eltype(a),
                 " requires that `axes(a, 1)` (got ", axes(a, 1), ") be equal to 1:",
-                sizeof(T) ÷ sizeof(eltype(a)), " (from the ratio of element sizes)")))
+                aligned_sizeof(T) ÷ aligned_sizeof(eltype(a)), " (from the ratio of element sizes)")))
         end
         function throwfromsingleton(S, T)
             @noinline
@@ -116,18 +123,20 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
-        if sizeof(S) == sizeof(T)
+        has_bit_padding(T) && throwbitpadding(S, T, T)
+        has_bit_padding(S) && throwbitpadding(S, T, S)
+        if aligned_sizeof(S) == aligned_sizeof(T)
             N = ndims(a)
-        elseif sizeof(S) > sizeof(T)
+        elseif aligned_sizeof(S) > aligned_sizeof(T)
             issingletontype(T) && throwsingleton(S, T)
-            rem(sizeof(S), sizeof(T)) == 0 || throwintmult(S, T)
+            rem(aligned_sizeof(S), aligned_sizeof(T)) == 0 || throwintmult(S, T)
             N = ndims(a) + 1
         else
             issingletontype(S) && throwfromsingleton(S, T)
-            rem(sizeof(T), sizeof(S)) == 0 || throwintmult(S, T)
+            rem(aligned_sizeof(T), aligned_sizeof(S)) == 0 || throwintmult(S, T)
             N = ndims(a) - 1
             N > -1 || throwsize0(S, T, "larger")
-            axes(a, 1) == OneTo(sizeof(T) ÷ sizeof(S)) || throwsize1(a, T)
+            axes(a, 1) == OneTo(aligned_sizeof(T) ÷ aligned_sizeof(S)) || throwsize1(a, T)
         end
         readable = array_subpadding(T, S)
         writable = array_subpadding(S, T)
@@ -144,9 +153,9 @@ NonReshapedReinterpretArray{T,N,S,A<:AbstractArray{S, N}} = ReinterpretArray{T,N
 
 Change the type-interpretation of `A` while consuming or adding a "channel dimension."
 
-If `sizeof(T) = n*sizeof(S)` for `n>1`, `A`'s first dimension must be
-of size `n` and `B` lacks `A`'s first dimension. Conversely, if `sizeof(S) = n*sizeof(T)` for `n>1`,
-`B` gets a new first dimension of size `n`. The dimensionality is unchanged if `sizeof(T) == sizeof(S)`.
+If `Base.elsize(Array{T}) = n*Base.elsize(Array{S})` for `n>1`, `A`'s first dimension must be
+of size `n` and `B` lacks `A`'s first dimension. Conversely, if `Base.elsize(Array{S}) = n*Base.elsize(Array{T})` for `n>1`,
+`B` gets a new first dimension of size `n`. The dimensionality is unchanged if `Base.elsize(Array{T}) == Base.elsize(Array{S})`.
 
 !!! compat "Julia 1.6"
     This method requires at least Julia 1.6.
@@ -199,20 +208,19 @@ stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Int
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
     stp = strides(parent(a))
-    els, elp = sizeof(T), sizeof(S)
+    els, elp = aligned_sizeof(T), aligned_sizeof(S)
     els == elp && return stp # 0dim parent is also handled here.
-    IsReshaped && els < elp && return (1, _checked_strides(stp, els, elp)...)
-    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    st′ = _checked_strides(tail(stp), els, elp)
+    # Note: ep typically equals elp, but a custom strided parent may define elsize differently
+    ep = elsize(parent(a))
+    byte_strides = map(i -> i * ep, stp)
+    IsReshaped && els < elp && return (1, _checked_strides(byte_strides, els)...)
+    first(byte_strides) == elp || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
+    st′ = _checked_strides(tail(byte_strides), els)
     return IsReshaped ? st′ : (1, st′...)
 end
 
-@inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
-    if elp > els && rem(elp, els) == 0
-        N = div(elp, els)
-        return map(i -> N * i, stp)
-    end
-    drs = map(i -> divrem(elp * i, els), stp)
+@inline function _checked_strides(byte_strides::Tuple, els::Integer)
+    drs = map(i -> divrem(i, els), byte_strides)
     all(i->iszero(i[2]), drs) ||
         throw(ArgumentError("Parent's strides could not be exactly divided!"))
     map(first, drs)
@@ -246,12 +254,12 @@ end
 
 # For `reinterpret(reshape, T, a)` where we're adding a channel dimension and with
 # `IndexStyle(a) == IndexLinear()`, it's advantageous to retain pseudo-linear indexing.
-struct IndexSCartesian2{K} <: IndexStyle end   # K = sizeof(S) ÷ sizeof(T), a static-sized 2d cartesian iterator
+struct IndexSCartesian2{K} <: IndexStyle end   # K = aligned_sizeof(S) ÷ aligned_sizeof(T), a static-sized 2d cartesian iterator
 
 IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} = IndexStyle(A)
 function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:AbstractArray{S}}
-    if sizeof(T) < sizeof(S)
-        IndexStyle(A) === IndexLinear() && return IndexSCartesian2{sizeof(S) ÷ sizeof(T)}()
+    if aligned_sizeof(T) < aligned_sizeof(S)
+        IndexStyle(A) === IndexLinear() && return IndexSCartesian2{aligned_sizeof(S) ÷ aligned_sizeof(T)}()
         return IndexCartesian()
     end
     return IndexStyle(A)
@@ -361,13 +369,13 @@ unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, 
 
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
-    size1 = issingletontype(T) ? psize[1] : div(psize[1]*sizeof(S), sizeof(T))
+    size1 = issingletontype(T) ? psize[1] : div(psize[1]*aligned_sizeof(S), aligned_sizeof(T))
     tuple(size1, tail(psize)...)
 end
 function size(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
-    sizeof(S) > sizeof(T) && return (div(sizeof(S), sizeof(T)), psize...)
-    sizeof(S) < sizeof(T) && return tail(psize)
+    aligned_sizeof(S) > aligned_sizeof(T) && return (div(aligned_sizeof(S), aligned_sizeof(T)), psize...)
+    aligned_sizeof(S) < aligned_sizeof(T) && return tail(psize)
     return psize
 end
 size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
@@ -375,37 +383,45 @@ size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 function axes(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
     f, l = first(paxs[1]), length(paxs[1])
-    size1 = issingletontype(T) ? l : div(l*sizeof(S), sizeof(T))
+    size1 = issingletontype(T) ? l : div(l*aligned_sizeof(S), aligned_sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
 function axes(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
-    sizeof(S) > sizeof(T) && return (OneTo(div(sizeof(S), sizeof(T))), paxs...)
-    sizeof(S) < sizeof(T) && return tail(paxs)
+    aligned_sizeof(S) > aligned_sizeof(T) && return (OneTo(div(aligned_sizeof(S), aligned_sizeof(T))), paxs...)
+    aligned_sizeof(S) < aligned_sizeof(T) && return tail(paxs)
     return paxs
 end
 axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 
 has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
-elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
+function elsize(::Type{<:ReinterpretArray{T,<:Any,S,A}}) where {T,S,A}
+    if aligned_sizeof(T) == aligned_sizeof(S)
+        elsize(A)
+    else
+        aligned_sizeof(T)
+    end
+end
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
 @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
-    if isprimitivetype(T) && isprimitivetype(S)
+    if _is_scalar_reinterpret_applicable(T, S)
         reinterpret(T, a.parent[])
     else
         a[firstindex(a)]
     end
 end
 
-check_ptr_indexable(a::ReinterpretArray, sz = elsize(a)) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::ReshapedArray, sz) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::FastContiguousSubArray, sz) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
-check_ptr_indexable(a::Memory, sz) = true
-check_ptr_indexable(a::AbstractArray, sz) = false
+function check_ptr_indexable(a::ReinterpretArray{T,<:Any,S}) where {T,S}
+    aligned_sizeof(T) === aligned_sizeof(S) && return false
+    return check_ptr_indexable(parent(a))
+end
+check_ptr_indexable(a::ReshapedArray) = check_ptr_indexable(parent(a))
+check_ptr_indexable(a::FastContiguousSubArray) = check_ptr_indexable(parent(a))
+check_ptr_indexable(a::Union{Array, Memory}) = true
+check_ptr_indexable(a::AbstractArray) = false
 
 @propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
@@ -442,25 +458,27 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
     GC.@preserve ap return unsafe_load(p)
 end
 
+function _is_scalar_reinterpret_applicable(T, S)
+    isprimitivetype(S) && isprimitivetype(T) && Core.bitsizeof(T) === Core.bitsizeof(S)
+end
+
 @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
-    # Make sure to match the scalar reinterpret if that is applicable
-    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if issingletontype(T) # singleton types
-            @boundscheck checkbounds(a, i1, tailinds...)
-            return T.instance
-        end
+    if issingletontype(T) # singleton types
+        @boundscheck checkbounds(a, i1, tailinds...)
+        return T.instance
+    elseif _is_scalar_reinterpret_applicable(T, S)
         return reinterpret(T, a.parent[i1, tailinds...])
     else
         @boundscheck checkbounds(a, i1, tailinds...)
-        ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
+        ind_start, sidx = divrem((i1-1)*aligned_sizeof(T), aligned_sizeof(S))
         # Optimizations that avoid branches
-        if sizeof(T) % sizeof(S) == 0
+        if aligned_sizeof(T) % aligned_sizeof(S) == 0
             # T is bigger than S and contains an integer number of them
-            n = sizeof(T) ÷ sizeof(S)
+            n = aligned_sizeof(T) ÷ aligned_sizeof(S)
             t = Ref{T}()
             GC.@preserve t begin
                 sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
@@ -470,7 +488,7 @@ end
                 end
             end
             return t[]
-        elseif sizeof(S) % sizeof(T) == 0
+        elseif aligned_sizeof(S) % aligned_sizeof(T) == 0
             # S is bigger than T and contains an integer number of them
             s = Ref{S}(a.parent[ind_start + 1, tailinds...])
             GC.@preserve s begin
@@ -488,9 +506,9 @@ end
             GC.@preserve s t begin
                 sptr = Ptr{S}(unsafe_convert(Ref{S}, s))
                 tptr = Ptr{T}(unsafe_convert(Ref{T}, t))
-                while nbytes_copied < sizeof(T)
+                while nbytes_copied < aligned_sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
-                    nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
+                    nb = min(aligned_sizeof(S) - sidx, aligned_sizeof(T)-nbytes_copied)
                     memcpy(tptr + nbytes_copied, sptr + sidx, nb)
                     nbytes_copied += nb
                     sidx = 0
@@ -503,22 +521,20 @@ end
 end
 
 @propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
-    # Make sure to match the scalar reinterpret if that is applicable
-    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if issingletontype(T) # singleton types
-            @boundscheck checkbounds(a, i1, tailinds...)
-            return T.instance
-        end
+    if issingletontype(T) # singleton types
+        @boundscheck checkbounds(a, i1, tailinds...)
+        return T.instance
+    elseif _is_scalar_reinterpret_applicable(T, S)
         return reinterpret(T, a.parent[i1, tailinds...])
     end
     @boundscheck checkbounds(a, i1, tailinds...)
-    if sizeof(T) >= sizeof(S)
+    if aligned_sizeof(T) >= aligned_sizeof(S)
         t = Ref{T}()
         GC.@preserve t begin
             sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
-            if sizeof(T) > sizeof(S)
+            if aligned_sizeof(T) > aligned_sizeof(S)
                 # Extra dimension in the parent array
-                n = sizeof(T) ÷ sizeof(S)
+                n = aligned_sizeof(T) ÷ aligned_sizeof(S)
                 if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
                     offset = n * (i1 - firstindex(a))
                     for i = 1:n
@@ -540,7 +556,7 @@ end
         return t[]
     end
     # S is bigger than T and contains an integer number of them
-    # n = sizeof(S) ÷ sizeof(T)
+    # n = aligned_sizeof(S) ÷ aligned_sizeof(T)
     s = Ref{S}()
     GC.@preserve s begin
         tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
@@ -550,7 +566,7 @@ end
 end
 
 @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
-    if isprimitivetype(S) && isprimitivetype(T)
+    if _is_scalar_reinterpret_applicable(T, S)
         a.parent[] = reinterpret(S, convert(T, v)::T)
         return a
     end
@@ -591,37 +607,34 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
     GC.@preserve ap unsafe_store!(p, v)
     return a
 end
 
 @propagate_inbounds function _setindex_ra!(a::NonReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
     v = convert(T, v)::T
-    # Make sure to match the scalar reinterpret if that is applicable
-    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if issingletontype(T) # singleton types
-            @boundscheck checkbounds(a, i1, tailinds...)
-            # setindex! is a noop except for the index check
-        else
-            setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
-        end
+    if issingletontype(T) # singleton types
+        @boundscheck checkbounds(a, i1, tailinds...)
+        # setindex! is a noop except for the index check
+    elseif _is_scalar_reinterpret_applicable(T, S)
+        setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     else
         @boundscheck checkbounds(a, i1, tailinds...)
-        ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
+        ind_start, sidx = divrem((i1-1)*aligned_sizeof(T), aligned_sizeof(S))
         # Optimizations that avoid branches
-        if sizeof(T) % sizeof(S) == 0
+        if aligned_sizeof(T) % aligned_sizeof(S) == 0
             # T is bigger than S and contains an integer number of them
             t = Ref{T}(v)
             GC.@preserve t begin
                 sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
-                n = sizeof(T) ÷ sizeof(S)
+                n = aligned_sizeof(T) ÷ aligned_sizeof(S)
                 for i = 1:n
                     s = unsafe_load(sptr, i)
                     a.parent[ind_start + i, tailinds...] = s
                 end
             end
-        elseif sizeof(S) % sizeof(T) == 0
+        elseif aligned_sizeof(S) % aligned_sizeof(T) == 0
             # S is bigger than T and contains an integer number of them
             s = Ref{S}(a.parent[ind_start + 1, tailinds...])
             GC.@preserve s begin
@@ -641,25 +654,24 @@ end
                 # element from the original array and overwrite the relevant parts
                 if sidx != 0
                     s[] = a.parent[ind_start + i, tailinds...]
-                    nb = min((sizeof(S) - sidx) % UInt, sizeof(T) % UInt)
+                    nb = min((aligned_sizeof(S) - sidx) % UInt, aligned_sizeof(T) % UInt)
                     memcpy(sptr + sidx, tptr, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
-                    sidx = 0
                 end
                 # Deal with the main body of elements
-                while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
-                    nb = min(sizeof(S), sizeof(T) - nbytes_copied)
+                while nbytes_copied < aligned_sizeof(T) && (aligned_sizeof(T) - nbytes_copied) > aligned_sizeof(S)
+                    nb = min(aligned_sizeof(S), aligned_sizeof(T) - nbytes_copied)
                     memcpy(sptr, tptr + nbytes_copied, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
                 end
                 # Deal with trailing partial elements
-                if nbytes_copied < sizeof(T)
+                if nbytes_copied < aligned_sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
-                    nb = min(sizeof(S), sizeof(T) - nbytes_copied)
+                    nb = min(aligned_sizeof(S), aligned_sizeof(T) - nbytes_copied)
                     memcpy(sptr, tptr + nbytes_copied, nb)
                     a.parent[ind_start + i, tailinds...] = s[]
                 end
@@ -671,63 +683,50 @@ end
 
 @propagate_inbounds function _setindex_ra!(a::ReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
     v = convert(T, v)::T
-    # Make sure to match the scalar reinterpret if that is applicable
-    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if issingletontype(T) # singleton types
-            @boundscheck checkbounds(a, i1, tailinds...)
-            # setindex! is a noop except for the index check
-        else
-            setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
-        end
-    end
-    @boundscheck checkbounds(a, i1, tailinds...)
-    if sizeof(T) >= sizeof(S)
-        t = Ref{T}(v)
-        GC.@preserve t begin
-            sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
-            if sizeof(T) > sizeof(S)
-                # Extra dimension in the parent array
-                n = sizeof(T) ÷ sizeof(S)
-                if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
-                    offset = n * (i1 - firstindex(a))
-                    for i = 1:n
-                        s = unsafe_load(sptr, i)
-                        a.parent[i + offset] = s
-                    end
-                else
-                    for i = 1:n
-                        s = unsafe_load(sptr, i)
-                        a.parent[i, i1, tailinds...] = s
-                    end
-                end
-            else # sizeof(T) == sizeof(S)
-                # No extra dimension
-                s = unsafe_load(sptr)
-                a.parent[i1, tailinds...] = s
-            end
-        end
+    if issingletontype(T) # singleton types
+        @boundscheck checkbounds(a, i1, tailinds...)
+        # setindex! is a noop except for the index check
+    elseif _is_scalar_reinterpret_applicable(T, S)
+        setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     else
-        # S is bigger than T and contains an integer number of them
-        s = Ref{S}()
-        GC.@preserve s begin
-            tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
-            s[] = a.parent[tailinds...]
-            unsafe_store!(tptr, v, i1)
-            a.parent[tailinds...] = s[]
+        @boundscheck checkbounds(a, i1, tailinds...)
+        if aligned_sizeof(T) >= aligned_sizeof(S)
+            t = Ref{T}(v)
+            GC.@preserve t begin
+                sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
+                if aligned_sizeof(T) > aligned_sizeof(S)
+                    # Extra dimension in the parent array
+                    n = aligned_sizeof(T) ÷ aligned_sizeof(S)
+                    if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
+                        offset = n * (i1 - firstindex(a))
+                        for i = 1:n
+                            s = unsafe_load(sptr, i)
+                            a.parent[i + offset] = s
+                        end
+                    else
+                        for i = 1:n
+                            s = unsafe_load(sptr, i)
+                            a.parent[i, i1, tailinds...] = s
+                        end
+                    end
+                else # aligned_sizeof(T) == aligned_sizeof(S)
+                    # No extra dimension
+                    s = unsafe_load(sptr)
+                    a.parent[i1, tailinds...] = s
+                end
+            end
+        else
+            # S is bigger than T and contains an integer number of them
+            s = Ref{S}()
+            GC.@preserve s begin
+                tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
+                s[] = a.parent[tailinds...]
+                unsafe_store!(tptr, v, i1)
+                a.parent[tailinds...] = s[]
+            end
         end
     end
     return a
-end
-
-# Padding
-struct Padding
-    offset::Int # 0-indexed offset of the next valid byte; sizeof(T) indicates trailing padding
-    size::Int   # bytes of padding before a valid byte
-end
-function intersect(p1::Padding, p2::Padding)
-    start = max(p1.offset, p2.offset)
-    stop = min(p1.offset + p1.size, p2.offset + p2.size)
-    Padding(start, max(0, stop-start))
 end
 
 struct PaddingError <: Exception
@@ -739,99 +738,102 @@ function showerror(io::IO, p::PaddingError)
     print(io, "Padding of type $(p.S) is not compatible with type $(p.T).")
 end
 
-"""
-    CyclePadding(padding, total_size)
-
-Cycles an iterator of `Padding` structs, restarting the padding at `total_size`.
-E.g. if `padding` is all the padding in a struct and `total_size` is the total aligned size of that struct, `CyclePadding` will correspond to the padding in an infinite vector of such structs.
-"""
-struct CyclePadding{P}
-    padding::P
-    total_size::Int
+# Return a byte index to Bool map for each byte of an aligned `T`
+# if false, that byte is undefined padding that should not be observed.
+# Preconditions, already checked by the `reinterpret` constructors and `_reinterpret`:
+# `isbitstype(T)` and `!has_bit_padding(T)`
+function non_padding_bytes(T::DataType)::Memory{Bool}
+    # @assert isbitstype(T)
+    # @assert !has_bit_padding(T)
+    used = Memory{Bool}(undef, aligned_sizeof(T))
+    fill!(used, false)
+    fill_nonpadding_bytes!(T, 0, used)
+    used
 end
-eltype(::Type{<:CyclePadding}) = Padding
-IteratorSize(::Type{<:CyclePadding}) = IsInfinite()
-isempty(cp::CyclePadding) = isempty(cp.padding)
-function iterate(cp::CyclePadding)
-    y = iterate(cp.padding)
-    y === nothing && return nothing
-    y[1], (0, y[2])
-end
-function iterate(cp::CyclePadding, state::Tuple)
-    y = iterate(cp.padding, tail(state)...)
-    y === nothing && return iterate(cp, (state[1]+cp.total_size,))
-    Padding(y[1].offset+state[1], y[1].size), (state[1], tail(y)...)
-end
-
-"""
-    Compute the location of padding in an isbits datatype. Recursive over the fields of that type.
-"""
-@assume_effects :foldable function padding(T::DataType, baseoffset::Int = 0)
-    pads = Padding[]
-    last_end::Int = baseoffset
-    for i = 1:fieldcount(T)
-        offset = baseoffset + Int(fieldoffset(T, i))
-        fT = fieldtype(T, i)
-        append!(pads, padding(fT, offset))
-        if offset != last_end
-            push!(pads, Padding(offset, offset-last_end))
+function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
+    if isprimitivetype(T)
+        for i in 1:sizeof(T)
+            used[i + offset] = true
         end
-        last_end = offset + sizeof(fT)
-    end
-    if 0 < last_end - baseoffset < sizeof(T)
-        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end + baseoffset))
-    end
-    return Core.svec(pads...)
-end
-
-function CyclePadding(T::DataType)
-    a, s = datatype_alignment(T), sizeof(T)
-    as = s + (a - (s % a)) % a
-    pad = padding(T)
-    if s != as
-        pad = Core.svec(pad..., Padding(s, as - s))
-    end
-    CyclePadding(pad, as)
-end
-
-@assume_effects :total function array_subpadding(S, T)
-    lcm_size = lcm(sizeof(S), sizeof(T))
-    s, t = CyclePadding(S), CyclePadding(T)
-    checked_size = 0
-    # use of Stateful harms inference and makes this vulnerable to invalidation
-    (pad, tstate) = let
-        it = iterate(t)
-        it === nothing && return true
-        it
-    end
-    (ps, sstate) = let
-        it = iterate(s)
-        it === nothing && return false
-        it
-    end
-    while checked_size < lcm_size
-        while true
-            # See if there's corresponding padding in S
-            ps.offset > pad.offset && return false
-            intersect(ps, pad) == pad && break
-            ps, sstate = iterate(s, sstate)
+    else
+        for i in 1:fieldcount(T)
+            fill_nonpadding_bytes!(fieldtype(T, i), offset + Int(fieldoffset(T, i)), used)
         end
-        checked_size = pad.offset + pad.size
-        pad, tstate = iterate(t, tstate)
     end
-    return true
 end
 
-@assume_effects :foldable function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
-    padding(Out) == padding(In)
+@assume_effects :foldable function isarraypacked(T)
+    !datatype_haspadding(T) && sizeof(T) == aligned_sizeof(T)
 end
 
-@assume_effects :foldable function packedsize(::Type{T}) where T
-    pads = padding(T)
-    return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
+# Preconditions, already checked by the `reinterpret` constructors:
+# `isbitstype(T/S)` and `!has_bit_padding(T/S)`
+@assume_effects :foldable function array_subpadding(S, T)
+    # Fast path: if every byte of `T` is a non-padding byte, any byte can be
+    # read. This also covers zero-size `T`.
+    if isarraypacked(T)
+        return true
+    end
+    # `T` has at least one padding byte here. If `S` has none, the byte cycle
+    # below visits every byte of `T`, so some readable byte of `S` must land on
+    # padding in `T`. This also covers zero-size `S`.
+    if isarraypacked(S)
+        return false
+    end
+    s_used, t_used = non_padding_bytes(S), non_padding_bytes(T)
+    # zero-size T and S are unreachable here (handled by the fast paths above);
+    # these guards only keep the loop below well-defined
+    isempty(t_used) && return true
+    isempty(s_used) && return false
+    s_n, t_n = length(s_used), length(t_used)
+    s_i, t_i = 1, 1
+    while true
+        # If a byte can be read in S, but is padding in T, return false
+        if s_used[s_i] && !t_used[t_i]
+            return false
+        end
+        # Advance the indexes with wrapping around
+        s_i += 1
+        if s_i > s_n
+            s_i = 1
+        end
+        t_i += 1
+        if t_i > t_n
+            t_i = 1
+        end
+        # We made it back to the start
+        if isone(s_i) && isone(t_i)
+            return true
+        end
+    end
 end
 
-@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
+@assume_effects :foldable function struct_subpadding(Out, In)
+    non_padding_bytes(Out) == non_padding_bytes(In)
+end
+
+@assume_effects :foldable function packedsize(T)
+    if !datatype_haspadding(T)
+        sizeof(T)
+    else
+        count(non_padding_bytes(T))
+    end
+end
+
+@assume_effects :foldable function ispacked(T)
+    !datatype_haspadding(T)
+end
+
+@assume_effects :foldable function has_bit_padding(::Type{T}) where T
+    if isprimitivetype(T)
+        return Core.bitsizeof(T) % 8 != 0
+    end
+    T isa Union && return any(has_bit_padding, uniontypes(T))
+    for i in 1:fieldcount(T)
+        has_bit_padding(fieldtype(T, i)) && return true
+    end
+    return false
+end
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
     writeoffset = 0
@@ -869,6 +871,10 @@ end
     # handle non-primitive types
     isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
     isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
+    has_bit_padding(Out) && throw(ArgumentError(LazyString(
+        "cannot `reinterpret` type ", Out, " containing non-byte-aligned primitive fields")))
+    has_bit_padding(In) && throw(ArgumentError(LazyString(
+        "cannot `reinterpret` type ", In, " containing non-byte-aligned primitive fields")))
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
     inpackedsize == outpackedsize ||
@@ -876,7 +882,7 @@ end
             " do not match; got ", outpackedsize, " and ", inpackedsize, ", respectively.")))
     in = Ref{In}(x)
     out = Ref{Out}()
-    if struct_subpadding(Out, In)
+    if (ispacked(In) && ispacked(Out)) || struct_subpadding(Out, In)
         # if packed the same, just copy
         GC.@preserve in out begin
             ptr_in = unsafe_convert(Ptr{In}, in)

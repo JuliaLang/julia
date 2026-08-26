@@ -705,6 +705,8 @@ end
     @test tanpi(-1) === 0.0
     @test tanpi(2) === 0.0
     @test tanpi(-2) === -0.0
+    @test_throws DomainError tanpi(Inf)
+    @test_throws DomainError tanpi(-Inf32)
     @test sinc(1) == 0
     @test sinc(complex(1,0)) == 0
     @test sinc(0) == 1
@@ -1638,6 +1640,31 @@ end
     n = Int64(1024 / log2(E))
     @test E^n == Inf
     @test E^float(n) == Inf
+
+    # integer power of a negative Float16/Float32 base must keep its sign when the
+    # exponent bypasses `pow_by_squaring` (|n| outside -2^12:3*2^13); the sign `s`
+    # used to be computed and then dropped.
+    @testset "sign of $T integer powers" for T in (Float16, Float32)
+        x = -nextfloat(one(T))
+        for n in (24577, 32769, -24577, -32769)   # odd, outside pow_by_squaring range
+            @test signbit(x^n)
+        end
+        for n in (24578, 32768, -24578)            # even, outside pow_by_squaring range
+            @test !signbit(x^n)
+        end
+    end
+    @testset "sign across clamped $T integer exponents" for (T, I) in
+            ((Float16, Int32), (Float32, Int32), (Float64, Int64))
+        W = widen(I)
+        nmax = W(typemax(I))
+        nmin = W(typemin(I))
+        @test !signbit((-T(2))^(nmax + 1))
+        @test signbit((-T(2))^(nmax + 2))
+        @test signbit((-T(2))^(nmin - 1))
+        @test !signbit((-T(2))^(nmin - 2))
+        @test signbit((-zero(T))^24577)
+        @test signbit((-zero(T))^-24577)
+    end
 
     # issue #55831
     @testset "literal pow zero sign" begin
