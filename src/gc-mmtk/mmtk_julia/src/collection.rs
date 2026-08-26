@@ -222,17 +222,7 @@ impl Collection<JuliaVM> for VMCollection {
             )
         }
 
-<<<<<<< HEAD
-        // Holding the mutex here guarantees that any mutator that observed
-        // `BLOCK_FOR_GC == true` is already enqueued in `wait()` by the time
-        // we call `notify_all`.
-        let (lock, cvar) = &*STW_COND.clone();
-        let count = lock.lock().unwrap();
-
-        #[cfg(feature = "concurrent_marking")]
-=======
         #[cfg(feature = "concurrentimmix")]
->>>>>>> master
         {
             // For concurrent Immix, we need to check if SATB is active
             let concurrent_plan = SINGLETON.get_plan().concurrent().unwrap();
