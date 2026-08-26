@@ -544,10 +544,12 @@ static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache)
             jl_code_instance_t *ci = (jl_code_instance_t*)v;
             jl_method_instance_t *mi = jl_get_ci_mi(ci);
             jl_method_t *m = mi->def.method;
+            if (!jl_is_method(m))
+                continue; // toplevel code: mi->def is a module
             int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
                 continue; // ignore replaced methods
-            if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m)) {
+            if (jl_atomic_load_relaxed(&ci->inferred)) {
                 int found = jl_object_in_image((jl_value_t*)m->module) ? has_backedge_to_worklist(mi, &visited, &stack, query_cache) : 1;
                 assert(found == 0 || found == 1 || found == 2);
                 assert(stack.len == 0);

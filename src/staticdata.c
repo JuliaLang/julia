@@ -1118,8 +1118,11 @@ static void ios_ensureroom(ios_t *s, size_t newsize) JL_NOTSAFEPOINT
 {
     size_t prevsize = s->size;
     if (prevsize < newsize) {
-        ios_trunc(s, newsize);
-        assert(s->size == newsize);
+        if (ios_trunc(s, newsize) != 0 || s->size != newsize) {
+            // Avoid writing past the buffer.
+            jl_safe_printf("FATAL ERROR: failed to allocate memory for image serialization\n");
+            abort();
+        }
         memset(&s->buf[prevsize], 0, newsize - prevsize);
     }
 }
@@ -4591,6 +4594,17 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
     return NULL;
 }
 
+// Reject an already-relocated pkgimage mapping. Image ranges are start-exclusive, so probe
+// a word into the payload: the range start itself always tests as out of range.
+static jl_value_t *jl_check_pkgimage_already_restored(const char *datastart, const char *pkgname) JL_CANSAFEPOINT
+{
+    if (eyt_tree_is_in_range(&image_tree, (uintptr_t)datastart + sizeof(uintptr_t))) {
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Package image for %s has already been loaded in this session; it cannot be restored again.", pkgname);
+    }
+    return NULL;
+}
+
 // TODO?: refactor to make it easier to create the "package inspector"
 static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT
 {
@@ -4606,8 +4620,26 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     if (verify_fail)
         return verify_fail;
 
-    assert(datastartpos > 0 && datastartpos < dataendpos);
+    if (!(datastartpos > 0 && datastartpos < dataendpos)) {
+        // Header-only pkgimage stub.
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Cache file for %s contains no serialized data.", pkgname);
+    }
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
+
+    if (!needs_permalloc && (uint64_t)dataendpos > f->size) {
+        // The in-place payload must fit in the buffer.
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Cache file for %s is truncated: serialized data extends past the end of the file.", pkgname);
+    }
+    // An image already relocated in place cannot be restored again, whether in place or
+    // copied, so this does not depend on `needs_permalloc`. Only a memory stream can alias
+    // such a mapping, and only within its own bounds.
+    if (f->bm == bm_mem && (uint64_t)dataendpos <= f->size) {
+        jl_value_t *reload_fail = jl_check_pkgimage_already_restored(f->buf + datastartpos, pkgname);
+        if (reload_fail)
+            return reload_fail;
+    }
 
     jl_value_t *restored = NULL;
     jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *method_roots_list = NULL;
@@ -4758,6 +4790,23 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 {
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
+
+    // Reject an already-restored mapping before loading metadata, so that the rejected load
+    // does not allocate (and leak) any. `jl_restore_package_image_from_stream` repeats the
+    // check for callers that arrive with a buffer.
+    {
+        ios_t header_io;
+        ios_static_buffer(&header_io, (char*)buf.data, buf.size);
+        uint32_t flags = 0, checksum = 0;
+        int64_t dataendpos = 0, datastartpos = 0;
+        int header_ok = jl_read_verify_header(&header_io, &flags, &checksum, &dataendpos, &datastartpos) == 0;
+        ios_close(&header_io);
+        if (header_ok && datastartpos > 0 && datastartpos < dataendpos && (uint64_t)dataendpos <= buf.size) {
+            jl_value_t *reload_fail = jl_check_pkgimage_already_restored((const char*)buf.data + datastartpos, pkgname);
+            if (reload_fail)
+                return reload_fail;
+        }
+    }
 
     jl_gc_notify_image_load(buf.data, buf.size);
 
