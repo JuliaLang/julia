@@ -303,3 +303,20 @@ let
     @__FUNCTION__()
 #   └─────────────┘ ── can only be used inside a function
 end
+
+########################################
+# @overlay lowering
+Base.Experimental.@overlay mt f() = 1
+#---------------------
+1   TestMod.f
+2   (call core.TypeEqOf %₁)
+3   (call core.svec %₂)
+4   (call core.svec)
+5   SourceLocation:nothing:1:0
+6   (call core.svec %₃ %₄ %₅)
+7   (call core.define_method TestMod TestMod.mt %₆
+    --- code_info
+    slots: [slot₁/#self#(!read)]
+    1   (return 1)
+8   latestworld
+9   (return %₇)
