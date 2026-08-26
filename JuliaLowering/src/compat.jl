@@ -454,27 +454,51 @@ function apply_32026_hack(st, orig)
     _apply_32026_hack(st, orig.context::SyntaxContext)
 end
 
-# nothing if not found, or symbol if 0-arg [no]specialize, or dict arg->meta
-function collect_body_arg_meta(st)
-    out = nothing
+function collect_body_meta(st)
+    argmeta_all = nothing
+    argmeta = nothing
+    mmetas = nothing
     for c in children(st)
-        k = kind(c)
-        @stm c begin
-            [K"meta" [K"Identifier"] idents...] -> begin
-                meta = Symbol(syntax_name(c[1]))
-                meta in (:specialize, :nospecialize) || continue
-                length(idents) == 0 && return meta
-                isnothing(out) && (out = Dict{String, Symbol}())
-                for id in idents
-                    kind(id) === K"Identifier" && (out[syntax_name(id)] = meta)
+        kind(c) === K"meta" || break
+        spec = numchildren(c) >= 1 && kind(c[1]) === K"Identifier" ?
+            syntax_name(c[1]) : ""
+        if spec in ("specialize", "nospecialize")
+            meta = Symbol(spec)
+            if numchildren(c) == 1
+                isnothing(argmeta_all) && (argmeta_all = meta)
+            else
+                isnothing(argmeta) && (argmeta = Dict{String, Symbol}())
+                for id in c[2:end]
+                    kind(id) === K"Identifier" && (argmeta[syntax_name(id)] = meta)
                 end
             end
-            # Only leading meta statements are recognized in lowering.  Ideally
-            # meta after non-meta statements would be an error.
-            _ -> break
+        else
+            for m in children(c)
+                isnothing(mmetas) && (mmetas = SyntaxList())
+                km = kind(m)
+                if km === K"purity"
+                    push!(mmetas, m)
+                elseif syntax_name(m) in (
+                    "inline", "noinline", "propagate_inbounds",
+                    "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                    push!(mmetas, @mknode(m; kind=K"Symbol"))
+                end
+            end
         end
     end
-    out
+    (isnothing(argmeta_all) ? argmeta : argmeta_all), mmetas
+end
+
+# Absorb `meta` nodes from arguments and the function body into syntax `.meta`
+# for easier desugaring.
+function _dst_function_body(st, r, method_metas)
+    r2 = if has_if_generated(r)
+        gen, nongen = split_generated(r, true), split_generated(r, false)
+        @ast _ st [K"_generated_body" [K"syntaxquote" gen] est_to_dst(nongen)]
+    else
+        est_to_dst(r)
+    end
+    isnothing(method_metas) ? r2 : setmeta(r2, :method_metas, method_metas)
 end
 
 """
@@ -610,45 +634,37 @@ function est_to_dst(st::SyntaxTree)
             @ast _ st [K"generator" rec(body) _dst_iterspec(st, iters)]
         ([K"=" l r], when=(is_eventually_call(l))) -> let
             # no fix_arglist needed, since this func can't be anonymous
-            l = apply_arglist_meta(l, collect_body_arg_meta(r))
-            l = force_readable_sparams(l)
+            arg_meta, method_metas = collect_body_meta(r)
+            l = force_readable_sparams(apply_arglist_meta(l, arg_meta))
             l = apply_32026_hack(l, st)
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast _ st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast _ st [K"function" rec(l) r2]
+            @ast _ st [K"function"
+                rec(l)
+                _dst_function_body(st, r, method_metas)]
         end
         [K"function" [K"Identifier"]] ->
             @ast _ st [K"function" apply_32026_hack(st[1], st)]
         [K"function" l r] -> let
-            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
-            l = force_readable_sparams(l)
+            arg_meta, method_metas = collect_body_meta(r)
+            l = force_readable_sparams(
+                apply_arglist_meta(_dst_fix_arglist(l), arg_meta))
             l = apply_32026_hack(l, st)
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast _ st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast _ st [K"function" rec(l) r2]
+            @ast _ st [K"function"
+                rec(l)
+                _dst_function_body(st, r, method_metas)]
         end
         [K"->" l r] -> let
-            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
-            l = force_readable_sparams(l)
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast _ st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast _ st [K"->" rec(l) r2]
+            arg_meta, method_metas = collect_body_meta(r)
+            l = force_readable_sparams(
+                apply_arglist_meta(_dst_fix_arglist(l), arg_meta))
+            @ast _ st [K"->"
+                rec(l)
+                _dst_function_body(st, r, method_metas)]
         end
         [K"macro" l r] -> let
-            l = apply_arglist_meta(l, collect_body_arg_meta(r))
-            @ast _ st [K"macro" rec(l) rec(r)]
+            arg_meta, method_metas = collect_body_meta(r)
+            r2 = rec(r)
+            isnothing(method_metas) || (r2 = setmeta(r2, :method_metas, method_metas))
+            @ast _ st [K"macro" rec(apply_arglist_meta(l, arg_meta)) r2]
         end
         [K"do" [K"call" f args...] lam] -> let
             @ast _ st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]

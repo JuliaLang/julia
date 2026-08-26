@@ -635,7 +635,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -645,7 +645,7 @@ end
 
 @noinline function typename(x::TypeEq)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::TypeEq)
@@ -669,7 +669,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -679,7 +679,7 @@ end
 
 @noinline function typename(x::Core.TypeEgal)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::Core.TypeEgal)

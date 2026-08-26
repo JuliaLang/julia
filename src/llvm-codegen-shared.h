@@ -183,15 +183,12 @@ static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*>
 }
 
 // Check if this is a load from an immutable value. The easiest way to do so is
-// to look at the tbaa and see if it derives from jtbaa_immut. This list is
-// GC-critical: codegen (isLoadFromConstGV) and LateLowerGCFrame must agree on
-// whether a load of a tracked pointer is rooted through its base.
+// to look at the AA metadata and see if it derives from jtbaa_immut.
 static inline bool isLoadFromImmut(llvm::LoadInst *LI)
 {
     if (LI->getMetadata(llvm::LLVMContext::MD_invariant_load))
         return true;
     llvm::MDNode *TBAA = LI->getMetadata(llvm::LLVMContext::MD_tbaa);
-    // n.b. jtbaa_memory* derives from jtbaa_immut; jtbaa_array* deliberately does not
     if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"}))
         return true;
     return false;

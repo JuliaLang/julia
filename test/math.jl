@@ -705,6 +705,8 @@ end
     @test tanpi(-1) === 0.0
     @test tanpi(2) === 0.0
     @test tanpi(-2) === -0.0
+    @test_throws DomainError tanpi(Inf)
+    @test_throws DomainError tanpi(-Inf32)
     @test sinc(1) == 0
     @test sinc(complex(1,0)) == 0
     @test sinc(0) == 1

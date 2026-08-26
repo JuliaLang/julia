@@ -905,7 +905,11 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
         dict::PersistentDict{K, V}, key, val) where {K, V} = @inline _keyvalueset(dict, key, val)
     @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
         dict::PersistentDict{K, V}, key::K, val::V) where {K, V} = @inline _keyvalueset(dict, key, val)
-    global function _keyvalueset(dict::PersistentDict{K, V}, key, val) where {K, V}
+    # `@nospecialize(val)`: scoped-value scope construction stores `Any`-typed
+    # values; a val-specializing MethodInstance turns every such insert into a
+    # runtime dispatch — unresolvable under static compilation (`juliac
+    # --trim`). The key stays specialized: `HashState(key)` needs its concrete type.
+    global function _keyvalueset(dict::PersistentDict{K, V}, key, @nospecialize(val)) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
         found, present, trie, i, bi, top, hs = HAMT.path(trie, h, #=persistent=#true)

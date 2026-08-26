@@ -233,7 +233,6 @@ function binding_module(m::Module, s::Symbol)
 end
 
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
-const _TYPE_NAME = TypeEq.name
 
 function _fieldnames(@nospecialize t)
     if t.name === _NAMEDTUPLE_NAME

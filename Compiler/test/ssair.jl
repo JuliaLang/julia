@@ -919,3 +919,21 @@ end
     (Float32, Float32, Float64),
     (Float32, Float32, Float32),
 ]
+
+# Tests that phi-edge cleanup during compaction terminates when the phi block
+# begins with a `nothing` statement rather than a PhiNode (#62818).
+function f62818(c)
+    r = Ref(false)
+    while true
+        if c !== nothing
+            r[] = true
+        end
+        if r[]
+            continue
+        else
+            break
+        end
+    end
+end
+@test only(Base.return_types(f62818, Tuple{Nothing})) === Nothing
+@test f62818(nothing) === nothing

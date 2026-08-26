@@ -552,6 +552,19 @@ end
     # 0-arg @nospecialize sets all bits (-1 == typemax(Int32) for nospecialize)
     @test only(methods(test_mod.f_nospecialize_zero_body)).nospecialize == -1
 
+    # @nospecialize with exceptions: what should this do?
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nospecialize_body_exceptions(a, @specialize(b), c)
+            @nospecialize
+            @specialize c
+            (a,b,c)
+        end
+        f_nospecialize_body_exceptions(1, 2, 3)
+    end
+    """) == (1, 2, 3)
+    @test_broken only(methods(test_mod.f_nospecialize_body_exceptions)).nospecialize == 0b100
+
     # @nospecialize with default value in signature
     @test JuliaLowering.include_string(test_mod, """
     begin
@@ -1536,7 +1549,8 @@ end
     @test JL.include_string(test_mod,
         "f_kwdef_sp(y::T; k=T) where T = (y, k); f_kwdef_sp(1)") == (1, Int)
     # ... but an sparam unused in the signature is undetermined at dispatch
-    JL.include_string(test_mod, "f_kwdef_sp_undet(y; k=T) where T = (y, k)")
+    @test_warn r"declares type variable T but does not use it" JL.include_string(
+        test_mod, "f_kwdef_sp_undet(y; k=T) where T = (y, k)")
     @test_throws UndefVarError test_mod.f_kwdef_sp_undet(1)
 end
 
