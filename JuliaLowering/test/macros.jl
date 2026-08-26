@@ -1042,6 +1042,8 @@ end
         :(let A = [1,2,3], B = [4,5,6]
               simple_aliasscope(A,B), A, B
           end); expr_compat_mode) == (0, [4,5,6], [4,5,6])
+
+    @test JuliaLowering.include_string(test_mod, """@fastmath 1 <= 2 <= 3""")
 end
 
 @testset "empty meta" begin
