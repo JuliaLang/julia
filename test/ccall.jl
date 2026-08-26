@@ -2029,3 +2029,11 @@ const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
+
+# A single partially-covering method keeps dispatching at call time, so uncovered
+# arguments raise MethodError instead of being reinterpreted (#62246).
+abi_partial_target(x::Float32, y::Cint) = x + Float32(y)   # partially covers (Any, Cint)
+let cf = @cfunction(abi_partial_target, Any, (Any, Cint))
+    @test ccall(cf, Any, (Any, Cint), Float32(1.5), Cint(2)) === Float32(3.5)
+    @test_throws MethodError ccall(cf, Any, (Any, Cint), 1.5, Cint(2))
+end

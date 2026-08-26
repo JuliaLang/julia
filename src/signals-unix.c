@@ -1313,6 +1313,9 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context)
 
 void jl_install_default_signal_handlers(void)
 {
+#ifdef _OS_LINUX_
+    (void)jl_ptr_demangle_available();
+#endif
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);

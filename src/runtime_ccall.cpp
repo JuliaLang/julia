@@ -352,12 +352,17 @@ struct cfuncdata_t {
 };
 
 extern "C" JL_DLLEXPORT
-void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
-                                    jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
+void *jl_jit_abi_converter_fallback(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst)
 {
-    if (unspecialized)
-        return unspecialized;
-    jl_errorf("cfunction not available in this build of Julia");
+    if (codeinst == nullptr)
+        return nullptr;
+    uint8_t specsigflags;
+    jl_callptr_t invoke = nullptr;
+    void *specptr = nullptr;
+    jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, /* waitcompile */ 1);
+    if (specptr != nullptr && jl_specptr_matches_abi(from_abi, codeinst, specsigflags, invoke))
+        return specptr; // no adapter required
+    return nullptr;
 }
 
 static const inline char *name_from_method_instance(jl_method_instance_t *mi) JL_NOTSAFEPOINT
@@ -400,6 +405,8 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
             return f;
         }
         mi = jl_get_specialization1((jl_tupletype_t*)sigt, world, 0);
+        if (mi != jl_nothing && !jl_subtype(sigt, ((jl_method_instance_t*)mi)->def.method->sig))
+            mi = jl_nothing; // partially-covered: not a guaranteed dispatch
         if (f != nullptr) {
             if (last_ci == nullptr) {
                 if (mi == jl_nothing) {
@@ -443,6 +450,10 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         // Generate an adapter to a dynamic dispatch
         if (cfuncdata->unspecialized == nullptr)
             cfuncdata->unspecialized = jl_jit_abi_converter(ct, from_abi, nullptr);
+        if (cfuncdata->unspecialized == nullptr) {
+            JL_UNLOCK(&cfun_lock);
+            jl_errorf("cfunction not available in this build of Julia");
+        }
 
         return assign_fptr(cfuncdata->unspecialized);
     }
@@ -455,7 +466,17 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         // even though we're likely to encounter memory errors in that case
         jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance((jl_method_instance_t*)mi));
     }
-    return assign_fptr(jl_jit_abi_converter(ct, from_abi, codeinst));
+    f = jl_jit_abi_converter(ct, from_abi, codeinst);
+    if (f == nullptr) {
+        // JIT is unavailable - fall back to dynamic dispatch so that we
+        // can re-enter the interpreter etc. as needed
+        f = cfuncdata->unspecialized;
+        if (f == nullptr) {
+            JL_UNLOCK(&cfun_lock);
+            jl_errorf("cfunction not available in this build of Julia");
+        }
+    }
+    return assign_fptr(f);
 }
 
 void jl_init_runtime_ccall(void)
