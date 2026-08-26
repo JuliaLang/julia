@@ -3450,7 +3450,7 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     // keeps a single winner
     super = NULL;
     if (jl_atomic_cmpswap(superp, &super, (jl_datatype_t*)s)) {
-        jl_gc_wb(ndt, s);
+        jl_gc_wb(ndt, &ndt->super, s);
         super = (jl_datatype_t*)s;
     }
     return super;

@@ -12,7 +12,7 @@ use mmtk::util::heap::GCTriggerPolicy;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
-#[cfg(feature = "concurrentimmix")]
+#[cfg(any(feature = "concurrentimmix", feature = "concurrent_marking"))]
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
 
@@ -222,9 +222,16 @@ impl Collection<JuliaVM> for VMCollection {
             )
         }
 
-        #[cfg(feature = "concurrentimmix")]
+        #[cfg(feature = "concurrent_marking")]
         {
-            // For concurrent Immix, we need to check if SATB is active
+            // Every concurrent plan (concurrentimmix's SATB, and LXR) needs this: whether its
+            // background marking is still in flight decides whether gcstack scans have to keep
+            // using the stable snapshot in `GC_STACK_SNAPSHOTS` rather than live stack memory.
+            // This used to be spelled `concurrentimmix`, which silently excluded LXR -- so a
+            // task discovered live via ordinary heap tracing (not just root scanning) got its
+            // gcstack read directly out of live memory while marking ran concurrently with the
+            // mutator, racing a stack-pool release/reuse of that same memory and segfaulting in
+            // `mmtk_scan_gcstack`.
             let concurrent_plan = SINGLETON.get_plan().concurrent().unwrap();
             let concurrent_marking_active = concurrent_plan.concurrent_work_in_progress();
 
