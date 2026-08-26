@@ -18,6 +18,21 @@ let x = [1,2]
 end
 """) == [1,2]
 
+# empty strings
+@test JuliaLowering.include_string(test_mod, raw"""
+\"\"\"
+\"\"\"
+""") == ""
+@test JuliaLowering.include_string(test_mod, raw"""
+""
+""") == ""
+@test JuliaLowering.include_string(test_mod, raw"""
+"$("")"
+""") == ""
+@test JuliaLowering.include_string(test_mod, raw"""
+\"\"\"$("")\"\"\"
+""") == ""
+
 @test JuliaLowering.include_string(test_mod, raw"""
 let
     x = 10
