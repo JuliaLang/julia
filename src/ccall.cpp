@@ -740,6 +740,35 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
 
 // --- code generator for llvmcall ---
 
+// Intrinsics that belong to a different target cannot be selected by the back-end for
+// the current one, which LLVM reports as a fatal error (`Cannot select: intrinsic ...`),
+// aborting the process. Reject them during codegen instead, so that the failure is an
+// ordinary Julia error. This also keeps ahead-of-time compilation from aborting on
+// methods that are only valid on another target (e.g. GPU kernels), which `--output-o`
+// compiles whether or not they are ever called.
+//
+// The check is against the triple of the module being emitted, so external users of
+// codegen that target another architecture (such as GPUCompiler.jl, which sets the
+// module's triple before emitting into it) can still use that target's intrinsics.
+static bool is_foreign_target_intrinsic(jl_codectx_t &ctx, Intrinsic::ID ID, StringRef name, std::string &msg)
+{
+    if (ID == Intrinsic::not_intrinsic || !Intrinsic::isTargetIntrinsic(ID))
+        return false;
+    const Triple &TT = ctx.emission_context.TargetTriple;
+    StringRef host = Triple::getArchTypePrefix(TT.getArch());
+    if (host.empty())
+        return false;
+    // intrinsic names are `llvm.<target prefix>.<name>`
+    StringRef target = name;
+    target.consume_front("llvm.");
+    target = target.split('.').first;
+    if (target == host)
+        return false;
+    msg = "llvmcall: intrinsic " + name.str() + " is not available on the " + host.str() +
+          " target (it belongs to the " + target.str() + " target)";
+    return true;
+}
+
 static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
     ++EmittedLLVMCalls;
@@ -987,6 +1016,15 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                 return jl_cgval_t();
             }
             Mod = std::move(ModuleOrErr.get());
+        }
+
+        for (Function &F : *Mod) {
+            std::string msg;
+            if (F.isIntrinsic() && is_foreign_target_intrinsic(ctx, F.getIntrinsicID(), F.getName(), msg)) {
+                emit_error(ctx, msg);
+                JL_GC_POP();
+                return jl_cgval_t();
+            }
         }
 
         f = Mod->getFunction(jl_string_data(entry));
@@ -2153,6 +2191,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 #else
                 auto ID = Function::lookupIntrinsicID(f_name);
 #endif
+                std::string foreign_msg;
+                if (is_foreign_target_intrinsic(ctx, ID, f_name, foreign_msg)) {
+                    emit_error(ctx, foreign_msg);
+                    return jl_cgval_t();
+                }
                 if (ID != Intrinsic::not_intrinsic) {
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
