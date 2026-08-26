@@ -1506,9 +1506,13 @@ endif
 endif
 
 # Warn if the user tries to build something that requires `gfortran` but they don't have it installed.
+# Goals that only download or repackage sources never run the fortran compiler and are exempt.
+FC_EXEMPT_GOALS := get getall light-source-dist full-source-dist print-%
+ifneq (,$(filter-out $(FC_EXEMPT_GOALS),$(or $(MAKECMDGOALS),x)))
 ifeq ($(FC_VERSION),)
 ifneq ($(USE_BINARYBUILDER_OPENBLAS)$(USE_BINARYBUILDER_LIBSUITESPARSE),11)
 $(error "Attempting to build OpenBLAS or SuiteSparse without a functioning fortran compiler!")
+endif
 endif
 endif
 
