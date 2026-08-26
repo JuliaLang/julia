@@ -218,3 +218,31 @@ s = MyStruct()
 @test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0
+
+# Intrinsics that belong to a different target cannot be selected by the host back-end.
+# LLVM reports that as a fatal error (`LLVM ERROR: Cannot select: intrinsic ...`) and
+# aborts the process, so such code must be rejected during codegen instead. This matters
+# for ahead-of-time compilation (`--output-o`, PackageCompiler.jl, juliac), which compiles
+# every concretely-typed method whether or not it is ever called: GPU packages define
+# methods whose bodies are only valid on the device (JuliaGPU/GPUCompiler.jl#611).
+@testset "intrinsics of another target" begin
+    script = """
+        f_nvvm() = ccall("llvm.nvvm.membar.cta", llvmcall, Cvoid, ())
+        g_nvvm() = Base.llvmcall(("declare i32 @llvm.nvvm.read.ptx.sreg.tid.x()",
+                                  "%r = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()\\nret i32 %r"),
+                                 Int32, Tuple{})
+        h_amdgcn() = ccall("llvm.amdgcn.s.barrier", llvmcall, Cvoid, ())
+        for f in (f_nvvm, g_nvvm, h_amdgcn)
+            try
+                f()
+                exit(1)  # ran to completion
+            catch err
+                err isa ErrorException || exit(2)
+                occursin("not available", err.msg) || exit(3)
+            end
+        end
+        exit(0)
+        """
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+    @test success(pipeline(cmd; stderr=devnull))
+end
