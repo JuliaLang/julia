@@ -493,7 +493,7 @@ function expand_scalar_compare_chain(ctx, srcref, terms, i)
         lhs = terms[i]
         op = terms[i+1]
         rhs = terms[i+2]
-        if kind(op) == K"."
+        if kind(op) == K"." && numchildren(op) == 1
             break
         end
         comp = @ast ctx op [K"call"
@@ -533,7 +533,7 @@ function expand_compare_chain(ctx, ex)
     comparisons = nothing
     # Combine any number of dotted comparisons
     while i + 2 <= length(terms)
-        if kind(terms[i+1]) != K"."
+        if !(kind(terms[i+1]) == K"." && numchildren(terms[i+1]) == 1)
             (comp, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
         else
             lhs = terms[i]
