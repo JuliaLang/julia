@@ -489,10 +489,10 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
             std::string type_str = jl_is_datatype(x.typ) ? jl_symbol_name(((jl_datatype_t*)x.typ)->name->name) : "<unknown type>";
             return "unbox::" + type_str;
         });
-        // This private buffer receives the tracked pointers back from the roots
-        // buffer, so it must live in a region that never grants late-gc-lowering a
-        // rooting refinement (see the invariant at `jl_regions_t`).
-        auto combined_ai = stack_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
+        // The pointers written back here are a second view of the ones the separate
+        // roots buffer holds, which is what keeps them alive; a value buffer cannot
+        // serve as a gc frame, so it is never itself a root.
+        auto combined_ai = private_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
         recombine_value(ctx, x, combined, combined_ai, alignment, false);
         p = combined;
         ai = combined_ai;

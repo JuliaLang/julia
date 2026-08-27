@@ -1412,7 +1412,7 @@ static std::tuple<Value*, jl_gc_roots_t, jl_aliasinfo_t> split_value(jl_codectx_
         // The alloca contains no pointers (those were split into roots), so this
         // write-once copy takes the layout tag of what it holds, as the no-copy
         // paths above already do.
-        jl_aliasinfo_t dst_ai = stack_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
+        jl_aliasinfo_t dst_ai = private_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
         split_value_into(ctx, x, x_alignment, alloca, align_dst, dst_ai, false);
         return std::make_tuple(alloca, std::move(roots), dst_ai);
     }
@@ -1452,7 +1452,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
     jl_aliasinfo_t src_ai = x.aliasinfo;
     size_t npointers = typ->layout->npointers;
     size_t shrunken_size = split_value_size(typ).first;
-    bool isprivatemem = isa<AllocaInst>(dst->stripInBoundsOffsets()) || dst_ai.region == jl_aliasinfo_t::Region::stack;
+    bool isprivatemem = isa<AllocaInst>(dst->stripInBoundsOffsets()) || ai_is_private(dst_ai);
     size_t off = 0;
     for (size_t i = 0; true; i++) {
         bool last = i == npointers;
@@ -2483,7 +2483,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
             AllocaInst *lv = emit_static_alloca(ctx, fsz, Align(al));
             setName(ctx.emission_context, lv, "immutable_union");
             // the copy is a private, write-once stack location
-            data_ai = stack_copy_aliasinfo(ctx, ai, jltype);
+            data_ai = private_copy_aliasinfo(ctx, ai, jltype);
             emit_memcpy(ctx, lv, data_ai, ptr, ai, fsz, Align(al), Align(al));
             data = lv;
         }
@@ -4510,9 +4510,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             Instruction *promotion_point = nullptr;
             ssize_t promotion_ssa = -1;
             Value *strct;
-            // This private buffer is a write-once copy of an immutable,
-            // but it must not claim `Region::stack`, because `boxed` may later
-            // promote the alloca into a freshly allocated heap box.
+            // This private buffer is a write-once copy of an immutable, and claims
+            // the same `immutdata` the value has anywhere else -- which is also what
+            // lets `boxed` later promote the alloca into a heap box in place.
             const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty);
             assert(strct_ai.region == jl_aliasinfo_t::Region::immutdata);
             SmallVector<Value*,0> inline_roots;

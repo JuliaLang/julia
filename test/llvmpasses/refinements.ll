@@ -239,10 +239,10 @@ define void @refine_region_without_type_tag({} addrspace(10)* %a) {
     ret void
 }
 
-; ... and the same layout tag also describes a private stack buffer, whose
-; contents may be overwritten while the buffer stays live.
-define void @dont_refine_stack_region({} addrspace(10)* %a) {
-; CHECK-LABEL: @dont_refine_stack_region
+; ... and the same layout tag also describes the element data of a `GenericMemory`,
+; which may be overwritten while the memory object stays live.
+define void @dont_refine_memorybuf_region({} addrspace(10)* %a) {
+; CHECK-LABEL: @dont_refine_memorybuf_region
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
@@ -343,7 +343,7 @@ attributes #1 = { inaccessiblememonly norecurse nounwind }
 !8 = !{!"jnoalias_immutdata", !9}
 !9 = !{!"jnoalias"}
 !10 = !{!11}
-!11 = !{!"jnoalias_stack", !9}
+!11 = !{!"jnoalias_memorybuf", !9}
 !12 = !{!8, !11}
 ; Same scope name, but a domain that is not ours.
 !15 = !{!16}
