@@ -51,8 +51,8 @@ Julia emits two orthogonal kinds of alias metadata: LLVM's
 layout/type of the data at a location (see `jl_tbaacache_t` in `src/codegen.cpp` for the
 inclusion relationships), while `!alias.scope`/`!noalias` metadata describes the disjoint
 memory regions (GC frame, stack, the assignable fields of a mutable heap object, its
-`const` fields, the payload of an immutable one, the element data of a `GenericMemory`,
-constant; see `jl_noaliascache_t`). Codegen tracks both together in `jl_aliasinfo_t`, with some
+`const` fields, the payload of an immutable one, the element data of a `GenericMemory`;
+see `jl_noaliascache_t`). Codegen tracks both together in `jl_aliasinfo_t`, with some
 standard pairings precomputed in `jl_aliascache_t`.
 
 The two axes answer different questions, and the split is load-bearing. Whether memory
@@ -65,6 +65,12 @@ object is a region of its own. What is stored belongs to the tag: under
 `jtbaa_value` sit `jtbaa_field` for an ordinary field of a user-defined layout and
 sibling tags for the object headers the runtime manages (`jtbaa_array`,
 `jtbaa_memory`, `jtbaa_datatype`), so a `setfield!` never aliases an array's length.
+
+A distinction only earns a region if a tag cannot carry it. Memory that is already
+constant when this compilation unit runs is described purely by the immutable
+`jtbaa_const` tag and `!invariant.load`: that claim is stronger than a scope, because
+it also holds against instructions carrying no metadata at all, and it does not have
+to be unioned into the scope set of a `memcpy` that merely reads such memory.
 
 The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 

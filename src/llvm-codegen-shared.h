@@ -190,11 +190,11 @@ static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*>
 
 // The regions in that domain whose base object cannot stop referencing a tracked
 // pointer stored in them while the base is live: the payload of an immutable heap
-// object, a `const` field of a mutable one, and memory that is already constant here.
+// object, and a `const` field of a mutable one. Memory that is already constant
+// here needs no region -- such a load is marked '!invariant.load' below.
 static inline bool isRootedRegionName(llvm::StringRef name)
 {
-    return name == "jnoalias_immutdata" || name == "jnoalias_mutconstdata" ||
-           name == "jnoalias_const";
+    return name == "jnoalias_immutdata" || name == "jnoalias_mutconstdata";
 }
 
 // Whether the object rooting the address `LI` loads from also roots the loaded

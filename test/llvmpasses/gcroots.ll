@@ -349,9 +349,9 @@ define {} addrspace(10)* @gv_const() {
 top:
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
-    %v10 = load {}*, {}** @gv1, !tbaa !2, !alias.scope !3
+    %v10 = load {}*, {}** @gv1, !tbaa !2, !invariant.load !3
     %v1 = addrspacecast {}* %v10 to {} addrspace(10)*
-    %v2 = load {} addrspace(10)*, {} addrspace(10)** @gv2, !tbaa !2, !alias.scope !3
+    %v2 = load {} addrspace(10)*, {} addrspace(10)** @gv2, !tbaa !2, !invariant.load !3
     call void @jl_safepoint()
     call void @one_arg_boxed({} addrspace(10)* %v1)
     call void @one_arg_boxed({} addrspace(10)* %v2)
@@ -804,7 +804,4 @@ top:
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}
-; The memory-region '!alias.scope' domain (`jl_regions_t` in codegen.cpp).
-!3 = !{!4}
-!4 = !{!"jnoalias_const", !5}
-!5 = !{!"jnoalias"}
+!3 = !{}
