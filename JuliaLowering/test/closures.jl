@@ -1251,6 +1251,85 @@ f_sp_in_sig_in_lam_in_optarg(1.)(2)
     """)
 end
 
+# Global methods are not lifted out of control flow.  Local methods also aren't,
+# except for in loops
+@testset "local and global functions in control flow" begin
+    @test JuliaLowering.include_string(@newmod(), """
+    begin
+        local cltypes = []
+        local out = []
+        for i in 1:2
+            local function f(); 1; end
+            push!(cltypes, typeof(f))
+            push!(out, f())
+        end
+        (cltypes[1] == cltypes[2], out)
+    end
+    """) == (true, [1,1])
+    @test JuliaLowering.include_string(@newmod(), """
+    begin
+        local cltypes = []
+        local out = []
+        for i in 1:2
+            local function f(); i; end # captures `i`
+            push!(cltypes, typeof(f))
+            push!(out, f())
+        end
+        (cltypes[1] === cltypes[2], out)
+    end
+    """) == (true, [1,2])
+    # i not defined
+    @test_throws UndefVarError JuliaLowering.include_string(@newmod(), """begin
+        local cltypes = []
+        local out = []
+        for i in 1:2
+            local function f(x::T) where {T<:typeof(i)}; x; end
+            push!(cltypes, typeof(f))
+            push!(out, f())
+        end
+        (cltypes[1] === cltypes[2], out)
+    end""")
+
+    @test JuliaLowering.include_string(@newmod(), """
+    if false
+        global function f(); 1; end
+    end
+    (isdefined(@__MODULE__, :f))
+    """) == false
+    @test JuliaLowering.include_string(@newmod(), """
+    for i in 1:0
+        global function f(); 1; end
+    end
+    (isdefined(@__MODULE__, :f))
+    """) == false # flisp: true but with 0 methods
+    @test JuliaLowering.include_string(@newmod(), """
+    for i in 1:1
+        global function f(); 1; end
+    end
+    (isdefined(@__MODULE__, :f))
+    """) == true
+
+    # short-form (broken in flisp)
+    @test JuliaLowering.include_string(@newmod(), """
+    if false
+        global function f end
+    end
+    (isdefined(@__MODULE__, :f))
+    """) == false
+    @test JuliaLowering.include_string(@newmod(), """
+    for i in 1:0
+        global function f end
+    end
+    (isdefined(@__MODULE__, :f))
+    """) == false
+    @test JuliaLowering.include_string(@newmod(), """
+    for i in 1:1
+        global function f end
+    end
+    (isdefined(@__MODULE__, :f))
+    """) == true
+end
+
 # A function definition is treated as an assignment to a name
 @testset "inner functions sharing names" begin
     @test JuliaLowering.include_string(test_mod, """
@@ -1362,13 +1441,8 @@ end
     end
     """) == ((1, 123), (1, 123.0))
 
-    # Closure info is keyed on (binding_id, lambda_id), so a name reassigned inside a
-    # *nested* function is a genuinely distinct closure type.  The cases above use
-    # non-capturing closures; these check that distinct types with *different capture
-    # sets* are kept separate (the case where a merged type would be most wrong).
+    # Closure info is keyed on pair (binding_id, lambda_id)
     @testset "(AI) inner functions with differing captures across lambdas" begin
-        # `inner` (in `f`) captures only `a`; the redefinition (in `mid`) captures
-        # both `a` and `b`.  `v1` observes the first type, `v2`/`inner` the second.
         @test JuliaLowering.include_string(test_mod, """
         begin
             function f_diffcap(a, b)
@@ -1385,7 +1459,6 @@ end
         end
         """) == (1, 11)
 
-        # The two definitions really are separate closure *types*.
         @test JuliaLowering.include_string(test_mod, """
         begin
             function f_diffcap_types(a, b)
@@ -1401,9 +1474,6 @@ end
         end
         """) == false
 
-        # Static-parameter captures are also keyed per (name, lambda): `g` in `f`
-        # captures only `T`, while the redefinition in `mid` captures both `T` and
-        # `S`.  A shared closure type would merge these capture sets.
         @test JuliaLowering.include_string(test_mod, """
         begin
             function f_sp_redef(::Type{T}) where {T}
