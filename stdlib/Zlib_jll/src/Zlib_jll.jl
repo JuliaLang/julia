@@ -31,6 +31,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libz_path() = libz_path
+
 function __init__()
     global libz_path = string(libz.path)
     global artifact_dir = dirname(Sys.BINDIR)
