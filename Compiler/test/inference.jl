@@ -593,6 +593,36 @@ end
     end
 end
 
+# a binder whose occurrences were all widened away is dropped by the
+# constructor, so repeated widening converges instead of accumulating
+# vacuous binders
+let t = Type{Vector{T}} where T
+    for _ in 1:3
+        t′ = Compiler.limit_type_size(t, Any, Any, 1, 4)
+        @test Compiler.unionall_depth(t′) <= Compiler.unionall_depth(t)
+        t = t′
+    end
+    @test Compiler.limit_type_size(t, Any, Any, 1, 4) === t
+end
+
+# the `.super` branch of `getfield_tfunc` on a kind (`Type{X{T}} where T`)
+# must widen when the wrapper's supertype depends on the parameter: returning
+# the raw template fragment leaks dangling bound-variable references into the
+# lattice, and the ill-formed type then matches no methods (observed in
+# PkgEval as spurious `Union{}` inference and runtime "Unreachable reached"
+# through ColorTypes' trait dispatch)
+@test Base.infer_return_type(supertype, (Type{Vector{A}} where A,)) == DataType
+@test Base.infer_return_type(supertype, (Type{Complex{A}} where A,)) == Type{Number}
+
+# detached bound-variable references are valid lattice elements through the
+# extended (wrapper) lattices, not only through `JLTypeLattice`
+let r = Core.TypeVarRef(1), 𝕃 = Compiler.fallback_lattice
+    @test Compiler.is_valid_lattice_norec(Compiler.JLTypeLattice(), r)
+    @test Compiler.tmeet(𝕃, r, r) === r
+    xt = Core.apply_type(Type, r)
+    @test Compiler.tmeet(𝕃, xt, r) === xt
+end
+
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
@@ -892,7 +922,7 @@ function g3182(t::DataType)
     # however the ::Type{T} method should still match at run time.
     return f3182(t)
 end
-@test g3182(Complex.body) == 0
+@test g3182(Complex.inner) == 0
 
 
 # issue #5906
@@ -2252,7 +2282,7 @@ let nfields_tfunc(@nospecialize xs...) =
     # only the egality kind `TypeEgal{X}` pins the value to exactly `X` (#61323)
     @test nfields_tfunc(Type{Type{Int}}) === Int
     @test nfields_tfunc(Core.TypeEgal{Type{Int}}) === Const(nfields(Type{Int}))
-    @test nfields_tfunc(UnionAll) === Const(2)
+    @test nfields_tfunc(UnionAll) === Const(6) # name, lb, ub, body, flags, hash
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Int
     @test nfields_tfunc(Core.TypeEgal{Int}) === Const(nfields(DataType))
@@ -3720,10 +3750,10 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(Int), Const(Int), Const(Int)) === Union{}
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(String)) === Union{}
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(AbstractString)) === Union{}
-    @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === Base.rewrap_unionall(Type{Issue47089.body.body}, Issue47089)
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === Base.rewrap_unionall(Type{Issue47089.inner.inner}, Issue47089)
     # check complexity size limiting
     @test apply_type_tfunc(𝕃, Const(Val), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Val{Pair{A, B}}} where {A, B}
-    @test apply_type_tfunc(𝕃, Const(Pair), Base.rewrap_unionall(Type{Pair.body.body},Pair), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
+    @test apply_type_tfunc(𝕃, Const(Pair), Base.rewrap_unionall(Type{Pair.inner.inner},Pair), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
     @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
@@ -3733,11 +3763,10 @@ end
 @test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
 let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
+    # binders are positional, so renaming is the identity and alpha-equal
+    # spellings are one object
     B = Compiler.rename_unionall(A)
-    for i in 1:8
-        @test A.var != B.var && (i == 1 ? A == B : A != B)
-        A, B = A.body, B.body
-    end
+    @test A === B
 end
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
@@ -3942,9 +3971,9 @@ let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
 end
 
 # issue #27078
-f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
+f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.inner) : T
 T27078 = Vector{Vector{T}} where T
-@test f27078(T27078) === T27078.body
+@test f27078(T27078) === T27078.inner
 
 # issue #28070
 g28070(f, args...) = f(args...)
@@ -6420,11 +6449,15 @@ paramtype62001(::Type{V}) where V<:Vector =
     isa(V, UnionAll) ? myeltype62001(Base.unwrap_unionall(V)) : myeltype62001(V)
 # A static parameter may be exactly a TypeVar object from the input.
 typevar_length62001(::Type{NTuple{N, VecElement{T}}}) where {N, T} = N + 32
-let T = Base.unwrap_unionall(Vector).parameters[1]
-    @test myeltype62001(Base.unwrap_unionall(Vector)) === T
+let b = Base.unwrap_unionall(Vector)
+    # under positional binders a detached wrapper body carries bound-variable
+    # references, not TypeVar objects, and as a dispatch key it is pinned to
+    # its own identity: it no longer matches the `Type{Vector{T}}` pattern
+    @test b.parameters[1] isa Core.TypeVarRef
+    @test_throws MethodError myeltype62001(b)
     @test paramtype62001(Vector{Int8}) === Int8
-    @test paramtype62001(Vector) === T
-    @test only(Base.return_types(myeltype62001, (Type{Base.unwrap_unionall(Vector)},))) === TypeVar
+    @test_throws MethodError paramtype62001(Vector)
+    @test isempty(Base.return_types(myeltype62001, (Type{b},)))
 end
 let N = TypeVar(:N), T = TypeVar(:T)
     @test_throws MethodError typevar_length62001(NTuple{N, VecElement{T}})
@@ -6435,8 +6468,9 @@ end
 # forms) rather than invent a fresh existential.
 applysparam62001(::Type{Vector{T}}) where T = Vector{T}
 let v = Base.unwrap_unionall(Vector)
-    @test applysparam62001(v) === v
-    @test only(Base.return_types(applysparam62001, (Type{v},))) == Type{v}
+    # see above: the detached body is not a `Type{Vector{T}}` match
+    @test_throws MethodError applysparam62001(v)
+    @test isempty(Base.return_types(applysparam62001, (Type{v},)))
 end
 # Identityless TypeVar values as type parameters widen to the top kind forms.
 applytypevar62001(tv::TypeVar) = Vector{tv}
@@ -7851,5 +7885,18 @@ function splatted_task_invoke(@nospecialize(rest::Tuple))
     return fetch(schedule(t))
 end
 @test Base.infer_return_type(splatted_task_invoke, (Tuple,)) === Tuple{}
+
+# review of the de Bruijn refactor: `has_dangling_tvarrefs` tfunc must not
+# constant-fold `TypeVarRef` values (a bare reference is a dangling fragment)
+let tfunc(t) = Compiler.has_dangling_tvarrefs_tfunc(Compiler.fallback_lattice, t)
+    @test tfunc(Core.TypeVarRef) === Core.Const(true)
+    @test tfunc(TypeVar) === Core.Const(false)
+    @test tfunc(Union{Core.TypeVarRef, Int}) === Bool
+    @test tfunc(Int) === Core.Const(false)
+end
+let f(x) = Core.has_dangling_tvarrefs(x)
+    @test f(Base.inferencebarrier(Core.TypeVarRef(1)))
+    @test f(Base.inferencebarrier(1)) === false
+end
 
 end # module inference

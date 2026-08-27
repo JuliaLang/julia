@@ -753,7 +753,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
     if (!jl_is_cpointer_type(aty))
         return emit_runtime_pointerref(ctx, argv);
     jl_value_t *ety = jl_tparam0(aty);
-    if (jl_is_typevar(ety))
+    if (jl_is_typevar(ety) || jl_is_tvarref(ety))
         return emit_runtime_pointerref(ctx, argv);
     if (!is_valid_intrinsic_elptr(ety)) {
         emit_error(ctx, "pointerref: invalid pointer type");
@@ -829,7 +829,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
     if (!jl_is_cpointer_type(aty))
         return emit_runtime_pointerset(ctx, argv);
     jl_value_t *ety = jl_tparam0(aty);
-    if (jl_is_typevar(ety))
+    if (jl_is_typevar(ety) || jl_is_tvarref(ety))
         return emit_runtime_pointerset(ctx, argv);
     if (align.constant == NULL || !jl_is_long(align.constant))
         return emit_runtime_pointerset(ctx, argv);
@@ -943,7 +943,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
     if (!jl_is_cpointer_type(aty) || !ord.constant || !jl_is_symbol(ord.constant))
         return emit_runtime_call(ctx, atomic_pointerref, argv, 2);
     jl_value_t *ety = jl_tparam0(aty);
-    if (jl_is_typevar(ety))
+    if (jl_is_typevar(ety) || jl_is_tvarref(ety))
         return emit_runtime_call(ctx, atomic_pointerref, argv, 2);
     enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
     if (order == jl_memory_order_invalid) {
@@ -1040,7 +1040,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
             return emit_runtime_call(ctx, f, argv, nargs);
     }
     jl_value_t *ety = jl_tparam0(aty);
-    if (jl_is_typevar(ety))
+    if (jl_is_typevar(ety) || jl_is_tvarref(ety))
         return emit_runtime_call(ctx, f, argv, nargs);
     enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
     enum jl_memory_order failorder = op == StoreKind::Replace ? jl_get_atomic_order((jl_sym_t*)failord.constant, true, false) : order;

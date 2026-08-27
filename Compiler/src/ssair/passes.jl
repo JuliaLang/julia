@@ -1132,21 +1132,21 @@ end
     # TODO: More general structural analysis of the intersection
     sig = m.sig
     isa(sig, UnionAll) || return nothing
-    tvar = sig.var
-    sig = sig.body
+    # the binder's occurrences are positional references (depth 1 from the body)
+    sig = sig.inner
     isa(sig, DataType) || return nothing
     sig.name === Tuple.name || return nothing
     sig_parameters = sig.parameters::SimpleVector
     length_sig_parameters = length(sig_parameters)
     length_sig_parameters >= 1 || return nothing
 
-    function has_typevar_closure(j::Int)
-        has_typevar(sig_parameters[j], tvar)
+    function has_tvarref_closure(j::Int)
+        tvarref_occurs(sig_parameters[j], 1)
     end
 
-    i = findfirst(has_typevar_closure, 1:length_sig_parameters)
+    i = findfirst(has_tvarref_closure, 1:length_sig_parameters)
     i === nothing && return nothing
-    any(has_typevar_closure, i+1:length_sig_parameters) && return nothing
+    any(has_tvarref_closure, i+1:length_sig_parameters) && return nothing
 
     arg = sig_parameters[i]
 
@@ -1170,30 +1170,35 @@ end
     applyT = applyT.val
 
     isa(applyT, UnionAll) || return nothing
-    # N.B.: At the moment we only lift the valI == 1 case, so we
-    # only need to look at the outermost tvar.
-    applyTvar = applyT.var
-    applyTbody = applyT.body
-
-    arg = unwrap_unionall(arg)
-    applyTbody = unwrap_unionall(applyTbody)
+    # N.B.: At the moment we only lift the valI == 1 case, so we only need to
+    # look at the outermost binder: from the fully unwrapped body it is
+    # `napply` levels out, while the sig binder is `1 + narg` levels out from
+    # the unwrapped `arg`
+    napply = 0
+    applyTbody = applyT
+    while applyTbody isa UnionAll
+        napply += 1
+        applyTbody = applyTbody.inner
+    end
+    narg = 0
+    while arg isa UnionAll
+        narg += 1
+        arg = arg.inner
+    end
 
     (isa(arg, DataType) && isa(applyTbody, DataType)) || return nothing
     applyTbody.name === arg.name || return nothing
     length(applyTbody.parameters) == length(arg.parameters) || return nothing
     for i = 1:length(applyTbody.parameters)
-        if applyTbody.parameters[i] === applyTvar && arg.parameters[i] === tvar
+        pa = applyTbody.parameters[i]
+        pb = arg.parameters[i]
+        if pa isa TypeVarRef && pa.depth == napply &&
+           pb isa TypeVarRef && pb.depth == 1 + narg
             return LiftedValue(argdef.args[3])
         end
     end
     return nothing
 end
-
-struct IsEgal <: Function
-    x::Any
-    IsEgal(@nospecialize(x)) = new(x)
-end
-(x::IsEgal)(@nospecialize(y)) = x.x === y
 
 # This tries to match patterns of the form
 #  %ft   = typeof(%farg)
@@ -1213,17 +1218,19 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
     isa(applyT, Const) || return false
 
     applyT = applyT.val
-    tvars = Any[]
+    nbinders = 0
     while isa(applyT, UnionAll)
-        applyTvar = applyT.var
-        applyT = applyT.body
-        push!(tvars, applyTvar)
+        nbinders += 1
+        applyT = applyT.inner
     end
 
     @assert applyT.name === typ.name
+    # a field typed as the binder `d` levels out is the `apply_type` argument
+    # at (outermost-first) position `nbinders - d + 1`
     fT = fieldtype(applyT, fidx)
-    idx = findfirst(IsEgal(fT), tvars)
-    idx === nothing && return false
+    fT isa TypeVarRef || return false
+    idx = nbinders - fT.depth + 1
+    1 <= idx <= nbinders || return false
     checkbounds(Bool, Tdef.args, 2+idx) || return false
     valarg = Tdef.args[2+idx]
     isa(valarg, SSAValue) || return false

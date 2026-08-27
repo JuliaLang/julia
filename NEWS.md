@@ -64,6 +64,23 @@ Language changes
   (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
+  - `UnionAll` types now store their bound variable positionally (de Bruijn style): the
+    binder's `name`, `lb`, and `ub` are fields of the `UnionAll` itself, and the wrapped type
+    (field `inner`) refers to the binder with `Core.TypeVarRef` indices instead of containing
+    a `TypeVar` object. Alpha-equivalent types with the same binder names are consequently
+    egal (`===`). The legacy two-field view keeps working through computed properties:
+    `u.var` materializes a canonical `TypeVar` for the binder and `u.body` is the wrapped
+    type with the binder's references substituted by that variable, so `u.body` mentions
+    `u.var` and `UnionAll(u.var, u.body) == u` as before (these properties are not suitable
+    for hot paths: `var` is memoized through a lock-protected weak cache). `TypeVarRef` is
+    exported from `Core` and `Base`. Note that `Base.unwrap_unionall` now returns the raw
+    stored body — a fragment containing `TypeVarRef`s rather than free `TypeVar`s; code that
+    matched unwrapped bodies against `Type{...}` patterns should use `u.body` (or
+    `Base.unionall_open`) instead ([#62272]).
+  - Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
+    that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
+    operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
+    in the default operators ([#50790]).
 
 Compiler/Runtime improvements
 -----------------------------

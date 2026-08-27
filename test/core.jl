@@ -197,7 +197,7 @@ f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
 f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 @test f11840(Type) == "UnionAll"
-@test f11840(Type.body) == "Type"
+@test f11840(Type.inner) == "Type"
 @test f11840(Union{Int,Int8}) == "Type"
 @test f11840(Tuple) == "Tuple"
 @test f11840(TT11840) == "Tuple"
@@ -205,9 +205,9 @@ f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 g11840(::DataType) = 1
 g11840(::Type) = 2
 g11840(sig::Type{T}) where {T<:Tuple} = 3
-@test g11840(Vector.body) == 1
+@test g11840(Vector.inner) == 1
 @test g11840(Vector) == 2
-@test g11840(Vector.body) == 1
+@test g11840(Vector.inner) == 1
 @test g11840(Vector) == 2
 @test g11840(Tuple) == 3
 @test g11840(TT11840) == 3
@@ -216,9 +216,9 @@ g11840b(::DataType) = 1
 g11840b(::Type) = 2
 g11840b(sig::Type{T}) where {T<:Tuple} = 3
 @test g11840b(Vector) == 2
-@test g11840b(Vector.body) == 1
+@test g11840b(Vector.inner) == 1
 @test g11840b(Vector) == 2
-@test g11840b(Vector.body) == 1
+@test g11840b(Vector.inner) == 1
 @test g11840b(Tuple) == 3
 @test g11840b(TT11840) == 3
 
@@ -227,22 +227,22 @@ h11840(::Type) = '2'
 h11840(::UnionAll) = '3'
 h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Vector) == '3'
-@test h11840(Vector.body) == '1'
+@test h11840(Vector.inner) == '1'
 @test h11840(Vector) == '3'
 @test h11840(Union{Vector, Matrix}) == '2'
-@test h11840(Union{Vector.body, Matrix.body}) == '2'
+@test h11840(Union{Vector.inner, Matrix.inner}) == '2'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
 # issue #61242: free-TypeVar bodies and their enclosing UnionAlls bind as
 # distinct type objects.
 let f61242(::Type{T}) where T = T
-    @test f61242(Vector.body) === Vector.body
+    @test f61242(Vector.inner) === Vector.inner
     @test f61242(Vector) === Vector
 end
 let g61242(::Type{T}) where T = T
     @test g61242(Vector) === Vector
-    @test g61242(Vector.body) === Vector.body
+    @test g61242(Vector.inner) === Vector.inner
 end
 
 # sparam definedness must agree across `==`-equal representations of a type
@@ -671,14 +671,14 @@ abstract type Qux_{T} <: Sup_{Qux_{Int},T} end
 @test ===(Qux_{Int}, Qux_{Char}.super.parameters[1])
 @test ===(Qux_{Char}.super.parameters[2], Char)
 
-@test Qux_.body.super.parameters[1].super <: Sup_
-@test ===(Qux_{Int}, Qux_.body.super.parameters[1].super.parameters[1])
-@test ===(Int, Qux_.body.super.parameters[1].super.parameters[2])
+@test Qux_.inner.super.parameters[1].super <: Sup_
+@test ===(Qux_{Int}, Qux_.inner.super.parameters[1].super.parameters[1])
+@test ===(Int, Qux_.inner.super.parameters[1].super.parameters[2])
 
 mutable struct Foo_{T} x::Foo_{Int} end
 
-@test ===(Foo_.body.types[1], Foo_{Int})
-@test ===(Foo_.body.types[1].types[1], Foo_{Int})
+@test ===(Foo_.inner.types[1], Foo_{Int})
+@test ===(Foo_.inner.types[1].types[1], Foo_{Int})
 
 mutable struct Circ_{T} x::Circ_{T} end
 @test ===(Circ_{Int}, Circ_{Int}.types[1])
@@ -700,12 +700,15 @@ struct D21923{T,N}; v::D21923{T}; end
 # issue #22624, more circular definitions
 struct T22624{A,B,C}; v::Vector{T22624{Int64,A}}; end
 let ft = Base.datatype_fieldtypes
-    elT = T22624.body.body.body.types[1].parameters[1]
-    @test elT == T22624{Int64, T22624.var, C} where C
-    elT2 = ft(elT.body)[1].parameters[1]
+    A22624, b1 = Base.unionall_open(T22624)
+    B22624, b2 = Base.unionall_open(b1)
+    C22624, tbody = Base.unionall_open(b2)
+    elT = ft(tbody)[1].parameters[1]
+    @test elT == T22624{Int64, A22624, C} where C
+    elT2 = ft(Base.unionall_open(elT)[2])[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
-    @test ft(elT2.body)[1].parameters[1] === elT2
-    @test Base.isconcretetype(ft(elT2.body)[1])
+    @test ft(Base.unionall_open(elT2)[2])[1].parameters[1] === elT2
+    @test Base.isconcretetype(ft(Base.unionall_open(elT2)[2])[1])
 end
 struct S22624{A,B,C} <: Ref{S22624{Int,A}}; end
 @test sizeof(S22624) == sizeof(S22624{Int,Int,Int}) == 0
@@ -1223,15 +1226,18 @@ end
 # isassigned, issue #11167
 mutable struct Type11167{T,N} end
 function count11167()
-    let cache = Type11167.body.body.name.cache
+    let cache = Type11167.inner.inner.name.cache
         return count(!isnothing, cache)
     end
 end
-@test count11167() == 0
-Type11167{Int,2}
-@test count11167() == 1
-Type11167{Float32,5}
-@test count11167() == 2
+# under the de Bruijn representation the typename cache may already hold
+# reference-bearing fragments from the definition itself; count relative
+let base11167 = count11167()
+    Type11167{Int,2}
+    @test count11167() == base11167 + 1
+    Type11167{Float32,5}
+    @test count11167() == base11167 + 2
+end
 
 # dispatch
 let
@@ -1747,7 +1753,7 @@ let
     @test baar(StridedArray) == 2
     @test baar(Base.unwrap_unionall(StridedArray)) == 1
     @test baar(Vector) == 2
-    @test baar(Vector.body) == 0
+    @test baar(Vector.inner) == 0
 
     boor(x) = 0
     boor(x::Union) = 1
@@ -4244,9 +4250,9 @@ end
 @test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B))
 @test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B, A(), A()))
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:new, Complex))
-@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:new, Complex.body))
+@test_throws TypeError("new", DataType, Complex.inner) eval(Expr(:new, Complex.inner))
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
-@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
+@test_throws TypeError("new", DataType, Complex.inner) eval(Expr(:splatnew, Complex.inner, ()))
 
 end
 
@@ -5360,14 +5366,14 @@ struct A12238{T} end
 mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
-@test B12238.body.body.types[1] === A12238{B12238{Int}.body}
+@test B12238.inner.inner.types[1] === A12238{B12238{Int}.inner}
 @test isa(A12238{B12238{Int}}.instance, A12238{B12238{Int}})
 let ft = Base.datatype_fieldtypes
-    @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
+    @test !isdefined(ft(B12238.inner.inner)[1], :instance)  # has free type vars
 end
 
 # issue #54969
-@test !isdefined(Memory.body, :instance)
+@test !isdefined(Memory.inner, :instance)
 
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
@@ -5493,8 +5499,8 @@ mutable struct C16767{T}
     b::A16767{C16767{:a}}
 end
 let ft = Base.datatype_fieldtypes
-    @test ft(ft(B16767.body.types[1])[1].parameters[1])[1] === A16767{B16767.body}
-    @test ft(C16767.body.types[1].types[1].parameters[1])[1] === A16767{C16767{:a}}
+    @test ft(ft(B16767.inner.types[1])[1].parameters[1])[1] === A16767{B16767.inner}
+    @test ft(C16767.inner.types[1].types[1].parameters[1])[1] === A16767{C16767{:a}}
 end
 
 # issue #16340
@@ -6436,7 +6442,7 @@ end
 @test_throws UndefVarError(:T, :static_parameter) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
-# This tests that there's no crash due to accessing Type.body.layout.
+# This tests that there's no crash due to accessing Type.inner.layout.
 let f(n) = isdefined(typeof(n), 5)
     @test f(0) === false
     @test isdefined(Int, 5) === false
@@ -8073,13 +8079,13 @@ struct T44614_3{L, N}
     param::NTuple{N, T44614_1}
     T44614_3(a::Tuple{T44614_2{L}}, pars::NTuple{N, T44614_1}) where {L, N} = new{L, N}(a, pars)
 end
-@test sizeof((T44614_2{L} where L).body) == 24
+@test sizeof((T44614_2{L} where L).inner) == 24
 let T = T44614_3{L,2} where L
     # these values are computable, but we currently don't know how to compute them properly
     ex = ErrorException("Argument is an incomplete T44614_3 type and does not have a definite size.")
-    @test_throws ex sizeof(T.body)
+    @test_throws ex sizeof(T.inner)
     @test_throws ex sizeof(T)
-    @test_throws BoundsError fieldoffset(T.body, 2)
+    @test_throws BoundsError fieldoffset(T.inner, 2)
     @test fieldoffset(T{1}, 2) == 24
 end
 
@@ -8177,8 +8183,8 @@ struct S36104{K,V}
     S36104{K,V}(x::S36104) where {K,V} = new(x)
 end
 @test !isdefined(Base.unwrap_unionall(Base.ImmutableDict).name, :partial)
-@test !isdefined(S36104.body.body.name, :partial)
-@test hasfield(typeof(S36104.body.body.name), :partial)
+@test !isdefined(S36104.inner.inner.name, :partial)
+@test hasfield(typeof(S36104.inner.inner.name), :partial)
 struct S36104{K,V}   # check that redefining it works
     v::S36104{K,V}
     S36104{K,V}() where {K,V} = new()
@@ -8233,7 +8239,7 @@ function f37044(r)
     end
     return t.types
 end
-r37044 = Ref37044(A37044{Int}.body)
+r37044 = Ref37044(A37044{Int}.inner)
 @test f37044(r37044)[1] === Int
 
 a37265() = 0
@@ -9390,4 +9396,119 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test supertype(lazy) isa Type # forcing accessor
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
+end
+
+@testset "detached TypeVarRef values through apply_type and dispatch keys" begin
+    r = TypeVarRef(1)
+    # compiled `apply_type` calls must agree with the interpreted results
+    # instead of being inferred unreachable, for constant operands...
+    @eval gU62272() = Core.apply_type(Union, $r, Int)
+    @eval g162272() = Core.apply_type(Union, $r)
+    @eval gV62272() = Core.apply_type(Vector, $r)
+    @test gU62272() === Core.apply_type(Union, r, Int)
+    @test g162272() === r
+    @test gV62272() === Core.apply_type(Vector, r)
+    # ...for reference-typed operands of unknown identity...
+    fU62272(x::TypeVarRef) = Core.apply_type(Union, x, Int)
+    f162272(x::TypeVarRef) = Core.apply_type(Union, x)
+    fV62272(x::TypeVarRef) = Core.apply_type(Vector, x)
+    @test fU62272(Base.inferencebarrier(r)::TypeVarRef) === Core.apply_type(Union, r, Int)
+    @test f162272(Base.inferencebarrier(r)::TypeVarRef) === r
+    @test fV62272(Base.inferencebarrier(r)::TypeVarRef) === Core.apply_type(Vector, r)
+    # ...and for untyped operands
+    hU62272(x) = Core.apply_type(Union, x, Int)
+    @test hU62272(Base.inferencebarrier(r)) === Core.apply_type(Union, r, Int)
+
+    # the four-argument constructor validates its fields and normalizes like
+    # the translating constructor
+    @test_throws TypeError UnionAll(:T, 1, 2, 3)
+    @test UnionAll(:T, Union{}, Any, Int) === Int
+    @test UnionAll(:T, Union{}, Int, TypeVarRef(1)) === Int
+
+    # `typejoin` cannot compare a detached fragment structurally against an
+    # unrelated type; identity and subtyping still apply
+    b = Array.inner
+    @test typejoin(Vector, b) === Any
+    @test typejoin(b, Vector) === Any
+    @test typejoin(b, b) === b
+    @test typejoin(Vector.inner, Vector) === Vector
+
+    # For fragments, `Core.Typeof` and the runtime argument-slot key serve
+    # different masters and deliberately diverge: `Typeof`'s result must be a
+    # complete type usable as a type parameter (e.g. closure capture fields),
+    # while the dispatch key pins the value by egality so that an exact-key
+    # method is dispatchable and static parameters bind (#61242)
+    x = Vector.inner
+    te = Core.apply_type(Core.TypeEgal, x)
+    @test Core.Typeof(x) === typeof(x)
+    @eval fdisp62272(::$te) = :egal_key
+    @test fdisp62272(x) === :egal_key
+end
+
+# a `jl_shift_dangling_refs` over a typename's own primary body must re-frame
+# the supertype (and field types) for the shifted parameters: the interned
+# fragment it creates is shared, and a verbatim-copied super poisons every
+# later instantiation whose template super hits the same cache key. The method
+# pair below makes specificity comparison shift `ShiftFragVP{ref(1)}` (the
+# primary body) by two binders while resolving the alias-nested bounds; the
+# struct definition then reuses the cached `ShiftFragVP{ref(3)}` fragment as
+# its template supertype. (Found via PkgEval: Polyhedra's supertype chain
+# collapsed to the wrong type parameter.)
+abstract type ShiftFragRep{T} end
+abstract type ShiftFragHRep{T} <: ShiftFragRep{T} end
+abstract type ShiftFragVRep{T} <: ShiftFragRep{T} end
+abstract type ShiftFragHA{T} <: ShiftFragHRep{T} end
+abstract type ShiftFragVP{T} <: ShiftFragVRep{T} end
+struct ShiftFragHS{T, AT<:AbstractVector{T}} end
+struct ShiftFragLN{T, AT<:AbstractVector{T}} end
+struct ShiftFragIdx{T, ElemT, RepT<:ShiftFragRep{T}} end
+const ShiftFragHSI{T, RepT} = ShiftFragIdx{T, <:ShiftFragHS{T, <:AbstractVector{T}}, RepT}
+const ShiftFragLNI{T, RepT} = ShiftFragIdx{T, <:ShiftFragLN{T, <:AbstractVector{T}}, RepT}
+fshiftfrag(::ShiftFragHSI{T, <:ShiftFragHA{T}}) where {T} = 1
+fshiftfrag(::ShiftFragLNI{T, <:ShiftFragVP{T}}) where {T} = 2
+mutable struct ShiftFragPH{T, AT, D<:Union{Int,Ref}} <: ShiftFragVP{T} end
+let P = ShiftFragPH{Float64, Vector{Float64}, Int64}
+    @test supertype(P) === ShiftFragVP{Float64}
+    @test supertype(supertype(P)) === ShiftFragVRep{Float64}
+    @test supertype(supertype(supertype(P))) === ShiftFragRep{Float64}
+    @test P <: ShiftFragRep{Float64}
+    @test !(P <: ShiftFragVRep{Int64})
+    # the interned fragment itself carries a consistently framed supertype
+    tpl = Base.unwrap_unionall(ShiftFragPH)
+    frag = getfield(tpl, :super)
+    @test frag === ShiftFragVP{Core.TypeVarRef(3)}
+    @test getfield(frag, :super) === ShiftFragVRep{Core.TypeVarRef(3)}
+end
+
+# review of the de Bruijn refactor: a deferred (lazily computed) supertype must
+# present the same field-access semantics to compiled and interpreted code
+module DeferredSuper62272
+struct T{A} <: AbstractArray{T{Tuple{A}}, 1} end
+end
+let root = Base.unwrap_unionall(DeferredSuper62272.T)
+    d1 = supertype(root).parameters[1]
+    lazy = supertype(d1).parameters[1]
+    @noinline compiled_isdef(x::DataType) = isdefined(x, :super)
+    # the slot can be filled at any moment by unrelated activity, so bracket
+    # the interpreted read with compiled reads and require monotone agreement
+    c1 = compiled_isdef(Base.inferencebarrier(lazy))
+    itp = Core.eval(@__MODULE__, :(isdefined($lazy, :super)))
+    c2 = compiled_isdef(Base.inferencebarrier(lazy))
+    @test c1 <= itp <= c2
+    @test supertype(lazy) isa Type # forcing accessor
+    @test isdefined(lazy, :super)
+    @test getfield(lazy, :super) === supertype(lazy)
+end
+
+# issue #61347 (field-type half; the supertype half is covered above): a
+# structurally increasing recursive field type must not hang instantiation.
+# Under the positional representation such a definition's fragments defer
+# their field types and complete them lazily, one level per demand.
+module Issue61347FieldTypes
+abstract type A{T} end
+struct S1{T}; x::S1{A{T}}; end
+end
+let A = Issue61347FieldTypes.A, S1 = Issue61347FieldTypes.S1
+    @test fieldtype(S1{Int}, 1) === S1{A{Int}}
+    @test fieldtype(fieldtype(S1{Int}, 1), 1) === S1{A{A{Int}}}
 end

@@ -174,15 +174,15 @@ end
 @test isconcretetype(Union)
 @test !isconcretetype(Union{})
 @test !isconcretetype(Complex)
-@test !isconcretetype(Complex.body)
+@test !isconcretetype(Complex.inner)
 @test !isconcretetype(AbstractArray{Int,1})
 struct AlwaysHasLayout{T}
     x
 end
-@test !isconcretetype(AlwaysHasLayout) && !isconcretetype(AlwaysHasLayout.body)
+@test !isconcretetype(AlwaysHasLayout) && !isconcretetype(AlwaysHasLayout.inner)
 @test isconcretetype(AlwaysHasLayout{Any})
 @test isconcretetype(Ptr{Cvoid})
-@test !isconcretetype(Ptr) && !isconcretetype(Ptr.body)
+@test !isconcretetype(Ptr) && !isconcretetype(Ptr.inner)
 
 # issue #10165
 i10165(::Type) = 0
@@ -1547,3 +1547,9 @@ end
 using .X1ConstConflict, .X2ConstConflict
 
 @test_throws ErrorException which(@__MODULE__, :xconstconflict)
+
+# review of the de Bruijn refactor: `argument_datatype` resolves a bound
+# binder reference through the binder's upper bound, like its typename sibling
+@test Base.argument_datatype(Type{T} where T<:Int) === Int
+@test Base.argument_datatypename(Type{T} where T<:Int) === Int.name
+@test Base.argument_datatypename(Type{T} where T<:AbstractDict{Int}) === AbstractDict.body.body.name

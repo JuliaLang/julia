@@ -1801,9 +1801,9 @@ end
 @b28593
 @c28593
 
-@test A28593.var.name === :S
-@test B28593.var.name === :S
-@test C28593.var.name === :S
+@test Base.unionall_open(A28593)[1].name === :S
+@test Base.unionall_open(B28593)[1].name === :S
+@test Base.unionall_open(C28593)[1].name === :S
 
 # issue #51899
 macro struct_macro_51899()

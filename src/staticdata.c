@@ -2903,6 +2903,8 @@ static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEP
 
 JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
 {
+    if (jl_global_roots_list == NULL)
+        return NULL; // called before the roots tables exist (early jl_init_types)
     if (jl_is_globally_rooted(val))
         return val;
     jl_value_t *tw = extract_wrapper(val);

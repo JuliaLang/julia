@@ -433,3 +433,29 @@ module DeprecatedShadowTest
     @test (@test_nowarn Consumer.getdep()) === Src._newc
     @test !Base.isdeprecated(Consumer, :OldC)
 end
+
+begin # UnionAll legacy property compatibility
+    # the layout is positional (a de Bruijn `inner` field), but the legacy
+    # two-field view keeps working through computed `var`/`body` properties
+    @test propertynames(Vector) == (:var, :body)
+    v = Vector.var
+    @test v isa TypeVar
+    @test v.name === :T && v.lb === Union{} && v.ub === Any
+    @test Vector.var === v # the minted variable is canonical
+    @test Vector.body === Vector.body
+    @test Vector.body.parameters[1] === v
+    @test UnionAll(Vector.var, Vector.body) === Vector
+    # nested binders and dependent bounds compose by identity
+    @test Array.body.var.name === :N
+    @test Array.body.body.parameters[1] === Array.var
+    @test Array.body.body.parameters[2] === Array.body.var
+    w = Tuple{S, T} where S<:T where T
+    @test w.body.var.ub === w.var
+    @test UnionAll(w.var, UnionAll(w.body.var, w.body.body)) === w
+    # the variable cache keys on egal, so equal spellings share the binder,
+    # while differently-named binders keep their own names
+    @test (Vector{T} where T) === Vector
+    @test (Vector{T} where T).var === Vector.var
+    @test (Vector{S} where S).var !== Vector.var
+    @test (Vector{S} where S).var.name === :S
+end

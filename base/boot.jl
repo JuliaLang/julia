@@ -51,8 +51,16 @@
 #end
 
 #struct UnionAll <: AnyType
-#    var::TypeVar
-#    body
+#    name::Symbol
+#    lb
+#    ub
+#    inner # the wrapped type; refers to the binder by TypeVarRef position
+#    flags::UInt32
+#    hash::UInt # structural objectid hash, memoized at construction (0 = unstable)
+#end
+
+#struct TypeVarRef
+#    depth::Int
 #end
 
 #struct Nothing
@@ -222,7 +230,7 @@
 export
     # key types
     Any, TypeEq, Type, DataType, Vararg, NTuple,
-    Tuple, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    Tuple, UnionAll, TypeVar, TypeVarRef, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
@@ -299,8 +307,31 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
       (f::typeof(Typeof))(x) = begin
           $(_expr(:meta,:nospecialize,:x))
+          # the total-purity override lets inference fold through the
+          # dangling-reference ccall (a pure predicate); without it a constant
+          # type argument stops folding to a constant `TypeEgal`
+          $(_expr(:meta, _expr(:purity,
+              #=:consistent=#true, #=:effect_free=#true, #=:nothrow=#true,
+              #=:terminates_globally=#true, #=:terminates_locally=#false,
+              #=:notaskstate=#true, #=:inaccessiblememonly=#true,
+              #=:noub=#true, #=:noub_if_noinbounds=#false,
+              #=:consistent_overlay=#false, #=:nortcall=#true)))
           if isa(x,Type)
-              has_free_typevars(x) ? Type{x} : TypeEgal{x}
+              if has_free_typevars(x)
+                  Type{x}
+              elseif has_dangling_tvarrefs(x)
+                  # a `TypeEgal` of a detached subterm carries the subterm's
+                  # dangling references, so a type parameterized by it (e.g. a
+                  # closure capturing `x`, whose field type this becomes) would
+                  # be an incomplete fragment itself; fall back to the kind.
+                  # N.B. this deliberately diverges from the runtime dispatch
+                  # keys (`jl_inst_arg_tuple_type`), which do pin such values
+                  # by egality: that key binds static parameters (#61242) but
+                  # never parameterizes another type
+                  typeof(x)
+              else
+                  TypeEgal{x}
+              end
           else
               typeof(x)
           end
@@ -371,6 +402,9 @@ TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
 TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
 TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
 UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
+UnionAll(n::Symbol, @nospecialize(lb), @nospecialize(ub), @nospecialize(t)) =
+    ccall(:jl_new_unionall_type, Any, (Any, Any, Any, Any), n, lb, ub, t)
+TypeVarRef(depth::Int) = ccall(:jl_new_tvarref, Any, (Int,), depth)
 
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}
 const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
@@ -428,7 +462,7 @@ function _contains_typeapp(@nospecialize(x))
         return true
     end
     if x isa UnionAll
-        return _contains_typeapp(x.body)
+        return _contains_typeapp(x.inner)
     end
     return false
 end
@@ -1310,7 +1344,7 @@ function typename(a::Union)
     ta === tb || throw(TypeNameError(a))
     return tb
 end
-typename(union::UnionAll) = typename(union.body)
+typename(union::UnionAll) = typename(union.inner)
 
 # Special inference support to avoid excess specialization of these methods.
 # TODO: Replace this by a generic heuristic.
