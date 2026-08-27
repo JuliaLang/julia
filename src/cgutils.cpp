@@ -3431,11 +3431,15 @@ static jl_aliasinfo_t best_field_aliasinfo(jl_codectx_t &ctx, const jl_cgval_t &
                                      //Does the fact that this is marked as constant make this fine?
     // A `const` field of a mutable object is not memory any `setfield!` may write,
     // and whatever it holds stays reachable through the object for as long as the
-    // object is live -- which is what lets late-gc-lowering root through it. Both the
-    // `new` that initializes it and every later read come through here, so the two
-    // sides stay consistent.
-    if (jl_field_isconst(jt, idx) && ai.region == jl_aliasinfo_t::Region::mutdata)
-        return ai.withRegion(ctx, jl_aliasinfo_t::Region::mutconstdata);
+    // object is live -- which is what lets late-gc-lowering root through it. The
+    // whole-object info claims both halves, so narrow it to the one this field is in.
+    // Both the `new` that initializes the field and every later read come through
+    // here, so the two sides stay consistent; the accesses that cannot name a single
+    // field (a dynamic `getfield`, an inline union's selector byte) keep the
+    // whole-object info and go on aliasing both.
+    if (ai.region == jl_aliasinfo_t::Region::mutfields)
+        return ai.withRegion(ctx, jl_field_isconst(jt, idx)
+                ? jl_aliasinfo_t::Region::mutconstdata : jl_aliasinfo_t::Region::mutdata);
     return ai;
 }
 

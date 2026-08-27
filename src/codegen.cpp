@@ -1739,9 +1739,16 @@ struct jl_aliasinfo_t {
         // The element data of a jl_genericmemory_t, containing mutable storage for immutdata.
         memorybuf = 1 << 5,
         constant  = 1 << 6,
+        // The fields of a mutable jl_value_t, without knowing which of them. The two
+        // halves above are disjoint rather than nested, so an access that may reach
+        // either has to say so here and claim both: a whole-object alias info, or a
+        // `getfield` with a dynamic index. Nesting them instead would put `mutdata`
+        // in every `const`-field access and defeat the rooting test, which needs a
+        // named `const` field to be distinguishable from a merge with an assignable one.
+        mutfields = mutdata | mutconstdata,
         // The fields of an jl_value_t: an access through a value of statically unknown
         // type may be any of these.
-        data      = mutdata | mutconstdata | immutdata,
+        data      = mutfields | immutdata,
         // Everything a raw `Ptr` may legally read from our alias regions.
         anydata   = data | memorybuf,
         LLVM_MARK_AS_BITMASK_ENUM(constant)
@@ -2282,7 +2289,11 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     // lives in, so it is carried by the region alone: the layout tag is the same
     // `jtbaa_field` either way, which is what lets a value keep its tag when it is
     // copied between the heap, a memory buffer and the stack.
-    mutab = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_field);
+    // A whole-object alias info has to claim both halves: it is what a `getfield`
+    // with a dynamic index uses, and what tags the selector byte of an inline union
+    // field, either of which may land on a `const` field. `best_field_aliasinfo`
+    // narrows it once the field is known.
+    mutab = jl_aliasinfo_t(ctx, Region::mutfields, tbaa.tbaa_field);
     immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_field);
     // `Array`, `GenericMemory` and `DataType` are all mutable heap objects, so what
     // separates their headers from an ordinary `setfield!` is the layout tag. The
