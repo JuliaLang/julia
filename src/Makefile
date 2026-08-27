@@ -592,9 +592,20 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
-$(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
+# A self-contained static runtime: the runtime objects plus the support
+# libraries that libjulia-internal.so links in statically. Consumers still need
+# the sysimage object (which supplies jl_image_unpack, jl_small_typeof, ...) and
+# the external libraries (libunwind, LLVMSupport, zstd, ...). Since Julia code
+# reaches most of these symbols through ccall, link the archive with
+# --whole-archive (or an equivalent) rather than relying on C references.
+STATIC_LIBS := $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING)
+$(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(STATIC_LIBS)
 	@rm -rf $@
-	@$(call PRINT_LINK, $(AR) -rcs $@ $(STATIC_OBJS))
+ifeq ($(OS),Darwin)
+	@$(call PRINT_LINK, libtool -static -o $@ $(STATIC_OBJS) $(STATIC_LIBS))
+else
+	@$(call PRINT_LINK, { echo "CREATE $@"; $(foreach o,$(STATIC_OBJS),echo "ADDMOD $(o)";) $(foreach l,$(STATIC_LIBS),echo "ADDLIB $(l)";) echo "SAVE"; echo "END"; } | $(AR) -M)
+endif
 
 ifneq ($(OS), WINNT)
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal%.$(JL_MAJOR_SHLIB_EXT): \
