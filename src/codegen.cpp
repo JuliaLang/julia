@@ -337,17 +337,20 @@ struct jl_tbaacache_t {
     MDNode *tbaa_memoryselbyte = nullptr;// A selector byte in an isbits Union jl_genericmemory_t
     MDNode *tbaa_data = nullptr;         // Any user data that `pointerset/ref` are allowed to alias
     MDNode *tbaa_binding = nullptr;        // jl_binding_t::value
+    // Whether the data may be mutated, and by whom, is a property of the memory it
+    // lives in, so it is described by the region ('!alias.scope'), not by this tree.
+    // What this level sorts is what kind of thing is stored: an ordinary field of a
+    // user-defined layout, or one of the object headers the runtime manages.
     MDNode *tbaa_value = nullptr;          // jl_value_t of statically unknown type; parent of the tags below
-    MDNode *tbaa_mutab = nullptr;              // mutable type
-    MDNode *tbaa_array = nullptr;                  // jl_array_t header, mutable
-    MDNode *tbaa_arrayptr = nullptr;                 // The pointer inside a jl_array_t (to a memoryref)
-    MDNode *tbaa_arraysize = nullptr;                // A size in a jl_array_t
-    MDNode *tbaa_datatype = nullptr;               // datatype
-    MDNode *tbaa_immut = nullptr;              // immutable type
+    MDNode *tbaa_field = nullptr;              // an ordinary field of a user-defined layout
+    MDNode *tbaa_array = nullptr;              // jl_array_t header
+    MDNode *tbaa_arrayptr = nullptr;             // The pointer inside a jl_array_t (to a memoryref)
+    MDNode *tbaa_arraysize = nullptr;            // A size in a jl_array_t
+    MDNode *tbaa_datatype = nullptr;           // jl_datatype_t fields
     MDNode *tbaa_memory = nullptr;             // jl_genericmemory_t header, never mutated after construction
-    MDNode *tbaa_memoryptr = nullptr;             // The pointer inside a jl_genericmemory_t
-    MDNode *tbaa_memorylen = nullptr;             // The length in a jl_genericmemory_t
-    MDNode *tbaa_memoryown = nullptr;             // The owner in a foreign jl_genericmemory_t
+    MDNode *tbaa_memoryptr = nullptr;            // The pointer inside a jl_genericmemory_t
+    MDNode *tbaa_memorylen = nullptr;            // The length in a jl_genericmemory_t
+    MDNode *tbaa_memoryown = nullptr;            // The owner in a foreign jl_genericmemory_t
     MDNode *tbaa_const = nullptr;        // Memory that is immutable by the time this compile unit can access it
     bool initialized = false;
 
@@ -377,21 +380,23 @@ struct jl_tbaacache_t {
         MDNode *tbaa_value_scalar;
         std::tie(tbaa_value, tbaa_value_scalar) =
             tbaa_make_child(mbuilder, "jtbaa_value", tbaa_data_scalar);
-        MDNode *tbaa_mutab_scalar;
-        std::tie(tbaa_mutab, tbaa_mutab_scalar) =
-            tbaa_make_child(mbuilder, "jtbaa_mutab", tbaa_value_scalar);
-        tbaa_datatype = tbaa_make_child(mbuilder, "jtbaa_datatype", tbaa_mutab_scalar).first;
-        MDNode *tbaa_immut_scalar;
-        std::tie(tbaa_immut, tbaa_immut_scalar) =
-            tbaa_make_child(mbuilder, "jtbaa_immut", tbaa_value_scalar);
+        // `jtbaa_field` and the header tags are siblings, so an access to an ordinary
+        // field never aliases a header: only an `Array`/`GenericMemory`/`DataType`
+        // gets a header tag, and `best_aliasinfo` never gives one of those the field
+        // tag. They must all stay *under* jtbaa_value, though: such an object is also
+        // reachable through a type-erased pointer, which is tagged jtbaa_value, and a
+        // disjoint subtree would make that load NoAlias against the stores that
+        // initialize the header (#62696).
+        tbaa_field = tbaa_make_child(mbuilder, "jtbaa_field", tbaa_value_scalar).first;
+        tbaa_datatype = tbaa_make_child(mbuilder, "jtbaa_datatype", tbaa_value_scalar).first;
         MDNode *tbaa_array_scalar;
         std::tie(tbaa_array, tbaa_array_scalar) =
-            tbaa_make_child(mbuilder, "jtbaa_array", tbaa_mutab_scalar);
+            tbaa_make_child(mbuilder, "jtbaa_array", tbaa_value_scalar);
         tbaa_arrayptr = tbaa_make_child(mbuilder, "jtbaa_arrayptr", tbaa_array_scalar).first;
         tbaa_arraysize = tbaa_make_child(mbuilder, "jtbaa_arraysize", tbaa_array_scalar).first;
         MDNode *tbaa_memory_scalar;
         std::tie(tbaa_memory, tbaa_memory_scalar) =
-            tbaa_make_child(mbuilder, "jtbaa_memory", tbaa_immut_scalar);
+            tbaa_make_child(mbuilder, "jtbaa_memory", tbaa_value_scalar);
         tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_memory_scalar).first;
         tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_memory_scalar).first;
         tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_memory_scalar).first;
@@ -406,11 +411,18 @@ struct jl_noaliascache_t {
     // "No aliasing" is inferred if it is implied by any domain.
 
     // memory regions domain
+    //
+    // Rooting invariant (relied upon by `isLoadFromRootedRegion` in
+    // llvm-codegen-shared.h): an access whose scope set in this domain is contained
+    // in {jnoalias_immutdata, jnoalias_const} refers to memory whose base object
+    // cannot stop referencing any tracked pointer stored there while the base is live. In particular a codegen-private buffer may only be
+    // classified `immutdata` if it never holds tracked pointers; private buffers
+    // that do must use `stack` or `gcframe`.
     struct jl_regions_t {
         MDNode *gcframe = nullptr;        // GC frame
         MDNode *stack = nullptr;          // Stack slot
         MDNode *mutdata = nullptr;        // The fields of a mutable (heap-allocated) jl_value_t
-        MDNode *immutdata = nullptr;      // The fields of an immutable (write-once) jl_value_t
+        MDNode *immutdata = nullptr;      // The payload of an immutable jl_value_t
         MDNode *memorybuf = nullptr;      // The element data of a jl_genericmemory_t
         MDNode *constant = nullptr;       // Memory that is immutable by the time this compile unit can access it
 
@@ -1698,15 +1710,23 @@ struct jl_aliasinfo_t {
     // The set of memory regions an access may touch: each region in the set is one
     // '!alias.scope' scope (see jl_regions_t), and every region outside it goes in
     // '!noalias'. The empty set (`unknown`) claims nothing.
+    //
+    // The region also decides whether late-gc-lowering may root a loaded pointer
+    // through the load's base instead of giving it a gc-frame slot of its own (see
+    // `isLoadFromRootedRegion`), so a private buffer that holds tracked pointers
+    // must never be classified `immutdata` -- see the invariant at
+    // `jl_regions_t`.
     enum class Region : uint8_t {
         unknown   = 0,
         // GC-frame is leaked globally after final-gc-lowering pass.
         gcframe   = 1 << 0,
         // Various hidden temporaries for local mutations.
         stack     = 1 << 1,
-        // The fields of a mutable jl_value_t, notably including `Array` and `GenericMemory`.
+        // The mutable fields of a heap-allocated jl_value_t, notably including
+        // `Array`'s header.
         mutdata   = 1 << 2,
-        // The contents of an immutable jl_value_t: notably disjoint from memory with hidden writes.
+        // The contents of an immutable jl_value_t, and the codegen-private write-once
+        // buffers that hold such a value: notably disjoint from memory with hidden writes.
         immutdata = 1 << 3,
         // The element data of a jl_genericmemory_t, containing mutable storage for immutdata.
         memorybuf = 1 << 4,
@@ -1788,8 +1808,8 @@ struct jl_aliascache_t {
     jl_aliasinfo_t stack;         // untyped stack slot
     jl_aliasinfo_t data;          // Any user data that `pointerset/ref` are allowed to alias
     jl_aliasinfo_t value;         // jl_value_t of statically unknown type
-    jl_aliasinfo_t immut;         // immutable type
-    jl_aliasinfo_t mutab;         // mutable type
+    jl_aliasinfo_t immut;         // the payload of an immutable jl_value_t
+    jl_aliasinfo_t mutab;         // the fields of a mutable jl_value_t
     jl_aliasinfo_t binding;       // jl_binding_t::value
     jl_aliasinfo_t datatype;      // datatype
     jl_aliasinfo_t array;         // jl_array_t header
@@ -1799,8 +1819,7 @@ struct jl_aliascache_t {
     jl_aliasinfo_t memoryptr;     // The pointer inside a jl_genericmemory_t
     jl_aliasinfo_t memorylen;     // The length in a jl_genericmemory_t
     jl_aliasinfo_t memoryown;     // The owner in a foreign jl_genericmemory_t
-    jl_aliasinfo_t memorybuf;     // Elements of a jl_genericmemory_t which hold no tracked pointers
-    jl_aliasinfo_t ptrmemorybuf;  // Elements of a jl_genericmemory_t which hold tracked pointers
+    jl_aliasinfo_t memorybuf;     // Elements of a jl_genericmemory_t
     jl_aliasinfo_t memoryselbyte; // a selector byte in an isbits Union jl_genericmemory_t
     jl_aliasinfo_t constant;      // Memory that is immutable by the time this compile unit can access it
 
@@ -2249,9 +2268,16 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     data = jl_aliasinfo_t(ctx, Region::anydata, tbaa.tbaa_data);
     binding = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_binding);
     value = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_value);
-    mutab = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_mutab);
+    // Whether a value's fields may be mutated is a statement about the memory it
+    // lives in, so it is carried by the region alone: the layout tag is the same
+    // `jtbaa_field` either way, which is what lets a value keep its tag when it is
+    // copied between the heap, a memory buffer and the stack.
+    mutab = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_field);
+    immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_field);
+    // `Array`, `GenericMemory` and `DataType` are all mutable heap objects, so their
+    // headers live in the same region as any other mutable object's fields; what
+    // separates them from an ordinary `setfield!` is the layout tag, not the region.
     datatype = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_datatype);
-    immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_immut);
     array = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_array);
     arrayptr = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_arrayptr);
     arraysize = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_arraysize);
@@ -2259,8 +2285,7 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     memoryptr = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_memoryptr);
     memorylen = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_memorylen);
     memoryown = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_memoryown);
-    memorybuf = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_immut);
-    ptrmemorybuf = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_mutab);
+    memorybuf = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_field);
     memoryselbyte = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_memoryselbyte);
     constant = jl_aliasinfo_t(ctx, Region::constant, tbaa.tbaa_const);
 }
@@ -2320,10 +2345,10 @@ static jl_aliasinfo_t best_aliasinfo(jl_codectx_t &ctx, jl_value_t *jt)
 // `select` of its a private buffer and a box: but its contents are only ever
 // dereferenced for the union's inline members, which are immutable by construction.
 //
-// The `!tbaa` tag is `jtbaa_immut`: the buffer cannot hold tracked pointers by
+// The slot is `Region::immutdata` for both arms, which the rooting invariant at
+// `jl_regions_t` permits because the buffer cannot hold tracked pointers by
 // construction (a pointer in the payload would be a root only conditionally on the
-// tindex), which makes this safe for late-gc-lowering -- unlike `value_to_pointer` which
-// had to hack around unsafe behavior of that pass.
+// tindex, which the GC pass could not track anyway).
 // This could be strengthened by examining each element of `typ` to build a more
 // precise tag for the union-tagged accesses.
 static jl_aliasinfo_t union_slot_aliasinfo(jl_codectx_t &ctx, jl_value_t *typ)
@@ -2332,11 +2357,15 @@ static jl_aliasinfo_t union_slot_aliasinfo(jl_codectx_t &ctx, jl_value_t *typ)
     return ctx.alias().immut;
 }
 
+// Alias info for the element data of a `jl_genericmemory_t` with this layout.
+// `Region::memorybuf` carries the claim that this is neither the memory header nor
+// any other object's fields, and (per the invariant at `jl_regions_t`) that an
+// element may be overwritten while a reference loaded from it is still live. That
+// leaves the `!tbaa` tag free to describe the elements, so a value keeps its layout
+// tag when copied into or out of the buffer, whether or not it holds pointers.
 static jl_aliasinfo_t memorybuf_aliasinfo(jl_codectx_t &ctx, const jl_datatype_layout_t *layout)
 {
-    if (layout->flags.arrayelem_isboxed || layout->first_ptr >= 0)
-        return ctx.alias().ptrmemorybuf;
-    // Everything else is inline data, and only immutable types are stored inline.
+    (void)layout;
     return ctx.alias().memorybuf;
 }
 
@@ -2620,14 +2649,10 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
     Value *loc;
     v = zext_struct(ctx, v);
     Align align(julia_alignment(typ));
-    // This write-once copy of pointer-free typed data keeps the type's prior layout tag.
-    // However, there is a subtlety for pointer-containing copies: llvm-late-gc-lowering
-    // does not correctly check for dominator for alloca when using it as root, so it could
-    // use it as a refinement base past the time the alloca has already been reused. Since
-    // this is pretty much the only time that should matter, we currently hack around that
-    // here rather than fixing it correctly for now.
-    jl_aliasinfo_t ai = (tindex == nullptr && jl_is_pointerfree(typ) ?
-            best_aliasinfo(ctx, typ) : ctx.alias().value)
+    // This write-once copy keeps the type's prior layout tag; `Region::stack` records
+    // that it is not heap memory, which is also what keeps late-gc-lowering from
+    // rooting anything through it (it may hold pointers, and the alloca can be reused).
+    jl_aliasinfo_t ai = best_aliasinfo(ctx, typ)
         .withRegion(ctx, jl_aliasinfo_t::Region::stack);
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
         assert(jl_is_concrete_type(typ)); // not legal to have an unboxed abstract type
@@ -2670,9 +2695,12 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
                     Constant::getNullValue(ctx.types().T_prjlvalue), ptr_field, Align(sizeof(void *)));
             }
         }
-        jl_aliasinfo_t stack_ai = v.V == nullptr ? ctx.alias().gcframe : best_aliasinfo(ctx, v.typ);
-        recombine_value(ctx, v, loc, stack_ai, align, false);
-        return mark_julia_slot(loc, v.typ, v.TIndex, stack_ai);
+        // This private buffer receives the tracked pointers back from the roots
+        // buffer, so it must live in a region that never grants late-gc-lowering a
+        // rooting refinement (see the invariant at `jl_regions_t`).
+        jl_aliasinfo_t slot_ai = stack_copy_aliasinfo(ctx, v.aliasinfo, v.typ);
+        recombine_value(ctx, v, loc, slot_ai, align, false);
+        return mark_julia_slot(loc, v.typ, v.TIndex, slot_ai);
     }
     if (v.ispointer() || v.V == nullptr)
         return v;
@@ -9663,7 +9691,12 @@ static jl_llvm_functions_t
             if (isboxed)
                 maybe_mark_argument_dereferenceable(param, argType);
             theArg = mark_julia_type(ctx, Arg, isboxed, argType);
-            if (theArg.aliasinfo.tbaa == ctx.tbaa().tbaa_immut)
+            // The caller roots an immutable argument for the whole call and nothing
+            // may write its payload while we hold it, so the callee may read it as
+            // constant memory. Only for an ordinary immutable layout: the header
+            // tags describe mutable objects the runtime writes.
+            if (theArg.aliasinfo.tbaa == ctx.tbaa().tbaa_field &&
+                theArg.aliasinfo.region == jl_aliasinfo_t::Region::immutdata)
                 theArg.aliasinfo = ctx.alias().constant;
         }
         attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes

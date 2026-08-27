@@ -489,7 +489,10 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
             std::string type_str = jl_is_datatype(x.typ) ? jl_symbol_name(((jl_datatype_t*)x.typ)->name->name) : "<unknown type>";
             return "unbox::" + type_str;
         });
-        auto combined_ai = best_aliasinfo(ctx, x.typ);
+        // This private buffer receives the tracked pointers back from the roots
+        // buffer, so it must live in a region that never grants late-gc-lowering a
+        // rooting refinement (see the invariant at `jl_regions_t`).
+        auto combined_ai = stack_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
         recombine_value(ctx, x, combined, combined_ai, alignment, false);
         p = combined;
         ai = combined_ai;

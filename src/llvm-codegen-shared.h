@@ -182,16 +182,61 @@ static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*>
     return false;
 }
 
-// Check if this is a load from an immutable value. The easiest way to do so is
-// to look at the AA metadata and see if it derives from jtbaa_immut.
-static inline bool isLoadFromImmut(llvm::LoadInst *LI)
+// The name of the '!alias.scope' domain describing which of codegen's memory
+// regions an access may touch (`jl_regions_t` in codegen.cpp). Scopes in any
+// other domain (`@aliasscope`/ivdep, loop versioning, ...) describe something
+// else entirely and say nothing about residence.
+#define JL_REGION_DOMAIN_NAME "jnoalias"
+
+// The regions in that domain whose base object cannot stop referencing a tracked
+// pointer stored in them while the base is live: the payload of an immutable heap
+// object, and memory that is already constant here.
+static inline bool isRootedRegionName(llvm::StringRef name)
 {
-    if (LI->getMetadata(llvm::LLVMContext::MD_invariant_load))
+    return name == "jnoalias_immutdata" || name == "jnoalias_const";
+}
+
+// Whether the object rooting the address `LI` loads from also roots the loaded
+// value -- so that late-gc-lowering may refine the loaded pointer to the load's
+// pointer operand instead of giving it a gc-frame slot of its own.
+//
+// This is a question about *residence*, not about content: it is answered by the
+// memory region ('!alias.scope'), not by the layout description ('!tbaa'), since
+// the same layout tag legitimately appears on stack copies and on the mutable
+// element data of a `GenericMemory`. An access qualifies if its region scopes are
+// nonempty and all rooted -- a merged access that may reside in an unrooted
+// region is vetoed by that region's presence. Missing metadata means no
+// information, hence no refinement, which is the fail-safe direction (an extra
+// gc-frame slot, never a missing root).
+static inline bool isLoadFromRootedRegion(llvm::LoadInst *LI)
+{
+    using namespace llvm;
+    // A constant location cannot change, so residence follows outright. This is
+    // also the only leg that fires on foreign IR carrying no region metadata.
+    if (LI->getMetadata(LLVMContext::MD_invariant_load))
         return true;
-    llvm::MDNode *TBAA = LI->getMetadata(llvm::LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"}))
-        return true;
-    return false;
+    MDNode *scopes = LI->getMetadata(LLVMContext::MD_alias_scope);
+    if (!scopes)
+        return false;
+    bool found = false;
+    for (const MDOperand &op : scopes->operands()) {
+        MDNode *scope = dyn_cast_or_null<MDNode>(op.get());
+        // '!alias.scope' entries are {name, domain} (or {self, domain, name});
+        // either way the domain is operand 1.
+        if (!scope || scope->getNumOperands() < 2)
+            continue;
+        MDNode *domain = dyn_cast_or_null<MDNode>(scope->getOperand(1));
+        if (!domain || domain->getNumOperands() < 1)
+            continue;
+        MDString *domain_name = dyn_cast<MDString>(domain->getOperand(0));
+        if (!domain_name || domain_name->getString() != JL_REGION_DOMAIN_NAME)
+            continue;
+        MDString *name = dyn_cast<MDString>(scope->getOperand(0));
+        if (!name || !isRootedRegionName(name->getString()))
+            return false; // may reside in a region that can drop the reference
+        found = true;
+    }
+    return found;
 }
 
 static inline bool isConstGV(llvm::GlobalVariable *gv)
