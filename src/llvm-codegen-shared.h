@@ -190,8 +190,8 @@ static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*>
 
 // The regions in that domain whose base object cannot stop referencing a tracked
 // pointer stored in them while the base is live: the payload of an immutable heap
-// object, and a `const` field of a mutable one. Memory that is already constant
-// here needs no region -- such a load is marked '!invariant.load' below.
+// object, and a `const` field of a mutable one. Constant memory needs no region --
+// its loads carry '!invariant.load', which `isLoadFromRootedRegion` accepts directly.
 static inline bool isRootedRegionName(llvm::StringRef name)
 {
     return name == "jnoalias_immutdata" || name == "jnoalias_mutconstdata";
@@ -222,18 +222,23 @@ static inline bool isLoadFromRootedRegion(llvm::LoadInst *LI)
     bool found = false;
     for (const MDOperand &op : scopes->operands()) {
         MDNode *scope = dyn_cast_or_null<MDNode>(op.get());
-        // '!alias.scope' entries are {name, domain} (or {self, domain, name});
-        // either way the domain is operand 1.
-        if (!scope || scope->getNumOperands() < 2)
+        if (!scope)
             continue;
-        MDNode *domain = dyn_cast_or_null<MDNode>(scope->getOperand(1));
+        AliasScopeNode snode(scope);
+        const MDNode *domain = snode.getDomain();
         if (!domain || domain->getNumOperands() < 1)
             continue;
         MDString *domain_name = dyn_cast<MDString>(domain->getOperand(0));
         if (!domain_name || domain_name->getString() != JL_REGION_DOMAIN_NAME)
             continue;
-        MDString *name = dyn_cast<MDString>(scope->getOperand(0));
-        if (!name || !isRootedRegionName(name->getString()))
+        // A scope is named either by its string key in operand 0 ({name, domain})
+        // or, when a self-reference keys it, by a trailing name operand
+        // ({self, domain, name}); AliasScopeNode reads the latter.
+        StringRef name = snode.getName();
+        if (name.empty())
+            if (MDString *key = dyn_cast<MDString>(scope->getOperand(0)))
+                name = key->getString();
+        if (name.empty() || !isRootedRegionName(name))
             return false; // may reside in a region that can drop the reference
         found = true;
     }

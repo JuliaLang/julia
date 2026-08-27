@@ -189,7 +189,9 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
             !isFDAnnotatedNotSafepoint(NewSymbolState->FD, BRC.getSourceManager());
         bool maybeUnrooted =
             declHasAnnotation(NewSymbolState->PVD, "julia_maybe_unrooted");
-        assert(isFunctionSafepoint || maybeUnrooted);
+        // `LivenessState::getForArgument` records FD/PVD only when the function
+        // is not a safepoint or the parameter is JL_MAYBE_UNROOTED.
+        assert(!isFunctionSafepoint || maybeUnrooted);
         (void)maybeUnrooted;
         Pos =
             PathDiagnosticLocation{NewSymbolState->PVD, BRC.getSourceManager()};

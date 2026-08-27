@@ -492,11 +492,11 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
 // (rather than unordered) loads and stores are permitted
 static bool ai_is_private(const jl_aliasinfo_t &ai)
 {
-    // constant memory is never written at all, and otherwise a known set of
-    // regions, none of which is shared with other threads
+    // constant memory is never written at all, and the gc frame is only written by
+    // its owning thread. An explicit whitelist: a region added later must opt in
+    // here to permit non-atomic access to its memory.
     using Region = jl_aliasinfo_t::Region;
-    return ai.isConstant() ||
-           (ai.region != Region::unknown && (ai.region & Region::anydata) == Region::unknown);
+    return ai.isConstant() || ai.region == Region::gcframe;
 }
 
 static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *data_pointer, jl_datatype_t *typ, size_t npointers, const jl_aliasinfo_t &roots_ai, bool isVolatile=false)
@@ -1210,12 +1210,9 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
         return;
     ++EmittedMemcpys;
 
-    // the memcpy intrinsic does not allow specifying different alias tags
-    // for the load part (src_ai) and the store part (dst_ai).
-    // since the tbaa lattice has to be a tree we unfortunately have
-    // tbaa(src) ∪ tbaa(dst) = tbaa_root whenever tbaa(src) != tbaa(dst),
-    // while the merged region metadata keeps the intersection of the
-    // regions' noalias sets.
+    // the memcpy intrinsic does not allow specifying different alias tags for the
+    // load part (src_ai) and the store part (dst_ai), so the tag may claim only
+    // what both sides can; see `jl_aliasinfo_t::merge` for how the claims combine.
     auto merged_ai = dst_ai.merge(src_ai);
 #if JL_LLVM_VERSION < 210000
     ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
@@ -3431,14 +3428,11 @@ static jl_aliasinfo_t best_field_aliasinfo(jl_codectx_t &ctx, const jl_cgval_t &
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
         return ctx.alias().constant; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containing struct's tbaa
                                      //Does the fact that this is marked as constant make this fine?
-    // A `const` field of a mutable object is not memory any `setfield!` may write,
-    // and whatever it holds stays reachable through the object for as long as the
-    // object is live -- which is what lets late-gc-lowering root through it. The
-    // whole-object info claims both halves, so narrow it to the one this field is in.
-    // Both the `new` that initializes the field and every later read come through
-    // here, so the two sides stay consistent; the accesses that cannot name a single
-    // field (a dynamic `getfield`, an inline union's selector byte) keep the
-    // whole-object info and go on aliasing both.
+    // Narrow a whole-object `mutfields` claim to the half this field is in (see the
+    // `Region` docs for what each half grants). Both the `new` that initializes the
+    // field and every later read come through here, so the two sides stay consistent;
+    // an access that cannot name a single field (a dynamic `getfield`, an inline
+    // union's selector byte) keeps the whole-object info and goes on aliasing both.
     if (ai.region == jl_aliasinfo_t::Region::mutfields)
         return ai.withRegion(ctx, jl_field_isconst(jt, idx)
                 ? jl_aliasinfo_t::Region::mutconstdata : jl_aliasinfo_t::Region::mutdata);
