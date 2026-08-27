@@ -431,28 +431,6 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
         sysctl(nm, 2, &count, &len, NULL, 0);
         if (count < 1) { count = 1; }
     }
-
-#if defined(__APPLE__) && defined(_CPU_AARCH64_)
-//MacOS 12 added a way to query performance cores
-    char buf[7];
-    len = 7;
-    sysctlbyname("kern.osrelease", buf, &len, NULL, 0);
-    if (buf[0] > 1 && buf[1] > 0){
-        len = 4;
-        sysctlbyname("hw.perflevel0.physicalcpu", &count, &len, NULL, 0);
-    }
-    else {
-        int32_t family = 0;
-        len = 4;
-        sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
-        if (family >= 1 && count > 1) {
-            if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
-                // We know the Apple M1 has 4 efficiency cores, so subtract them out.
-                count -= 4;
-            }
-        }
-    }
-#endif
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     long count = sysconf(_SC_NPROCESSORS_ONLN);
