@@ -2260,7 +2260,7 @@ function expand_decls(ctx, ex)
             [K".=" x _] -> x
             [K"op=" x _ _] -> x
             [K".op=" x _ _] -> x
-            [K"function" x _] -> x
+            [K"function" x _...] -> x
         end
         # type decls are handled elsewhere unless simple
         make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
@@ -2296,8 +2296,8 @@ function expand_const_decl(ctx, ex)
     end
     @stm ex[1] begin
         # const is ignored on function
-        [K"function" _ _] -> expand_forms_2(ctx, ex[1])
-        [K"global" [K"function" _ _]] -> expand_forms_2(ctx, ex[1])
+        [K"function" _...] -> expand_forms_2(ctx, ex[1])
+        [K"global" [K"function" _...]] -> expand_forms_2(ctx, ex[1])
 
         [K"global" x] -> let decls = SyntaxList()
             @jl_assert kind(x) === K"=" ex

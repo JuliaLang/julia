@@ -373,10 +373,25 @@ function convert_local_function_decl(ctx, ex)
     ]
 end
 
-# Map the children of `ex` through _convert_closures, lifting any toplevel
-# closure definition statements to occur before the other content of `ex`.
+# We want to change the order of children as little as necessary to get all
+# top-level-only forms out to top level (extra movement is hard to reason about,
+# as there is currently a somewhat brittle ordering of forms enforced by
+# desugaring).  For top-level `st`, this means setting up a new `toplevel_stmts`
+# catcher for all children of `st` to add to.  Otherwise, expressions use their
+# parent's catcher.  An exception to "as little as necessary" is made for loops
+# for performance reasons.
 function map_cl_convert(ctx::ClosureConversionCtx, ex)
-    if ctx.toplevel
+    if !ctx.toplevel
+        mapchildren(e->_convert_closures(ctx, e), ex)
+    elseif kind(ex) === K"_while" || kind(ex) === K"_do_while"
+        mapchildren(e->_convert_closures(
+            ClosureConversionCtx(
+                ctx.bindings, ctx.mod,
+                ctx.closure_bindings, ctx.capture_rewriting, ctx.top_bindings,
+                ctx.lambda_bindings, ctx.sp_typevars, false, ctx.lifted,
+                ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos),
+            e), ex)
+    else
         toplevel_stmts = SyntaxList()
         ctx2 = ClosureConversionCtx(
             ctx.bindings, ctx.mod,
@@ -389,8 +404,6 @@ function map_cl_convert(ctx::ClosureConversionCtx, ex)
         else
             @ast ctx ex [K"block" toplevel_stmts... res]
         end
-    else
-        mapchildren(e->_convert_closures(ctx, e), ex)
     end
 end
 
@@ -538,20 +551,12 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ctx.toplevel, true, ctx.toplevel_pure, ctx.toplevel_stmts,
             ctx.closure_infos)
         tvs = map_cl_convert(ctx2, ex[2])
-        if !ctx.toplevel
+        if is_closure && !ctx.toplevel
             push!(ctx2.toplevel_stmts, tvs)
-            tvs = @ast ctx ex[2] (::K"TOMBSTONE")
-        end
-        body = map_cl_convert(ctx2, ex[3])
-        if is_closure
-            if ctx.toplevel
-                @ast ctx ex [K"block" tvs body]
-            else
-                push!(ctx2.toplevel_stmts, body)
-                @ast ctx ex (::K"TOMBSTONE")
-            end
+            push!(ctx2.toplevel_stmts, map_cl_convert(ctx2, ex[3]))
+            @ast ctx ex (::K"TOMBSTONE")
         else
-            @ast ctx ex [K"block" tvs body (::K"TOMBSTONE")]
+            @ast ctx ex [K"block" tvs map_cl_convert(ctx2, ex[3])]
         end
     elseif k == K"_opaque_closure"
         ck = closure_key(ctx, ex[1])
