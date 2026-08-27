@@ -298,6 +298,21 @@ define void @dont_refine_without_region({} addrspace(10)* %a) {
     ret void
 }
 
+; A `const` field of a mutable object cannot be reassigned either, so it roots what
+; it holds just as an immutable's payload does.
+define void @refine_mutconst_region({} addrspace(10)* %a) {
+; CHECK-LABEL: @refine_mutconst_region
+; CHECK-NOT: %gcframe
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !19
+    call void @jl_safepoint()
+    %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
+    %loaded2 = load i64, i64 addrspace(10)* %casted2
+    ret void
+}
+
 ; Foreign IR carrying no region metadata still refines through `!invariant.load`.
 define void @refine_invariant_load({} addrspace(10)* %a) {
 ; CHECK-LABEL: @refine_invariant_load
@@ -339,4 +354,7 @@ attributes #1 = { inaccessiblememonly norecurse nounwind }
 !17 = !{!"not_jnoalias"}
 
 !18 = !{}
+
+!19 = !{!20}
+!20 = !{!"jnoalias_mutconstdata", !9}
 

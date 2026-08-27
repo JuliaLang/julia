@@ -50,9 +50,9 @@ Julia emits two orthogonal kinds of alias metadata: LLVM's
 [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata) describes the
 layout/type of the data at a location (see `jl_tbaacache_t` in `src/codegen.cpp` for the
 inclusion relationships), while `!alias.scope`/`!noalias` metadata describes the disjoint
-memory regions (GC frame, stack, the fields of a mutable heap object, the payload of an
-immutable one, the element data of a `GenericMemory`, constant; see
-`jl_noaliascache_t`). Codegen tracks both together in `jl_aliasinfo_t`, with some
+memory regions (GC frame, stack, the assignable fields of a mutable heap object, its
+`const` fields, the payload of an immutable one, the element data of a `GenericMemory`,
+constant; see `jl_noaliascache_t`). Codegen tracks both together in `jl_aliasinfo_t`, with some
 standard pairings precomputed in `jl_aliascache_t`.
 
 The two axes answer different questions, and the split is load-bearing. Whether memory
@@ -60,7 +60,8 @@ may be written, and by whom, belongs to the region: the same value keeps its lay
 as it is copied between a heap object, a memory buffer and the stack.
 `llvm-late-gc-lowering.cpp` relies on this, and roots a loaded pointer through the
 object it was loaded from only when the *region* says that object cannot drop the
-reference (`isLoadFromRootedRegion`). What is stored belongs to the tag: under
+reference (`isLoadFromRootedRegion`) -- which is why a `const` field of a mutable
+object is a region of its own. What is stored belongs to the tag: under
 `jtbaa_value` sit `jtbaa_field` for an ordinary field of a user-defined layout and
 sibling tags for the object headers the runtime manages (`jtbaa_array`,
 `jtbaa_memory`, `jtbaa_datatype`), so a `setfield!` never aliases an array's length.
