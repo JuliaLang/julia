@@ -640,6 +640,15 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
                 @ast _ st [K"call" "collect"::K"top" arg]
             end
         end
+        [K"typed_comprehension" t0 g] -> let
+            t = rec(t0)
+            arg = rec(ctx, g)
+            if kind(arg) === K"generator"
+                @ast _ st [K"typed_comprehension" t arg]
+            else
+                @ast _ st [K"call" "collect"::K"top" t arg]
+            end
+        end
         # hack: `[_ for _ in rhs]`, `[f(_) for _ in rhs]` works
         ([K"generator" body [K"=" u2 rhs]],
          when=is_flisp_compat(st) &&
