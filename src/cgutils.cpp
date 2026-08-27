@@ -3590,8 +3590,6 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             Value *tindex0 = ctx.builder.CreateExtractValue(obj, ArrayRef<unsigned>(ptindex));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
             setNameWithField(ctx.emission_context, tindex, get_objname, jt, idx, Twine(".tindex"));
-            // `lv` is a private buffer that codegen just filled from the unboxed
-            // struct, not a pointer into the object the field came from.
             return mark_julia_slot(lv, jfty, tindex, union_slot_aliasinfo(ctx, jfty));
         }
         else {
@@ -4499,15 +4497,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             Instruction *promotion_point = nullptr;
             ssize_t promotion_ssa = -1;
             Value *strct;
-            // This private buffer is a write-once copy of an immutable holding no
-            // pointers (those are split into inline_roots). It must not claim
-            // `Region::stack`, because `boxed` may later promote the alloca into a
-            // freshly allocated heap box: the promotion rewrites the pointer but
-            // keeps these tags on the already-emitted initializing stores, so the
-            // tag must stay truthful for the box payload. `best_aliasinfo` gives
-            // `Region::immutdata` for every type on this path (`deserves_stack`
-            // requires a concrete immutable), which is exactly that, on the same
-            // principle as `union_slot_aliasinfo`.
+            // This private buffer is a write-once copy of an immutable,
+            // but it must not claim `Region::stack`, because `boxed` may later
+            // promote the alloca into a freshly allocated heap box.
             const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty);
             assert(strct_ai.region == jl_aliasinfo_t::Region::immutdata);
             SmallVector<Value*,0> inline_roots;
