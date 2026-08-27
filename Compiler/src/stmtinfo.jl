@@ -234,20 +234,20 @@ function add_method_match_proofs!(edges::Vector{Any}, info::MethodMatchInfo,
     return nothing
 end
 
-function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
-    if !fully_covering(info)
-        exists = false
-        for i in 2:length(edges)
-            if edges[i] === Core.methodtable && edges[i-1] == info.atype
-                exists = true
-                break
-            end
-        end
-        if !exists
-            push!(edges, info.atype)
-            push!(edges, Core.methodtable)
+function add_uncovered_edges!(edges::Vector{Any}, info::MethodMatchInfo)
+    fully_covering(info) && return nothing
+    for i in 2:length(edges)
+        if edges[i] === Core.methodtable && edges[i-1] == info.atype
+            return nothing
         end
     end
+    push!(edges, info.atype)
+    push!(edges, Core.methodtable)
+    return nothing
+end
+
+function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
+    add_uncovered_edges!(edges, info)
     nmatches = length(info.results)
     if nmatches == length(info.edges) == 1 && fully_covering(info)
         # try the optimized format for the representation, if possible and applicable
@@ -344,6 +344,8 @@ add_edges_impl(edges::Vector{Any}, info::UnionSplitInfo) =
     _add_edges_impl(edges, info)
 _add_edges_impl(edges::Vector{Any}, info::UnionSplitInfo, mi_edge::Bool=false) =
     for split in info.split; _add_edges_impl(edges, split, mi_edge); end
+add_uncovered_edges!(edges::Vector{Any}, info::UnionSplitInfo) =
+    for split in info.split; add_uncovered_edges!(edges, split); end
 nsplit_impl(info::UnionSplitInfo) = length(info.split)
 getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit(info.split[idx], 1)
 function getresult_impl(info::UnionSplitInfo, idx::Int)
@@ -709,6 +711,25 @@ nsplit_impl(info::VirtualMethodMatchInfo) = nsplit(info.info)
 getsplit_impl(info::VirtualMethodMatchInfo, idx::Int) = getsplit(info.info, idx)
 getresult_impl(info::VirtualMethodMatchInfo, idx::Int) = getresult(info.info, idx)
 getedge_impl(info::VirtualMethodMatchInfo, idx::Int) = getedge(info.info, idx)
+
+"""
+    info::UninformativeCallInfo <: CallInfo
+
+Wraps the `MethodMatchInfo`/`UnionSplitInfo` of a non-concrete call site at which
+inference learned nothing from the matched methods: `Any` return and exception types,
+no argument refinements, and effects no better than `EFFECTS_UNKNOWN`. Inference records
+no edges for such a site, since there is no conclusion for a backedge to protect. The
+inliner sees through the wrapper and adds edges itself only where it commits to a matched
+method, by inlining it or emitting an `:invoke`; a site left as a dynamic call gets none.
+"""
+struct UninformativeCallInfo <: CallInfo
+    info::Union{MethodMatchInfo,UnionSplitInfo}
+end
+add_edges_impl(::Vector{Any}, ::UninformativeCallInfo) = nothing
+nsplit_impl(info::UninformativeCallInfo) = nsplit(info.info)
+getsplit_impl(info::UninformativeCallInfo, idx::Int) = getsplit(info.info, idx)
+getresult_impl(info::UninformativeCallInfo, idx::Int) = getresult(info.info, idx)
+getedge_impl(info::UninformativeCallInfo, idx::Int) = getedge(info.info, idx)
 
 """
     info::GlobalAccessInfo <: CallInfo
