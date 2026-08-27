@@ -357,11 +357,11 @@ viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
     (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
-substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
-    (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
+substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedRange{<:Integer}, Vararg{Any}}) where N =
+    (size_to_strides(strds[1]*Int(step(I[1].parent)), size(I[1])...)..., substrides(tail(strds), tail(I))...)
 
 # This exists for backwards compatibility, normally the cconvert method below will be used
-function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedRange{<:Integer}}}}}) where {S,T,N,P}
     parent = V.parent
     Δmem = if _checkcontiguous(Bool, parent)
         (first_index(V) - firstindex(parent)) * elsize(parent)
@@ -395,7 +395,7 @@ function unsafe_convert(::Type{Ptr{S}}, c::OffsetCConvert{T}) where {S, T}
     Ptr{S}(unsafe_convert(Ptr{T}, c.cconv_parent) + c.byte_offset)
 end
 
-function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedRange{<:Integer}}}}}) where {S,T,N,P}
     parent = V.parent
     p = cconvert(Ptr{T}, parent)
     Δmem = if _checkcontiguous(Bool, parent)
@@ -410,9 +410,34 @@ function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIn
     )
 end
 
-_checkcontiguous(::Type{Bool}, A::AbstractArray) = false
-# `strides(A::DenseArray)` calls `size_to_strides` by default.
-# Thus it's OK to assume all `DenseArray`s are contiguously stored.
+# TODO: Views along a constant-step `AbstractRange{<:AbstractCartesianIndex}` are
+# also strided in memory; however, `strides` and `cconvert`
+# do not yet support this.
+function is_strided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{Union{
+        RangeIndex,
+        ReshapedRange{<:Integer}
+    }}}}}
+    # Some subarrays may be strided even if the
+    # parent is not strided
+    is_vec_strided(A) || is_strided(P)
+end
+function is_vec_strided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
+    is_contiguous(A) || has_vec_strided_layout(P)
+end
+function is_contiguous(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
+    has_contiguous_layout(P)
+end
+
+
+is_ptr_loadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_loadable(P)
+is_ptr_storable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_storable(P)
+is_vec_strided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_vec_strided_layout(P)
+is_contiguous(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_contiguous_layout(P)
+
+# Contiguous with the exact byte layout of the equivalent Array and matching elsize
+_checkcontiguous(::Type{Bool}, A::AbstractArray{T}) where {T} =
+    has_contiguous_layout(typeof(A)) && elsize(typeof(A)) == elsize(Array{T})
+# TODO remove this. DenseArray being contiguous was not part of the DenseArray requirements. See CodeUnits.
 _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
 _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
