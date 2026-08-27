@@ -4,6 +4,7 @@ using Test
 using Distributed
 using Dates
 using Printf: @sprintf
+using StyledStrings: @styled_str
 using Base: Experimental
 using Base.ScopedValues
 
@@ -13,6 +14,55 @@ include("buildkitetestjson.jl")
 
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
 const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
+
+const prefix_name_width = 15
+# Width of the widest worker id, set once the worker count is known so that one- and
+# two-digit workers line up.
+const prefix_id_width = Ref(1)
+
+# Label for a line of test output, e.g. `" LinearAlg…  (3): "`. Names and ids are padded so
+# that the output of the different workers lines up.
+function output_prefix(name::AbstractString, id::Integer)
+    short = textwidth(name) <= prefix_name_width ? name : first(name, prefix_name_width - 1) * "…"
+    short = rpad(short, prefix_name_width)
+    at = lpad("($id)", prefix_id_width[] + 2)
+    return styled"{bright_black: $short $at: }"
+end
+
+# Prefix of each worker (worker id => prefix), updated as it picks up tests. Building a
+# prefix costs more than printing the line it labels, so it is not done per line; the lock
+# guards the map against the per-worker output tasks that read it.
+const worker_prefixes = Dict{Int, Base.AnnotatedString{String}}()
+const worker_prefixes_lock = ReentrantLock()
+
+# Label each line of worker output with the test it came from; `Distributed` still does the
+# printing. This must be installed before any worker is added, as `Distributed` calls it
+# from a task it starts per worker, which cannot call a function defined after it started.
+Distributed.worker_output_hook[] = (ident, line) -> begin
+    id = parse(Int, ident)
+    # a worker between tests has no test to name, but its id still identifies it
+    prefix = @lock worker_prefixes_lock get!(() -> output_prefix("", id), worker_prefixes, id)
+    return Base.annotatedstring(prefix, line)
+end
+
+# Run `f()` with its stdout/stderr captured and re-emitted to `io` with `prefix` on every
+# line. Node-1 tests run in this process, so their output does not pass through
+# Distributed's redirection and `worker_output_hook`.
+function with_output_prefix(f, prefix::AbstractString, io::IO, lock::ReentrantLock)
+    pipe = Pipe()
+    Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
+    reader = @async while !eof(pipe)
+        line = readline(pipe)
+        @lock lock println(io, prefix, line)
+    end
+    try
+        redirect_stdio(f; stdout=pipe, stderr=pipe)
+    finally
+        close(pipe.in)
+        wait(reader)
+        close(pipe)
+    end
+end
 
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -122,6 +172,7 @@ cd(@__DIR__) do
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end
+    prefix_id_width[] = ndigits(n + 1) # worker ids start at 2, so `n + 1` is the widest
     skipped = 0
 
     @everywhere include("testdefs.jl")
@@ -156,6 +207,9 @@ cd(@__DIR__) do
     printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
     printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
     results = []
+    # Node-1 tests run with `stdout` redirected, so the table is printed to the real stdout
+    # to keep it out of that capture (see `with_output_prefix`).
+    master_stdout = stdout
     print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
     if stderr isa Base.LibuvStream
         stderr.lock = print_lock
@@ -165,21 +219,21 @@ cd(@__DIR__) do
         @nospecialize resp
         lock(print_lock)
         try
-            printstyled(test, color=:white)
-            printstyled(lpad("($wrkr)", name_align - textwidth(test) + 1, " "), " | ", color=:white)
+            printstyled(master_stdout, test, color=:white)
+            printstyled(master_stdout, lpad("($wrkr)", name_align - textwidth(test) + 1, " "), " | ", color=:white)
             time_str = @sprintf("%7.2f",resp[2])
-            printstyled(lpad(time_str, elapsed_align, " "), " | ", color=:white)
+            printstyled(master_stdout, lpad(time_str, elapsed_align, " "), " | ", color=:white)
             gc_str = @sprintf("%5.2f", resp[5].total_time / 10^9)
-            printstyled(lpad(gc_str, gc_align, " "), " | ", color=:white)
+            printstyled(master_stdout, lpad(gc_str, gc_align, " "), " | ", color=:white)
 
             # since there may be quite a few digits in the percentage,
             # the left-padding here is less to make sure everything fits
             percent_str = @sprintf("%4.1f", 100 * resp[5].total_time / (10^9 * resp[2]))
-            printstyled(lpad(percent_str, percent_align, " "), " | ", color=:white)
+            printstyled(master_stdout, lpad(percent_str, percent_align, " "), " | ", color=:white)
             alloc_str = @sprintf("%5.2f", resp[3] / 2^20)
-            printstyled(lpad(alloc_str, alloc_align, " "), " | ", color=:white)
+            printstyled(master_stdout, lpad(alloc_str, alloc_align, " "), " | ", color=:white)
             rss_str = @sprintf("%5.2f", resp[6] / 2^20)
-            printstyled(lpad(rss_str, rss_align, " "), "\n", color=:white)
+            printstyled(master_stdout, lpad(rss_str, rss_align, " "), "\n", color=:white)
         finally
             unlock(print_lock)
         end
@@ -191,8 +245,8 @@ cd(@__DIR__) do
         at = lpad("($wrkr)", name_align - textwidth(name) + 1, " ")
         lock(print_lock)
         try
-            printstyled(name, at, " |", " "^elapsed_align, color=:white)
-            printstyled("started at $(now())",
+            printstyled(master_stdout, name, at, " |", " "^elapsed_align, color=:white)
+            printstyled(master_stdout, "started at $(now())",
                     (pid > 0 ? " on pid $pid" : ""),
                     "\n", color=:light_black)
         finally
@@ -204,18 +258,18 @@ cd(@__DIR__) do
     function print_testworker_errored(name, wrkr, @nospecialize(e))
         lock(print_lock)
         try
-            printstyled(name, color=:red)
-            printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
+            printstyled(master_stdout, name, color=:red)
+            printstyled(master_stdout, lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
                 " "^elapsed_align, " failed at $(now())\n", color=:red)
             if isa(e, Test.TestSetException)
                 for t in e.errors_and_fails
-                    show(t)
-                    println()
+                    show(master_stdout, t)
+                    println(master_stdout)
                 end
             elseif e !== nothing
-                Base.showerror(stdout, e)
+                Base.showerror(master_stdout, e)
             end
-            println()
+            println(master_stdout)
         finally
             unlock(print_lock)
         end
@@ -357,6 +411,7 @@ cd(@__DIR__) do
                         running_tests[test] = now()
                         wrkr = p
                         running_on[test] = wrkr
+                        @lock worker_prefixes_lock (worker_prefixes[wrkr] = output_prefix(test, wrkr))
 
                         # Create a timer for this test to report long-running status
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
@@ -373,14 +428,14 @@ cd(@__DIR__) do
                                 end
 
                                 @lock print_lock begin
-                                    print(test)
-                                    print(lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ")
+                                    print(master_stdout, test)
+                                    print(master_stdout, lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ")
                                     # Calculate total width of data columns: "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)"
                                     # This is: elapsed_align + 3 + gc_align + 3 + percent_align + 3 + alloc_align + 3 + rss_align
                                     data_width = elapsed_align + gc_align + percent_align + alloc_align + rss_align + 12  # 12 = 4 * " | "
                                     message = "has been running for $(elapsed_str)"
                                     centered_message = lpad(rpad(message, (data_width + textwidth(message)) ÷ 2), data_width)
-                                    printstyled(centered_message, "\n", color=:light_black)
+                                    printstyled(master_stdout, centered_message, "\n", color=:light_black)
                                 end
                             end
                         end
@@ -394,6 +449,7 @@ cd(@__DIR__) do
                             end
                         delete!(running_tests, test)
                         delete!(running_on, test)
+                        @lock worker_prefixes_lock delete!(worker_prefixes, wrkr)
                         if haskey(test_timers, test)
                             close(test_timers[test])
                             delete!(test_timers, test)
@@ -452,8 +508,10 @@ cd(@__DIR__) do
             running_on[t] = 1
             before = time()
             resp, duration = try
-                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
-                    r, time() - before
+                    with_output_prefix(output_prefix(t, 1), master_stdout, print_lock) do
+                        r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                        r, time() - before
+                    end
                 catch e
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
@@ -487,6 +545,7 @@ cd(@__DIR__) do
         if @isdefined test_timers
             foreach(close, values(test_timers))
         end
+        Distributed.worker_output_hook[] = nothing
     end
 
     #=
