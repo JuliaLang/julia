@@ -33,13 +33,93 @@ JL_HIDDEN const void **const jl_static_exported_data_ptrs[] = {
 #undef XX
 
 #include "julia.h"
+#include "julia_internal.h"
+#include "jl_exported_funcs.inc"
 
-// The public copy of ijl_small_typeof, filled in by export_jl_small_typeof
-JL_DLLEXPORT jl_datatype_t *jl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+// n.b. `jl_small_typeof` is not defined here: the system image linked into the
+// binary defines it (aotcompile.cpp), and export_jl_small_typeof fills it in.
 
 // Data symbols that live in libjulia in the shared build (jl_options, jl_n_threads, ...)
 #define XX(name, type) JL_DLLEXPORT type name;
 JL_EXPORTED_DATA_SYMBOLS(XX)
 #undef XX
+
+// The runtime's exported functions are defined under their `ijl_` names
+// (jl_internal_funcs.inc); libjulia normally re-exports them as `jl_`. Provide
+// the `jl_` names here as tail-jump thunks. Each thunk lives in its own section
+// so that --gc-sections can drop the unused ones, and is weak so that functions
+// which the runtime also defines under their `jl_` name (e.g. jl_egal) win.
+#if defined(_OS_WINDOWS_)
+// TODO: COFF needs a different mechanism (e.g. a .def file with aliases)
+#else
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#define JL_THUNK_BRANCH "jmp "
+#elif defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
+#define JL_THUNK_BRANCH "b "
+#elif defined(_CPU_RISCV64_)
+#define JL_THUNK_BRANCH "tail "
+#elif defined(_CPU_PPC64_)
+#define JL_THUNK_BRANCH "b "
+#else
+#error "unsupported architecture for static jl_ function thunks"
+#endif
+#if defined(_OS_DARWIN_)
+#define XX(name) __asm__( \
+    ".section __TEXT,__text,regular,pure_instructions\n" \
+    "\t.globl _" #name "\n" \
+    "\t.weak_definition _" #name "\n" \
+    "\t.p2align 2\n" \
+    "_" #name ":\n" \
+    "\t" JL_THUNK_BRANCH "_i" #name "\n");
+#else
+#define XX(name) __asm__( \
+    ".section .text." #name ",\"ax\",@progbits\n" \
+    "\t.weak " #name "\n" \
+    "\t.type " #name ",@function\n" \
+    "\t.p2align 2\n" \
+    #name ":\n" \
+    "\t" JL_THUNK_BRANCH "i" #name "\n" \
+    "\t.size " #name ", .-" #name "\n");
+#endif
+JL_RUNTIME_EXPORTED_FUNCS(XX)
+#undef XX
+#endif // !_OS_WINDOWS_
+
+// Normally provided by the libjulia loader: the directory containing libjulia,
+// which for a static build is the directory containing the executable.
+JL_DLLEXPORT const char *jl_get_libdir(void)
+{
+    static char *libdir = NULL;
+    if (libdir != NULL)
+        return libdir;
+    char *path = (char*)malloc_s(JL_PATH_MAX);
+    size_t size = JL_PATH_MAX;
+    if (uv_exepath(path, &size) != 0) {
+        free(path);
+        return NULL;
+    }
+    path[size] = '\0';
+    char *sep = NULL;
+    for (char *p = path; *p; p++) {
+#ifdef _OS_WINDOWS_
+        if (*p == '/' || *p == '\\')
+#else
+        if (*p == '/')
+#endif
+            sep = p;
+    }
+    if (sep == NULL) {
+        path[0] = '.';
+        path[1] = '\0';
+    }
+    else if (sep == path) {
+        sep[1] = '\0';
+    }
+    else {
+        *sep = '\0';
+    }
+    libdir = path;
+    return libdir;
+}
 
 #endif // JL_LIBRARY_STATIC
