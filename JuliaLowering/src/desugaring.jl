@@ -3027,12 +3027,18 @@ end
 #-------------------------------------------------------------------------------
 # Expand macro definitions
 
+# Name is hygienic-global in compat mode, hygienic otherwise
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
-        @mknode(ex; kind=k, value="@$(syntax_name(ex))", children=nothing)
+        if k === K"Identifier" && is_flisp_compat(ex)
+            @mknode(ex; kind=k, value="@$(syntax_name(ex))",
+                    mod=syntax_module(ex))
+        else
+            @mknode(ex; kind=k, value="@$(syntax_name(ex))")
+        end
     elseif k == K"Placeholder"
-        @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))", children=nothing)
+        @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))")
     elseif is_valid_modref(ex)
         @jl_assert numchildren(ex) == 2 ex
         @ast ctx ex [K"." ex[1] _make_macro_name(ctx, ex[2])]
@@ -3041,7 +3047,6 @@ function _make_macro_name(ctx, ex)
     end
 end
 
-# flisp: expand-macro-def
 function expand_macro_def(ctx, ex)
     if numchildren(ex) == 1
         # macro with zero methods
