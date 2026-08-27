@@ -3029,7 +3029,7 @@ end
 
 function _make_macro_name(ctx, ex)
     k = kind(ex)
-    if k == K"Identifier" || k == K"Symbol"
+    name = if k == K"Identifier" || k == K"Symbol"
         @mknode(ex; kind=k, value="@$(syntax_name(ex))", children=nothing)
     elseif k == K"Placeholder"
         @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))", children=nothing)
@@ -3039,6 +3039,7 @@ function _make_macro_name(ctx, ex)
     else
         @jl_assert false ex
     end
+    relayer_global_if_unhygienic(ctx, name)[1]
 end
 
 # flisp: expand-macro-def
