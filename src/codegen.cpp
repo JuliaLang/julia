@@ -412,13 +412,20 @@ struct jl_noaliascache_t {
 
     // memory regions domain
     //
+    // A region is only worth a scope here if it says something '!tbaa' cannot. That
+    // rules out memory that is constant for this compilation unit: `jtbaa_const` is
+    // an immutable access tag, so `TypeBasedAAResult::pointsToConstantMemory` already
+    // reports that no store or call may modify it -- a stronger claim than a scope,
+    // since it holds against instructions that carry no metadata at all. Such an
+    // access therefore gets no scope, and `jl_aliasinfo_t::isConstant` reads the tag.
+    //
     // Rooting invariant (relied upon by `isLoadFromRootedRegion` in
     // llvm-codegen-shared.h): an access whose scope set in this domain is contained
-    // in {jnoalias_immutdata, jnoalias_mutconstdata, jnoalias_const} refers to memory
-    // whose base object cannot stop referencing any tracked pointer stored there while
-    // the base is live. In particular a codegen-private buffer may only be
-    // classified `immutdata` if it never holds tracked pointers; private buffers
-    // that do must use `stack` or `gcframe`.
+    // in {jnoalias_immutdata, jnoalias_mutconstdata} refers to memory whose base
+    // object cannot stop referencing any tracked pointer stored there while the base
+    // is live. In particular a codegen-private buffer may only be classified
+    // `immutdata` if it never holds tracked pointers; private buffers that do must
+    // use `stack` or `gcframe`.
     struct jl_regions_t {
         MDNode *gcframe = nullptr;        // GC frame
         MDNode *stack = nullptr;          // Stack slot
@@ -426,7 +433,6 @@ struct jl_noaliascache_t {
         MDNode *mutconstdata = nullptr;   // The `const` fields of a mutable jl_value_t
         MDNode *immutdata = nullptr;      // The payload of an immutable jl_value_t
         MDNode *memorybuf = nullptr;      // The element data of a jl_genericmemory_t
-        MDNode *constant = nullptr;       // Memory that is immutable by the time this compile unit can access it
 
         jl_regions_t() = default;
 
@@ -440,7 +446,6 @@ struct jl_noaliascache_t {
             this->mutconstdata = mbuilder.createAliasScope("jnoalias_mutconstdata", domain);
             this->immutdata = mbuilder.createAliasScope("jnoalias_immutdata", domain);
             this->memorybuf = mbuilder.createAliasScope("jnoalias_memorybuf", domain);
-            this->constant = mbuilder.createAliasScope("jnoalias_const", domain);
         }
     } regions;
 
@@ -460,7 +465,7 @@ struct jl_noaliascache_t {
 
     void initialize(llvm::LLVMContext &context) {
         if (initialized) {
-            assert(&regions.constant->getContext() == &context);
+            assert(&regions.gcframe->getContext() == &context);
             return;
         }
         initialized = true;
@@ -1703,11 +1708,14 @@ static void union_alloca_type(jl_uniontype_t *ut,
 // This combines the two orthogonal pieces of alias information codegen tracks
 // for a memory location:
 //  - the memory region it lives in (gcframe / stack / mutable object fields /
-//    immutable object payload / memory buffer / constant), expressed as
-//    '!alias.scope' + '!noalias' metadata derived from
-//    jl_noaliascache_t::jl_regions_t, and
+//    immutable object payload / memory buffer), expressed as '!alias.scope' +
+//    '!noalias' metadata derived from jl_noaliascache_t::jl_regions_t, and
 //  - the layout/type of the data stored there, expressed as struct-path
 //    '!tbaa' metadata from the jl_tbaacache_t tree.
+//
+// Memory that is constant for this compilation unit has no region of its own: the
+// immutable `jtbaa_const` access tag already claims more than a scope could (see
+// `jl_regions_t`), and `isConstant` recovers the fact from the tag.
 namespace {
 struct jl_aliasinfo_t {
     // The set of memory regions an access may touch: each region in the set is one
@@ -1738,7 +1746,6 @@ struct jl_aliasinfo_t {
         immutdata = 1 << 4,
         // The element data of a jl_genericmemory_t, containing mutable storage for immutdata.
         memorybuf = 1 << 5,
-        constant  = 1 << 6,
         // The fields of a mutable jl_value_t, without knowing which of them. The two
         // halves above are disjoint rather than nested, so an access that may reach
         // either has to say so here and claim both: a whole-object alias info, or a
@@ -1751,7 +1758,7 @@ struct jl_aliasinfo_t {
         data      = mutfields | immutdata,
         // Everything a raw `Ptr` may legally read from our alias regions.
         anydata   = data | memorybuf,
-        LLVM_MARK_AS_BITMASK_ENUM(constant)
+        LLVM_MARK_AS_BITMASK_ENUM(memorybuf)
     };
 
     MDNode *tbaa = nullptr;          // '!tbaa': Struct-path TBAA. TBAA graph forms a tree (indexed by offset).
@@ -1782,9 +1789,21 @@ struct jl_aliasinfo_t {
         return jl_aliasinfo_t(ctx, r, this->tbaa);
     }
 
+    // Whether the layout tag is an immutable one (`jtbaa_const`), meaning nothing
+    // may store to this memory for as long as this compilation unit can reach it.
+    // This is the axis constant memory is described on -- it has no region.
+    bool isConstant() const {
+        // A struct-path access tag is {base, access, offset} plus a trailing
+        // non-zero constant when the access is to immutable memory.
+        if (!tbaa || tbaa->getNumOperands() < 4)
+            return false;
+        auto *imm = mdconst::dyn_extract<ConstantInt>(tbaa->getOperand(3));
+        return imm && !imm->isZero();
+    }
+
     // Add !tbaa, !tbaa.struct, !alias.scope, !noalias annotations to an instruction.
     //
-    // Also adds `invariant.load` to load instructions from the constant region.
+    // Also adds `invariant.load` to loads of constant memory.
     Instruction *decorateInst(Instruction *inst) const {
 
         if (this->tbaa)
@@ -1796,8 +1815,8 @@ struct jl_aliasinfo_t {
         if (this->noalias)
             inst->setMetadata(LLVMContext::MD_noalias, this->noalias);
 
-        // If this is in the read-only region, mark the load with "!invariant.load"
-        if (this->region == Region::constant && isa<LoadInst>(inst))
+        // If this memory is read-only, mark the load with "!invariant.load"
+        if (this->isConstant() && isa<LoadInst>(inst))
             inst->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(inst->getContext(), {}));
 
         return inst;
@@ -1805,7 +1824,7 @@ struct jl_aliasinfo_t {
 
     // Merge two sets of alias information, for an instruction (such as a memcpy)
     // that accesses both.
-    jl_aliasinfo_t merge(jl_codectx_t &ctx, const jl_aliasinfo_t &other) const;
+    jl_aliasinfo_t merge(const jl_aliasinfo_t &other) const;
 
     AAMDNodes toAAMDNodes() const
     {
@@ -2235,11 +2254,10 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
         { Region::mutconstdata, regions.mutconstdata },
         { Region::immutdata, regions.immutdata },
         { Region::memorybuf, regions.memorybuf },
-        { Region::constant,  regions.constant },
     };
     // The regions in the set are added to !alias.scope, all others to !noalias
-    SmallVector<Metadata*,7> scopes;
-    SmallVector<Metadata*,7> noaliases;
+    SmallVector<Metadata*,6> scopes;
+    SmallVector<Metadata*,6> noaliases;
     for (auto const &region: all_scopes) {
         if ((r & region.first) != Region::unknown)
             scopes.push_back(region.second);
@@ -2252,17 +2270,18 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
     }
 }
 
-jl_aliasinfo_t jl_aliasinfo_t::merge(jl_codectx_t &ctx, const jl_aliasinfo_t &other) const {
+jl_aliasinfo_t jl_aliasinfo_t::merge(const jl_aliasinfo_t &other) const {
+    // Nothing may store to constant memory, and it lives in no region, so an access
+    // that also touches it is never the subject of an aliasing query whose answer it
+    // could change: keep the other side's claim in full, instead of climbing to their
+    // (much coarser) common parent tag and unioning in a scope it does not need.
+    if (this->isConstant() || other.isConstant()) {
+        jl_aliasinfo_t result = this->isConstant() ? other : *this;
+        result.tbaa_struct = nullptr;
+        return result;
+    }
     jl_aliasinfo_t result;
-    // Nothing may store to `jtbaa_const` memory, so an access that also touches it
-    // is never the subject of a TBAA query whose answer could change: keep the other
-    // side's precise tag instead of climbing to their (much coarser) common parent.
-    if (this->tbaa == ctx.tbaa().tbaa_const)
-        result.tbaa = other.tbaa;
-    else if (other.tbaa == ctx.tbaa().tbaa_const)
-        result.tbaa = this->tbaa;
-    else
-        result.tbaa = MDNode::getMostGenericTBAA(this->tbaa, other.tbaa);
+    result.tbaa = MDNode::getMostGenericTBAA(this->tbaa, other.tbaa);
     result.tbaa_struct = nullptr;
     result.scope = MDNode::getMostGenericAliasScope(this->scope, other.scope);
     result.noalias = MDNode::intersect(this->noalias, other.noalias);
@@ -2310,7 +2329,9 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     memoryown = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_memoryown);
     memorybuf = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_field);
     memoryselbyte = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_memoryselbyte);
-    constant = jl_aliasinfo_t(ctx, Region::constant, tbaa.tbaa_const);
+    // No region: an immutable access tag is a stronger claim than any scope could
+    // make, since it also holds against instructions that carry no metadata.
+    constant = jl_aliasinfo_t(ctx, Region::unknown, tbaa.tbaa_const);
 }
 
 // Alias info for the inline data of an `sret` return buffer. Both the caller
@@ -2335,7 +2356,7 @@ static jl_aliasinfo_t sret_aliasinfo(jl_codectx_t &ctx, jl_value_t *jlretty, boo
 // The copy keeps the source's layout tag, but is also known to move to the stack.
 static jl_aliasinfo_t stack_copy_aliasinfo(jl_codectx_t &ctx, const jl_aliasinfo_t &src_ai, jl_value_t *typ)
 {
-    return (src_ai && src_ai.region != jl_aliasinfo_t::Region::constant ? src_ai : best_aliasinfo(ctx, typ))
+    return (src_ai && !src_ai.isConstant() ? src_ai : best_aliasinfo(ctx, typ))
         .withRegion(ctx, jl_aliasinfo_t::Region::stack);
 }
 
@@ -4068,7 +4089,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
                     ai = parg1.aliasinfo;
                 }
                 else {
-                    ai = parg1.aliasinfo.merge(ctx, parg2.aliasinfo);
+                    ai = parg1.aliasinfo.merge(parg2.aliasinfo);
                 }
                 ai.decorateInst(answer);
             }

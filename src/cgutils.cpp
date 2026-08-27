@@ -488,13 +488,15 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
     return Ptrs;
 }
 
-// whether memory in this region cannot be written concurrently, so that
-// non-atomic (rather than unordered) loads and stores are permitted
-static bool region_is_private(jl_aliasinfo_t::Region r)
+// whether this memory cannot be written concurrently, so that non-atomic
+// (rather than unordered) loads and stores are permitted
+static bool ai_is_private(const jl_aliasinfo_t &ai)
 {
-    // i.e. a known set of regions, none of which is shared with other threads
+    // constant memory is never written at all, and otherwise a known set of
+    // regions, none of which is shared with other threads
     using Region = jl_aliasinfo_t::Region;
-    return r != Region::unknown && (r & Region::anydata) == Region::unknown;
+    return ai.isConstant() ||
+           (ai.region != Region::unknown && (ai.region & Region::anydata) == Region::unknown);
 }
 
 static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *data_pointer, jl_datatype_t *typ, size_t npointers, const jl_aliasinfo_t &roots_ai, bool isVolatile=false)
@@ -502,7 +504,7 @@ static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *da
     SmallVector<Value*,0> gcroots(npointers);
     if (npointers) {
         Type *T_prjlvalue = ctx.types().T_prjlvalue;
-        bool isprivatemem = isa<AllocaInst>(data_pointer->stripInBoundsOffsets()) || region_is_private(roots_ai.region);
+        bool isprivatemem = isa<AllocaInst>(data_pointer->stripInBoundsOffsets()) || ai_is_private(roots_ai);
         for (size_t i = 0; i < npointers; i++) {
             Value *field_ptr = emit_ptrgep(ctx, data_pointer, jl_ptr_offset(typ, i) * sizeof(jl_value_t*));
             LoadInst *root = ctx.builder.CreateAlignedLoad(T_prjlvalue, field_ptr, Align(sizeof(void*)), isVolatile);
@@ -529,7 +531,7 @@ static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, const jl_
             Type *T_prjlvalue = ctx.types().T_prjlvalue;
             const jl_aliasinfo_t &roots_ai = val.aliasinfo;
             Value *p = maybe_decay_tracked(ctx, data_pointer(ctx, val));
-            bool isprivatemem = isa<AllocaInst>(p->stripInBoundsOffsets()) || region_is_private(roots_ai.region);
+            bool isprivatemem = isa<AllocaInst>(p->stripInBoundsOffsets()) || ai_is_private(roots_ai);
             gcroots.resize(npointers, nullptr);
             for (size_t i = 0; i < npointers; i++) {
                 Value *field_ptr = emit_ptrgep(ctx, p, jl_ptr_offset((jl_datatype_t*)val.typ, i) * sizeof(jl_value_t*));
@@ -1214,7 +1216,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // tbaa(src) ∪ tbaa(dst) = tbaa_root whenever tbaa(src) != tbaa(dst),
     // while the merged region metadata keeps the intersection of the
     // regions' noalias sets.
-    auto merged_ai = dst_ai.merge(ctx, src_ai);
+    auto merged_ai = dst_ai.merge(src_ai);
 #if JL_LLVM_VERSION < 210000
     ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
                              merged_ai.tbaa, merged_ai.tbaa_struct, merged_ai.scope, merged_ai.noalias);
@@ -1294,7 +1296,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         return;
     Value *src;
     std::tie(src, src_ai) = data_pointer_ai(ctx, value_to_pointer(ctx, x));
-    bool isprivatemem = isa<AllocaInst>(src->stripInBoundsOffsets()) || region_is_private(src_ai.region);
+    bool isprivatemem = isa<AllocaInst>(src->stripInBoundsOffsets()) || ai_is_private(src_ai);
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
     size_t shrunken_size = split_value_size(typ).first;

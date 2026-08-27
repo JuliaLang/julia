@@ -138,7 +138,7 @@ top:
 L1:
   %continue = phi i1 [ true, %top ], [ false, %L1 ]
   %p = phi {} addrspace(10)* [ %x, %top ], [ %v, %L1 ]
-  %v0 = load {}*, {}** @gv1, !tbaa !4, !alias.scope !13
+  %v0 = load {}*, {}** @gv1, !tbaa !4, !invariant.load !18
   %v = addrspacecast {}* %v0 to {} addrspace(10)*
   call void @one_arg_boxed({} addrspace(10)* %v)
   call void @one_arg_boxed({} addrspace(10)* %p)
@@ -345,9 +345,6 @@ attributes #1 = { inaccessiblememonly norecurse nounwind }
 !10 = !{!11}
 !11 = !{!"jnoalias_stack", !9}
 !12 = !{!8, !11}
-!13 = !{!14}
-!14 = !{!"jnoalias_const", !9}
-
 ; Same scope name, but a domain that is not ours.
 !15 = !{!16}
 !16 = !{!"jnoalias_immutdata", !17}
