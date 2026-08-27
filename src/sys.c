@@ -410,15 +410,6 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-// Apple's M1 processor is a big.LITTLE style processor, with 4x "performance"
-// cores, and 4x "efficiency" cores.  Because Julia expects to be able to run
-// things like heavy linear algebra workloads on all cores, it's best for us
-// to only spawn as many threads as there are performance cores.  Once macOS
-// 12 is released, we'll be able to query the multiple "perf levels" of the
-// cores of a CPU (see this PR [0] to pytorch/cpuinfo for an example) but
-// until it's released, we will just recognize the M1 by its CPU family
-// identifier, then subtract how many efficiency cores we know it has.
-
 JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
