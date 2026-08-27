@@ -207,16 +207,16 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1_lam(vcx, st)
     [K"flatten" g] -> vst1_generator(vcx, g)
     [K"generator" _...] -> vst1_generator(vcx, st)
-    [K"comprehension" [K"flatten" g]] -> vst1_generator(vcx, g)
-    [K"comprehension" g] -> vst1_generator(vcx, g)
+    [K"comprehension" [K"flatten" g]] -> vst1(vcx, g)
+    [K"comprehension" g] -> vst1(vcx, g)
     [K"comprehension" xs...] ->
         # HACK: We shouldn't be creating trees here, but this is extremely rare
         # (deprecated even in 2016)
         vst1_generator(vcx, @ast _ st [K"generator" xs...])
     [K"typed_comprehension" t [K"flatten" g]] ->
-        vst1(vcx, t) & vst1_generator(vcx, g)
+        vst1(vcx, t) & vst1(vcx, g)
     [K"typed_comprehension" t g] ->
-        vst1(vcx, t) & vst1_generator(vcx, g)
+        vst1(vcx, t) & vst1(vcx, g)
     [K"comparison" xs...] ->
         length(xs) < 3 || iseven(length(xs)) ?
         @fail(st, "`comparison` expects n>=3 args and odd n") :
