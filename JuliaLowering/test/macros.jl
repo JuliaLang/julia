@@ -1574,6 +1574,57 @@ end
 
     @test JuliaLowering.include_string(
         test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=false) === 123
+
+    # unescaped top-level macro should be visible in the old system
+    @test JuliaLowering.include_string(test_mod, raw"""
+    module MacrosDefiningMacros
+    macro make_old_unescaped_macro(name)
+        :(macro $name(x)
+            x
+        end)
+    end
+    macro make_old_escaped_macro(name)
+        :(macro $(esc(name))(x)
+            x
+        end)
+    end
+    end
+    """; expr_compat_mode=true) isa Module
+    @test JuliaLowering.include_string(test_mod, raw"""
+    MacrosDefiningMacros.@make_old_unescaped_macro make_old_unescaped_macro_out
+    """; expr_compat_mode=true) isa Function
+    @test JuliaLowering.include_string(test_mod, raw"""
+    MacrosDefiningMacros.@make_old_escaped_macro make_old_escaped_macro_out
+    """; expr_compat_mode=true) isa Function
+    @test JuliaLowering.include_string(test_mod, raw"""
+    MacrosDefiningMacros.@make_old_unescaped_macro_out 1
+    """; expr_compat_mode=true) == 1
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @make_old_escaped_macro_out 1
+    """; expr_compat_mode=true) == 1
+
+    # standard scope-layer-carrying macro arg `name` should work in new system
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro make_new_nameprovided_macro(name)
+        @legacy_quote_to_syntax :(macro $name(x)
+            x
+        end)
+    end
+    @make_new_nameprovided_macro make_new_nameprovided_macro_out
+    @make_new_nameprovided_macro_out 1
+    """; expr_compat_mode=false) == 1
+
+    # unhygienic new macro def shouldn't be visible (may change)
+    JuliaLowering.include_string(test_mod, raw"""
+    macro make_new_anaphoric_macro_fail()
+        @legacy_quote_to_syntax :(macro make_new_anaphoric_macro_fail_out(x)
+            x
+        end)
+    end
+    @make_new_anaphoric_macro_fail
+    """; expr_compat_mode=false) == 1
+    @test_throws MacroExpansionError JuliaLowering.include_string(
+        test_mod, "@make_new_anaphoric_macro_fail_out"; expr_compat_mode=false)
 end
 
 @testset "SIMD loopinfo" begin
