@@ -33,12 +33,12 @@ end
     """
     data, comments = parse_with_comments(str)
     @test data["name"] == "MyPkg"
-    @test comments.floating[()] == [" floating root comment"]
-    @test comments.items[("deps",)].above == [" attached to deps"]
-    @test comments.items[("deps", "Dep")].above == [" `Dep` is used for fooing bars"]
-    @test comments.items[("deps", "Dep")].inline === nothing
-    @test comments.items[("compat", "Dep")].inline == " see issue 123 before bumping"
-    @test !haskey(comments.items, ("compat", "julia"))
+    @test comments.floating[String[]] == [" floating root comment"]
+    @test comments.items[["deps"]].above == [" attached to deps"]
+    @test comments.items[["deps", "Dep"]].above == [" `Dep` is used for fooing bars"]
+    @test comments.items[["deps", "Dep"]].inline === nothing
+    @test comments.items[["compat", "Dep"]].inline == " see issue 123 before bumping"
+    @test !haskey(comments.items, ["compat", "julia"])
 end
 
 @testset "print and reparse is a fixed point" begin
@@ -74,9 +74,9 @@ end
     bar = 456
     """
     data, comments = parse_with_comments(str)
-    @test comments.floating[()] == [" 1", " 2"]
-    @test comments.items[("bar",)].above == [" 3"]
-    @test !haskey(comments.items, ("foo",))
+    @test comments.floating[String[]] == [" 1", " 2"]
+    @test comments.items[["bar"]].above == [" 3"]
+    @test !haskey(comments.items, ["foo"])
 end
 
 @testset "comments in values attach to the owning entry" begin
@@ -88,9 +88,9 @@ end
     b = { x = 1 } # inline b
     """
     data, comments = parse_with_comments(str)
-    @test comments.items[("a",)].above == [" above a", " one", " two"]
-    @test comments.items[("b",)].inline == " inline b"
-    @test !haskey(comments.items, ("b", "x"))
+    @test comments.items[["a"]].above == [" above a", " one", " two"]
+    @test comments.items[["b"]].inline == " inline b"
+    @test !haskey(comments.items, ["b", "x"])
 end
 
 @testset "dotted and quoted keys" begin
@@ -102,9 +102,9 @@ end
     "x.y" = 2 # inline weird
     """
     data, comments = parse_with_comments(str)
-    @test comments.items[("a", "b", "c")].above == [" above dotted"]
-    @test comments.items[("weird key", "x.y")].above == [" above weird entry"]
-    @test comments.items[("weird key", "x.y")].inline == " inline weird"
+    @test comments.items[["a", "b", "c"]].above == [" above dotted"]
+    @test comments.items[["weird key", "x.y"]].above == [" above weird entry"]
+    @test comments.items[["weird key", "x.y"]].inline == " inline weird"
     out = sprint_with_comments(data, comments)
     data2, comments2 = parse_with_comments(out)
     @test data2 == data
@@ -125,8 +125,8 @@ end
     z = 1
     """
     data, comments = parse_with_comments(str)
-    @test comments.items[("x",)].above == [" above first"]
-    @test comments.items[("y", "z")].above == [" in y"]
+    @test comments.items[["x"]].above == [" above first"]
+    @test comments.items[["y", "z"]].above == [" in y"]
     @test length(comments.items) == 2
     @test isempty(comments.floating)
     out = sprint_with_comments(data, comments)
@@ -143,17 +143,17 @@ end
     # floats in a
     """
     data, comments = parse_with_comments(str)
-    @test comments.floating[("a",)] == [" floats in a"]
+    @test comments.floating[["a"]] == [" floats in a"]
     out = sprint_with_comments(data, comments)
     data2, comments2 = parse_with_comments(out)
-    @test comments2.floating[("a",)] == [" floats in a"]
+    @test comments2.floating[["a"]] == [" floats in a"]
 
     data, comments = parse_with_comments("x = 1\n# tail")
-    @test comments.floating[()] == [" tail"]
+    @test comments.floating[String[]] == [" tail"]
 
     data, comments = parse_with_comments("# just a comment\n")
     @test isempty(data)
-    @test comments.floating[()] == [" just a comment"]
+    @test comments.floating[String[]] == [" just a comment"]
     data, comments = parse_with_comments("")
     @test isempty(data)
     @test isempty(comments)
@@ -161,16 +161,16 @@ end
 
 @testset "comment without preceding whitespace" begin
     data, comments = parse_with_comments("a = 1# c\n[b]# d\nx = 2\n")
-    @test comments.items[("a",)].inline == " c"
-    @test comments.items[("b",)].inline == " d"
+    @test comments.items[["a"]].inline == " c"
+    @test comments.items[["b"]].inline == " d"
 end
 
 @testset "crlf line endings" begin
     str = "# above\r\na = 1\r\n\r\n# floating\r\n\r\nb = 2\r\n"
     data, comments = parse_with_comments(str)
-    @test comments.items[("a",)].above == [" above"]
-    @test comments.floating[()] == [" floating"]
-    @test !haskey(comments.items, ("b",))
+    @test comments.items[["a"]].above == [" above"]
+    @test comments.floating[String[]] == [" floating"]
+    @test !haskey(comments.items, ["b"])
 end
 
 @testset "comments removed with their item" begin
@@ -190,11 +190,11 @@ end
 @testset "programmatic comments are sanitized" begin
     data = Dict{String, Any}("a" => 1)
     comments = TOML.Comments()
-    comments.items[("a",)] = TOML.Internals.CommentBlock(["evil\nb = 2"], "inline\nevil = 3")
+    comments.items[["a"]] = TOML.Internals.CommentBlock(["evil\nb = 2"], "inline\nevil = 3")
     out = sprint_with_comments(data, comments)
     data2, comments2 = parse_with_comments(out)
     @test data2 == data
-    @test comments2.items[("a",)].above == [" evil", " b = 2"]
+    @test comments2.items[["a"]].above == [" evil", " b = 2"]
 end
 
 @testset "comments in nested and empty tables" begin
@@ -207,9 +207,9 @@ end
     [c]
     """
     data, comments = parse_with_comments(str)
-    @test comments.items[("a", "b")].above == [" above nested header"]
-    @test comments.items[("a", "b")].inline == " inline nested header"
-    @test comments.items[("c",)].above == [" above empty table"]
+    @test comments.items[["a", "b"]].above == [" above nested header"]
+    @test comments.items[["a", "b"]].inline == " inline nested header"
+    @test comments.items[["c"]].above == [" above empty table"]
     out = sprint_with_comments(data, comments)
     data2, comments2 = parse_with_comments(out)
     @test data2 == data
@@ -224,7 +224,7 @@ end
     x = 1
     """
     data, comments = parse_with_comments(str)
-    @test comments.items[("a",)].above == [" keep me"]
+    @test comments.items[["a"]].above == [" keep me"]
     out = sprint_with_comments(data, comments)
     @test occursin("[a]", out)
     data2, comments2 = parse_with_comments(out)
@@ -241,7 +241,7 @@ end
     x = 1
     """
     data, comments = parse_with_comments(str)
-    @test comments.floating[("a",)] == [" floating in a"]
+    @test comments.floating[["a"]] == [" floating in a"]
     out = sprint_with_comments(data, comments)
     data2, comments2 = parse_with_comments(out)
     @test data2 == data
@@ -254,8 +254,8 @@ end
 
 @testset "empty inline comments are preserved" begin
     data, comments = parse_with_comments("x = 1 #\ny = 2\n")
-    @test comments.items[("x",)].inline == ""
-    @test !haskey(comments.items, ("y",))
+    @test comments.items[["x"]].inline == ""
+    @test !haskey(comments.items, ["y"])
     out = sprint_with_comments(data, comments)
     @test occursin("x = 1 #\n", out)
     @test occursin("y = 2\n", out)
@@ -285,9 +285,9 @@ end
     @test occursin("Example = {path = \"../Example\"}", out)
     data2, comments2 = parse_with_comments(out)
     @test data2 == data
-    @test comments2.items[("sources", "Example")].above ==
+    @test comments2.items[["sources", "Example"]].above ==
         [" above the sources entry", " local checkout", " trailing"]
-    @test !haskey(comments2.items, ("sources", "Example", "path"))
+    @test !haskey(comments2.items, ["sources", "Example", "path"])
     inline_tables2 = Base.IdSet{Dict{String, Any}}()
     push!(inline_tables2, data2["sources"]["Example"])
     out2 = sprint_with_comments(data2, comments2; inline_tables = inline_tables2, sorted = true)
@@ -297,17 +297,17 @@ end
 @testset "Comments is emptied on reuse" begin
     comments = TOML.Comments()
     TOML.parse("# hi\na = 1"; comments)
-    @test haskey(comments.items, ("a",))
+    @test haskey(comments.items, ["a"])
     TOML.parse("b = 2"; comments)
-    @test !haskey(comments.items, ("a",))
+    @test !haskey(comments.items, ["a"])
     @test isempty(comments)
 
     p = TOML.Parser()
     comments = TOML.Comments()
     TOML.parse(p, "# hi\na = 1"; comments)
-    @test haskey(comments.items, ("a",))
+    @test haskey(comments.items, ["a"])
     @test TOML.parse(p, "b = 2") == Dict("b" => 2)
-    @test haskey(comments.items, ("a",))
+    @test haskey(comments.items, ["a"])
 end
 
 @testset "parsefile/tryparsefile/tryparse with comments" begin
@@ -318,19 +318,19 @@ end
             comments = TOML.Comments()
             data = parsef(path; comments)
             @test data == Dict("a" => 1)
-            @test comments.items[("a",)].above == [" above"]
-            @test comments.items[("a",)].inline == " inline"
+            @test comments.items[["a"]].above == [" above"]
+            @test comments.items[["a"]].inline == " inline"
             comments = TOML.Comments()
             data = parsef(TOML.Parser(), path; comments)
             @test data == Dict("a" => 1)
-            @test comments.items[("a",)].inline == " inline"
+            @test comments.items[["a"]].inline == " inline"
         end
         comments = TOML.Comments()
         @test TOML.tryparse("# c\na = 1"; comments) == Dict("a" => 1)
-        @test comments.items[("a",)].above == [" c"]
+        @test comments.items[["a"]].above == [" c"]
         comments = TOML.Comments()
         @test open(io -> TOML.parse(io; comments), path) == Dict("a" => 1)
-        @test comments.items[("a",)].inline == " inline"
+        @test comments.items[["a"]].inline == " inline"
     end
 end
 
