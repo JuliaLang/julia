@@ -3429,6 +3429,13 @@ static jl_aliasinfo_t best_field_aliasinfo(jl_codectx_t &ctx, const jl_cgval_t &
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
         return ctx.alias().constant; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containing struct's tbaa
                                      //Does the fact that this is marked as constant make this fine?
+    // A `const` field of a mutable object is not memory any `setfield!` may write,
+    // and whatever it holds stays reachable through the object for as long as the
+    // object is live -- which is what lets late-gc-lowering root through it. Both the
+    // `new` that initializes it and every later read come through here, so the two
+    // sides stay consistent.
+    if (jl_field_isconst(jt, idx) && ai.region == jl_aliasinfo_t::Region::mutdata)
+        return ai.withRegion(ctx, jl_aliasinfo_t::Region::mutconstdata);
     return ai;
 }
 

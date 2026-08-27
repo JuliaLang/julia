@@ -414,14 +414,16 @@ struct jl_noaliascache_t {
     //
     // Rooting invariant (relied upon by `isLoadFromRootedRegion` in
     // llvm-codegen-shared.h): an access whose scope set in this domain is contained
-    // in {jnoalias_immutdata, jnoalias_const} refers to memory whose base object
-    // cannot stop referencing any tracked pointer stored there while the base is live. In particular a codegen-private buffer may only be
+    // in {jnoalias_immutdata, jnoalias_mutconstdata, jnoalias_const} refers to memory
+    // whose base object cannot stop referencing any tracked pointer stored there while
+    // the base is live. In particular a codegen-private buffer may only be
     // classified `immutdata` if it never holds tracked pointers; private buffers
     // that do must use `stack` or `gcframe`.
     struct jl_regions_t {
         MDNode *gcframe = nullptr;        // GC frame
         MDNode *stack = nullptr;          // Stack slot
-        MDNode *mutdata = nullptr;        // The fields of a mutable (heap-allocated) jl_value_t
+        MDNode *mutdata = nullptr;        // The assignable fields of a mutable jl_value_t
+        MDNode *mutconstdata = nullptr;   // The `const` fields of a mutable jl_value_t
         MDNode *immutdata = nullptr;      // The payload of an immutable jl_value_t
         MDNode *memorybuf = nullptr;      // The element data of a jl_genericmemory_t
         MDNode *constant = nullptr;       // Memory that is immutable by the time this compile unit can access it
@@ -435,6 +437,7 @@ struct jl_noaliascache_t {
             this->gcframe = mbuilder.createAliasScope("jnoalias_gcframe", domain);
             this->stack = mbuilder.createAliasScope("jnoalias_stack", domain);
             this->mutdata = mbuilder.createAliasScope("jnoalias_mutdata", domain);
+            this->mutconstdata = mbuilder.createAliasScope("jnoalias_mutconstdata", domain);
             this->immutdata = mbuilder.createAliasScope("jnoalias_immutdata", domain);
             this->memorybuf = mbuilder.createAliasScope("jnoalias_memorybuf", domain);
             this->constant = mbuilder.createAliasScope("jnoalias_const", domain);
@@ -1722,17 +1725,23 @@ struct jl_aliasinfo_t {
         gcframe   = 1 << 0,
         // Various hidden temporaries for local mutations.
         stack     = 1 << 1,
-        // The mutable fields of a heap-allocated jl_value_t, notably including
-        // `Array`'s header.
+        // The assignable fields of a heap-allocated jl_value_t, notably including
+        // `Array`'s header: the memory a generic `setfield!` writes.
         mutdata   = 1 << 2,
+        // The `const` fields of a mutable jl_value_t, including the `GenericMemory`
+        // header and `DataType`'s fields. A `setfield!` can never reach these, and
+        // what they hold stays reachable through the object for as long as it is
+        // live, which is what lets late-gc-lowering root through them.
+        mutconstdata = 1 << 3,
         // The contents of an immutable jl_value_t, and the codegen-private write-once
         // buffers that hold such a value: notably disjoint from memory with hidden writes.
-        immutdata = 1 << 3,
+        immutdata = 1 << 4,
         // The element data of a jl_genericmemory_t, containing mutable storage for immutdata.
-        memorybuf = 1 << 4,
-        constant  = 1 << 5,
-        // The fields of an jl_value_t.
-        data      = mutdata | immutdata,
+        memorybuf = 1 << 5,
+        constant  = 1 << 6,
+        // The fields of an jl_value_t: an access through a value of statically unknown
+        // type may be any of these.
+        data      = mutdata | mutconstdata | immutdata,
         // Everything a raw `Ptr` may legally read from our alias regions.
         anydata   = data | memorybuf,
         LLVM_MARK_AS_BITMASK_ENUM(constant)
@@ -2216,13 +2225,14 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
         { Region::gcframe,   regions.gcframe },
         { Region::stack,     regions.stack },
         { Region::mutdata,   regions.mutdata },
+        { Region::mutconstdata, regions.mutconstdata },
         { Region::immutdata, regions.immutdata },
         { Region::memorybuf, regions.memorybuf },
         { Region::constant,  regions.constant },
     };
     // The regions in the set are added to !alias.scope, all others to !noalias
-    SmallVector<Metadata*,6> scopes;
-    SmallVector<Metadata*,6> noaliases;
+    SmallVector<Metadata*,7> scopes;
+    SmallVector<Metadata*,7> noaliases;
     for (auto const &region: all_scopes) {
         if ((r & region.first) != Region::unknown)
             scopes.push_back(region.second);
@@ -2274,17 +2284,19 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     // copied between the heap, a memory buffer and the stack.
     mutab = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_field);
     immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_field);
-    // `Array`, `GenericMemory` and `DataType` are all mutable heap objects, so their
-    // headers live in the same region as any other mutable object's fields; what
-    // separates them from an ordinary `setfield!` is the layout tag, not the region.
-    datatype = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_datatype);
+    // `Array`, `GenericMemory` and `DataType` are all mutable heap objects, so what
+    // separates their headers from an ordinary `setfield!` is the layout tag. The
+    // region additionally records which of their fields are assignable: `array.jl`
+    // really does `setfield!(a, :ref/:size, ...)` after publication, while a
+    // `GenericMemory`'s header fields and a `DataType`'s are const.
+    datatype = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_datatype);
     array = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_array);
     arrayptr = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_arrayptr);
     arraysize = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_arraysize);
-    memory = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_memory);
-    memoryptr = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_memoryptr);
-    memorylen = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_memorylen);
-    memoryown = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_memoryown);
+    memory = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_memory);
+    memoryptr = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_memoryptr);
+    memorylen = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_memorylen);
+    memoryown = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_memoryown);
     memorybuf = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_field);
     memoryselbyte = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_memoryselbyte);
     constant = jl_aliasinfo_t(ctx, Region::constant, tbaa.tbaa_const);
