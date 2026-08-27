@@ -454,7 +454,9 @@ static bool isTrackedValue(Value *V) {
     return PT && PT->getAddressSpace() == AddressSpace::Tracked;
 }
 
-static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src, ArrayRef<unsigned> perm_offsets={}) {
+// `offsets`, if given, receives the byte offset of each returned pointer within `Src`, so a
+// caller storing `Src` at a known address can name the slot of each pointer it contains.
+static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src, ArrayRef<unsigned> perm_offsets={}, SmallVectorImpl<unsigned> *offsets=nullptr) {
     Type *STy = Src->getType();
     auto Tracked = TrackCompositeType(STy);
     SmallVector<Value*, 0> Ptrs;
@@ -482,8 +484,12 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
         if (ignore_field(Idxs))
             continue;
         Value *Elem = ExtractScalar(ctx, Src, STy, Idxs);
-        if (isTrackedValue(Elem)) // ignore addrspace Loaded when it appears
+        if (isTrackedValue(Elem)) { // ignore addrspace Loaded when it appears
             Ptrs.push_back(Elem);
+            if (offsets)
+                offsets->push_back(getFieldOffset(
+                    ctx.builder.GetInsertBlock()->getModule()->getDataLayout(), STy, Idxs));
+        }
     }
     return Ptrs;
 }
@@ -2366,7 +2372,8 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
 
 static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
-static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*) JL_CANSAFEPOINT;
+static void emit_write_barrier(jl_codectx_t&, Value*, Value*, ArrayRef<Value*>);
+static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*, Value *dest=nullptr) JL_CANSAFEPOINT;
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x) JL_CANSAFEPOINT;
 
 SmallVector<unsigned, 0> first_ptr(Type *T)
@@ -2728,13 +2735,15 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             return;
         if (isboxed) {
             // Insertion-barrier optimization: skip when the new value is perm-allocated.
-            // Invalid under SATB (ConcurrentImmix), which must snapshot the old value.
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+            // Invalid for plans that must observe the old value (see MMTK_SNAPSHOT_BARRIER).
+#ifndef MMTK_SNAPSHOT_BARRIER
             if (type_is_permalloc(rhs.typ))
                 return;
 #endif
             assert(r != nullptr);
-            emit_write_barrier(ctx, parent, r);
+            // `ptr` is the address of the field being stored to, which is what a
+            // field-granularity barrier needs to log.
+            emit_write_barrier(ctx, parent, ptr, ArrayRef<Value*>(r));
         }
         else if (r) {
             Value *wbval = r;
@@ -2749,7 +2758,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 // pointer-exposing type
                 wbval = emit_unbox(ctx, intcast_eltyp, rhs);
             }
-            emit_write_multibarrier(ctx, parent, wbval, rhs.typ);
+            emit_write_multibarrier(ctx, parent, wbval, rhs.typ, ptr);
         }
         else {
             assert(!isboxed);
@@ -4396,35 +4405,84 @@ static Value *emit_new_bits(jl_codectx_t &ctx, Value *jt, Value *pval)
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ptr)
 {
-    emit_write_barrier(ctx, parent, ArrayRef<Value*>(ptr));
+    emit_write_barrier(ctx, parent, nullptr, ArrayRef<Value*>(ptr));
 }
 
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*> ptrs)
+{
+    emit_write_barrier(ctx, parent, nullptr, ptrs);
+}
+
+// `slot`, if non-null, is the address of the single field being written. Pass null
+// when the store cannot be attributed to one field; plans with a field-granularity
+// barrier then fall back to treating the whole parent as modified.
+static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *slot, ArrayRef<Value*> ptrs)
 {
     ++EmittedWriteBarriers;
     // if there are no child objects we can skip emission
     if (ptrs.empty())
         return;
-    SmallVector<Value*, 8> decay_ptrs;
-    decay_ptrs.push_back(maybe_decay_untracked(ctx, parent));
+    SmallVector<Value*, 8> args;
+    args.push_back(maybe_decay_untracked(ctx, parent));
+    // Pass the slot in the derived address space, whatever address space it arrives in.
+    //
+    // This used to require the slot to already be addrspace 0 and substituted null otherwise,
+    // reasoning that casting a derived address to 0 is illegal. It is -- but the cast needed here
+    // goes the other way. A field address is derived from a tracked object and so is addrspace 11
+    // already; the few that are addrspace 0 decay to 11 legally, which is what `decay_derived`
+    // does for pointers everywhere else in codegen. As written, the test rejected essentially
+    // every real slot, so a field-granularity plan silently fell back to "the whole parent was
+    // written" on every store -- including the boxed-element stores in `typed_store` that take
+    // care to pass one. For LXR that fallback walks and records every field of the parent, which
+    // is O(N) per element store into an N-element `Memory`.
+    //
+    // Not every slot can be carried, though. A slot into array data is `AddressSpace::Loaded`
+    // (13) -- a pointer loaded out of a tracked object rather than derived from one -- and
+    // casting that to derived is rejected by the GC invariant verifier. Recovering a derived
+    // pointer for those needs `julia.gc_loaded`, which the caller has to supply because only it
+    // knows the tracked base. Until then those still fall back to the whole-parent barrier, which
+    // is correct but coarse; struct fields, the common case, now carry their slot.
+    Type *T_pptr_derived =
+        PointerType::get(ctx.builder.getContext(), AddressSpace::Derived);
+    unsigned slot_as = slot && slot->getType()->isPointerTy()
+                           ? slot->getType()->getPointerAddressSpace()
+                           : AddressSpace::Loaded;
+    bool slot_decayable = slot_as == 0 || slot_as == AddressSpace::Tracked ||
+                          slot_as == AddressSpace::Derived;
+    args.push_back(slot && slot_decayable ? decay_derived(ctx, slot)
+                                          : Constant::getNullValue(T_pptr_derived));
     for (auto ptr : ptrs) {
-        decay_ptrs.push_back(maybe_decay_untracked(ctx, ptr));
+        args.push_back(maybe_decay_untracked(ctx, ptr));
     }
-    ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
+    ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), args);
 }
 
+// `dest`, if non-null, is the address `agg` is being stored to. An inline composite can hold
+// several references at different offsets within itself, so one slot cannot describe the store;
+// but each reference does have a slot, at `dest + its offset`. Emitting one barrier per reference
+// keeps the store field-granular instead of falling back to "the whole parent was written", which
+// for a field-granularity plan is the difference between recording what changed and walking the
+// entire parent.
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,
-                                    jl_value_t *jltype)
+                                    jl_value_t *jltype, Value *dest)
 {
     SmallVector<unsigned,4> perm_offsets;
-    // Insertion-barrier optimization: drop perm-allocated inline fields. Invalid under
-    // SATB (ConcurrentImmix), which must snapshot the overwritten old inline values.
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+    // Insertion-barrier optimization: drop perm-allocated inline fields. Invalid for
+    // plans that must observe the overwritten old inline values (MMTK_SNAPSHOT_BARRIER).
+#ifndef MMTK_SNAPSHOT_BARRIER
     if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
 #endif
-    auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets);
-    emit_write_barrier(ctx, parent, ptrs);
+    SmallVector<unsigned,4> offsets;
+    auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets, dest ? &offsets : nullptr);
+    if (!dest || ptrs.size() != offsets.size()) {
+        emit_write_barrier(ctx, parent, ptrs);
+        return;
+    }
+    for (size_t i = 0; i < ptrs.size(); ++i) {
+        Value *slot = offsets[i] == 0 ? dest : emit_ptrgep(ctx, dest, offsets[i]);
+        emit_write_barrier(ctx, parent, slot, ArrayRef<Value*>(ptrs[i]));
+    }
 }
 
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x)

@@ -134,6 +134,7 @@ namespace jl_intrinsics {
     static const char *PUSH_GC_FRAME_NAME = "julia.push_gc_frame";
     static const char *POP_GC_FRAME_NAME = "julia.pop_gc_frame";
     static const char *QUEUE_GC_ROOT_NAME = "julia.queue_gc_root";
+    static const char *QUEUE_GC_ROOT_FIELD_NAME = "julia.queue_gc_root_field";
     static const char *SAFEPOINT_NAME = "julia.safepoint";
 
     // Annotates a function with attributes suitable for GC allocation
@@ -242,6 +243,25 @@ namespace jl_intrinsics {
             return intrinsic;
         });
 
+    const IntrinsicDescription queueGCRootField(
+        QUEUE_GC_ROOT_FIELD_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto intrinsic = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(ctx),
+                    // The slot is a field address, which is derived from a tracked object and so
+                    // lives in the derived address space. Matches `julia.write_barrier`, whose
+                    // slot operand this one is forwarded from.
+                    { T_prjlvalue, PointerType::get(ctx, AddressSpace::Derived) },
+                    false),
+                Function::ExternalLinkage,
+                QUEUE_GC_ROOT_FIELD_NAME);
+            intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+            return intrinsic;
+        });
+
     const IntrinsicDescription safepoint(
         SAFEPOINT_NAME,
         [](Type *T_size) {
@@ -263,6 +283,7 @@ namespace jl_well_known {
     static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
     static const char *GC_SMALL_ALLOC_NAME = XSTR(jl_gc_small_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
+    static const char *GC_QUEUE_ROOT_FIELD_NAME = XSTR(jl_gc_queue_root_field);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
     static const char *GC_BIG_ALLOC_RESET_SAFE_NAME = XSTR(jl_gc_big_alloc_reset_safe);
     static const char *GC_SMALL_ALLOC_RESET_SAFE_NAME = XSTR(jl_gc_small_alloc_reset_safe);
@@ -315,6 +336,23 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_QUEUE_ROOT_NAME);
+            func->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+            return func;
+        });
+
+    const WellKnownFunctionDescription GCQueueRootField(
+        GC_QUEUE_ROOT_FIELD_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto func = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(ctx),
+                    // See `queueGCRootField`: the slot arrives in the derived address space.
+                    { T_prjlvalue, PointerType::get(ctx, AddressSpace::Derived) },
+                    false),
+                Function::ExternalLinkage,
+                GC_QUEUE_ROOT_FIELD_NAME);
             func->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
             return func;
         });

@@ -31,7 +31,19 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
 {
     size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
 
+#ifdef MMTK_FIELD_BARRIER
+    // Keep the elements inside the GC heap at every size. MMTk routes an allocation this
+    // large to its large object space, which is still heap and still carries side metadata.
+    //
+    // The malloc'd alternative below puts the elements outside the heap, where there is no
+    // per-field unlog bit, so a field-logging write barrier cannot record those fields at
+    // all: it ends up deferring a slot whose memory the VM may free before the collector
+    // reads it. Plans with an object-granularity barrier key off the parent, which is
+    // always in the heap, so they keep the malloc'd path.
+    int pooled = 1;
+#else
     int pooled = tot <= GC_MAX_SZCLASS;
+#endif
     char *data;
     jl_genericmemory_t *m;
     if (!pooled) {
@@ -412,7 +424,7 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
         assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         _Atomic(jl_value_t*) *p = (_Atomic(jl_value_t*)*)m.ptr_or_offset;
         // Deletion barrier: snapshot the overwritten reference for SATB collectors.
-        jl_gc_wb(jl_genericmemory_owner(m.mem), NULL);
+        jl_gc_wb(jl_genericmemory_owner(m.mem), (void*)p, NULL);
         if (isatomic)
             jl_atomic_store(p, (jl_value_t*)NULL);
         else
@@ -428,8 +440,9 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     size_t fsz = jl_datatype_size(dt);
     char *data = (char*)m.ptr_or_offset;
     int needlock = layout->flags.arrayelem_islocked;
-    // Deletion barrier: snapshot the overwritten references for SATB collectors.
-    jl_gc_wb(jl_genericmemory_owner(m.mem), NULL);
+    // Deletion barrier: snapshot the overwritten references for SATB collectors. The
+    // element is a struct whose several reference fields are all cleared, so name none.
+    jl_gc_wb(jl_genericmemory_owner(m.mem), NULL, NULL);
     if (isatomic && !needlock) {
         _Alignas(MAX_POINTERATOMIC_SIZE) char zero_buf[MAX_POINTERATOMIC_SIZE] = {0};
         assert(fsz <= MAX_POINTERATOMIC_SIZE);
@@ -458,7 +471,7 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_RO
     }
     if (layout->flags.arrayelem_isboxed) {
         assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
-        jl_gc_wb(jl_genericmemory_owner(m.mem), rhs);
+        jl_gc_wb(jl_genericmemory_owner(m.mem), m.ptr_or_offset, rhs);
         if (isatomic)
             jl_atomic_store((_Atomic(jl_value_t*)*)m.ptr_or_offset, rhs);
         else
@@ -516,7 +529,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *r
     if (layout->flags.arrayelem_isboxed) {
         assert(data - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         jl_value_t *r;
-        jl_gc_wb(owner, rhs);
+        jl_gc_wb(owner, (void*)data, rhs);
         if (isatomic)
             r = jl_atomic_exchange((_Atomic(jl_value_t*)*)data, rhs);
         else
@@ -601,7 +614,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t
         assert(data - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         jl_value_t *r = NULL;
         _Atomic(jl_value_t*) *px = (_Atomic(jl_value_t*)*)data;
-        jl_gc_wb(owner, rhs);
+        jl_gc_wb(owner, (void*)px, rhs);
         success = isatomic ? jl_atomic_cmpswap(px, &r, rhs) : jl_atomic_cmpswap_release(px, &r, rhs);
     }
     else {

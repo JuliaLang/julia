@@ -16,7 +16,23 @@ MMTK_INSTALLED_LIB := $(build_shlibdir)/$(MMTK_LIB_NAME)
 MMTK_JULIA_BUILD_CONFIG := $(MMTK_JULIA_LIB_PATH)/.build_config
 MMTK_JULIA_DEPS_LIBDIR := $(if $(build_libdir),$(build_libdir),$(JULIAHOME)/usr/lib)
 MMTK_JULIA_BINDGEN_INCLUDE_DIRS := $$($(LLVM_CONFIG_HOST) --includedir)$(PATHSEP)$(LIBUV_INC)$(PATHSEP)$(build_includedir)
+# Pin the libclang that bindgen loads.
+#
+# clang-sys searches LD_LIBRARY_PATH (set below so cargo can find the in-tree deps)
+# among other places, and prefers the highest version it finds, which is Julia's own
+# LLVM. bindgen separately derives its system include paths by running the `clang`
+# executable from PATH. Left alone, those resolve to different LLVM installs, and a
+# libclang given another toolchain's resource headers segfaults part-way through
+# parsing Julia's headers. Pinning short-circuits the search, so libclang matches the
+# clang whose headers it is handed.
+MMTK_HOST_LLVM_CONFIG := $(shell command -v llvm-config 2>/dev/null)
+ifneq ($(MMTK_HOST_LLVM_CONFIG),)
+MMTK_LIBCLANG_PATH ?= $(shell $(MMTK_HOST_LLVM_CONFIG) --libdir 2>/dev/null)
+endif
 MMTK_JULIA_CARGO_ENV := LD_LIBRARY_PATH="$(MMTK_JULIA_DEPS_LIBDIR):$$LD_LIBRARY_PATH" MMTK_JULIA_BINDGEN_INCLUDE_DIRS="$(MMTK_JULIA_BINDGEN_INCLUDE_DIRS)"
+ifneq ($(MMTK_LIBCLANG_PATH),)
+MMTK_JULIA_CARGO_ENV += LIBCLANG_PATH="$(MMTK_LIBCLANG_PATH)"
+endif
 MMTK_JULIA_CARGO_BUILD := cd $(MMTK_JULIA_DIR) && $(MMTK_JULIA_CARGO_ENV) cargo build
 
 ifeq (${MMTK_PLAN},Immix)
@@ -25,6 +41,8 @@ else ifeq (${MMTK_PLAN},StickyImmix)
 MMTK_JULIA_CARGO_FEATURES := stickyimmix
 else ifeq (${MMTK_PLAN},ConcurrentImmix)
 MMTK_JULIA_CARGO_FEATURES := concurrentimmix
+else ifeq (${MMTK_PLAN},LXR)
+MMTK_JULIA_CARGO_FEATURES := lxr_lazy
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN)")
 endif
@@ -66,6 +84,20 @@ MMTK_JULIA_RUST_DEPS := \
 	$(MMTK_DIR)/Makefile \
 	$(MMTK_JULIA_DIR)/rust-toolchain \
 	$(filter-out $(MMTK_JULIA_DIR)/src/julia_types.rs,$(wildcard $(MMTK_JULIA_DIR)/src/*.rs))
+
+# When `mmtk_julia/Cargo.toml` points at a local mmtk-core checkout rather than the pinned git
+# revision, mmtk-core's sources are part of this build and editing them must force a rebuild.
+#
+# Without this they were invisible to make: cargo was never invoked, and the recipe for
+# $(MMTK_INSTALLED_LIB) still re-copied the stale library, giving it a fresh timestamp. So a
+# rebuild appeared to succeed, the installed library looked newer than the edited source, and
+# every measurement taken afterwards silently described the old code.
+MMTK_CORE_DIR := $(MMTK_DIR)/mmtk-core
+ifneq ($(wildcard $(MMTK_CORE_DIR)/Cargo.toml),)
+MMTK_JULIA_RUST_DEPS += \
+	$(MMTK_CORE_DIR)/Cargo.toml \
+	$(shell find $(MMTK_CORE_DIR)/src -name '*.rs' 2>/dev/null)
+endif
 
 MMTK_JULIA_DEPS :=
 ifneq ($(USE_SYSTEM_LLVM), 1)

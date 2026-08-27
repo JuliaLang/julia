@@ -17,12 +17,12 @@ use mmtk::MMTK;
 use crate::jl_gc_mmtk_sweep_malloced_memory;
 use crate::jl_gc_scan_vm_specific_roots;
 use crate::jl_gc_sweep_stack_pools_and_mtarraylist_buffers;
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 use crate::julia_types::_jl_task_t;
 use crate::JuliaVM;
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 use dashmap::DashMap;
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct StackRootBuffer {
@@ -46,7 +46,7 @@ impl SlotVisitor<JuliaVMSlot> for StackRootBuffer {
     }
 }
 
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 lazy_static! {
     pub static ref GC_STACK_SNAPSHOTS: GCStackSnapshots = GCStackSnapshots::new();
 }
@@ -59,109 +59,10 @@ impl Scanning<JuliaVM> for VMScanning {
         mutator: &'static mut Mutator<JuliaVM>,
         mut factory: impl RootsWorkFactory<JuliaVMSlot>,
     ) {
-        use crate::julia_scanning::*;
         use crate::julia_types::*;
-        use mmtk::util::Address;
 
         let ptls: &mut _jl_tls_states_t = unsafe { std::mem::transmute(mutator.mutator_tls) };
-        let mut slot_buffer = StackRootBuffer { buffer: vec![] }; // need to be tpinned as they're all from the shadow stack
-        let mut node_buffer = vec![];
-
-        // Scan thread local from ptls: See gc_queue_thread_local in gc.c
-        let mut root_scan_task = |task: *const _jl_task_t, task_is_root: bool| {
-            if !task.is_null() {
-                unsafe {
-                    crate::julia_scanning::mmtk_scan_gcstack(task, &mut slot_buffer);
-                }
-                // Mark tasks scanned directly in this STW pause. Without this, a later concurrent
-                // scan would find no record for it and trip the "not bound to a mutator" assert
-                // in `gc_thread_scan_stack`, even though the task was already scanned here. The
-                // roots themselves don't need to be recorded in GC_STACK_SNAPSHOTS: they were just fed into
-                // `slot_buffer` above, as part of this pause's root-scan work.
-                #[cfg(feature = "concurrentimmix")]
-                GC_STACK_SNAPSHOTS.mark_pause_scanned(task);
-
-                if task_is_root {
-                    // captures wrong root nodes before creating the work
-                    debug_assert!(
-                        Address::from_ptr(task).is_aligned_to(16)
-                            || Address::from_ptr(task).is_aligned_to(8),
-                        "root node {:?} is not aligned to 8 or 16",
-                        Address::from_ptr(task)
-                    );
-
-                    // unsafe: We checked `!task.is_null()` before.
-                    let objref = unsafe {
-                        ObjectReference::from_raw_address_unchecked(Address::from_ptr(task))
-                    };
-                    node_buffer.push(objref);
-                }
-            }
-        };
-        root_scan_task(ptls.root_task, true);
-
-        // need to iterate over live tasks as well to process their shadow stacks
-        // we should not set the task themselves as roots as we will know which ones are still alive after GC
-        let mut i = 0;
-        while i < ptls.gc_tls_common.heap.live_tasks.len {
-            let mut task_address = Address::from_ptr(ptls.gc_tls_common.heap.live_tasks.items);
-            task_address = task_address.shift::<Address>(i as isize);
-            let task = unsafe { task_address.load::<*const jl_task_t>() };
-            root_scan_task(task, false);
-            i += 1;
-        }
-
-        root_scan_task(ptls.current_task as *mut _jl_task_t, true);
-        root_scan_task(ptls.next_task, true);
-        root_scan_task(ptls.previous_task, true);
-        root_scan_task(ptls.abandon_victim, true);
-        root_scan_task(ptls.abandon_to, true);
-        if !ptls.abandon_result.is_null() {
-            node_buffer.push(unsafe {
-                // unsafe: We have just checked `ptls.abandon_result` is not null.
-                ObjectReference::from_raw_address_unchecked(Address::from_mut_ptr(
-                    ptls.abandon_result,
-                ))
-            });
-        }
-        if !ptls.previous_exception.is_null() {
-            node_buffer.push(unsafe {
-                // unsafe: We have just checked `ptls.previous_exception` is not null.
-                ObjectReference::from_raw_address_unchecked(Address::from_mut_ptr(
-                    ptls.previous_exception,
-                ))
-            });
-        }
-
-        // Scan backtrace buffer: See gc_queue_bt_buf in gc.c
-        let mut i = 0;
-        while i < ptls.bt_size {
-            unsafe {
-                let bt_entry = ptls.bt_data.add(i);
-                let bt_entry_size = mmtk_jl_bt_entry_size(bt_entry);
-                if mmtk_jl_bt_is_native(bt_entry) {
-                    i += bt_entry_size;
-                    continue;
-                }
-                let njlvals = mmtk_jl_bt_num_jlvals(bt_entry);
-                for j in 0..njlvals {
-                    let bt_entry_value = mmtk_jl_bt_entry_jlvalue(bt_entry, j);
-
-                    // captures wrong root nodes before creating the work
-                    debug_assert!(
-                        bt_entry_value.to_raw_address().is_aligned_to(16)
-                            || bt_entry_value.to_raw_address().is_aligned_to(8),
-                        "root node {:?} is not aligned to 8 or 16",
-                        bt_entry_value
-                    );
-
-                    node_buffer.push(bt_entry_value);
-                }
-                i += bt_entry_size;
-            }
-        }
-
-        // We do not need gc_queue_remset from gc.c (we are not using remset in the thread)
+        let (slot_buffer, node_buffer) = gather_mutator_roots(ptls);
 
         // Push work
         const CAPACITY_PER_PACKET: usize = 4096;
@@ -192,14 +93,46 @@ impl Scanning<JuliaVM> for VMScanning {
         unsafe {
             jl_gc_scan_vm_specific_roots(&mut roots_closure as _);
         }
+
+        // The finalizer lists root the objects they name. Under LXR nothing else traces them
+        // -- `process_weak_refs`, and with it `mark_finlist`, is never called -- so report
+        // them here or they are reclaimed while still referenced. See
+        // `julia_finalizer::collect_finalizer_roots`.
+        #[cfg(feature = "lxr_base")]
+        {
+            const CAPACITY_PER_PACKET: usize = 4096;
+            let fin_roots = crate::julia_finalizer::collect_finalizer_roots();
+            for nodes in fin_roots.chunks(CAPACITY_PER_PACKET).map(|c| c.to_vec()) {
+                factory.create_process_pinning_roots_work(nodes);
+            }
+        }
     }
 
-    fn scan_object<SV: SlotVisitor<JuliaVMSlot>>(
+    fn scan_object(
         _tls: VMWorkerThread,
         object: ObjectReference,
-        slot_visitor: &mut SV,
+        slot_visitor: &mut impl SlotVisitor<JuliaVMSlot>,
     ) {
         process_object(object, slot_visitor);
+    }
+
+    fn scan_chunk_count(_tls: VMWorkerThread, object: ObjectReference) -> Option<usize> {
+        unsafe { crate::julia_scanning::mmtk_julia_chunk_count(object.to_raw_address()) }
+    }
+
+    fn scan_object_chunks(
+        _tls: VMWorkerThread,
+        object: ObjectReference,
+        chunks: std::ops::Range<usize>,
+        slot_visitor: &mut impl SlotVisitor<JuliaVMSlot>,
+    ) {
+        unsafe {
+            crate::julia_scanning::scan_julia_object_chunks(
+                object.to_raw_address(),
+                chunks,
+                slot_visitor,
+            )
+        }
     }
 
     fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {}
@@ -236,6 +169,119 @@ impl Scanning<JuliaVM> for VMScanning {
         // We have pushed work. No need to repeat this method.
         false
     }
+}
+
+/// Enumerate one thread's roots: the objects on each of its tasks' shadow stacks, the
+/// tasks themselves, the previous exception, and the backtrace buffer.
+///
+/// Split out of `scan_roots_in_mutator_thread` so that the reference-count verifier can
+/// obtain the same root set without also creating work packets or flushing the mutator's
+/// barrier buffers.
+pub(crate) fn gather_mutator_roots(
+    ptls: &mut crate::julia_types::_jl_tls_states_t,
+) -> (StackRootBuffer, Vec<ObjectReference>) {
+    use crate::julia_scanning::*;
+    use crate::julia_types::*;
+    use mmtk::util::Address;
+
+    // Shadow-stack objects need to be tpinned, as they are all from the shadow stack.
+    let mut slot_buffer = StackRootBuffer { buffer: vec![] };
+    let mut node_buffer = vec![];
+
+    // Scan thread local from ptls: See gc_queue_thread_local in gc.c
+    let mut root_scan_task = |task: *const _jl_task_t, task_is_root: bool| {
+        if !task.is_null() {
+            unsafe {
+                crate::julia_scanning::mmtk_scan_gcstack(task, &mut slot_buffer);
+            }
+            // Mark tasks scanned directly in this STW pause. Without this, a later concurrent
+            // scan would find no record for it and trip the "not bound to a mutator" assert
+            // in `gc_thread_scan_stack`, even though the task was already scanned here. The
+            // roots themselves don't need to be recorded in GC_STACK_SNAPSHOTS: they were just fed into
+            // `slot_buffer` above, as part of this pause's root-scan work.
+            #[cfg(feature = "concurrent_marking")]
+            GC_STACK_SNAPSHOTS.mark_pause_scanned(task);
+
+            if task_is_root {
+                // captures wrong root nodes before creating the work
+                debug_assert!(
+                    Address::from_ptr(task).is_aligned_to(16)
+                        || Address::from_ptr(task).is_aligned_to(8),
+                    "root node {:?} is not aligned to 8 or 16",
+                    Address::from_ptr(task)
+                );
+
+                // unsafe: We checked `!task.is_null()` before.
+                let objref =
+                    unsafe { ObjectReference::from_raw_address_unchecked(Address::from_ptr(task)) };
+                node_buffer.push(objref);
+            }
+        }
+    };
+    root_scan_task(ptls.root_task, true);
+
+    // need to iterate over live tasks as well to process their shadow stacks
+    // we should not set the task themselves as roots as we will know which ones are still alive after GC
+    let mut i = 0;
+    while i < ptls.gc_tls_common.heap.live_tasks.len {
+        let mut task_address = Address::from_ptr(ptls.gc_tls_common.heap.live_tasks.items);
+        task_address = task_address.shift::<Address>(i as isize);
+        let task = unsafe { task_address.load::<*const jl_task_t>() };
+        root_scan_task(task, false);
+        i += 1;
+    }
+
+    root_scan_task(ptls.current_task as *mut _jl_task_t, true);
+    root_scan_task(ptls.next_task, true);
+    root_scan_task(ptls.previous_task, true);
+    root_scan_task(ptls.abandon_victim, true);
+    root_scan_task(ptls.abandon_to, true);
+    if !ptls.abandon_result.is_null() {
+        node_buffer.push(unsafe {
+            // unsafe: We have just checked `ptls.abandon_result` is not null.
+            ObjectReference::from_raw_address_unchecked(Address::from_mut_ptr(ptls.abandon_result))
+        });
+    }
+    if !ptls.previous_exception.is_null() {
+        node_buffer.push(unsafe {
+            // unsafe: We have just checked `ptls.previous_exception` is not null.
+            ObjectReference::from_raw_address_unchecked(Address::from_mut_ptr(
+                ptls.previous_exception,
+            ))
+        });
+    }
+
+    // Scan backtrace buffer: See gc_queue_bt_buf in gc.c
+    let mut i = 0;
+    while i < ptls.bt_size {
+        unsafe {
+            let bt_entry = ptls.bt_data.add(i);
+            let bt_entry_size = mmtk_jl_bt_entry_size(bt_entry);
+            if mmtk_jl_bt_is_native(bt_entry) {
+                i += bt_entry_size;
+                continue;
+            }
+            let njlvals = mmtk_jl_bt_num_jlvals(bt_entry);
+            for j in 0..njlvals {
+                let bt_entry_value = mmtk_jl_bt_entry_jlvalue(bt_entry, j);
+
+                // captures wrong root nodes before creating the work
+                debug_assert!(
+                    bt_entry_value.to_raw_address().is_aligned_to(16)
+                        || bt_entry_value.to_raw_address().is_aligned_to(8),
+                    "root node {:?} is not aligned to 8 or 16",
+                    bt_entry_value
+                );
+
+                node_buffer.push(bt_entry_value);
+            }
+            i += bt_entry_size;
+        }
+    }
+
+    // We do not need gc_queue_remset from gc.c (we are not using remset in the thread)
+
+    (slot_buffer, node_buffer)
 }
 
 pub fn process_object<EV: SlotVisitor<JuliaVMSlot>>(object: ObjectReference, closure: &mut EV) {
@@ -284,13 +330,13 @@ impl<C: ObjectTracerContext<JuliaVM>> GCWork<JuliaVM> for ScanFinalizersSingleTh
     }
 }
 
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 pub struct GCStackSnapshots {
     snapshots: DashMap<usize, Arc<[ObjectReference]>>,
     task_scan_locks: DashMap<usize, Arc<Mutex<()>>>,
 }
 
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 impl GCStackSnapshots {
     fn new() -> Self {
         Self {

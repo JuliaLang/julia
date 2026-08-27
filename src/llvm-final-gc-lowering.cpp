@@ -111,6 +111,13 @@ void FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
                                   : queueRootFunc);
 }
 
+void FinalLowerGC::lowerQueueGCRootField(CallInst *target, Function &F)
+{
+    ++QueueGCRootCount;
+    assert(target->arg_size() == 2);
+    target->setCalledFunction(queueRootFieldFunc);
+}
+
 void FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
 {
     ++SafepointCount;
@@ -136,6 +143,7 @@ bool FinalLowerGC::shouldRunFinalGC()
     should_run |= hasUse(*this, jl_intrinsics::popGCFrame);
     should_run |= hasUse(*this, jl_intrinsics::GCAllocBytes);
     should_run |= hasUse(*this, jl_intrinsics::queueGCRoot);
+    should_run |= hasUse(*this, jl_intrinsics::queueGCRootField);
     should_run |= hasUse(*this, jl_intrinsics::safepoint);
     should_run |= (write_barrier_func && !write_barrier_func->use_empty());
     return should_run;
@@ -155,6 +163,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
+    queueRootFieldFunc = getOrDeclare(jl_well_known::GCQueueRootField);
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
@@ -232,6 +241,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             LOWER_INTRINSIC(pushGCFrame, lowerPushGCFrame);
             LOWER_INTRINSIC(popGCFrame, lowerPopGCFrame);
             LOWER_INTRINSIC(queueGCRoot, lowerQueueGCRoot);
+            LOWER_INTRINSIC(queueGCRootField, lowerQueueGCRootField);
             LOWER_INTRINSIC(safepoint, lowerSafepoint);
 
 #undef LOWER_INTRINSIC
@@ -269,6 +279,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             IS_INTRINSIC(jl_intrinsics::getGCFrameSlot);
             IS_INTRINSIC(jl_intrinsics::GCAllocBytes);
             IS_INTRINSIC(jl_intrinsics::queueGCRoot);
+            IS_INTRINSIC(jl_intrinsics::queueGCRootField);
             IS_INTRINSIC(jl_intrinsics::safepoint);
             }
         }

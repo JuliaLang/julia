@@ -2,6 +2,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 use crate::JuliaVM;
 use crate::JULIA_HEADER_SIZE;
+use crate::MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS;
 use crate::MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 use crate::SINGLETON;
 use crate::{BUILDER, MUTATORS, USER_TRIGGERED_GC};
@@ -51,6 +52,8 @@ pub extern "C" fn mmtk_gc_init(
             Some(PlanSelector::StickyImmix)
         } else if cfg!(feature = "concurrentimmix") {
             Some(PlanSelector::ConcurrentImmix)
+        } else if cfg!(feature = "lxr_base") {
+            Some(PlanSelector::LXR)
         } else {
             None
         };
@@ -124,6 +127,13 @@ pub extern "C" fn mmtk_gc_init(
     unsafe {
         MMTK_SIDE_LOG_BIT_BASE_ADDRESS =
             mmtk::util::metadata::side_metadata::global_side_metadata_vm_base_address();
+        // The field unlog table is laid out after the log bit table, so it has its own
+        // base. Codegen loads this to key the field-granularity write barrier.
+        MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS =
+            crate::object_model::FIELD_UNLOGGING_SIDE_METADATA_SPEC
+                .as_spec()
+                .extract_side_spec()
+                .get_starting_address();
     }
 
     // Hijack the panic hook to make sure that if we crash in the GC threads, the process aborts.
@@ -197,7 +207,7 @@ pub extern "C" fn mmtk_notify_task_resume(
     mutator: *mut Mutator<JuliaVM>,
     task: *const crate::julia_types::_jl_task_t,
 ) {
-    #[cfg(feature = "concurrentimmix")]
+    #[cfg(feature = "concurrent_marking")]
     {
         if !crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst)
             || task.is_null()
@@ -209,7 +219,7 @@ pub extern "C" fn mmtk_notify_task_resume(
         crate::scanning::GC_STACK_SNAPSHOTS.resume_barrier_scan_task(task);
     }
 
-    #[cfg(not(feature = "concurrentimmix"))]
+    #[cfg(not(feature = "concurrent_marking"))]
     {
         let _ = (mutator, task);
         panic!("mmtk_notify_task_resume should not be called for non-concurrent plans");
@@ -310,7 +320,15 @@ pub extern "C" fn mmtk_total_bytes() -> usize {
 
 #[no_mangle]
 pub extern "C" fn mmtk_is_live_object(object: ObjectReference) -> bool {
-    object.is_live()
+    // Routed through LXR's own notion of liveness when LXR is the plan.
+    //
+    // `object.is_live()` dispatches to the owning policy, and `ImmixSpace::is_live` has an
+    // `rc_enabled` branch no other plan takes: for an *unmarked* object it falls through to
+    // `object_forwarding::is_forwarded`. LXR is built with `lxr_no_evac`, so nothing ever
+    // moves, that state is never established, and reading it faults in `side_metadata_access`.
+    // Unmarked is the common case for the C-side sweeps -- `jl_gc_mmtk_sweep_stack_pools`
+    // calls this for every entry on `ptls->live_tasks` precisely to find the dead ones.
+    crate::julia_finalizer::object_is_live(object)
 }
 
 #[no_mangle]
@@ -328,7 +346,7 @@ pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, coll
     // See jl_gc_collection_t
     match collection {
         // auto
-        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls),
+        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls, false),
         // full
         1 => SINGLETON.handle_user_collection_request(tls, true, true),
         // incremental
@@ -560,6 +578,9 @@ pub extern "C" fn mmtk_object_reference_write_post(
     )
 }
 
+/// Slow path for an object-granularity barrier. The zero slot is deliberate: the plans
+/// that use this barrier (StickyImmix's remembered set, ConcurrentImmix's SATB
+/// snapshot) ignore the slot, and only the field-granularity path below needs one.
 #[no_mangle]
 pub extern "C" fn mmtk_object_reference_write_slow(
     mutator: &'static mut Mutator<JuliaVM>,
@@ -567,9 +588,42 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     target: NullableObjectReference,
 ) {
     use mmtk::MutatorContext;
+    // A field-granularity barrier cannot use the zero slot below: it would index the
+    // per-field unlog bit at address 0. Callers on this path (the C runtime's jl_gc_wb,
+    // and codegen where the field address is not a plain pointer) genuinely have no
+    // slot to give, so treat the whole object as written instead.
+    #[cfg(feature = "lxr_base")]
+    {
+        let _ = target;
+        mutator.barrier().object_probable_write(src);
+        return;
+    }
+    #[cfg(not(feature = "lxr_base"))]
     mutator.barrier().object_reference_write_slow(
         src,
         crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(Address::ZERO)),
+        target.into(),
+    );
+}
+
+/// Slow path for a field-granularity barrier. `slot` is the address of the field being
+/// written, which is what the plan records; a null slot means the caller could not
+/// attribute the write to one field, so fall back to the whole object.
+#[no_mangle]
+pub extern "C" fn mmtk_object_reference_write_field_slow(
+    mutator: &'static mut Mutator<JuliaVM>,
+    src: ObjectReference,
+    slot: Address,
+    target: NullableObjectReference,
+) {
+    use mmtk::MutatorContext;
+    if slot.is_zero() {
+        mutator.barrier().object_probable_write(src);
+        return;
+    }
+    mutator.barrier().object_reference_write_slow(
+        src,
+        crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(slot)),
         target.into(),
     );
 }
