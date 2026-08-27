@@ -228,9 +228,12 @@ s = MyStruct()
 @testset "intrinsics of another target" begin
     script = """
         f_nvvm() = ccall("llvm.nvvm.membar.cta", llvmcall, Cvoid, ())
-        g_nvvm() = Base.llvmcall(("declare i32 @llvm.nvvm.read.ptx.sreg.tid.x()",
-                                  "%r = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()\\nret i32 %r"),
-                                 Int32, Tuple{})
+        g_nvvm() = Base.llvmcall((\"""
+            declare i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+            define i32 @entry() {
+                %r = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+                ret i32 %r
+            }\""", "entry"), Int32, Tuple{})
         h_amdgcn() = ccall("llvm.amdgcn.s.barrier", llvmcall, Cvoid, ())
         for f in (f_nvvm, g_nvvm, h_amdgcn)
             try
@@ -245,4 +248,50 @@ s = MyStruct()
         """
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
     @test success(pipeline(cmd; stderr=devnull))
+end
+
+# The opposite direction: intrinsics of the host target must still be accepted, both as
+# `ccall(..., llvmcall, ...)` and declared in a `Base.llvmcall` module. Only intrinsics
+# that do not require an ISA extension are used, so that this holds on any CPU of the target.
+@testset "intrinsics of the host target" begin
+    @static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+        host_ccall() = ccall("llvm.x86.sse2.pause", llvmcall, Cvoid, ())
+        host_ir() = Base.llvmcall(("""
+            declare void @llvm.x86.sse2.pause()
+            define void @entry() {
+                call void @llvm.x86.sse2.pause()
+                ret void
+            }""", "entry"), Cvoid, Tuple{})
+    elseif Sys.ARCH === :aarch64
+        host_ccall() = ccall("llvm.aarch64.isb", llvmcall, Cvoid, (Int32,), Int32(15))
+        host_ir() = Base.llvmcall(("""
+            declare void @llvm.aarch64.isb(i32)
+            define void @entry() {
+                call void @llvm.aarch64.isb(i32 15)
+                ret void
+            }""", "entry"), Cvoid, Tuple{})
+    elseif Sys.ARCH === :armv7l || Sys.ARCH === :armv6l
+        host_ccall() = ccall("llvm.arm.hint", llvmcall, Cvoid, (Int32,), Int32(0))
+        host_ir() = Base.llvmcall(("""
+            declare void @llvm.arm.hint(i32)
+            define void @entry() {
+                call void @llvm.arm.hint(i32 0)
+                ret void
+            }""", "entry"), Cvoid, Tuple{})
+    elseif Sys.ARCH === :powerpc64le
+        host_ccall() = ccall("llvm.ppc.lwsync", llvmcall, Cvoid, ())
+        host_ir() = Base.llvmcall(("""
+            declare void @llvm.ppc.lwsync()
+            define void @entry() {
+                call void @llvm.ppc.lwsync()
+                ret void
+            }""", "entry"), Cvoid, Tuple{})
+    else
+        # riscv64: every `llvm.riscv.*` intrinsic requires an ISA extension (e.g.
+        # `llvm.riscv.pause` needs Zihintpause, which `generic-rv64` lacks).
+        host_ccall() = nothing
+        host_ir() = nothing
+    end
+    @test host_ccall() === nothing
+    @test host_ir() === nothing
 end
