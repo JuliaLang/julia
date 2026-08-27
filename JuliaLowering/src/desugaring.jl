@@ -756,9 +756,8 @@ function expand_fuse_broadcast(ctx, ex)
         lhs = ex[1]
         kl = kind(lhs)
         rhs = expand_dotcall(ctx, ex[2])
-        @ast ctx ex [K"call"
-            "materialize!"::K"top"
-            if kl == K"ref"
+        @ast ctx ex [K"block"
+            dest := if kl == K"ref"
                 sctx = with_stmts(ctx)
                 (arr, idxs) = expand_ref_components(sctx, lhs)
                 [K"block"
@@ -777,7 +776,7 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 lhs
             end
-            if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && syntax_name(rhs[1]) == "broadcasted")
+            bc := if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && syntax_name(rhs[1]) == "broadcasted")
                 # Ensure the rhs of .= is always wrapped in a call to `broadcasted()`
                 [K"call"(rhs)
                     "broadcasted"::K"top"
@@ -787,6 +786,8 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 rhs
             end
+            [K"call" "materialize!"::K"top" dest bc]
+            dest
         ]
     else
         @ast ctx ex [K"call"
