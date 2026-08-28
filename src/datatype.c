@@ -2226,6 +2226,21 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
     return r;
 }
 
+// store `rhs` into the tagged union slot at `offset` inside `parent`,
+// without any mutability or type checking (used by codegen for both
+// `new` initialization and setfield!)
+JL_DLLEXPORT void jl_store_tagged_union_word(jl_value_t *parent, size_t offset, jl_value_t *u, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT
+{
+    uintptr_t w = jl_tagged_word_encode(u, rhs);
+    if (jl_tagged_word_isptr(w))
+        jl_gc_wb(parent, (jl_value_t*)w);
+    _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)parent + offset);
+    if (isatomic)
+        jl_atomic_store(slot, w);
+    else
+        jl_atomic_store_release(slot, w);
+}
+
 // tagged union slots are a single word, so their swap/modify/replace/setonce
 // are word-CAS loops over the encoded representation
 jl_value_t *swap_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic)

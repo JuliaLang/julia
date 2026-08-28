@@ -668,6 +668,7 @@ function aligned_sizeof(@nospecialize T::Type)
         al = datatype_alignment(T)
         return LLT_ALIGN(Core.sizeof(T), al)
     end
+    # boxed values and tagged unions both occupy one pointer-sized word
     return Core.sizeof(Ptr{Cvoid})
 end
 

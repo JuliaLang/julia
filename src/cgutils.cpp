@@ -1042,6 +1042,15 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
                 lty = JuliaType::get_prjlvalue_ty(ctxt);
                 isvector = false;
             }
+            else if (jl_is_uniontype(ty) && jl_uniontype_istagged(ty, NULL, NULL)) {
+                // a tagged union word; access goes through typed loads/stores
+                // keyed on bit 0, never through this slot as a tracked pointer
+                latypes.push_back(getInt64Ty(ctxt));
+                isvector = false;
+                isarray = false;
+                allghost = false;
+                continue;
+            }
             else if (jl_is_uniontype(ty)) {
                 // pick an Integer type size such that alignment will generally be correct,
                 // and always end with an Int8 (selector byte).
@@ -2746,7 +2755,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (FailOrder == AtomicOrdering::Release)
             FailOrder = AtomicOrdering::Monotonic;
         nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
-        tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0;
+        // tagged union words lower to i64, so CountTrackedPointers misses them
+        tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0 || type_has_taggedunion(jltype);
         if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
             intcast_eltyp = elty;
             elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
@@ -2866,7 +2876,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         store_ai.decorateInst(store);
         instr = store;
     }
-    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype)) {
+    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype) && !type_has_taggedunion(jltype)) {
         // emit this only if we have a possibility of optimizing it
         if (Order == AtomicOrdering::Unordered)
             Order = AtomicOrdering::Monotonic;
@@ -3245,7 +3255,9 @@ static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_
     size_t nfields = jl_datatype_nfields(stt);
     if (idx < nfields - (unsigned)stt->name->n_uninitialized)
         return false;
-    if (!jl_field_isptr(stt, idx) && !jl_type_hasptr(jl_field_type(stt, idx)))
+    jl_value_t *ft = jl_field_type(stt, idx);
+    if (!jl_field_isptr(stt, idx) && !jl_type_hasptr(ft) &&
+        !(jl_is_uniontype(ft) && jl_uniontype_istagged(ft, NULL, NULL)))
         return false;
     if (strct.constant) {
         if ((jl_is_immutable(stt) || jl_field_isconst(stt, idx)) && jl_field_isdefined(strct.constant, idx))
@@ -3527,6 +3539,13 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     }
     if (type_is_ghost(julia_type_to_llvm(ctx, jfty)))
         return ghostValue(ctx, jfty);
+    if (jl_is_uniontype(jfty) && jl_uniontype_istagged(jfty, NULL, NULL)) {
+        // TODO: direct codegen for tagged union words; decode through the
+        // runtime for now (throws UndefRefError for the zero word)
+        Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func),
+                { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, idx) });
+        return mark_julia_type(ctx, fld, true, jfty);
+    }
     Value *needlock = nullptr;
     if (isatomic && !jl_field_isptr(jt, idx) && jl_datatype_size(jfty) > MAX_ATOMIC_SIZE) {
         assert(strct.isboxed);
@@ -4521,6 +4540,17 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     bool isboxed = jl_field_isptr(sty, idx0);
     unsigned align = jl_field_align(sty, idx0);
     bool maybe_null = field_may_be_null(strct, sty, idx0);
+    if (!isboxed && jl_is_uniontype(jfty) && jl_uniontype_istagged(jfty, NULL, NULL)) {
+        // TODO: direct codegen for tagged union words; encode through the
+        // runtime for now. Other operations take the generic builtin path.
+        assert(op == StoreKind::Set);
+        ctx.builder.CreateCall(prepare_call(jlstoretaggedword_func),
+                { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, byte_offset),
+                  literal_pointer_val(ctx, jfty), boxed(ctx, rhs),
+                  ConstantInt::get(getInt32Ty(ctx.builder.getContext()),
+                                   Order == AtomicOrdering::NotAtomic ? 0 : 1) });
+        return rhs;
+    }
     Value *ptindex = nullptr;
     if (!isboxed && jl_is_uniontype(jfty)) {
         size_t fsz1 = jl_field_size(sty, idx0) - 1;
@@ -4793,6 +4823,15 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         for (size_t i = nargs; i < nf; i++) {
             if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
                 const jl_aliasinfo_t &ai = strctinfo.aliasinfo;
+                if (jl_uniontype_istagged(jl_field_type(sty, i), NULL, NULL)) {
+                    // the zero word is #undef
+                    auto *store = ctx.builder.CreateAlignedStore(
+                            ConstantInt::get(ctx.types().T_size, 0),
+                            emit_ptrgep(ctx, strct, jl_field_offset(sty, i)),
+                            Align(sizeof(void*)));
+                    ai.decorateInst(store);
+                    continue;
+                }
                 auto *store = ctx.builder.CreateAlignedStore(
                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                         emit_ptrgep(ctx, strct, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1),

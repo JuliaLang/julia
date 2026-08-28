@@ -1357,6 +1357,15 @@ static const auto jlgetnthfieldchecked_func = new JuliaFunction<TypeFnContextAnd
             Attributes(C, {Attribute::NonNull}),
             {}); },
 };
+static const auto jlstoretaggedword_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_store_tagged_union_word),
+    [](LLVMContext &C, Type *T_size) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_prjlvalue, T_size, T_prjlvalue, T_prjlvalue, getInt32Ty(C)}, false);
+    },
+    nullptr,
+};
 static const auto jlfieldindex_func = new JuliaFunction<>{
     XSTR(jl_field_index),
     [](LLVMContext &C) {
@@ -1640,7 +1649,17 @@ static bool jl_is_pointerfree(jl_value_t* t)
     if (!jl_is_concrete_immutable(t))
         return 0;
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)t)->layout;
-    return layout && layout->npointers == 0;
+    return layout && layout->npointers == 0 && layout->ntaggedptrs == 0;
+}
+
+// whether the layout embeds tagged union words (conditional references
+// that codegen currently only handles through the runtime)
+static bool type_has_taggedunion(jl_value_t *t)
+{
+    if (!jl_is_datatype(t))
+        return false;
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)t)->layout;
+    return layout && layout->ntaggedptrs > 0;
 }
 
 static bool allpointers(size_t size, size_t npointers)
@@ -1662,6 +1681,10 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut) JL_CANSAFEPOIN
 static bool deserves_stack(jl_value_t* t) JL_CANSAFEPOINT
 {
     if (!jl_is_concrete_immutable(t))
+        return false;
+    // TODO: stack representation of tagged union words (a conditional root
+    // does not fit the split bits/roots scheme yet); keep such types boxed
+    if (type_has_taggedunion(t))
         return false;
     jl_datatype_t *dt = (jl_datatype_t*)t;
     return jl_is_datatype_singleton(dt) || jl_datatype_isinlinealloc(dt, /* (require) pointerfree */ 0);
@@ -4081,10 +4104,11 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
 
-    // can compare any concrete immutable by bits, except for UnionAll
-    // which has a special non-bits based egal
-    bool justbits1 = jl_is_concrete_immutable(rt1) && !jl_is_kind(rt1);
-    bool justbits2 = jl_is_concrete_immutable(rt2) && !jl_is_kind(rt2);
+    // can compare any concrete immutable by bits, except for UnionAll, which
+    // has a special non-bits based egal, and for types embedding tagged union
+    // words, whose reference members compare by contents, not by word
+    bool justbits1 = jl_is_concrete_immutable(rt1) && !jl_is_kind(rt1) && !type_has_taggedunion(rt1);
+    bool justbits2 = jl_is_concrete_immutable(rt2) && !jl_is_kind(rt2) && !type_has_taggedunion(rt2);
     if (justbits1 || justbits2) { // whether this type is unique'd by value
         return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] () JL_CANSAFEPOINT -> Value* {
             jl_datatype_t *typ = (jl_datatype_t*)(justbits1 ? rt1 : rt2);
@@ -4263,6 +4287,11 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (idx != -1) {
             jl_value_t *ft = jl_field_type(uty, idx);
+            if (jl_is_uniontype(ft) && jl_uniontype_istagged(ft, NULL, NULL) && op != StoreKind::Set) {
+                // TODO: direct codegen for tagged union words; only plain
+                // stores are handled, the rest goes through the generic builtin
+                return false;
+            }
             if (!jl_has_free_typevars(ft)) {
                 if (op != StoreKind::Modify) {
                     emit_typecheck(ctx, val, ft, fname);
@@ -4382,6 +4411,8 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
     if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
         return false;
+    if (((jl_datatype_t*)mty_dt)->layout->ntaggedptrs > 0)
+        return false; // TODO: direct codegen for tagged union words
 
     const jl_cgval_t &cmp = has_cmp ? argv[2] : undefval;
     enum jl_memory_order order = jl_memory_order_notatomic;
@@ -4722,7 +4753,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = ghostValue(ctx, jl_emptytuple_type);
             return true;
         }
-        if (jl_is_tuple_type(rt) && jl_is_concrete_type(rt) && nargs == jl_datatype_nfields(rt)) {
+        if (jl_is_tuple_type(rt) && jl_is_concrete_type(rt) && nargs == jl_datatype_nfields(rt) &&
+            !type_has_taggedunion(rt)) {
             *ret = emit_new_struct(ctx, rt, nargs, argv.drop_front(), is_promotable);
             return true;
         }
@@ -4840,6 +4872,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
             if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
                 return false;
+            if (((jl_datatype_t*)mty_dt)->layout->ntaggedptrs > 0)
+                return false; // TODO: direct codegen for tagged union words
             enum jl_memory_order order = jl_memory_order_unspecified;
             const std::string fname = "memoryrefget";
             {
@@ -4961,6 +4995,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
             if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
                 return false;
+            if (((jl_datatype_t*)mty_dt)->layout->ntaggedptrs > 0)
+                return false; // TODO: direct codegen for tagged union words
             enum jl_memory_order order = jl_memory_order_unspecified;
             const std::string fname = "memoryref_isassigned";
             {
@@ -5505,6 +5541,26 @@ isdefined_unknown_idx:
         }
         else if (!field_may_be_null(obj, stt, fieldidx)) {
             *ret = mark_julia_const(ctx, jl_true);
+        }
+        else if (jl_is_uniontype(jl_field_type(stt, fieldidx)) &&
+                 jl_uniontype_istagged(jl_field_type(stt, fieldidx), NULL, NULL)) {
+            // a tagged union word is defined iff it is nonzero
+            if (obj.constant) {
+                *ret = mark_julia_const(ctx, jl_field_isdefined(obj.constant, fieldidx) ? jl_true : jl_false);
+            }
+            else {
+                assert(obj.ispointer());
+                size_t offs = jl_field_offset(stt, fieldidx);
+                auto ai = best_field_aliasinfo(ctx, obj, stt, fieldidx, offs);
+                Value *ptr = data_pointer(ctx, obj);
+                Value *addr = offs == 0 ? ptr : emit_ptrgep(ctx, ptr, offs);
+                LoadInst *w = ctx.builder.CreateAlignedLoad(ctx.types().T_size, addr, ctx.types().alignof_ptr);
+                w->setOrdering(order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
+                ai.decorateInst(w);
+                Value *isdef = ctx.builder.CreateIsNotNull(w);
+                setName(ctx.emission_context, isdef, "isdefined");
+                *ret = mark_julia_type(ctx, isdef, false, jl_bool_type);
+            }
         }
         else if (jl_field_isptr(stt, fieldidx) || jl_type_hasptr(jl_field_type(stt, fieldidx))) {
             Value *fldv;
@@ -11013,6 +11069,7 @@ static void init_jit_functions(void)
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);
     add_named_global(jlgetnthfieldchecked_func, &jl_get_nth_field_checked);
+    add_named_global(jlstoretaggedword_func, &jl_store_tagged_union_word);
     add_named_global(jlfieldindex_func, &jl_field_index);
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
     add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);
