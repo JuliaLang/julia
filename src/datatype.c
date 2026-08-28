@@ -520,6 +520,11 @@ JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsi
     }
     if (nimm == 0 || nimm > 4 || nptr == 0)
         return 0;
+    // a union that is storable inline (e.g. mixing bits members with ghost
+    // singletons like Nothing) keeps the selector-byte layout
+    size_t fsz = 0, al = 0;
+    if (jl_islayout_inline(u, &fsz, &al))
+        return 0;
     unsigned k = jl_tagged_union_shift(nimm);
     for (unsigned i = 0; i < n; i++) {
         jl_value_t *t = jl_nth_union_component(u, i);
@@ -2150,7 +2155,8 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
             hasptr = 0;
         }
         else {
-            hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
+            hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
+                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
         }
         size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
         assert(!isatomic || jl_typeis(rhs, ty));
@@ -2182,7 +2188,8 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
         hasptr = 0;
     }
     else {
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
+                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
     }
     size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
     int needlock = (isatomic && fsz > MAX_ATOMIC_SIZE);
@@ -2395,7 +2402,8 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
         hasptr = 0;
     }
     else {
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
+                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
     }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2);
@@ -2537,7 +2545,8 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
     }
     else {
         rty = layout_ty;
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
+                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
         assert(jl_typeis(rhs, ty));
     }
     int success;
