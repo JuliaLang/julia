@@ -102,6 +102,18 @@ end
     return (fin_total[], total)
 end
 
+# A `ccall` whose library is given by a runtime value makes the runtime call
+# `Libdl.dlopen(lib)` on first use. A custom library type whose `dlopen` method is itself
+# fully static keeps that resolvable under trimming; exercise it end to end so that the
+# compiled path is actually taken at run time rather than merely verifying.
+struct StaticLib end
+const static_lib = StaticLib()
+const static_lib_name = "libjulia"
+Base.Libc.Libdl.dlopen(::StaticLib) =
+    ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Ptr{UInt8}, UInt32, Cint),
+          static_lib_name, Base.Libc.Libdl.RTLD_LAZY, Cint(0))
+static_lib_ccall() = ccall((:jl_ver_major, static_lib), Cint, ())
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -213,6 +225,8 @@ function @main(args::Vector{String})::Cint
         end
     catch
     end
+
+    println(Core.stdout, "static_lib_ccall: ", static_lib_ccall())
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 

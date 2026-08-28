@@ -18,4 +18,5 @@ outdir = ARGS[1]
     @test lines[8] == "# preferences: 0"
     @test lines[9] == "finalizers: 27 32"
     @test lines[10] == "collected: 0 kept, 10 dropped"
+    @test lines[11] == "static_lib_ccall: $(VERSION.major)"
 end
