@@ -269,11 +269,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
-    [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
-        all(vst1_ident, vcx, b1; lhs=true) &
-        all(vst1_ident, vcx, b2; lhs=true) &
-        (kind(st[3]) === K"->" ? vst1_lam(vcx, st[3]) :
-            vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), st[3]))
+    [K"lambda" _...] -> vst1_raw_lambda(vcx, st)
+    [K"with-static-parameters" lam sps...] ->
+        vst1_raw_lambda(vcx, lam) & all(vst1_ident, vcx, sps; lhs=true)
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
     [K"generated"] -> pass()
@@ -1079,6 +1077,16 @@ vst1_iter(vcx, st) = @stm st begin
     [K"=" i [K"..." v]] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     [K"=" i v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     _ -> @fail(st, "expected one of `=`, `in`, `∈`")
+end
+
+vst1_raw_lambda(vcx, st) = @stm st begin
+    [K"lambda" [K"Value"] body] -> let args = st[1].value
+        (args isa Vector && all(a->a isa Symbol, args) ? pass() :
+        @fail(st[1], "expected Vector of Symbol")) &
+        vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), body)
+    end
+    [K"lambda" _...] -> @fail(st, "malformed `lambda`")
+    _ -> @fail(st, "expected `lambda`")
 end
 
 #-------------------------------------------------------------------------------
