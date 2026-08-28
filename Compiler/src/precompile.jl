@@ -358,7 +358,11 @@ function compile_and_emit_native(worlds::Vector{UInt},
             f = Core.invoke_in_world(latestworld, getglobal, mod, :__init__)
             # Get module compile setting
             setting = ccall(:jl_get_module_compile, Cint, (Any,), mod)
-            if setting != JL_OPTIONS_COMPILE_OFF && setting != JL_OPTIONS_COMPILE_MIN
+            # When trimming, the entrypoint list is the only thing that keeps `__init__`
+            # alive, and `jl_module_run_initializer` will call it regardless of the
+            # module's `compile=` setting. So `compile=min` (e.g. every JLLWrappers
+            # generated JLL) must not exclude it from the entrypoints here.
+            if setting != JL_OPTIONS_COMPILE_OFF && (trim_mode != 0x00 || setting != JL_OPTIONS_COMPILE_MIN)
                 tt = Tuple{Core.Typeof(f)}
                 compile_hint(tt)
                 trim_mode == 0x00 || add_entrypoint(tt)

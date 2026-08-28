@@ -5,6 +5,11 @@
 baremodule Zstd_jll
 using Base, Libdl
 
+# Mirror what JLLWrappers emits into every generated JLL. This matters for trimming:
+# `__init__` of a `compile=min` module must still be treated as an entrypoint,
+# otherwise it is trimmed away and the binary aborts in `jl_module_run_initializer`.
+Base.Experimental.@compiler_options compile=min optimize=0 infer=false
+
 export libzstd, zstd, zstdmt
 
 # These get calculated in __init__()
