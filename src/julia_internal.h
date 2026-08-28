@@ -1126,6 +1126,10 @@ jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *par
 jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_binding_t *b, jl_module_t *mod, jl_sym_t *name) JL_CANSAFEPOINT;
 jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
 int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
+jl_value_t *swap_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *replace_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
+int setonce_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) JL_CANSAFEPOINT;
 jl_value_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world) JL_CANSAFEPOINT;
 jl_value_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world) JL_CANSAFEPOINT;
