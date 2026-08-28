@@ -1361,8 +1361,11 @@ static const auto jlstoretaggedword_func = new JuliaFunction<TypeFnContextAndSiz
     XSTR(jl_store_tagged_union_word),
     [](LLVMContext &C, Type *T_size) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        // the union type is passed as a bare literal pointer (it is always a
+        // permanently rooted type object), matching literal_pointer_val
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(getVoidTy(C),
-            {T_prjlvalue, T_size, T_prjlvalue, T_prjlvalue, getInt32Ty(C)}, false);
+            {T_prjlvalue, T_size, T_pjlvalue, T_prjlvalue, getInt32Ty(C)}, false);
     },
     nullptr,
 };
