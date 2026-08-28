@@ -102,6 +102,18 @@ end
     return (fin_total[], total)
 end
 
+# Test that `dlopen(...)` for user-provided library types in `ccall` / `cglobal` works
+struct CustomLib end
+const custom_lib = CustomLib()
+function Base.Libc.Libdl.dlopen(::CustomLib)
+    print(Core.stdout, "custom_library_ccall: ")
+    return ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Ptr{UInt8}, UInt32, Cint),
+                 "libjulia", Base.Libc.Libdl.RTLD_LAZY, Cint(0))
+end
+function user_library_ccall()
+    println(Core.stdout, ccall((:jl_ver_major, custom_lib), Cint, ()))
+end
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -219,6 +231,8 @@ function @main(args::Vector{String})::Cint
         end
     catch
     end
+
+    user_library_ccall() # prints as a side effect
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
