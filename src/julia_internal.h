@@ -1030,6 +1030,61 @@ STATIC_INLINE unsigned jl_tagged_union_shift(unsigned nimmediate) JL_NOTSAFEPOIN
 JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsigned *shift) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_nth_tagged_member(jl_value_t *u JL_PROPAGATES_ROOT, unsigned i) JL_NOTSAFEPOINT;
 int jl_tagged_member_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT;
+
+// Word access discipline for tagged union slots: they hold a conditional
+// reference, so they follow the boxed-field rules - readers use a relaxed
+// atomic load, plain writers a release store (see jl_gc_write_atomic), and
+// atomic fields/elements use the requested orderings. A slot is one aligned
+// word and can never tear. Payload extraction assumes little-endian, like the
+// rest of the runtime.
+
+// pointer-vs-immediate for a tagged union word; the zero word (#undef) is not a pointer
+STATIC_INLINE int jl_tagged_word_isptr(uintptr_t w) JL_NOTSAFEPOINT
+{
+    return w != 0 && (w & 1) == 0;
+}
+
+// encode a value of a member type of tagged union `u` into its slot word
+STATIC_INLINE uintptr_t jl_tagged_word_encode(jl_value_t *u, jl_value_t *rhs JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *rty = (jl_datatype_t*)jl_typeof(rhs);
+    unsigned idx;
+    if (!jl_tagged_member_index(u, rty, &idx)) {
+        assert(((uintptr_t)rhs & 7) == 0);
+        return (uintptr_t)rhs;
+    }
+    unsigned nimm, k;
+    int istagged = jl_uniontype_istagged(u, &nimm, &k);
+    assert(istagged); (void)istagged;
+    // primitive sizes are alignment-rounded, hence powers of two
+    uint64_t bits;
+    switch (jl_datatype_size(rty)) {
+    case 1: bits = *(const uint8_t*)rhs; break;
+    case 2: bits = *(const uint16_t*)rhs; break;
+    case 4: bits = *(const uint32_t*)rhs; break;
+    default: assert(jl_datatype_size(rty) == 8); bits = *(const uint64_t*)rhs; break;
+    }
+    // trailing padding bits of an odd-bit primitive are undefined; canonicalize
+    unsigned nbits = jl_datatype_nbits(rty);
+    if (nbits < 64)
+        bits &= (((uint64_t)1 << nbits) - 1);
+    return (uintptr_t)((bits << k) | (2 * idx + 1));
+}
+
+// decode a tagged union word: NULL for the zero word (#undef), the stored
+// object for a pointer word, a freshly allocated box for an immediate
+STATIC_INLINE jl_value_t *jl_tagged_word_decode(jl_value_t *u, uintptr_t w) JL_CANSAFEPOINT
+{
+    if (!(w & 1))
+        return (jl_value_t*)w;
+    unsigned nimm, k;
+    int istagged = jl_uniontype_istagged(u, &nimm, &k);
+    assert(istagged); (void)istagged;
+    jl_datatype_t *t = jl_nth_tagged_member(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
+    assert(t != NULL);
+    uint64_t payload = (uint64_t)w >> k;
+    return jl_new_bits((jl_value_t*)t, &payload);
+}
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
                                    jl_datatype_t *super, jl_svec_t *parameters) JL_CANSAFEPOINT;
 jl_datatype_t *jl_new_uninitialized_datatype(void) JL_CANSAFEPOINT;
