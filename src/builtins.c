@@ -1043,6 +1043,23 @@ JL_CALLABLE(jl_f__apply_iterate)
     return result;
 }
 
+JL_DLLEXPORT size_t jl_enter_world(size_t world)
+{
+    jl_task_t *ct = jl_current_task;
+    size_t previous_world = ct->world_age;
+    if (!ct->ptls->in_pure_callback) {
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (ct->world_age > world)
+            ct->world_age = world;
+    }
+    return previous_world;
+}
+
+JL_DLLEXPORT void jl_exit_world(size_t previous_world)
+{
+    jl_current_task->world_age = previous_world;
+}
+
 // this is like a regular call, but always runs in the newest world
 JL_CALLABLE(jl_f_invokelatest)
 {
@@ -1061,17 +1078,11 @@ JL_CALLABLE(jl_f_invokelatest)
 JL_CALLABLE(jl_f_invoke_in_world)
 {
     JL_NARGSV(invoke_in_world, 2);
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
     JL_TYPECHK(invoke_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
-    if (!ct->ptls->in_pure_callback) {
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        if (ct->world_age > world)
-            ct->world_age = world;
-    }
+    size_t previous_world = jl_enter_world(world);
     jl_value_t *ret = jl_apply(&args[1], nargs - 1);
-    ct->world_age = last_age;
+    jl_exit_world(previous_world);
     return ret;
 }
 

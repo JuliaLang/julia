@@ -116,6 +116,7 @@
     XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
+    XX(jl_enter_world) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
@@ -130,6 +131,7 @@
     XX(jl_exit) \
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
+    XX(jl_exit_world) \
     XX(jl_field_index) \
     XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \

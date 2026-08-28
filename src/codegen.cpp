@@ -969,6 +969,16 @@ static const auto jlapplygeneric_func = new JuliaFunction<>{
     get_func_sig,
     get_func_attrs,
 };
+static const auto jlenterworld_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_enter_world),
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(T_size, {T_size}, false); },
+    nullptr,
+};
+static const auto jlexitworld_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_exit_world),
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C), {T_size}, false); },
+    nullptr,
+};
 static const auto jlinvoke_func = new JuliaFunction<>{
     XSTR(jl_invoke),
     get_func2_sig,
@@ -4576,6 +4586,30 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 // returns true if the call has been handled
 {
     ++EmittedBuiltinCalls;
+    if (f == BUILTIN(invoke_in_world) && nargs >= 2 && argv[1].typ == (jl_value_t*)jl_ulong_type) {
+        Value *world = emit_unbox(ctx, ctx.types().T_size, argv[1]);
+        Value *previous_world = ctx.builder.CreateCall(prepare_call(jlenterworld_func), {world});
+        setName(ctx.emission_context, previous_world, "previous_world");
+        CallInst *result = nullptr;
+        if (argv[2].constant && jl_isa(argv[2].constant, (jl_value_t*)jl_builtin_type)) {
+            auto it = builtin_func_map().find(argv[2].constant);
+            if (it != builtin_func_map().end()) {
+                result = emit_jlcall(ctx, it->second,
+                    Constant::getNullValue(ctx.types().T_prjlvalue),
+                    argv.drop_front(3), nargs - 2, julia_call);
+            }
+        }
+        if (result == nullptr)
+            result = emit_jlcall(ctx, jlapplygeneric_func, nullptr,
+                argv.drop_front(2), nargs - 1, julia_call);
+        // An exception skips this call, but the enclosing handler restores the
+        // task state, including the world age saved before `jl_enter_world`.
+        ctx.builder.CreateCall(prepare_call(jlexitworld_func), {previous_world});
+        setName(ctx.emission_context, result, "invoke_in_world_ret");
+        *ret = mark_julia_type(ctx, result, true, rt);
+        return true;
+    }
+
     if (f == BUILTIN(is) && nargs == 2) {
         // emit comparison test
         Value *ans = emit_f_is(ctx, argv[1], argv[2]);
@@ -10925,6 +10959,8 @@ static void init_jit_functions(void)
     for (int i = 0; i < jl_n_builtins; i++)
         add_named_global(jl_builtin_f_names[i], jl_builtin_f_addrs[i]);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
+    add_named_global(jlenterworld_func, &jl_enter_world);
+    add_named_global(jlexitworld_func, &jl_exit_world);
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);

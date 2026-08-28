@@ -403,6 +403,21 @@ wc_aiw2 = get_world_counter()
 @test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
 @test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"
 
+# Compiled world calls preserve builtin dispatch and the caller's task world.
+module CompiledBuiltinWorlds
+const value = 1
+lookup(world::UInt) = Core.invoke_in_world(world, Core.getglobal, @__MODULE__, :value)
+throwing_lookup(world::UInt) = Core.invoke_in_world(world, Core.getfield, (1,), 2)
+end
+wc_sbw1 = get_world_counter()
+Core.eval(CompiledBuiltinWorlds, :(const value = 2))
+wc_sbw2 = get_world_counter()
+@test CompiledBuiltinWorlds.lookup(wc_sbw1) == 1
+@test Core._call_in_world_total(wc_sbw2, CompiledBuiltinWorlds.lookup, wc_sbw1) == 2
+world_before_error = tls_world_age()
+@test_throws BoundsError CompiledBuiltinWorlds.throwing_lookup(wc_sbw1)
+@test tls_world_age() == world_before_error
+
 # logging
 mc48954(x, y) = false
 mc48954(x::Int, y::Int) = x == y
