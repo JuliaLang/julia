@@ -205,6 +205,16 @@ false
 """
 isbitsunion(u::Type) = u isa Union && allocatedinline(u)
 
+"""
+    Base.istaggedunion(::Type{T})
+
+Return whether a type is a Union stored as a single tagged 64-bit word: a mix
+of reference members with up to four small primitive members whose values are
+encoded immediately in the word's payload bits.
+"""
+istaggedunion(@nospecialize u) =
+    u isa Union && ccall(:jl_uniontype_istagged, Cint, (Any, Ptr{Cvoid}, Ptr{Cvoid}), u, C_NULL, C_NULL) != Cint(0)
+
 unsetindex!(A::Array, i::Integer) = unsetindex!(A, to_index(i))
 function unsetindex!(A::Array, i::Int)
     @inline

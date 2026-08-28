@@ -82,7 +82,7 @@ function summarysize(obj;
         elseif isa(x, GenericMemory)
             T = eltype(x)
             if allocatedinline(T)
-                np = datatype_npointers(T)
+                np = datatype_npointers(T) + Int(datatype_ntaggedptrs(T))
                 nf = length(x) * np
                 idx = (i-1) ÷ np + 1
                 if @inbounds @inline isassigned(x, idx)
@@ -99,7 +99,7 @@ function summarysize(obj;
                 end
             end
         else
-            nf = datatype_npointers(typeof(x))
+            nf = datatype_npointers(typeof(x)) + Int(datatype_ntaggedptrs(typeof(x)))
             if nth_pointer_isdefined(x, i)
                 val = get_nth_pointer(x, i)
             end
@@ -125,7 +125,7 @@ end
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    if datatype_npointers(typeof(obj)) > 0
+    if datatype_npointers(typeof(obj)) > 0 || datatype_ntaggedptrs(typeof(obj)) > 0
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
     end
