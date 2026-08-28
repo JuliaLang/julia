@@ -176,6 +176,7 @@ function _register_kinds()
             # requires scope resolution and special conversion to Expr.
             "foreignsymbol"
             "thunk"
+            "with-static-parameters"
             # Options specific to K"lambda"
             "generated_lambda"
             "toplevel_lambda"
