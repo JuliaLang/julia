@@ -1814,6 +1814,8 @@ if threadpoolsize() >= 2
             while true
                 x[] = x[] * 1.0000001 + 0.1
                 Threads.atomic_add!(spins, 1)
+                # Safepoint needed. Otherwise it causes GC hang.
+                GC.safepoint()
             end
         end
         watcher = @async wait(victim)

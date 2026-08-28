@@ -328,7 +328,7 @@ pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, coll
     // See jl_gc_collection_t
     match collection {
         // auto
-        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls),
+        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls, false),
         // full
         1 => SINGLETON.handle_user_collection_request(tls, true, true),
         // incremental

@@ -10,6 +10,10 @@
 
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
+#ifdef JL_LIBRARY_STATIC
+#include "jl_static_codegen_fallbacks.inc"
+#endif
+
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, uint32_t checksum, const char *unpack_func,

@@ -638,15 +638,8 @@ public:
     typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
-    template
-    <typename ResourceT, size_t max = 0,
-        typename BackingT = std::stack<ResourceT,
-            std::conditional_t<max == 0,
-                SmallVector<ResourceT, 0>,
-                SmallVector<ResourceT, max>
-            >
-        >
-    >
+    template<typename ResourceT, size_t max = 0,
+             typename BackingT = std::stack<ResourceT, SmallVector<ResourceT, max>>>
     struct ResourcePool {
         public:
         ResourcePool(std::function<ResourceT()> creator) JL_NOTSAFEPOINT : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
