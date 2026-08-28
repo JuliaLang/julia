@@ -521,7 +521,7 @@ void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_ROOTED_BY_ARG(0
         data = (char*)m.mem->ptr + i * layout->size;
     }
     else {
-        hasptr = layout->first_ptr >= 0;
+        hasptr = layout->first_ptr >= 0 || layout->ntaggedptrs > 0; // tagged words are conditional refs
     }
     if (layout->size != 0) {
         assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);
