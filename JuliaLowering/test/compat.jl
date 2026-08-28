@@ -536,3 +536,145 @@ end
     out = JL.core_lowering_hook(lambda, test_mod)
     @test out isa Core.SimpleVector && out[1] isa Core.CodeInfo
 end
+
+@testset "expr compat: #self# becomes `thisfunction`" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self()
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (let
+        ()->(var"#self#")
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    var_self_short() = var"#self#"
+    var_self_short()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro var_self_macro(); var"#self#"; end
+    @var_self_macro
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_kw(; k=1)
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_quoted()
+        :(var"#self#")
+    end)()
+    """; expr_compat_mode=true) === Symbol("#self#")
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @isdefined(var"#self#") ? var"#self#" : nothing
+    """; expr_compat_mode=true) == nothing
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_isdefined()
+        @isdefined(var"#self#") ? var"#self#" : nothing
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    # we don't bother with generators
+    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    collect(var"#self#" for i in 1:1)[1]
+    """; expr_compat_mode=true) isa Function
+
+    # we assume the user doesn't create vars with this name
+    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_assign()
+        var"#self#" = 1
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) == 1
+end
+
+@testset "scope-block" begin
+    lam = Expr(:lambda, Symbol[Symbol("#self#"), :f],
+               Expr(Symbol("scope-block"),
+                    Expr(:block,
+                         Expr(:return, 1))))
+    @test fl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+end
+
+# `x^n` is rewritten to `literal_pow(^, x, Val(n))` if n is an Int
+@testset "(AI) literal_pow" begin
+    pow_mod = @newmod(:LiteralPowTest)
+    Core.eval(pow_mod, quote
+        struct P end
+        Base.:^(::P, n) = (:call, n)
+        Base.literal_pow(::typeof(^), ::P, ::Val{n}) where {n} = (:literal, n)
+        Base.Broadcast.broadcastable(x::P) = Ref(x)
+        const p = P()
+    end)
+
+    cases = [
+        "p^2"                                  => (:literal, 2)
+        "p^0"                                  => (:literal, 0)
+        "p^1"                                  => (:literal, 1)
+        "p^-2"                                 => (:literal, -2)
+        "p^(2)"                                => (:literal, 2)
+        "^(p, 2)"                              => (:literal, 2)
+        "p^$(typemax(Int))"                    => (:literal, typemax(Int))
+        "p^$(BigInt(typemax(Int)) + 1)"        => (:call, BigInt(typemax(Int)) + 1)
+        "p^true"                               => (:call, true)
+        "p^0x02"                               => (:call, 0x02)
+        "p^0x0002"                             => (:call, 0x0002)
+        "p^0x00000002"                         => (:call, 0x00000002)
+        "p^0x0000000000000002"                 => (:call, 0x0000000000000002)
+        "p^0x00000000000000000000000000000002" => (:call, UInt128(2))
+        "p^big\"2\""                           => (:call, big(2))
+        "p^(1 + 1)"                            => (:call, 2)
+        "Base.:^(p, 2)"                        => (:call, 2)
+        "p .^ 2"                               => (:literal, 2)
+        "p .^ -1"                              => (:literal, -1)
+        "(.^)(p, 2)"                           => (:literal, 2)
+        "[p] .^ 2"                             => [(:literal, 2)]
+        "identity.([p] .^ 2)"                  => [(:literal, 2)]
+        "p .^ 0x02"                            => (:call, 0x02)
+        "p .^ true"                            => (:call, true)
+        "p .^ 2.0"                             => (:call, 2.0)
+        "(.^)(p, 0x02)"                        => (:call, 0x02)
+        "[p] .^ 0x02"                          => [(:call, 0x02)]
+    ]
+
+    for (str, expected) in cases
+        ex = parsestmt(SyntaxTree, str)
+        fl = fl_eval(pow_mod, ex)
+        jl = jl_eval(pow_mod, ex; expr_compat_mode=true)
+        @test (str, fl) == (str, expected) context=str
+        @test (str, jl) == (str, fl) context=str
+    end
+
+    let ex = parsestmt(SyntaxTree, "let q = p; q ^= 2; q end")
+        @test fl_eval(pow_mod, ex) == (:literal, 2)
+        @test_broken jl_eval(pow_mod, ex; expr_compat_mode=true) == (:literal, 2)
+    end
+end
+
+@testset "quoted import path components" begin
+    local run(s) = JuliaLowering.include_string(test_mod, s)
+
+    @test run("baremodule M; end; isdefined(M, :+)") == false
+    @test run("baremodule M; import Base: Base.:(+); end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.:+; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base: (+); end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.var\"+\"; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base: var\"+\"; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.:sin; end; getglobal(M,:sin) === Base.sin")
+    @test run("baremodule M; import Base.:(sin); end; getglobal(M,:sin) === Base.sin")
+    @test run("baremodule M; import Base.:Iterators; end; getglobal(M,:Iterators) === Base.Iterators")
+    @test run("baremodule M; import Base.:Iterators.:take; end; getglobal(M,:take) === Base.Iterators.take")
+    @test run("baremodule M; import Base.:Iterators: take; end; getglobal(M,:take) === Base.Iterators.take")
+    @test run("baremodule M; import Base.:+ as plus; end; getglobal(M,:plus) === Base.:+")
+    @test run("baremodule M; using Base.:Iterators; end; isdefined(M, :take)")
+    @test run("module Outer; f() = 1; baremodule In; import ..Outer.:f; end; end; getglobal(Outer.In,:f) === Outer.f")
+    @test run("module Outer; f() = 1; baremodule In; import ..Outer: f; end; end; getglobal(Outer.In,:f) === Outer.f")
+end

@@ -2528,7 +2528,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @jl_assert kind(body) === K"_generated_body" && numchildren(body) == 2 body
     gen_name = let mangled = reserve_module_binding_i(
         ctx.layer.mod,
-        string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator#"))
+        string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator"))
         new_global_binding(ctx, src, mangled, ctx.layer.mod)
     end
 
@@ -2714,9 +2714,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     prop_metas = getmeta(body, :method_metas, nothing)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),
-        mangled = reserve_module_binding_i(
+        mangled = reserve_module_binding_simple(
             ctx.layer.mod,
-            string(startswith(n, '#') ? "" : "#kw_body#", n, "#"))
+            string("#", n, "#kw_body"))
         # probably not desirable, but fixes eval-into-closed-module
         m1_sc = escape_layer(mtable.context::SyntaxContext, true)
         @mknode(newsym(ctx, mtable, mangled);
@@ -3838,15 +3838,10 @@ function expand_typegroup_def(ctx, ex)
 
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block, then do the expand and replace
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        mapsyntax(x->@ast(ctx, x, [K"global" x]), struct_names)...
+        [K"scope_block" [K"hard_scope"] [K"block" stmts...]]
         fdef_stmts...
     ]
 
@@ -3986,15 +3981,10 @@ function expand_struct_def(ctx, ex, docs)
     end
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
+        [K"global" struct_name]
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        [K"scope_block" [K"hard_scope"] stmts...]
         fdef_stmts...
     ]
 
@@ -4080,7 +4070,7 @@ end
 
 function _unplaceholder(st)
     k = kind(st)
-    k === K"Placeholder" ? @mknode(st; kind=K"Identifier") :
+    k === K"Placeholder" || k === K"Symbol" ? @mknode(st; kind=K"Identifier") :
         k === K"Identifier" ? st : @jl_assert false st
 end
 
@@ -4345,7 +4335,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"tuple" as...] -> (nothing, as, @ast(ctx, sig, "Any"::K"core"))
         end
         if isnothing(name)
-            name = newsym(ctx, sig, "#anon#")
+            @static if VERSION < v"1.14.0-DEV.3063"
+                name = newsym(ctx, sig, "#anon#")
+            else
+                name = newsym(ctx, sig, string(module_next_counter(ctx.layer.mod)))
+            end
             @ast ctx ex [K"block" [K"local" name] expand_function_def(
                 ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett)]
         else
@@ -4355,7 +4349,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"->"
         sig, wheres = flatten_wheres(ex[1])
         @jl_assert kind(sig) === K"tuple" ex
-        name = newsym(ctx, sig, "#->#")
+        @static if VERSION < v"1.14.0-DEV.3063"
+            name = newsym(ctx, sig, "#->#")
+        else
+            name = newsym(ctx, sig, string(module_next_counter(ctx.layer.mod)))
+        end
         rett = @ast(ctx, sig, "Any"::K"core")
         @ast ctx ex [K"block" [K"local" name] expand_function_def(
             ctx, ex, SyntaxList(name, children(sig)...), wheres, ex[2], rett)]
