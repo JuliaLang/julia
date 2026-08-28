@@ -1724,6 +1724,32 @@ static inline const char *jl_dt_layout_taggedptrs(const jl_datatype_layout_t *l)
            (l->first_ptr < 0 ? 0 : jl_fielddesc_ptr_size(l->flags.fielddesc_type) * l->npointers);
 }
 
+// whether the i-th field is stored as a tagged union word: its offset appears
+// in the layout's tagged-slot table (callers additionally check that the field
+// type is a Union, since an inline struct field may start with a tagged slot
+// composed at the same offset)
+static inline int jl_field_istagged(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
+{
+    const jl_datatype_layout_t *ly = st->layout; // NOT jl_datatype_layout(st)
+    uint32_t nt = ly->ntaggedptrs;
+    if (nt == 0 || jl_field_isptr(st, i))
+        return 0;
+    uint32_t offw = jl_field_offset(st, i) / sizeof(void*);
+    const void *tagged = jl_dt_layout_taggedptrs(ly);
+    for (uint32_t j = 0; j < nt; j++) {
+        uint32_t entry;
+        if (ly->flags.fielddesc_type == JL_FIELDDESC_8)
+            entry = ((const uint8_t*)tagged)[j];
+        else if (ly->flags.fielddesc_type == JL_FIELDDESC_16)
+            entry = ((const uint16_t*)tagged)[j];
+        else
+            entry = ((const uint32_t*)tagged)[j];
+        if (entry == offw)
+            return 1;
+    }
+    return 0;
+}
+
 // offset (in words) of the i-th tagged union word inside an instance
 static inline uint32_t jl_tagged_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 {

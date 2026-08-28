@@ -499,10 +499,26 @@ STATIC_INLINE int tagged_union_isimmediate(jl_value_t *t) JL_NOTSAFEPOINT
            jl_datatype_nbits((jl_datatype_t*)t) <= 63;
 }
 
+// tag width k of a union already known (from layout metadata) to be tagged;
+// unlike jl_uniontype_istagged this never computes layouts (no safepoints)
+unsigned jl_tagged_union_kbits(jl_value_t *u) JL_NOTSAFEPOINT
+{
+    unsigned n = jl_count_union_components(u);
+    unsigned nimm = 0;
+    for (unsigned i = 0; i < n; i++) {
+        if (tagged_union_isimmediate(jl_nth_union_component(u, i)))
+            nimm++;
+    }
+    assert(nimm > 0 && nimm <= 4);
+    return jl_tagged_union_shift(nimm);
+}
+
 // If `u` gets the tagged layout, return 1 and report the immediate member
 // count and the tag width k; return 0 for every other type (all-or-nothing:
 // a union that exceeds the tag budget falls back to the boxed layout).
-JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsigned *shift) JL_NOTSAFEPOINT
+// May compute member layouts; at access time, prefer the layout metadata
+// (jl_field_istagged / arrayelem_istagged), which is the source of truth.
+JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsigned *shift) JL_CANSAFEPOINT
 {
 #if !defined(_P64) || !JL_TAGGED_UNION_LAYOUT
     return 0;
@@ -2061,7 +2077,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     jl_value_t *ty = jl_field_type_concrete(st, i);
     int isatomic = jl_field_isatomic(st, i);
     if (jl_is_uniontype(ty)) {
-        if (jl_uniontype_istagged(ty, NULL, NULL)) {
+        if (jl_field_istagged(st, i)) {
             _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)v + offs);
             uintptr_t w = isatomic ? jl_atomic_load(slot) : jl_atomic_load_relaxed(slot);
             return jl_tagged_word_decode(ty, w); // NULL means #undef, checked by callers
@@ -2118,8 +2134,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
     if (rhs == NULL) { // TODO: this should be invalid, but it happens frequently in ircode.c
         // for a pointer or tagged union field, #undef is (already) the zero word
         assert(*(jl_value_t**)((char*)v + offs) == NULL);
-        assert(jl_field_isptr(st, i) ||
-               jl_uniontype_istagged(jl_field_type_concrete(st, i), NULL, NULL));
+        assert(jl_field_isptr(st, i) || jl_field_istagged(st, i));
         return;
     }
     if (jl_field_isptr(st, i)) {
@@ -2131,7 +2146,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         jl_value_t *rty = jl_typeof(rhs);
         int hasptr;
         int isunion = jl_is_uniontype(ty);
-        if (isunion && jl_uniontype_istagged(ty, NULL, NULL)) {
+        if (isunion && jl_field_istagged(st, i)) {
             uintptr_t w = jl_tagged_word_encode(ty, rhs);
             if (jl_tagged_word_isptr(w))
                 jl_gc_wb(v, (jl_value_t*)w);
@@ -2348,7 +2363,7 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
             jl_throw(jl_undefref_exception);
         return r;
     }
-    else if (jl_uniontype_istagged(ty, NULL, NULL)) {
+    else if (jl_is_uniontype(ty) && jl_field_istagged(st, i)) {
         return swap_tagged(ty, (_Atomic(uintptr_t)*)p, v, rhs, isatomic);
     }
     else {
@@ -2495,7 +2510,7 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
     if (jl_field_isptr(st, i)) {
         return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, NULL, NULL, NULL);
     }
-    else if (jl_uniontype_istagged(ty, NULL, NULL)) {
+    else if (jl_is_uniontype(ty) && jl_field_istagged(st, i)) {
         return modify_tagged(ty, (_Atomic(uintptr_t)*)p, v, op, rhs, isatomic);
     }
     else {
@@ -2612,7 +2627,7 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
     if (jl_field_isptr(st, i)) {
         return replace_value(ty, (_Atomic(jl_value_t*)*)p, v, expected, rhs, isatomic, NULL, NULL);
     }
-    else if (jl_uniontype_istagged(ty, NULL, NULL)) {
+    else if (jl_is_uniontype(ty) && jl_field_istagged(st, i)) {
         return replace_tagged(ty, (_Atomic(uintptr_t)*)p, v, expected, rhs, isatomic);
     }
     else {
@@ -2663,7 +2678,7 @@ int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rh
     else {
         int isunion = jl_is_uniontype(ty);
         if (isunion) {
-            if (jl_uniontype_istagged(ty, NULL, NULL))
+            if (jl_field_istagged(st, i))
                 return setonce_tagged(ty, (_Atomic(uintptr_t)*)p, v, rhs, isatomic);
             return 0;
         }
@@ -2684,7 +2699,7 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT
     _Atomic(jl_value_t*) *fld = (_Atomic(jl_value_t*)*)((char*)v + offs);
     if (!jl_field_isptr(st, i)) {
         jl_datatype_t *ft = (jl_datatype_t*)normalize_typeofbottom_layout_alias(jl_field_type_concrete(st, i));
-        if (jl_uniontype_istagged((jl_value_t*)ft, NULL, NULL))
+        if (jl_is_uniontype((jl_value_t*)ft) && jl_field_istagged(st, i))
             return jl_atomic_load_relaxed((_Atomic(uintptr_t)*)fld) != 0 ? 1 : 0;
         if (!jl_is_datatype(ft) || ft->layout->first_ptr < 0)
             return 2; // isbits are always defined

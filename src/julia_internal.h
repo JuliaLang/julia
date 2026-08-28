@@ -1011,7 +1011,7 @@ JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
 jl_value_t* jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype_t * y) JL_CANSAFEPOINT;
-int jl_count_union_components(jl_value_t *v);
+int jl_count_union_components(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_nth_union_component(jl_value_t *v JL_PROPAGATES_ROOT, int i) JL_NOTSAFEPOINT;
 int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT;
 
@@ -1027,7 +1027,8 @@ STATIC_INLINE unsigned jl_tagged_union_shift(unsigned nimmediate) JL_NOTSAFEPOIN
 {
     return nimmediate == 1 ? 1 : nimmediate == 2 ? 2 : 3;
 }
-JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsigned *shift) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsigned *shift) JL_CANSAFEPOINT;
+unsigned jl_tagged_union_kbits(jl_value_t *u) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_nth_tagged_member(jl_value_t *u JL_PROPAGATES_ROOT, unsigned i) JL_NOTSAFEPOINT;
 int jl_tagged_member_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT;
 
@@ -1053,9 +1054,7 @@ STATIC_INLINE uintptr_t jl_tagged_word_encode(jl_value_t *u, jl_value_t *rhs JL_
         assert(((uintptr_t)rhs & 7) == 0);
         return (uintptr_t)rhs;
     }
-    unsigned nimm, k;
-    int istagged = jl_uniontype_istagged(u, &nimm, &k);
-    assert(istagged); (void)istagged;
+    unsigned k = jl_tagged_union_kbits(u);
     // primitive sizes are alignment-rounded, hence powers of two
     uint64_t bits;
     switch (jl_datatype_size(rty)) {
@@ -1077,9 +1076,7 @@ STATIC_INLINE jl_value_t *jl_tagged_word_decode(jl_value_t *u, uintptr_t w) JL_C
 {
     if (!(w & 1))
         return (jl_value_t*)w;
-    unsigned nimm, k;
-    int istagged = jl_uniontype_istagged(u, &nimm, &k);
-    assert(istagged); (void)istagged;
+    unsigned k = jl_tagged_union_kbits(u);
     jl_datatype_t *t = jl_nth_tagged_member(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
     assert(t != NULL);
     uint64_t payload = (uint64_t)w >> k;

@@ -422,7 +422,7 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt)
 
 // --- type union ---
 
-int jl_count_union_components(jl_value_t *v)
+int jl_count_union_components(jl_value_t *v) JL_NOTSAFEPOINT
 {
     size_t c = 0;
     while (jl_is_uniontype(v)) {
