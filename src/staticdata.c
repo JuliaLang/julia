@@ -898,7 +898,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
         assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v));
 
-    if (layout->npointers == 0) {
+    if (layout->npointers == 0 && layout->ntaggedptrs == 0) {
         // bitstypes do not require recursion
     }
     else if (jl_is_svec(v)) {
@@ -926,15 +926,21 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 jl_queue_for_serialization_(s, fld, 1, immediate);
             }
         }
-        else if (layout->first_ptr >= 0) {
+        else if (layout->first_ptr >= 0 || layout->ntaggedptrs > 0) {
             uint16_t elsz = layout->size;
             size_t i, l = m->length;
-            size_t j, np = layout->npointers;
+            size_t j, np = layout->first_ptr >= 0 ? layout->npointers : 0;
+            size_t nt = layout->ntaggedptrs;
             for (i = 0; i < l; i++) {
                 for (j = 0; j < np; j++) {
                     uint32_t ptr = jl_ptr_offset(t, j);
                     jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], 1);
                     jl_queue_for_serialization_(s, fld, 1, immediate);
+                }
+                for (j = 0; j < nt; j++) {
+                    uintptr_t w = ((uintptr_t*)data)[jl_tagged_offset(t, j)];
+                    if (jl_tagged_word_isptr(w))
+                        jl_queue_for_serialization_(s, (jl_value_t*)w, 1, immediate);
                 }
                 data += elsz;
             }
@@ -999,6 +1005,12 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             int mutabl = !jl_field_isconst(t, fldidx - 1);
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
+        }
+        size_t nt = layout->ntaggedptrs;
+        for (i = 0; i < nt; i++) {
+            uintptr_t w = ((uintptr_t*)data)[jl_tagged_offset(t, i)];
+            if (jl_tagged_word_isptr(w))
+                jl_queue_for_serialization_(s, (jl_value_t*)w, 1, immediate);
         }
     }
 
@@ -1554,7 +1566,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 // copy header
                 ios_write(f, (char*)v, headersize);
                 // write data
-                if (!layout->flags.arrayelem_isboxed && layout->first_ptr < 0) {
+                if (!layout->flags.arrayelem_isboxed && layout->first_ptr < 0 && layout->ntaggedptrs == 0) {
                     // set owner to NULL
                     write_pointer(f);
                     // Non-pointer eltypes get encoded in the const_data section
@@ -1616,6 +1628,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                         // the rewrite all of the embedded pointers to null+relocation
                         uint16_t elsz = layout->size;
                         size_t j, np = layout->first_ptr < 0 ? 0 : layout->npointers;
+                        size_t nt = layout->ntaggedptrs;
                         size_t i;
                         for (i = 0; i < len; i++) {
                             for (j = 0; j < np; j++) {
@@ -1628,6 +1641,20 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                                     record_uniquing(s, fld, fld_pos);
                                 }
                                 memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+                            }
+                            for (j = 0; j < nt; j++) {
+                                // rewrite reference words to null+relocation;
+                                // immediate and #undef words stay as raw bytes
+                                size_t offset = i * elsz + jl_tagged_offset(t, j) * sizeof(jl_value_t*);
+                                uintptr_t w = *(uintptr_t*)&data[offset];
+                                if (jl_tagged_word_isptr(w)) {
+                                    jl_value_t *fld = (jl_value_t*)w;
+                                    size_t fld_pos = reloc_offset + headersize + offset;
+                                    arraylist_push(&s->relocs_list, (void*)(uintptr_t)fld_pos); // relocation location
+                                    arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
+                                    record_uniquing(s, fld, fld_pos);
+                                    memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+                                }
                             }
                         }
                     }
@@ -1736,6 +1763,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 jl_value_t *replace = (jl_value_t*)ptrhash_get(&bits_replace, (void*)slot);
                 if (replace != HT_NOTFOUND && fsz > 0) {
                     assert(t->name->mutabl && !jl_field_isptr(t, i));
+                    assert(!jl_uniontype_istagged(jl_field_type_concrete(t, i), NULL, NULL) &&
+                           "bits_replace cannot target a tagged union slot");
                     jl_value_t *rty = jl_typeof(replace);
                     size_t sz = jl_datatype_size(rty);
                     ios_write(f, (const char*)replace, sz);
@@ -1775,6 +1804,22 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     record_uniquing(s, fld, fld_pos);
                 }
                 memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+            }
+
+            size_t ntagged = t->layout->ntaggedptrs;
+            for (i = 0; i < ntagged; i++) {
+                // rewrite reference words to null+relocation; immediate and
+                // #undef words keep the raw bytes written above
+                size_t offset = jl_tagged_offset(t, i) * sizeof(jl_value_t*);
+                uintptr_t w = *(uintptr_t*)&data[offset];
+                if (jl_tagged_word_isptr(w)) {
+                    jl_value_t *fld = (jl_value_t*)w;
+                    size_t fld_pos = offset + reloc_offset;
+                    arraylist_push(&s->relocs_list, (void*)(uintptr_t)(fld_pos)); // relocation location
+                    arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
+                    record_uniquing(s, fld, fld_pos);
+                    memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+                }
             }
 
             // Need do a tricky fieldtype walk an record all memoryref we find inlined in this value
