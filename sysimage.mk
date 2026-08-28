@@ -10,11 +10,6 @@ ifeq ($(JULIA_COVERAGE_IMAGES),1)
 JULIA_SYSIMG_BUILD_FLAGS += $(JULIA_COVERAGE_IMAGE_FLAGS)
 endif
 
-# TODO(taggedunions): multithreaded native-code emission of the Base sysimage
-# crashes in an LLVM pass since the tagged union layout was enabled; emit
-# single-threaded until the root cause is found.
-export JULIA_IMAGE_THREADS := 1
-
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug
 basecompiler-ji: $(build_private_libdir)/basecompiler.ji
