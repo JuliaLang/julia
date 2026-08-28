@@ -43,6 +43,8 @@ impl<'a> Iterator for JuliaMutatorIterator<'a> {
 pub struct VMActivePlan {}
 
 impl ActivePlan<JuliaVM> for VMActivePlan {
+    const NEEDS_MEMORY_ZEROING: bool = false;
+
     fn number_of_mutators() -> usize {
         Self::mutators().count()
     }
