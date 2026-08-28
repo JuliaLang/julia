@@ -1019,7 +1019,7 @@ int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *
 // datatype.c). Layout is baked into system images, so the master switch must
 // be a compile-time constant.
 #ifndef JL_TAGGED_UNION_LAYOUT
-#define JL_TAGGED_UNION_LAYOUT 0
+#define JL_TAGGED_UNION_LAYOUT 1
 #endif
 
 // tag width k for a tagged union with the given number of immediate members
