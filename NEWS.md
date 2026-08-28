@@ -10,6 +10,14 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* On 64-bit platforms, a field or `Memory` element whose type is a `Union` mixing
+  reference members with up to four small primitive members (each fitting in 63 bits or
+  fewer, e.g. `Union{String, Int32}` or a `Union` with an odd-bit primitive like a
+  63-bit integer) is now stored as a single tagged 64-bit word: storing or loading the
+  primitive value involves no allocation. The encoding is documented ABI (see the
+  devdocs on tagged unions); such fields were previously stored as a pointer to a boxed
+  value, which C code should not have relied upon ([#62918]).
+
 Command-line option changes
 ---------------------------
 
