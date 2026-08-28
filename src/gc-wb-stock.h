@@ -45,7 +45,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
         return; // ptr is old and not in remset (thus it does not point to young)
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
     const jl_datatype_layout_t *ly = dt->layout;
-    if (ly->npointers)
+    if (ly->npointers || ly->ntaggedptrs)
         jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
 }
 
@@ -111,10 +111,38 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_g
         size_t elsz = dt->layout->size;
         if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
             dt = (jl_datatype_t*)jl_tparam1(dt);
+            const jl_datatype_layout_t *ly = dt->layout;
             for (size_t done = 0; done < n; done++) { // copy forwards
                 char* s = (char*)src_p+done*elsz;
-                if (*((jl_value_t**)s+dt->layout->first_ptr) != NULL)
+                if ((ly->first_ptr >= 0 && *((jl_value_t**)s+ly->first_ptr) != NULL) ||
+                    ly->ntaggedptrs > 0)
                     jl_gc_queue_multiroot(owner, s, dt);
+            }
+        }
+    }
+}
+
+// Barrier for copying the elements of a Memory of tagged union words: queue
+// the destination owner when any copied word references a young object (a word
+// is a reference exactly when it is nonzero with bit 0 clear).
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_tagged(const jl_value_t *owner, jl_genericmemory_t *src,
+                                          char* src_p, size_t n) JL_NOTSAFEPOINT
+{
+    if (__unlikely(jl_astaggedvalue(owner)->bits.gc == 3 /* GC_OLD_MARKED */)) {
+        if (__unlikely(jl_astaggedvalue(owner)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
+            // GC_MARKED optimizations are invalid for generations >= 2
+            jl_gc_queue_root(owner);
+            return;
+        }
+        jl_value_t *src_owner = jl_genericmemory_owner(src);
+        if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
+            for (size_t done = 0; done < n; done++) {
+                uintptr_t w = ((uintptr_t*)src_p)[done];
+                if (w != 0 && (w & 1) == 0 &&
+                    !(jl_astaggedvalue((jl_value_t*)w)->bits.gc & 1 /* GC_MARKED */)) {
+                    jl_gc_queue_root(owner);
+                    return;
+                }
             }
         }
     }
