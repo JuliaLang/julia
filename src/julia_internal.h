@@ -1014,6 +1014,22 @@ jl_value_t* jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
 int jl_count_union_components(jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_nth_union_component(jl_value_t *v JL_PROPAGATES_ROOT, int i) JL_NOTSAFEPOINT;
 int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT;
+
+// Tagged union layout (see the description above jl_uniontype_istagged in
+// datatype.c). Layout is baked into system images, so the master switch must
+// be a compile-time constant.
+#ifndef JL_TAGGED_UNION_LAYOUT
+#define JL_TAGGED_UNION_LAYOUT 0
+#endif
+
+// tag width k for a tagged union with the given number of immediate members
+STATIC_INLINE unsigned jl_tagged_union_shift(unsigned nimmediate) JL_NOTSAFEPOINT
+{
+    return nimmediate == 1 ? 1 : nimmediate == 2 ? 2 : 3;
+}
+JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsigned *shift) JL_NOTSAFEPOINT;
+jl_datatype_t *jl_nth_tagged_member(jl_value_t *u JL_PROPAGATES_ROOT, unsigned i) JL_NOTSAFEPOINT;
+int jl_tagged_member_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
                                    jl_datatype_t *super, jl_svec_t *parameters) JL_CANSAFEPOINT;
 jl_datatype_t *jl_new_uninitialized_datatype(void) JL_CANSAFEPOINT;

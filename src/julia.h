@@ -703,6 +703,7 @@ typedef struct {
     uint32_t nfields;
     uint32_t npointers; // number of pointers embedded inside
     int32_t first_ptr; // index of the first pointer (or -1)
+    uint32_t ntaggedptrs; // number of tagged union words embedded inside
     uint16_t alignment; // strictest alignment over all fields
     struct { // combine these fields into a struct so that we can take addressof them
         uint16_t haspadding : 1; // has internal undefined bytes
@@ -718,7 +719,8 @@ typedef struct {
         // trailing bits of `size` that are not part of the value (primitive types);
         // bounded by 8 * (MAX_ALIGN - 1) + 7
         uint16_t unused_bits : 7;
-        uint16_t padding : 1;
+        // metadata bit only for GenericMemory eltype layout: element is a tagged union word
+        uint16_t arrayelem_istagged : 1;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -729,6 +731,11 @@ typedef struct {
     //     uint8_t ptr8[npointers];
     //     uint16_t ptr16[npointers];
     //     uint32_t ptr32[npointers];
+    // };
+    // union { // offsets of tagged union words relative to data start in words
+    //     uint8_t tagged8[ntaggedptrs];
+    //     uint16_t tagged16[ntaggedptrs];
+    //     uint32_t tagged32[ntaggedptrs];
     // };
 } jl_datatype_layout_t;
 
@@ -1708,6 +1715,30 @@ static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
     else {
         assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
         return ((const uint32_t*)ptrs)[i];
+    }
+}
+
+static inline const char *jl_dt_layout_taggedptrs(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
+{
+    return jl_dt_layout_ptrs(l) +
+           (l->first_ptr < 0 ? 0 : jl_fielddesc_ptr_size(l->flags.fielddesc_type) * l->npointers);
+}
+
+// offset (in words) of the i-th tagged union word inside an instance
+static inline uint32_t jl_tagged_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
+{
+    const jl_datatype_layout_t *ly = st->layout; // NOT jl_datatype_layout(st)
+    assert(i >= 0 && (size_t)i < ly->ntaggedptrs);
+    const void *tagged = jl_dt_layout_taggedptrs(ly);
+    if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
+        return ((const uint8_t*)tagged)[i];
+    }
+    else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
+        return ((const uint16_t*)tagged)[i];
+    }
+    else {
+        assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
+        return ((const uint32_t*)tagged)[i];
     }
 }
 
