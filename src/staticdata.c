@@ -383,7 +383,6 @@ typedef struct {
     ios_t *relocs;              // for (de)serializing relocs_list and gctags_list
     ios_t *gvar_record;         // serialized array mapping gvid => spos
     ios_t *fptr_record;         // serialized array mapping fptrid => spos
-    arraylist_t memowner_list;  // a list of memory locations that have shared owners
     arraylist_t memref_list;    // a list of memoryref locations
     arraylist_t relocs_list;    // a list of (location, target) pairs, see description at top
     arraylist_t gctags_list;    //      "
@@ -3387,7 +3386,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.gvar_record = &gvar_record;
     s.fptr_record = &fptr_record;
     s.ptls = jl_current_task->ptls;
-    arraylist_new(&s.memowner_list, 0);
     arraylist_new(&s.memref_list, 0);
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
@@ -3575,7 +3573,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     jl_finish_relocs(base + sysimg_offset, sysimg_size, &s.relocs_list);
     jl_write_offsetlist(s.relocs, sysimg_size, &s.gctags_list);
     jl_write_offsetlist(s.relocs, sysimg_size, &s.relocs_list);
-    jl_write_offsetlist(s.relocs, sysimg_size, &s.memowner_list);
     jl_write_offsetlist(s.relocs, sysimg_size, &s.memref_list);
     if (s.incremental) {
         jl_write_arraylist(s.relocs, &s.uniquing_types);
@@ -3651,7 +3648,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&s.uniquing_objs);
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
-    arraylist_free(&s.memowner_list);
     arraylist_free(&s.memref_list);
     arraylist_free(&s.relocs_list);
     arraylist_free(&s.gctags_list);
@@ -4480,7 +4476,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
-    jl_read_memreflist(&s); // memowner_list relocs (must come before memref_list reads the pointers and after general relocs computes the pointers)
     jl_read_memreflist(&s); // memref_list relocs
     // s.link_ids_gvars will be processed in `jl_update_all_gvars`
     // s.link_ids_external_fns will be processed in `jl_update_all_gvars`
