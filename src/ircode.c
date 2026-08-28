@@ -214,9 +214,10 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
             jl_encode_value(s, e);
         }
     }
-    else if (layout->first_ptr >= 0) {
+    else if (layout->first_ptr >= 0 || layout->ntaggedptrs > 0) {
         uint16_t elsz = layout->size;
-        size_t j, np = layout->npointers;
+        size_t j, np = layout->first_ptr >= 0 ? layout->npointers : 0;
+        size_t nt = layout->ntaggedptrs;
         const char *data = (const char*)mem->ptr + offset * elsz;
         for (i = 0; i < len; i++) {
             const char *start = data;
@@ -232,6 +233,15 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
             data += elsz;
             if (data != start)
                 ios_write(s->s, start, data - start);
+            for (j = 0; j < nt; j++) {
+                // the raw bytes above already hold the word; a reference is
+                // additionally encoded as a value (NULL for immediate/#undef,
+                // whose raw bytes round-trip by themselves)
+                uintptr_t w = ((const uintptr_t*)(data - elsz))[jl_tagged_offset(t, j)];
+                jl_value_t *e = jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL;
+                JL_GC_PROMISE_ROOTED(e);
+                jl_encode_value(s, e);
+            }
         }
     }
     else {
@@ -542,6 +552,16 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
         char *ptr = data + jl_datatype_size(t);
         if (ptr > last)
             ios_write(s->s, last, ptr - last);
+        size_t nt = t->layout->ntaggedptrs;
+        for (i = 0; i < nt; i++) {
+            // the raw bytes above already hold the word; a reference is
+            // additionally encoded as a value (NULL for immediate/#undef,
+            // whose raw bytes round-trip by themselves)
+            uintptr_t w = ((uintptr_t*)data)[jl_tagged_offset(t, i)];
+            jl_value_t *e = jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL;
+            JL_GC_PROMISE_ROOTED(e);
+            jl_encode_value(s, e);
+        }
     }
     else {
         jl_encode_as_indexed_root(s, v);
@@ -601,11 +621,12 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
             jl_gc_write(m, data[i], jl_value_t, jl_decode_value(s));
         }
     }
-    else if (layout->first_ptr >= 0) {
+    else if (layout->first_ptr >= 0 || layout->ntaggedptrs > 0) {
         size_t i, numel = m->length;
         char *data = (char*)m->ptr;
         uint16_t elsz = layout->size;
-        size_t j, np = layout->npointers;
+        size_t j, np = layout->first_ptr >= 0 ? layout->npointers : 0;
+        size_t nt = layout->ntaggedptrs;
         for (i = 0; i < numel; i++) {
             char *start = data;
             for (j = 0; j < np; j++) {
@@ -619,6 +640,14 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
             data += elsz;
             if (data != start)
                 ios_readall(s->s, start, data - start);
+            for (j = 0; j < nt; j++) {
+                // a NULL value means the raw word (immediate or #undef) stands
+                jl_value_t *e = jl_decode_value(s);
+                if (e != NULL) {
+                    jl_value_t **fld = &((jl_value_t**)(data - elsz))[jl_tagged_offset((jl_datatype_t*)mty, j)];
+                    jl_gc_write(m, *fld, jl_value_t, e);
+                }
+            }
         }
     }
     else {
@@ -769,6 +798,20 @@ static jl_value_t *jl_decode_value_any(jl_ircode_state *s) JL_CANSAFEPOINT
     data += jl_datatype_size(dt);
     if (data != start)
         ios_readall(s->s, start, data - start);
+    size_t nt = dt->layout->ntaggedptrs;
+    if (nt) {
+        data = (char*)jl_data_ptr(v);
+        JL_GC_PUSH1(&v);
+        for (i = 0; i < nt; i++) {
+            // a NULL value means the raw word (immediate or #undef) stands
+            jl_value_t *e = jl_decode_value(s);
+            if (e != NULL) {
+                jl_value_t **fld = &((jl_value_t**)data)[jl_tagged_offset(dt, i)];
+                jl_gc_write(v, *fld, jl_value_t, e);
+            }
+        }
+        JL_GC_POP();
+    }
     return v;
 }
 
