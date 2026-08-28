@@ -138,7 +138,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(ft)) {
-                if (jl_uniontype_istagged((jl_value_t*)ft, NULL, NULL)) {
+                if (jl_field_istagged(dt, f)) {
                     uintptr_t wa = *(uintptr_t*)ao;
                     uintptr_t wb = *(uintptr_t*)bo;
                     if (wa == wb)
@@ -532,7 +532,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(fieldtype)) {
-                if (jl_uniontype_istagged((jl_value_t*)fieldtype, NULL, NULL)) {
+                if (jl_field_istagged(dt, f)) {
                     uintptr_t w = *(uintptr_t*)vo;
                     if (jl_tagged_word_isptr(w))
                         u = jl_object_id((jl_value_t*)w);
