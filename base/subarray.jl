@@ -488,10 +488,15 @@ function compute_linindex(parent, I::NTuple{N,Any}) where N
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
     compute_linindex(Int(first(LinearIndices(parent))), 1, IP, I)
 end
-function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
+function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Any, Vararg{Any}})
     @inline
     Δi = Int(first(I[1])) - Int(first(IP[1]))
     compute_linindex(f + Δi*s, s*Int(length(IP[1])), tail(IP), tail(I))
+end
+function compute_linindex(f, s, IP::Tuple, I::Tuple{Any})
+    @inline
+    Δi = Int(first(I[1])) - Int(first(IP[1]))
+    f + Δi*s
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 
