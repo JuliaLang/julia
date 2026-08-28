@@ -59,7 +59,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest, const jl_value
         return; // ptr is old and not in remset (thus it does not point to young)
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
     const jl_datatype_layout_t *ly = dt->layout;
-    if (ly->npointers)
+    if (ly->npointers || ly->ntaggedptrs)
         jl_gc_multi_wb_cold((jl_value_t*)parent, dest, ptr, dt);
 }
 
@@ -110,7 +110,7 @@ STATIC_INLINE void jl_gc_genericmemory_copy_ptr(const jl_value_t *owner, char *d
     memmove_refs(dest_p, (_Atomic(void*)*)srcdata, n * stride);
     if (n == 0 || __likely(jl_astaggedvalue(owner)->bits.gc != 3 /* GC_OLD_MARKED */))
         return; // destination is young or remembered, or the copy is empty
-    if (n * ly->npointers <= JL_GC_COPY_SCAN_MAX_POINTERS &&
+    if (ly->ntaggedptrs == 0 && n * ly->npointers <= JL_GC_COPY_SCAN_MAX_POINTERS &&
         __likely(jl_astaggedvalue(owner)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
         // For small copies into old objects, scan what we just copied and see if all the
         // elements were old to avoid adding `dest` to the remset, which saves a full scan
@@ -137,6 +137,32 @@ STATIC_INLINE void jl_gc_genericmemory_clear(const jl_value_t *owner JL_UNUSED,
 {
     // a clear inserts no references, and this collector records only insertions
     memset(data, 0, nbytes);
+}
+
+// Barrier for copying the elements of a Memory of tagged union words: queue
+// the destination owner when any copied word references a young object (a word
+// is a reference exactly when it is nonzero with bit 0 clear).
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_tagged(const jl_value_t *owner, jl_genericmemory_t *src,
+                                          char* src_p, size_t n) JL_NOTSAFEPOINT
+{
+    if (__unlikely(jl_astaggedvalue(owner)->bits.gc == 3 /* GC_OLD_MARKED */)) {
+        if (__unlikely(jl_astaggedvalue(owner)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
+            // GC_MARKED optimizations are invalid for generations >= 2
+            jl_gc_queue_root(owner);
+            return;
+        }
+        jl_value_t *src_owner = jl_genericmemory_owner(src);
+        if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
+            for (size_t done = 0; done < n; done++) {
+                uintptr_t w = ((uintptr_t*)src_p)[done];
+                if (w != 0 && (w & 1) == 0 &&
+                    !(jl_astaggedvalue((jl_value_t*)w)->bits.gc & 1 /* GC_MARKED */)) {
+                    jl_gc_queue_root(owner);
+                    return;
+                }
+            }
+        }
+    }
 }
 
 #ifdef __cplusplus

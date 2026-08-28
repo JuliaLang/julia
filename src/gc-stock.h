@@ -75,6 +75,7 @@ typedef enum {
     GC_ary8_chunk,      // for chunk of array with 8 bit field descriptors
     GC_ary16_chunk,     // for chunk of array with 16 bit field descriptors
     GC_finlist_chunk,   // for chunk of finalizer list
+    GC_taggedary_chunk, // for chunk of tagged union word array
 } gc_chunk_id_t;
 
 typedef struct _jl_gc_chunk_t {
