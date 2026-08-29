@@ -363,11 +363,13 @@ include("opaque_closure.jl")
 
 """
     Base.Experimental.@overlay mt def
+    Base.Experimental.@overlay mt begin defs... end
 
 Define a method and add it to the method table `mt` instead of to the global method table.
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
-method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)). The block form
+overlays every definition in the block; definitions may carry docstrings and other macros.
 
 !!! note
     Please be aware that when defining overlay methods using `@overlay`, it is not necessary
@@ -392,8 +394,18 @@ method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
 """
 macro overlay(mt, def)
     inner = Base.unwrap_macrocalls(def)
-    is_function_def(inner) || error("@overlay requires a function definition")
-    overlay_def!(mt, inner)
+    if isexpr(inner, :block)
+        # `@overlay mt begin ... end`: overlay every definition in the block
+        for arg in inner.args
+            isa(arg, LineNumberNode) && continue
+            innerarg = Base.unwrap_macrocalls(arg)
+            is_function_def(innerarg) || error("@overlay requires a function definition")
+            overlay_def!(mt, innerarg)
+        end
+    else
+        is_function_def(inner) || error("@overlay requires a function definition")
+        overlay_def!(mt, inner)
+    end
     return esc(def)
 end
 
