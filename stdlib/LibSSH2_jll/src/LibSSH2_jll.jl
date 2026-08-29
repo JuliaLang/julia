@@ -34,6 +34,7 @@ const libssh2 = LazyLibrary(
     else
         error("LibSSH2_jll: Library 'libssh2' is not available for $(Sys.KERNEL)")
     end;
+    id = LibraryID(Base.UUID("29816b5a-b9ab-546f-933c-edad1886dfa8"), "libssh2"),
     dependencies = if Sys.iswindows()
         if Sys.WORD_SIZE == 32
             LazyLibrary[libgcc_s]

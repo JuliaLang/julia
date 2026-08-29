@@ -30,6 +30,7 @@ const libopenblas = LazyLibrary(
     else
         BundledLazyLibraryPath(string("libopenblas", libsuffix, ".so"))
     end,
+    id = LibraryID(Base.UUID("4536629a-c528-5b80-bd46-f80d51c5b363"), "libopenblas"),
     dependencies = if Sys.iswindows()
         LazyLibrary[libgfortran, libgcc_s]
     elseif Sys.isapple()

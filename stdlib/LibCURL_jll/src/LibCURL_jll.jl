@@ -31,6 +31,7 @@ const libcurl = LazyLibrary(
     else
         error("LibCURL_jll: Library 'libcurl' is not available for $(Sys.KERNEL)")
     end;
+    id = LibraryID(Base.UUID("deac9b47-8bc7-5906-a0fe-35ac56dc84c0"), "libcurl"),
     dependencies = if Sys.iswindows()
         if  Sys.WORD_SIZE == 32
             LazyLibrary[libz, libzstd, libnghttp2, libssh2, libgcc_s]

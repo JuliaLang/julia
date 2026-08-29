@@ -15,7 +15,10 @@ const LIBPATH_list = String[]
 artifact_dir::String = ""
 
 llvmlibunwind_path::String = ""
-const llvmlibunwind = LazyLibrary(BundledLazyLibraryPath("libunwind"))
+const llvmlibunwind = LazyLibrary(
+    BundledLazyLibraryPath("libunwind");
+    id = LibraryID(Base.UUID("47c5dbc3-30ba-59ef-96a6-123e260183d9"), "llvmlibunwind")
+)
 
 function eager_mode()
     dlopen(llvmlibunwind)
