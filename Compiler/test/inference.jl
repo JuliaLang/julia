@@ -6590,4 +6590,13 @@ end
     jetls618(1,2,3), jetls618(1,2,3,4)
 end == Tuple{Int,Int}
 
+# `return_type_tfunc` should bail out (rather than crash inference) when the queried
+# signature has no function type to model
+@test Base.infer_return_type() do
+    Compiler.return_type(Tuple{Vararg{Any}})
+end == Type
+@test Base.infer_return_type() do
+    Compiler.return_type(Tuple)
+end == Type
+
 end # module inference

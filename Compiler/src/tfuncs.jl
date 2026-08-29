@@ -3122,6 +3122,8 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         argtypes_vec = Any[af_argtype.parameters...]
         isempty(argtypes_vec) && push!(argtypes_vec, Union{})
         aft = argtypes_vec[1]
+        # e.g. `return_type(Tuple{Vararg{Any}})`: there is no function type to model
+        isvarargtype(aft) && return Future(UNKNOWN)
     end
     if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
             (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
