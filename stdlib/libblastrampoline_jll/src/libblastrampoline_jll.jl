@@ -17,18 +17,22 @@ artifact_dir::String = ""
 # Because LBT needs to have a weak-dependence on OpenBLAS (or any other BLAS)
 # we must manually construct a list of which modules and libraries we're going
 # to be using with it, as well as the on load callbacks they may or may not need.
-const on_load_callbacks::Vector{Function} = Function[]
+const on_load_callbacks::Vector{Ptr{Cvoid}} = Ptr{Cvoid}[]
+
 const eager_mode_modules::Vector{Module} = Module[]
 function libblastrampoline_on_load_callback()
-    for callback = on_load_callbacks
-        callback()
+    for callback in on_load_callbacks
+        ccall(callback, Cvoid, ())
     end
 end
 
-function add_dependency!(mod::Module, lib::LazyLibrary, on_load_callback::Function = () -> nothing)
+function add_dependency!(mod::Module, lib::LazyLibrary, on_load_callback::Ptr{Cvoid} = C_NULL)
     Libdl.add_dependency!(libblastrampoline, lib)
     push!(eager_mode_modules, mod)
-    push!(on_load_callbacks, on_load_callback)
+    if on_load_callback !== C_NULL
+        push!(on_load_callbacks, on_load_callback)
+    end
+    return nothing
 end
 
 libblastrampoline_path::String = ""
@@ -42,7 +46,7 @@ const libblastrampoline = LazyLibrary(
         BundledLazyLibraryPath("libblastrampoline.so.5")
     end,
     dependencies = LazyLibrary[],
-    on_load_callback = libblastrampoline_on_load_callback
+    _on_load_c_callback = @cfunction(libblastrampoline_on_load_callback, Cvoid, ())
 )
 
 function eager_mode()
@@ -57,6 +61,12 @@ is_available() = true
 get_libblastrampoline_path() = libblastrampoline_path
 
 function __init__()
+    # _on_load_c_callback does not survive precompilation so it needs
+    # to be manually restored in `__init__`
+    # FIXME: Delete this once `on_load_callback` is trim-compatible.
+    fptr = @cfunction(libblastrampoline_on_load_callback, Cvoid, ())
+    @atomic :release libblastrampoline._on_load_c_callback = fptr
+
     global libblastrampoline_path = string(libblastrampoline.path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libblastrampoline_path)

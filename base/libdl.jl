@@ -400,7 +400,7 @@ migration from `__init__()` patterns, see the manual section on
 """
 mutable struct LazyLibrary
     # Name and flags to open with
-    const path
+    const path::Union{String, LazyLibraryPath}
     const flags::UInt32
 
     # Dependencies that must be loaded before we can load
@@ -412,24 +412,35 @@ mutable struct LazyLibrary
 
     # Function that get called once upon initial load
     on_load_callback
+
+    # C function pointer called once upon initial load
+    #
+    # This field is for internal use only. It is intentionally undocumented and may
+    # change and / or be deleted in the future.
+    @atomic _on_load_c_callback::Ptr{Cvoid}
+
     const lock::Base.ReentrantLock
 
     # Pointer that we eventually fill out upon first `dlopen()`
     @atomic handle::Ptr{Cvoid}
     function LazyLibrary(path; flags = default_rtld_flags, dependencies = LazyLibrary[],
-                         on_load_callback = nothing)
+                         on_load_callback = nothing, _on_load_c_callback = C_NULL)
         return new(
-            path,
+            path isa LazyLibraryPath ? path : String(path),
             UInt32(flags),
             Base.OncePerProcess{Vector{LazyLibrary}}(
                 InitialDependencies{LazyLibrary}(dependencies)
             ),
             on_load_callback,
+            _on_load_c_callback,
             Base.ReentrantLock(),
             C_NULL,
         )
     end
 end
+
+# to allow overloading by JuliaC / trim
+@noinline _invoke_on_load_callback(@nospecialize(cb)) = cb()
 
 # We support adding dependencies only because of very special situations
 # such as LBT needing to have OpenBLAS_jll added as a dependency dynamically.
@@ -475,9 +486,11 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
                 handle = dlopen(string(ll.path), flags; kwargs...)
                 @atomic :release ll.handle = handle
 
-                # Only the thread that loaded the library calls the `on_load_callback()`.
+                # Only the thread that loaded the library calls the callbacks.
+                fptr = @atomic :acquire ll._on_load_c_callback
+                fptr == C_NULL || ccall(fptr, Cvoid, ())
                 if ll.on_load_callback !== nothing
-                    ll.on_load_callback()
+                    _invoke_on_load_callback(ll.on_load_callback)
                 end
             else
                 # Another thread loaded the library while we were waiting
@@ -486,7 +499,7 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
         end
     else
         # Invoke our on load callback, if it exists
-        if ll.on_load_callback !== nothing
+        if ll.on_load_callback !== nothing || (@atomic :acquire ll._on_load_c_callback) != C_NULL
             # This empty lock protects against the case where we have updated
             # `ll.handle` in the branch above, but not exited the lock.  We want
             # a second thread that comes in at just the wrong time to have to wait

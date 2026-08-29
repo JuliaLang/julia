@@ -102,6 +102,31 @@ end
     return (fin_total[], total)
 end
 
+# A `ccall` whose library is given by a runtime value makes the runtime call
+# `Libdl.dlopen(lib)` on first use. A custom library type whose `dlopen` method is itself
+# fully static keeps that resolvable under trimming; exercise it end to end so that the
+# compiled path is actually taken at run time rather than merely verifying.
+struct StaticLib end
+const static_lib = StaticLib()
+const static_lib_name = "libjulia"
+Base.Libc.Libdl.dlopen(::StaticLib) =
+    ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Ptr{UInt8}, UInt32, Cint),
+          static_lib_name, Base.Libc.Libdl.RTLD_LAZY, Cint(0))
+static_lib_ccall() = ccall((:jl_ver_major, static_lib), Cint, ())
+
+# A `LazyLibrary`'s C on-load callback is invoked through a raw pointer, so nothing about
+# whether it actually fires is visible to trim verification: an image can verify perfectly
+# clean and still never call it. That is exactly the failure mode where a pointer-registered
+# callback was appended to the roots vector instead of the vector the dispatcher iterates,
+# silently dropping it. Count the firings so such a regression fails here at runtime.
+const c_callback_count = Base.RefValue{Int}(0)
+note_c_callback() = (c_callback_count[] += 1; nothing)
+
+# `libjulia-internal` is already loaded in the trimmed program, so this `dlopen` picks up
+# the existing handle rather than loading anything new.
+const c_callback_lib = Base.Libc.Libdl.LazyLibrary("libjulia-internal";
+    _on_load_c_callback = @cfunction(note_c_callback, Cvoid, ()))
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -204,6 +229,12 @@ function @main(args::Vector{String})::Cint
 
     println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
 
+    # The callback pointer does not survive precompilation, so re-arm it once here before
+    # the library is first loaded, per the `_on_load_c_callback` convention.
+    @atomic c_callback_lib._on_load_c_callback = @cfunction(note_c_callback, Cvoid, ())
+    Base.Libc.Libdl.dlopen(c_callback_lib)
+    println(Core.stdout, "c_callback: ", c_callback_count[])
+
     try
         sock = connect("localhost", 4900)
         if isopen(sock)
@@ -213,6 +244,8 @@ function @main(args::Vector{String})::Cint
         end
     catch
     end
+
+    println(Core.stdout, "static_lib_ccall: ", static_lib_ccall())
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
