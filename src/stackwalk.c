@@ -36,7 +36,9 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
     jl_gcframe_t *pgcstack = *ppgcstack;
     while (pgcstack != NULL) {
         jl_gcframe_t *prev = pgcstack->prev;
-        if (pgcstack->nroots & 2) { // tagged frame
+        // interpreter frame; finalizer-list frames (see gc-common.h) set
+        // both low bits and carry no frame pointer word
+        if ((pgcstack->nroots & 3) == 2) {
             uintptr_t frame_fp = ((uintptr_t*)pgcstack)[-1];
             if (frame_fp != 0) { // check that frame was fully initialized
                 if (frame_fp >= sp)
