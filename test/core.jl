@@ -8454,6 +8454,18 @@ end
 @overlay mt cos(x::Float64) = 2
 # parametric function def
 @overlay mt tan(x::T) where {T} = 3
+# block form, including docstrings and other macros
+@overlay mt begin
+    """
+    an overlaid exp
+    """
+    exp(x::Float64) = 4
+
+    @inline log(x::Float64) = 5
+end
+@test_throws ErrorException @macroexpand @overlay mt begin
+    x = 1
+end
 
 end # module OverlayModule
 
@@ -8461,6 +8473,10 @@ let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, Base.ge
     @test only(ms).method.module === Base.Math
 end
 let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
+    @test only(ms).method.module === OverlayModule
+end
+for f in (exp, log)
+    ms = Base._methods_by_ftype(Tuple{typeof(f), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
     @test only(ms).method.module === OverlayModule
 end
 let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
