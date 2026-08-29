@@ -193,6 +193,14 @@ extern jl_mutex_t finalizers_lock;
 #define GC_FIN_CFUNC_TAG 1
 #define GC_FIN_COBJ_TAG  2
 #define GC_FIN_TAG_MASK  3
+
+// `jl_gc_run_finalizers_in_list` roots an in-flight finalizer list by pushing
+// it as a GC frame with this `nroots` encoding: both low bits set, a
+// combination no other frame kind uses (`JL_GC_ENCODE_PUSH` sets bit 0,
+// interpreter frames set bit 1). It tells the mark loop that slots may carry
+// `GC_FIN_*` tags; in every other frame kind, a tagged slot is an immediate
+// value rooted by a foreign runtime and is skipped.
+#define JL_GC_ENCODE_PUSHFINLIST(n) ((((size_t)(n)) << 2) | 3)
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 
