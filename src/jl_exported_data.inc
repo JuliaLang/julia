@@ -4,6 +4,7 @@
 #define JL_EXPORTED_DATA_POINTERS(XX) \
     XX(abioverride_type, jl_datatype_t*) \
     XX(abstractarray_type, jl_unionall_t*) \
+    XX(abstractlibrary_type, jl_datatype_t*) \
     XX(abstractstring_type, jl_datatype_t*) \
     XX(addrspace_type, jl_unionall_t*) \
     XX(addrspace_typename, jl_typename_t*) \

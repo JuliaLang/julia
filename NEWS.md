@@ -191,6 +191,14 @@ Standard library changes
 
 #### JuliaSyntaxHighlighting
 
+#### Libdl
+
+* Library types used with `ccall` / `cglobal` can now subtype `Libdl.AbstractLibrary`
+  to opt-in to `Libdl.dlid` support. This allows libraries to identify themselves
+  at precompilation time by implementing `Libdl.dlid` and providing a `Libdl.LibraryID`.
+  The `LibraryID` is used by `JuliaC.jl` and the runtime to report required libraries
+  and symbols for `--trim` applications and configure linking on a per-library basis.
+
 #### LinearAlgebra
 
 #### Markdown

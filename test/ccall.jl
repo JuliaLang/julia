@@ -2165,3 +2165,42 @@ const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
+
+# `Libdl.AbstractLibrary`, `LibraryID`, and `dlid`
+module TestAbstractLibraryAPI
+using Test, Libdl
+using Libdl: AbstractLibrary, LibraryID, LazyLibrary, LazyLibraryPath, dlid
+
+const test_pkg = Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60001)
+const test_id = LibraryID(test_pkg, "libfoo")
+
+struct IdentityDeclaringLib <: AbstractLibrary end
+Libdl.dlid(::IdentityDeclaringLib) = test_id
+struct NoIdentityLib <: AbstractLibrary end
+Libdl.dlid(::NoIdentityLib) = nothing
+
+@testset "AbstractLibrary API" begin
+    @test isabstracttype(AbstractLibrary)
+    @test LazyLibrary <: AbstractLibrary
+
+    # `LibraryID` compares by value (the runtime check uses `===`)
+    @test LibraryID(test_pkg, "lib" * "foo") === test_id
+    @test LibraryID(test_pkg, "libbar") !== test_id
+    @test LibraryID(Base.UUID(UInt128(test_pkg) + 1), "libfoo") !== test_id
+    @test test_id.pkg === test_pkg
+    @test test_id.name == "libfoo"
+
+    # no identity is derived from the path
+    @test dlid(LazyLibrary("libfoo")) === nothing
+    @test dlid(LazyLibrary(LazyLibraryPath("dir", "libfoo.so"))) === nothing
+
+    @test dlid(LazyLibrary("libfoo"; id=test_id)) === test_id
+    @test dlid(LazyLibrary(LazyLibraryPath("dir", "libfoo.so"); id=test_id)) === test_id
+
+    @test LazyLibrary("libfoo"; id=test_id).id === test_id
+    @test LazyLibrary("libfoo").id === nothing
+
+    @test dlid(IdentityDeclaringLib()) === test_id
+    @test dlid(NoIdentityLib()) === nothing
+end
+end
