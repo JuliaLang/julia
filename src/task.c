@@ -2062,6 +2062,9 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
 JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots)
 {
     jl_task_t *ct = jl_current_task;
+    // the `task` field is declared `Union{Nothing, Task}` (see `jl_init_types`), which
+    // this store bypasses.
+    assert(task == jl_nothing || jl_is_task(task));
     // `nslots` must fit the uint32_t field *and* keep the allocation-size
     // arithmetic below from wrapping (on 32-bit, SIZE_MAX overflows long
     // before UINT32_MAX slots do).
