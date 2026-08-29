@@ -2221,27 +2221,21 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
     uint32_t nr = nroots >> 2;
     while (1) {
         jl_value_t ***rts = (jl_value_t ***)(((void **)s) + 2);
+        // The low two bits of nroots distinguish the frame kind:
+        //   01  JL_GC_PUSH1..8: each slot holds the address of a local
+        //       `jl_value_t*` variable, hence the double dereference.
+        //   00/10  direct roots (JL_GC_PUSHARGS, codegen, interpreter
+        //       frames; bit 1 is the interpreter-frame marker read by
+        //       stackwalk.c): slots hold object pointers.
+        //   11  in-flight finalizer list pushed as a frame by
+        //       jl_gc_run_finalizers_in_list: the only kind whose slots
+        //       carry GC_FIN_* tags.
+        // Outside finalizer-list frames, a slot value with either low bit
+        // set is an immediate value rooted by a foreign runtime, not a heap
+        // pointer; skip it.
+        uint32_t frame_kind = nroots & 3;
         for (uint32_t i = 0; i < nr; i++) {
-            // The low bit of nroots distinguishes the frame layout:
-            // set: JL_GC_PUSH1..8 frame; each slot holds the address of a
-            //   local `jl_value_t*` variable, hence the double dereference.
-            // clear: slots hold object pointers directly (JL_GC_PUSHARGS,
-            //   codegen, interpreter frames), including finalizer lists
-            //   pushed as frames by jl_gc_run_finalizers_in_list — the only
-            //   frames that contain GC_FIN_*-tagged pointers.
-            if (nroots & 1) {
-                void **slot = (void **)gc_read_stack(&rts[i], offset, lb, ub);
-                new_obj = (jl_value_t *)gc_read_stack(slot, offset, lb, ub);
-                if (new_obj == NULL)
-                    continue;
-                // GC frame slots created by JL_GC_PUSH* are expected to hold
-                // either NULL or heap object pointers. Be tolerant of foreign
-                // runtimes that encode immediate values in the same nominal
-                // pointer type and may root those locals through this API.
-                if (((uintptr_t)new_obj & 0x3) != 0)
-                    continue;
-            }
-            else {
+            if (frame_kind == 3) {
                 new_obj = (jl_value_t *)gc_read_stack(&rts[i], offset, lb, ub);
                 if (gc_ptr_tag(new_obj, GC_FIN_CFUNC_TAG)) {
                     // handle tagged pointers in finalizer list
@@ -2250,6 +2244,21 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
                     i++;
                 }
                 if (gc_ptr_tag(new_obj, GC_FIN_COBJ_TAG))
+                    continue;
+                if (new_obj == NULL)
+                    continue;
+            }
+            else if (frame_kind & 1) {
+                void **slot = (void **)gc_read_stack(&rts[i], offset, lb, ub);
+                new_obj = (jl_value_t *)gc_read_stack(slot, offset, lb, ub);
+                if (new_obj == NULL)
+                    continue;
+                if (((uintptr_t)new_obj & 0x3) != 0)
+                    continue;
+            }
+            else {
+                new_obj = (jl_value_t *)gc_read_stack(&rts[i], offset, lb, ub);
+                if (((uintptr_t)new_obj & 0x3) != 0)
                     continue;
                 // conservatively check for the presence of any smalltag type, instead of just NULL
                 // in the very unlikely event that codegen decides to root the result of julia.typeof
