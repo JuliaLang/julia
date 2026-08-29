@@ -38,15 +38,15 @@ static void tagged_root_finalizer(void *o)
     tagged_root_fin_ran = 1;
 }
 
-// Tagged immediates -- non-pointer values with one of the low two bits set,
-// as used by foreign runtimes sharing Julia's GC -- may be stored in
-// JL_GC_PUSH*/JL_GC_PUSHARGS roots. The GC must skip them without
+// Tagged pointers -- immediate values stored in the low bits of a pointer,
+// e.g. introduced by a foreign runtime sharing Julia's GC -- may be stored
+// in JL_GC_PUSH*/JL_GC_PUSHARGS roots. The GC must skip them without
 // disturbing the marking of neighboring roots.
 //
 // Detection: a fresh object whose only reference is a frame slot next to a
-// tagged immediate. If marking mishandles the immediate, the object is
+// tagged pointer. If marking mishandles the tagged pointer, the object is
 // swept and its finalizer runs while the frame is still pushed.
-static void test_tagged_immediate_roots(void)
+static void test_tagged_pointer_roots(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     const uintptr_t large_imm = (uintptr_t)1 << 40;
@@ -61,11 +61,11 @@ static void test_tagged_immediate_roots(void)
     jl_gc_add_ptr_finalizer(ptls, args[1], (void *)tagged_root_finalizer);
     jl_gc_collect(JL_GC_FULL);
     if (tagged_root_fin_ran) {
-        fprintf(stderr, "tagged immediate in JL_GC_PUSHARGS frame un-rooted its neighbor\n");
+        fprintf(stderr, "tagged pointer in JL_GC_PUSHARGS frame un-rooted its neighbor\n");
         exit(1);
     }
 
-    // Large tagged immediates in even slots must simply be skipped, not
+    // Large tagged pointers in even slots must simply be skipped, not
     // interpreted as object references.
     args[0] = (jl_value_t *)(large_imm | 0x1);
     args[2] = (jl_value_t *)(large_imm | 0x3);
@@ -79,7 +79,7 @@ static void test_tagged_immediate_roots(void)
     }
     tagged_root_fin_ran = 0;
 
-    // Indirect-layout frame (JL_GC_PUSH2): locals holding tagged immediates.
+    // Indirect-layout frame (JL_GC_PUSH2): locals holding tagged pointers.
     jl_value_t *tagged = (jl_value_t *)0x5;
     jl_value_t *obj = NULL;
     JL_GC_PUSH2(&tagged, &obj);
@@ -87,7 +87,7 @@ static void test_tagged_immediate_roots(void)
     jl_gc_add_ptr_finalizer(ptls, obj, (void *)tagged_root_finalizer);
     jl_gc_collect(JL_GC_FULL);
     if (tagged_root_fin_ran) {
-        fprintf(stderr, "tagged immediate in JL_GC_PUSH frame un-rooted its neighbor\n");
+        fprintf(stderr, "tagged pointer in JL_GC_PUSH frame un-rooted its neighbor\n");
         exit(1);
     }
     tagged = (jl_value_t *)(large_imm | 0x3);
@@ -276,7 +276,7 @@ int main()
         jl_printf(jl_stderr_stream(), "exception caught from C\n");
     }
 
-    test_tagged_immediate_roots();
+    test_tagged_pointer_roots();
 
     int ret = 0;
     jl_atexit_hook(ret);
