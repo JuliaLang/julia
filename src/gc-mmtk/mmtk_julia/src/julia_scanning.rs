@@ -466,11 +466,13 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
 
         loop {
             let rts = Address::from_mut_ptr(s).shift::<Address>(2);
-            // The low two bits of nroots distinguish the frame kind; see
-            // gc_mark_stack in gc-stock.c. Only finalizer-list frames (0b11)
-            // carry GC_FIN_* tagged slots; in the other kinds a slot value
-            // with either low bit set is an immediate value rooted by a
-            // foreign runtime, not a heap reference.
+            // The low two bits of nroots hold the frame kind (JL_GCFRAME_*
+            // in julia.h); see gc_mark_stack in gc-stock.c. Only
+            // finalizer-list frames (JL_GCFRAME_FINLIST = 3) carry GC_FIN_*
+            // tagged slots; in the other kinds a slot value with either low
+            // bit set is a tagged pointer (an immediate value stored in the
+            // pointer's low bits, e.g. introduced by a foreign runtime
+            // sharing Julia's GC), not a heap reference.
             let frame_kind = nroots.as_usize() & 3;
             let mut i = 0;
             while i < nr {
