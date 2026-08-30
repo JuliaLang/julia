@@ -4295,6 +4295,11 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 // stores are handled, the rest goes through the generic builtin
                 return false;
             }
+            if (!jl_field_isptr(uty, idx) && type_has_taggedunion(ft)) {
+                // an inline value embedding tagged words needs a barrier over
+                // its conditional references, which only the runtime does
+                return false;
+            }
             if (!jl_has_free_typevars(ft)) {
                 if (op != StoreKind::Modify) {
                     emit_typecheck(ctx, val, ft, fname);
