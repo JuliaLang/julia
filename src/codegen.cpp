@@ -489,7 +489,7 @@ static bool is_uniquerep_Type(jl_value_t *t)
 }
 
 namespace {
-class jl_codectx_t;
+class JL_GC_TRACKED_TYPE jl_codectx_t;
 }  // anonymous namespace
 namespace {
 struct JuliaVariable {
@@ -1865,7 +1865,7 @@ public:
 // metadata tracking for a llvm Value* during codegen
 const uint8_t UNION_BOX_MARKER = 0x80;
 namespace {
-struct jl_cgval_t {
+struct JL_GC_TRACKED_TYPE jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
     // If this is non-NULL, then, at runtime, we satisfy the invariant that (for the corresponding
@@ -2078,7 +2078,7 @@ struct jl_varinfo_t {
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
 namespace {
-class jl_codectx_t {
+class JL_GC_TRACKED_TYPE jl_codectx_t {
 public:
     IRBuilder<> builder;
     jl_codegen_output_t &emission_context;

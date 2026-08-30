@@ -120,6 +120,17 @@
 //                     assigned through the annotated pointer argument are treated
 //                     as rooted.
 //
+// -- Type annotations --
+//
+//   JL_GC_TRACKED_TYPE   The analyzer tracks values of the annotated type for
+//                     rooting, exactly as it tracks a jl_value_t*. Types are
+//                     recognised by this annotation alone, so code outside
+//                     Julia can mark its own object types too. Put it on the
+//                     struct rather than on a typedef of it, so that every
+//                     typedef is covered:
+//                         struct JL_GC_TRACKED_TYPE MyObject;
+//                         typedef struct MyObject *MyValue;
+//
 // -- Escape hatches (function-like annotations) --
 //
 //   JL_GC_PROMISE_ROOTED(v)   Treat `v` as rooted for the remainder of the
@@ -162,6 +173,7 @@
 #define JL_GC_DISABLED __attribute__((annotate("julia_gc_disabled")))
 #define JL_ALWAYS_LEAFTYPE JL_GLOBALLY_ROOTED
 #define JL_REQUIRE_ROOTED_SLOT __attribute__((annotate("julia_require_rooted_slot")))
+#define JL_GC_TRACKED_TYPE __attribute__((annotate("julia_gc_tracked")))
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -216,6 +228,7 @@ extern struct GCUNSAFEREGION *jl_gcunsaferegion;
 #define JL_GC_DISABLED
 #define JL_ALWAYS_LEAFTYPE
 #define JL_REQUIRE_ROOTED_SLOT
+#define JL_GC_TRACKED_TYPE
 #define JL_GC_PROMISE_ROOTED(x) (void)(x)
 #define jl_may_leak(x) (void)(x)
 
@@ -245,6 +258,7 @@ extern struct GCUNSAFEREGION *jl_gcunsaferegion;
 #define JL_GC_DISABLED
 #define JL_ALWAYS_LEAFTYPE
 #define JL_REQUIRE_ROOTED_SLOT
+#define JL_GC_TRACKED_TYPE
 #define JL_GC_PROMISE_ROOTED(x) (void)(x)
 #define jl_may_leak(x) (void)(x)
 
