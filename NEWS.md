@@ -185,7 +185,7 @@ New library features
 * `@time` now reports the number of runtime dispatches when there are enough of them to plausibly account
   for a percent or so of the elapsed time, which is usually a symptom of type instability. `@timev` always
   reports the count, `@timed` returns it in a new `dispatches` field, and the new `@dispatches` macro
-  measures it on its own.
+  measures it on its own ([#62929]).
 
 Standard library changes
 ------------------------
