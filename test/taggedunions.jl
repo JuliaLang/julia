@@ -254,6 +254,43 @@ end
     GC.gc(false)
     @test memS[1].x == "young1"
 
+    # same, but into an old mutable parent's inline field: the barrier has to
+    # see the conditional reference inside the stored value, not just the
+    # unconditional pointers. Needs a heap of its own, since a young sweep is
+    # what exposes a missing remset entry.
+    let script = """
+        primitive type U63 63 end
+        U63(x::UInt64) = Core.Intrinsics.trunc_int(U63, x)
+        struct S; x::Union{U63, String}; end
+        mutable struct MI; s::S; end                   # tagged word inside an inline field
+        mutable struct MD; s::Union{U63, String}; end  # tagged word as the field itself
+        @noinline setinline!(m::MI, s::S) = (m.s = s)
+        @noinline setdirect!(m::MD, s::Union{U63, String}) = (m.s = s)
+        function probe(n, rounds)
+            ps = [MI(S(U63(UInt64(0)))) for _ in 1:n]
+            qs = [MD(U63(UInt64(0))) for _ in 1:n]
+            GC.gc(true); GC.gc(true)  # promote the parents
+            bad = 0
+            for r in 1:rounds
+                for i in 1:n
+                    setinline!(ps[i], S(string("inline", r, "_", i)))
+                    setdirect!(qs[i], string("direct", r, "_", i))
+                end
+                GC.gc(false)  # young sweep: reaches the strings only via the remset
+                for _ in 1:20_000; Ref(rand(UInt64)); end  # reuse whatever was freed
+                for i in 1:n
+                    ps[i].s.x == string("inline", r, "_", i) || (bad += 1)
+                    qs[i].s == string("direct", r, "_", i) || (bad += 1)
+                end
+            end
+            return bad
+        end
+        exit(probe(500, 20) == 0 ? 0 : 1)
+        """
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        @test success(pipeline(cmd; stdout=devnull, stderr=devnull))
+    end
+
     # finalizer liveness: overwriting the only reference lets the object die
     died = Ref(false)
     m = MTU(Int32(0))
