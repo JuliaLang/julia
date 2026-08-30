@@ -12,6 +12,7 @@
 #include <string.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
@@ -4824,12 +4825,36 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
-    size_t world = jl_current_task->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t world = ct->world_age;
+    // Inference is Julia code and dispatches heavily, so counting while this task is
+    // inside the compiler would swamp whatever the caller is actually measuring.
+    if (ct->reentrant_timing == 0) {
+        jl_ptls_t ptls = ct->ptls;
+        jl_atomic_store_relaxed(&ptls->dispatch_count,
+                jl_atomic_load_relaxed(&ptls->dispatch_count) + 1);
+    }
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
                                                      world, 1);
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+}
+
+// Total number of runtime dispatches since the process started. Threads that
+// have exited keep their `jl_all_tls_states` slot, so this only ever grows.
+JL_DLLEXPORT uint64_t jl_dispatch_count(void)
+{
+    uint64_t count = 0;
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int i = 0; i < nthreads; i++) {
+        jl_ptls_t ptls = allstates[i];
+        if (ptls == NULL)
+            continue;
+        count += jl_atomic_load_relaxed(&ptls->dispatch_count);
+    }
+    return count;
 }
 
 // buggy way to lookup a method given a list of arguments

@@ -182,6 +182,10 @@ New library features
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
 * The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
   heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
+* `@time` now reports the number of runtime dispatches when there are enough of them to plausibly account
+  for a percent or so of the elapsed time, which is usually a symptom of type instability. `@timev` always
+  reports the count, `@timed` returns it in a new `dispatches` field, and the new `@dispatches` macro
+  measures it on its own.
 
 Standard library changes
 ------------------------

@@ -132,6 +132,9 @@ end
 # total time spent in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
+# cumulative number of runtime dispatches, excluding those made by the compiler itself
+dispatch_count() = ccall(:jl_dispatch_count, UInt64, ())
+
 """
     Base.gc_live_bytes()
 
@@ -199,6 +202,12 @@ end
 # print elapsed time, return expression value
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
+
+# A dispatch count is reported only if it clears both the absolute floor and, at this
+# nominal per-dispatch cost, this share of the elapsed time.
+const DISPATCH_COST_NS = 20
+const DISPATCH_REPORT_MIN = 100
+const DISPATCH_REPORT_FRACTION = 0.01
 function prettyprint_getunits(value, numunits, factor)
     if value == 0 || value == 1
         return (value, 1)
@@ -251,9 +260,13 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, dispatches=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
                     msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
+    # Almost every timed expression makes a handful of dispatches, so reporting any nonzero
+    # count would be noise rather than signal.
+    show_dispatches = dispatches >= DISPATCH_REPORT_MIN &&
+        DISPATCH_COST_NS * dispatches >= elapsedtime * DISPATCH_REPORT_FRACTION
     str = sprint() do io
         if msg isa String
             print(io, msg, ": ")
@@ -261,7 +274,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         end
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0 || compile_time > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || show_dispatches || lock_conflicts > 0 || compile_time > 0
         parens && print(io, " (")
         had_allocs = bytes != 0 || allocs != 0
         if had_allocs
@@ -279,15 +292,27 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             end
             print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
-        if lock_conflicts > 0
+        if show_dispatches
             if had_allocs || gctime > 0
+                print(io, ", ")
+            end
+            dispatches_scaled, md = prettyprint_getunits(dispatches, length(_cnt_units), Int64(1000))
+            if md == 1
+                print(io, Int(dispatches_scaled))
+            else
+                print(io, Ryu.writefixed(Float64(dispatches_scaled), 2), _cnt_units[md])
+            end
+            print(io, " dynamic dispatches")
+        end
+        if lock_conflicts > 0
+            if had_allocs || gctime > 0 || show_dispatches
                 print(io, ", ")
             end
             plural = lock_conflicts == 1 ? "" : "s"
             print(io, lock_conflicts, " lock conflict$plural")
         end
         if compile_time > 0
-            if had_allocs || gctime > 0 || lock_conflicts > 0
+            if had_allocs || gctime > 0 || show_dispatches || lock_conflicts > 0
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
@@ -304,11 +329,11 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; msg::Union{String,Nothing}=nothing)
+function timev_print(elapsedtime, diff::GC_Diff, dispatches, lock_conflicts, compile_times; msg::Union{String,Nothing}=nothing)
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true; msg)
+    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, dispatches, lock_conflicts, compile_time, recompile_time, true; msg)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -321,6 +346,7 @@ function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; 
     minor_collects = diff.pause - diff.full_sweep
     padded_nonzero_print(minor_collects,    "minor collections")
     padded_nonzero_print(diff.full_sweep,   "full collections")
+    padded_nonzero_print(dispatches,        "dynamic dispatches")
 end
 
 # Like a try-finally block, except without introducing the try scope
@@ -343,6 +369,13 @@ returning the value of the expression. Any time spent garbage collecting (gc), c
 new code, or recompiling invalidated code is shown as a percentage. Any lock conflicts
 where a [`ReentrantLock`](@ref) had to wait are shown as a count.
 
+The number of runtime dispatches is shown when there are enough of them to plausibly
+account for a percent or so of the elapsed time; small counts are not reported, since almost
+every expression makes a few. Runtime dispatch, where the method to call must be looked up
+at run time because the compiler could not resolve it statically, is usually a symptom of
+type instability; see [`@code_warntype`](@ref) and the
+[Performance Tips](@ref man-performance-tips).
+
 Optionally provide a description string to print before the time report.
 
 In some cases the system will look inside the `@time` expression and compile some of the
@@ -350,7 +383,7 @@ called code before execution of the top-level expression begins. When that happe
 compilation time will not be counted. To include this time you can run `@time @eval ...`.
 
 See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
-[`@allocated`](@ref), and [`@allocations`](@ref).
+[`@allocated`](@ref), [`@allocations`](@ref), and [`@dispatches`](@ref).
 
 !!! note
     For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
@@ -364,6 +397,9 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 
 !!! compat "Julia 1.11"
     The reporting of any lock conflicts was added in Julia 1.11.
+
+!!! compat "Julia 1.14"
+    The reporting of runtime dispatches was added in Julia 1.14.
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -402,7 +438,7 @@ macro time(msg, ex)
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.dispatches, ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
         ret.value
     end
 end
@@ -433,8 +469,8 @@ end
     @timev "description" expr
 
 This is a verbose version of the `@time` macro. It first prints the same information as
-`@time`, then any non-zero memory allocation counters, and then returns the value of the
-expression.
+`@time`, then any non-zero memory allocation counters and the number of runtime dispatches,
+then returns the value of the expression.
 
 Optionally provide a description string to print before the time report.
 
@@ -442,7 +478,7 @@ Optionally provide a description string to print before the time report.
     The option to add a description was introduced in Julia 1.8.
 
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
-[`@allocated`](@ref), and [`@allocations`](@ref).
+[`@allocated`](@ref), [`@allocations`](@ref), and [`@dispatches`](@ref).
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -475,7 +511,7 @@ macro timev(msg, ex)
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
-        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg_str)
+        timev_print(ret.time*1e9, ret.gcstats, ret.dispatches, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg_str)
         ret.value
     end
 end
@@ -533,6 +569,13 @@ only(methods(allocated)).called = 0xff
     return Base.gc_alloc_count(diff)
 end
 only(methods(allocations)).called = 0xff
+
+@constprop :none function dispatches(f, args::Vararg{Any,N}) where {N}
+    start = dispatch_count()
+    @noinline f(args...)
+    return Int(dispatch_count() -% start)
+end
+only(methods(dispatches)).called = 0xff
 
 function is_simply_call(@nospecialize ex)
     is_simple_atom(a) = a isa QuoteNode || a isa Symbol || !isa_ast_node(a)
@@ -683,19 +726,71 @@ macro lock_conflicts(ex)
 end
 
 """
+    @dispatches
+
+A macro to evaluate an expression, discard the resulting value, and instead return the
+number of runtime dispatches performed during evaluation, that is, calls whose method had
+to be looked up at run time because the compiler could not resolve them statically.
+
+Runtime dispatch is usually a symptom of type instability, so this is a way to check that
+code stays statically resolved. Dispatches made by the compiler while inferring or
+generating code are not counted; dispatches made on other threads during the expression are.
+
+As for [`@allocations`](@ref), if the expression is a function call then the dispatch of the
+call itself is excluded. To include it, use `@dispatches (()->f(1))()`.
+
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@allocations`](@ref),
+and [`@code_warntype`](@ref).
+
+```julia-repl
+julia> f(x) = sum(x);
+
+julia> @dispatches f([1,2,3])
+0
+
+julia> @dispatches f(Any[1,2,3])
+2
+```
+
+!!! compat "Julia 1.14"
+    This macro was added in Julia 1.14.
+"""
+macro dispatches(ex)
+    # Exclude the dispatch of the call itself, as in `@allocations`.
+    if isexpr(ex, :call)
+        if !is_simply_call(ex)
+            ex = :((() -> $ex)())
+        end
+        pushfirst!(ex.args, GlobalRef(Base, :dispatches))
+        return quote
+            Experimental.@force_compile
+            $(esc(ex))
+        end
+    end
+    return quote
+        Experimental.@force_compile
+        local start = dispatch_count()
+        $(esc(ex))
+        Int(dispatch_count() -% start)
+    end
+end
+
+"""
     @timed
 
 A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
 total bytes allocated, garbage collection time, an object with various memory allocation
 counters, compilation time in seconds, and recompilation time in seconds. Any lock conflicts
-where a [`ReentrantLock`](@ref) had to wait are shown as a count.
+where a [`ReentrantLock`](@ref) had to wait are shown as a count, as is the number of
+runtime dispatches (see [`@dispatches`](@ref)).
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
 compilation time will not be counted. To include this time you can run `@timed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref),
-[`@allocated`](@ref), [`@allocations`](@ref), and [`@lock_conflicts`](@ref).
+[`@allocated`](@ref), [`@allocations`](@ref), [`@lock_conflicts`](@ref), and
+[`@dispatches`](@ref).
 
 ```julia-repl
 julia> stats = @timed rand(10^6);
@@ -728,6 +823,9 @@ julia> stats.recompile_time
 
 !!! compat "Julia 1.11"
     The `lock_conflicts`, `compile_time`, and `recompile_time` fields were added in Julia 1.11.
+
+!!! compat "Julia 1.14"
+    The `dispatches` field was added in Julia 1.14.
 """
 macro timed(ex)
     quote
@@ -738,8 +836,10 @@ macro timed(ex)
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
+        local dispatches = dispatch_count()
         local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() -% elapsedtime;
+            (dispatches = dispatch_count() -% dispatches;
+            elapsedtime = time_ns() -% elapsedtime;
             cumulative_compile_timing(false);
             compile_elapsedtimes = map(-%, cumulative_compile_time_ns(), compile_elapsedtimes);
             lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
@@ -752,6 +852,7 @@ macro timed(ex)
             bytes=diff.allocd,
             gctime=diff.total_time/1e9,
             gcstats=diff,
+            dispatches=Int(dispatches),
             lock_conflicts=lock_conflicts,
             compile_time=compile_elapsedtimes[1]/1e9,
             recompile_time=compile_elapsedtimes[2]/1e9

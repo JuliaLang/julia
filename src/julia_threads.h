@@ -296,6 +296,9 @@ typedef struct _jl_tls_states_t {
     // currently-held locks, to be released when an exception is thrown
     small_arraylist_t locks;
     size_t engine_nqueued;
+    // Number of runtime dispatches made by this thread, excluding the compiler's own
+    // (never reset by the runtime; `jl_dispatch_count` sums this across threads)
+    _Atomic(uint64_t) dispatch_count;
 
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;
