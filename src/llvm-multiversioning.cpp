@@ -606,6 +606,12 @@ Function *CloneCtx::create_trampoline(Function *F, GlobalVariable *slot, bool au
     for (auto &arg : trampoline->args())
         Args.push_back(&arg);
     auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
+    // Forward the target's calling convention and its return/argument attributes.
+    // Dropping them would break the ABI of e.g. `@ccallable` entry points, whose
+    // aggregate arguments are passed `byval` and thus occupy stack rather than
+    // register slots. Function attributes describe `F` itself, not this call.
+    call->setCallingConv(F->getCallingConv());
+    call->setAttributes(F->getAttributes().removeFnAttributes(F->getContext()));
     if (F->isVarArg()) {
         assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
         call->setTailCallKind(CallInst::TCK_MustTail);
