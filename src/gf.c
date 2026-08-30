@@ -4678,9 +4678,16 @@ void call_cache_stats()
 }
 #endif
 
+// `count_ptls` is the caller's ptls when this lookup should be counted for `@time`, and
+// NULL otherwise. It is a parameter rather than a lookup here so that the caller's decision
+// (is this a real call, is this task inside the compiler) is made once, at the call site.
 STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t **args, uint32_t nargs,
-                                                       uint32_t callsite, size_t world, int for_call) JL_CANSAFEPOINT
+                                                       uint32_t callsite, size_t world, int for_call,
+                                                       jl_ptls_t count_ptls) JL_CANSAFEPOINT
 {
+    if (count_ptls)
+        jl_atomic_store_relaxed(&count_ptls->dispatch_count,
+                jl_atomic_load_relaxed(&count_ptls->dispatch_count) + 1);
 #ifdef JL_GF_PROFILE
     ncalls++;
 #endif
@@ -4737,6 +4744,9 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     i = 4;
     if (i == 4) {
         // if no method was found in the associative cache, check the full cache
+        if (count_ptls)
+            jl_atomic_store_relaxed(&count_ptls->dispatch_slow_count,
+                    jl_atomic_load_relaxed(&count_ptls->dispatch_slow_count) + 1);
         JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
         jl_methcache_t *mc = jl_method_table->cache;
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
@@ -4820,7 +4830,7 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
 {
     assert(nargs);
     return jl_lookup_generic_(args[0], &args[1], nargs - 1,
-            jl_int32hash_fast(jl_return_address()), world, 0);
+            jl_int32hash_fast(jl_return_address()), world, 0, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
@@ -4829,32 +4839,40 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
     size_t world = ct->world_age;
     // Inference is Julia code and dispatches heavily, so counting while this task is
     // inside the compiler would swamp whatever the caller is actually measuring.
-    if (ct->reentrant_timing == 0) {
-        jl_ptls_t ptls = ct->ptls;
-        jl_atomic_store_relaxed(&ptls->dispatch_count,
-                jl_atomic_load_relaxed(&ptls->dispatch_count) + 1);
-    }
+    jl_ptls_t count_ptls = ct->reentrant_timing == 0 ? ct->ptls : NULL;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
-                                                     world, 1);
+                                                     world, 1, count_ptls);
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
 
-// Total number of runtime dispatches since the process started. Threads that
-// have exited keep their `jl_all_tls_states` slot, so this only ever grows.
-JL_DLLEXPORT uint64_t jl_dispatch_count(void)
+// Runtime dispatches since the process started, and how many of them missed the call-site
+// cache. Threads that have exited keep their `jl_all_tls_states` slot, so these only grow.
+JL_DLLEXPORT jl_dispatch_counts_t jl_dispatch_counts(void)
 {
-    uint64_t count = 0;
+    jl_dispatch_counts_t counts = {0, 0};
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (int i = 0; i < nthreads; i++) {
         jl_ptls_t ptls = allstates[i];
         if (ptls == NULL)
             continue;
-        count += jl_atomic_load_relaxed(&ptls->dispatch_count);
+        counts.total += jl_atomic_load_relaxed(&ptls->dispatch_count);
+        counts.slow += jl_atomic_load_relaxed(&ptls->dispatch_slow_count);
     }
-    return count;
+    return counts;
+}
+
+// Just this thread's counters. Calibration uses these rather than the process-wide totals
+// so that dispatches on other threads cannot be charged to the loop it is timing.
+JL_DLLEXPORT jl_dispatch_counts_t jl_dispatch_counts_thread(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_dispatch_counts_t counts;
+    counts.total = jl_atomic_load_relaxed(&ptls->dispatch_count);
+    counts.slow = jl_atomic_load_relaxed(&ptls->dispatch_slow_count);
+    return counts;
 }
 
 // buggy way to lookup a method given a list of arguments

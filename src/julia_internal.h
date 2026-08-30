@@ -1465,6 +1465,15 @@ JL_DLLEXPORT extern jl_value_t *(*const jl_rettype_inferred_addr)(jl_method_inst
 JL_DLLEXPORT void jl_force_trace_compile_timing_enable(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void) JL_NOTSAFEPOINT;
 
+// Runtime dispatch counters for `@time`. Must be kept in sync with `DispatchCounts` in
+// base/timing.jl.
+typedef struct {
+    uint64_t total;
+    uint64_t slow;
+} jl_dispatch_counts_t;
+JL_DLLEXPORT jl_dispatch_counts_t jl_dispatch_counts(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_dispatch_counts_t jl_dispatch_counts_thread(void) JL_NOTSAFEPOINT;
+
 JL_DLLEXPORT void jl_force_trace_dispatch_enable(void);
 JL_DLLEXPORT void jl_force_trace_dispatch_disable(void);
 
