@@ -235,7 +235,9 @@ Standard library changes
   unbound when called with `Union{}`, or `f(::Vector{<:T}) where {T}` with a
   `Vector{Union{}}` argument), and no longer reports methods whose problematic calls are
   all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback), or
-  whose lowered bodies never read the possibly-unbound parameters.
+  whose lowered bodies never read the possibly-unbound parameters. Parameters left
+  unbound only by calls with `Union{}` type parameters are reported only with the new
+  `ambiguous_bottom=true` keyword argument, as for `detect_ambiguities` ([#62405]).
 
 #### Dates
 
