@@ -58,8 +58,13 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         // waiting for `t` to be resolved, then will be determined later as
         // soon as possible afterwards).
         while (super != NULL && super != jl_any_type) {
-            if (ptrhash_has(news, (void*)super))
-                return 1;
+            void *entry = ptrhash_get(news, (void*)super);
+            if (entry != HT_NOTFOUND) {
+                if (entry != (void*)super)
+                    return 1;
+                // A self-mapping marks an unresolved forward reference.
+                break;
+            }
             if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
                break; // the rest must all be non-new
             // otherwise super might be something that was not cached even though a later supertype might be
