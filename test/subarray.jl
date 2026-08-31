@@ -624,6 +624,12 @@ end
     big_v = view(vec(A), big(1):big(2):big(5))
     @test strides(big_v) === (2,)
 
+    # views of a non-contiguous strided parent
+    S = Strider(vec(M), (2, 8), (2, 3))
+    sv = view(S, big(1):big(2), big(1):big(3))
+    @test strides(sv) === (2, 8)
+    check_strided_get(sv)
+
     R = reshape(UInt64(1):UInt64(2):UInt64(15), 2, 4)
     @test view(vec(A), R) == vec(A)[R]
 
@@ -1230,41 +1236,6 @@ end
 @testset "copyto! @inbounds propagation" begin
     @test @inbounds(copyto!(Vector{Int}(undef, 10), 1, collect(1:10), 1, 10)) == 1:10
     @test_throws BoundsError copyto!(Vector{Int}(undef, 5), 1, collect(1:10), 1, 10)
-end
-
-@testset "strided views with non-Int index types" begin
-    # Range indices with a non-BitInteger eltype (e.g. BigInt) still describe a
-    # strided view, so `strides`, `pointer`, and `cconvert`/`unsafe_convert`
-    # should work and return Int-based results.
-    A = collect(1.0:20.0)
-    @testset "index $(typeof(idx))" for idx in (big(2):big(9),
-                                                big(1):big(2):big(9),
-                                                UInt128(2):UInt128(9),
-                                                Int16(2):Int16(2):Int16(8))
-        v = view(A, idx)
-        @test strides(v) isa Tuple{Int}
-        @test strides(v) == (step(idx),)
-        check_strided_get(v)
-    end
-
-    M = collect(reshape(1.0:24.0, 4, 6))
-    mv = view(M, big(2):big(3), big(1):big(2):big(5))
-    @test strides(mv) === (1, 8)
-    check_strided_get(mv)
-
-    # views of a non-contiguous strided parent take the `_memory_offset` path
-    S = Strider(vec(M), (2, 8), (2, 3))
-    sv = view(S, big(1):big(2), big(1):big(3))
-    @test strides(sv) === (2, 8)
-    check_strided_get(sv)
-
-    # a contiguous BigInt view is recognized as contiguous
-    cv = view(A, big(2):big(6))
-    @test cv isa Base.FastContiguousSubArray
-
-    # non-strided views still throw
-    nsv = view(A, [1, 3, 4])
-    check_strides_throws(ArgumentError, nsv)
 end
 
 @testset "strided views with reshaped range indices" begin

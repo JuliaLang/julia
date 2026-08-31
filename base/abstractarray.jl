@@ -606,7 +606,7 @@ function stride(A::AbstractArray, k::Integer)
     return s
 end
 
-@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * Int(d), sz...)...)
+@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
