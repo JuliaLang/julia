@@ -625,7 +625,7 @@ end
     @test strides(big_v) === (2,)
 
     # views of a non-contiguous strided parent
-    S = Strider(vec(M), (2, 8), (2, 3))
+    S = Strider(collect(1.0:24.0), (2, 8), (2, 3))
     sv = view(S, big(1):big(2), big(1):big(3))
     @test strides(sv) === (2, 8)
     check_strided_get(sv)
