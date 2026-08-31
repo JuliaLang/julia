@@ -34,6 +34,11 @@ JL_HIDDEN const void **const jl_static_exported_data_ptrs[] = {
 
 #include "julia.h"
 #include "julia_internal.h"
+#ifdef _OS_WINDOWS_
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 #include "jl_exported_funcs.inc"
 
 // n.b. `jl_small_typeof` is not defined here: the system image linked into the
@@ -120,6 +125,21 @@ JL_DLLEXPORT const char *jl_get_libdir(void)
     }
     libdir = path;
     return libdir;
+}
+
+// Convenience initializer for a program that has the runtime and the system
+// image linked in statically: initializes the options and boots the runtime
+// from the executable itself. Equivalent to what the libjulia loader plus
+// jl_init do in the shared build.
+JL_DLLEXPORT void jl_init_static(void)
+{
+    jl_init_options();
+#ifdef _OS_WINDOWS_
+    void *handle = GetModuleHandleW(NULL);
+#else
+    void *handle = dlopen(NULL, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+#endif
+    jl_init_with_image_handle(handle);
 }
 
 #endif // JL_LIBRARY_STATIC
