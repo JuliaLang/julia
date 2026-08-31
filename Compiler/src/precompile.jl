@@ -359,7 +359,9 @@ function compile_and_emit_native(worlds::Vector{UInt},
             f = Core.invoke_in_world(latestworld, getglobal, mod, :__init__)
             # Get module compile setting
             setting = ccall(:jl_get_module_compile, Cint, (Any,), mod)
-            if setting != JL_OPTIONS_COMPILE_OFF && setting != JL_OPTIONS_COMPILE_MIN
+            # When trimming, the entrypoint list is the only thing that keeps `__init__`
+            # alive so keep them regardless of compile option
+            if setting != JL_OPTIONS_COMPILE_OFF && (trim_mode != TRIM_NO || setting != JL_OPTIONS_COMPILE_MIN)
                 tt = Tuple{Core.Typeof(f)}
                 compile_hint(tt)
                 trim_mode == 0x00 || add_entrypoint(tt)
