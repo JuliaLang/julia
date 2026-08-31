@@ -27,6 +27,7 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test lines[9] == "finalizers: 27 32"
     @test lines[10] == "collected: 0 kept, 10 dropped"
     @test lines[11] == "got 1:3 vs 1 with 2.5 and sym and c"
+    @test lines[12] == "initialized: true"
 
     basic_jll_exe = joinpath(bindir, "basic_jll" * exe_suffix)
     lines = split(readchomp(`$basic_jll_exe`), "\n")

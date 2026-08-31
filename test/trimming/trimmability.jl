@@ -169,6 +169,22 @@ end
 # keeps in a merged union: each `print` must still resolve statically.
 @noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
 
+# A `compile=min` module with an `__init__` (as JLLWrappers emits into every generated
+# JLL). Under `--trim`, the entrypoint list is the only thing keeping `__init__` alive,
+# but `jl_module_run_initializer` calls it at startup regardless of the module's compile
+# setting.
+module MinInitDep
+
+Base.Experimental.@compiler_options compile=min
+
+const initialized = Ref(false)
+
+function __init__()
+    initialized[] = true
+end
+
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -208,6 +224,8 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
 
     println(Core.stdout, interpolate_many(1:3, 2.5, :sym, 'c'))
+
+    println(Core.stdout, "initialized: ", MinInitDep.initialized[])
 
     try
         sock = connect("localhost", 4900)
