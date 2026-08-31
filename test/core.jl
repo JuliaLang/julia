@@ -434,6 +434,14 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, Int) == 1
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, String) == 0
 
+# issue #62897: `Type{v}` with a non-type parameter is constructible (like 1.13), so the
+# `T` field of `TypeEq` must be declared `Any` — a narrower field type would let inference
+# unsoundly assume the parameter is a type or TypeVar.
+@test fieldtype(Core.TypeEq, :T) === Any
+@test Base.type_parameter(Type{setindex!}) === setindex!
+@test Base.type_parameter(Type{1}) === 1
+@test Base.type_parameter(Type{:sym}) === :sym
+
 # `isType` covers both type-object kinds; use split predicates when exactness matters.
 @test Base.isType(Type{Int})
 @test Base.isType(Core.TypeEgal{Int})
