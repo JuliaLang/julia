@@ -7662,6 +7662,21 @@ let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873)
     #   @ Main REPL[1]:4
 end
 
+# generating a package image must not re-infer or emit callees that are already
+# compiled into a loaded image (JuliaLang/julia#62934)
+let
+    f62934(p::String) = (isfile(p), Base.homedir())
+    mi = Compiler.specialize_method(only(methods(f62934)), Tuple{typeof(f62934), String}, Core.svec())
+    world = Base.get_world_counter()
+    cis(out) = Core.CodeInstance[x for x in (out isa Core.SimpleVector ? out[1] : out) if x isa Core.CodeInstance]
+    all_cis = cis(Compiler.typeinf_ext_toplevel(Any[mi], UInt[world], Compiler.TRIM_NO))
+    @test any(Compiler.ci_has_image_code, all_cis)
+    pkg_cis = cis(Compiler.typeinf_ext_toplevel(Any[mi], UInt[world], Compiler.TRIM_NO; external_linkage=true))
+    @test length(pkg_cis) == 1
+    @test Compiler.get_ci_mi(only(pkg_cis)) === mi
+    @test !any(Compiler.ci_has_image_code, pkg_cis)
+end
+
 function ss57873(a::Vector{String}, pref)
     ret = String[]
     for j in a
