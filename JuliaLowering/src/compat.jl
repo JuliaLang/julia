@@ -492,7 +492,7 @@ function collect_body_meta(st)
                 km = kind(m)
                 if km === K"purity"
                     push!(mmetas, m)
-                elseif syntax_name(m) in (
+                elseif kind(m) === K"Identifier" && syntax_name(m) in (
                     "inline", "noinline", "propagate_inbounds",
                     "nospecializeinfer", "aggressive_constprop", "no_constprop")
                     push!(mmetas, @mknode(m; kind=K"Symbol"))

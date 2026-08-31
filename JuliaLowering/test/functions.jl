@@ -2288,6 +2288,15 @@ end
     @test_throws UndefVarError test_mod.f_generated_return_delete_me()
 end
 
+@testset "pre-desugared meta-generated" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @eval function meta_generated_form()
+        $(Expr(:meta, :generated, Base.identity))
+        $(Expr(:meta, :generated_only))
+    end
+    """, expr_compat_mode=true) isa Function
+end
+
 @testset "Broadcast" begin
     @test JuliaLowering.include_string(test_mod, """
     let x = [1,2], y = [3,4], z = [5,6]
