@@ -336,6 +336,31 @@ end
     @test string() == ""
 end
 
+@testset "`string`/`print` of many argument types resolve statically" begin
+    # For an exact signature (what `--trim` compiles), each argument's `print` must
+    # be resolved at compile time even when the arguments span more distinct types
+    # than inference keeps in a merged union.
+    function isdynamic_call(stmt)
+        Meta.isexpr(stmt, :call) || return false
+        f = stmt.args[1]
+        f isa GlobalRef && (f = getglobal(f.mod, f.name))
+        return !(f isa Core.Builtin || f isa Core.IntrinsicFunction)
+    end
+    args = ("got ", 1:3, " vs ", 1, " with ", 2.5, " and ", :s, " and ", 'c')
+    expected = "got 1:3 vs 1 with 2.5 and s and c"
+    @test string(args...) == expected
+    @test sprint(print, args...) == expected
+    T = typeof(args)
+    for (f, sig) in ((Base.print_to_string, T), (print, Tuple{IOBuffer, T.parameters...}))
+        src, _ = only(code_typed(f, sig))
+        @test !any(isdynamic_call, src.code)
+    end
+    # arguments of unknown type still take the dynamic path
+    v = Any[args...]
+    @test string(v...) == expected
+    @test sprint(print, v...) == expected
+end
+
 module StringsIOStringReturnTypesTestModule
     struct S end
     Base.joinpath(::S) = S()

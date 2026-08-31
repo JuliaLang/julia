@@ -165,6 +165,10 @@ function _test_cat()
 end
 
 
+# String interpolation whose arguments span more distinct types than inference
+# keeps in a merged union: each `print` must still resolve statically.
+@noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -202,6 +206,8 @@ function @main(args::Vector{String})::Cint
     end
 
     println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
+
+    println(Core.stdout, interpolate_many(1:3, 2.5, :sym, 'c'))
 
     try
         sock = connect("localhost", 4900)
