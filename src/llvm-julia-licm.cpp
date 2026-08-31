@@ -150,12 +150,11 @@ struct JuliaLICM : public JuliaPassContext {
         BasicBlock *header = L->getHeader();
         const llvm::DataLayout &DL = header->getModule()->getDataLayout();
         initFunctions(*header->getModule());
-        // Also require `gc_preserve_begin_func` whereas
-        // `gc_preserve_end_func` is optional since the input to
-        // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
-        // We also hoist write barriers here, so we don't exit if the module
-        // uses julia.write_barrier.
-        if (!gc_preserve_begin_func &&
+        // Also require `gc_preserve_begin` whereas `gc_preserve_end` is
+        // optional since the input to `gc_preserve_end` must be from
+        // `gc_preserve_begin`. We also hoist write barriers here, so we
+        // don't exit if the module uses julia.write_barrier.
+        if (!julia::getOpDeclaration<julia::GCPreserveBegin>(*header->getModule()) &&
             !julia::getOpDeclaration<julia::WriteBarrier>(*header->getModule()) &&
             !julia::getOpDeclaration<julia::GCAllocObj>(*header->getModule())) {
             LLVM_DEBUG(dbgs() << "No gc_preserve_begin, write_barrier or gc_alloc_obj found, skipping JuliaLICM\n");
@@ -200,7 +199,7 @@ struct JuliaLICM : public JuliaPassContext {
                 // If all the input arguments dominates the whole loop we can
                 // hoist the `begin` and if a `begin` dominates the loop the
                 // corresponding `end` can be moved to the loop exit.
-                if (callee == gc_preserve_begin_func) {
+                if (isa<julia::GCPreserveBegin>(call)) {
                     bool canhoist = true;
                     for (Use &U : call->args()) {
                         // Check if all arguments are generated outside the loop
@@ -223,7 +222,7 @@ struct JuliaLICM : public JuliaPassContext {
                     });
                     changed = true;
                 }
-                else if (callee == gc_preserve_end_func) {
+                else if (isa<julia::GCPreserveEnd>(call)) {
                     auto begin = cast<Instruction>(call->getArgOperand(0));
                     if (!DT->properlyDominates(begin->getParent(), header))
                         continue;

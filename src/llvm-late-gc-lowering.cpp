@@ -1253,7 +1253,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 NoteOperandUses(S, BBS, I);
                 if (!CI->canReturnTwice()) {
                     if (callee) {
-                        if (callee == gc_preserve_begin_func) {
+                        if (isa<julia::GCPreserveBegin>(CI)) {
                             SmallVector<int, 0> args;
                             for (Use &U : CI->args()) {
                                 Value *V = U;
@@ -1278,8 +1278,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             continue;
                         }
                         // Known functions emitted in codegen that are not safepoints
-                        if (isa<julia::PointerFromObjref>(CI) || callee == gc_preserve_begin_func ||
-                            callee == gc_preserve_end_func || isa<julia::Typeof>(CI) ||
+                        if (isa<julia::PointerFromObjref>(CI) || isa<julia::GCPreserveBegin>(CI) ||
+                            isa<julia::GCPreserveEnd>(CI) || isa<julia::Typeof>(CI) ||
                             isa<julia::Blackbox>(CI) ||
                             isa<julia::GetPGCStack>(CI) || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
@@ -1920,8 +1920,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
 
-            if (isa<julia::GCRootFlush>(CI) || (callee && (callee == gc_preserve_begin_func
-                        || callee == gc_preserve_end_func))) {
+            if (isa<julia::GCRootFlush>(CI) || isa<julia::GCPreserveBegin>(CI)
+                        || isa<julia::GCPreserveEnd>(CI)) {
                 /* No replacement */
             } else if (isa<julia::PointerFromObjref>(CI)) {
                 auto *obj = CI->getOperand(0);

@@ -1400,19 +1400,6 @@ static const auto jldnd_func = new JuliaFunction<>{
 
 // placeholder functions
 
-// The `julia.gcroot_flush` intrinsic is a marker function to flush all current
-// GC roots, to the shadow stack. It is used in the codegen of `GC.safepoint`/`jl_gc_safepoint`
-// and `jl_sigatomic_{begin,end}`. It is removed in late-gc-lowering (no-effect).
-static const auto gc_preserve_begin_func = new JuliaFunction<>{
-    "llvm.julia.gc_preserve_begin",
-    [](LLVMContext &C) { return FunctionType::get(Type::getTokenTy(C), true); },
-    nullptr,
-};
-static const auto gc_preserve_end_func = new JuliaFunction<> {
-    "llvm.julia.gc_preserve_end",
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), {Type::getTokenTy(C)}, false); },
-    nullptr,
-};
 // julia.call represents a call with julia calling convention, it is used as
 //
 //   ptr julia.call(ptr %fptr, ptr %f, ptr %arg1, ptr %arg2, ...)
@@ -6754,7 +6741,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 //       This is correct as-is anyway - it just means the scope lives longer than it needs to
                 //       if the `Expr(:enter, ...)` has multiple exits.
                 std::tie(token, scope_to_restore) = ctx.scope_restore[enter_idx];
-                ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token});
+                ctx.builder.create<julia::GCPreserveEnd>(token);
             }
             if (intptr_t catch_dest = jl_enternode_catch_dest(enter_stmt)) {
                 handler_to_end.push_back(ctx.eh_buffers[enter_stmt]);
@@ -7233,7 +7220,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())
-            : ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), vals);
+            : ctx.builder.create<julia::GCPreserveBegin>(vals);
         jl_cgval_t tok(token, (jl_value_t*)jl_nothing_type, NULL);
         return tok;
     }
@@ -7247,7 +7234,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_cgval_t token = emit_expr(ctx, args[0]);
         assert(token.V->getType()->isTokenTy());
         if (!isa<ConstantTokenNone>(token.V))
-            ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
+            ctx.builder.create<julia::GCPreserveEnd>(token.V);
         return jl_cgval_t((jl_value_t*)jl_nothing_type);
     }
     else if (head == jl_latestworld_sym && !jl_is_method(ctx.linfo->def.method)) {
@@ -10170,7 +10157,8 @@ static jl_llvm_functions_t
                     ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
                 // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.
-                Value *scope_token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {current_scope});
+                Value *scope_token = ctx.builder.create<julia::GCPreserveBegin>(
+                    ArrayRef<Value*>{current_scope});
                 ctx.scope_restore[cursor] = std::make_pair(scope_token, current_scope);
             }
         }
@@ -10800,8 +10788,6 @@ static void init_jit_functions(void)
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
     add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);
     add_named_global(jl_allocgenericmemory, &jl_alloc_genericmemory);
-    add_named_global(gc_preserve_begin_func, (void*)NULL);
-    add_named_global(gc_preserve_end_func, (void*)NULL);
     add_named_global(jllockvalue_func, &jl_lock_value);
     add_named_global(jlunlockvalue_func, &jl_unlock_value);
     add_named_global(jllockfield_func, &jl_lock_field);

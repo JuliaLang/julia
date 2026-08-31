@@ -28,7 +28,6 @@ JuliaPassContext::JuliaPassContext()
 
         tbaa_gcframe(nullptr), tbaa_tag(nullptr),
 
-        gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pop_handler_noexcept_func(nullptr), module(nullptr)
 {
 }
@@ -44,8 +43,6 @@ void JuliaPassContext::initFunctions(Module &M)
     std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child_with_context(llvmctx, "jtbaa_data");
     tbaa_tag = tbaa_make_child_with_context(llvmctx, "jtbaa_tag", tbaa_data_scalar).first;
 
-    gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
-    gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
     pop_handler_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
 }
 

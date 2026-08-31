@@ -50,11 +50,10 @@ struct JuliaPassContext {
     llvm::MDNode *tbaa_gcframe;
     llvm::MDNode *tbaa_tag;
 
-    // Intrinsics that are not part of the Julia dialect (see JuliaDialect.td).
-    // Julia dialect ops are recognized with isa<julia::Op> on the call
-    // instead, and their declarations are found with julia::getOpDeclaration.
-    llvm::Function *gc_preserve_begin_func;
-    llvm::Function *gc_preserve_end_func;
+    // Runtime functions that are not part of the Julia dialect (see
+    // JuliaDialect.td). Julia dialect ops are recognized with isa<julia::Op>
+    // on the call instead, and their declarations are found with
+    // julia::getOpDeclaration.
     llvm::Function *pop_handler_noexcept_func;
 
     // Creates a pass context. Type and function pointers
