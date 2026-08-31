@@ -638,15 +638,8 @@ public:
     typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
-    template
-    <typename ResourceT, size_t max = 0,
-        typename BackingT = std::stack<ResourceT,
-            std::conditional_t<max == 0,
-                SmallVector<ResourceT, 0>,
-                SmallVector<ResourceT, max>
-            >
-        >
-    >
+    template<typename ResourceT, size_t max = 0,
+             typename BackingT = std::stack<ResourceT, SmallVector<ResourceT, max>>>
     struct ResourcePool {
         public:
         ResourcePool(std::function<ResourceT()> creator) JL_NOTSAFEPOINT : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
@@ -812,6 +805,18 @@ public:
 
     const char *objCacheDisabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE {
         return OCache.disabledNotice();
+    }
+
+    jl_value_t *objCacheKVGet(const char *Ns, const uint8_t *Key,
+                              size_t KeyLen) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvGet(Ns, Key, KeyLen);
+    }
+    int objCacheKVPut(const char *Ns, const uint8_t *Key, size_t KeyLen,
+                      const uint8_t *Val, size_t ValLen) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvPut(Ns, Key, KeyLen, Val, ValLen);
+    }
+    int objCacheKVEnabled() JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvEnabled();
     }
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {

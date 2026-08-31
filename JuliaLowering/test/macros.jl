@@ -869,11 +869,12 @@ end
 catch exc
     sprint(showerror, exc)
 end == """
-MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
+LoadError: MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
 @oldstyle_error
 └─────────────┘ ── Error expanding macro
 Caused by:
-Some error in old style macro"""
+Some error in old style macro
+in expression starting at string:1"""
 
 # Old-style macros returning non-Expr values
 Base.eval(test_mod, :(
@@ -900,8 +901,8 @@ try
     """)
     @test false
 catch exc
-    @test exc isa JuliaLowering.MacroExpansionError
-    mexc = exc.err
+    @test exc isa LoadError
+    mexc = exc.error.err
     @test mexc isa MethodError
     @test mexc.args isa Tuple{JuliaLowering.MacroContext, JuliaLowering.SyntaxTree, JuliaLowering.SyntaxTree}
 end
@@ -922,7 +923,7 @@ end
         sprint(showerror, exc, context=:module=>test_mod)
     end
     @test startswith(err, """
-    MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
+    LoadError: MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
     Caused by:
@@ -1334,6 +1335,16 @@ end
         ref_ci = find_method_ci(Meta.lower(test_mod, Meta.parse(prog_def)))
         our_ci = find_method_ci(jlower_e(prog_def))
         @test ref_ci.purity === our_ci.purity
+
+        prog = """
+        Base.@assume_effects :total function f_assume_nospecialize(x)
+            @nospecialize x
+            x
+        end
+        """
+        ref_ci = find_method_ci(fl_lower(test_mod, Meta.parse(prog)))
+        our_ci = find_method_ci(jlower_e(prog))
+        @test ref_ci.purity === our_ci.purity
     end
 end
 
@@ -1513,9 +1524,7 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
             Expr(:toplevel,
                  Expr(:module, false, esc(name),
                       Expr(:block,
-                           # TODO: escape node in outer context
-                           # Expr(:const, Expr(:(=), esc(:c), 1))
-                           )))
+                           Expr(:const, Expr(:(=), esc(:c), 1)))))
         end
         end); expr_compat_mode=true)
 
@@ -1526,8 +1535,7 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
         # module name should escape macmod->test_mod
         @test test_mod.newmod isa Module
         @test !isdefined(test_mod.MacMod, :newmod)
-        # const in mod body should
-        @test_broken test_mod.newmod.c == 1
+        @test test_mod.newmod.c == 1
     end
 end
 
@@ -1896,4 +1904,50 @@ end
     """; expr_compat_mode=true)
     @test !isdefined(test_mod, :a)
     @test !isdefined(macro_mod, :a)
+end
+
+# Method annotations propagate from the body to positional-default wrappers
+# and the `Core.kwcall` sorter (matching flisp's `propagate-method-meta`).
+@testset "method meta propagation" begin
+    JuliaLowering.include_string(test_mod, raw"""
+    @inline function _test_opts_kw(x::Int, y::Int=1; k::Int=2)
+        x + y + k
+    end
+    """)
+    fkw = test_mod._test_opts_kw
+    @test fkw(1) == 4
+    for m in (which(fkw, (Int,)), which(fkw, (Int, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fkw), Int)))
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # Destructuring prepends assignments but must retain the metadata.
+    JuliaLowering.include_string(test_mod, raw"""
+    @inline function _test_opts_destr((a, b)::Tuple{Int,Int}, y::Int=1; k::Int=2)
+        a + b + y + k
+    end
+    """)
+    fd = test_mod._test_opts_destr
+    @test fd((1, 2)) == 6
+    for m in (which(fd, (Tuple{Int,Int},)), which(fd, (Tuple{Int,Int}, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fd), Tuple{Int,Int})))
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # @nospecializeinfer
+    local f = JuliaLowering.include_string(@newmod(), raw"""
+    Base.@nospecializeinfer function f(@nospecialize(x), y::Int=1)
+        (x, y)
+    end
+    """)
+    @test which(f, (Any, Int)).nospecializeinfer == true
+    @test which(f, (Any,)).nospecializeinfer == true
+
+    local f = JuliaLowering.include_string(@newmod(), raw"""
+    Base.@nospecializeinfer function f(@nospecialize(x); k::Int=1)
+        (x, k)
+    end
+    """)
+    local sorter = x->which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(x), Any))
+    @test sorter(f).nospecializeinfer == true
 end

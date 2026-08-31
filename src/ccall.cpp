@@ -539,7 +539,7 @@ static jl_cgval_t drop_inline_roots(const jl_cgval_t &x)
         // a ghost-like union with all of its data in the roots: there is no
         // inline data to unbox, so this is unreachable (emit_unbox will trap)
         return jl_cgval_t();
-    return mark_julia_slot(x.V, x.typ, x.TIndex, x.tbaa);
+    return mark_julia_slot(x.V, x.typ, x.TIndex, x.aliasinfo);
 }
 
 // bitcast whatever Ptr kind x might be (even if it is part of a union) into Ptr{Cvoid},
@@ -622,7 +622,7 @@ static Value *julia_to_native(
     Align align(julia_alignment(jlto));
     Value *slot = emit_static_alloca(ctx, to, align);
     setName(ctx.emission_context, slot, "native_convert_buffer");
-    emit_unbox_store(ctx, jvinfo, slot, ctx.tbaa().tbaa_stack, align, align);
+    emit_unbox_store(ctx, jvinfo, slot, ctx.alias().stack, align, align);
     return slot;
 }
 
@@ -739,6 +739,35 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
 }
 
 // --- code generator for llvmcall ---
+
+// Intrinsics that belong to a different target cannot be selected by the back-end for
+// the current one, which LLVM reports as a fatal error (`Cannot select: intrinsic ...`),
+// aborting the process. Reject them during codegen instead, so that the failure is an
+// ordinary Julia error. This also keeps ahead-of-time compilation from aborting on
+// methods that are only valid on another target (e.g. GPU kernels), which `--output-o`
+// compiles whether or not they are ever called.
+//
+// The check is against the triple of the module being emitted, so external users of
+// codegen that target another architecture (such as GPUCompiler.jl, which sets the
+// module's triple before emitting into it) can still use that target's intrinsics.
+static bool is_foreign_target_intrinsic(jl_codectx_t &ctx, Intrinsic::ID ID, StringRef name, std::string &msg)
+{
+    if (ID == Intrinsic::not_intrinsic || !Intrinsic::isTargetIntrinsic(ID))
+        return false;
+    const Triple &TT = ctx.emission_context.TargetTriple;
+    StringRef host = Triple::getArchTypePrefix(TT.getArch());
+    if (host.empty())
+        return false;
+    // intrinsic names are `llvm.<target prefix>.<name>`
+    StringRef target = name;
+    target.consume_front("llvm.");
+    target = target.split('.').first;
+    if (target == host)
+        return false;
+    msg = "llvmcall: intrinsic " + name.str() + " is not available on the " + host.str() +
+          " target (it belongs to the " + target.str() + " target)";
+    return true;
+}
 
 static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
@@ -989,6 +1018,15 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             Mod = std::move(ModuleOrErr.get());
         }
 
+        for (Function &F : *Mod) {
+            std::string msg;
+            if (F.isIntrinsic() && is_foreign_target_intrinsic(ctx, F.getIntrinsicID(), F.getName(), msg)) {
+                emit_error(ctx, msg);
+                JL_GC_POP();
+                return jl_cgval_t();
+            }
+        }
+
         f = Mod->getFunction(jl_string_data(entry));
         if (!f) {
             emit_error(ctx, "Module IR does not contain specified entry function");
@@ -1134,10 +1172,10 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     unsigned nb = DL.getTypeStoreSize(result->getType());
     unsigned align = sizeof(void*); // Allocations are at least pointer aligned
-    MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
+    jl_aliasinfo_t ai = jl_is_mutable(rt) ? ctx.alias().mutab : ctx.alias().immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
     setName(ctx.emission_context, strct, "ccall_result_box");
-    init_bits_value(ctx, strct, result, tbaa);
+    init_bits_value(ctx, strct, result, ai);
     return strct;
 }
 
@@ -1733,7 +1771,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         setName(ctx.emission_context, ptid, "thread_id_ptr");
         LoadInst *tid = ctx.builder.CreateAlignedLoad(getInt16Ty(ctx.builder.getContext()), ptid, Align(sizeof(int16_t)));
         setName(ctx.emission_context, tid, "thread_id");
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        jl_aliasinfo_t ai = ctx.alias().gcframe;
         ai.decorateInst(tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
     }
@@ -1748,7 +1786,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
         LoadInst *rng_value = ctx.builder.CreateAlignedLoad(getInt64Ty(ctx.builder.getContext()), rng_ptr, Align(sizeof(void*)));
         setName(ctx.emission_context, rng_value, "rngseed");
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        jl_aliasinfo_t ai = ctx.alias().gcframe;
         ai.decorateInst(rng_value);
         return mark_or_box_ccall_result(ctx, rng_value, retboxed, rt, unionall, static_rt);
     }
@@ -1763,7 +1801,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
         Value *val64 = emit_unbox(ctx, getInt64Ty(ctx.builder.getContext()), drop_inline_roots(argv[0]));
         auto store = ctx.builder.CreateAlignedStore(val64, rng_ptr, Align(sizeof(void*)));
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        jl_aliasinfo_t ai = ctx.alias().gcframe;
         ai.decorateInst(store);
         return ghostValue(ctx, jl_nothing_type);
     }
@@ -1780,7 +1818,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == ctx.types().T_size);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+        jl_aliasinfo_t ai = ctx.alias().constant;
 
         // jl_task_t *ct = jl_current_task;
         // if (ct->ptls->in_pure_callback)
@@ -1995,7 +2033,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             setName(ctx.emission_context, ph2, "object_id_ptr");
             LoadInst *hashval = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ph2, ctx.types().alignof_ptr);
             setName(ctx.emission_context, hashval, "object_id");
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+            jl_aliasinfo_t ai = ctx.alias().constant;
             ai.decorateInst(hashval);
             return mark_or_box_ccall_result(ctx, hashval, retboxed, rt, unionall, static_rt);
         }
@@ -2153,6 +2191,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 #else
                 auto ID = Function::lookupIntrinsicID(f_name);
 #endif
+                std::string foreign_msg;
+                if (is_foreign_target_intrinsic(ctx, ID, f_name, foreign_msg)) {
+                    emit_error(ctx, foreign_msg);
+                    return jl_cgval_t();
+                }
                 if (ID != Intrinsic::not_intrinsic) {
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
@@ -2323,7 +2366,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (!jlretboxed) {
             // something alloca'd above is SSA
             if (static_rt)
-                return mark_julia_slot(result, rt, NULL, ctx.tbaa().tbaa_stack);
+                return mark_julia_slot(result, rt, NULL, ctx.alias().stack);
             ++SRetCCalls;
             result = ctx.builder.CreateLoad(sretty, result);
             setName(ctx.emission_context, result, "returned");
@@ -2342,7 +2385,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             if (static_rt) {
                 Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt, true);
                 setName(ctx.emission_context, strct, "ccall_ret_box");
-                MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
+                jl_aliasinfo_t ai = jl_is_mutable(rt) ? ctx.alias().mutab : ctx.alias().immut;
                 Align boxalign(julia_alignment(rt));
                 // copy the data from the return value to the new struct
                 const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
@@ -2354,11 +2397,10 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     auto slot = emit_static_alloca(ctx, resultTy, boxalign);
                     setName(ctx.emission_context, slot, "type_pun_slot");
                     ctx.builder.CreateAlignedStore(result, slot, boxalign);
-                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
                     emit_memcpy(ctx, strct, ai, slot, ai, rtsz, boxalign, boxalign);
                 }
                 else {
-                    init_bits_value(ctx, strct, result, tbaa, boxalign);
+                    init_bits_value(ctx, strct, result, ai, boxalign);
                 }
                 return mark_julia_type(ctx, strct, true, rt);
             }

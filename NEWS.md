@@ -138,6 +138,8 @@ New library functions
 ---------------------
 
 * `tap(f)` creates a function that calls `f(x)` for side effects and returns `x` ([#61340]).
+* `unsplat(f)` creates a function that bundles its arguments into a tuple and passes them to `f`;
+  it is the inverse of `splat` ([#62714]).
 * `Base.set_binding_visibility!` sets the declared visibility (`:none`, `:public`, or `:export`) of a name
   in a module, allowing an `export` or `public` declaration to be retracted programmatically ([#62131]).
 * `Base.generating_output()` has been made `public` (but not exported) to allow checking whether the current
@@ -233,7 +235,9 @@ Standard library changes
   unbound when called with `Union{}`, or `f(::Vector{<:T}) where {T}` with a
   `Vector{Union{}}` argument), and no longer reports methods whose problematic calls are
   all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback), or
-  whose lowered bodies never read the possibly-unbound parameters.
+  whose lowered bodies never read the possibly-unbound parameters. Parameters left
+  unbound only by calls with `Union{}` type parameters are reported only with the new
+  `ambiguous_bottom=true` keyword argument, as for `detect_ambiguities` ([#62405]).
 
 #### Dates
 

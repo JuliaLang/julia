@@ -40,6 +40,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libopenlibm_path() = libopenlibm_path
+
 function __init__()
     global libopenlibm_path = string(libopenlibm.path)
     global artifact_dir = dirname(Sys.BINDIR)

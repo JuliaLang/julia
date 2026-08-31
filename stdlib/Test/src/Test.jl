@@ -2747,13 +2747,21 @@ See also [`detect_closure_boxes`](@ref) to check specific modules.
 detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
 
 """
-    detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
+    detect_unbound_args(mod1, mod2...; recursive=false,
+                                       ambiguous_bottom=false,
+                                       allowed_undefineds=nothing)
 
 Return a vector of `Method`s which may have unbound type parameters: some
 call matching the method's signature does not pin every static parameter to
 a definite value, so reading such a parameter in the method body may throw an
 `UndefVarError`.
 Use `recursive=true` to test in all submodules.
+
+`ambiguous_bottom` controls whether parameters left unbound only by calls
+with `Union{}` type parameters are included, such as `T` in
+`f(::Type{<:T}) where {T}` for the call `f(Union{})`, or in
+`f(::Vector{<:T}) where {T}` for a `Vector{Union{}}` argument; in most cases
+you probably want to leave this `false`. See [`Test.detect_ambiguities`](@ref).
 
 The check is a conservative static approximation of how subtyping assigns
 static parameters, so a reported method may in practice never see the calls
@@ -2783,18 +2791,23 @@ would suppress warnings about `Base.active_repl` and
 
 !!! compat "Julia 1.8"
     `allowed_undefineds` requires at least Julia 1.8.
+
+!!! compat "Julia 1.14"
+    `ambiguous_bottom` requires at least Julia 1.14.
 """
 function detect_unbound_args(mods...;
                              recursive::Bool = false,
+                             ambiguous_bottom::Bool = false,
                              allowed_undefineds=nothing)
     @nospecialize mods
+    inhabited_params = !ambiguous_bottom
     ambs = Set{Method}()
     mods = Module[mods...]
     world = Base.get_world_counter()
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             is_in_mods(parentmodule(m), recursive, mods) || continue
-            idxs = unbound_sparams(m.sig)
+            idxs = unbound_sparams(m.sig, inhabited_params)
             isempty(idxs) && continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
             params = tuple_sig.parameters
@@ -2833,7 +2846,7 @@ function detect_unbound_args(mods...;
                 # way needs no method-table probe (`idxs` is a superset of
                 # the parameters still unbound under `nonempty_vararg`)
                 any(idx -> (var = sig_vars[idx];
-                            v !== var && Base.Compiler.constrains_var(var, v.ub, Core.Compiler.MATCH_INHABITED)),
+                            v !== var && Base.Compiler.constrains_var(var, v.ub, Core.Compiler.MATCH_INHABITED, false, inhabited_params)),
                     idxs) || continue
                 bot_params = Any[params...]
                 bot_params[i] = Type{Union{}}
@@ -2845,7 +2858,7 @@ function detect_unbound_args(mods...;
             end
             # re-check unboundness under the verified assumptions
             if nonempty_vararg || !isempty(shadowed_slots)
-                idxs = unbound_sparams(m.sig, nonempty_vararg, shadowed_slots)
+                idxs = unbound_sparams(m.sig, inhabited_params, nonempty_vararg, shadowed_slots)
                 isempty(idxs) && continue
             end
             # unboundness only matters if the body actually reads one of the
@@ -2874,9 +2887,10 @@ end
 
 # The 1-based positions in the signature's `where` chain of parameters that
 # some matching call may leave unbound.
+# - `inhabited_params` assumes no invariant type parameter of the arguments is `Union{}`;
 # - `nonempty_vararg` assumes the signature's trailing `Vararg` matches at least one argument;
 # - `shadowed_slots` lists `Type{S}` argument positions whose `Union{}` member never reaches this method.
-function unbound_sparams(@nospecialize(sig), nonempty_vararg::Bool=false,
+function unbound_sparams(@nospecialize(sig), inhabited_params::Bool, nonempty_vararg::Bool=false,
                          shadowed_slots::Vector{Int}=Int[])
     idxs = Int[]
     params = isempty(shadowed_slots) ? Core.svec() :
@@ -2887,13 +2901,13 @@ function unbound_sparams(@nospecialize(sig), nonempty_vararg::Bool=false,
         i += 1
         var = body.var
         body = body.body
-        Base.Compiler.constrains_var(var, body, Core.Compiler.MATCH_TYPEOF, nonempty_vararg) && continue
+        Base.Compiler.constrains_var(var, body, Core.Compiler.MATCH_TYPEOF, nonempty_vararg, inhabited_params) && continue
         pinned = false
         for j in shadowed_slots
             # any non-`Union{}` value of this slot's `Type` parameter pins
             # `var` if it occurs invariantly below a constructor of its bound
             v = type_slot_var(params[j])::TypeVar
-            if v !== var && Base.Compiler.constrains_var(var, v.ub, Core.Compiler.MATCH_INHABITED)
+            if v !== var && Base.Compiler.constrains_var(var, v.ub, Core.Compiler.MATCH_INHABITED, false, inhabited_params)
                 pinned = true
                 break
             end

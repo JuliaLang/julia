@@ -33,9 +33,14 @@ function SubArray(::IndexCartesian, parent::P, indices::I, ::NTuple{N,Any}) wher
 end
 function SubArray(::IndexLinear, parent::P, indices::I, ::NTuple{N,Any}) where {P,I,N}
     @inline
-    # Compute the stride and offset
-    stride1 = compute_stride1(parent, indices)
-    SubArray{eltype(P), N, P, I, true}(parent, indices, compute_offset1(parent, stride1, indices), stride1)
+    offset1, stride1 = _compute_linear_layout(parent, indices)
+    SubArray{eltype(P), N, P, I, true}(parent, indices, offset1, stride1)
+end
+
+function _compute_linear_layout(parent, indices)
+    @inline
+    stride1 = Int(compute_stride1(parent, indices))
+    return Int(compute_offset1(parent, stride1, indices)), stride1
 end
 
 check_parent_index_match(parent, indices) = check_parent_index_match(parent, index_ndims(indices...))
@@ -117,8 +122,11 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
     vdest = trimmedpind isa Tuple{Vararg{Union{Slice,Colon}}} ? dest : view(dest, trimmedpind...)
     copyto!(vdest, view(V, _trimmedvind(V.indices...)...))
     indices = map(_trimmedindex, V.indices)
-    stride1 = LD ? compute_stride1(dest, indices) : 0
-    offset1 = LD ? compute_offset1(dest, stride1, indices) : 0
+    if LD
+        offset1, stride1 = _compute_linear_layout(dest, indices)
+    else
+        offset1, stride1 = 0, 0
+    end
     SubArray{T,N,A,I,LD}(dest, indices, offset1, stride1)
 end
 # Get the proper trimmed shape
@@ -442,8 +450,8 @@ compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{Vararg{ScalarIndex}}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
-    (@inline; compute_stride1(s*length(inds[1]), tail(inds), tail(I)))
-compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
+    (@inline; compute_stride1(s*Int(length(inds[1])), tail(inds), tail(I)))
+compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s * Int(step(I[1]))
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(LazyString("invalid strided index type ", typeof(I[1]))))
 
@@ -461,7 +469,7 @@ first_index(V::SubArray) = compute_linindex(parent(V), V.indices)
 # The running sum is `f`; the cumulative stride product is `s`.
 # If the parent is a vector, then we offset the parent's own indices with parameters of I
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange}) =
-    (@inline; first(I[1]) - stride1*first(axes1(I[1])))
+    (@inline; Int(first(I[1])) - stride1*Int(first(axes1(I[1]))))
 # If the result is one-dimensional and it's a Colon, then linear
 # indexing uses the indices along the given dimension.
 # If the result is one-dimensional and it's a range, then linear
@@ -470,20 +478,25 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange
 compute_offset1(parent, stride1::Integer, I::Tuple) =
     (@inline; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
 compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
-    (@inline; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
+    (@inline; compute_linindex(parent, I) - stride1*Int(first(axes(parent, dims[1]))))  # index-preserving case
 compute_offset1(parent, stride1::Integer, dims, inds::Tuple{AbstractRange}, I::Tuple) =
-    (@inline; compute_linindex(parent, I) - stride1*first(axes1(inds[1]))) # potentially index-offsetting case
+    (@inline; compute_linindex(parent, I) - stride1*Int(first(axes1(inds[1])))) # potentially index-offsetting case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
     (@inline; compute_linindex(parent, I) - stride1)
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @inline
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
-    compute_linindex(first(LinearIndices(parent)), 1, IP, I)
+    compute_linindex(Int(first(LinearIndices(parent))), 1, IP, I)
 end
-function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
+function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Any, Vararg{Any}})
     @inline
-    Δi = first(I[1])-first(IP[1])
-    compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
+    Δi = Int(first(I[1])) - Int(first(IP[1]))
+    compute_linindex(f + Δi*s, s*Int(length(IP[1])), tail(IP), tail(I))
+end
+function compute_linindex(f, s, IP::Tuple, I::Tuple{Any})
+    @inline
+    Δi = Int(first(I[1])) - Int(first(IP[1]))
+    f + Δi*s
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 

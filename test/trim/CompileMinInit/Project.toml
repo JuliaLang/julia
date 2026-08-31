@@ -1,0 +1,9 @@
+name = "CompileMinInit"
+uuid = "5a2d7c31-0d3a-4c1b-9d36-8b2f9a6c4e10"
+version = "0.1.0"
+
+[deps]
+MinInitDep = "3f9b1e2c-7a4d-4b8e-a1c5-6d0e2f8b9a37"
+
+[sources]
+MinInitDep = {path = "MinInitDep"}

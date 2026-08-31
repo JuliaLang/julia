@@ -3441,6 +3441,8 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         argtypes_vec = Any[af_argtype.parameters...]
         isempty(argtypes_vec) && push!(argtypes_vec, Union{})
         aft = argtypes_vec[1]
+        # e.g. `return_type(Tuple{Vararg{Any}})`: there is no function type to model
+        isvarargtype(aft) && return Future(UNKNOWN)
     end
     # effects are not an issue if we know this statement will get removed, but if it does not get removed,
     # then this could be recursively re-entering inference (via concrete-eval), which will not terminate

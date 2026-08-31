@@ -7,4 +7,7 @@ using Test, Libdl, PCRE2_jll
     @test ccall((:pcre2_config_8, libpcre2_8), Cint, (UInt32, Ref{UInt8}), 11, vstr) > 0
     vn = VersionNumber(split(unsafe_string(pointer(vstr)), " ")[1])
     @test vn == v"10.47.0"
+
+    # Preserve the JLLWrappers path compatibility accessor used by packages.
+    @test PCRE2_jll.get_libpcre2_8_path() == PCRE2_jll.libpcre2_8_path
 end
