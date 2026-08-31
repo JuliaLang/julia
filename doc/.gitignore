@@ -4,4 +4,5 @@ UnicodeData.txt
 src/stdlib/
 src/NEWS.md
 src/devdocs/agents/skills/*/index.md
+src/devdocs/llvm-dialect.md
 
