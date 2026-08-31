@@ -1548,16 +1548,19 @@ function expand_let(ctx, ex)
             lhs = binding[1]
             rhs = binding[2]
             if is_identifier_like(lhs)
-                kind(lhs) === K"Placeholder" && continue
-                blk = @ast ctx binding [K"block"
-                    tmp := rhs
-                    [K"scope_block"(ex) scope_type
-                        [K"local"(lhs) lhs]
-                        [K"always_defined" lhs]
-                        [K"="(binding) lhs tmp]
-                        blk
+                if kind(lhs) === K"Placeholder"
+                    blk = @ast ctx binding [K"block" rhs blk]
+                else
+                    blk = @ast ctx binding [K"block"
+                        tmp := rhs
+                        [K"scope_block"(ex) scope_type
+                            [K"local"(lhs) lhs]
+                            [K"always_defined" lhs]
+                            [K"="(binding) lhs tmp]
+                            blk
+                        ]
                     ]
-                ]
+                end
             elseif kind(lhs) == K"::"
                 var = lhs[1]
                 kind(var) === K"Placeholder" && continue
