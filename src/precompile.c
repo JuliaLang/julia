@@ -21,14 +21,9 @@ JL_DLLEXPORT int jl_generating_output(void)
     return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji || jl_options.outputasm;
 }
 
-static void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) JL_CANSAFEPOINT {
+static void write_srctext(ios_t *f, jl_array_t *udeps) JL_CANSAFEPOINT {
     // Write the source-text for the dependent files
     if (udeps) {
-        // Go back and update the source-text position to point to the current position
-        int64_t posfile = ios_pos(f);
-        ios_seek(f, srctextpos);
-        write_uint64(f, posfile);
-        ios_seek_end(f);
         // Each source-text file is written as
         //   int32: length of abspath
         //   char*: abspath
@@ -79,7 +74,7 @@ static void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) JL_CA
                 size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);
                 ios_write(f, jl_string_data(depalias), slen);
-                posfile = ios_pos(f);
+                int64_t posfile = ios_pos(f);
                 write_uint64(f, 0);   // placeholder for length of this file in bytes
                 uint64_t filelen = (uint64_t) ios_copyall(f, &srctext);
                 ios_close(&srctext);
@@ -137,11 +132,10 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     int comp = jl_options.compress_sysimage;
 
     ios_t *s = NULL;
-    int64_t srctextpos = 0 ;
     uint32_t checksum =
         jl_create_system_image(emit_native ? &native_code : NULL,
                                jl_options.incremental ? worklist : NULL, emit_split, comp,
-                               &s, &udeps, &srctextpos, init_order);
+                               &s, &udeps, init_order);
 
     ios_t f;
 
@@ -173,7 +167,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     if (outputji) {
         if (jl_options.incremental) {
-            write_srctext(&f, udeps, srctextpos);
+            write_srctext(&f, udeps);
         }
         ios_close(&f);
     }
