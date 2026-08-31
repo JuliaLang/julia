@@ -259,6 +259,8 @@ end
 
         f = findeach(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
         @test only(f) == 2
+
+        @test collect(findeach([true,false,true])) == [1,3]
     end
 end
 
@@ -549,6 +551,11 @@ end
 @test collect(flatten(())) == Union{}[]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
+
+# Flattened iterator lengths must not wrap before comprehension allocation.
+overflow_length = Int(typemax(UInt) ÷ 3 + 1)
+overflow_flatten = flatten(Iterators.repeated((1, 2, 3), overflow_length))
+@test_throws OverflowError collect(identity(x) for x in overflow_flatten)
 
 @testset "IteratorSize trait for flatten" begin
     @test (@inferred Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1))) == Base.SizeUnknown()

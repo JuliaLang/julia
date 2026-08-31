@@ -93,6 +93,10 @@ using Dates
 
     @test_throws DimensionMismatch reshape(1:3, 4)
 
+    # Generic reshape must reject dimensions whose product overflows.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws ArgumentError reshape(view([1, 2], :), 3, overflow_dim)
+
     # issue #23107
     a = [1,2,3]
     @test typeof(a)(a) !== a
@@ -933,6 +937,12 @@ end
     @test isequal(cumsum(A,dims=3),A3)
     @test repeat([1,2,3,4], UInt32(1)) == [1,2,3,4]
     @test repeat([1 2], UInt32(2)) == repeat([1 2], UInt32(2), UInt32(1))
+
+    # Repeated array dimensions must be checked before allocating and filling the result.
+    overflow_count = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws OverflowError repeat([1, 2, 3], overflow_count)
+    @test_throws OverflowError repeat([1, 2, 3], inner=overflow_count)
+    @test_throws OverflowError repeat(reshape(1:9, 3, 3), overflow_count, 1)
 
     # issue 20564
     @test_throws MethodError repeat(1, 2, 3)
@@ -2364,6 +2374,12 @@ end
     @test_throws BoundsError copyto!(a,b)
     @test_throws ArgumentError copyto!(a,2:3,1:3,b,1:5,2:7)
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+
+    # Copy bounds must be validated without overflowing their end indices.
+    @test_throws BoundsError copyto!(zeros(UInt8, 2), Int8(2), ones(UInt8, 2), Int8(2), typemax(Int8))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), 2, Iterators.repeated(1, typemax(Int)))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), Int8(2), Iterators.repeated(1), 1, typemax(Int8))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), Int8(2), view(ones(Int, 2), :), Int8(2), typemax(Int8))
 end
 
 @testset "empty copyto!" begin
@@ -2378,7 +2394,7 @@ end
 
 module RetTypeDecl
     using Test
-    import Base: +, *, broadcast, convert
+    import Base: +, *, muladd, broadcast, convert
 
     struct MeterUnits{T,P} <: Number
         val::T
@@ -2391,6 +2407,7 @@ module RetTypeDecl
     (+)(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{T,pow}(x.val+y.val)
     (*)(x::Int, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
     (*)(x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    muladd(x::MeterUnits{T,1}, y::MeterUnits{T,1}, z::MeterUnits{T,2}) where {T} = MeterUnits{T,2}(muladd(x.val, y.val, z.val))
     broadcast(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
     convert(::Type{MeterUnits{T,pow}}, y::Real) where {T,pow} = MeterUnits{T,pow}(convert(T,y))
 
@@ -2399,6 +2416,7 @@ module RetTypeDecl
     @test @inferred(broadcast(*,m,[m,m])) == [m2,m2]
     @test @inferred(broadcast(*,[m,m],m)) == [m2,m2]
     @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
+    @test @inferred([m 2m; m m]*[m 2m; m m]) == [3m2 4m2; 2m2 3m2]
     @test @inferred(broadcast(*,[m m],[m,m])) == [m2 m2; m2 m2]
 end
 
@@ -2727,7 +2745,7 @@ end
     @test cumsum(Any[1, 2.3]) == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
     @test cumsum([true,true,true]) == [1,2,3]
     @test cumsum(0x00:0xff)[end] === UInt(255*(255+1)÷2) # no overflow
-    @test accumulate(+, 0x00:0xff)[end] === 0x80         # overflow
+    @test accumulate(+%, 0x00:0xff)[end] === 0x80         # overflow
     @test_throws InexactError cumsum!(similar(0x00:0xff), 0x00:0xff) # overflow
 
     @test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]

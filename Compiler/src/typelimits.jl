@@ -403,6 +403,9 @@ end
             return false
         end
         return false
+    elseif typea isa PartialTask
+        typeb isa PartialTask || return false
+        return issimplertype(𝕃, typea.fetch_type, typeb.fetch_type)
     end
     return true
 end
@@ -725,6 +728,21 @@ end
         typeb = widenlattice(wl, typeb)
     end
 
+    # type-lattice for PartialTask wrapper
+    apt = isa(typea, PartialTask)
+    bpt = isa(typeb, PartialTask)
+    if apt && bpt
+        # Both are PartialTask - merge their fetch types
+        merged_fetch_type = tmerge(lattice, typea.fetch_type, typeb.fetch_type)
+        # Any carries no additional type information - return Task
+        merged_fetch_type === Any && return Task
+        return PartialTask(merged_fetch_type)
+    elseif apt
+        typea = Task
+    elseif bpt
+        typeb = Task
+    end
+
     return tmerge(wl, typea, typeb)
 end
 
@@ -766,18 +784,18 @@ end
     heighta = 0
     while a !== Any
         heighta += 1
-        a = a.super
+        a = datatype_super(a)
     end
     b = unwrap_unionall(bname.wrapper)
     heightb = 0
     while b !== Any
         b.name === aname && return aname
         heightb += 1
-        b = b.super
+        b = datatype_super(b)
     end
     a = unwrap_unionall(aname.wrapper)
     while heighta > heightb
-        a = a.super
+        a = datatype_super(a)
         heighta -= 1
     end
     return a.name === bname ? bname : nothing
@@ -847,11 +865,11 @@ end
                         uw = unwrap_unionall(wr)::DataType
                         ui = unwrap_unionall(ti)::DataType
                         while ui.name !== ijname
-                            ui = ui.super
+                            ui = datatype_super(ui)
                         end
                         uj = unwrap_unionall(tj)::DataType
                         while uj.name !== ijname
-                            uj = uj.super
+                            uj = datatype_super(uj)
                         end
                         p = Vector{Any}(undef, length(uw.parameters))
                         usep = true

@@ -4,7 +4,7 @@ use crate::JuliaVM;
 use crate::JULIA_HEADER_SIZE;
 use crate::MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 use crate::SINGLETON;
-use crate::{BUILDER, DISABLED_GC, MUTATORS, USER_TRIGGERED_GC};
+use crate::{BUILDER, MUTATORS, USER_TRIGGERED_GC};
 
 use libc::c_char;
 use log::*;
@@ -17,13 +17,14 @@ use mmtk::AllocationSemantics;
 use mmtk::Mutator;
 use std::ffi::CStr;
 use std::sync::atomic::AtomicIsize;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[no_mangle]
 pub extern "C" fn mmtk_gc_init(
     min_heap_size: usize,
     max_heap_size: usize,
     n_gcthreads: usize,
+    n_concurrent_gcthreads: usize,
     header_size: usize,
     buffer_tag: usize,
 ) {
@@ -31,6 +32,9 @@ pub extern "C" fn mmtk_gc_init(
         crate::JULIA_HEADER_SIZE = header_size;
         crate::JULIA_BUFF_TAG = buffer_tag;
     };
+
+    // We don't need the env var, as we will overwrite the plan with the defined feature.
+    std::env::remove_var("MMTK_PLAN");
 
     {
         let mut builder = BUILDER.lock().unwrap();
@@ -45,6 +49,8 @@ pub extern "C" fn mmtk_gc_init(
             Some(PlanSelector::Immix)
         } else if cfg!(feature = "stickyimmix") {
             Some(PlanSelector::StickyImmix)
+        } else if cfg!(feature = "concurrentimmix") {
+            Some(PlanSelector::ConcurrentImmix)
         } else {
             None
         };
@@ -97,6 +103,16 @@ pub extern "C" fn mmtk_gc_init(
         if n_gcthreads > 0 {
             let success = builder.options.threads.set(n_gcthreads);
             assert!(success, "Failed to set GC threads to {}", n_gcthreads);
+        }
+
+        // Set concurrent GC threads
+        if n_concurrent_gcthreads > 0 {
+            let success = builder.options.concurrent_threads.set(n_concurrent_gcthreads);
+            assert!(
+                success,
+                "Failed to set concurrent GC threads to {}",
+                n_concurrent_gcthreads
+            );
         }
     }
 
@@ -174,6 +190,30 @@ pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<JuliaVM>) {
 
     // Remove from our hashmap
     mutators.remove(&key);
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_notify_task_resume(
+    mutator: *mut Mutator<JuliaVM>,
+    task: *const crate::julia_types::_jl_task_t,
+) {
+    #[cfg(feature = "concurrentimmix")]
+    {
+        if !crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst)
+            || task.is_null()
+            || mutator.is_null()
+        {
+            return;
+        }
+
+        crate::scanning::GC_STACK_SNAPSHOTS.resume_barrier_scan_task(task);
+    }
+
+    #[cfg(not(feature = "concurrentimmix"))]
+    {
+        let _ = (mutator, task);
+        panic!("mmtk_notify_task_resume should not be called for non-concurrent plans");
+    }
 }
 
 #[no_mangle]
@@ -281,20 +321,95 @@ pub extern "C" fn mmtk_is_mapped_address(address: Address) -> bool {
 #[no_mangle]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, collection: u8) {
     AtomicIsize::fetch_add(&USER_TRIGGERED_GC, 1, Ordering::SeqCst);
-    if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) {
+    if !memory_manager::is_collection_enabled(&SINGLETON) {
         AtomicIsize::fetch_add(&USER_TRIGGERED_GC, -1, Ordering::SeqCst);
         return;
     }
     // See jl_gc_collection_t
     match collection {
         // auto
-        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls),
+        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls, false),
         // full
         1 => SINGLETON.handle_user_collection_request(tls, true, true),
         // incremental
         2 => SINGLETON.handle_user_collection_request(tls, true, false),
         _ => unreachable!(),
     };
+}
+
+/// `mmtk_disable_collection()` succeeded: collection is now disabled.
+pub const MMTK_DISABLE_COLLECTION_OK: i32 = 0;
+/// `mmtk_disable_collection()` failed because a GC pause has been requested but mutators have
+/// not all stopped yet (status `PauseRequested`). This mutator may itself be one of the ones the
+/// pause is waiting to stop, so the caller should do a safepoint check (which is exactly how a
+/// mutator cooperates with letting the pause start) and then retry.
+pub const MMTK_DISABLE_COLLECTION_RETRY: i32 = 1;
+/// `mmtk_disable_collection()` failed because a stop-the-world pause is currently active, or a
+/// concurrent GC's background work is currently running (statuses `InPause`/`InConcurrentGC`).
+/// Either way there's no useful safepoint action to take right now: in the `InPause` case, this
+/// mutator isn't one of the ones the active pause is waiting on (otherwise it wouldn't be running
+/// this code at all), and in the `InConcurrentGC` case there's no pause happening yet to
+/// safepoint into. The caller should instead wait on `mmtk_wait_for_new_gc_epoch()` and then
+/// retry.
+pub const MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH: i32 = 2;
+
+use mmtk::GcStatus;
+
+#[no_mangle]
+pub extern "C" fn mmtk_disable_collection() -> i32 {
+    assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
+    match memory_manager::disable_collection(&SINGLETON) {
+        Ok(_) => MMTK_DISABLE_COLLECTION_OK,
+        Err(GcStatus::PauseRequested) => MMTK_DISABLE_COLLECTION_RETRY,
+        Err(GcStatus::InPause | GcStatus::InConcurrentGC) => {
+            MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH
+        }
+        // `Uninitialized` should never happen this late (MMTk must already be initialized for a
+        // mutator to be calling this at all), and `NotInGC`/`Disabled(_)` are the success cases,
+        // so they can never appear here either. Treat any of these as a hard bug rather than
+        // silently falling back to some retry strategy.
+        Err(status) => panic!(
+            "disable_collection() failed with unexpected status: {:?}",
+            status
+        ),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_enable_collection() -> i32 {
+    assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
+    memory_manager::enable_collection(&SINGLETON) as i32
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_is_collection_enabled() -> i32 {
+    assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
+    memory_manager::is_collection_enabled(&SINGLETON) as i32
+}
+
+/// Return the current GC epoch. Call this *before* attempting `mmtk_disable_collection()`, and
+/// pass the returned value to `mmtk_wait_for_new_gc_epoch()` if that attempt fails with
+/// `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`, so a notification that arrives in between is
+/// not missed.
+#[no_mangle]
+pub extern "C" fn mmtk_gc_epoch() -> u64 {
+    let arc = crate::GC_EPOCH_COND.clone();
+    let (lock, _cvar) = &*arc;
+    let epoch = *lock.lock().unwrap();
+    epoch
+}
+
+/// Block until the GC epoch has advanced at least once since `last_seen_epoch` (as previously
+/// obtained from `mmtk_gc_epoch()`). The epoch advances once per completed stop-the-world pause,
+/// which covers both the case of waiting for an active pause to finish, and the pause that ends a
+/// concurrent GC's background-work phase. Returns immediately if the epoch has already moved on.
+#[no_mangle]
+pub extern "C" fn mmtk_wait_for_new_gc_epoch(last_seen_epoch: u64) {
+    let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
+    let guard = lock.lock().unwrap();
+    let _guard = cvar
+        .wait_while(guard, |epoch| *epoch == last_seen_epoch)
+        .unwrap();
 }
 
 #[no_mangle]
@@ -416,6 +531,21 @@ fn set_side_log_bit_for_region(start: Address, size: usize) {
 }
 
 #[no_mangle]
+pub extern "C" fn mmtk_object_reference_write_pre(
+    mutator: *mut Mutator<JuliaVM>,
+    src: ObjectReference,
+    target: NullableObjectReference,
+) {
+    let mutator = unsafe { &mut *mutator };
+    memory_manager::object_reference_write_pre(
+        mutator,
+        src,
+        crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(Address::ZERO)),
+        target.into(),
+    )
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_object_reference_write_post(
     mutator: *mut Mutator<JuliaVM>,
     src: ObjectReference,
@@ -532,6 +662,26 @@ pub extern "C" fn mmtk_unpin_object(_object: ObjectReference) -> bool {
 #[no_mangle]
 pub extern "C" fn mmtk_is_pinned(_object: ObjectReference) -> bool {
     false
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_set_concurrent_marking_enabled(enabled: bool) {
+    #[cfg(feature = "concurrentimmix")]
+    {
+        let mut builder = BUILDER.lock().unwrap();
+        let success = builder
+            .options
+            .concurrent_immix_disable_concurrent_marking
+            .set(!enabled);
+        assert!(
+            success,
+            "Failed to set concurrent_immix_disable_concurrent_marking"
+        );
+    }
+    #[cfg(not(feature = "concurrentimmix"))]
+    {
+        let _ = enabled;
+    }
 }
 
 #[no_mangle]

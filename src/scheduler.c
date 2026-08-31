@@ -109,7 +109,11 @@ void jl_threadfun(void *arg)
     JL_GC_PROMISE_ROOTED(ct);
 
     // wait for all threads
+#ifdef __clang_safetyanalysis__
+    jl_gc_safe_enter(ptls);
+#else
     jl_gc_state_set(ptls, JL_GC_STATE_SAFE, JL_GC_STATE_UNSAFE);
+#endif
     uv_barrier_wait(targ->barrier);
 
     // free the thread argument here
@@ -121,7 +125,7 @@ void jl_threadfun(void *arg)
 
 
 
-void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT
+void jl_init_thread_scheduler(jl_ptls_t ptls)
 {
     uv_mutex_init(&ptls->sleep_lock);
     uv_cond_init(&ptls->wake_signal);
@@ -237,7 +241,10 @@ static void wake_libuv(void) JL_NOTSAFEPOINT
     JULIA_DEBUG_SLEEPWAKE( io_wakeup_leave = cycleclock() );
 }
 
-static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
+// Returns 1 if a sleeping thread was transitioned to running (i.e. the wake
+// added a running thread), 0 if the target was already awake or is the caller.
+static int wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
+    int woke = 0;
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
     if (tid != self)
         jl_fence(); // [^store_buffering_1]
@@ -259,16 +266,19 @@ static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass 
     }
     else {
         // something added to the sticky-queue: notify that thread
-        if (wake_thread(tid) && uvlock != ct) {
-            // check if we need to notify uv_run too
-            jl_fence();
-            jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-            jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
-            // now that we have changed the thread to not-sleeping, ensure that
-            // either it has not yet acquired the libuv lock, or that it will
-            // observe the change of state to not_sleeping
-            if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
-                wake_libuv();
+        if (wake_thread(tid)) {
+            woke = 1;
+            if (uvlock != ct) {
+                // check if we need to notify uv_run too
+                jl_fence();
+                jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
+                // now that we have changed the thread to not-sleeping, ensure that
+                // either it has not yet acquired the libuv lock, or that it will
+                // observe the change of state to not_sleeping
+                if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+                    wake_libuv();
+            }
         }
     }
     if (tid == -1) {
@@ -279,6 +289,7 @@ static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass 
             if (tid != self)
                 anysleep |= wake_thread(tid);
         }
+        woke = anysleep;
         // check if we need to notify uv_run too
         if (uvlock != ct && anysleep) {
             jl_fence();
@@ -287,13 +298,32 @@ static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass 
         }
     }
     JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
+    return woke;
 }
 
-/* ensure thread tid is awake if necessary */
-JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
+/* ensure thread tid is awake if necessary; returns 1 if a sleeping thread was
+   woken (a running thread was added), 0 otherwise */
+JL_DLLEXPORT int jl_wakeup_thread(int16_t tid)
 {
     jl_task_t *ct = jl_current_task;
-    wakeup_thread(ct, tid);
+    return wakeup_thread(ct, tid);
+}
+
+// Like jl_wakeup_thread, but callable from non-Julia threads (e.g. the signal
+// listener), which have no task context.
+JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT
+{
+    if (tid < 0)
+        return;
+    jl_fence(); // [^store_buffering_1]
+    if (wake_thread(tid)) {
+        // check if we need to notify uv_run too
+        jl_fence();
+        jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
+        if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+            wake_libuv();
+    }
 }
 
 // Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded
@@ -367,7 +397,7 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
 }
 
 // get the next runnable task
-static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
+static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q) JL_CANSAFEPOINT
 {
     jl_gc_safepoint();
     jl_task_t *task = (jl_task_t*)jl_apply_generic(trypoptask, &q, 1);
@@ -379,7 +409,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
     return NULL;
 }
 
-static int check_empty(jl_value_t *checkempty)
+static int check_empty(jl_value_t *checkempty) JL_CANSAFEPOINT
 {
     return jl_apply_generic(checkempty, NULL, 0) == jl_true;
 }
@@ -424,12 +454,37 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 }
 
 
-JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty)
+// Run a pending ^C dispatch pass inline on this (idle, ordinary-task-
+// context) thread: the pass only wakes waiters and walks Julia state, so
+// any scheduling thread can perform it, and the event loop stays out of
+// the delivery path - a worker must not run the shared loop outside
+// threaded regions, and the loop-owning thread may be stuck in a foreign
+// call, which is exactly when ^C must still deliver. Base arbitrates
+// concurrent passes (see `Base.maybe_dispatch_sigint`); errors are caught
+// on the Julia side.
+static void jl_dispatch_sigint_inline(void) JL_CANSAFEPOINT
+{
+    static _Atomic(jl_value_t *) dispatch_f = NULL;
+    jl_value_t *f = jl_atomic_load_relaxed(&dispatch_f);
+    if (f == NULL) {
+        if (jl_base_module == NULL)
+            return;
+        f = jl_get_global(jl_base_module, jl_symbol("maybe_dispatch_sigint"));
+        if (f == NULL)
+            return;
+        jl_atomic_store_relaxed(&dispatch_f, f);
+    }
+    jl_apply(&f, 1);
+}
+
+JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     uint64_t start_cycles = 0;
 
     while (1) {
+        if (jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+            jl_dispatch_sigint_inline();
         jl_task_t *task = get_next_task(trypoptask, q);
         if (task)
             return task;
@@ -503,7 +558,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     // of us.
                     if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
                         jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
-
                 }
                 if (uvlock) {
                     int enter_eventloop = may_sleep(ptls);
@@ -565,7 +619,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
                 // the other threads will just wait for an individual wake signal to resume
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
-                int8_t gc_state = jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
+                int8_t gc_state = jl_gc_safe_enter(ptls);
+                jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
                 while (may_sleep(ptls)) {
                     if (ptls->tid == 0) {
                         task = wait_empty;
@@ -589,6 +644,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 start_cycles = 0;
                 uv_mutex_unlock(&ptls->sleep_lock);
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
+                jl_gc_notify_task_resume(ct);
                 jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
                 if (task) {
                     assert(task == wait_empty);

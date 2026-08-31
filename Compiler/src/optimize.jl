@@ -39,6 +39,9 @@ const IR_FLAG_NOUB        = one(UInt32) << 10
 #const IR_FLAG_CONSISTENTOVERLAY = one(UInt32) << 12
 # This statement is :nortcall
 const IR_FLAG_NORTCALL = one(UInt32) << 13
+# This statement is proven :reset_safe
+const IR_FLAG_RESET_SAFE = one(UInt32) << 14
+# Reserved: one(UInt32) << 15 used for RSIIMO below
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
@@ -50,15 +53,21 @@ const IR_FLAG_UNUSED      = one(UInt32) << 17
 const IR_FLAG_EFIIMO      = one(UInt32) << 18
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 19
+# This statement is :reset_safe == RESET_SAFE_IF_INACCESSIBLEMEMONLY
+const IR_FLAG_RSIIMO      = one(UInt32) << 20
 
 const NUM_IR_FLAGS = 3 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
     IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW |
-    IR_FLAG_TERMINATES | IR_FLAG_NOUB | IR_FLAG_NORTCALL
+    IR_FLAG_TERMINATES | IR_FLAG_NOUB | IR_FLAG_NORTCALL | IR_FLAG_RESET_SAFE
 
 const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
 
+# N.B.: RSIIMO is deliberately not included: `has_flag` requires all bits, and
+# nothing consumes an escape-analysis outcome for reset-safety yet. When such
+# a consumer exists, it needs its own (RSIIMO | INACCESSIBLEMEM_OR_ARGMEM)
+# qualification, not membership in this conjunction.
 const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
 has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
@@ -78,6 +87,20 @@ function flags_for_effects(effects::Effects)
         flags |= IR_FLAG_EFFECT_FREE
     elseif is_effect_free_if_inaccessiblememonly(effects)
         flags |= IR_FLAG_EFIIMO
+    end
+    # N.B.: Inference does not yet model `reset_safe` separately from
+    # `effect_free`, so until it does, only statements that are additionally
+    # proven effect-free may be treated as reset-safe (execution can safely
+    # be reset across them, since they have no externally visible effects).
+    # This flag describes the statement's IPO contract only: machinery the
+    # runtime inserts implicitly to execute it (allocation, write barriers,
+    # runtime library calls), whose frames must never be abandoned
+    # asynchronously, is handled separately by eagerly dropping the published
+    # reset context around it (see llvm-cancellation-lowering.cpp).
+    if is_reset_safe(effects) && is_effect_free(effects)
+        flags |= IR_FLAG_RESET_SAFE
+    elseif is_reset_safe_if_inaccessiblememonly(effects) && is_effect_free_if_inaccessiblememonly(effects)
+        flags |= IR_FLAG_RSIIMO
     end
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
@@ -1138,10 +1161,10 @@ function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
         edge === prev[2] || return true # change to this edge
         linetable = di.linetable
         # check for change to line number here
-        if linetable === nothing || line == 0
+        if !(linetable isa DebugInfo) || line == 0
             line == prevline || return true
         else
-            changed_lineinfo(linetable::DebugInfo, Int(line), Int(prevline)) && return true
+            changed_lineinfo(linetable, Int(line), Int(prevline)) && return true
         end
         # check for change to edge here
         edge == 0 && return false # no edge here
@@ -1589,17 +1612,16 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
         elseif isa(el, EnterNode)
             tgt = el.catch_dest
-            if tgt != 0
-                was_deleted = labelchangemap[tgt] == typemin(Int)
-                if was_deleted
-                    @assert !isdefined(el, :scope)
-                    body[i] = nothing
+            if tgt != 0 && labelchangemap[tgt] == typemin(Int)
+                @assert !isdefined(el, :scope)
+                body[i] = nothing  # the enclosing catch block was deleted
+            else
+                # renumber the catch destination (tgt == 0 stays frame-less) and the scope operand
+                newdest = tgt == 0 ? 0 : tgt + labelchangemap[tgt]
+                if isdefined(el, :scope) && isa(el.scope, SSAValue)
+                    body[i] = EnterNode(newdest, SSAValue(el.scope.id + ssachangemap[el.scope.id]))
                 else
-                    if isdefined(el, :scope) && isa(el.scope, SSAValue)
-                        body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
-                    else
-                        body[i] = EnterNode(el, tgt + labelchangemap[tgt])
-                    end
+                    body[i] = EnterNode(el, newdest)
                 end
             end
         elseif isa(el, Expr)

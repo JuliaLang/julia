@@ -236,7 +236,7 @@ struct Error <: Result
         @nospecialize orig_expr value
         bt_str = ""
         if !isnothing(excs)
-            if test_type === :test_error
+            if test_type === :test_error || test_type === :nontest_error
                 excs = scrub_exc_stack(excs, nothing, extract_file(source))
             end
             if test_type === :test_error || test_type === :nontest_error
@@ -2089,12 +2089,13 @@ parent test set (with the context object appended to any failing tests.)
 !!! compat "Julia 1.13"
     Context is shown when a test errors since Julia 1.13.
 
-# Special implicit world age increment for `@testset begin`
+# Special implicit world age increment for `@testset begin` and `@testset for`
 
-World age inside `@testset begin` increments implicitly after every statement.
-This matches the behavior of ordinary toplevel code, but not that of ordinary
-`begin/end` blocks, i.e. with respect to world age, `@testset begin` behaves
-as if the body of the `begin/end` block was written at toplevel.
+World age inside `@testset begin` and inside the loop body of `@testset for`
+increments implicitly after every statement. This matches the behavior of
+ordinary toplevel code, but not that of ordinary `begin/end` blocks or `for`
+loops, i.e. with respect to world age, `@testset begin` and `@testset for`
+behave as if their bodies were written at toplevel.
 
 ## Examples
 ```jldoctest
@@ -2312,7 +2313,7 @@ function testset_forloop(args, testloop, source)
 
     # Uses a similar block as for `@testset`, except that it is
     # wrapped in the outer loop provided by the user
-    tests = testloop.args[2]
+    tests = insert_toplevel_latestworld(testloop.args[2])
     blk = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
@@ -2746,10 +2747,35 @@ See also [`detect_closure_boxes`](@ref) to check specific modules.
 detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
 
 """
-    detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
+    detect_unbound_args(mod1, mod2...; recursive=false,
+                                       ambiguous_bottom=false,
+                                       allowed_undefineds=nothing)
 
-Return a vector of `Method`s which may have unbound type parameters.
+Return a vector of `Method`s which may have unbound type parameters: some
+call matching the method's signature does not pin every static parameter to
+a definite value, so reading such a parameter in the method body may throw an
+`UndefVarError`.
 Use `recursive=true` to test in all submodules.
+
+`ambiguous_bottom` controls whether parameters left unbound only by calls
+with `Union{}` type parameters are included, such as `T` in
+`f(::Type{<:T}) where {T}` for the call `f(Union{})`, or in
+`f(::Vector{<:T}) where {T}` for a `Vector{Union{}}` argument; in most cases
+you probably want to leave this `false`. See [`Test.detect_ambiguities`](@ref).
+
+The check is a conservative static approximation of how subtyping assigns
+static parameters, so a reported method may in practice never see the calls
+that leave the parameter unbound. A parameter that some matching call can
+pin only as `T == Union{}`, by absorbing a `Union` arm (such as
+`f(::Vector{Union{Nothing, T}}) where {T<:Real}` called with a
+`Vector{Nothing}`), is deliberately reported as well. Methods are not reported when those calls
+are provably shadowed by a more specific method: a definition like
+`f(::Type{Union{}})` covers the `Union{}` argument that would leave `T`
+unbound in `f(::Type{<:T}) where {T}`, and a zero-argument fallback covers
+the empty call that would leave `T` unbound in `f(x::T...) where {T}`.
+Methods are also not reported when none of the possibly-unbound parameters
+is read in the method's lowered body (querying a parameter with
+`@isdefined` does not count as a read, since it cannot throw).
 
 By default, any undefined symbols trigger a warning. This warning can
 be suppressed by supplying a collection of `GlobalRef`s for which
@@ -2765,27 +2791,79 @@ would suppress warnings about `Base.active_repl` and
 
 !!! compat "Julia 1.8"
     `allowed_undefineds` requires at least Julia 1.8.
+
+!!! compat "Julia 1.14"
+    `ambiguous_bottom` requires at least Julia 1.14.
 """
 function detect_unbound_args(mods...;
                              recursive::Bool = false,
+                             ambiguous_bottom::Bool = false,
                              allowed_undefineds=nothing)
     @nospecialize mods
+    inhabited_params = !ambiguous_bottom
     ambs = Set{Method}()
     mods = Module[mods...]
+    world = Base.get_world_counter()
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             is_in_mods(parentmodule(m), recursive, mods) || continue
-            has_unbound_vars(m.sig) || continue
+            idxs = unbound_sparams(m.sig, inhabited_params)
+            isempty(idxs) && continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
+            params = tuple_sig.parameters
+            # The calls that leave a parameter unbound may all dispatch to
+            # more specific methods, making the unboundness unreachable.
+            # Verify which of the two shadowable call classes are covered,
+            # then re-check unboundness under those assumptions.
+            nonempty_vararg = false
             if Base.isvatuple(tuple_sig)
-                params = tuple_sig.parameters[1:(end - 1)]
-                tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
-                world = Base.get_world_counter()
-                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tuple_sig, nothing, world)
-                if mf !== nothing && mf !== m && mf.sig <: tuple_sig
-                    continue
+                # a trailing Vararg leaves its element variables unbound only
+                # for zero-length matches; remove Vararg and compute dispatch.
+                # compute type-intersect of sig with `NTuple{Any, nparams - 1}`:
+                short_sig = Base.rewrap_unionall(Tuple{params[1:(end - 1)]...}, m.sig)
+                mf = Base._which(short_sig; world, raise=false)
+                if mf !== nothing && mf.method !== m && Base.morespecific(mf.method, m)
+                    nonempty_vararg = true
                 end
             end
+            # the where-chain binders, aligned with the `static_parameter` numbering used in `idxs`
+            sig_vars = TypeVar[]
+            let body = m.sig
+                while body isa UnionAll
+                    push!(sig_vars, body.var)
+                    body = body.body
+                end
+            end
+            shadowed_slots = Int[]
+            for i in eachindex(params)
+                # a `Type{S}` argument (with type `S`) may bind `S = Union{}` — which does not constrain
+                # TypeVar internal to `S`, unless we later identify a covering method for that dispatch
+                v = type_slot_var(params[i])
+                v === nothing && continue
+                # the re-check consumes a shadowed slot only through a
+                # `MATCH_INHABITED` `constrains_var` on the slot variable's bound, so a
+                # slot that cannot pin any possibly-unbound parameter that
+                # way needs no method-table probe (`idxs` is a superset of
+                # the parameters still unbound under `nonempty_vararg`)
+                any(idx -> (var = sig_vars[idx];
+                            v !== var && Base.Compiler.constrains_var(var, v.ub, Core.Compiler.MATCH_INHABITED, false, inhabited_params)),
+                    idxs) || continue
+                bot_params = Any[params...]
+                bot_params[i] = Type{Union{}}
+                bot_sig = Base.rewrap_unionall(Tuple{bot_params...}, m.sig)
+                mf = Base._which(bot_sig; world, raise=false)
+                if mf !== nothing && mf.method !== m && Base.morespecific(mf.method, m)
+                    push!(shadowed_slots, i)
+                end
+            end
+            # re-check unboundness under the verified assumptions
+            if nonempty_vararg || !isempty(shadowed_slots)
+                idxs = unbound_sparams(m.sig, inhabited_params, nonempty_vararg, shadowed_slots)
+                isempty(idxs) && continue
+            end
+            # unboundness only matters if the body actually reads one of the
+            # possibly-unbound parameters
+            reads_sparams(m, idxs) || continue
             push!(ambs, m)
         end
     end
@@ -2793,12 +2871,64 @@ function detect_unbound_args(mods...;
     return collect(ambs)
 end
 
-function has_unbound_vars(@nospecialize sig)
-    while sig isa UnionAll
-        var = sig.var
-        sig = sig.body
-        if !Core.Compiler.constrains_param(var, sig, #=covariant=#true, #=type_constrains=#true)
-            return true
+# The `Type{S}`-valued argument slots recognized by the `Union{}`-shadowing
+# rescue in `detect_unbound_args`: either a slot-local range
+# (`Type{S} where S<:UB`) or a plain method parameter (`Type{S}` with `S`
+# bound in the signature's `where` chain). Returns `S`, or `nothing`.
+function type_slot_var(@nospecialize(p))
+    if p isa UnionAll && Base.isTypeEq(p.body) && Base.type_parameter(p.body) === p.var
+        return p.var
+    elseif Base.isTypeEq(p)
+        q = Base.type_parameter(p)
+        q isa TypeVar && return q
+    end
+    return nothing
+end
+
+# The 1-based positions in the signature's `where` chain of parameters that
+# some matching call may leave unbound.
+# - `inhabited_params` assumes no invariant type parameter of the arguments is `Union{}`;
+# - `nonempty_vararg` assumes the signature's trailing `Vararg` matches at least one argument;
+# - `shadowed_slots` lists `Type{S}` argument positions whose `Union{}` member never reaches this method.
+function unbound_sparams(@nospecialize(sig), inhabited_params::Bool, nonempty_vararg::Bool=false,
+                         shadowed_slots::Vector{Int}=Int[])
+    idxs = Int[]
+    params = isempty(shadowed_slots) ? Core.svec() :
+        (Base.unwrap_unionall(sig)::DataType).parameters
+    body = sig
+    i = 0
+    while body isa UnionAll
+        i += 1
+        var = body.var
+        body = body.body
+        Base.Compiler.constrains_var(var, body, Core.Compiler.MATCH_TYPEOF, nonempty_vararg, inhabited_params) && continue
+        pinned = false
+        for j in shadowed_slots
+            # any non-`Union{}` value of this slot's `Type` parameter pins
+            # `var` if it occurs invariantly below a constructor of its bound
+            v = type_slot_var(params[j])::TypeVar
+            if v !== var && Base.Compiler.constrains_var(var, v.ub, Core.Compiler.MATCH_INHABITED, false, inhabited_params)
+                pinned = true
+                break
+            end
+        end
+        pinned || push!(idxs, i)
+    end
+    return idxs
+end
+
+# Whether the lowered body of `m` reads any of the static parameters whose
+# indices are in `idxs`.
+function reads_sparams(m::Method, idxs::Vector{Int})
+    isdefined(m, :source) || return true
+    src = Base.uncompressed_ir(m)
+    maybeundef = BitSet(idxs)
+    for stmt in src.code
+        if Meta.isexpr(stmt, :static_parameter)
+            read = stmt.args[1]::Int
+            if read in maybeundef
+                return true
+            end
         end
     end
     return false

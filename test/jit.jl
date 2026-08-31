@@ -149,4 +149,57 @@ function test_gc_codeinst()
     true
 end
 @test test_gc_codeinst()
+
+# A small cache must evict in bounded transactions and still exit with writes pending.
+@testset "object-cache bounded eviction and shutdown" begin
+    mktempdir() do dir
+        logfile = joinpath(dir, "objcache.log")
+        script = """
+            for i in 1:600
+                f = Symbol(:objcache_eviction_, i)
+                @eval \$f(x) = x + \$i
+                @eval \$f(1)
+            end
+            print("OK")
+        """
+        cmd = addenv(
+            `$(Base.julia_cmd()) --startup-file=no --color=no -e $script`,
+            "JULIA_OBJCACHE" => "1",
+            "JULIA_OBJCACHE_PATH" => joinpath(dir, "cache"),
+            "JULIA_OBJCACHE_CAPACITY" => string(512 << 10),
+            "JULIA_OBJCACHE_LOG" => logfile,
+        )
+        outpath = joinpath(dir, "stdout")
+        errpath = joinpath(dir, "stderr")
+        completed = ok = false
+        open(outpath, "w") do stdout
+            open(errpath, "w") do stderr
+                proc = run(pipeline(cmd; stdout, stderr), wait=false)
+                completed = timedwait(() -> process_exited(proc), 180; pollint=0.05) === :ok
+                process_running(proc) && kill(proc, Base.SIGKILL)
+                wait(proc)
+                ok = completed && success(proc)
+            end
+        end
+        if !ok
+            @info "object-cache child failed" stdout=read(outpath, String) stderr=read(errpath, String)
+        end
+        @test completed
+        @test ok
+        @test read(outpath, String) == "OK"
+        lines = isfile(logfile) ? readlines(logfile) : String[]
+        nevicted = count(startswith("evict,"), lines)
+        if nevicted == 0 &&
+           (Sys.isapple() || ccall(:jl_running_under_rr, Cint, (Cint,), 0) != 0)
+            @test_skip false
+        else
+            @test nevicted > 0
+            batches = [parse(Int, split(line, ',')[2]) for line in lines
+                       if startswith(line, "evict_batch,")]
+            @test length(batches) > 1
+            @test all(n -> 1 <= n <= 64, batches)
+        end
+    end
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough

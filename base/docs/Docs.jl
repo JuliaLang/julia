@@ -65,8 +65,7 @@ function.
 
 include("bindings.jl")
 
-import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
-import .Base: Callable, with_output_color
+import .Base.Meta: quot, isexpr, unblock, unescape
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
@@ -305,6 +304,10 @@ elseif head === :call && length(x.args) >= 1 && isexpr(x.args[1], :(::))
         # for documenting (x::y)(args...), extract the name from y
         # otherwise, for documenting `x::y`, it will be extracted from x
         astname((x.args[1]::Expr).args[end], ismacro)
+    elseif head === :overlay
+        # for documenting `Base.Experimental.@overlay mt f(args...)`, the callee is
+        # `Expr(:overlay, mt, f)`: extract the name from f
+        astname(x.args[end], ismacro)
     else
         n = if isexpr(x, :module)
             isa(x.args[1], Bool) ? 2 : 3
@@ -673,7 +676,6 @@ function docm(source::LineNumberNode, mod::Module, ex)
     else
         return simple_lookup_doc(ex)
     end
-    return nothing
 end
 # Drop incorrect line numbers produced by nested macro calls.
 docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)

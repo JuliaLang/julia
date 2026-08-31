@@ -30,6 +30,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libdSFMT_path() = libdSFMT_path
+
 function __init__()
     global libdSFMT_path = string(libdSFMT.path)
     global artifact_dir = dirname(Sys.BINDIR)

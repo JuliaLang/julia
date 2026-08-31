@@ -220,6 +220,53 @@ If you already have one or more of these packages installed on your system, you 
 
 Please be aware that this procedure is not officially supported, as it introduces additional variability into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
+### Building a dependency from a Git checkout
+
+Most dependencies are downloaded as prebuilt BinaryBuilder artifacts (`*_jll`), but many can instead be
+built from a Git checkout — useful for testing a patch or building against an unreleased upstream commit.
+This is driven by `git-external` in
+[`deps/tools/git-external.mk`](https://github.com/JuliaLang/julia/blob/master/deps/tools/git-external.mk).
+Set the following in `Make.user` (or on the `make` command line):
+
+```make
+# 1. prefer the source build over the prebuilt binary for this dep (or USE_BINARYBUILDER=0 for all)
+USE_BINARYBUILDER_LLVM = 0
+# 2. fetch the source with Git (DEPS_GIT=1 for all, or a space-separated list of names)
+DEPS_GIT = llvm
+# 3. optionally override the origin/branch/commit (defaults live in deps/<name>.version and .mk)
+LLVM_GIT_URL = https://github.com/JuliaLang/llvm-project.git
+LLVM_BRANCH = julia-release/18.x
+LLVM_SHA1 = $(LLVM_BRANCH)   # a branch name, tag, or explicit commit hash
+```
+
+`<NAME>` is the upper-cased dependency name (see `deps/*.mk`, e.g. `LLVM`, `LIBUV`). The branch and commit
+come from `<NAME>_BRANCH`/`<NAME>_SHA1` in `deps/<name>.version`. The checkout is a
+[`git worktree`](https://git-scm.com/docs/git-worktree) of a bare mirror cached at
+`deps/srccache/<name>.git` (so it shares that mirror's objects rather than being a full clone), living at
+`deps/srccache/<name>/` on a detached `HEAD` at `<NAME>_SHA1`.
+
+**Rebuilds** are keyed off `deps/<name>.version`: changing *or merely touching* it re-fetches and resets the
+checkout to `<NAME>_SHA1` and reinstalls the dependency. Each build step records progress in a marker file, so
+touching one (or a predecessor) forces that step and everything after it to rerun:
+
+ * `deps/<name>.version` — re-checkout to `<NAME>_SHA1` (`extract-<name>`) and reinstall (`install-<name>`)
+ * `deps/srccache/<name>/source-extracted` — reconfigure (`configure-<name>`)
+ * `deps/scratch/<name>/build-configured` — recompile (`compile-<name>`)
+ * `deps/scratch/<name>/build-compiled` — restage (`stage-<name>`)
+ * `usr/manifest/<name>` — the installed result (also `uninstall-<name>` / `reinstall-<name>`)
+
+`make version-check-<name>` runs on every build to warn when the checkout has local modifications or does not
+match `<NAME>_SHA1`, and `make distclean-<name>` removes the worktree and cached mirror. Not every dependency
+defines every step (e.g. header-only or install-only deps may have no `configure`/`compile` stage), so some of
+these markers and targets may be absent — check `deps/<name>.mk` for the ones a given dependency actually uses.
+
+**To edit in place**, treat `deps/srccache/<name>/` as an ordinary worktree: change files, commit, or `git
+checkout` another commit, then rebuild (`make compile-<name>` / `make install-<name>`). As long as you don't
+touch `deps/<name>.version`, the checkout is never reset to `<NAME>_SHA1`, so local edits survive rebuilds.
+Bumping `<NAME>_SHA1` to record a new commit triggers a fresh checkout on the next extract, but that checkout
+will fail if the worktree is dirty — this is intentional, so that uncommitted changes are never clobbered.
+Commit (or stash) your work first, then update `<NAME>_SHA1`.
+
 ### LLVM
 
 The most complicated dependency is LLVM, for which we require additional patches from upstream (LLVM is not backward compatible).

@@ -100,6 +100,27 @@ let x = [1 2; 3 4]
 end
 """) == [0 1 ; 3 4]
 
+@testset "in-place broadcast returns the lhs" begin
+    mod = @newmod()
+    JL.include_string(mod, """
+    f50794(Y) = Y .+= Any[zeros(size(Y))][1]
+    g50794(A, x) = A[1, :] .+= x
+    """)
+    @test only(Base.return_types(mod.f50794, (Vector{Float64},))) === Vector{Float64}
+    rt = only(Base.return_types(mod.g50794, (Matrix{Float64}, Any)))
+    @test rt <: SubArray{Float64, 1, Matrix{Float64}}
+end
+
+# Tuple-destructuring updating assignment `x, y += a, b`
+@test JuliaLowering.include_string(@newmod(), """
+struct Vec1; v::Int; end
+Base.:+(a::Tuple{Vec1,Vec1}, b::Tuple{Vec1,Vec1}) = (Vec1(a[1].v+b[1].v), Vec1(a[2].v+b[2].v))
+let x = Vec1(1), y = Vec1(2)
+    x, y += Vec1(3), Vec1(4)
+    (x.v, y.v)
+end
+""") == (4, 6)
+
 @testset "lhs forms" begin
     @test JuliaLowering.include_string(test_mod, """
     mutable struct with_mutable_x; x; end
@@ -116,6 +137,21 @@ end
         (val, x1, x2[1], x3[], x4.x)
     end
     """) == ((10.0,20.0,30.0,40.0), 10,20,30,40.0)
+
+    # add local/global
+    @test JuliaLowering.include_string(test_mod, """
+    let x1 = 1, x2 = [2], x3 = Ref(3), x4 = with_mutable_x(4)
+        val = local (x1, x2[1], x3[], x4.x) = 10,20,30,40
+        (val, x1, x2[1], x3[], x4.x)
+    end
+    """) == ((10,20,30,40), 10,20,30,40)
+    @test JuliaLowering.include_string(@newmod(), """
+    mutable struct with_mutable_x; x; end
+    let x1 = 1, x2 = [2], x3 = Ref(3), x4 = with_mutable_x(4)
+        val = global (x1::Int, x2[1]::Int, x3[]::Int, x4.x::Int) = 10.0,20.0,30.0,40.0
+        (val, x1, x2[1], x3[], x4.x)
+    end
+    """) == ((10,20,30,40), 10,20,30,40.0)
 end
 
 @testset "chaining assignments (robot-generated)" begin
@@ -453,9 +489,9 @@ end
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), eq)
             @test fl_eval(test_mod, ex) == (1, :semicolon)
-            @test_broken jl_eval(test_mod, ex) == (1, :semicolon)
+            @test jl_eval(test_mod, ex) == (1, :semicolon)
             @test fl_eval(test_mod, outer_ab(ex)) == (1, 0)
-            @test_broken jl_eval(test_mod, outer_ab(ex)) == (1, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (1, 0)
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), peq)
             @test_throws "unexpected semicolon" fl_eval(test_mod, ex)
@@ -463,9 +499,9 @@ end
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), kw)
             @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
-            @test_broken jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
             @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-            @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), pkw)
             @test_throws "unexpected semicolon" fl_eval(test_mod, ex)

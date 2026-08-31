@@ -3,6 +3,7 @@
 
 function vst1_ok(x::Expr)
     est = JuliaLowering.expr_to_est(x)
+    JuliaSyntax.fill_context!(est, JuliaSyntax.SyntaxContext(@__MODULE__, v"1.13"))
     JuliaLowering.valid_st1(est).ok
 end
 
@@ -28,8 +29,6 @@ let
         "comprehension",
         "typed_comprehension",
         "comparison",
-        "<:",
-        ">:",
         "::",
         ".&&",
         ".||",
@@ -39,7 +38,7 @@ let
         "macrocall",
         "quote",
         "inert",
-        "inert_syntaxtree",
+        "syntaxinert",
         "top",
         "opaque_closure",
         "symboliclabel",
@@ -77,8 +76,6 @@ let
         "primitive",
         "module",
         "local-def",
-        "<:",
-        ">:",
         "::",
         "where",
         "curly",
@@ -98,6 +95,8 @@ let
         "export",
         "string",
         "&&",
+        "<:",
+        ">:",
         "-->",
         "&&",
         "||",
@@ -120,13 +119,19 @@ let
     end
 end
 
-@test !vst1_ok(Expr(:nothing))
+if JL.DEBUG
+    @test_throws ErrorException vst1_ok(Expr(:nothing))
+else
+    @test !vst1_ok(Expr(:nothing))
+end
 @test vst1_ok(Expr(:block, nothing))
 @test vst1_ok(Expr(:block, GlobalRef(Core, :nothing)))
 
 @test vst1_ok(Expr(:-->, 1))
 @test vst1_ok(Expr(:-->, 1, 2))
 @test vst1_ok(Expr(:-->, 1, 2, 3))
+@test vst1_ok(Expr(:-->, Expr(:..., Expr(:tuple, 1, 2, 3))))
+@test vst1_ok(Expr(:-->, Expr(:kw, :foo, 1)))
 
 @test vst1_ok(Expr(:const, :a, 1))
 

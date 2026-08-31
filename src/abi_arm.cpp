@@ -30,7 +30,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &abi, LLVMContext &ctx, Type *
 
 #define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
 
-Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
+Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     if (dt->name->mutabl || jl_datatype_nfields(dt) != 0)
@@ -58,7 +58,7 @@ Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
 // fundamental type.
 //
 // Returns the corresponding LLVM type.
-Type *isLegalHAType(jl_datatype_t *dt, LLVMContext &ctx) const
+Type *isLegalHAType(jl_datatype_t *dt, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // single- or double-precision floating-point type
     if (Type *fp = get_llvm_fptype(dt, ctx))
@@ -74,7 +74,7 @@ Type *isLegalHAType(jl_datatype_t *dt, LLVMContext &ctx) const
 //
 // Legality of the HA is determined by a nonzero return value.
 // In case of a non-legal HA, the value of 'base' is undefined.
-size_t isLegalHA(jl_datatype_t *dt, Type *&base, LLVMContext &ctx) const
+size_t isLegalHA(jl_datatype_t *dt, Type *&base, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Homogeneous aggregates are only used for VFP registers,
     // so use that definition of legality (section 6.1.2.1)
@@ -122,7 +122,7 @@ size_t isLegalHA(jl_datatype_t *dt, Type *&base, LLVMContext &ctx) const
 // Determine if an argument can be passed through a coprocessor register.
 //
 // All the out parameters should be default to `false`.
-void classify_cprc(jl_datatype_t *dt, bool *vfp, LLVMContext &ctx) const
+void classify_cprc(jl_datatype_t *dt, bool *vfp, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Based on section 6.1 of the Procedure Call Standard
 
@@ -146,7 +146,7 @@ void classify_cprc(jl_datatype_t *dt, bool *vfp, LLVMContext &ctx) const
 }
 
 void classify_return_arg(jl_datatype_t *dt, bool *reg, bool *onstack,
-                         bool *need_rewrite, LLVMContext &ctx) const
+                         bool *need_rewrite, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Based on section 5.4 of the Procedure Call Standard
 
@@ -198,7 +198,7 @@ void classify_return_arg(jl_datatype_t *dt, bool *reg, bool *onstack,
         *onstack = true;
 }
 
-bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     bool reg = false;
     bool onstack = false;
@@ -220,7 +220,7 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 //
 // All the out parameters should be default to `false`.
 void classify_arg(jl_datatype_t *dt, bool *reg,
-                  bool *onstack, bool *need_rewrite, LLVMContext &ctx) const
+                  bool *onstack, bool *need_rewrite, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Based on section 5.5 of the Procedure Call Standard
 
@@ -241,7 +241,7 @@ void classify_arg(jl_datatype_t *dt, bool *reg,
     *need_rewrite = true;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override JL_CANSAFEPOINT
 {
     if (Type *fptype = get_llvm_fptype(dt, ctx))
         return fptype;

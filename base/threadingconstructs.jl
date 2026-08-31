@@ -173,23 +173,52 @@ function threading_run(fun, static)
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
+    # The workers run in a new dynamic scope carrying the token of a fresh
+    # cancellation source, so that cancellation of the enclosing scope reaches
+    # every worker through the token tree.
+    src = Base.CancellationTokenSource(Base.default_cancel_token())
+    tok = Base.CancellationToken(src)
+    cr = nothing
     try
-        for i = 1:n
-            t = Task(() -> fun(i)) # pass in tid
-            t.sticky = static
-            if static
-                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
-            else
-                # TODO: this should be the current pool (except interactive) if there
-                # are ever more than two pools.
-                _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
-                @assert _result == 1 "_result != 1"
+        Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
+            for i = 1:n
+                t = Task(() -> fun(i)) # pass in tid
+                t.sticky = static
+                if static
+                    ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+                else
+                    # TODO: this should be the current pool (except interactive) if there
+                    # are ever more than two pools.
+                    _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+                    @assert _result == 1 "_result != 1"
+                end
+                tasks[i] = t
+                schedule(t)
             end
-            tasks[i] = t
-            schedule(t)
         end
         for i = 1:n
-            Base._wait(tasks[i])
+            r = Base._wait(tasks[i], tok; cancel_value=true)
+            if r isa Base.CancellationRequest
+                # Our own scope was cancelled; the workers observe the same
+                # cancellation through the tree. Await their unwind rather
+                # than unwinding out of the `@threads` while workers are
+                # still running; a severity escalation completes these
+                # teardown waits (value-mode) and is adopted, re-arming
+                # them (at ABANDON_ALL the workers were frozen; nothing to
+                # wait for).
+                cr = r
+                sev = Base.severity(r)
+                for j = i:n
+                    while sev < Base.CANCEL_REQUEST_ABANDON_ALL.request
+                        r2 = Base._wait(tasks[j], tok; min_severity=sev + 0x01,
+                                        cancel_value=true)
+                        r2 isa Base.CancellationRequest || break
+                        cr = r2
+                        sev = Base.severity(r2)
+                    end
+                end
+                break
+            end
         end
     finally
         ccall(:jl_exit_threaded_region, Cvoid, ())
@@ -198,6 +227,10 @@ function threading_run(fun, static)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
+    # The block's scope was cancelled but every worker happened to complete
+    # cleanly - the request must still surface at this cancellation-aware
+    # boundary rather than be swallowed.
+    cr === nothing || throw(cr)
 end
 
 # Helper to generate threading run code with schedule checking
@@ -677,7 +710,7 @@ To illustrate of the different scheduling strategies, consider the following fun
 ```julia-repl
 julia> function busywait(seconds)
             tstart = time_ns()
-            while (time_ns() - tstart) / 1e9 < seconds
+            while (time_ns() -% tstart) / 1e9 < seconds
             end
         end
 

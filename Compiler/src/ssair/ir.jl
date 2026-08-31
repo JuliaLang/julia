@@ -663,7 +663,7 @@ function is_relevant_expr(e::Expr)
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :foreignglobal, :isdefined, :copyast,
                       :throw_undef_if_not,
-                      :cfunction, :method, :pop_exception,
+                      :cfunction, :pop_exception,
                       :leave,
                       :new_opaque_closure)
 end
@@ -1526,7 +1526,10 @@ function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from
             idx = first(stmts)
             while idx <= last(stmts)
                 stmt = compact.result[idx][:stmt]
-                stmt === nothing && continue
+                if stmt === nothing
+                    idx += 1
+                    continue
+                end
                 isa(stmt, PhiNode) || break
                 i = findfirst(x::Int32->x==bb_rename_pred[from], stmt.edges)
                 if i !== nothing

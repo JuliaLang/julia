@@ -9,14 +9,14 @@ export
 import
     .Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
         inv, exp, exp2, exponent, factorial, floor, fma, muladd, hypot, isinteger,
-        isfinite, isinf, isnan, issubnormal, ldexp, log, log2, log10, max, min, mod, modf,
+        isfinite, isinf, isnan, issubnormal, ldexp, log, log2, log10, max, min, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, _precision, exp10, expm1, log1p,
-        eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
+        eps, signbit, sign, sin, cos, sincos, tan, sec, csc, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n, decompose, minmax, _precision_with_base_2,
+        isone, big, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
         uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
         ispositive, isnegative
@@ -197,7 +197,7 @@ end
 end
 
 # While BigFloat (like all Numbers) is considered immutable, for practical reasons
-# of writing the algorithms on it we allow mutating sign, exp, and the contents of d
+# of writing the algorithms on it we allow mutating sign and exp
 @inline function Base.setproperty!(x::BigFloat, s::Symbol, v)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)
@@ -205,9 +205,8 @@ end
         return GC.@preserve d unsafe_store!(Ptr{Cint}(p) + offset_sign, v)
     elseif s === :exp
         return GC.@preserve d unsafe_store!(Ptr{Clong}(p) + offset_exp, v)
-    #elseif s === :d || s === :prec # not mutable
     else
-        return throw(FieldError(x, s))
+        throw(FieldError(BigFloat, s))
     end
 end
 
@@ -747,7 +746,7 @@ end
 
 
 # More efficient commutative operations
-for (fJ, fC, fI) in ((:+, :add, 0), (:*, :mul, 1))
+for (fJ, fC) in ((:+, :add), (:*, :mul))
     @eval begin
         function ($fJ)(a::BigFloat, b::BigFloat, c::BigFloat)
             z = BigFloat()
@@ -1151,7 +1150,7 @@ isnegative(x::BigFloat) = signbit(x) && !iszero(x) && !isnan(x)
 
 function nextfloat!(x::BigFloat, n::Integer=1)
     signbit(n) && return prevfloat!(x, abs(n))
-    for i = 1:n
+    for _ = 1:n
         ccall((:mpfr_nextabove, libmpfr), Int32, (Ref{BigFloat},), x)
     end
     return x
@@ -1159,7 +1158,7 @@ end
 
 function prevfloat!(x::BigFloat, n::Integer=1)
     signbit(n) && return nextfloat!(x, abs(n))
-    for i = 1:n
+    for _ = 1:n
         ccall((:mpfr_nextbelow, libmpfr), Int32, (Ref{BigFloat},), x)
     end
     return x
@@ -1199,10 +1198,10 @@ Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
     The `base` keyword requires at least Julia 1.8.
 """
 function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
-    depwarn("""
-            The fallback `setprecision(::Function, ...)` method is deprecated. Packages overloading this method should
-            implement their own specialization using `ScopedValue` instead.
-            """, :setprecision)
+    Base.depwarn("""
+                 The fallback `setprecision(::Function, ...)` method is deprecated. Packages overloading this method should
+                 implement their own specialization using `ScopedValue` instead.
+                 """, :setprecision)
     old_prec = precision(T)
     setprecision(T, prec; kws...)
     try

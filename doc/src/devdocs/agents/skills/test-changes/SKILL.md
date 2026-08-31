@@ -14,3 +14,6 @@ Use this when you change or add a Julia test.
 - Write one comment at the top of the test to explain what is being tested.
   Otherwise keep comments minimal.
 - Use the environment variable `JULIA_TEST_FAILFAST=1` to make tests fail fast.
+- Do not coordinate with fixed `sleep`s — loaded CI machines break any fixed
+  delay. Synchronize on observable state (readiness markers, round-trips), or
+  retry.

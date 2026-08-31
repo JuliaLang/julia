@@ -1681,3 +1681,156 @@ end
         end
     end
 end
+
+# Interrupt (SIGINT/Ctrl-C) delivery: an interrupt must reach user code, not be
+# swallowed by (or crash) the internal scheduler task (issue #58689).
+if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
+else
+    running_under_rr() = false
+end
+# rr emulates signal delivery and does not interrupt blocking syscalls the way a
+# real SIGINT does, so these tests do not pass under it (the sleeping subprocess
+# never observes the InterruptException).
+if !Sys.iswindows() && !running_under_rr()
+    # "Internal Task ERROR" is uppercased by `emphasize` when color is off
+    has_internal_err(s) = occursin(r"internal task error"i, s)
+    expect_output(output, pat; timeout=60) =
+        timedwait(() -> occursin(pat, output[]), timeout) === :ok
+    function spawn_interrupt_test_repl()
+        # Use the bare executable with default flags, NOT julia_cmd(): the
+        # suite's inherited `--check-bounds=yes` invalidates the sysimage's
+        # native code, putting the child in recompile-everything mode where
+        # this testset's interactive timing expectations are meaningless.
+        # These tests probe SIGINT delivery semantics, not the flag matrix.
+        exe = joinpath(Sys.BINDIR, Base.julia_exename())
+        cmd = addenv(`$exe -q -i --startup-file=no`, Dict("TERM" => "dumb"))
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        p = run(cmd, pts, pts, pts; wait=false)
+        Base.close_stdio(pts)
+        output = Ref("")
+        @async try
+            while !eof(ptm)
+                output[] *= String(readavailable(ptm))
+            end
+        catch
+        end
+        return p, ptm, output
+    end
+    function cleanup_interrupt_test_repl(p, ptm)
+        process_running(p) && kill(p, Base.SIGKILL)
+        close(ptm)
+        wait(p)
+    end
+
+    @testset "SIGINT at idle REPL prompt" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            write(ptm, "println(\"READY_\", 1+1)\n")
+            @test expect_output(output, "READY_2")
+            sleep(2) # best-effort: let the thread park; the checks below do not depend on it
+            kill(p, 2) # SIGINT
+            # SIGINT aborts any in-flight input line, so retry with distinct markers
+            alive = false
+            # generous horizon: this asserts the session SURVIVES the press,
+            # not its latency - a cold session (first spawns after a build,
+            # slow CI hosts) can lag the first responses behind compilation
+            for attempt in 1:4
+                write(ptm, "println(\"CHECK$(attempt)_\", 1+1)\n")
+                if expect_output(output, "CHECK$(attempt)_2"; timeout=30)
+                    alive = true
+                    break
+                end
+            end
+            if !alive && process_running(p)
+                # collect diagnostics into the CI log: SIGQUIT makes the
+                # session dump all task backtraces onto the pty
+                kill(p, 3)
+                sleep(10)
+                println(stderr, "idle-SIGINT session unresponsive; transcript tail:\n",
+                        last(output[], 16000))
+            end
+            @test alive
+            @test process_running(p)
+            @test !has_internal_err(output[])
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT during REPL evaluation of a sleep loop" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            # compile the error-display path up front; on a loaded machine doing it
+            # lazily can delay the InterruptException output past the timeout below
+            write(ptm, "error(\"warmup_display\")\n")
+            # the pty echoes the input line (which also contains "warmup_display"),
+            # so wait for the error display to finish and the prompt to return
+            @test expect_output(output, r"ERROR.*warmup_display.*julia>"s)
+            # the marker is split so the pty echo of the input line does not match it
+            write(ptm, "println(\"LOOP\", \"START\"); while true; sleep(0.05); end\n")
+            @test expect_output(output, "LOOPSTART")
+            # ^C is delivered as a cancellation request (InterruptException is
+            # what packages may still rethrow it as); a single SIGINT can be
+            # missed on a loaded machine, so resend until it surfaces
+            interrupted = false
+            for _ in 1:5
+                kill(p, 2) # SIGINT
+                if expect_output(output, r"InterruptException|CancellationRequest"; timeout=10)
+                    interrupted = true
+                    break
+                end
+            end
+            @test interrupted
+            @test !has_internal_err(output[])
+            @test process_running(p)
+            write(ptm, "println(\"CHECK_\", 1+1)\n")
+            @test expect_output(output, "CHECK_2"; timeout=30)
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT to a non-interactive process blocked in sleep" begin
+        # Synchronize on a readiness marker printed from user code (proving the
+        # runtime is up and the SIGINT handler is armed) rather than a racy fixed
+        # sleep. See the "SIGINFO/SIGUSR1 profile triggering" test in
+        # stdlib/Profile for the same pattern.
+        script = """
+            println(stderr, "READY")
+            sleep(600)
+            """
+        iob = Base.BufferStream() # unbounded buffer, so we can read after exit
+        p = run(`$(Base.julia_cmd()) --startup-file=no -e $script`, devnull, devnull, iob; wait=false)
+        reader = @async try # monitor task to set EOF on iob after p exits
+            wait(p)
+        finally
+            closewrite(iob)
+        end
+        try
+            @test occursin("READY", readuntil(iob, "READY", keep=true))
+            # even 1.11 needed a 2nd SIGINT here, so allow a few attempts
+            for i in 1:3
+                kill(p, 2) # SIGINT
+                timedwait(() -> process_exited(p), 10) === :ok && break
+            end
+            @test process_exited(p)
+            wait(reader) # wait for iob to reach EOF
+            err = read(iob, String)
+            # ^C is delivered as a cancellation request (InterruptException is
+            # what packages may still rethrow it as). A repeat press may land
+            # while the first one's error report is being displayed, cancelling
+            # the report itself - the fallback note is an acceptable outcome.
+            @test occursin(r"InterruptException|CancellationRequest|displaying the error report failed", err)
+            @test !has_internal_err(err)
+        finally
+            process_running(p) && kill(p, Base.SIGKILL)
+            wait(p)
+        end
+    end
+end

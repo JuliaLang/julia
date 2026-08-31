@@ -409,6 +409,16 @@ end
     @test fieldnames(test_mod.DefaultInnerCtors6) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors7
+        field::Int
+        begin; end
+        begin; begin; end; end
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors7)
+    @test fieldnames(test_mod.DefaultInnerCtors7) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
         struct NoDefaultInnerCtors1
         field::Int
         identity(1)
@@ -534,6 +544,28 @@ end
 # Wrong number of args checked by lowering
 @test_throws ArgumentError test_mod.S8((1,), ())
 @test_throws ArgumentError test_mod.S8((1,2,3), ())
+
+# empty-curly `new{}()`
+@test JuliaLowering.include_string(test_mod, """
+struct S_empty_new
+    x::Int
+    S_empty_new() = new{}(5)
+end
+""") === nothing
+let s = test_mod.S_empty_new()
+    @test s isa test_mod.S_empty_new
+    @test s.x === 5
+end
+
+# flisp doesn't error with kwargs after `;` in `new`
+@test JuliaLowering.include_string(test_mod, """
+struct S_new_kwargs1
+    x
+    y
+    S_new_kwargs1(args...; kwargs...) = new(args...; kwargs...)
+end
+S_new_kwargs1(1,2).x
+"""; expr_compat_mode=true) == 1
 
 # new() with splats and untyped fields
 @test JuliaLowering.include_string(test_mod, """
@@ -798,3 +830,245 @@ end
           end
           (struct_eq_assigns_test(5).x, struct_eq_assigns_test().x)
       end)) == (5, 1)
+
+@testset "(AI) inner ctor with return-type annotation and `where`" begin
+    # Regression: an inner constructor with BOTH an explicit return-type
+    # annotation and a `where` clause used to fail lowering ("No match found"),
+    # because `rewrite_ctor_sig` re-wrapped the `where` a second time — nesting
+    # it inside the `::` — when it recursed through the return-type branch.
+    m = Module()
+    JuliaLowering.include_string(m, """
+        struct Wrap{T}
+            x::T
+            function Wrap{T}(x)::Wrap{T} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    w = JuliaLowering.include_string(m, "Wrap{Int}(5)")
+    @test w isa m.Wrap{Int}
+    @test w.x === 5
+
+    # The return-type annotation performs `convert` (matching flisp): a
+    # mismatched annotation only fails at construction time, as a MethodError
+    # from the missing `convert`, not as a lowering/type-assert error.
+    JuliaLowering.include_string(m, """
+        struct W2{T}
+            x::T
+            function W2{T}(x)::W2{Int} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "W2{Int}(3)") isa m.W2{Int}
+    @test_throws MethodError JuliaLowering.include_string(m, "W2{String}(\"hi\")")
+
+    # The `where`-bound typevar scopes over the return-type annotation (`::T`).
+    JuliaLowering.include_string(m, """
+        struct W4{T}
+            x::T
+            function W4{T}(x)::T where {T}
+                return new{T}(x).x
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "W4{Int}(9)") === 9
+
+    # Constructor name without curlies, plus return annotation and `where`.
+    JuliaLowering.include_string(m, """
+        struct B2{T}
+            x::T
+            function B2(x::T)::B2{T} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "B2(7)") isa m.B2{Int}
+
+    # Multiple `where`-bound typevars with subtype bounds (the shape found in
+    # FlexiChains that first surfaced this bug).
+    JuliaLowering.include_string(m, """
+        struct FS{TKey, TIIdx<:Union{Int,Nothing}, TCIdx<:Union{Int,Nothing}, TSIdx<:Real}
+            _iter::TIIdx
+            _chain::TCIdx
+            _stat::TSIdx
+            function FS{TKey}(iter::TIIdx, chain::TCIdx, stat::TSIdx)::FS{TKey,TIIdx,TCIdx,TSIdx} where {
+                TKey, TIIdx<:Union{Int,Nothing}, TCIdx<:Union{Int,Nothing}, TSIdx<:Real}
+                return new{TKey,TIIdx,TCIdx,TSIdx}(iter, chain, stat)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "FS{Symbol}(1, nothing, 2.0)") isa
+        m.FS{Symbol, Int, Nothing, Float64}
+
+    # Success path of the return-type `convert` (complements the W2 failure case
+    # above): an `::Any` annotation converts by identity, so the constructor
+    # still returns the freshly-built struct.  Combined with `where`.
+    JuliaLowering.include_string(m, """
+        struct WA{T}
+            x::T
+            function WA{T}(x)::Any where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "WA{Int}(5)") isa m.WA{Int}
+end
+
+@testset "(AI) struct fields named with underscores" begin
+    # Bug in _defaultctors giving lowering a K"lambda"
+    m = Module()
+    JuliaLowering.include_string(m, """
+        struct TextItem
+            _::String
+        end
+        struct TwoScores
+            _::Int
+            __::Int
+        end
+    """)
+    @test JuliaLowering.include_string(m, """TextItem("hi")._""") == "hi"
+    t = JuliaLowering.include_string(m, "TwoScores(1, 2)")
+    @test (t._, t.__) == (1, 2)
+end
+
+# A global should be declared in scope.  the local name should not be
+# user-visible (the user may use it in a function arg type)
+@testset "struct def in local scope" for expr_compat_mode in (true, false)
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        struct S; x::Int; end
+        Core.isdefinedglobal(@__MODULE__, :S)
+    end
+    """; expr_compat_mode) == true
+
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        struct S; x::Int; end
+        S(y::UInt) = S(-1)
+        S(UInt(1)).x
+    end
+    """; expr_compat_mode) == -1
+
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        struct S; x::Int; end
+        S(y::UInt) = S(-1)
+        f(arg::S) = arg.x # S should be the global
+        f(S(UInt(1)))
+    end
+    """; expr_compat_mode) == -1
+
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        struct S{T}; x::T; end
+        S(;y=0) = S{typeof(y)}(y)
+        f(::Type{<:S}) = 1
+        (f(S{Int}), fieldcount(S{Int}), nameof(typeof(S(;y=2))))
+    end
+    """; expr_compat_mode) == (1, 1, :S)
+
+    # local captures
+    @test JuliaLowering.include_string(@newmod(), """
+    let loc = 1
+        struct S; x::Int; end
+        S(y::Float64) = S(loc += 1)
+        S(1).x, S(1.0).x, S(2).x, S(2.0).x, S(3).x, S(3.0).x
+    end
+    """; expr_compat_mode) == (1, 2, 2, 3, 3, 4)
+    @test JuliaLowering.include_string(@newmod(), """
+    let loc = 1
+        struct S
+            x::Int
+            S(y::Float64) = new(loc += 1)
+        end
+        S(1.0).x, S(2.0).x, S(3.0).x
+    end
+    """; expr_compat_mode) == (2, 3, 4)
+end
+@testset "nonstruct type def in local scope" for expr_compat_mode in (true, false)
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        abstract type AbstractTypeInLocalScope end
+        Core.isdefinedglobal(@__MODULE__, :AbstractTypeInLocalScope)
+    end
+    """; expr_compat_mode) == true
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        primitive type PrimitiveTypeInLocalScope 8 end
+        Core.isdefinedglobal(@__MODULE__, :PrimitiveTypeInLocalScope)
+    end
+    """; expr_compat_mode) == true
+end
+
+@testset "(AI) typegroup def in local scope" for expr_compat_mode in (true, false)
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        typegroup
+            struct N; x::Int; end
+            struct E; f::N; end
+        end
+        Core.isdefinedglobal(@__MODULE__, :N)
+    end
+    """; expr_compat_mode, version=v"1.14") == true
+
+    # A later method whose body refers to the type name.
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        typegroup
+            struct N; x::Int; end
+            struct E; f::N; end
+        end
+        N(y::UInt) = N(-1)
+        N(UInt(1)).x
+    end
+    """; expr_compat_mode, version=v"1.14") == -1
+
+    # A later method whose signature refers to the type name.
+    @test JuliaLowering.include_string(@newmod(), """
+    let
+        typegroup
+            struct N; x::Int; end
+            struct E; f::N; end
+        end
+        N(y::UInt) = N(-1)
+        f(arg::N) = arg.x
+        f(N(UInt(1)))
+    end
+    """; expr_compat_mode, version=v"1.14") == -1
+end
+
+@testset "(AI) type def in local scope: name conflicts" for expr_compat_mode in (true, false)
+    for src in ("""let S = 1
+                    struct S; x::Int; end
+                end
+                """,
+                """let A = 1
+                    abstract type A end
+                end
+                """,
+                """let P = 1
+                    primitive type P 8 end
+                end
+                """,
+                """let N = 1
+                    typegroup
+                        struct N; x::Int; end
+                        struct E; f::N; end
+                    end
+                end""")
+        @test_throws JuliaLowering.LoweringError JuliaLowering.include_string(
+            test_mod, src; expr_compat_mode, version=v"1.14")
+    end
+
+    # shadowing is OK
+    @test JuliaLowering.include_string(@newmod(), """
+    let S = 1
+        let
+            struct S; x::Int; end
+        end
+        S
+    end
+    """; expr_compat_mode) == 1
+end

@@ -254,12 +254,15 @@ end
         ver = read(buf, String)
         @test startswith(ver, "Julia Version $VERSION")
         @test occursin("Environment:", ver)
-    end
-    let exename = `$(Base.julia_cmd()) --startup-file=no`
-        @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String[]), String))
-        @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String["JULIA_CPU_THREADS=1"]), String))
+
+        let exename = `$(Base.julia_cmd()) --startup-file=no`,
+            home = Sys.iswindows() ? "USERPROFILE=$dir" : "HOME=$dir"
+            @test !occursin("Environment:", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`, [home]), String))
+            @test occursin("Environment:", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`,
+                [home, "JULIA_CPU_THREADS=1"]), String))
+        end
     end
 end
 
@@ -270,6 +273,18 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
 @test (@which vcat(1...)).name === :vcat
+
+@testset "@methods" begin
+    ms = @methods sort(::AbstractVector)
+    @test ms isa Base.MethodList
+    @test ms == methods(sort, (AbstractVector,))
+    # arguments are interpreted as values, like `@which`
+    @test (@methods sort([1, 2, 3])) == methods(sort, (Vector{Int},))
+    # qualified callable
+    @test (@methods Base.sort(::AbstractVector)) == methods(sort, (AbstractVector,))
+    # unlike `@which`, lists every matching method when types are abstract
+    @test length(@methods +(::Integer, ::Integer)) > 1
+end
 
 # PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex

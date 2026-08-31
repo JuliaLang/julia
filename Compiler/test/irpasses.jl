@@ -1892,6 +1892,20 @@ let (ir,rt) = only(Base.code_ircode((Int,)) do y
     @test rt == Union{Nothing,Float64}
 end
 
+# issue #62082: a frame-less (`catch_dest == 0`) EnterNode's scope operand must be
+# renumbered too, else `Core.current_scope()` reads a stale value in the scoped region
+let sval = ScopedValue(1)
+    @noinline observe_scope() = Core.current_scope()
+    function scope_renumber(c::Bool)
+        if c
+            error("x")
+        end
+        @with sval => 2 observe_scope()
+    end
+    @test scope_renumber(false) isa Base.ScopedValues.Scope
+    @test_throws ErrorException scope_renumber(true)
+end
+
 # Test that adce_pass! sets Refined on PhiNode values
 let code = Any[
     # Basic Block 1
@@ -2160,6 +2174,43 @@ let src = code_typed1(foosvalconstprop, ())
     @test count(is_constfield_load, src.code) == 0
 end
 
+# JuliaLang/julia#58330: propagate SROA type refinements through scoped value reads and comparisons
+const sval58330 = ScopedValue(1)
+struct SROAEgalNonConst
+    x::Any
+end
+
+@testset "SROA type refinement propagation" begin
+    let (ir, _) = only(Base.code_ircode(()) do
+            @with sval58330 => 2 sval58330[]
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+    end
+
+    let (ir, _) = only(Base.code_ircode(()) do
+            with(sval58330 => 2) do
+                sval58330[]
+            end
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+    end
+
+    let (ir, _) = only(Base.code_ircode(
+            (Bool, Int, Float64, String); optimize_until="CC: SROA") do b, x, y, z
+            local val
+            if b
+                val = SROAEgalNonConst(x)
+            else
+                val = SROAEgalNonConst(y)
+            end
+            val.x === z
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === false
+    end
+end
 # JuliaLang/julia #59548
 # Rewrite `Core._apply_iterate` to use `Core.svec` instead of `tuple` to better match
 # the codegen ABI

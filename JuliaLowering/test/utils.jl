@@ -15,30 +15,20 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, new_id!, sourcetext
+using .JuliaSyntax: SourceAttrType, sourcetext, SyntaxList
 
-using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
-    ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
-    is_leaf, mapchildren, numchildren, setattr!, showprov, syntax_graph
+using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError,
+    ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,
+    is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
 
-function _ast_test_graph()
-    JuliaLowering.ensure_desugaring_attributes!(
-        JuliaLowering.ensure_macro_attributes!(SyntaxGraph()))
-end
-
-function _source_node(graph, src)
-    id = new_id!(graph)
-    setattr!(graph, id, :kind, K"TOMBSTONE")
-    setattr!(graph, id, :source, src)
-    SyntaxTree(graph, id)
+function _source_node(src)
+    SyntaxTree(K"TOMBSTONE", nothing, nothing, src, nothing)
 end
 
 macro ast_(tree)
-    # TODO: Implement this in terms of new-style macros.
     quote
-        graph = _ast_test_graph()
-        srcref = _source_node(graph, $(QuoteNode(__source__)))
-        @ast graph srcref $tree
+        srcref = _source_node($(QuoteNode(__source__)))
+        @ast _ srcref $tree
     end
 end
 
@@ -55,9 +45,9 @@ function _format_as_ast_macro(io, ex, indent)
         println(io, indent, "]")
     else
         val_str = if k == K"Identifier" || k == K"core" || k == K"top"
-            repr(ex.name_val)
+            repr(syntax_name(ex))
         elseif k == K"BindingId"
-            repr(ex.var_id)
+            repr(syntax_id(ex))
         else
             repr(get(ex, :value, nothing))
         end
@@ -142,7 +132,7 @@ function format_ir_for_test(mod, case)
     ex = parsestmt(SyntaxTree, case.input)
     try
         if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
-            ex[1].name_val == "@ast_")
+            syntax_name(ex[1]) == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
             ex = Base.eval(mod, JuliaLowering.est_to_expr(ex))
@@ -364,6 +354,32 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
     nothing
 end
 
+function expr_structure_eq(e1,e2)
+    @nospecialize
+    typeof(e1) == typeof(e2) || return false
+    e1 isa Expr || return e1 == e2
+    e1.head === e2.head || return false
+    length(e1.args) == length(e2.args) || return false
+    for (a, b) in Iterators.zip(e1.args, e2.args)
+        expr_structure_eq(a,b) || return false
+    end
+    true
+end
+
+macro newmod(name="newmod_$(string(__source__))", parentmod=__module__, body...)
+    mod_ex = :(
+        module $(Symbol(name))
+        const JuliaLowering = $(JuliaLowering)
+        const JuliaSyntax = $(JuliaSyntax)
+        const var"@K_str" = JuliaSyntax.var"@K_str"
+        const var"@legacy_quote_to_syntax" = JuliaLowering.var"@legacy_quote_to_syntax"
+        $(body...)
+        end)
+    Expr(:block,
+         :(mod = $(Expr(:escape, :(Core.eval($parentmod, $(QuoteNode(mod_ex))))))),
+         Expr(Symbol("latestworld-if-toplevel")), :mod)
+end
+
 function fl_macroexpand(mod::Module, x::Expr)
     ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
 end
@@ -377,7 +393,7 @@ function fl_eval(mod::Module, x::Expr)
 end
 
 function jl_macroexpand(mod::Module, x::SyntaxTree; expr_compat_mode=false)
-    JuliaLowering.expand_forms_1(mod, x, expr_compat_mode, Base.get_world_counter())[2]
+    JuliaLowering.macroexpand(mod, x; expr_compat_mode)
 end
 
 function jl_lower(mod::Module, st::SyntaxTree; expr_compat_mode=false)

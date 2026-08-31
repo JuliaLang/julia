@@ -32,7 +32,6 @@ function kill_timer(delay)
         # **DON'T COPY ME.**
         # The correct way to handle timeouts is to close the handle:
         # e.g. `close(stdout_read); close(stdin_write)`
-        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue::Base.IntrusiveLinkedList{Task}, test_task)
         schedule(test_task, "hard kill repl test"; error=true)
         print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
     end
@@ -112,6 +111,39 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel]))
     close(stdin_write)
+    Base.wait(repltask)
+end
+
+
+# Two ^C at an empty prompt sweep the session's in-flight work (the
+# session -> evaluation cancellation-source tree; issue #47839). N.B.: in
+# fake_repl only *displayed results* (and LineEdit's own output) reach
+# `stdout_read` - a `println` from an evaluation goes to the process
+# stdout - so every step communicates through its result value.
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async REPL.run_repl(repl)
+    # start a runaway background task from an evaluation
+    write(stdin_write, "global bg = @async while true; sleep(0.01); end; \"BG\" * \"UP\"\n")
+    readuntil(stdout_read, "BGUP")
+    readuntil(stdout_read, "julia> ")
+    # first ^C at the empty prompt arms the sweep
+    write(stdin_write, "\x03")
+    readuntil(stdout_read, "press ^C again to cancel all in-flight work")
+    # any other key stands the arm down: this ^C press only re-arms
+    write(stdin_write, "1\n")
+    readuntil(stdout_read, "julia> ")
+    write(stdin_write, "\x03")
+    readuntil(stdout_read, "press ^C again to cancel all in-flight work")
+    # the second press in a row sweeps
+    write(stdin_write, "\x03")
+    readuntil(stdout_read, "Cancelled all in-flight work.")
+    # the runaway task was cancelled ...
+    write(stdin_write, "\"done=\" * string(timedwait(() -> istaskdone(bg), 30.0) === :ok)\n")
+    readuntil(stdout_read, "done=true")
+    # ... and the session still evaluates (a fresh session epoch)
+    write(stdin_write, "\"still\" * \"-alive\"\n")
+    readuntil(stdout_read, "still-alive")
+    write(stdin_write, '\x04') # ^D: exit the REPL loop (not the process)
     Base.wait(repltask)
 end
 
@@ -244,7 +276,6 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=fa
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @info repr(s)
         @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
             startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] "),
             skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
@@ -572,6 +603,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # test that history_first jumps to beginning of current session's history
         @test hp.start_idx == 11
         hp.start_idx -= 5 # temporarily alter history
+        @test REPL.repl_filename(repl, hp) == "REPL[5]"
         LineEdit.history_first(s, hp)
         @test hp.cur_idx == 6
         # we are at the beginning of current session's history, so history_first
@@ -1300,6 +1332,25 @@ end
     Base.wait(backend.backend_task)
 end
 
+# a stray InterruptException forwarded to the backend between evaluations (e.g. a
+# Ctrl-C arriving just as user code finishes) must not tear down the backend (#58689)
+@testset "stray InterruptException in REPL backend" begin
+    backend = REPL.REPLBackend()
+    errormonitor(@async REPL.start_repl_backend(backend))
+    put!(backend.repl_channel, (:(1+1), false))
+    @test take!(backend.response_channel) == Pair{Any, Bool}(2, false)
+    # the backend task is now parked in take!(repl_channel); inject the interrupt
+    # from a throwaway task, since throwto does not reschedule its caller
+    @async Base.throwto(backend.backend_task, InterruptException())
+    yield()
+    @test !istaskdone(backend.backend_task)
+    put!(backend.repl_channel, (:(1+2), false))
+    @test timedwait(() -> isready(backend.response_channel), 60) === :ok
+    @test take!(backend.response_channel) == Pair{Any, Bool}(3, false)
+    put!(backend.repl_channel, (nothing, -1))
+    Base.wait(backend.backend_task)
+end
+
 # Mimic of JSON.jl's structure
 module JSON54872
 
@@ -1661,11 +1712,16 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     LineEdit.edit_input(s, input_f)
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
+    write(stdin_write, '\x04')
+    wait(repltask)
 end
 
-# Non standard output_prefix, tested via `numbered_prompt!`
+# Test that numbered prompts start at one with initialized session history.
 fake_repl() do stdin_write, stdout_read, repl
     repl.interface = REPL.setup_interface(repl)
+    hp = repl.interface.modes[1].hist
+    @test hp.start_idx == 1
+    @test REPL.history_do_initialize(hp)
 
     backend = REPL.REPLBackend()
     repltask = @async begin
