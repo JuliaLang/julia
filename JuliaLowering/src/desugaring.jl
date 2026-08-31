@@ -1548,36 +1548,43 @@ function expand_let(ctx, ex)
             lhs = binding[1]
             rhs = binding[2]
             if is_identifier_like(lhs)
-                kind(lhs) === K"Placeholder" && continue
-                blk = @ast ctx binding [K"block"
-                    tmp := rhs
-                    [K"scope_block"(ex) scope_type
-                        [K"local"(lhs) lhs]
-                        [K"always_defined" lhs]
-                        [K"="(binding) lhs tmp]
-                        blk
+                if kind(lhs) === K"Placeholder"
+                    blk = @ast ctx binding [K"block" rhs blk]
+                else
+                    blk = @ast ctx binding [K"block"
+                        tmp := rhs
+                        [K"scope_block"(ex) scope_type
+                            [K"local"(lhs) lhs]
+                            [K"always_defined" lhs]
+                            [K"="(binding) lhs tmp]
+                            blk
+                        ]
                     ]
-                ]
+                end
             elseif kind(lhs) == K"::"
                 var = lhs[1]
-                kind(var) === K"Placeholder" && continue
                 if !is_identifier_like(var)
                     throw(LoweringError(var, "Invalid assignment location in let syntax"))
-                end
-                blk = @ast ctx binding [K"block"
-                    tmp := rhs
-                    # type := lhs[2]
-                    [K"scope_block"(ex) scope_type
-                        # n.b. the declared type is referenced directly (not
-                        # hoisted into a temporary) so that the declaration
-                        # works for variables captured into other lambdas, where
-                        # it is re-evaluated at each assignment like flisp does
-                        [K"local"(lhs) [K"::" var lhs[2]]]
-                        [K"always_defined" var]
-                        [K"="(binding) var tmp]
-                        blk
+                elseif kind(var) === K"Placeholder"
+                    # do a typeassert/convert here? (this falls through flisp as
+                    # a typed global...)
+                    blk = @ast ctx binding [K"block" rhs blk]
+                else
+                    blk = @ast ctx binding [K"block"
+                        tmp := rhs
+                        # type := lhs[2]
+                        [K"scope_block"(ex) scope_type
+                            # n.b. the declared type is referenced directly (not
+                            # hoisted into a temporary) so that the declaration
+                            # works for variables captured into other lambdas, where
+                            # it is re-evaluated at each assignment like flisp does
+                            [K"local"(lhs) [K"::" var lhs[2]]]
+                            [K"always_defined" var]
+                            [K"="(binding) var tmp]
+                            blk
+                        ]
                     ]
-                ]
+                end
             elseif kind(lhs) == K"tuple"
                 lhs_locals = SyntaxList()
                 foreach_lhs_name(lhs) do var
