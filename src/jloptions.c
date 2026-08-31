@@ -86,7 +86,7 @@ uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int
 
 static int jl_options_initialized = 0;
 
-JL_DLLEXPORT void jl_init_options(void)
+JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT
 {
     if (jl_options_initialized)
         return;
