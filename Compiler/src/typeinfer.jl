@@ -1602,6 +1602,19 @@ function ci_has_invoke(code::CodeInstance)
     return (@atomic :monotonic code.invoke) !== C_NULL
 end
 
+# mirrors JL_CI_FLAGS_FROM_IMAGE in julia.h
+const CI_FLAGS_FROM_IMAGE = 0x04
+
+"""
+    ci_has_image_code(code::CodeInstance)
+
+Whether `code` already has native code in a loaded system or package image.
+"""
+function ci_has_image_code(code::CodeInstance)
+    ((@atomic :acquire code.flags) & CI_FLAGS_FROM_IMAGE) === 0x00 && return false
+    return ci_has_invoke(code)
+end
+
 function ci_meets_requirement(interp::AbstractInterpreter, code::CodeInstance, source_mode::UInt8)
     source_mode == SOURCE_MODE_NOT_REQUIRED && return true
     source_mode == SOURCE_MODE_ABI && return ci_has_abi(interp, code)
@@ -2075,6 +2088,7 @@ end
 function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
     enqueue_unprepared_invokes::Bool = false,
+    skip_image_code::Bool = false,
 )
     interp = workqueue.interp
     world = get_inference_world(interp)
@@ -2088,6 +2102,13 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             # and this is either the primary world, or not applicable in the primary world
             # then we want to compile and emit this
             if item.def.primary_world <= world
+                if skip_image_code
+                    cached = get(code_cache(interp), item, nothing)
+                    if cached isa CodeInstance && ci_has_image_code(cached)
+                        markinspected!(workqueue, item)
+                        continue
+                    end
+                end
                 ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
                 ci isa CodeInstance && push!(workqueue, ci)
             end
@@ -2110,6 +2131,13 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             isinspected(workqueue, callee) && continue
             mi = get_ci_mi(callee)
             if !has_valid_abi_sparams(mi)
+                markinspected!(workqueue, callee)
+                continue
+            end
+            if skip_image_code && ci_has_image_code(callee)
+                # Already compiled into a loaded image, so codegen calls that code directly
+                # (see `jl_emit_native`). Obtaining source here would only re-run inference,
+                # since images do not retain it.
                 markinspected!(workqueue, callee)
                 continue
             end
@@ -2160,11 +2188,16 @@ const TRIM_NO = 0x0
 const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8;
+                              external_linkage::Bool = false)
     # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
     # back to `nothing` at serialization time (see `src/staticdata.c`).
     cache_owner = trim_mode == TRIM_NO ? nothing : :trim
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO, cache_owner)
+    # A package image can call code that is already compiled into other images, so
+    # there is no need to fetch (and for sysimage code, re-infer) source for it.
+    # Trimmed and system images must contain everything they call.
+    skip_image_code = external_linkage && trim_mode == TRIM_NO
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
     # invokelatest calls such as from `Core.finalizer` and `ccallable`
@@ -2180,14 +2213,14 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         )
 
         append!(workqueue, methods)
-        compile!(codeinfos, workqueue; invokelatest_queue,
+        compile!(codeinfos, workqueue; invokelatest_queue, skip_image_code,
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
-        compile!(codeinfos, invokelatest_queue; invokelatest_queue,
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue, skip_image_code,
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 

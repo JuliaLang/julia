@@ -435,7 +435,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
     # list for codegen, plus the ordered CodeInstances to place in the method
     # caches of the output image.
     result = try
-        typeinf_ext_toplevel(tocompile, worlds, trim_mode)
+        typeinf_ext_toplevel(tocompile, worlds, trim_mode; external_linkage)
     catch exc
         # Handle trimming failures
         isa(exc, Core.TrimFailure) || rethrow()
