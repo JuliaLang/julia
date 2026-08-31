@@ -237,7 +237,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                     required.use_info.addrescaped = true;
                     return true;
                 }
-                if (required.pass.gc_preserve_begin_func == callee) {
+                if (isa<julia::GCPreserveBegin>(call)) {
                     for (auto user: call->users())
                         required.use_info.uses.insert(cast<Instruction>(user));
                     required.use_info.preserves.insert(call);
