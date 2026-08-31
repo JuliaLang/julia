@@ -34,6 +34,25 @@ enum AddressSpace {
 
 namespace julia {
 
+// RAII attachment of the Julia dialect to an LLVMContext, required while
+// dialect ops are being *created* in the context (recognition via isa<> is
+// pure name matching and needs no attachment). Attachments are refcounted
+// per context, so emission state (jl_codegen_output_t), optimization passes,
+// and external producers can nest attachments freely. The last release
+// destroys the underlying llvm_dialects::DialectContext, which must happen
+// before the LLVMContext itself is destroyed.
+class ScopedDialects {
+    llvm::LLVMContext *ctx;
+
+public:
+    explicit ScopedDialects(llvm::LLVMContext &ctx) JL_NOTSAFEPOINT;
+    ~ScopedDialects() JL_NOTSAFEPOINT;
+    ScopedDialects(ScopedDialects &&other) JL_NOTSAFEPOINT : ctx(other.ctx) { other.ctx = nullptr; }
+    ScopedDialects(const ScopedDialects &) = delete;
+    ScopedDialects &operator=(const ScopedDialects &) = delete;
+    ScopedDialects &operator=(ScopedDialects &&) = delete;
+};
+
 // Returns the declaration of the dialect op `OpT` in `M`, or nullptr if no
 // call to the op has been emitted into the module. Useful for passes that
 // want to skip work when a module does not use an op at all, or that need

@@ -35,6 +35,7 @@
 #include "llvm-codegen-shared.h"
 #include "objcache.h"
 #include <llvm-dialects/Dialect/Dialect.h>
+#include "JuliaDialect.h"
 #include <stack>
 #include <queue>
 #include <tuple>
@@ -372,10 +373,9 @@ class jl_codegen_output_t {
 private:
     Module &M;
 
-    // Makes the ops of the Julia dialect constructible in M's LLVMContext.
-    // Owned here so that it is destroyed together with the emission state,
-    // and in the common flow before the LLVMContext itself goes away.
-    std::unique_ptr<llvm_dialects::DialectContext> dialects;
+    // Makes the ops of the Julia dialect constructible in M's LLVMContext
+    // for the lifetime of the emission state.
+    julia::ScopedDialects dialects;
 
     jl_name_counter_t names;
 
@@ -443,8 +443,7 @@ public:
     bool use_swiftcc = true;
 
     jl_codegen_output_t(Module &M) JL_NOTSAFEPOINT
-      : M(M),
-        dialects(llvm_dialects::DialectContext::make<julia::JuliaDialect>(M.getContext())),
+      : M(M), dialects(M.getContext()),
         DL(M.getDataLayout()), TargetTriple(M.getTargetTriple())
     {
         if (TargetTriple.isRISCV())
