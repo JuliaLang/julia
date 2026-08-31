@@ -100,7 +100,7 @@ endif
 
 $(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
 ifneq ($(NO_GIT), 1)
-	sh $< $(SRCDIR) > $@
+	JULIA_RELEASE_BUILD=$(JULIA_RELEASE_BUILD) sh $< $(SRCDIR) > $@
 	@# This to avoid touching version_git.jl when it is not modified,
 	@# so that the system image does not need to be rebuilt.
 	@if ! cmp -s $@ version_git.jl; then \

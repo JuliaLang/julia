@@ -42,6 +42,14 @@ to create a Make.user file containing:
 
     override TAGGED_RELEASE_BANNER = "my-package-repository build"
 
+The official release builds are not built from the `vx.y.z` tag: the tag is
+created only after the artifacts have been built, validated, and published
+(see [Tagging the release](#tagging-the-release)). Instead, passing
+`JULIA_RELEASE_BUILD=1` to `make` declares the build to be the release build
+of the version in the `VERSION` file, producing the same artifacts that
+building from the tag would (release naming, `tagged_commit` set). It refuses
+to run when `VERSION` carries a `-DEV` (or legacy `-pre`) suffix.
+
 Target Architectures
 --------------------
 
@@ -282,31 +290,16 @@ Do not remove the label from PRs that have not been backported.
 
 The release-x.y branch should now contain all of the new commits.
 The last thing we want to do to the branch is to adjust the version number.
-To do this, submit a PR against release-x.y that edits the VERSION file to remove `-pre`
+To do this, submit a PR against release-x.y that edits the VERSION file to remove `-DEV`
 from the version number.
-Once that's merged, we're ready to tag.
+Once that's merged, the branch is ready to release.
 
-## Tagging the release
-
-It's time!
-Check out the release-x.y branch and make sure that your local copy of the branch is
-up to date with the remote branch.
-At the command line, run
-
-```
-git tag v$(cat VERSION)
-git push --tags
-```
-
-This creates the tag locally and pushes it to GitHub.
-
-After tagging the release, submit another PR to release-x.y to bump the patch number
-and add `-pre` back to the end.
-This denotes that the branch state reflects a prerelease version of the next point
-release in the x.y series.
-
-Pushing the tag is what sets the release machinery in motion; see
-[Publishing the release](#publishing-the-release) below.
+The release is built and published from that commit on release-x.y; the
+`vx.y.z` tag is created only afterwards, as the last step (see
+[Tagging the release](#tagging-the-release)). If a problem is found after the
+version bump has been merged, simply merge the fix and release from the new
+tip of the branch — nothing has been tagged or published yet, so nothing
+needs to be moved or deleted.
 
 ## Publishing the release
 
@@ -316,32 +309,56 @@ exists outside of a cloud KMS. The authoritative runbook, including recovery
 procedures, lives in `ops/README.md` of
 [JuliaCI/julia-buildkite](https://github.com/JuliaCI/julia-buildkite); in outline:
 
-1. Pushing the `vx.y.z` tag triggers a `julia-ci` Buildkite build, which builds
-   binaries for every platform, runs the tests, and additionally builds the
-   light and full source tarballs (with the bundled HTML documentation).
+1. The release manager starts a release `julia-ci` build (New Build with
+   branch = `release-x.y` at the release commit, with `RELEASE_VERSION=x.y.z`
+   in the environment). The pipeline checks `RELEASE_VERSION` against the
+   `VERSION` file and builds with `JULIA_RELEASE_BUILD=1`, producing the same
+   artifacts a build of the (future) `vx.y.z` tag would: binaries for every
+   platform, plus the light and full source tarballs (with the bundled HTML
+   documentation). The tests run as usual.
 2. When the tests pass, `julia-ci` automatically triggers the trusted
    `julia-publish` pipeline, which signs everything (GPG for the Linux/FreeBSD
    and source tarballs, notarization for macOS, Authenticode for Windows),
    publishes version-named artifacts to the `julialangnightlies` bucket, and
-   deploys the documentation.
-3. The release manager then starts a `julia-promote` build (New Build with
-   branch = `vx.y.z`), which copies everything into the release bucket layout
+   deploys the documentation. Nothing user-facing points at this bucket, so
+   this is the moment to download and sanity-check the artifacts.
+3. The release manager then starts a `julia-promote` build for the same
+   commit and version, which copies everything into the release bucket layout
    served at `julialang-s3.julialang.org` — including the source tarballs under
    `bin/src/x.y/` — repoints the `julia-x.y-latest-*` files, generates and
    uploads the `bin/checksums/julia-x.y.z.{sha256,md5}` files, and purges the
    CDN cache.
-4. Dispatch the CI workflow of
+
+## Tagging the release
+
+The tag is created last, once the artifacts are published, so that it
+immutably records exactly what was released and never needs to be moved or
+deleted. Check out release-x.y at the exact commit that was built and
+promoted, then run
+
+```
+git tag v$(cat VERSION)
+git push --tags
+```
+
+The tag does not trigger any builds. What remains:
+
+1. Dispatch the CI workflow of
    [VersionsJSONUtil.jl](https://github.com/JuliaLang/VersionsJSONUtil.jl) to
    regenerate `versions.json`, then the "Update Version DB" workflow of
    [juliaup](https://github.com/JuliaLang/juliaup) (its upload jobs need manual
    approval) so `juliaup` picks up the release.
-5. Create the GitHub release with the CI-signed source tarballs attached by
+2. Create the GitHub release with the CI-signed source tarballs attached by
    running `contrib/github_source_release.sh x.y.z` — it downloads them from the
    release bucket, verifies the signatures and layout, and shows what it would
    do; rerun with `--execute` to create the (pre)release and upload.
-6. Update [the website](https://github.com/JuliaLang/www.julialang.org): bump
+3. Update [the website](https://github.com/JuliaLang/www.julialang.org): bump
    the version in `config.md` and regenerate the old releases page with
    `downloads/oldreleases.jl`. Finally, announce the release on Discourse.
+
+After the release, submit another PR to release-x.y to bump the patch number
+and add `-DEV` back to the end, denoting that the branch state reflects a
+development version of the next point release in the x.y series.
 
 
 ## Verifying signatures
