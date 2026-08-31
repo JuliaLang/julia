@@ -5,7 +5,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](https://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
 
 > [!IMPORTANT]
-> If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening. This also applies to other content, such as issues, discussions, and comments.
+> If your pull request contains substantive contributions from a generative AI tool, please disclose so with details, and review all changes before opening. This also applies to other content, such as issues, discussions, and comments.
 
 ## Learning Julia
 
@@ -69,7 +69,7 @@ Similarly to other types of contribution, AI-assisted review is allowed so long 
 
 * Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
-* If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening.
+* If your pull request contains substantive contributions from a generative AI tool, please disclose so with details, and review all changes before opening. Open the pull request yourself once you have reviewed it, rather than having a tool open it on your behalf.
 
 * Relax and have fun!
 

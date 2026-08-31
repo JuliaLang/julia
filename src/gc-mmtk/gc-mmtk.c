@@ -51,8 +51,9 @@ static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 // ========================================================================= //
 
 extern void mmtk_julia_copy_stack_check(int copy_stack);
-extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
-extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
+extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t n_concurrent_gcthreads, uintptr_t header_size, uintptr_t tag);
+extern void mmtk_set_concurrent_marking_enabled(bool enabled);
+extern void mmtk_notify_task_resume(void *mutator, const void* task);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
 extern void* mmtk_alloc(void* mutator, size_t size, size_t align, size_t offset, int allocator);
 extern void mmtk_post_alloc(void* mutator, void* refer, size_t bytes, int allocator);
@@ -127,7 +128,8 @@ void jl_gc_init(void) {
     int has_mmtk_max_heap_sizing = max_size_def != NULL || max_size_gb != NULL;
     int use_mmtk_heap_sizing = has_mmtk_min_heap_sizing || has_mmtk_max_heap_sizing;
 
-    // Assert that the number of stock GC threads is 0; MMTK uses the number of threads in jl_options.ngcthreads
+    // Assert that the number of stock GC threads is 0; MMTk's GC threads are not part of
+    // Julia's own thread array and are sized separately from jl_n_markthreads/jl_n_sweepthreads below
     assert(jl_n_gcthreads == 0);
 
     // Check that the julia_copy_stack rust feature has been defined when the COPY_STACK has been defined
@@ -171,18 +173,20 @@ void jl_gc_init(void) {
         exit(1);
     }
 
+    // Offset by 1. Julia counts the mutator thread as a GC thread, but MMTk does not.
+    // So we add 1 to the number of mark threads to get the total number of GC threads.
+    uintptr_t gcthreads = (jl_n_markthreads != -1) ? (uintptr_t)jl_n_markthreads + 1 : 0;
+    uintptr_t concurrent_gcthreads = jl_n_sweepthreads;
+
     // if min and max are the same initialize MMTk with a fixed size heap
     // otherwise use a dynamic heap between min and max
-    // TODO: We just assume mark threads means GC threads, and ignore the number of concurrent sweep threads.
-    // If the two values are the same, we can use either. Otherwise, we need to be careful.
-    uintptr_t gcthreads = jl_options.nmarkthreads;
     if (!use_mmtk_heap_sizing) {
-        mmtk_gc_init(0, 0, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+        mmtk_gc_init(0, 0, gcthreads, concurrent_gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     }
     else if (min_heap_size != max_heap_size) {
-        mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+        mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, concurrent_gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     } else {
-        mmtk_gc_init(0, min_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+        mmtk_gc_init(0, min_heap_size, gcthreads, concurrent_gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     }
 
     if ((int)mmtk_is_moving() != MMTK_MOVING) {
@@ -388,50 +392,23 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
 }
 
 
-// Based on jl_gc_collect from gc-stock.c
-// called when stopping the thread in `mmtk_block_for_gc`
-JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
+// Arm the GC safepoint and wait for every currently-registered mutator to reach it, on behalf of
+// `Collection::stop_all_mutators` in the mmtk_julia binding.
+//
+// This runs on whichever GC worker thread mmtk-core's own scheduler dedicates to running the
+// current pause's `StopMutators` work -- never on a mutator, and never with a second concurrent
+// caller, both guaranteed by mmtk-core.
+JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(int collection)
 {
-    // FIXME: set to JL_GC_AUTO since we're calling it from mmtk
-    // maybe just remove this?
-    JL_PROBE_GC_BEGIN(JL_GC_AUTO);
+    JL_PROBE_GC_BEGIN(collection);
 
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    if (!mmtk_is_collection_enabled()) {
-        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
-        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
-        static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
-        return;
-    }
-
-    int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
-    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
-    // `jl_safepoint_start_gc()` makes sure only one thread can run the GC.
     uint64_t t0 = jl_hrtime();
-    if (!jl_safepoint_start_gc(ct)) {
-        jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
-        jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
-        return;
-    }
+    jl_safepoint_start_gc_from_gc_thread();
 
-    JL_TIMING_SUSPEND_TASK(GC, ct);
-    JL_TIMING(GC, GC);
-
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
-    // Now we are ready to wait for other threads to hit the safepoint,
-    // we can do a few things that doesn't require synchronization.
-    //
     // We must sync here with the tls_lock operations, so that we have a
     // seq-cst order between these events now we know that either the new
     // thread must run into our safepoint flag or we must observe the
     // existence of the thread in the jl_n_threads count.
-    //
-    // TODO: concurrently queue objects
     jl_fence();
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
@@ -442,37 +419,104 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     uint64_t duration = t1 - t0;
     if (duration > gc_num.max_time_to_safepoint)
         gc_num.max_time_to_safepoint = duration;
+    // time_to_safepoint is computed in the same way as stock GC, and it only counts
+    // the time to bring all the threads to safepoint.
+    // TODO: We may want to count from the time when we request the STW in MMTk,
+    // until all the threads are stopped (this would include the time for MMTk scheduler to schedule a stop-the-world packet).
+    // Either add a on_pause_requested callback in MMTk, or let MMTk measure time_to_safepoint and report it back here to Julia.
     gc_num.time_to_safepoint = duration;
     gc_num.total_time_to_safepoint += duration;
+}
 
-    if (mmtk_is_collection_enabled()) {
-        JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
-#ifndef __clang_gcanalyzer__
-        mmtk_block_thread_for_gc();
-#endif
-        JL_UNLOCK_NOGC(&finalizers_lock);
-    }
-
+// The other half of `jl_gc_mmtk_stop_the_world`: disarm the safepoint and let mutators run again,
+// on behalf of `Collection::resume_mutators`, once the pause's GC work is done.
+//
+// Finalizers no longer run here: a GC worker thread has no `jl_current_task` to run them on.
+// `jl_gc_mmtk_run_pending_finalizers` runs them instead, from the waiting mutator itself.
+JL_DLLEXPORT void jl_gc_mmtk_resume_the_world(void)
+{
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     jl_safepoint_end_gc();
-    jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
-    jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+}
 
-    // Only disable finalizers on current thread
-    // Doing this on all threads is racy (it's impossible to check
-    // or wait for finalizers on other threads without dead lock).
+// By the time a mutator gets here, collection may have been disabled. If so, defer the
+// allocation instead of waiting on a GC that won't run -- same as `jl_gc_collect` does.
+// Returns whether the caller should skip waiting.
+JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
+{
+    if (mmtk_is_collection_enabled())
+        return 0;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+    static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
+    jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
+    return 1;
+}
+
+// Saved errno/last-error, passed from `jl_gc_mmtk_block_for_gc_enter` to
+// `jl_gc_mmtk_run_pending_finalizers`, which restores it.
+typedef struct {
+    int saved_errno;
+    uint32_t saved_last_error; // Windows only; always 0 elsewhere.
+} jl_gc_mmtk_saved_errno_t;
+
+// Called by `Collection::block_for_gc` right before it waits for the pause, mirroring what
+// `jl_gc_prepare_to_collect` used to do around the same wait when it ran on this same mutator:
+// save errno, and mark this task's own timing as suspended.
+JL_DLLEXPORT jl_gc_mmtk_saved_errno_t jl_gc_mmtk_block_for_gc_enter(void)
+{
+    jl_gc_mmtk_saved_errno_t saved;
+    saved.saved_errno = errno;
+#ifdef _OS_WINDOWS_
+    saved.saved_last_error = GetLastError();
+#else
+    saved.saved_last_error = 0;
+#endif
+#if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
+    jl_timing_suspend_t suspend;
+    _jl_timing_suspend_ctor(&suspend, "GC", jl_current_task);
+#endif
+    return saved;
+}
+
+// The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
+// task's own timing, and tell mmtk-core this task has resumed.
+//
+// errno/last-error are NOT restored here -- pending finalizers still need to run first, and they
+// can set errno themselves, so the restore waits until after them (see
+// `jl_gc_mmtk_run_pending_finalizers` below).
+JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
+{
+    jl_task_t *ct = jl_current_task;
+#if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
+    jl_timing_suspend_t suspend;
+    suspend.ct = ct;
+    _jl_timing_suspend_destroy(&suspend);
+#endif
+    jl_gc_notify_task_resume(ct);
+}
+
+// Runs this mutator's pending finalizers before `Collection::block_for_gc` returns --
+// `GC.gc()` is documented/tested to have run pending finalizers by the time they
+// return. Also restores the errno/last-error `saved` carries from `jl_gc_mmtk_block_for_gc_enter`.
+JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(jl_gc_mmtk_saved_errno_t saved)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    // Only disable finalizers on current thread. Doing this on all threads is racy (it's
+    // impossible to check or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
         JL_TIMING(GC, GC_Finalizers);
         run_finalizers(ct, 0);
     }
     JL_PROBE_GC_FINALIZER();
-
 #ifdef _OS_WINDOWS_
-    SetLastError(last_error);
+    SetLastError(saved.saved_last_error);
 #endif
-    errno = last_errno;
+    errno = saved.saved_errno;
 }
 
 // ========================================================================= //
@@ -919,7 +963,7 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
     //            if (stkbuf)
     //                push(free_stacks[sz], stkbuf)
     assert(gc_n_threads);
-    for (int i = 0; i < jl_n_threads; i++) {
+    for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 == NULL)
             continue;
@@ -998,6 +1042,16 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
 {
     jl_gc_mmtk_sweep_stack_pools();
     sweep_mtarraylist_buffers();
+}
+
+void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
+{
+#ifdef MMTK_PLAN_CONCURRENTIMMIX
+    if (task == NULL)
+        return;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    mmtk_notify_task_resume(&ptls->gc_tls.mmtk_mutator, (const void*) task);
+#endif
 }
 
 JL_DLLEXPORT void* jl_gc_get_stackbase(int16_t tid) {
@@ -1385,7 +1439,6 @@ JL_DLLEXPORT uint64_t jl_get_pg_size(void)
     return MMTK_GC_PAGE_SZ;
 }
 
-// Not used by mmtk
 // Number of GC threads that may run parallel marking
 int jl_n_markthreads;
 // Number of GC threads that may run concurrent sweeping (0 or 1)

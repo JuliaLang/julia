@@ -265,6 +265,9 @@ ifeq ($(USE_SYSTEM_ZSTD), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zstd
 endif
 
+# LLVM's configure checks link against libraries installed by csl.
+$(LLVM_BUILDDIR_withtype)/build-configured: | install-csl
+
 
 # NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 

@@ -1157,7 +1157,9 @@ end
 function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     nv = _getfield_fieldindex(typeof(sv), name)
     nv === nothing && return Bottom
-    if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
+    # `types` and `super` are write-once: non-const (filled lazily), but once
+    # a defined value is observed it can never change, so folding it is sound
+    if isa(sv, DataType) && (nv == DATATYPE_TYPES_FIELDINDEX || nv == DATATYPE_SUPER_FIELDINDEX) && isdefined(sv, nv)
         return Const(getfield(sv, nv))
     end
     if !isa(sv, Module) && isconst(typeof(sv), nv)
@@ -1256,10 +1258,14 @@ end
             sv = type_parameter(s)
             if isa(sv, DataType) && isa(name, Const) &&
                _getfield_fieldindex(DataType, name) == DATATYPE_SUPER_FIELDINDEX &&
-               !has_free_typevars(sv.super)
+               # read without forcing: on a deferred instantiation whose slot
+               # is still unset the modeled `getfield` throws, so no precision
+               # is lost by falling through (see issue #61347)
+               isdefined(sv, :super) &&
+               (svsuper = getfield(sv, :super); !has_free_typevars(svsuper))
                 # only `DataType` reps reach `.super` without throwing, and the
                 # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal)
-                return Type{sv.super}
+                return Type{svsuper}
             end
             if isTypeDataType(sv) && isa(name, Const)
                 nv = _getfield_fieldindex(DataType, name)::Int
@@ -3435,6 +3441,8 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         argtypes_vec = Any[af_argtype.parameters...]
         isempty(argtypes_vec) && push!(argtypes_vec, Union{})
         aft = argtypes_vec[1]
+        # e.g. `return_type(Tuple{Vararg{Any}})`: there is no function type to model
+        isvarargtype(aft) && return Future(UNKNOWN)
     end
     # effects are not an issue if we know this statement will get removed, but if it does not get removed,
     # then this could be recursively re-entering inference (via concrete-eval), which will not terminate

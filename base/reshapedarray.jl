@@ -220,7 +220,7 @@ end
 # General reshape
 function _reshape(parent::AbstractArray, dims::Dims)
     n = length(parent)
-    prod(dims) == n || _throw_dmrs(n, "size", dims)
+    Core.checked_dims(dims...) == n || _throw_dmrs(n, "size", dims)
     __reshape((parent, IndexStyle(parent)), dims)
 end
 
@@ -354,9 +354,9 @@ unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(P
 const ReshapedUnitRange{T,N,A<:AbstractUnitRange} = ReshapedArray{T,N,A,Tuple{}}
 viewindexing(I::Tuple{Slice, ReshapedUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
-compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
+compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s * Int(step(I[1].parent))
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
-    (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
+    (@inline; Int(first(I[1])) - Int(first(axes1(I[1])))*stride1)
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 
@@ -368,7 +368,7 @@ function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{R
     else
         _memory_offset(parent, map(first, V.indices)...)
     end
-    return Ptr{S}(unsafe_convert(Ptr{T}, parent) + Δmem)
+    return Ptr{S}(unsafe_convert(Ptr{T}, parent) + Int(Δmem))
 end
 
 struct OffsetCConvert{T, C}
@@ -458,3 +458,13 @@ function merge_adjacent_dim(apsz::Dims{N}, apst::Dims{N}, n::Int = 1) where {N}
     end
     return sz, st, n
 end
+
+map(f, R::ReshapedArray) = reshape(map(f, parent(R)), size(R))
+
+iterate(R::ReshapedArray) = iterate(parent(R))
+iterate(R::ReshapedArray, state) = iterate(parent(R), state)
+
+mapfoldl_impl(f, op, nt, R::ReshapedArray) = mapfoldl_impl(f, op, nt, parent(R))
+mapfoldr_impl(f, op, nt, R::ReshapedArray) = mapfoldr_impl(f, op, nt, parent(R))
+
+in(x, R::ReshapedArray) = in(x, parent(R))

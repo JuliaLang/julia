@@ -2137,19 +2137,16 @@ TypeError
 """
     InterruptException()
 
-The process was stopped by a terminal interrupt (CTRL+C).
+The exception historically thrown when the process was stopped by a terminal
+interrupt (CTRL+C). A terminal interrupt is now delivered as a cancellation
+of the current ^C episode's scope and observed at cancellation points as a
+[`Base.CancellationRequest`](@ref); `InterruptException` remains for code
+that throws it explicitly (e.g. to signal an interruption to another task).
 
-Note that, in Julia script started without `-i` (interactive) option,
-`InterruptException` is not thrown by default.  Calling
-[`Base.exit_on_sigint(false)`](@ref Base.exit_on_sigint) in the script
-can recover the behavior of the REPL.  Alternatively, a Julia script
-can be started with
-
-```sh
-julia -e "include(popfirst!(ARGS))" script.jl
-```
-
-to let `InterruptException` be thrown by CTRL+C during the execution.
+Note that, in a Julia script started without the `-i` (interactive) option,
+CTRL+C terminates the process by default.  Calling
+[`Base.exit_on_sigint(false)`](@ref Base.exit_on_sigint) in the script makes
+CTRL+C observable again as a cancellation.
 """
 InterruptException
 
@@ -3294,7 +3291,9 @@ Array{T,N}(::Missing, dims)
 Singleton type used in array initialization, indicating the array-constructor-caller
 would like an uninitialized array.
 
-See also [`undef`](@ref), an alias for `UndefInitializer()`.
+See the section in the manual on uninitialized memory.
+
+See also: [`undef`](@ref), an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
@@ -3314,7 +3313,9 @@ Alias for `UndefInitializer()`, which constructs an instance of the singleton ty
 [`UndefInitializer`](@ref), used in array initialization to indicate the
 array-constructor-caller would like an uninitialized array.
 
-See also [`missing`](@ref), [`similar`](@ref).
+See the section in the manual on uninitialized memory.
+
+See also: [`missing`](@ref), [`similar`](@ref).
 
 # Examples
 ```julia-repl
@@ -4148,7 +4149,7 @@ Base.donotdelete
 """
     Base.blackbox(x) -> x
 
-Return `x` unchanged but the returned value will be treated as if it
+This function returns `x` unchanged, but treats the returned value as if it
 came from an unknowable black-box source. The optimizer may not make any
 assumptions about the output: it cannot be constant-folded, common-subexpression
 eliminated (CSE'd), or treated as loop-invariant.

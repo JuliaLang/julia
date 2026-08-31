@@ -1393,7 +1393,7 @@ function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT
             pkgimage = if JLOptions().use_pkgimages != 0
                 io = open(path, "r")
                 try
-                    if iszero(isvalid_cache_header(io))
+                    if isvalid_cache_header(io) === nothing
                         false
                     else
                         _, _, _, _, _, _, flags = parse_cache_header(io, path)
@@ -2139,7 +2139,7 @@ function isrelocatable(pkg::PkgId)
     isnothing(path) && return false
     io = open(path, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $path."))
         _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
         for inc in includes
             !startswith(inc.filename, "@depot") && return false
@@ -2159,11 +2159,11 @@ function parse_cache_buildid(cachepath::String)
     f = open(cachepath, "r")
     try
         checksum = isvalid_cache_header(f)
-        iszero(checksum) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
-        flags = read(f, UInt8)
-        syntax_version = read(f, UInt8)
+        checksum === nothing && throw(ArgumentError("Incompatible header in cache file $cachepath."))
+        read(f, UInt8) # flags
+        read(f, UInt8) # syntax_version
         n = read(f, Int32)
-        n == 0 && error("no module defined in $cachefile")
+        n == 0 && error("no module defined in $cachepath")
         skip(f, n) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
         build_id = (UInt128(checksum) << 64) | read(f, UInt64)
@@ -2204,7 +2204,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     local depmodnames
     io = open(path, "r")
     try
-        iszero(isvalid_cache_header(io)) && return ArgumentError("Incompatible header in cache file $path.")
+        isvalid_cache_header(io) === nothing && return ArgumentError("Incompatible header in cache file $path.")
         _, (includes, _, _), depmodnames, _, _, clone_targets, _ = parse_cache_header(io, path)
 
 
@@ -2957,7 +2957,7 @@ function __require_prelocked(pkg::PkgId, env)
     end
 
     if JLOptions().use_compiled_modules == 3
-        error("Precompiled image $pkg not available with flags $(CacheFlags())")
+        error("Precompiled image $pkg not available with flags $(CacheFlags())$(list_reasons(reasons; full=true))")
     end
 
     # if the module being required was supposed to have a particular version
@@ -3221,11 +3221,6 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
     try
         _parse = invokelatest(Meta.parser_for_module, mod)
         ast = Meta.parseall(code; filename, _parse)
-        if !Meta.isexpr(ast, :toplevel)
-            @assert Core._lower != fl_lower
-            # Only reached when JuliaLowering and alternate parse functions are activated
-            return Core.eval(mod, ast)
-        end
         result = nothing
         line_and_ex = Expr(:toplevel, loc, nothing)
         for ex in ast.args
@@ -3708,7 +3703,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
 
             # append extra crc to the end of the .ji file:
             open(tmppath, "r+") do f
-                if iszero(isvalid_cache_header(f))
+                if isvalid_cache_header(f) === nothing
                     error("Incompatible header for $(repr("text/plain", pkg)) in new cache file $(repr(tmppath)).")
                 end
                 seekend(f)
@@ -3802,15 +3797,19 @@ function object_build_id(obj)
     return module_build_id(mod::Module)
 end
 
-function isvalid_cache_header(f::IOStream)
-    pkgimage = Ref{UInt8}()
-    checksum = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Int64}, Ptr{Int64}), f.ios, pkgimage, Ref{Int64}(), Ref{Int64}()) # returns checksum id or zero
+const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
+const JI_FLAG_SPLIT::UInt32 = 1 << 1
 
-    if !iszero(checksum) && pkgimage[] != 0
-        @debug "Cache header was for pkgimage"
-        return UInt64(0) # We somehow read the header for a pkgimage and not a ji
+function isvalid_cache_header(f::IOStream)
+    flags = Ref{UInt32}()
+    checksum = Ref{UInt32}()
+    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}())
+
+    if err == 0 && (flags[] & JI_FLAG_PKGIMAGE == 0)
+        @debug "Cache header was for a system image"
+        return nothing # We somehow read the header for a system image
     end
-    return checksum
+    return err == 0 ? checksum[] : nothing
 end
 isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
@@ -4029,7 +4028,7 @@ end
 function parse_cache_header(cachefile::String)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         ret = parse_cache_header(io, cachefile)
         return ret
     finally
@@ -4041,7 +4040,7 @@ preferences_blob(f::IO, cachefile::AbstractString) = parse_cache_header(f, cache
 function preferences_blob(cachefile::String)
     io = open(cachefile, "r")
     try
-        if iszero(isvalid_cache_header(io))
+        if isvalid_cache_header(io) === nothing
             throw(ArgumentError("Incompatible header in cache file $cachefile."))
         end
         return preferences_blob(io, cachefile)
@@ -4058,7 +4057,7 @@ end
 function cache_dependencies(cachefile::String)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         return cache_dependencies(io, cachefile)
     finally
         close(io)
@@ -4098,7 +4097,7 @@ end
 function read_dependency_src(cachefile::String, filename::AbstractString)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         return read_dependency_src(io, cachefile, filename)
     finally
         close(io)
@@ -4396,7 +4395,7 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :dep_buildid_mismatch    => :internal    => "different dependency build identifier",
 )
 
-function list_reasons(reasons::Dict{Symbol,Int})
+function list_reasons(reasons::Dict{Symbol,Int}; full::Bool=false)
     isempty(reasons) && return ""
     actionable = String[]
     wrong_julia = false
@@ -4411,6 +4410,7 @@ function list_reasons(reasons::Dict{Symbol,Int})
         end
     end
     @debug "Caches not reused: $(join(verbose, ", "))"
+    full && return " (cache not reused: $(join(sort!(verbose), ", ")))"
     if !isempty(actionable)
         return " (cache not reused: $(join(sort!(actionable), ", ")))"
     elseif wrong_julia
@@ -4419,7 +4419,7 @@ function list_reasons(reasons::Dict{Symbol,Int})
         return ""
     end
 end
-list_reasons(::Nothing) = ""
+list_reasons(::Nothing; full::Bool=false) = ""
 
 function in_package_store(path::String)
     for depot in DEPOT_PATH
@@ -4558,7 +4558,7 @@ end
     end
     try
         checksum = isvalid_cache_header(io)
-        if iszero(checksum)
+        if checksum === nothing
             @debug "Rejecting cache file $cachefile due to it containing an incompatible cache header"
             record_reason(reasons, :incompatible_header)
             return true # incompatible cache file

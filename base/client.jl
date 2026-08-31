@@ -170,7 +170,15 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
                 istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
-                invokelatest(display_error, errio, lasterr)
+                # error display (user-extensible show methods) runs in a
+                # fresh ^C epoch: the failed evaluation's cancelled epoch
+                # must not poison it, and a stuck printout is cancellable
+                try
+                    ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(new_evaluation_cancel_source!()),
+                                       invokelatest(display_error, errio, lasterr))
+                finally
+                    sigint_close_episode!()
+                end
             else
                 ast = __repl_entry_client_lower(Main, ast)
                 value = __repl_entry_client_eval(Main, ast)
@@ -502,7 +510,14 @@ function run_fallback_repl(interactive::Bool)
                             break
                         end
                     end
-                    eval_user_input(stderr, ex, true)
+                    # each interactive input is a fresh ^C epoch (an
+                    # evaluation source, so leftovers stay session-sweepable)
+                    try
+                        ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(new_evaluation_cancel_source!()),
+                                           eval_user_input(stderr, ex, true))
+                    finally
+                        sigint_close_episode!()
+                    end
                 catch err
                     isa(err, InterruptException) ? print("\n\n") : rethrow()
                 end
@@ -603,6 +618,63 @@ function should_use_main_entrypoint()
     return true
 end
 
+
+## The interactive session's two-level cancellation-source tree
+#
+# An interactive driver (the REPL backend) runs every evaluation under its
+# own cancellation source, each a child of one long-lived *session* source:
+# cancelling an evaluation's source stops exactly that evaluation (and
+# everything it spawned), while cancelling the session source sweeps every
+# still-running piece of work any evaluation has started - the runaway
+# `@async` from three prompts ago included. Cancellation is monotonic, so a
+# swept session source is retired and the next evaluation starts a fresh
+# session epoch: "everything so far" always means "since the last sweep".
+
+const _session_cancel_source = Ref{Union{Nothing, CancellationTokenSource}}(nothing)
+const _session_cancel_lock = ReentrantLock()
+
+# The current session source, created on first use (and after each sweep).
+function session_cancel_source!()
+    lock(_session_cancel_lock; cancel=nothing)
+    try
+        ses = _session_cancel_source[]
+        if ses === nothing
+            ses = CancellationTokenSource()
+            _session_cancel_source[] = ses
+        end
+        return ses
+    finally
+        unlock(_session_cancel_lock)
+    end
+end
+
+# A fresh source governing one interactive evaluation, linked under the
+# session source.
+new_evaluation_cancel_source!() =
+    CancellationTokenSource(CancellationToken(session_cancel_source!()))
+
+"""
+    Base.cancel_session_work!() -> Bool
+
+Cancel every still-running piece of work started under the current
+interactive session's evaluations (see the session-source tree above) and
+start a fresh session epoch. Returns whether there was a session to sweep.
+The REPL binds this to a repeated `^C` at an empty prompt.
+"""
+function cancel_session_work!()
+    lock(_session_cancel_lock; cancel=nothing)
+    ses = try
+        s = _session_cancel_source[]
+        _session_cancel_source[] = nothing
+        s
+    finally
+        unlock(_session_cancel_lock)
+    end
+    ses === nothing && return false
+    cancel!(ses)
+    return true
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
@@ -612,7 +684,14 @@ function _start()
     # `--project` has been processed at this point - latch the active project's syntax
     # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
     # at each prompt.
-    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() try
+    # The whole foreground execution runs as a ^C episode: a SIGINT (with
+    # exit-on-sigint disabled) cancels the episode token's scope. An
+    # interactive session installs its own per-evaluation episodes later
+    # (see REPL.repl_backend_loop), superseding this one. Deliberately a
+    # standalone root, not a session child - see the `sigint_new_episode!`
+    # docstring.
+    sigint_tok = sigint_new_episode!()
+    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)
@@ -635,7 +714,22 @@ function _start()
         end
     catch
         ret = Cint(1)
-        invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
+        # report the error in a fresh ^C epoch (the script's epoch may be
+        # the very cancellation being reported; level-triggered checks in
+        # the printing path would re-throw it mid-report)
+        local errs = scrub_repl_backtrace(current_exceptions())
+        try
+            ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
+                               invokelatest(display_error, errs))
+        catch
+            # The report itself failed - e.g. a further ^C cancelled the
+            # display epoch, or a user-defined `show` method errored. The
+            # exit code already reflects the original failure; leave a bare
+            # note rather than dying with an unhandled exception.
+            Core.print(Core.stderr, "\nSYSTEM: displaying the error report failed\n")
+        finally
+            sigint_close_episode!()
+        end
     end
     if is_interactive && get(stdout, :color, false)
         print(color_normal)

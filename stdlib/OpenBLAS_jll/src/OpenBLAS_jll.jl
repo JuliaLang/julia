@@ -53,6 +53,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libopenblas_path() = libopenblas_path
+
 function __init__()
     global libopenblas_path = string(libopenblas.path)
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)

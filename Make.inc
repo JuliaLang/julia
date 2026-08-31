@@ -890,15 +890,18 @@ JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 
 # Use StickyImmix as the default MMTk plan.
 MMTK_PLAN ?= StickyImmix
-# Must specify a supported MMTk plan: Immix or StickyImmix
+# Must specify a supported MMTk plan: Immix, StickyImmix, or ConcurrentImmix
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
 JCFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
 else ifeq (${MMTK_PLAN},StickyImmix)
 JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
+else ifeq (${MMTK_PLAN}, ConcurrentImmix)
+JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\"
+JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\"
 else
-$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix or StickyImmix.")
+$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, or ConcurrentImmix.")
 endif
 
 # Julia's MMTk support does not support moving just yet
@@ -1539,9 +1542,13 @@ endif
 endif
 
 # Warn if the user tries to build something that requires `gfortran` but they don't have it installed.
+# Goals that only download or repackage sources never run the fortran compiler and are exempt.
+FC_EXEMPT_GOALS := get getall light-source-dist full-source-dist print-%
+ifneq (,$(filter-out $(FC_EXEMPT_GOALS),$(or $(MAKECMDGOALS),x)))
 ifeq ($(FC_VERSION),)
 ifneq ($(USE_BINARYBUILDER_OPENBLAS)$(USE_BINARYBUILDER_LIBSUITESPARSE),11)
 $(error "Attempting to build OpenBLAS or SuiteSparse without a functioning fortran compiler!")
+endif
 endif
 endif
 

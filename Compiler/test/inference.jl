@@ -7835,6 +7835,15 @@ end == Type{<:Real}
     Compiler.return_type(oc, Tuple{String})
 end == Type{Union{}}
 
+# `return_type_tfunc` should bail out (rather than crash inference) when the queried
+# signature has no function type to model
+@test Base.infer_return_type() do
+    Compiler.return_type(Tuple{Vararg{Any}})
+end == Type
+@test Base.infer_return_type() do
+    Compiler.return_type(Tuple)
+end == Type
+
 @test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
 task_returner() = Task(() -> "hello")
 @test Base.infer_return_type((typeof(task_returner),)) do f

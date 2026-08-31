@@ -169,6 +169,22 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
 
             let ta = obj.to_ptr::<jl_task_t>();
 
+            #[cfg(feature = "concurrentimmix")]
+            if crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst) {
+                // For concurrent marking, prefer a stable snapshot captured before the task runs.
+                // If no snapshot exists, create one while holding the per-task scan lock so
+                // resume-time snapshotting for the same task waits only until the live task scan
+                // finishes. The snapshot itself is then processed outside the lock.
+                if let Some(snapshot) = crate::scanning::GC_STACK_SNAPSHOTS.gc_thread_scan_stack(ta)
+                {
+                    snapshot.iter().for_each(|slot| {
+                        process_slot(closure, Address::from_ptr(slot as *const _))
+                    });
+                }
+            } else {
+                mmtk_scan_gcstack(ta, closure);
+            }
+            #[cfg(not(feature = "concurrentimmix"))]
             mmtk_scan_gcstack(ta, closure);
 
             let layout = (*jl_task_type).layout;
@@ -342,6 +358,17 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
     }
 
     if vt == jl_weakref_type {
+        #[cfg(feature = "concurrentimmix")]
+        if crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst) {
+            // Treat weak ref as strong
+            let wr = obj.to_ptr::<jl_weakref_t>();
+            let slot = Address::from_ptr(std::ptr::addr_of!((*wr).value));
+            process_slot(closure, slot);
+            return;
+        } else {
+            return;
+        }
+        #[cfg(not(feature = "concurrentimmix"))]
         return;
     }
 
@@ -405,6 +432,9 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
     ta: *const jl_task_t,
     closure: &mut EV,
 ) {
+    // ConcurrentImmix may call this from the task-resume barrier. Callers must ensure the task
+    // stack is stable before using this path during concurrent marking.
+
     let stkbuf = (*ta).ctx.stkbuf;
     let copy_stack = (*ta).ctx.copy_stack_custom();
 

@@ -14,7 +14,9 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#if JL_LLVM_VERSION < 220000
 #include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
+#endif
 #if JL_LLVM_VERSION >= 210000
 #  include <llvm/ExecutionEngine/Orc/SelfExecutorProcessControl.h>
 #endif
@@ -50,6 +52,7 @@
 #endif
 #include <llvm/ExecutionEngine/Orc/ObjectFileInterface.h>
 #include <llvm/ExecutionEngine/Orc/DebugUtils.h>
+#include <llvm/Object/ELFObjectFile.h>
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/ObjectFile.h>
 
@@ -662,18 +665,128 @@ static void selectOptLevel(Module &M) JL_NOTSAFEPOINT {
 
 static bool isJITLinkEHFrameSection(StringRef Name) JL_NOTSAFEPOINT
 {
-    // EH-frame sections are handled by the EH-frame registration plugin. Its
-    // post-allocation graph state is not suitable for generic section range
-    // walks here.
+    // Runtime EH-frame registration is owned by the EH-frame registration
+    // plugin. The load address recorded for these sections is used only to
+    // patch the debug object handed to GDB (registerWithGDB); every other
+    // consumer of the recorded addresses filters them out with this predicate.
     return Name == ".eh_frame" || Name == "__eh_frame" || Name.ends_with(",__eh_frame");
+}
+
+// Write the load address of each section into the `sh_addr` field of its
+// section header, so that a debugger reading this copy of the object knows
+// where the JIT put it. Returns false if this is not the right ELF flavor;
+// NumPatched counts the sections that received a load address.
+template <typename ELFT>
+static bool patchELFSectionAddresses(const object::ObjectFile &Obj,
+                                     const StringMap<uint64_t> &LoadAddresses,
+                                     size_t &NumPatched) JL_NOTSAFEPOINT
+{
+    const auto *ELFObj = dyn_cast<object::ELFObjectFile<ELFT>>(&Obj);
+    if (!ELFObj)
+        return false;
+    for (const object::SectionRef &Sec : ELFObj->sections()) {
+        auto Name = Sec.getName();
+        if (!Name) {
+            consumeError(Name.takeError());
+            continue;
+        }
+        auto It = LoadAddresses.find(*Name);
+        if (It == LoadAddresses.end())
+            continue;
+        // const_cast is safe here: the object is parsed from BackingBuffer,
+        // which we own and which is writable.
+        auto *Header = const_cast<typename ELFT::Shdr *>(
+            ELFObj->getSection(Sec.getRawDataRefImpl()));
+        Header->sh_addr = static_cast<typename ELFT::uint>(It->second);
+        NumPatched++;
+    }
+    return true;
+}
+
+// Hand a copy of the object over to the debugger through the GDB JIT interface,
+// as LLVM's ELFDebugObjectPlugin would. We do it here instead so that the debug
+// object does not need a JIT memory allocation of its own: that allocation
+// cannot be finalized until the LinkGraph's own allocation is, and waiting for
+// it (as ELFDebugObjectPlugin does) blocks the linker thread.
+void JLDebuginfoPlugin::registerWithGDB(orc::ExecutionSession &ES, JITObjectInfo &Info)
+{
+    // Patch the copy of the object we already parsed, rather than walking the
+    // ELF headers by hand a second time.
+    size_t SectionsPatched = 0;
+    if (!patchELFSectionAddresses<object::ELF64LE>(*Info.Object, Info.SectionLoadAddresses, SectionsPatched) &&
+        !patchELFSectionAddresses<object::ELF32LE>(*Info.Object, Info.SectionLoadAddresses, SectionsPatched) &&
+        !patchELFSectionAddresses<object::ELF64BE>(*Info.Object, Info.SectionLoadAddresses, SectionsPatched) &&
+        !patchELFSectionAddresses<object::ELF32BE>(*Info.Object, Info.SectionLoadAddresses, SectionsPatched))
+        return; // not an ELF object
+    // No section got a load address, so the object holds nothing the debugger
+    // could locate (ELFDebugObjectPlugin skips these too).
+    if (SectionsPatched == 0)
+        return;
+
+    orc::ExecutorAddrRange R(
+        orc::ExecutorAddr::fromPtr(Info.BackingBuffer->getBufferStart()),
+        Info.BackingBuffer->getBufferSize());
+    auto Register = orc::shared::WrapperFunctionCall::Create<
+        orc::shared::SPSArgList<orc::shared::SPSExecutorAddrRange, bool>>(
+            GDBRegistrar, R, /*AutoRegisterCode*/true);
+    if (!Register) {
+        // reportError runs an unknown callback, which cannot be annotated as
+        // safe here (but is), and takes its Error by value (see
+        // JL_SA_BROKEN_PARAM_DTORS)
+#if !defined(__clang_gcanalyzer__) && !defined(JL_SA_BROKEN_PARAM_DTORS)
+        ES.reportError(Register.takeError());
+#endif
+        return;
+    }
+    // Running the wrapper call is an indirect call through GDBRegistrar, which
+    // the analyzer must assume is a safepoint. It is not: the callee is
+    // llvm_orc_registerJITLoaderGDBAllocAction, which only appends to the GDB
+    // JIT descriptor list and never runs Julia code.
+    // (reportError also runs an unknown callback, which cannot be annotated as
+    // safe here, and takes its Error by value)
+#if !defined(__clang_gcanalyzer__) && !defined(JL_SA_BROKEN_PARAM_DTORS)
+    if (auto Err = Register->runWithSPSRetErrorMerged()) {
+        ES.reportError(std::move(Err));
+        return;
+    }
+#endif
+    // The GDB JIT interface keeps a pointer to the object, so it has to stay
+    // alive for as long as the code it describes, which is forever today.
+    GDBObjects.push_back(std::move(Info.BackingBuffer));
+}
+
+void JLDebuginfoPlugin::enableGDBRegistration(orc::ExecutorAddr Registrar)
+{
+    std::lock_guard<std::mutex> lock(PluginMutex);
+    assert(PendingObjs.empty());
+    GDBRegistrar = Registrar;
+}
+
+// BumpPtrAllocator's ASAN bookkeeping is inlined into each caller: allocations
+// we make in the LinkGraph poison the fresh slab and unpoison the returned
+// bytes, while allocations made inside the uninstrumented libLLVM touch no
+// shadow state. A block libLLVM carves out of a slab our calls created is
+// therefore live but still shadow-poisoned; repair that before reading it.
+static void unpoisonLinkGraphBlocks(const jitlink::Section &Sec) JL_NOTSAFEPOINT
+{
+#ifdef _COMPILER_ASAN_ENABLED_
+    for (const jitlink::Block *B : Sec.blocks())
+        __asan_unpoison_memory_region(B, sizeof(*B));
+#else
+    (void)Sec;
+#endif
 }
 
 void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     orc::MaterializationResponsibility &MR, jitlink::LinkGraph &G,
     MemoryBufferRef InputObject, std::unique_ptr<jl_linker_info_t> LinkerInfo)
 {
+    // The buffer is writable because registerWithGDB patches the section
+    // load addresses into its section headers in place.
     auto NewBuffer =
-        MemoryBuffer::getMemBufferCopy(InputObject.getBuffer(), G.getName());
+        WritableMemoryBuffer::getNewUninitMemBuffer(InputObject.getBufferSize(), G.getName());
+    memcpy(NewBuffer->getBufferStart(), InputObject.getBufferStart(),
+           InputObject.getBufferSize());
     // Re-parsing the InputObject is wasteful, but for now, this lets us
     // reuse the existing debuginfo.cpp code. Should look into just
     // directly pulling out all the information required in a JITLink pass
@@ -690,6 +803,28 @@ void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     }
 }
 
+// Deprecated layer-level hook, but the only way to see objects that enter the
+// layer without going through JuliaOJIT::linkOutput (e.g. via
+// JuliaOJIT::addObjectFile from the C API). When the GDB listener is enabled,
+// record a copy of those too so they get registered with the debugger; they
+// carry no jl_linker_info_t, so notifyEmitted skips jl_register_jit_object for
+// them.
+void JLDebuginfoPlugin::notifyMaterializing(
+    orc::MaterializationResponsibility &MR, jitlink::LinkGraph &G,
+    jitlink::JITLinkContext &, MemoryBufferRef InputObject)
+{
+    {
+        std::lock_guard<std::mutex> lock(PluginMutex);
+        if (!GDBRegistrar || PendingObjs.count(&MR))
+            return;
+    }
+    // Graphs emitted without a backing object file (e.g. trampolines) have
+    // nothing to hand to the debugger.
+    if (InputObject.getBufferSize() == 0)
+        return;
+    notifyMaterializingWithInfo(MR, G, InputObject, nullptr);
+}
+
 // TODO: analysis disabled since we aren't able to annotate that it was safe to lock
 // std::mutex here because we asserted !jl_gcunsaferegion, so we don't need to assert jl_notsafepoint
 Error JLDebuginfoPlugin::notifyEmitted(MaterializationResponsibility &MR) JL_NO_SAFEPOINT_ANALYSIS // NOLINT[julia-first-decl-annotations]
@@ -702,6 +837,10 @@ Error JLDebuginfoPlugin::notifyEmitted(MaterializationResponsibility &MR) JL_NO_
 
         auto NewInfo = PendingObjs[&MR].get();
         auto getLoadAddress = [NewInfo](const StringRef &Name) -> uint64_t {
+            // EH-frame sections are handled by the EH-frame registration
+            // plugin; their recorded range is only meant for the debug object.
+            if (isJITLinkEHFrameSection(Name))
+                return 0;
             auto result = NewInfo->SectionLoadAddresses.find(Name);
             if (result == NewInfo->SectionLoadAddresses.end()) {
                 LLVM_DEBUG({
@@ -713,7 +852,17 @@ Error JLDebuginfoPlugin::notifyEmitted(MaterializationResponsibility &MR) JL_NO_
             return result->second;
         };
 
-        jl_register_jit_object(*NewInfo->Object, getLoadAddress, *NewInfo->LinkerInfo);
+        // Objects recorded by notifyMaterializing (added directly to the
+        // object layer, not produced by linkOutput) carry no linker info; only
+        // the debugger registration below applies to them.
+        if (NewInfo->LinkerInfo)
+            jl_register_jit_object(*NewInfo->Object, getLoadAddress, *NewInfo->LinkerInfo);
+        // Holding PluginMutex across the debugger rendezvous is benign: with
+        // AutoRegisterCode the debugger stops the whole process at the
+        // __jit_debug_register_code breakpoint anyway, so nothing useful runs
+        // concurrently while it is held.
+        if (GDBRegistrar)
+            registerWithGDB(MR.getExecutionSession(), *NewInfo);
         PendingObjs.erase(&MR);
     }
 
@@ -763,10 +912,9 @@ void JLDebuginfoPlugin::modifyPassConfig(MaterializationResponsibility &MR, jitl
 #else
             auto SecName = Sec.getName();
 #endif
-            if (isJITLinkEHFrameSection(SecName))
-                continue;
             if (Sec.blocks().empty())
                 continue;
+            unpoisonLinkGraphBlocks(Sec);
             // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
             Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
         }
@@ -802,14 +950,13 @@ public:
                           jitlink::PassConfiguration &Config) override {
         Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
             // `G.blocks()` is exactly the union of the sections' blocks, so a
-            // single pass over the (non-EH-frame) sections counts every block
-            // once; `graph_size == code_size + data_size`
+            // single pass over the sections counts every block once;
+            // `graph_size == code_size + data_size`
             size_t graph_size = 0;
             size_t code_size = 0;
             size_t data_size = 0;
             for (auto &section : G.sections()) {
-                if (isJITLinkEHFrameSection(section.getName()))
-                    continue;
+                unpoisonLinkGraphBlocks(section);
                 size_t secsize = 0;
                 for (auto block : section.blocks()) {
                     secsize += block->getSize();
@@ -930,7 +1077,10 @@ public:
         auto G = jitlink::createLinkGraphFromObject(Obj->getMemBufferRef(),
                                                     ES.getSymbolStringPool());
         if (!G) {
-#ifndef __clang_gcanalyzer__ // reportError runs an unknown callback, which cannot be annotated as safe here (but is)
+            // reportError runs an unknown callback, which cannot be annotated
+            // as safe here (but is), and takes its Error by value (see
+            // JL_SA_BROKEN_PARAM_DTORS)
+#if !defined(__clang_gcanalyzer__) && !defined(JL_SA_BROKEN_PARAM_DTORS)
             ES.reportError(G.takeError());
 #endif
             R->failMaterialization();
@@ -1014,7 +1164,10 @@ public:
                     JIT, OL,
                     Out.finish(std::move(Ctx), std::move(Mod),
                                *R->getExecutionSession().getSymbolStringPool()))))) {
+            // reportError takes its Error by value (see JL_SA_BROKEN_PARAM_DTORS)
+#ifndef JL_SA_BROKEN_PARAM_DTORS
             R->getExecutionSession().reportError(std::move(Err));
+#endif
             R->failMaterialization();
         }
     }
@@ -1237,18 +1390,14 @@ namespace {
         OptimizationLevel O;
         SmallVector<std::function<void()>, 0> &printers;
         std::mutex &llvm_printing_mutex;
-        bool cache_enabled;
-        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled) JL_NOTSAFEPOINT
-            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex), cache_enabled(cache_enabled) {}
+        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT
+            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex) {}
         ~PMCreator() JL_NOTSAFEPOINT = default;
 
         auto operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
             fixupTM(*TM);
             auto options = OptimizationOptions::defaults();
-            // It is unsafe to embed the specific TLS offset into the output
-            // when the cache is enabled.
-            options.tls_getters = cache_enabled;
             auto NPM = std::make_unique<NewPM>(std::move(TM), O, options);
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
             {
@@ -1263,9 +1412,9 @@ namespace {
 
     template<size_t N>
     struct sizedOptimizerT {
-        sizedOptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled) JL_NOTSAFEPOINT {
+        sizedOptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT {
             for (size_t i = 0; i < N; i++) {
-                PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers, llvm_printing_mutex, cache_enabled));
+                PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers, llvm_printing_mutex));
             }
         }
 
@@ -1444,8 +1593,8 @@ namespace {
 }
 
 struct JuliaOJIT::OptimizerT {
-    OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled)
-        : opt(TM, printers, llvm_printing_mutex, cache_enabled) {}
+    OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex)
+        : opt(TM, printers, llvm_printing_mutex) {}
     void operator()(Module &M) JL_NOTSAFEPOINT {
         opt(M);
     }
@@ -1735,7 +1884,7 @@ JuliaOJIT::JuliaOJIT()
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
     JITPointers(std::make_unique<JITPointersT>(SharedBytes, SharedBytesMutex)),
     JITPointersLayer(ES, CompileLayer, IRTransformRef(*JITPointers)),
-    Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex, OCache.isEnabled())),
+    Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex)),
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
@@ -2124,10 +2273,13 @@ void JuliaOJIT::unregisterCI(jl_code_instance_t *CI)
 void JuliaOJIT::enableJITDebuggingSupport()
 {
     orc::SymbolMap GDBFunctions;
-    addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBAllocAction);
+    auto registerJITLoaderGDBAllocAction = addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBAllocAction);
+    (void)registerJITLoaderGDBAllocAction;
+#if JL_LLVM_VERSION < 220000
     auto registerJITLoaderGDBWrapper = addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBWrapper);
-    cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     (void)registerJITLoaderGDBWrapper;
+#endif
+    cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     if (TM->getTargetTriple().isOSBinFormatMachO()) {
         auto RegisterSym = cantFail(
             safelookup(ES, {&JD}, ES.intern("_llvm_orc_registerJITLoaderGDBAllocAction")));
@@ -2136,8 +2288,19 @@ void JuliaOJIT::enableJITDebuggingSupport()
     }
 #ifndef _COMPILER_ASAN_ENABLED_ // TODO: Fix duplicated sections spam #51794
     else if (TM->getTargetTriple().isOSBinFormatELF()) {
+#if JL_LLVM_VERSION < 220000
         //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
         ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, registerJITLoaderGDBWrapper)));
+#else
+        // LLVM 22 replaced DebugObjectManagerPlugin with ELFDebugObjectPlugin,
+        // which emits the debug object into a JIT allocation of its own and then
+        // blocks the linker thread until that allocation is finalized. Blocking
+        // there is not sound for us (our tasks reuse stacks, and the allocation
+        // cannot be finalized while the thread that would do it is parked), so
+        // register the copy of the object that JLDebuginfoPlugin already keeps
+        // instead. See JLDebuginfoPlugin::registerWithGDB.
+        DebuginfoPlugin->enableGDBRegistration(registerJITLoaderGDBAllocAction);
+#endif
     }
 #endif
 }
@@ -2363,7 +2526,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             continue;
         }
         JL_GC_PROMISE_ROOTED(CI);
-        auto Dest = linkCallTarget(MR, CI, API, EquivMap);
+        auto Dest = linkCallTarget(MR, CI, static_cast<jl_invoke_api_t>(API), EquivMap);
         if (!Dest)
             return false;
         if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);

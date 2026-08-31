@@ -1308,6 +1308,11 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
     uv_mutex_unlock(&live_tasks_lock);
 }
 
+void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    // do nothing
+}
+
 static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_NOTSAFEPOINT
 {
     assert(pg->fl_begin_offset != UINT16_MAX);
@@ -3024,6 +3029,21 @@ static void gc_queue_thread_local(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOT
         gc_try_claim_and_push(mq, task, NULL);
         gc_heap_snapshot_record_root((jl_value_t*)task, "next task");
     }
+    task = ptls2->abandon_victim;
+    if (task != NULL) {
+        gc_try_claim_and_push(mq, task, NULL);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "abandon victim");
+    }
+    task = ptls2->abandon_to;
+    if (task != NULL) {
+        gc_try_claim_and_push(mq, task, NULL);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "abandon target");
+    }
+    jl_value_t *abandon_result = ptls2->abandon_result;
+    if (abandon_result != NULL) {
+        gc_try_claim_and_push(mq, abandon_result, NULL);
+        gc_heap_snapshot_record_root(abandon_result, "abandon result");
+    }
     task = ptls2->previous_task;
     if (task != NULL) {
         gc_try_claim_and_push(mq, task, NULL);
@@ -3788,6 +3808,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         // either another thread is running GC, or the GC got disabled just now.
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+        if (old_state == JL_GC_STATE_UNSAFE)
+            jl_gc_safepoint(); // ensure our gc_safe transition is recognized
         return;
     }
 
@@ -3840,6 +3862,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+    if (old_state == JL_GC_STATE_UNSAFE)
+        jl_gc_safepoint(); // ensure our gc_safe transition is recognized
 
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check

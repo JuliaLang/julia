@@ -54,8 +54,6 @@ using namespace llvm;
 #include <atomic>
 #include <mutex>
 
-#include <zstd.h>
-
 #include "jitlayers.h"
 #include "serialize.h"
 #include "julia_assert.h"
@@ -1098,7 +1096,7 @@ static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_ptr) {
     std::array<Constant *, 3> ptls_table{
         new GlobalVariable(M, T_ptr, false, GlobalValue::ExternalLinkage, emit_pgcstack_default_func(M, T_ptr), "jl_pgcstack_func_slot"),
         new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_key_slot"),
-        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_tls_offset"),
+        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_image_tls_offset"),
     };
     for (auto &gv : ptls_table) {
         cast<GlobalVariable>(gv)->setVisibility(GlobalValue::HiddenVisibility);
@@ -2188,8 +2186,9 @@ jl_emission_params_t default_emission_params = { 1 };
 
 static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                            const char *unopt_bc_fname, const char *obj_fname,
-                           const char *asm_fname, ios_t *z, ios_t *s,
-                           jl_emission_params_t *params, Module &dataM)
+                           const char *asm_fname, ios_t *z, uint32_t checksum,
+                           const char *unpack_func, jl_emission_params_t *params,
+                           Module &dataM)
 {
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
@@ -2245,7 +2244,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     SmallVector<AOTOutputs, 16> sysimg_outputs;
     SmallVector<AOTOutputs, 16> data_outputs;
     SmallVector<AOTOutputs, 16> metadata_outputs;
-    if (z) {
+    {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
         Context.setDiscardValueNames(true);
@@ -2259,57 +2258,44 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
 
-        int compression = jl_options.compress_sysimage ? 15 : 0;
-        uint32_t sysimg_checksum = jl_crc32c(0, z->buf, z->size);
-        ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
-        SmallVector<char, 0> compressed_data;
-        if (compression) {
-            compressed_data.resize(ZSTD_compressBound(z->size));
-            size_t comp_size = ZSTD_compress(compressed_data.data(), compressed_data.size(),
-                                             z->buf, z->size, compression);
-            compressed_data.resize(comp_size);
-            sysimg_data = compressed_data;
-            ios_close(z);
-            free(z);
-        }
-
-        Constant *data = ConstantDataArray::get(Context, sysimg_data);
-        auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
-                                     GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data");
-        sysdata->setAlignment(Align(jl_page_size));
+        if (z) {
+            ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
+            Constant *data = ConstantDataArray::get(Context, sysimg_data);
+            auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
+                                              GlobalVariable::ExternalLinkage,
+                                              data, "jl_system_image_data");
+            sysdata->setAlignment(Align(jl_page_size));
 #if JL_LLVM_VERSION >= 180000
-        sysdata->setCodeModel(CodeModel::Large);
+            sysdata->setCodeModel(CodeModel::Large);
 #else
-        if (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())
-            sysdata->setSection(".ldata");
+            if (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())
+                sysdata->setSection(".ldata");
 #endif
-        addComdat(sysdata, TheTriple);
-        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), sysimg_data.size());
-        addComdat(new GlobalVariable(sysimgM, len->getType(), true,
-                                     GlobalVariable::ExternalLinkage,
-                                     len, "jl_system_image_size"), TheTriple);
-        Constant *checksum_val = ConstantInt::get(Type::getInt32Ty(Context), sysimg_checksum);
-        addComdat(new GlobalVariable(sysimgM, checksum_val->getType(), true,
-                                     GlobalVariable::ExternalLinkage,
-                                     checksum_val, "jl_system_image_checksum"), TheTriple);
+            addComdat(sysdata, TheTriple);
+            Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), sysimg_data.size());
+            addComdat(new GlobalVariable(sysimgM, len->getType(), true,
+                                         GlobalVariable::ExternalLinkage,
+                                         len, "jl_system_image_size"), TheTriple);
 
-        const char *unpack_func = compression ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp";
-        auto unpack = new GlobalVariable(sysimgM, DL.getIntPtrType(Context), true,
-                                         GlobalVariable::ExternalLinkage, nullptr,
-                                         unpack_func);
-        addComdat(new GlobalVariable(sysimgM, PointerType::getUnqual(Context), true,
-                                     GlobalVariable::ExternalLinkage, unpack,
-                                     "jl_image_unpack"),
-                  TheTriple);
-
-        if (!compression) {
             // Free z here, since we've copied out everything into data
             // Results in serious memory savings
             ios_close(z);
             free(z);
         }
-        compressed_data.clear();
+
+        Constant *checksum_val = ConstantInt::get(Type::getInt32Ty(Context), checksum);
+        addComdat(new GlobalVariable(sysimgM, checksum_val->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     checksum_val, "jl_system_image_checksum"), TheTriple);
+
+        auto unpack =
+            new GlobalVariable(sysimgM, DL.getIntPtrType(Context), true,
+                               GlobalVariable::ExternalLinkage, nullptr, unpack_func);
+        addComdat(new GlobalVariable(sysimgM, PointerType::getUnqual(Context), true,
+                                     GlobalVariable::ExternalLinkage, unpack,
+                                     "jl_image_unpack"),
+                  TheTriple);
+
         // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
         // to function as expected
         // no need to free the module/context, destructor handles that
@@ -2517,10 +2503,6 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                             }),
                                             "jl_image_pointers");
             addComdat(pointers, TheTriple);
-            if (s) {
-                write_int32(s, data.size());
-                ios_write(s, (const char *)data.data(), data.size());
-            }
             jl_free_clone_targets(&targets);
         }
 
@@ -2548,10 +2530,8 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         } \
         filenames.push_back("metadata" prefix suffix); \
         buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
-        if (z) { \
-            filenames.push_back("sysimg" prefix suffix); \
-            buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
-        } \
+        filenames.push_back("sysimg" prefix suffix); \
+        buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
         for (size_t i = 0; i < filenames.size(); i++) { \
             archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
         } \
@@ -2568,12 +2548,11 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_dump_native_impl(void *native_code,
-        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
-        const char *asm_fname,
-        ios_t *z, ios_t *s,
-        jl_emission_params_t *params)
+extern "C" JL_DLLEXPORT_CODEGEN void
+jl_dump_native_impl(void *native_code, const char *bc_fname, const char *unopt_bc_fname,
+                    const char *obj_fname, const char *asm_fname, ios_t *z,
+                    uint32_t checksum, const char *unpack_func,
+                    jl_emission_params_t *params)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -2588,8 +2567,8 @@ void jl_dump_native_impl(void *native_code,
     }
 
     data->TSM_ref->withModuleDo([&](Module &dataM) {
-        jl_dump_native_locked(data, bc_fname, unopt_bc_fname, obj_fname, asm_fname, z, s,
-                              params, dataM);
+        jl_dump_native_locked(data, bc_fname, unopt_bc_fname, obj_fname, asm_fname, z,
+                              checksum, unpack_func, params, dataM);
     });
 }
 

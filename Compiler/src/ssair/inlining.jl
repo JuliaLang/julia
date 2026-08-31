@@ -775,7 +775,7 @@ end
 
 function compileable_specialization(code::Union{MethodInstance,CodeInstance}, effects::Effects,
     et::InliningEdgeTracker, @nospecialize(info::CallInfo), state::InliningState)
-    mi = code isa CodeInstance ? code.def : code
+    mi = code isa CodeInstance ? get_ci_mi(code) : code
     mi_invoke = mi
     method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
     if OptimizationParams(state.interp).compilesig_invokes
@@ -840,6 +840,11 @@ function add_inlining_dispatch_edge!(edges::Vector{Any}, mi::MethodInstance,
         add_invoke_edge!(edges, info.atype, mi)
     elseif info isa VirtualMethodMatchInfo
         add_inlining_dispatch_edge!(edges, mi, info.info)
+    elseif info isa MethodMatchInfo || info isa UnionSplitInfo
+        # A standalone `MethodInstance` edge claims `mi.specTypes` has a single
+        # fully-covering match, which is false when this call matched several methods.
+        # Encode the lookup instead; `mi_edge` keeps the invalidation target.
+        _add_edges_impl(edges, info, #=mi_edge=#true)
     else
         add_one_edge!(edges, mi)
     end
@@ -945,10 +950,10 @@ end
 
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::String)
     src = _uncompressed_ir(cached_result, src)
-    return inflate_ir!(src, cached_result.def), SpecInfo(src), src.debuginfo
+    return inflate_ir!(src, get_ci_mi(cached_result)), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::CodeInfo)
-    return inflate_ir!(copy(src), cached_result.def), SpecInfo(src), src.debuginfo
+    return inflate_ir!(copy(src), get_ci_mi(cached_result)), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool)
     if preserve_local_sources
@@ -1491,7 +1496,7 @@ end
 
 function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,
     match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
-    mi = result.edge.def
+    mi = get_ci_mi(result.edge)
     validate_sparams(mi.sparam_vals) || return false
     item = semiconcrete_result_item(result, info, flag, state)
     item === nothing && return false

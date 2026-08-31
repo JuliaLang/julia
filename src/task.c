@@ -424,6 +424,10 @@ const char tsan_state_corruption[] = "TSAN state corrupted. Exiting HARD!\n";
 JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
 {
     jl_ptls_t ptls = lastt->ptls;
+    // Abandonment delivery must refuse a thread whose outgoing context is
+    // only partially saved; cleared at every resumption point (the
+    // setjmp return, the common tail, and start_task for fresh tasks).
+    ptls->in_task_switch = 1;
     jl_task_t **pt = &ptls->next_task;
     jl_task_t *t = *pt;
     assert(t != lastt);
@@ -484,6 +488,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
 #ifdef MIGRATE_TASKS
                 ptls = lastt->ptls;
 #endif
+                ptls->in_task_switch = 0;
                 lastt->ctx.copy_ctx = NULL;
                 sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &lastt->ctx);
                 return;
@@ -504,6 +509,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
     // move the barrier back instead of walking the shadow stack again here to check if that is required
     // even if killed (dropping the stack) and just the scope field matters,
     // let the gc figure that out next time it does a quick mark
+    jl_gc_notify_task_resume(t);
 
     // set up global state for new task and clear global state for old task
     t->ptls = ptls;
@@ -655,6 +661,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
 #endif
     assert(ptls);
     assert(lastt == jl_atomic_load_relaxed(&ptls->current_task));
+    ptls->in_task_switch = 0;
     lastt->ctx.ctx = NULL;
     sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &lastt->ctx);
 }
@@ -1133,6 +1140,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_timing_task_init(t);
     jl_atomic_store_relaxed(&t->preempt_request, 0);
     jl_atomic_store_relaxed(&t->bound_cancel_token, jl_nothing);
+    t->bound_cancel_default = 0;
     jl_atomic_store_relaxed(&t->reset_ctx, NULL);
     jl_atomic_store_relaxed(&t->cancel_handler_ctx, NULL);
 
@@ -1221,6 +1229,7 @@ CFI_NORETURN
 #endif
     ct->ctx.ctx = NULL;
     jl_ptls_t ptls = ct->ptls;
+    ptls->in_task_switch = 0;
     jl_value_t *res;
     assert(ptls->finalizers_inhibited == 0);
 
@@ -1608,8 +1617,11 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     }
     jl_atomic_store_relaxed(&ct->preempt_request, 0);
     jl_atomic_store_relaxed(&ct->bound_cancel_token, jl_nothing);
+    ct->bound_cancel_default = 0;
     jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
     jl_atomic_store_relaxed(&ct->cancel_handler_ctx, NULL);
+    ptls->abandon_to = NULL;
+    ptls->abandon_notify = NULL;
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
@@ -1668,6 +1680,271 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
     return t->threadpoolid;
 }
 
+
+// Ping the requester's staged wakeup handle (if any) after settling its
+// request. The delivery paths run in signal context (or with the victim
+// suspended), where uv_async_send is the one legal wakeup; the handle is
+// part of the request, so the slot state machine brackets every ping.
+static void abandon_notify(jl_ptls_t ptls2) JL_NOTSAFEPOINT
+{
+    uv_async_t *h = ptls2->abandon_notify;
+    if (h != NULL)
+        uv_async_send(h);
+}
+
+// Callback for task abandonment - the delivery redirects the victim thread
+// here (via jl_call_in_ctx / a rewritten thread context). Must not return.
+// JL_CANSAFEPOINT: like the other context-entry callbacks, the victim
+// thread enters here in managed compute (gc_state == 0 is in the commit's
+// refusal set), holding the gc-unsafe region.
+JL_NORETURN void jl_abandon_task_cb(void) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    jl_task_t *next_task = ptls->abandon_to;
+
+    // The delivery only redirects here for a committed request with a
+    // target set; there is no return path out of this (fake) frame.
+    if (next_task == NULL)
+        abort();
+
+    // The staged result becomes the abandoned task's (exceptional) outcome.
+    // Raw store: the write barrier is not async-signal-safe - the ptls
+    // staging slot keeps the value rooted until the requester settles the
+    // verdict and issues the barrier (jl_abandon_task_poll) - and unlike
+    // the refused case, the abandoned task can never run again to observe
+    // the write.
+    ct->result = ptls->abandon_result;
+    // An exception retained from the victim's active catch would otherwise
+    // shadow the abandonment result when the failure is displayed.
+    ct->excstack = NULL;
+    jl_atomic_store_relaxed(&ct->_isexception, 1);
+    // The observable task state is published here - with the result already
+    // in place - not at commit: a failed context redirect (mach, windows)
+    // can then roll the commit back with nothing published, and a poller
+    // that sees `:abandoned` never reads a half-staged outcome.
+    jl_atomic_store_release(&ct->_state, JL_TASK_STATE_ABANDONED);
+
+    // A cancellation-handler delivery in flight on this thread dies with the
+    // abandoned task; disarm so future deliveries are not blocked.
+    ptls->cancel_handler_armed = 0;
+
+    // Ordinary switch-exit bookkeeping that the redirect bypassed: the
+    // timing block on the discarded stack must be exited before that stack
+    // is released for reuse by ctx_switch below.
+    (void)jl_timing_block_task_exit(ct, ptls);
+
+    // The root task's stack is the system stack, not a pooled buffer - it
+    // must not be released into the task-stack pool by ctx_switch below.
+    if (ct == ptls->root_task) {
+        ct->ctx.stkbuf = NULL;
+        ct->ctx.bufsz = 0;
+    }
+
+    // The target's thread affinity was claimed by the requester
+    // (jl_abandon_task_request) - which is also the validation that it is
+    // not running anywhere else.
+    assert(jl_atomic_load_relaxed(&next_task->tid) ==
+           jl_atomic_load_relaxed(&ct->tid));
+
+    // Install the target as this thread's next task *before* releasing the
+    // `abandon_to` staging slot: both are GC roots, and the requester may
+    // drop its own reference to the rescue task the moment it observes
+    // FINISHED. `abandon_victim` and `abandon_result` stay staged - rooting
+    // the raw-stored result - until the requester's settle.
+    ptls->next_task = next_task;
+    ptls->abandon_to = NULL;
+    // Pinged while still in DONE (see the refusal path's ordering comment):
+    // the requester wakes, observes the pre-terminal state, and spins the
+    // final microseconds to FINISHED.
+    abandon_notify(ptls);
+    jl_atomic_store_release(&ptls->abandon_state, JL_ABANDON_FINISHED);
+
+    // Clear state that might cause issues during switch
+    ptls->in_finalizer = 0;
+    ptls->in_pure_callback = 0;
+
+    // The task state is already ABANDONED, so ctx_switch treats the victim
+    // as killed and performs the teardown (release the stack, clear gcstack
+    // and eh).
+    JL_PROBE_RT_PAUSE_TASK(ct);
+    ctx_switch(ct);
+
+    // If we somehow return, something went very wrong
+    abort();
+}
+
+// Validate and commit (or refuse) the pending abandon request for
+// `ptls2`'s current task. The victim thread must be quiescent: this runs
+// either in its signal handler (unix) or while it is suspended (mach,
+// windows), so the state inspected here cannot change under us - unlike a
+// pre-check on the requester's thread. On commit the request slot moves to
+// DONE and 1 is returned; the caller then redirects the thread into
+// jl_abandon_task_cb, which publishes the task state and settles the slot.
+// On refusal (or no pending request) 0 is returned; the requester observes
+// REFUSED and settles. Async-signal-safe: loads, stores and CAS only.
+int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
+{
+    uint8_t st = JL_ABANDON_PENDING;
+    if (!jl_atomic_cmpswap(&ptls2->abandon_state, &st, JL_ABANDON_TAKEN))
+        return 0; // no pending request (withdrawn, already consumed, or none)
+    jl_task_t *t = ptls2->abandon_victim;
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+    // The refusal set: conditions under which discarding the current
+    // context would corrupt *runtime* state. Leaking user resources is the
+    // documented cost of an unsafe abandon; leaking runtime state is not:
+    //  - the thread already switched away (the request outlived its target);
+    //  - the thread is not in managed compute (gc_state != 0): a GC-safe
+    //    region is a foreign call or scheduler wait whose C frame owns
+    //    runtime interactions, and may be mid stop-the-world handshake;
+    //  - the thread is inside ctx_switch with the outgoing context only
+    //    partially saved;
+    //  - runtime (jl_mutex_t) locks are held - including the uv loop lock,
+    //    whose owner is checked explicitly since takeover paths acquire it
+    //    through trylock variants;
+    //  - a finalizer is running, or finalizers are inhibited (ReentrantLock
+    //    holders raise this; the counter would leak and permanently disable
+    //    finalizers on this thread);
+    //  - the victim is in a signal-deferral region (sigatomic; this also
+    //    covers the inference entry point);
+    //  - the victim is inside the scheduler's sleep transition
+    //    (sleep_check_state != not_sleeping): abandonment bypasses the
+    //    JL_CATCH in jl_task_get_next that would restore the sleep state
+    //    and running count, so the rescue task would re-enter the
+    //    scheduler with sleep bookkeeping still claimed by the victim.
+    if (ct != t ||
+        jl_atomic_load_relaxed(&ptls2->gc_state) != 0 ||
+        ptls2->in_task_switch ||
+        ptls2->locks.len != 0 ||
+        ptls2->in_finalizer ||
+        ptls2->finalizers_inhibited != 0 ||
+        ptls2->defer_signal != 0 ||
+        jl_atomic_load_relaxed(&ptls2->sleep_check_state) != 0 || // 0 == not_sleeping
+        jl_atomic_load_relaxed(&jl_uv_mutex.owner) == ct) {
+        // Ping before the terminal store: the requester consumes (and may
+        // free its handle) the moment a terminal state is visible, so a
+        // later ping could touch a dead handle. From the requester's side a
+        // pre-terminal wakeup means "verdict imminent": it spins the last
+        // microseconds instead of re-parking (see jl_abandon_task_poll).
+        abandon_notify(ptls2);
+        jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
+        return 0;
+    }
+    // Commit: only the request slot here - the victim's observable task
+    // state is written by the callback (see jl_abandon_task_cb).
+    jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_DONE);
+    return 1;
+}
+
+// Publish an abandonment request for `t` (which must be current on some
+// thread), redirecting its thread to `next_task` and staging `result`
+// (NULL: the interned ABANDON_ALL severity byte) as the abandoned task's
+// outcome, then send one delivery signal. `notify` (may be NULL for
+// polling requesters) is pinged via uv_async_send when the request
+// settles; it must outlive the request. Returns the victim's thread id
+// on publication; -1 when no request could be published: the victim is not
+// current on a thread, the target is the victim itself or already bound to
+// a thread, or another abandonment is in flight for the victim's thread.
+// The caller owns the published request and must drive it to a verdict
+// with jl_abandon_task_poll (the delivery bit cannot be coalesced away, so
+// the single send suffices), optionally withdrawing via
+// jl_abandon_task_withdraw.
+JL_DLLEXPORT int jl_abandon_task_request(jl_task_t *t, jl_task_t *next_task,
+                                         jl_value_t *result, uv_async_t *notify)
+{
+    if (t == next_task)
+        return -1;
+    int16_t tid = jl_atomic_load_relaxed(&t->tid);
+    if (tid < 0)
+        return -1; // task not assigned to a thread
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return -1;
+    if (jl_atomic_load_relaxed(&ptls2->current_task) != t)
+        return -1; // task is not currently running
+    // Claim the request slot.
+    uint8_t st = JL_ABANDON_IDLE;
+    if (!jl_atomic_cmpswap(&ptls2->abandon_state, &st, JL_ABANDON_SETUP))
+        return -1; // another abandonment is in flight for this thread
+    // Claim the target's thread affinity up front: this is what makes the
+    // callback's installation of the target sound, and it doubles as the
+    // validation that the target is not already running (or sticky-queued)
+    // on some other thread.
+    if (!jl_set_task_tid(next_task, tid)) {
+        jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_IDLE);
+        return -1;
+    }
+    if (result == NULL)
+        result = jl_box_uint8(0x4); // CANCEL_REQUEST_ABANDON_ALL (interned)
+    ptls2->abandon_result = result;
+    ptls2->abandon_notify = notify;
+    ptls2->abandon_victim = t;
+    ptls2->abandon_to = next_task;
+    jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_PENDING);
+    jl_send_abandon_signal(tid);
+    return tid;
+}
+
+// Verdict poll for the request published on thread `tid`: 0 while the
+// request awaits delivery (wait for the staged handle's ping), 2 while a
+// delivery is mid-settle (the ping was already sent; the verdict is
+// microseconds away - spin, do not re-park), 1 once the abandonment
+// committed, -1 once it was refused. A terminal verdict retires the slot
+// and is returned exactly once.
+JL_DLLEXPORT int jl_abandon_task_poll(int16_t tid)
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    uint8_t st = jl_atomic_load_acquire(&ptls2->abandon_state);
+    if (st == JL_ABANDON_PENDING)
+        return 0;
+    if (st == JL_ABANDON_TAKEN || st == JL_ABANDON_DONE)
+        return 2;
+    if (st == JL_ABANDON_FINISHED) {
+        // Committed; the callback consumed the target slot and raw-stored
+        // the staged result. Issue the write barrier it could not, then
+        // release the staging roots and retire the slot.
+        jl_task_t *t = ptls2->abandon_victim;
+        assert(t != NULL);
+        jl_gc_wb(t, ptls2->abandon_result);
+        ptls2->abandon_victim = NULL;
+        ptls2->abandon_result = NULL;
+        ptls2->abandon_notify = NULL;
+        jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_IDLE);
+        return 1;
+    }
+    assert(st == JL_ABANDON_REFUSED);
+    // Refused: withdraw the published state, returning the target's
+    // affinity claim (it never ran, and only this requester saw it).
+    jl_task_t *next = ptls2->abandon_to;
+    if (next != NULL)
+        jl_atomic_store_relaxed(&next->tid, -1);
+    ptls2->abandon_victim = NULL;
+    ptls2->abandon_to = NULL;
+    ptls2->abandon_result = NULL;
+    ptls2->abandon_notify = NULL;
+    jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_IDLE);
+    return -1;
+}
+
+// Withdraw a still-undelivered request on `tid`: returns 1 with the
+// request fully withdrawn (no abandonment will happen), 0 when a delivery
+// already took it - the caller keeps polling for the verdict.
+JL_DLLEXPORT int jl_abandon_task_withdraw(int16_t tid)
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    uint8_t st = JL_ABANDON_PENDING;
+    if (!jl_atomic_cmpswap(&ptls2->abandon_state, &st, JL_ABANDON_SETUP))
+        return 0;
+    jl_task_t *next = ptls2->abandon_to;
+    if (next != NULL)
+        jl_atomic_store_relaxed(&next->tid, -1);
+    ptls2->abandon_victim = NULL;
+    ptls2->abandon_to = NULL;
+    ptls2->abandon_result = NULL;
+    ptls2->abandon_notify = NULL;
+    jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_IDLE);
+    return 1;
+}
 
 // cancellation token sources -----------------------------------------------
 
@@ -1763,6 +2040,7 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
     jl_atomic_store_relaxed(&src->state, 0);
     src->nparents = (uint16_t)np;
     jl_atomic_store_relaxed(&src->dead_count, 0);
+    jl_atomic_store_relaxed(&src->reg_count, 0);
     // Initialize every link entry before publishing the node under *any*
     // parent: a concurrent cancellation walk that reaches the node through
     // one parent scans all of its entries.
@@ -1819,8 +2097,7 @@ JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_owner(jl_value_t *w, size_t i) JL_NO
 
 JL_DLLEXPORT void jl_wait_entry_set_slot_owner(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    jl_atomic_store_relaxed(&wait_entry_slot(w, i)->owner, v);
-    jl_gc_wb(w, v);
+    jl_gc_write_atomic(w, wait_entry_slot(w, i)->owner, jl_value_t, v, relaxed);
 }
 
 JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_next(jl_value_t *w, size_t i) JL_NOTSAFEPOINT
@@ -1830,8 +2107,7 @@ JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_next(jl_value_t *w, size_t i) JL_NOT
 
 JL_DLLEXPORT void jl_wait_entry_set_slot_next(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    wait_entry_slot(w, i)->next = v;
-    jl_gc_wb(w, v);
+    jl_gc_write(w, wait_entry_slot(w, i)->next, jl_value_t, v);
 }
 
 JL_DLLEXPORT uint64_t jl_wait_entry_slot_aux(jl_value_t *w, size_t i) JL_NOTSAFEPOINT

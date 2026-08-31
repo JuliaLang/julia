@@ -305,8 +305,8 @@ bool CancellationLowering::runOnFunction(Function &F) {
         // stores are untagged - unsafe points whose pass-inserted clear
         // tears the region - so a region that is still live here was
         // established under the very token this point just verified as
-        // bound (the non-local rebinders, exception-handler restore and the
-        // finalizer bracket, restore the (region, token) pair together).
+        // bound (exception handlers restore the pair together, and finalizers
+        // only run with the region unpublished).
         // The load is
         // exact ground truth - the region survived if and only if no unsafe
         // point (whose pass-inserted clear nulls reset_ctx) ran since the

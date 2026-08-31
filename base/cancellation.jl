@@ -460,6 +460,13 @@ function _cached_wait_entry(waiter::Task)
     return w
 end
 
+# A source slot's aux: the low byte is the minimum delivery severity (the
+# "floor"); the watcher bit marks a `wait(::CancellationToken)` slot, whose
+# claimed wake the walk *completes* with the request as a value instead of
+# interrupting the task - the cancellation is the event that wait is for.
+# Staged pre-arm like the floor (see below).
+const WAIT_AUX_WATCHER_BIT = UInt64(0x100)
+
 # Return the entry for a cancellable park of `waiter` governed by `src`,
 # with the minimum delivery severity staged on the source slot. Must run
 # before the arm: the cancellation walk reads the slot's aux only through
@@ -557,9 +564,16 @@ const _PRUNE_DEAD_THRESHOLD = UInt32(16)
 # threshold loses `_try_prune!`'s trylock to a concurrent walk, corpses that
 # walk had already passed remain counted here, and the next death must retry
 # the prune rather than let the count sail past the threshold forever.
+# The threshold scales with the (approximate) list length: a prune walk is
+# O(list), so tripping it every fixed number of deaths makes a mass fan-out
+# parking under one source - e.g. any large task tree governed by a shared
+# ambient token - quadratic in its waiter count. Requiring the dead to be a
+# constant fraction of the list amortizes each walk against the corpses it
+# collects.
 function _note_dead_registration!(src::CancellationTokenSource)
     dc = @atomic :monotonic src.dead_count += UInt32(1)
-    dc >= _PRUNE_DEAD_THRESHOLD && _try_prune!(src)
+    threshold = max(_PRUNE_DEAD_THRESHOLD, (@atomic :monotonic src.reg_count) >> 2)
+    dc >= threshold && _try_prune!(src)
     return nothing
 end
 
@@ -685,6 +699,27 @@ function cancel!(src::CancellationTokenSource,
     return raised
 end
 
+"""
+    Base.redeliver!(src::CancellationTokenSource) -> Bool
+
+Re-run the delivery pass for an already-cancelled source at its current
+severity: wakes waiters that registered without observing the cancellation
+and re-sends the interruption signal to bound running computations (the
+signal-based delivery is best-effort and can be missed while a reset point
+is unpublished). Used by the ^C machinery when a press finds the episode
+source already marked cancelled (e.g. by the C-side fast path in
+`jl_sigint_request_cancellation`, which cannot wake parked waiters itself).
+Returns whether the source was cancelled at all.
+"""
+function redeliver!(src::CancellationTokenSource)
+    st = @atomic :acquire src.state
+    st == 0x00 && return false
+    _cancel_walk!(src, st)
+    Threads.atomic_fence_heavy()
+    ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
+    return true
+end
+
 function _cancel_walk!(src::CancellationTokenSource, sev::UInt8)
     # Iterative worklist (no recursion): a deep source chain must not
     # overflow the canceller's stack, and a reconverging ("linked") graph
@@ -703,10 +738,14 @@ end
 # registrations of completed tasks and retired entries (the only removal in
 # the registry - a live task's registration is sticky and stays linked
 # between parks) and, when `sev` is nonzero, claim armed waiters eligible
-# at that severity. Returns the claimed tasks as a `(t, rest)` cons list;
-# the caller wakes them after releasing the walk lock.
+# at that severity. Returns the claimed tasks as a cons list of
+# `Pair{Tuple{Task, WaitEntry, UInt64}, Any}` cells (a Pair's declared
+# parameters make every cell one type - a tuple cons would mint a fresh
+# concrete tuple type per list depth); the caller wakes them after
+# releasing the walk lock.
 function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
     @atomic :monotonic node.dead_count = UInt32(0)
+    nlive = UInt32(0)
     towake = nothing
     prev = nothing # the predecessor's slot for `node`, once past the head
     # seq_cst: the S-ordered counterpart of a registrant's seq_cst push -
@@ -760,18 +799,25 @@ function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
             # spurious below-floor wake into a teardown re-park, which
             # handles it like any interruption of its wait
             # (conservatively, e.g. by detaching the awaited request).
+            aux = slot.aux
             if sev != 0x00 && (@atomic :sequentially_consistent t.waiting_on) === w &&
-                    slot.aux % UInt8 <= sev
+                    aux % UInt8 <= sev
                 if (@atomicreplace t.waiting_on w => nothing).success
-                    towake = ((t, w), towake)
+                    towake = Pair{Tuple{Task, WaitEntry, UInt64}, Any}((t, w, aux), towake)
                 end
                 # a lost claim: a completion or interrupter won the race;
                 # the waiter resumes through that wake
             end
+            nlive += UInt32(1)
             prev = slot
         end
         w = wnext
     end
+    # Resync the approximate list length (see _note_dead_registration!'s
+    # scaled prune threshold) to what this walk left linked. Entries kept
+    # only because their head-unlink CAS lost count as live: conservative,
+    # and the next walk resyncs.
+    @atomic :monotonic node.reg_count = nlive
     return towake
 end
 
@@ -801,7 +847,17 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     # cleanup (or a later notify) lazily unlinks it.
     _unlock_walk(node)
     while towake !== nothing
-        ((t, w), towake) = towake::Tuple{Tuple{Task, WaitEntry}, Any}
+        towake = towake::Pair{Tuple{Task, WaitEntry, UInt64}, Any}
+        (t, w, aux) = towake.first
+        towake = towake.second
+        if aux & WAIT_AUX_WATCHER_BIT != 0x00
+            # A watcher (`wait(::CancellationToken)`): this cancellation is
+            # the event its wait completes on, so it is woken with the
+            # request as a *value* - a watcher observes this source but
+            # does not run under it.
+            deliver_claimed_value_wake!(t, w, creq)
+            continue
+        end
         # N.B.: an ABANDON_ALL request also delivers by interruption for
         # now (freezing the task in place is not yet implemented). The
         # delivery is claim-scoped - the claim above is the wake ticket, so
@@ -983,12 +1039,45 @@ function _birth_cancel_source(t::Task)
     return (tok::CancellationToken).source
 end
 
+# The scoped-default resolution, with a per-task cache: when the task's
+# `bound_cancel_default` flag is set, `bound_cancel_token` holds the source
+# this lookup would resolve to under the task's current scope (or `nothing`),
+# placed there by the slow path below. The flag is dropped wherever a scope
+# is installed (`with` enter and its inline exit) and by cancellation points
+# publishing a different source, and travels with the token through the
+# exception-handler and finalizer save/restore brackets, so a set flag
+# always describes the current scope (see bound_cancel_default in
+# src/julia_threads.h). Reconstructing the token from the cached source is
+# exact: `CancellationToken` is an immutable wrapper, so the copy is egal to
+# the token in the scope.
 @inline function default_cancel_token()
+    ct = current_task()
+    if getfield(ct, :bound_cancel_default) !== 0x00
+        # the field's declared type (Union{Nothing, CancellationTokenSource})
+        # narrows through the `=== nothing` check without a type-tag load
+        s = @atomic :monotonic ct.bound_cancel_token
+        s === nothing && return nothing
+        return CancellationToken(s)
+    end
+    return _default_cancel_token_slow(ct)
+end
+
+@noinline function _default_cancel_token_slow(ct::Task)
+    tok = nothing
     scope = Core.current_scope()::Union{Scope, Nothing}
-    scope === nothing && return nothing
-    v = KeyValue.get(scope.values, CANCEL_TOKEN)
-    v === nothing && return nothing
-    return something(v)::Union{Nothing, CancellationToken}
+    if scope !== nothing
+        v = KeyValue.get(scope.values, CANCEL_TOKEN)
+        if v !== nothing
+            tok = something(v)::Union{Nothing, CancellationToken}
+        end
+    end
+    # Cache the resolution for the current scope. The store is an untagged
+    # unsafe point for CancellationLowering, so it cannot break a published
+    # reset region's (region, token) coherence: any live region is torn down
+    # before the store and re-established at the next cancellation point.
+    @atomic :monotonic ct.bound_cancel_token = tok === nothing ? nothing : tok.source
+    setfield!(ct, :bound_cancel_default, 0x01)
+    return tok
 end
 
 @inline function default_cancel_source()

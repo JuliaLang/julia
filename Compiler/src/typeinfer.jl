@@ -1966,6 +1966,35 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
     end
 end
 
+"""
+    jit_cache_root!(cache, ci::CodeInstance)
+
+Establish a GC root for `ci` that is adequate for handing it to the JIT.
+
+The JIT retains raw, non-GC-visible pointers to every CodeInstance it emits code
+for (in its symbol table and in the debuginfo address map used for backtraces
+and profiling), for the lifetime of the process. Every CodeInstance passed to
+`jl_add_codeinsts_to_jit` must therefore remain GC-reachable permanently.
+[`add_codeinsts_to_jit!`](@ref) calls this function for each CodeInstance it is
+about to emit that is not already rooted through the native `mi.cache` chain
+(which guarantees the required lifetime on its own); the executable cache that
+holds the CodeInstance is responsible for guaranteeing an equivalent lifetime.
+
+The generic fallback conservatively promotes the CodeInstance to a global root,
+which matches the lifetime of the code emitted for it (JIT code is never
+freed). A custom cache whose entries are process-rooted by other means may
+override this with a no-op.
+"""
+function jit_cache_root!(cache, ci::CodeInstance)
+    ccall(:jl_as_global_root, Any, (Any, Cint), ci, 1)
+    return nothing
+end
+# Entries in the native `mi.cache` chain are already rooted for the lifetime of
+# the process through their MethodInstance.
+jit_cache_root!(::InternalCodeCache, ::CodeInstance) = nothing
+jit_cache_root!(cache::OverlayCodeCache, ci::CodeInstance) =
+    jit_cache_root!(cache.globalcache, ci)
+
 function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UInt8)
     source_mode == SOURCE_MODE_ABI || return ci
     ci isa CodeInstance && !ci_has_invoke(ci) || return ci
@@ -2010,13 +2039,17 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
             cached = find_equivalent_cached_ci(
                 workqueue.interp, callee, valid_worlds)
             if cached === nothing
-                # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
+                # make sure callee is cached, as required by jl_add_codeinsts_to_jit
                 code_cache(workqueue.interp)[mi] = callee
             else
                 # use an existing CI from the cache, if there is available one that is compatible
                 callee === ci && (ci = cached)
                 callee = cached
             end
+            # `callee` is about to be emitted while absent from the native
+            # `mi.cache` chain; the executable cache it lives in must root it
+            # for the lifetime of the process (see `jit_cache_root!`).
+            jit_cache_root!(code_cache(workqueue.interp), callee)
         end
         push!(codeinsts, callee)
         push!(srcs, src)

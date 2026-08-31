@@ -740,6 +740,27 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
+_bc_eltype(bc::Broadcasted, i) = bc.f(_bc_eltypes(bc.args, i)...)
+# Numbers must broadcast as scalars even if they override eltype
+# Tuples may have heterogenous eltypes across indices
+_bc_eltype(x::Number, i) = _broadcast_getindex(x, i)
+_bc_eltype(x::Tuple, i) = _broadcast_getindex(x, i)
+# since this method only exists to be inferred, indexing x is never actually executed. the
+# inference barrier prevents recursion limiting, and ::eltype gives the desired result
+_bc_eltype(x, i) = _broadcast_getindex(Base.inferencebarrier(x), i)::eltype(x)
+
+_bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(tail(args), i)...)
+_bc_eltypes(::Tuple{}, i) = ()
+
+function result_eltype(bc::Broadcasted)
+    argtypes = Iterators.TupleOrBottom(typeof(bc), eltype(eachindex(bc)))
+    argtypes === Union{} && return Union{}
+    rettype = Base._return_type(_bc_eltype, argtypes)
+    return promote_typejoin_union(rettype)
+end
+
+### this machinery is now dead code in Base, but several packages
+### reach into these internals so it's retained for convenience.
 _broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
 _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
 
@@ -747,7 +768,6 @@ eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
 eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
 eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
-# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
 
 # Inferred eltype of result of broadcast(f, args...)
 function combine_eltypes(f, args::Tuple)
@@ -925,7 +945,7 @@ copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
 @inline function copy(bc::Broadcasted)
-    ElType = combine_eltypes(bc.f, bc.args)
+    ElType = result_eltype(bc)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
         return copyto!(similar(bc, ElType), bc)
@@ -1294,6 +1314,8 @@ function __dot__(x::Expr)
         Expr(:let, undot(dotargs[1]), dotargs[2])
     elseif x.head === :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
+    elseif x.head === :generator || x.head === :filter
+        Expr(x.head, dotargs[1], map(undot, dotargs[2:end])...)
     elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])

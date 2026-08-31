@@ -251,7 +251,7 @@ JL_EXTENSION typedef struct {
 JL_EXTENSION typedef struct {
     JL_DATA_TYPE
     jl_genericmemoryref_t ref;
-    size_t dimsize[]; // length for 1-D, otherwise length is mem->length
+    size_t dimsize[]; // dimension sizes; mem may hold more than prod(dimsize) elements
 } jl_array_t;
 
 
@@ -861,7 +861,7 @@ enum jl_partition_kind {
 };
 
 static const uint8_t PARTITION_MASK_KIND = 0x0f;
-static const uint8_t PARTITION_MASK_FLAG = 0xf0;
+static const uint16_t PARTITION_MASK_FLAG = 0x1f0;
 
 //// These are flags that get anded into the above
 //
@@ -878,6 +878,11 @@ static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 // _IMPLICITLY_EXPORTED: This binding partition is implicitly exported via @reexport. Unlike _EXPORTED,
 // this flag is set during implicit resolution and can be removed if the resolution changes.
 static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
+// _IMPLICITLY_DEPRECATED: The _DEPRECATED/_DEPWARN flags on this partition were set by
+// implicit resolution from the imported binding, rather than set explicitly on this binding.
+// Like _IMPLICITLY_EXPORTED, it is recomputed on re-resolution, and it does not survive
+// replacement of the partition by a definition or an explicit import.
+static const uint16_t PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100;
 
 #if defined(_COMPILER_MICROSOFT_)
 #define JL_ALIGNED_ATTR(alignment) \
@@ -1356,7 +1361,19 @@ STATIC_INLINE jl_value_t *jl_svecset(
 #define jl_array_nrows(a) (((jl_array_t*)(a))->dimsize[0])
 #define jl_array_ndims(a) (*(size_t*)jl_tparam1(jl_typetagof(a)))
 #define jl_array_maxsize(a) (((jl_array_t*)(a))->ref.mem->length)
-#define jl_array_len(a)   (jl_array_ndims(a) == 1 ? jl_array_nrows(a) : jl_array_maxsize(a))
+STATIC_INLINE size_t jl_array_len(void *a) JL_NOTSAFEPOINT
+{
+    size_t ndims = jl_array_ndims(a);
+    if (ndims == 1)
+        return jl_array_nrows(a);
+    // an N-d array may be backed by a Memory with excess capacity (e.g. from
+    // `reshape` of a `sizehint!`ed vector), so the length must be computed
+    // from the dimensions rather than read from the Memory
+    size_t len = 1;
+    for (size_t i = 0; i < ndims; i++)
+        len *= jl_array_dim(a, i);
+    return len;
+}
 
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
@@ -2372,7 +2389,8 @@ typedef struct {
     const char *data;
     size_t size;
     uint64_t base;
-    uint32_t checksum;
+    uint32_t heap_checksum;
+    bool_t is_split;
 } jl_image_buf_t;
 
 struct _jl_image_t;
@@ -2397,7 +2415,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, bool_t compress, ios_t **s, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
@@ -2557,11 +2575,15 @@ struct _jl_handler_t {
     struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
+    // Saved `bound_cancel_default` flag, restored with `bound_cancel_token`
+    // (the pair is only coherent together; see julia_threads.h).
+    uint8_t bound_cancel_default;
 };
 
-#define JL_TASK_STATE_RUNNABLE 0
-#define JL_TASK_STATE_DONE     1
-#define JL_TASK_STATE_FAILED   2
+#define JL_TASK_STATE_RUNNABLE  0
+#define JL_TASK_STATE_DONE      1
+#define JL_TASK_STATE_FAILED    2
+#define JL_TASK_STATE_ABANDONED 3
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t nparents) JL_CANSAFEPOINT;
