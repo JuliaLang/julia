@@ -1446,6 +1446,9 @@ function fieldcount(@nospecialize t)
     if t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
+    if t isa Core.TypeEgal
+        return nfields(type_parameter(t))
+    end
     t = unwrap_unionall(t)
     if t isa Union
         fcount = _fieldcount_noerror(t)
