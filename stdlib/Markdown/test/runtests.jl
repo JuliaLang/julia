@@ -1789,7 +1789,5 @@ include("test_spec_html_github.jl")
 include("test_spec_html_julia.jl")
 
 @testset "Header accepts any integer level" begin
-    # `Header{Int32(2)}` and `Header{2}` are distinct types that print identically, so the
-    # level has to be canonicalized rather than merely accepted.
     @test Markdown.Header("x", Int32(2)) isa Markdown.Header{2}
 end
