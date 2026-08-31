@@ -4036,11 +4036,12 @@ end
 
 const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
 const JI_FLAG_SPLIT::UInt32 = 1 << 1
+const JI_PAYLOAD_END_OFFSET = 168 # the source text of a package image follows its payload
 
 function isvalid_cache_header(f::IOStream)
     flags = Ref{UInt32}()
     checksum = Ref{UInt32}()
-    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}())
+    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}, Ptr{UInt64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}(), Ref{UInt64}())
 
     if err == 0 && (flags[] & JI_FLAG_PKGIMAGE == 0)
         @debug "Cache header was for a system image"
@@ -4207,7 +4208,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     flags = CacheFlags(read(f, UInt8), read(f, UInt8))
     syntax_version = read(f, UInt8)
     modules = read_module_list(f, false)
-    totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
+    totbytes = Int64(read(f, UInt64)) - 8 # total bytes for file dependencies + preferences
     # read the list of requirements
     # and split the list into include and requires statements
     includes = CacheHeaderIncludes[]
@@ -4253,13 +4254,14 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     totbytes -= 4
     prefs_blob = String(read(f, n2))
     totbytes -= n2
-    srctextpos = read(f, Int64)
-    totbytes -= 8
     @assert totbytes == 0 "header of cache file appears to be corrupt (totbytes == $(totbytes))"
     # read the list of modules that are required to be present during loading
     required_modules = read_module_list(f, true)
     l = read(f, Int32)
     clone_targets = read(f, l)
+    pos = position(f)
+    srctextpos = read(seek(f, JI_PAYLOAD_END_OFFSET), Int64)
+    seek(f, pos)
 
     srcfiles = srctext_files(f, srctextpos, includes)
 
@@ -4401,7 +4403,6 @@ end
 
 function read_dependency_src(io::IO, cachefile::AbstractString, filename::AbstractString)
     _, (includes, _, _), _, srctextpos, _, _, _ = parse_cache_header(io, cachefile)
-    srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
     return _read_dependency_src(io, filename, includes)
 end
@@ -4441,7 +4442,6 @@ end
 
 function srctext_files(f::IO, srctextpos::Int64, includes::Vector{CacheHeaderIncludes})
     files = Set{String}()
-    srctextpos == 0 && return files
     seek(f, srctextpos)
     while !eof(f)
         filenamelen = read(f, Int32)
