@@ -544,11 +544,11 @@ let f(x) = x <= 0 ? x : f(x-1)
     f(5)
 end
 """) == 0
-@test JuliaLowering.include_string(test_mod, """
+@test_throws UndefVarError JuliaLowering.include_string(test_mod, """
 let f(x::typeof(f)) = x
     f(f)
 end
-""") isa Function # broken in flisp
+""") isa Function # desirable?
 
 # Self-reference in let-function default args
 @test JuliaLowering.include_string(test_mod, """
@@ -556,7 +556,7 @@ let f(x=f) = x
     f()
 end
 """) isa Function
-@test JuliaLowering.include_string(test_mod, """
+@test_throws UndefVarError JuliaLowering.include_string(test_mod, """
 let f(x::typeof(f)) = x
     f(f)
 end
@@ -566,7 +566,7 @@ let f(;x=f) = x
     f()
 end
 """) isa Function
-@test JuliaLowering.include_string(test_mod, """
+@test_throws UndefVarError JuliaLowering.include_string(test_mod, """
 let f(;x::typeof(f)) = x
     f(x=f)
 end
@@ -1548,4 +1548,89 @@ end
    @test test_mod.f_boxed_localvar_typed([3, 1, 2], -1) == [1]
    @test only(Base.return_types(test_mod.f_boxed_localvar_typed, (Vector{Int}, Int))) ===
        Vector{Int}
+end
+
+@testset "(AI) regression tests: inner function gets its value after method def" begin
+    ex_local_alias = :(let
+        A{T} = Vector{T}
+        A(x::A) = 1
+        A([2])
+    end)
+    @test fl_eval(Module(), ex_local_alias) == 1
+    @test jl_eval(Module(), ex_local_alias) == 1
+
+    ex_alias_semantics = :(let
+        A{T} = Vector{T}
+        A(x::A) = 1
+        r2 = try; A(2); catch e; nameof(typeof(e)); end
+        (A([2]), r2, A isa Function)
+    end)
+    @test fl_eval(Module(), ex_alias_semantics) == (1, :MethodError, true)
+    @test jl_eval(Module(), ex_alias_semantics) == (1, :MethodError, true)
+
+    ex_typeof_value_sig = :(let
+        f = 2
+        f(x::typeof(f)) = 1
+        f(2)
+    end)
+    @test fl_eval(Module(), ex_typeof_value_sig) == 1
+    @test jl_eval(Module(), ex_typeof_value_sig) == 1
+
+    ex_isdefined_sig = :(let
+        r = try
+            f(x::((@isdefined f) ? Int : String)) = x
+            f(1)
+        catch e
+            nameof(typeof(e))
+        end
+        r
+    end)
+    @test fl_eval(Module(), ex_isdefined_sig) == :MethodError
+    @test jl_eval(Module(), ex_isdefined_sig) == :MethodError
+
+    ex_where_self = :(let
+        r = try
+            f(x::T) where {T <: typeof(f)} = 1
+            f(f)
+        catch e
+            nameof(typeof(e))
+        end
+        r
+    end)
+    @test fl_eval(Module(), ex_where_self) == :UndefVarError
+    @test jl_eval(Module(), ex_where_self) == :UndefVarError
+
+    ex_kwarg_self = :(let
+        r = try
+            A = Vector
+            A(; x::A = [7]) = x
+            A(x = [2])
+        catch e
+            nameof(typeof(e))
+        end
+        r
+    end)
+    @test fl_eval(Module(), ex_kwarg_self) == :TypeError
+    @test jl_eval(Module(), ex_kwarg_self) == :TypeError
+
+    ex_error_leaves_name = :(let
+        A = Vector
+        ok = try
+            A(x::3) = x
+            :defined
+        catch e
+            nameof(typeof(e))
+        end
+        (ok, A === Vector, A isa Function)
+    end)
+    @test fl_eval(Module(), ex_error_leaves_name) == (:ArgumentError, true, false)
+    @test jl_eval(Module(), ex_error_leaves_name) == (:ArgumentError, true, false)
+
+    ex_sig_assigns_capture = :(let
+        local y
+        f(x::(begin; y = 2; Int; end)) = x + y
+        f(1)
+    end)
+    @test fl_eval(Module(), ex_sig_assigns_capture) == 3
+    @test jl_eval(Module(), ex_sig_assigns_capture) == 3
 end

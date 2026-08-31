@@ -31,6 +31,7 @@ mutable struct ClosureConversionCtx <: AbstractLoweringContext
     const toplevel_pure::Bool
     const toplevel_stmts::Vector{SyntaxTree}
     const closure_infos::Dict{ClosureKey,ClosureInfo}
+    const closure_structs::Dict{ClosureKey,SyntaxTree}
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
@@ -359,6 +360,7 @@ function convert_local_function_decl(ctx, ex)
                   field_val])
         end
     end
+    ctx.closure_structs[ck] = clstruct = ssavar(ctx, ex[1])
     @ast ctx ex [K"block"
         define_clstruct
         (::K"latestworld_if_toplevel")
@@ -367,8 +369,7 @@ function convert_local_function_decl(ctx, ex)
         else
             [K"call" "apply_type"::K"core" global_clstruct type_params...]
         end
-        closure_val := [K"new" closure_type init_closure_args...]
-        convert_assignment(ctx, [K"=" ex[1] closure_val])
+        [K"=" clstruct [K"new" closure_type init_closure_args...]]
         (::K"TOMBSTONE")
     ]
 end
@@ -389,7 +390,8 @@ function map_cl_convert(ctx::ClosureConversionCtx, ex)
                 ctx.bindings, ctx.mod,
                 ctx.closure_bindings, ctx.capture_rewriting, ctx.top_bindings,
                 ctx.lambda_bindings, ctx.sp_typevars, false, ctx.lifted,
-                ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos),
+                ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos,
+                ctx.closure_structs),
             e), ex)
     else
         toplevel_stmts = SyntaxList()
@@ -397,7 +399,8 @@ function map_cl_convert(ctx::ClosureConversionCtx, ex)
             ctx.bindings, ctx.mod,
             ctx.closure_bindings, ctx.capture_rewriting, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, true, ctx.lifted,
-            ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos)
+            ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos,
+            ctx.closure_structs)
         res = mapchildren(e->_convert_closures(ctx2, e), ex)
         if isempty(toplevel_stmts)
             res
@@ -484,12 +487,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         if haskey(ctx.closure_bindings, closure_key(ctx, func_name))
             convert_local_function_decl(ctx, ex)
         else
-            # Single-arg K"method" has the side effect of creating a global
-            # binding for `func_name` if it doesn't exist.
-            @ast ctx ex [K"block"
-                [K"method" func_name]
-                (::K"TOMBSTONE") # <- function_decl should not be used in value position
-            ]
+            @ast ctx ex [K"block" [K"method" func_name] (::K"TOMBSTONE")]
         end
     elseif k == K"method"
         @jl_assert ctx.lifted ex
@@ -549,14 +547,25 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ctx.closure_bindings, cap_rewrite,
             ctx.top_bindings, ctx.lambda_bindings, ctx.sp_typevars,
             ctx.toplevel, true, ctx.toplevel_pure, ctx.toplevel_stmts,
-            ctx.closure_infos)
+            ctx.closure_infos, ctx.closure_structs)
         tvs = map_cl_convert(ctx2, ex[2])
+        assign_fname = !is_closure ? nothing : let ck = closure_key(ctx, name)
+            convert_assignment(ctx, @ast ctx ex [K"=" name ctx.closure_structs[ck]])
+        end
         if is_closure && !ctx.toplevel
             push!(ctx2.toplevel_stmts, tvs)
             push!(ctx2.toplevel_stmts, map_cl_convert(ctx2, ex[3]))
-            @ast ctx ex (::K"TOMBSTONE")
+            @ast ctx ex [K"block" assign_fname (::K"TOMBSTONE")]
         else
-            @ast ctx ex [K"block" tvs map_cl_convert(ctx2, ex[3])]
+            @ast ctx ex [K"block" tvs map_cl_convert(ctx2, ex[3]) assign_fname]
+        end
+    elseif k == K"no_method_defs"
+        name = ex[1]
+        if kind(name) == K"BindingId" && get_binding(ctx, name).kind === :local
+            ck = closure_key(ctx, name)
+            convert_assignment(ctx, @ast ctx ex [K"=" name ctx.closure_structs[ck]])
+        else
+            @ast ctx ex (::K"TOMBSTONE")
         end
     elseif k == K"_opaque_closure"
         ck = closure_key(ctx, ex[1])
@@ -570,8 +579,8 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ctx.bindings, ctx.mod,
             ctx.closure_bindings, capture_rewrites, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, false, false,
-            ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos)
-
+            ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos,
+            ctx.closure_structs)
         argt = _convert_closures(ctx, ex[2])
         rt_lb = _convert_closures(ctx, ex[3])
         rt_ub = _convert_closures(ctx, ex[4])
@@ -621,7 +630,7 @@ function closure_convert_lambda(ctx, ex, sps)
         lbs, ctx.sp_typevars,
         k === K"toplevel_lambda", k === K"toplevel_lambda",
         ctx.toplevel_pure && k == K"generated_lambda",
-        ctx.toplevel_stmts, ctx.closure_infos)
+        ctx.toplevel_stmts, ctx.closure_infos, ctx.closure_structs)
     lambda_children = SyntaxList()
     push!(lambda_children, ex[1])
     push!(lambda_children, ex[2])
@@ -668,12 +677,15 @@ end
 
 
 """
-Closure conversion and lowering of bindings
+For each local function decl with closure key `ck`, we:
+1. Declare the closure type, populating `closure_infos[ck]`
+2. Define all methods
+3. Instantiate the closure with `new`, storing it in `closure_structs[ck]`, and
+   assigning this to the function name
 
-This pass does a few things:
+Also in this pass:
 * Deal with typed variables (K"decl") and their assignments
 * Deal with const and non-const global assignments
-* Convert closures into types
 * Lower variables captured by closures into boxes, etc, as necessary
 
 Invariants:
@@ -690,7 +702,8 @@ Invariants:
                                    ctx.closure_bindings, nothing,
                                    lbs, lbs, ctx.sp_typevars,
                                    false, true, true, SyntaxList(),
-                                   Dict{ClosureKey,ClosureInfo}())
+                                   Dict{ClosureKey,ClosureInfo}(),
+                                   Dict{ClosureKey,SyntaxTree}())
     ex_out = closure_convert_lambda(ctx_out, ex, children(ex[3]))
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
