@@ -270,6 +270,54 @@ static ObjCache::Hash hashModule(const llvm::Module &M) JL_NOTSAFEPOINT
     // Compiled code needs to have the same jl_tls_offset value as the running
     // process (see LowerPTLSPass).
     Hasher.update({(uint8_t *)&jl_tls_offset, sizeof jl_tls_offset});
+    // Build options can change generated code or runtime layouts without
+    // changing JL_CODEGEN_SRC_HASH. Include the relevant options and layout
+    // values in the cache key.
+    Hasher.update("cfg:"
+#ifdef USE_TRACY
+        "tracy,"
+#endif
+#ifdef USE_ITTAPI
+        "ittapi,"
+#endif
+#ifdef USE_NVTX
+        "nvtx,"
+#endif
+#ifdef USE_APPLE_OSLOG
+        "oslog,"
+#endif
+#ifdef JL_DEBUG_BUILD
+        "debug,"
+#endif
+#ifdef MEMDEBUG
+        "memdebug,"
+#endif
+#ifdef _COMPILER_TSAN_ENABLED_
+        "tsan,"
+#endif
+#ifdef _COMPILER_ASAN_ENABLED_
+        "asan,"
+#endif
+#ifdef _COMPILER_MSAN_ENABLED_
+        "msan,"
+#endif
+    );
+    const uint64_t layout_abi[] = {
+        sizeof(jl_task_t),
+        sizeof(jl_tls_states_t),
+        offsetof(jl_task_t, gcstack),
+        offsetof(jl_task_t, world_age),
+        offsetof(jl_task_t, ptls),
+        offsetof(jl_task_t, scope),
+        offsetof(jl_task_t, eh),
+        offsetof(jl_task_t, reset_ctx),
+        offsetof(jl_task_t, cancel_handler_ctx),
+        offsetof(jl_task_t, bound_cancel_token),
+        offsetof(jl_task_t, bound_cancel_default),
+        offsetof(jl_task_t, preempt_request),
+        offsetof(jl_task_t, tid),
+    };
+    Hasher.update({(const uint8_t *)layout_abi, sizeof layout_abi});
     Hasher.update({(uint8_t *)&ModHash[0], sizeof ModHash});
     return Hasher.final();
 }
