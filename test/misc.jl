@@ -393,10 +393,11 @@ end
 # enough dispatches happened for that share to mean anything
 @test sprint(Base.time_print, 1e9, 0, 0, 0, 1e6, 1000) == "  1.000000 seconds"
 @test sprint(Base.time_print, 1e9, 0, 0, 0, 5e6, 1000) == "  1.000000 seconds"   # 0.5% rounds to 0
-@test sprint(Base.time_print, 1e9, 0, 0, 0, 6e6, 1000) == "  1.000000 seconds (~1% dynamic dispatch)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 6e6, 1000) == "  1.000000 seconds (1000 dynamic dispatches: ~1% time)"
 @test sprint(Base.time_print, 1e9, 0, 0, 0, 6e6, 9) == "  1.000000 seconds"      # too few to report
-@test sprint(Base.time_print, 1e9, 0, 0, 0, 2.4e8, 1000) == "  1.000000 seconds (~24% dynamic dispatch)"
-@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 2.4e8, 1000, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, ~24% dynamic dispatch, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 2.4e8, 1000) == "  1.000000 seconds (1000 dynamic dispatches: ~24% time)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 2.4e8, 1460) == "  1.000000 seconds (1.46 k dynamic dispatches: ~24% time)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 2.4e8, 1000, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 1000 dynamic dispatches: ~24% time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
 
 # @showtime
 @test @showtime true
@@ -1602,7 +1603,7 @@ end
     '`, String)))
     @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
 
-    # runtime dispatch counting
+    # dynamic dispatch counting
     stable_dispatch_test() = sum(Int[1, 2, 3])
     unstable_dispatch_test() = sum(Any[1, 2, 3])
     stable_dispatch_test(); unstable_dispatch_test() # compile before measuring

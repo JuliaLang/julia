@@ -213,7 +213,7 @@ end
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
 
-# Cost of one runtime dispatch in nanoseconds, as (call-site cache hit, cache miss). These
+# Cost of one dynamic dispatch in nanoseconds, as (call-site cache hit, cache miss). These
 # are measured on first use rather than hardcoded: a hit and a miss differ by an order of
 # magnitude, and both scale with the machine, so any single literal is several times wrong
 # on most hardware. The fallback is only used if measurement gives an implausible answer.
@@ -298,7 +298,7 @@ function _calibrate_loop_ns(v::Vector{Any}, n::Int, reps::Int)
     return Float64(dispatched) - Float64(invoked)
 end
 
-# Estimated nanoseconds spent looking up methods for runtime dispatches. This is a lower
+# Estimated nanoseconds spent looking up methods for dynamic dispatches. This is a lower
 # bound on what the type instability behind them costs: the boxing, the lost inlining and
 # the lost specialization it also causes do not show up in the lookup being measured here.
 function dispatch_time_ns(counts::DispatchCounts)
@@ -363,9 +363,9 @@ end
 function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, dispatch_time=0, dispatches=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
                     msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    # Shown as a share of the elapsed time rather than as a count, because a count is not
+    # The share is what says whether the count matters, since a count alone is not
     # interpretable without knowing how much work accompanied it. Unlike the other figures
-    # here this one is estimated rather than measured, hence the `~` and no decimals.
+    # here the share is estimated rather than measured, hence the `~` and no decimals.
     dispatch_pct = elapsedtime > 0 ? 100 * dispatch_time / elapsedtime : 0.0
     # Gate on the rounded value so nothing is ever reported as `~0%`, and on a floor of a
     # few dispatches: over a short enough measurement a single call-cache miss is a whole
@@ -400,7 +400,13 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, dispatch_t
             if had_allocs || gctime > 0
                 print(io, ", ")
             end
-            print(io, "~", Ryu.writefixed(dispatch_pct, 0), "% dynamic dispatch")
+            dispatches_scaled, md = prettyprint_getunits(dispatches, length(_cnt_units), Int64(1000))
+            if md == 1
+                print(io, Int(dispatches_scaled))
+            else
+                print(io, Ryu.writefixed(Float64(dispatches_scaled), 2), _cnt_units[md])
+            end
+            print(io, " dynamic dispatches: ~", Ryu.writefixed(dispatch_pct, 0), "% time")
         end
         if lock_conflicts > 0
             if had_allocs || gctime > 0 || show_dispatches
@@ -468,13 +474,13 @@ returning the value of the expression. Any time spent garbage collecting (gc), c
 new code, or recompiling invalidated code is shown as a percentage. Any lock conflicts
 where a [`ReentrantLock`](@ref) had to wait are shown as a count.
 
-Time spent on runtime dispatch is shown as an approximate share of the elapsed time, when
-that share reaches one percent. Unlike the other percentages reported here it is estimated,
-from the number of dispatches and a per-dispatch cost measured on this machine, rather than
-measured directly: timing each dispatch would cost several times more than the dispatch. It
-is also a lower bound, since the boxing and lost inlining that come with the type
-instability behind it are not included. See [`@code_warntype`](@ref) and the
-[Performance Tips](@ref man-performance-tips), and [`@dispatches`](@ref) for the raw count.
+The number of dynamic dispatches is shown along with the approximate share of the elapsed
+time they took, when that share reaches one percent. Unlike the other percentages reported
+here the share is estimated, from the count and a per-dispatch cost measured on this machine,
+rather than measured directly: timing each dispatch would cost several times more than the
+dispatch. It is also a lower bound, since the boxing and lost inlining that come with the
+type instability behind it are not included. See [`@code_warntype`](@ref) and the
+[Performance Tips](@ref man-performance-tips).
 
 Optionally provide a description string to print before the time report.
 
@@ -499,7 +505,7 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
     The reporting of any lock conflicts was added in Julia 1.11.
 
 !!! compat "Julia 1.14"
-    The reporting of runtime dispatches was added in Julia 1.14.
+    The reporting of dynamic dispatches was added in Julia 1.14.
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -569,7 +575,7 @@ end
     @timev "description" expr
 
 This is a verbose version of the `@time` macro. It first prints the same information as
-`@time`, then any non-zero memory allocation counters and the number of runtime dispatches,
+`@time`, then any non-zero memory allocation counters and the number of dynamic dispatches,
 then returns the value of the expression.
 
 Optionally provide a description string to print before the time report.
@@ -829,10 +835,10 @@ end
     @dispatches
 
 A macro to evaluate an expression, discard the resulting value, and instead return the
-number of runtime dispatches performed during evaluation, that is, calls whose method had
+number of dynamic dispatches performed during evaluation, that is, calls whose method had
 to be looked up at run time because the compiler could not resolve them statically.
 
-Runtime dispatch is usually a symptom of type instability, so this is a way to check that
+Dynamic dispatch is usually a symptom of type instability, so this is a way to check that
 code stays statically resolved. Dispatches made by the compiler while inferring or
 generating code are not counted; dispatches made on other threads during the expression are.
 
@@ -882,7 +888,7 @@ A macro to execute an expression, and return the value of the expression, elapse
 total bytes allocated, garbage collection time, an object with various memory allocation
 counters, compilation time in seconds, and recompilation time in seconds. Any lock conflicts
 where a [`ReentrantLock`](@ref) had to wait are shown as a count, as is the number of
-runtime dispatches (see [`@dispatches`](@ref)) and the estimated time they took.
+dynamic dispatches (see [`@dispatches`](@ref)) and the estimated time they took.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
