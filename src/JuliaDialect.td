@@ -271,10 +271,35 @@ def GCAllocObj : JuliaOp<"gc_alloc_obj",
   }];
 }
 
-// Not represented here: `llvm.julia.gc_preserve_begin` and
-// `llvm.julia.gc_preserve_end` use the reserved `llvm.` intrinsic prefix and
-// a token result type, neither of which llvm-dialects can express for a
-// dialect named `julia`.
+// The GC preserve pair keeps the reserved `llvm.` intrinsic prefix
+// (useLlvmIntrinsicPrefix): LLVM's IR verifier only allows token-returning
+// functions when they are (unknown) intrinsics, and the token linking each
+// end to its begin is a use-def edge the optimizer cannot sever.
+
+def GCPreserveBegin : JuliaOp<"gc_preserve_begin", []> {
+  let results = (outs TokenTy:$token);
+  let arguments = (ins varargs:$objects);
+
+  let useLlvmIntrinsicPrefix = 1;
+
+  let summary = "begin a region in which the given objects are preserved";
+  let description = [{
+    Keeps `objects` (and what they transitively refer to) alive from here to
+    the `llvm.julia.gc_preserve_end` that consumes the returned token, even
+    if no rooted use remains. Deleted (with its uses) by `LateLowerGCFrame`
+    after the liveness it implies has been accounted for.
+  }];
+}
+
+def GCPreserveEnd : JuliaOp<"gc_preserve_end", []> {
+  let results = (outs);
+  let arguments = (ins TokenTy:$token);
+
+  let useLlvmIntrinsicPrefix = 1;
+
+  let summary = "end the preserve region identified by `token`";
+  let description = [{}];
+}
 
 // ============================================================================
 // GC lowering ops ("Julia GC dialect")
