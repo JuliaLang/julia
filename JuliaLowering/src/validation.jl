@@ -1312,6 +1312,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"method_defs" id [K"block" sps...] body] ->
         (kind(id) === K"nothing" ? pass() : vst2_ident_val(vcx, id)) &
         all(vst2_typevar, vcx, sps) & vst2(with(vcx; in_method_defs=true), body)
+    [K"no_method_defs" id] -> vst2_ident_val(vcx, id)
     [K"new" t args...] -> vst2(vcx, t) & all(vst2, vcx, args)
     [K"splatnew" t arg] -> vst2(vcx, t) & vst2(vcx, arg)
     [K"softscope"] -> pass()

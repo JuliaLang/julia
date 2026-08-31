@@ -2692,7 +2692,7 @@ is_vararg_type_expr(st) = @stm st begin
     _ -> kind(st) in KSet"core Identifier" && syntax_name(st) == "Vararg"
 end
 
-function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, overlay)
     kws = argl[end]
     pargl = argl[1:end-1]
     @jl_assert kind(kws) === K"parameters" src
@@ -2850,7 +2850,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     end
     @ast ctx src [K"block"
         [K"function_decl" m1_name]
-        kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
+        # hack: define closure type for next decl
+        overlay || kind(mtable) === K"nothing" ? nothing : [K"no_method_defs" m1_name]
+        overlay || kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
         [K"method_defs" m1_name method_def_sparams(ctx, src, sparams) mdefs1]
         [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
         [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
@@ -2963,7 +2965,8 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     end
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
-        keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+        keywords_method_def_expr(
+            ctx, src, mtable, sparams, argl, body, rett, overlay)
     elseif overlay
         mtmp = ssavar(ctx, mtable)
         @ast ctx src [K"block"
@@ -4338,7 +4341,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"function"
         if numchildren(ex) == 1
             return @ast ctx ex [K"block"
-                [K"global_if_global" ex[1]] [K"function_decl" ex[1]] ex[1]]
+                [K"global_if_global" ex[1]]
+                [K"function_decl" ex[1]]
+                [K"no_method_defs" ex[1]]
+                ex[1]]
         end
         sig, wheres = flatten_wheres(ex[1])
         name, args, rett = @stm sig begin

@@ -729,19 +729,19 @@ end
 29  latestworld
 30  TestMod.#f##0
 31  (new %₃₀)
-32  (= slot₂/f %₃₁)
-33  TestMod.#f##0
-34  (call core.svec %₃₃)
-35  (call core.svec)
-36  SourceLocation::3:5
-37  (call core.svec %₃₄ %₃₅ %₃₆)
-38  (call core.define_method TestMod core.nothing %₃₇
+32  TestMod.#f##0
+33  (call core.svec %₃₂)
+34  (call core.svec)
+35  SourceLocation::3:5
+36  (call core.svec %₃₃ %₃₄ %₃₅)
+37  (call core.define_method TestMod core.nothing %₃₆
     --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁ 1)
     3   (return %₂)
-39  latestworld
+38  latestworld
+39  (= slot₂/f %₃₁)
 40  TestMod.X
 41  (call core.apply_type_or_typeapp core.Type %₄₀)
 42  (call core.svec %₄₁)
@@ -883,13 +883,12 @@ end
 55  latestworld
 56  TestMod.#f##1
 57  (new %₅₆)
-58  (= slot₄/f %₅₇)
-59  TestMod.#f##1
-60  (call core.svec %₅₉)
-61  (call core.svec)
-62  SourceLocation::5:5
-63  (call core.svec %₆₀ %₆₁ %₆₂)
-64  (call core.define_method TestMod core.nothing %₆₃
+58  TestMod.#f##1
+59  (call core.svec %₅₈)
+60  (call core.svec)
+61  SourceLocation::5:5
+62  (call core.svec %₅₉ %₆₀ %₆₁)
+63  (call core.define_method TestMod core.nothing %₆₂
     --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
@@ -898,8 +897,10 @@ end
     4   (call core.apply_type_or_typeapp %₁ %₂ %₃)
     5   (new %₄ 1)
     6   (return %₅)
-65  latestworld
-66  (return core.nothing)
+64  latestworld
+65  (= slot₄/f %₅₇)
+66  latestworld
+67  (return core.nothing)
 
 ########################################
 # new() calls with splats; `Any` fields
