@@ -132,6 +132,9 @@ function _register_kinds()
             # reference inside a lambda should resolve to the lambda's sparam
             # shadowing it.
             "method_defs"
+            # from `function f end`, tells closure conversion to give f its value
+            # (usually done with method_defs)
+            "no_method_defs"
             # [K"typevar" name rhs] appears only in method_defs and gets special
             # scope resolution: a sequence of K"sparam"s are similar to nested
             # let-blocks, but without introducing a local scope.
