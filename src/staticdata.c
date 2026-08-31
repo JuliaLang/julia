@@ -776,14 +776,21 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             for (size_t i = 0, n = ((jl_genericmemory_t*)allbackedges)->length; i < n; i += 2) {
                 jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
                 jl_queue_for_serialization(s, tn);
-                jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i + 1);
-                if (backedges && backedges != jl_nothing) {
-                    jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
-                    jl_queue_for_serialization(s, backedges);
-                    for (size_t i = 0, n = jl_array_nrows(backedges); i < n; i += 2) {
-                        jl_value_t *t = jl_array_ptr_ref(backedges, i);
+                jl_value_t *table = jl_genericmemory_ptr_ref(allbackedges, i + 1);
+                if (table && table != jl_nothing) {
+                    // per-typename eqtable of sig => callers
+                    jl_queue_for_serialization_(s, table, 0, 1);
+                    for (size_t j = 0, m = ((jl_genericmemory_t*)table)->length; j < m; j += 2) {
+                        jl_value_t *t = jl_genericmemory_ptr_ref(table, j);
+                        jl_value_t *callers = jl_genericmemory_ptr_ref(table, j + 1);
+                        if (callers == NULL)
+                            continue;
                         assert(!jl_is_code_instance(t));
                         jl_queue_for_serialization(s, t);
+                        // serialize the callers list without forcing the CodeInstances
+                        // in it to be serialized (unreachable ones are pruned later)
+                        jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)callers)->ref.mem, 0, 1);
+                        jl_queue_for_serialization(s, callers);
                     }
                 }
             }
@@ -2524,26 +2531,38 @@ static void jl_prune_mi_backedges(jl_array_t *backedges)
     jl_array_del_end(backedges, n - ins);
 }
 
-static void jl_prune_tn_backedges(jl_array_t *backedges)
+static void jl_prune_tn_backedges(jl_genericmemory_t *table)
 {
-    size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
-    for (i = 1; i < n; i += 2) {
-        jl_value_t *ci = jl_array_ptr_ref(backedges, i);
-        if (ptrhash_get(&serialization_order, ci) != HT_NOTFOUND) {
-            jl_array_ptr_set(backedges, ins++, jl_array_ptr_ref(backedges, i - 1));
-            jl_array_ptr_set(backedges, ins++, ci);
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)table->ptr;
+    for (size_t i = 0, n = table->length; i < n; i += 2) {
+        jl_value_t *callers = jl_atomic_load_relaxed(&tab[i + 1]);
+        if (callers == NULL)
+            continue; // empty or deleted slot
+        size_t j, ins = 0, l = jl_array_nrows(callers);
+        for (j = 0; j < l; j++) {
+            jl_value_t *ci = jl_array_ptr_ref(callers, j);
+            if (ptrhash_get(&serialization_order, ci) != HT_NOTFOUND)
+                jl_array_ptr_set((jl_array_t*)callers, ins++, ci);
+        }
+        // compact in place: the array was already queued for serialization, so
+        // pruned CodeInstances must not remain reachable from it
+        jl_array_del_end((jl_array_t*)callers, l - ins);
+        if (ins == 0) {
+            // no caller is being serialized: drop the entry (cf. `jl_eqtable_pop`)
+            jl_gc_wb(table, NULL);
+            jl_atomic_store_relaxed(&tab[i], jl_nothing); // clear the key
+            jl_atomic_store_relaxed(&tab[i + 1], NULL); // and the value
         }
     }
-    jl_array_del_end(backedges, n - ins);
 }
 
 static void jl_prune_mt_backedges(jl_genericmemory_t *allbackedges)
 {
     for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
         jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
-        jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i + 1);
-        if (tn && tn != jl_nothing && backedges)
-            jl_prune_tn_backedges((jl_array_t*)backedges);
+        jl_value_t *table = jl_genericmemory_ptr_ref(allbackedges, i + 1);
+        if (tn && tn != jl_nothing && table && table != jl_nothing)
+            jl_prune_tn_backedges((jl_genericmemory_t*)table);
     }
 }
 
