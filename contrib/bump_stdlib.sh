@@ -7,9 +7,10 @@
 #        contrib/bump_stdlib.sh [-b <branch>] all
 #
 # The stdlib branch is picked automatically: on a release-X.Y or
-# backports-release-X.Y Julia branch the stdlib's release-X.Y branch is used
-# (if it exists upstream), otherwise the branch recorded in
-# stdlib/<StdlibName>.version. Pass -b <branch> to override.
+# backports-release-X.Y Julia branch the stdlib's release-X.Y branch is used,
+# and stdlibs without such a branch upstream are skipped; on other Julia
+# branches the branch recorded in stdlib/<StdlibName>.version is used.
+# Pass -b <branch> to override.
 #
 # For each stdlib, updates stdlib/<StdlibName>.version, replaces the old
 # checksums in deps/checksums with freshly generated ones, and creates one
@@ -89,8 +90,8 @@ bump_one() {
     elif [[ $JULIA_BRANCH =~ ^(backports-)?(release-[0-9]+\.[0-9]+)$ ]]; then
         STDLIB_BRANCH=${BASH_REMATCH[2]}
         if [ -z "$(remote_sha "$STDLIB_BRANCH")" ]; then
-            echo "note: no '$STDLIB_BRANCH' branch at $GIT_URL, using '$OLD_BRANCH' from $NAME.version" >&2
-            STDLIB_BRANCH=$OLD_BRANCH
+            echo "note: no '$STDLIB_BRANCH' branch at $GIT_URL, skipping $NAME (pass -b <branch> to bump anyway)" >&2
+            return 0
         fi
     else
         STDLIB_BRANCH=$OLD_BRANCH
@@ -194,7 +195,7 @@ bump_one() {
 
     git -C "$JULIAHOME" add -A -- "deps/checksums/$NAME-*" "stdlib/$NAME.version" || return 1
     git -C "$JULIAHOME" commit --quiet -F "$MSGFILE" -- "deps/checksums/$NAME-*" "stdlib/$NAME.version" || return 1
-    git -C "$JULIAHOME" log -1 --stat
+    git -C "$JULIAHOME" --no-pager log -1 --format="committed %h: %s"
 }
 
 FAILED=()
