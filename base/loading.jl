@@ -1390,22 +1390,22 @@ function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT
     if length(paths) > 1
         function sort_by(path)
             # when using pkgimages, consider those cache files first
-            pkgimage = if JLOptions().use_pkgimages != 0
-                io = open(path, "r")
-                try
-                    if isvalid_cache_header(io) === nothing
-                        false
-                    else
-                        _, _, _, _, _, _, flags = parse_cache_header(io, path)
-                        CacheFlags(flags).use_pkgimages
+            pkgimage = false
+            path_mtime = 0.0
+            try
+                if JLOptions().use_pkgimages != 0
+                    open(path, "r") do io
+                        if isvalid_cache_header(io) !== nothing
+                            pkgimage = CacheFlags(read_cache_header_flags(io)).use_pkgimages
+                        end
                     end
-                finally
-                    close(io)
                 end
-            else
-                false
+                path_mtime = mtime(path)
+            catch ex
+                # stale_cachefile will reject this candidate later
+                ex isa InterruptException && rethrow()
             end
-            (; pkgimage, mtime=mtime(path))
+            (; pkgimage, mtime=path_mtime)
         end
         function sort_lt(a, b)
             if a.pkgimage != b.pkgimage
@@ -2007,6 +2007,8 @@ function parse_image_target(io::IO)
 end
 
 function parse_image_targets(targets::Vector{UInt8})
+    # no native code
+    isempty(targets) && return ImageTarget[]
     io = IOBuffer(targets)
     ntargets = read(io, Int32)
     targets = Vector{ImageTarget}(undef, ntargets)
@@ -2143,7 +2145,7 @@ function isrelocatable(pkg::PkgId)
         _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
         for inc in includes
             !startswith(inc.filename, "@depot") && return false
-            if inc ∉ includes_srcfiles
+            if inc.filename ∉ includes_srcfiles
                 # its an include_dependency
                 track_content = inc.mtime == -1.0
                 track_content || return false
@@ -2160,8 +2162,8 @@ function parse_cache_buildid(cachepath::String)
     try
         checksum = isvalid_cache_header(f)
         checksum === nothing && throw(ArgumentError("Incompatible header in cache file $cachepath."))
-        read(f, UInt8) # flags
-        read(f, UInt8) # syntax_version
+        read_cache_header_flags(f) # skip flags
+        skip(f, 1) # skip syntax_version
         n = read(f, Int32)
         n == 0 && error("no module defined in $cachepath")
         skip(f, n) # module name
@@ -3723,14 +3725,18 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
                     evicted_cachefile = joinpath(cachepath, cachefiles[idx])
                     @debug "Evicting file from cache" evicted_cachefile
-                    rm(evicted_cachefile; force=true)
-                    try
-                        rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
-                        @static if Sys.isapple()
-                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
+                    evicted_files = [evicted_cachefile, ocachefile_from_cachefile(evicted_cachefile)]
+                    @static if Sys.isapple()
+                        push!(evicted_files, ocachefile_from_cachefile(evicted_cachefile) * ".dSYM")
+                    end
+                    for evicted in evicted_files
+                        try
+                            rm(evicted; force=true, recursive=true)
+                        catch e
+                            # Keep the successful compile.
+                            e isa IOError || rethrow()
+                            @warn "Failed to evict file from cache" evicted exception=e
                         end
-                    catch e
-                        e isa IOError || rethrow()
                     end
                 end
             end
@@ -3869,12 +3875,31 @@ function resolve_depot(inc::AbstractString)
     return :no_depot_found
 end
 
+# `read(f, n)` returns a short vector when the file ends early instead of throwing, which
+# lets a truncated cache file parse into a valid-looking header.
+function read_cache_bytes(f::IO, n::Integer)
+    bytes = read(f, n)
+    length(bytes) == n || throw(EOFError())
+    return bytes
+end
+
+# Names recorded in a cache file end up in filesystem paths and identifiers, where an
+# embedded NUL throws from `ispath` or `joinpath`. That happens outside the malformed-cache
+# handling in `stale_cachefile`, so reject such a name while parsing the file instead.
+function check_cache_name(name::String)
+    '\0' in name && error("cache file records a name containing an embedded NUL")
+    return name
+end
+check_cache_name(pkg::PkgId) = (check_cache_name(pkg.name); pkg)
+
+read_cache_name(f::IO, n::Integer) = check_cache_name(String(read_cache_bytes(f, n)))
+
 function read_module_list(f::IO, has_buildid_hi::Bool)
     modules = Vector{Pair{PkgId, UInt128}}()
     while true
         n = read(f, Int32)
         n == 0 && break
-        sym = String(read(f, n)) # module name
+        sym = read_cache_name(f, n) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
         build_id_hi = UInt128(has_buildid_hi ? read(f, UInt64) : UInt64(0)) << 64
         build_id = (build_id_hi | read(f, UInt64)) # build id (checksum + time - not a UUID)
@@ -3883,8 +3908,11 @@ function read_module_list(f::IO, has_buildid_hi::Bool)
     return modules
 end
 
+# Read flags after the version header.
+read_cache_header_flags(f::IO) = read(f, UInt8)
+
 function _parse_cache_header(f::IO, cachefile::AbstractString)
-    flags = read(f, UInt8)
+    flags = read_cache_header_flags(f)
     syntax_version = read(f, UInt8)
     modules = read_module_list(f, false)
     totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
@@ -3898,7 +3926,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
         if n2 == 0
             break
         end
-        depname = String(read(f, n2))
+        depname = String(read_cache_bytes(f, n2))
         totbytes -= n2
         fsize = read(f, UInt64)
         totbytes -= 8
@@ -3919,19 +3947,19 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
                 if n1 == 0
                     break
                 end
-                push!(modpath, String(read(f, n1)))
+                push!(modpath, read_cache_name(f, n1))
                 totbytes -= n1
             end
         end
         if depname[1] == '\0'
-            push!(requires, modkey => binunpack(depname))
+            push!(requires, modkey => check_cache_name(binunpack(depname)))
         else
-            push!(includes, CacheHeaderIncludes(modkey, depname, fsize, hash, mtime, modpath))
+            push!(includes, CacheHeaderIncludes(modkey, check_cache_name(depname), fsize, hash, mtime, modpath))
         end
     end
     n2 = read(f, Int32)
     totbytes -= 4
-    prefs_blob = String(read(f, n2))
+    prefs_blob = String(read_cache_bytes(f, n2))
     totbytes -= n2
     srctextpos = read(f, Int64)
     totbytes -= 8
@@ -3939,7 +3967,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     # read the list of modules that are required to be present during loading
     required_modules = read_module_list(f, true)
     l = read(f, Int32)
-    clone_targets = read(f, l)
+    clone_targets = read_cache_bytes(f, l)
 
     srcfiles = srctext_files(f, srctextpos, includes)
 
@@ -3949,7 +3977,12 @@ end
 function parse_cache_header(f::IO, cachefile::AbstractString)
     modules, (includes, srcfiles, requires), required_modules,
         srctextpos, prefs_blob, clone_targets, flags, syntax_version = _parse_cache_header(f, cachefile)
+    includes_srcfiles, _ = resolve_depot_includes!(includes, srcfiles, cachefile)
+    return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
+end
 
+# Resolve `@depot` include paths in place.
+function resolve_depot_includes!(includes::Vector{CacheHeaderIncludes}, srcfiles::Set{String}, cachefile::AbstractString)
     includes_srcfiles = CacheHeaderIncludes[]
     includes_depfiles = CacheHeaderIncludes[]
     for inc in includes
@@ -4022,7 +4055,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         end
     end
 
-    return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
+    return includes_srcfiles, includes_depfiles
 end
 
 function parse_cache_header(cachefile::String)
@@ -4111,7 +4144,7 @@ function srctext_files(f::IO, srctextpos::Int64, includes::Vector{CacheHeaderInc
     while !eof(f)
         filenamelen = read(f, Int32)
         filenamelen == 0 && break
-        filename = String(read(f, filenamelen))
+        filename = read_cache_name(f, filenamelen)
         len = read(f, UInt64)
         push!(files, filename)
         seek(f, position(f) + len)
@@ -4385,6 +4418,7 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :source_path_changed     => :actionable  => "different source file path",
     :dep_identity_changed    => :actionable  => "dependency identifier changed",
     :checksum_invalid        => :actionable  => "cache file checksum is invalid",
+    :malformed_cache         => :actionable  => "cache file contents are malformed or truncated",
     :ocache_checksum_invalid => :actionable  => "native code cache checksum is invalid",
     :preferences_changed     => :actionable  => "package preferences changed",
     :incompatible_header     => :wrong_julia => "incompatible cache header",
@@ -4510,27 +4544,46 @@ function toml_egal(A::AbstractDict, B::AbstractDict)
     return true
 end
 
-function stale_prefs(prefs_blob::String)
-    # ensure any preferences observed match their precompile-time values
-    prefs_blob == "" && return false # no observed preferences (fast-path)
+# Parse the preferences recorded in a cache file into the observed and unset preferences
+# of each package, or `nothing` if none were recorded. Separate from `stale_prefs` so that
+# a caller can attribute a failure here to the cache file, while the environment lookups
+# the comparison performs are not the cache file's fault.
+function parse_prefs_blob(prefs_blob::String)
+    prefs_blob == "" && return nothing # no observed preferences (fast-path)
     prefs_data = TOML.parse(TOML.Parser{nothing}(prefs_blob))
+    observed = Dict{UUID,Dict{String,Any}}()
+    unset = Dict{UUID,Vector{String}}()
+    for (uuid, prefs) in prefs_data
+        if uuid == "unset"
+            for (unset_uuid, pref_keys) in prefs::Dict{String,Any}
+                unset[UUID(unset_uuid)] = pref_keys::Vector{String}
+            end
+        else
+            observed[UUID(uuid)] = prefs::Dict{String,Any}
+        end
+    end
+    return observed, unset
+end
 
-    for (uuid, observed) in prefs_data
-        uuid == "unset" && continue
-        curr = get_preferences(UUID(uuid))
-        for (key, val) in observed::Dict{String,Any}
+stale_prefs(prefs_blob::String) = stale_prefs(parse_prefs_blob(prefs_blob))
+stale_prefs(::Nothing) = false
+
+# ensure any preferences observed match their precompile-time values
+function stale_prefs(prefs::Tuple{Dict{UUID,Dict{String,Any}},Dict{UUID,Vector{String}}})
+    observed, unset = prefs
+    for (uuid, set_prefs) in observed
+        curr = get_preferences(uuid)
+        for (key, val) in set_prefs
             # any set preferences should have the same value
             !haskey(curr, key) && return true
             !toml_egal(curr[key], val) && return true
         end
     end
-    if haskey(prefs_data, "unset")
-        for (uuid, observed) in prefs_data["unset"]::Dict{String,Any}
-            curr = get_preferences(UUID(uuid))
-            for key in observed::Vector{String}
-                # any unset preferences should still be unset
-                haskey(curr, key) && return true
-            end
+    for (uuid, pref_keys) in unset
+        curr = get_preferences(uuid)
+        for key in pref_keys
+            # any unset preferences should still be unset
+            haskey(curr, key) && return true
         end
     end
     return false
@@ -4556,14 +4609,28 @@ end
         @debug "Rejecting cache file $cachefile for $modkey because it could not be opened" isfile(cachefile)
         return true
     end
+    # Treat malformed cache contents as stale.
+    @noinline function reject_malformed_cachefile(ex)
+        @debug "Rejecting cache file $cachefile due to malformed or truncated contents" exception=(ex, catch_backtrace())
+        record_reason(reasons, :malformed_cache)
+        return true
+    end
     try
-        checksum = isvalid_cache_header(io)
-        if checksum === nothing
-            @debug "Rejecting cache file $cachefile due to it containing an incompatible cache header"
-            record_reason(reasons, :incompatible_header)
-            return true # incompatible cache file
+        local checksum, modules, includes, srcfiles, requires, required_modules, prefs_blob, clone_targets, actual_flags, syntax_version
+        try
+            checksum = isvalid_cache_header(io)
+            if checksum === nothing
+                @debug "Rejecting cache file $cachefile due to it containing an incompatible cache header"
+                record_reason(reasons, :incompatible_header)
+                return true # incompatible cache file
+            end
+            modules, (includes, srcfiles, requires), required_modules, _, prefs_blob, clone_targets, actual_flags, syntax_version = _parse_cache_header(io, cachefile)
+        catch ex
+            ex isa InterruptException && rethrow()
+            return reject_malformed_cachefile(ex)
         end
-        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, actual_flags, syntax_version = parse_cache_header(io, cachefile)
+        # Keep filesystem queries outside the malformed-cache guard.
+        resolve_depot_includes!(includes, srcfiles, cachefile)
         if isempty(modules)
             return true # ignore empty file
         end
@@ -4590,7 +4657,12 @@ end
                 record_reason(reasons, :pkgimages_disabled)
                 return true
             end
-            rejection_reasons = check_clone_targets(clone_targets)
+            rejection_reasons = try
+                check_clone_targets(clone_targets)
+            catch ex
+                ex isa InterruptException && rethrow()
+                return reject_malformed_cachefile(ex)
+            end
             if !isnothing(rejection_reasons)
                 @debug("Rejecting cache file $cachefile for $modkey:",
                     Reasons=rejection_reasons,
@@ -4684,6 +4756,12 @@ end
 
         # now check if this file's content hash has changed relative to its source files
         if stalecheck
+            if isempty(includes)
+                # Packages record at least their entry source file.
+                @debug "Rejecting cache file $cachefile because it records no source files"
+                record_reason(reasons, :malformed_cache)
+                return true
+            end
             if !samefile(includes[1].filename, modspec.path)
                 # In certain cases the path rewritten by `fixup_stdlib_path` may
                 # point to an unreadable directory, make sure we can `stat` the
@@ -4710,22 +4788,35 @@ end
         end
 
         if verify_checksums
-            if !isvalid_file_crc(io)
-                @debug "Rejecting cache file $cachefile because it has an invalid checksum"
-                record_reason(reasons, :checksum_invalid)
-                return true
-            end
-
-            if pkgimage
-                if !isvalid_pkgimage_crc(io, ocachefile::String)
-                    @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
-                    record_reason(reasons, :ocache_checksum_invalid)
+            try
+                if !isvalid_file_crc(io)
+                    @debug "Rejecting cache file $cachefile because it has an invalid checksum"
+                    record_reason(reasons, :checksum_invalid)
                     return true
                 end
+
+                if pkgimage
+                    if !isvalid_pkgimage_crc(io, ocachefile::String)
+                        @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
+                        record_reason(reasons, :ocache_checksum_invalid)
+                        return true
+                    end
+                end
+            catch ex
+                ex isa InterruptException && rethrow()
+                return reject_malformed_cachefile(ex)
             end
         end
 
-        if stale_prefs(prefs_blob)
+        # only the blob itself comes from the cache file; the comparison against the
+        # active environment can fail for reasons that do not implicate the cache
+        prefs = try
+            parse_prefs_blob(prefs_blob)
+        catch ex
+            ex isa InterruptException && rethrow()
+            return reject_malformed_cachefile(ex)
+        end
+        if stale_prefs(prefs)
             @debug "Rejecting cache file $cachefile because preferences have changed"
             record_reason(reasons, :preferences_changed)
             return true
