@@ -35,9 +35,36 @@ Any pointer whose static type is a Julia runtime type (`jl_value_t*`,
 `jl_task_t*`, ...) is rendered from its *runtime* type tag, so a plain
 `jl_value_t*` prints as whatever it actually holds: numbers, strings, symbols,
 types, arrays with their elements, structs with their fields, methods with
-their signatures, and so on. The scripts read struct layouts from the debug
-info, so they need a build with debug info (the default for source builds) but
-do not need to match the exact Julia version.
+their signatures, and so on. Output is capped (long strings and arrays are
+truncated with a `…`/`(N more)` marker) so printing a huge value is always
+safe. The scripts read struct layouts from the debug info, so they need a
+build with debug info (the default for source builds) but do not need to
+match the exact Julia version. Both files load the shared renderer from
+`contrib/julia_debug_core.py`, so keep the three files together when copying
+them elsewhere.
+
+Both debuggers also gain a `jl` command for Julia-semantics field and index
+access (1-based indexing, fields by name, module globals), since the C
+expression evaluator cannot look through `jl_value_t*`:
+
+```
+(gdb) jl v.inner.name
+$jl = "hello"
+(gdb) jl v.vec[2]
+$jl = 42
+(gdb) jl Base.have_fma
+$jl = false
+(gdb) jl $jl.name              # continue from the previous result
+```
+
+In gdb the result is stored in the convenience variable `$jl`, and the
+convenience functions `$jl_typeof(v)` and `$jl_field(v, "name")` compose
+inside larger expressions (boxed fields come back as `jl_value_t*`, unboxed
+primitive fields as native values):
+
+```
+(gdb) print $jl_field($jl_field(v, "counts"), 2) + 1
+```
 
 Both scripts provide a `jl-safepoint-filter [on|off]` command to control the
 SIGSEGV filtering described above, and the gdb script additionally provides
