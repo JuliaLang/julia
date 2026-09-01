@@ -3607,9 +3607,9 @@ function insert_struct_shim(ctx, fieldtypes, name)
     map(ex->_insert_fieldtype_struct_shim(ctx, name, ex), fieldtypes)
 end
 
-# Replace all (call core.apply_type ...) with (call core.apply_type_or_typeapp ...)
-# in an expression tree. Used for typegroup to handle TypeVar/TypeApp references
-# during type resolution before real DataTypes exist.
+# Used to handle TypeVar/TypeApp references during type resolution before real
+# DataTypes exist.  flisp: "Skips method bodies since constructors should use
+# plain apply_type for correct effects inference."
 function _replace_type_constructors(ctx, ex)
     if is_leaf(ex)
         return ex
@@ -3623,6 +3623,8 @@ function _replace_type_constructors(ctx, ex)
             push!(new_children, _replace_type_constructors(ctx, ex[i]))
         end
         return @ast ctx ex [K"call" new_children...]
+    elseif k === K"method" || is_quoted(ex)
+        ex
     else
         return mapchildren(e->_replace_type_constructors(ctx, e), ex)
     end
@@ -3787,10 +3789,9 @@ function expand_typegroup_def(ctx, ex)
         ])
         push!(old_type_vars, old_var)
     end
-
     # 2e. Call resolve_typegroup
-    push!(stmts, @ast ctx ex [K"="
-        [K"tuple" struct_names...]
+    resolve_tmp = ssavar(ctx, ex)
+    push!(stmts, @ast ctx ex [K"=" resolve_tmp
         [K"call" "resolve_typegroup"::K"core"
             typegroup_mod::K"Value"
             [K"call" "svec"::K"core" struct_names...]
@@ -3801,7 +3802,10 @@ function expand_typegroup_def(ctx, ex)
 
     # 2f. Bind to global constants
     for i in 1:n
-        push!(stmts, @ast ctx entries[i].sdef [K"constdecl" global_names[i] struct_names[i]])
+        prov = entries[i].sdef
+        push!(stmts, @ast ctx prov [K"=" struct_names[i]
+                [K"call" "getfield"::K"core" resolve_tmp i::K"Value"]])
+        push!(stmts, @ast ctx prov [K"constdecl" global_names[i] struct_names[i]])
     end
 
     # 2f. latestworld
