@@ -257,10 +257,10 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                 }
                 else if (callee == write_barrier_func) {
-                    // A SATB (ConcurrentImmix) barrier must fire every iteration to
-                    // snapshot each overwritten value, so it can't be hoisted. Other
-                    // plans only mark the parent dirty, where hoisting is safe.
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+                    // A barrier that has to observe every overwritten value must fire on
+                    // every iteration, so it can't be hoisted (MMTK_SNAPSHOT_BARRIER).
+                    // Other plans only mark the parent dirty, where hoisting is safe.
+#ifndef MMTK_SNAPSHOT_BARRIER
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!makeLoopInvariant(L, call->getArgOperand(i),
