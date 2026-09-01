@@ -37,6 +37,9 @@ MAX_ELEMS = 10
 MAX_STRING = 200
 # Hard cap on the total size of a rendered summary.
 MAX_OUTPUT = 4096
+# Smaller cap for values rendered as part of an enclosing expansion (e.g.
+# each element the debugger prints while expanding an array's children).
+BRIEF_OUTPUT = 512
 
 # The GC safepoint region is this many pages at jl_safepoint_pages
 # (see the layout description in src/safepoint.c).
@@ -154,6 +157,35 @@ class JuliaRuntime:
     def __init__(self, adapter):
         self.a = adapter
         self.dt_names = {}  # jl_datatype_t* address -> qualified name
+        self._budget = None  # remaining output chars for this render pass
+
+    # ---- output budget ----------------------------------------------------
+    #
+    # The element/string/depth caps bound each *level* of a summary, but a
+    # recursively big structure could still make the renderer compute far
+    # more text than MAX_OUTPUT keeps. A per-render-pass character budget
+    # makes deeply/widely nested rendering stop early instead: once it is
+    # exhausted, nested renderers return "…" immediately.
+
+    def spend(self, n):
+        if self._budget is not None:
+            self._budget[0] -= n
+
+    def exhausted(self):
+        return self._budget is not None and self._budget[0] <= 0
+
+    def _render_budgeted(self, fn, *args, limit=MAX_OUTPUT):
+        fresh = self._budget is None
+        if fresh:
+            self._budget = [limit]
+        try:
+            out = fn(*args)
+        finally:
+            if fresh:
+                self._budget = None
+        if len(out) > limit:
+            out = out[:limit] + "…"
+        return out
 
     # ---- basic reads ----------------------------------------------------
 
@@ -258,6 +290,11 @@ class JuliaRuntime:
         return "%s<:%s<:%s" % (lb, name, ub)
 
     def flatten_union(self, addr, parts, depth):
+        if parts and parts[-1] == "…":
+            return
+        if self.exhausted():
+            parts.append("…")
+            return
         if self.datatype_qualname(self.typeof_addr(addr)) == "Core.Union":
             self.flatten_union(self.field_u(addr, "jl_uniontype_t", "a"),
                                parts, depth)
@@ -265,12 +302,13 @@ class JuliaRuntime:
                                parts, depth)
         else:
             parts.append(self.render_type(addr, depth))
+            self.spend(len(parts[-1]))
 
     def render_type(self, addr, depth=MAX_DEPTH):
         """Render a Julia type object (or type parameter) as a string."""
         if addr == 0:
             return "#<null>"
-        if depth < 0:
+        if depth < 0 or self.exhausted():
             return "…"
         dtaddr = self.typeof_addr(addr)
         if dtaddr == 0:
@@ -334,10 +372,17 @@ class JuliaRuntime:
                     return "Memory{%s}" % eltstr
                 if oname == "atomic":
                     return "AtomicMemory{%s}" % eltstr
-        rendered = [self.render_type(self.svec_ref(params, i), depth - 1)
-                    for i in range(min(nparams, MAX_ELEMS))]
-        if nparams > MAX_ELEMS:
-            rendered.append("…")
+        rendered = []
+        for i in range(min(nparams, MAX_ELEMS)):
+            if self.exhausted():
+                rendered.append("…")
+                break
+            rendered.append(self.render_type(self.svec_ref(params, i),
+                                             depth - 1))
+            self.spend(len(rendered[-1]))
+        else:
+            if nparams > MAX_ELEMS:
+                rendered.append("…")
         return "%s{%s}" % (name, ", ".join(rendered))
 
     # ---- data rendering ----------------------------------------------------
@@ -434,7 +479,7 @@ class JuliaRuntime:
 
     def render_unboxed(self, taddr, addr, depth):
         """Render the unboxed (inline-stored) value of type taddr at addr."""
-        if depth < 0:
+        if depth < 0 or self.exhausted():
             return "…"
         if taddr == 0:
             return "<?>"
@@ -471,6 +516,9 @@ class JuliaRuntime:
         ftypes = self.field_types(taddr, len(fields))
         parts = []
         for i, (off, size, isptr) in enumerate(fields[:MAX_ELEMS]):
+            if self.exhausted():
+                parts.append("…")
+                break
             if isptr:
                 p = self.read_ptr(addr + off)
                 r = self.render_value(p, depth - 1) if p else "#undef"
@@ -478,8 +526,10 @@ class JuliaRuntime:
                 r = self.render_unboxed(ftypes[i], addr + off, depth - 1)
             fname = names[i] if names and i < len(names) else str(i + 1)
             parts.append(r if istuple else "%s = %s" % (fname, r))
-        if len(fields) > MAX_ELEMS:
-            parts.append("…")
+            self.spend(len(parts[-1]))
+        else:
+            if len(fields) > MAX_ELEMS:
+                parts.append("…")
         if istuple and len(fields) == 1:
             return "(%s,)" % parts[0]
         if istuple or tname == "NamedTuple":
@@ -563,8 +613,12 @@ class JuliaRuntime:
             return summary
         parts = []
         for _, (kind, v) in self.array_children(addr):
+            if self.exhausted():
+                parts.append("…")
+                break
             parts.append(self.render_value(v, depth - 1) if kind == "val"
                          else v)
+            self.spend(len(parts[-1]))
         return "%s = {%s}" % (summary, ", ".join(parts))
 
     # ---- runtime objects ------------------------------------------------------
@@ -648,10 +702,15 @@ class JuliaRuntime:
         n = self.svec_len(addr)
         parts = []
         for i in range(min(n, MAX_ELEMS)):
+            if self.exhausted():
+                parts.append("…")
+                break
             p = self.svec_ref(addr, i)
             parts.append(self.render_value(p, depth - 1) if p else "#undef")
-        if n > MAX_ELEMS:
-            parts.append("…")
+            self.spend(len(parts[-1]))
+        else:
+            if n > MAX_ELEMS:
+                parts.append("…")
         return "svec(%s)" % ", ".join(parts)
 
     # ---- main value renderer -----------------------------------------------
@@ -660,7 +719,7 @@ class JuliaRuntime:
         """Render the Julia value at addr as a compact single-line string."""
         if addr == 0:
             return "#<null>"
-        if depth < 0:
+        if depth < 0 or self.exhausted():
             return "…"
         dtaddr = self.typeof_addr(addr)
         if dtaddr == 0:
@@ -687,6 +746,7 @@ class JuliaRuntime:
             s, strlen = self.string_data(addr)
             suffix = "…" if strlen > len(s.encode("utf-8", "replace")) \
                 else ""
+            self.spend(len(s))
             return '"%s%s"' % (escape_string(s), suffix)
         if qual == "Core.SimpleVector":
             return self.render_svec(addr, depth)
@@ -738,10 +798,14 @@ class JuliaRuntime:
 
     def render_value_capped(self, addr):
         """render_value with a hard cap on the output size, for printers."""
-        out = self.render_value(addr)
-        if len(out) > MAX_OUTPUT:
-            out = out[:MAX_OUTPUT] + "…"
-        return out
+        return self._render_budgeted(self.render_value, addr)
+
+    def render_value_brief(self, addr):
+        """A terser render_value (smaller budget, shallower depth) for
+        values that appear inside an enclosing expansion, so the total
+        output stays bounded when the debugger expands nested children."""
+        return self._render_budgeted(self.render_value, addr,
+                                     MAX_DEPTH - 1, limit=BRIEF_OUTPUT)
 
     # ---- Julia-semantics field/index access (the `jl` command) ---------------
     #
@@ -753,12 +817,9 @@ class JuliaRuntime:
 
     def render_loc(self, loc):
         if loc[0] == "val":
-            out = self.render_value(loc[1])
-        else:
-            out = self.render_unboxed(loc[1], loc[2], MAX_DEPTH)
-        if len(out) > MAX_OUTPUT:
-            out = out[:MAX_OUTPUT] + "…"
-        return out
+            return self._render_budgeted(self.render_value, loc[1])
+        return self._render_budgeted(self.render_unboxed, loc[1], loc[2],
+                                     MAX_DEPTH)
 
     def loc_type_and_addr(self, loc):
         if loc[0] == "val":

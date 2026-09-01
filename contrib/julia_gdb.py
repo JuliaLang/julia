@@ -152,6 +152,7 @@ def get_rt():
 def _clear_cache(event=None):
     _RT[0] = None
     JlCommand.last_loc = None
+    _expand_depth[0] = 0
 
 
 gdb.events.new_objfile.connect(_clear_cache)
@@ -223,11 +224,28 @@ class JuliaValuePrinter:
         if addr == 0:
             return "(jl_value_t *) NULL"
         try:
-            return get_rt().render_value_capped(addr)
+            rt = get_rt()
+            # inside an array expansion each element is rendered by its own
+            # printer; keep those terse and drawing from the expansion-wide
+            # budget so the total output stays bounded
+            if _expand_depth[0] > 0:
+                s = rt.render_value_brief(addr)
+                rt.spend(len(s))
+                return s
+            rt._budget = None  # recover from any abandoned expansion
+            return rt.render_value_capped(addr)
         except JLDebugError as e:
             return "<not a julia value: 0x%x (%s)>" % (addr, e)
         except Exception as e:  # never break `print` on a printer bug
             return "<error rendering julia value 0x%x: %s>" % (addr, e)
+
+
+# Number of array children() generators currently being expanded. gdb drives
+# nested expansion itself (our depth caps don't apply to it), so without a
+# guard a self-referential array would be re-expanded until gdb's own limits
+# kick in. Elements yielded at nesting >= MAX_DEPTH become pre-rendered
+# (depth-capped) strings instead of jl_value_t* values.
+_expand_depth = [0]
 
 
 class JuliaArrayPrinter(JuliaValuePrinter):
@@ -242,11 +260,34 @@ class JuliaArrayPrinter(JuliaValuePrinter):
             return JuliaValuePrinter.to_string(self)
 
     def children(self):
+        rt = get_rt()
+        # the outermost expansion owns a budget that everything nested
+        # (element to_strings, leaf renders) draws from, so gdb's
+        # multiplicative child expansion cannot produce unbounded output
+        owns_budget = _expand_depth[0] == 0 and rt._budget is None
+        if owns_budget:
+            rt._budget = [core.MAX_OUTPUT]
+        _expand_depth[0] += 1
         try:
-            for name, (kind, v) in get_rt().array_children(int(self.val)):
-                yield name, jl_value(v) if kind == "val" else v
+            for name, (kind, v) in rt.array_children(int(self.val)):
+                if rt.exhausted():
+                    yield name, "…"
+                    break
+                if kind != "val":
+                    rt.spend(len(v))
+                    yield name, v
+                elif _expand_depth[0] < core.MAX_DEPTH:
+                    yield name, jl_value(v)
+                else:
+                    s = rt.render_value_brief(v)
+                    rt.spend(len(s))
+                    yield name, s
         except (JLDebugError, Exception):
             return
+        finally:
+            _expand_depth[0] -= 1
+            if owns_budget:
+                rt._budget = None
 
     def display_hint(self):
         return "array"
