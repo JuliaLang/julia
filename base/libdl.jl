@@ -431,6 +431,12 @@ mutable struct LazyLibrary
     end
 end
 
+function Base.show(io::IO, ll::LazyLibrary)
+    print(io, "LazyLibrary(")
+    show(io, string(ll.path))
+    print(io, ")")
+end
+
 # We support adding dependencies only because of very special situations
 # such as LBT needing to have OpenBLAS_jll added as a dependency dynamically.
 """
