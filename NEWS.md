@@ -65,11 +65,6 @@ Language changes
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
 
-Multi-threading changes
------------------------
-
-* CPU count detection (`Sys.CPU_THREADS` & `Sys.EFFECTIVE_CPU_THREADS`) on Apple Silicon now considers all cores. The BLAS threads heuristic has been moved to LinearAlgebra ([#62891], [LinearAlgebra#1691]).
-
 Compiler/Runtime improvements
 -----------------------------
 
