@@ -1227,20 +1227,69 @@ static const auto jl_blackbox_func = new JuliaFunction<>{
             {}); },
 };
 
-static const auto jl_write_barrier_func = new JuliaFunction<>{
-    "julia.write_barrier",
+// The write barrier intrinsics, matching the barrier surface a collector implements
+// (see MMTk's Barrier trait for the model):
+//
+//   julia.object_write_barrier(parent, children...) -- the whole `parent` counts as
+//   modified: the caller cannot name the written locations. This is the degradation
+//   target (the LICM barrier hoist demotes to it; stores whose reference offsets are
+//   runtime-dependent take it), not a convenience form: a field-granularity collector
+//   must treat every field of `parent` as written, which for a Memory parent can mean
+//   scanning the whole array. Do not emit it where the slots are knowable.
+//
+//   julia.field_write_barrier.pN(parent, slot, child, ...) -- the named fields were
+//   written. The tail is additional (slot, child) pairs, for a store that writes
+//   several fields of `parent` at once (an inline composite). Slots are never null; a
+//   store that cannot name its fields takes the object barrier instead. A parent-keyed
+//   lowering produces the same code for one pairs call as for the equivalent object
+//   barrier; a slot-keyed lowering can coalesce the pair checks into one wide masked
+//   test of the slots' metadata bits, since the slots' relative offsets are constants.
+//
+// The `.pN` suffix on the field barrier is monomorphization mangling, spelled the way
+// LLVM's intrinsic mangler spells pointer overloads: the slot is an opaque address
+// whose address space is an encoding artifact, not part of the barrier's semantics,
+// but a declared function is monomorphic in its pointer types and the GC invariant
+// verifier permits no cast between the Derived (11) and Loaded (13) worlds.
+// Object-interior slots are Derived (.p11); slots into array data are Loaded (.p13).
+// Both monomorphizations have identical semantics and identical lowerings; no consumer
+// may interpret the suffix.
+//
+// There is deliberately no span-granularity barrier intrinsic. A span mutation that
+// reads its values from memory (an array copy) must make each barrier decision on a
+// value read exactly once, which means fusing the barrier with the operation; the
+// fused span operations live behind the C runtime (see jl_gc_genericmemory_copy_boxed
+// and jl_gc_genericmemory_clear in gc-interface.h). Statically-known clears decompose
+// into field barriers with null children.
+static AttributeList get_attrs_write_barrier(LLVMContext &C)
+{
+    AttrBuilder FnAttrs(C);
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+    FnAttrs.addAttribute(Attribute::NoUnwind);
+    FnAttrs.addAttribute(Attribute::NoRecurse);
+    return AttributeList::get(C,
+        AttributeSet::get(C, FnAttrs),
+        AttributeSet(),
+        {Attributes(C, {Attribute::ReadOnly})});
+}
+static const auto jl_object_write_barrier_func = new JuliaFunction<>{
+    "julia.object_write_barrier",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {JuliaType::get_prjlvalue_ty(C)}, true); },
-    [](LLVMContext &C) {
-        AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        FnAttrs.addAttribute(Attribute::NoRecurse);
-        return AttributeList::get(C,
-            AttributeSet::get(C, FnAttrs),
-            AttributeSet(),
-            {Attributes(C, {Attribute::ReadOnly})});
-    },
+    get_attrs_write_barrier,
+};
+static const auto jl_field_write_barrier_p11_func = new JuliaFunction<>{
+    "julia.field_write_barrier.p11",
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {JuliaType::get_prjlvalue_ty(C), PointerType::get(C, AddressSpace::Derived),
+             JuliaType::get_prjlvalue_ty(C)}, true); },
+    get_attrs_write_barrier,
+};
+static const auto jl_field_write_barrier_p13_func = new JuliaFunction<>{
+    "julia.field_write_barrier.p13",
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {JuliaType::get_prjlvalue_ty(C), PointerType::get(C, AddressSpace::Loaded),
+             JuliaType::get_prjlvalue_ty(C)}, true); },
+    get_attrs_write_barrier,
 };
 
 static const auto jl_cancellation_point_func = new JuliaFunction<>{
@@ -4473,9 +4522,9 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (lock)
             emit_lockstate_value(ctx, lock, true);
         // Deletion barrier before clearing the slot: a SATB collector must
-        // snapshot the overwritten reference. The barrier is keyed on the
-        // parent (the memory object), so a NULL child is fine.
-        emit_write_barrier(ctx, mem, Constant::getNullValue(ctx.types().T_prjlvalue));
+        // snapshot the overwritten reference. A NULL child is fine, since the
+        // barrier is keyed on the parent and the slot.
+        emit_write_barrier(ctx, mem, ptr, ArrayRef<Value*>(Constant::getNullValue(ctx.types().T_prjlvalue)));
         emit_aliased_store(ctx, Constant::getNullValue(elty), ptr, Align(al),
                            isboxed ? ctx.alias().ptrarraybuf : ctx.alias().arraybuf,
                            ctx.noalias().aliasscope.current, storeOrder);
@@ -4702,7 +4751,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         for (size_t i = 0; i < nargs; i++) {
             Value *elem = boxed(ctx, argv[i + 1]);
             Value *elem_ptr = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr * (i + 1));
-            emit_write_barrier(ctx, svec, elem);
+            emit_write_barrier(ctx, svec, elem_ptr, ArrayRef<Value*>(elem));
             auto *store = ctx.builder.CreateAlignedStore(elem, elem_ptr, Align(ctx.types().sizeof_ptr));
             store->setOrdering(AtomicOrdering::Release);
         }
@@ -5651,7 +5700,7 @@ isdefined_unknown_idx:
         // scoped default, so the cache flag must drop (the same-source skip
         // path keeps a matching cache intact).
         ai.decorateInst(ctx.builder.CreateAlignedStore(ConstantInt::get(T_int8, 0), bound_default_ptr, Align(1)));
-        emit_write_barrier(ctx, ct, src);
+        emit_write_barrier(ctx, ct, bound_ptr, ArrayRef<Value*>(src));
         ctx.builder.CreateBr(point_bb);
 
         // The cancellation point intrinsic (which the CancellationLowering
@@ -6930,12 +6979,11 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
-            // Deletion barrier before overwriting the scope: a SATB collector
-            // must snapshot the current task's old scope. Keyed on the parent
-            // (current task); a generational collector elides this since the
-            // current task is always a root.
-#ifdef MMTK_PLAN_CONCURRENTIMMIX
-            emit_write_barrier(ctx, get_current_task(ctx), scope_to_restore);
+#ifdef MMTK_SNAPSHOT_BARRIER
+            // Barrier is needed to snapshot old scope value
+            emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, ArrayRef<Value*>(scope_to_restore));
+#else
+            // No barrier required: old Tasks are implicitly in the GC remset
 #endif
             ctx.alias().gcframe.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
@@ -10310,8 +10358,13 @@ static jl_llvm_functions_t
                 Value *scope_boxed = boxed(ctx, scope);
                 Value *scope_ptr = get_scope_field(ctx);
                 LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
+#ifdef MMTK_SNAPSHOT_BARRIER
+                // Barrier is needed to snapshot scope value before replacement
+                emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, ArrayRef<Value*>(scope_boxed));
+#else
+                // No barrier required: old Tasks are implicitly in the GC remset
+#endif
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
-                // NOTE: wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
                 ctx.alias().gcframe.decorateInst(current_scope);
                 ctx.alias().gcframe.decorateInst(scope_store);
                 // Installing a new scope invalidates the task's cached
@@ -10947,7 +11000,9 @@ static void init_jit_functions(void)
     add_named_global(jl_alloc_obj_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
     add_named_global(jl_typeof_func, (void*)NULL);
-    add_named_global(jl_write_barrier_func, (void*)NULL);
+    add_named_global(jl_object_write_barrier_func, (void*)NULL);
+    add_named_global(jl_field_write_barrier_p11_func, (void*)NULL);
+    add_named_global(jl_field_write_barrier_p13_func, (void*)NULL);
     add_named_global(jldlsym_func, &jl_load_and_lookup);
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);

@@ -2548,8 +2548,10 @@ static void jl_prune_tn_backedges(jl_genericmemory_t *table)
         // pruned CodeInstances must not remain reachable from it
         jl_array_del_end((jl_array_t*)callers, l - ins);
         if (ins == 0) {
-            // no caller is being serialized: drop the entry (cf. `jl_eqtable_pop`)
-            jl_gc_wb(table, NULL);
+            // no caller is being serialized: drop the entry (cf. `jl_eqtable_pop`);
+            // deletion barriers for both slots
+            jl_gc_wb(table, (void*)&tab[i], NULL);
+            jl_gc_wb(table, (void*)&tab[i + 1], NULL);
             jl_atomic_store_relaxed(&tab[i], jl_nothing); // clear the key
             jl_atomic_store_relaxed(&tab[i + 1], NULL); // and the value
         }
@@ -2681,7 +2683,7 @@ static void strip_specializations_(jl_method_instance_t *mi) JL_CANSAFEPOINT
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
-                jl_gc_wb(codeinst, stripped);
+                jl_gc_wb(codeinst, (void*)&codeinst->inferred, stripped);
                 jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
             }
         }

@@ -72,11 +72,14 @@ static void moveInstructionBefore(Instruction &I, Instruction &Dest,
     SE->forgetValue(&I);
 }
 
-static void createNewInstruction(Instruction *New, Instruction *Ref, MemorySSAUpdater &MSSAU) {
+static void createNewInstruction(Instruction *New, Instruction *Ref, MemorySSAUpdater &MSSAU,
+                                 MemorySSA::InsertionPlace Point = MemorySSA::Beginning) {
   if (MSSAU.getMemorySSA() && MSSAU.getMemorySSA()->getMemoryAccess(Ref)) {
-    // Create a new MemoryAccess and let MemorySSA set its defining access.
+    // Create a new MemoryAccess and let MemorySSA set its defining access. `Point`
+    // must match where `New` sits in its block, or the access list order diverges
+    // from the instruction order and later loop passes see an inconsistent MemorySSA.
     MemoryAccess *NewMemAcc = MSSAU.createMemoryAccessInBB(
-        New, nullptr, New->getParent(), MemorySSA::Beginning);
+        New, nullptr, New->getParent(), Point);
     if (NewMemAcc) {
       if (auto *MemDef = dyn_cast<MemoryDef>(NewMemAcc))
         MSSAU.insertDef(MemDef, /*RenameUses=*/true);
@@ -153,10 +156,10 @@ struct JuliaLICM : public JuliaPassContext {
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
-        // We also hoist write barriers here, so we don't exit if write_barrier_func exists
-        if (!gc_preserve_begin_func && !write_barrier_func &&
-            !alloc_obj_func) {
-            LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write_barrier_func or alloc_obj_func found, skipping JuliaLICM\n");
+        // We also hoist write barriers here, so we don't exit if write barriers exist
+        if (!gc_preserve_begin_func && !object_write_barrier_func && !field_write_barrier_p11_func &&
+            !field_write_barrier_p13_func && !alloc_obj_func) {
+            LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write barrier or alloc_obj_func found, skipping JuliaLICM\n");
             return false;
         }
         auto LI = &GetLI();
@@ -256,27 +259,56 @@ struct JuliaLICM : public JuliaPassContext {
                         });
                     }
                 }
-                else if (callee == write_barrier_func) {
+                else if (isWriteBarrierFunc(callee)) {
                     // A barrier that has to observe every overwritten value must fire on
                     // every iteration, so it can't be hoisted (MMTK_SNAPSHOT_BARRIER).
                     // Other plans only mark the parent dirty, where hoisting is safe.
 #ifndef MMTK_SNAPSHOT_BARRIER
-                    bool valid = true;
-                    for (std::size_t i = 0; i < call->arg_size(); i++) {
-                        if (!makeLoopInvariant(L, call->getArgOperand(i),
-                            changed, preheader->getTerminator(),
-                            MSSAU, SE)) {
-                            valid = false;
-                            LLVM_DEBUG(dbgs() << "Failed to hoist write barrier argument: " << *call->getArgOperand(i) << "\n");
-                            break;
-                        }
+                    auto invariant = [&](unsigned i) {
+                        return makeLoopInvariant(L, call->getArgOperand(i), changed,
+                                                 preheader->getTerminator(), MSSAU, SE);
+                    };
+                    // The parent and every child must be invariant to hoist. A
+                    // loop-varying *slot* is no obstacle: the parent-keyed lowerings
+                    // reachable here never read it, but the hoisted call cannot keep
+                    // naming a value defined inside the loop, so such a barrier is
+                    // demoted to the object barrier -- which is what a hoisted barrier
+                    // with unknown fields is.
+                    bool is_field = isFieldWriteBarrier(callee);
+                    unsigned stride = is_field ? 2 : 1;
+                    bool valid = invariant(0);
+                    bool varying_slot = false;
+                    for (unsigned i = writeBarrierFirstChildArg(callee);
+                         valid && i < call->arg_size(); i += stride) {
+                        valid = invariant(i); // the child
+                        if (is_field)
+                            varying_slot |= !invariant(i - 1); // its slot
                     }
                     if (!valid) {
                         LLVM_DEBUG(dbgs() << "Failed to hoist write barrier: " << *call << "\n");
                         continue;
                     }
+                    if (varying_slot) {
+                        // Build the demoted barrier directly in the preheader.
+                        object_write_barrier_func = getOrDeclare(jl_intrinsics::objectWriteBarrier);
+                        IRBuilder<> builder(preheader->getTerminator());
+                        builder.SetCurrentDebugLocation(call->getDebugLoc());
+                        SmallVector<Value*, 4> args{call->getArgOperand(0)};
+                        for (unsigned i = field_wb_child_arg; i < call->arg_size(); i += 2)
+                            args.push_back(call->getArgOperand(i));
+                        auto *repl = builder.CreateCall(object_write_barrier_func, args);
+                        if (auto *MD = call->getMetadata("julia.reset_region"))
+                            repl->setMetadata("julia.reset_region", MD);
+                        // `repl` sits just before the preheader terminator, so its
+                        // MemoryAccess must be placed there too (not at the block start).
+                        createNewInstruction(repl, call, MSSAU, MemorySSA::BeforeTerminator);
+                        eraseInstruction(*call, MSSAU);
+                        call = repl;
+                    }
+                    else {
+                        moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    }
                     ++HoistedWriteBarrier;
-                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     changed = true;
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)

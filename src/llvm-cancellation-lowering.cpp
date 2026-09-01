@@ -584,7 +584,8 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // republish it on the way out (so the region even
                     // survives the operation).
                     if (Callee && (Callee->getName() == "julia.gc_alloc_obj" ||
-                                   Callee->getName() == "julia.write_barrier"))
+                                   Callee->getName() == "julia.object_write_barrier" ||
+                                   Callee->getName().starts_with("julia.field_write_barrier")))
                         continue;
                     UnsafePoints.push_back(CI);
                 }
@@ -690,7 +691,8 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     continue;
                 StringRef Name = Callee->getName();
                 if (region_open && (Name == "julia.gc_alloc_obj" ||
-                                    Name == "julia.write_barrier")) {
+                                    Name == "julia.object_write_barrier" ||
+                                    Name.starts_with("julia.field_write_barrier"))) {
                     CI->setMetadata("julia.reset_region", MDNode::get(F.getContext(), {}));
                     Changed = true;
                 }
