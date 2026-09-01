@@ -1772,8 +1772,10 @@ un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
-    JL_TYPECHK(have_fma, datatype, typ); // TODO what about float16/bfloat16?
-    if (typ == (jl_value_t*)jl_float32_type)
+    JL_TYPECHK(have_fma, datatype, typ); // TODO what about bfloat16?
+    if (typ == (jl_value_t*)jl_float16_type)
+        return jl_cpu_has_fma(16);
+    else if (typ == (jl_value_t*)jl_float32_type)
         return jl_cpu_has_fma(32);
     else if (typ == (jl_value_t*)jl_float64_type)
         return jl_cpu_has_fma(64);

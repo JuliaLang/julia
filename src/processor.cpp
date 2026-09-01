@@ -563,6 +563,16 @@ jl_value_t *jl_cpu_has_fma(int bits)
 #elif defined(_CPU_AARCH64_)
     if (bits == 32 || bits == 64)
         return jl_true;
+#elif defined(_CPU_RISCV64_)
+    if (!jit_targets.empty()) {
+        const auto &feats = jit_targets.front().en_features;
+        if (bits == 64 && tp::has_feature(feats, "d"))
+            return jl_true;
+        if (bits == 32 && tp::has_feature(feats, "f"))
+            return jl_true;
+        if (bits == 16 && tp::has_feature(feats, "zfh"))
+            return jl_true;
+    }
 #endif
     return jl_false;
 }
