@@ -255,7 +255,11 @@ function g27079(X)
     r
 end
 
-@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+# The auto-vectorizer can only produce a vector.reduce.add on a target with vector
+# registers; a scalar one (rv64gc without RVV, say) emits an ordinary loop.
+if Sys.ARCH in (:x86_64, :i686, :aarch64)
+    @test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+end
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
