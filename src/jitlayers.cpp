@@ -1315,6 +1315,7 @@ namespace {
             return nullptr;
         }
         // Allocate a target...
+        // Keep jl_jit_uses_large_code_model (jitlayers.h) in sync with this.
         std::optional<CodeModel::Model> codemodel =
 #ifdef _P64
             // Make sure we are using the large code model on 64bit

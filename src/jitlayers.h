@@ -447,6 +447,22 @@ public:
     ~jl_codegen_output_t() JL_NOTSAFEPOINT = default;
 };
 
+// Whether JIT-compiled code for this target uses CodeModel::Large. Keep in sync with
+// the code model selection in jl_create_native_target (jitlayers.cpp); the AOT paths
+// (aotcompile.cpp) never use the large model for code.
+static inline bool jl_jit_uses_large_code_model(const Triple &TT) JL_NOTSAFEPOINT
+{
+    if (!TT.isArch64Bit())
+        return false;   // LLVM picks a default suitable for jitting on 32-bit
+    if (TT.isAArch64())
+        return false;   // CodeModel::Small
+#if JL_LLVM_VERSION < 200000
+    if (TT.isRISCV())
+        return false;   // CodeModel::Medium before LLVM 20
+#endif
+    return true;
+}
+
 const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt) JL_CANSAFEPOINT;
 
 std::optional<jl_llvm_functions_t> jl_emit_code(
