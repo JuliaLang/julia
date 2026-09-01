@@ -604,6 +604,15 @@ JL_DLLEXPORT void *jl_get_ptls_states(void);
 #  define jl_cpu_suspend() __asm__ volatile ("wfe" ::: "memory")
 #  define jl_cpu_wake() __asm__ volatile ("sev" ::: "memory")
 #  define JL_CPU_WAKE_NOOP 0
+#elif defined(_CPU_RISCV64_)
+// Zihintpause `pause`, spelled as the FENCE encoding it reserves (pred=W, succ=none)
+// so that it assembles without the extension in -march and executes as a harmless
+// fence on cores that do not implement the hint. RISC-V has no wfe/sev analogue
+// without Zawrs, so suspend and wake stay no-ops.
+#  define jl_cpu_pause() __asm__ volatile (".insn i 0x0F, 0, x0, x0, 0x010" ::: "memory")
+#  define jl_cpu_suspend() ((void)0)
+#  define jl_cpu_wake() ((void)0)
+#  define JL_CPU_WAKE_NOOP 1
 #else
 #  define jl_cpu_pause() ((void)0)
 #  define jl_cpu_suspend() ((void)0)
