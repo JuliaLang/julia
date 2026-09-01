@@ -940,3 +940,65 @@ let code = """
     # JULIA_COPY_STACKS is broken on Windows (#35147)
     @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end
+
+# A macOS thread faulting at a safepoint must progress under back-to-back GCs.
+@testset "no starvation at safepoint polls under back-to-back collections" begin
+    code = """
+    function work(prec)
+        x = BigFloat(1.5, precision=prec)
+        s = BigFloat(0, precision=prec)
+        for i in 1:50
+            s += x * x + i
+        end
+        return s
+    end
+    function main(iters, budget)
+        done = Threads.Atomic{Bool}(false)
+        gcspam = Threads.@spawn while !done[]
+            GC.gc(false)
+            yield()
+        end
+        nworkers = max(2, Threads.nthreads() - 1)
+        t0 = time()
+        for i in 1:iters
+            prec = 256 + 32 * i
+            tasks = [Threads.@spawn work(prec) for _ in 1:nworkers]
+            foreach(wait, tasks)
+            time() - t0 < budget || break
+        end
+        done[] = true
+        wait(gcspam)
+    end
+    main(300, 10)
+    """
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -t8 -e $code`
+    cmd = ignorestatus(setenv(cmd; dir = @__DIR__))
+    cmd = pipeline(cmd; stdout = stderr, stderr)
+    proc = run(cmd; wait = false)
+    timeout = false
+    timer = Timer(120) do t
+        timeout = true
+        # The deadlock does not respond to SIGTERM. Dump a backtrace, then kill.
+        sigs = Sys.iswindows() ? (Base.SIGKILL,) : (Base.SIGQUIT, Base.SIGKILL)
+        for sig in sigs
+            for _ in 1:3
+                process_running(proc) || return
+                try
+                    kill(proc, sig)
+                catch
+                end
+                sleep(1)
+            end
+        end
+    end
+    try
+        wait(proc)
+    finally
+        close(timer)
+    end
+    if !success(proc) || timeout
+        @error "The safepoint poll starvation test failed" proc.exitcode proc.termsignal timeout
+    end
+    @test success(proc)
+    @test !timeout
+end

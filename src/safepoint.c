@@ -273,6 +273,23 @@ void jl_set_gc_and_wait(jl_task_t *ct)
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
 }
 
+void jl_safepoint_wait_gc_and_resume(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
+    uv_mutex_lock(&safepoint_lock);
+    uv_cond_broadcast(&safepoint_cond_begin);
+    {
+        JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
+        while (jl_atomic_load_acquire(&jl_gc_running))
+            uv_cond_wait(&safepoint_cond_end, &safepoint_lock);
+    }
+    // No collection can be claimed until the running state is visible.
+    jl_atomic_store_release(&ct->ptls->gc_state, state);
+    uv_mutex_unlock(&safepoint_lock);
+    jl_gc_notify_task_resume(ct);
+}
+
 // Exclude garbage collection for a brief critical section on a thread that
 // does not participate in stop-the-world (the SIGINT listener thread, a
 // Windows console-ctrl handler thread). Holding `safepoint_lock` blocks

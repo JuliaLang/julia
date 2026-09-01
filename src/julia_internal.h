@@ -1424,6 +1424,7 @@ extern pthread_mutex_t in_signal_lock;
 #endif
 
 void jl_set_gc_and_wait(jl_task_t *ct) JL_CANSAFEPOINT;
+void jl_safepoint_wait_gc_and_resume(jl_task_t *ct) JL_NOTSAFEPOINT;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
