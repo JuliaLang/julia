@@ -1325,8 +1325,8 @@ namespace {
         // Generate simpler code for JIT
         Reloc::Model relocmodel = Reloc::Static;
         if (TheTriple.isRISCV()) {
-            // until large code model is supported, use PIC for RISC-V
-            // https://github.com/llvm/llvm-project/issues/106203
+            // Static relocation is no cheaper than PIC under the large code model:
+            // both load external addresses indirectly.
             relocmodel = Reloc::PIC_;
         }
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
