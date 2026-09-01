@@ -262,6 +262,10 @@ end
             @test occursin("Environment:", read(setenv(
                 `$exename -e 'using InteractiveUtils; versioninfo()'`,
                 [home, "JULIA_CPU_THREADS=1"]), String))
+            # when Sys.EFFECTIVE_CPU_THREADS < Sys.CPU_THREADS, both counts are reported
+            @test occursin(r"99999 virtual cores; \d+ effective\)", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`,
+                [home, "JULIA_CPU_THREADS=99999"]), String))
         end
     end
 end
