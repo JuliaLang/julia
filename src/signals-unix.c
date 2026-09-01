@@ -1618,10 +1618,10 @@ next_thread:;
 // This is a common fallback based on the observation that `mprotect` happens to
 // issue the necessary memory barriers. However, there is no spec that
 // guarantees this behavior. On AArch64, it is known not to work on either
-// Linux or FreeBSD, so we don't use it there. However, we use it as a fallback
-// here for older versions of Linux and FreeBSD on x86 where we know that it
-// happens to work.
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+// Linux or FreeBSD, so we don't use it there, and RISC-V's memory model is weak in
+// the same way, so it is excluded too. However, we use it as a fallback here for
+// older versions of Linux and FreeBSD on x86 where we know that it happens to work.
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
 static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
 // Returns 1 on success, 0 on failure (e.g. mlock fails)
@@ -1671,7 +1671,7 @@ static void jl_mprotect_membarrier(void) JL_NOTSAFEPOINT
     assert(result == 0);
     (void)result;
 }
-#endif // !_CPU_AARCH64_ && !_CPU_ARM_
+#endif // !_CPU_AARCH64_ && !_CPU_ARM_ && !_CPU_RISCV64_
 
 // Membarrier implementation selection
 enum membarrier_implementation {
@@ -1718,8 +1718,9 @@ static enum membarrier_implementation jl_init_membarrier(void) JL_NOTSAFEPOINT {
         }
     }
 #endif
-    // The mprotect fallback is known not to work on AArch64, so skip it there
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+    // The mprotect fallback is known not to work on AArch64, and RISC-V's memory
+    // model gives no more reason to trust it, so skip it on both
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
     if (jl_init_mprotect_membarrier()) {
         jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_MPROTECT);
         return MEMBARRIER_IMPLEMENTATION_MPROTECT;
@@ -1744,7 +1745,7 @@ JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT {
         break;
     }
 #endif
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
     case MEMBARRIER_IMPLEMENTATION_MPROTECT:
         jl_mprotect_membarrier();
         break;
