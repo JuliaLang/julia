@@ -97,6 +97,8 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest JL_UNUSED, cons
 
 STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT
 {
+    // TODO: Use the written usings slot/span for GC_BARRIER_FIELD_PRECISE,
+    // rather than scanning the module's entire, unbounded usings list.
     mmtk_gc_wb_fast(mod, from);
 }
 

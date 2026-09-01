@@ -305,7 +305,9 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 // Runtime Write-Barriers
 // ========================================================================= //
 
-// Pre-write barriers and their associated writes must not be separated by a safepoint.
+// Collector barrier requirements, selected by the build:
+//      GC_BARRIER_SNAPSHOT: barriers must observe references before they are overwritten.
+// GC_BARRIER_FIELD_PRECISE: barriers are field-precise, so whole-object barriers are potentially expensive.
 
 // Write barrier slow-path. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
@@ -344,9 +346,7 @@ STATIC_INLINE void jl_gc_wb_knownold(const void *parent, void *slot, const void 
 // Write-barrier function that must be used before copying the payload of the boxed
 // immutable `ptr` into `dest`. The object `parent` owns `dest`. `dest` must not be NULL
 // and must have the same layout as `ptr`. For a field that has a lock, `dest` points
-// after the lock, at the first byte of the payload. The barrier covers each reference in
-// the payload at the slot it is copied into. It does not cover a reference to `ptr`
-// itself, and it does not copy the data.
+// after the lock, at the first byte of the payload.
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
 // Write-barrier function that must be used before draining the finalizer queue.
