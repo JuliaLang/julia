@@ -255,7 +255,10 @@ function g27079(X)
     r
 end
 
-@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+# rv64gc has no vector registers, so the loop stays scalar there
+if Sys.ARCH !== :riscv64
+    @test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+end
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
