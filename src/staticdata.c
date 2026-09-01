@@ -2559,9 +2559,8 @@ static void jl_prune_tn_backedges(jl_genericmemory_t *table)
         jl_array_del_end((jl_array_t*)callers, l - ins);
         if (ins == 0) {
             // no caller is being serialized: drop the entry (cf. `jl_eqtable_pop`)
-            jl_gc_wb(table, NULL);
-            jl_atomic_store_relaxed(&tab[i], jl_nothing); // clear the key
-            jl_atomic_store_relaxed(&tab[i + 1], NULL); // and the value
+            jl_gc_write_atomic(table, tab[i], jl_value_t, jl_nothing, relaxed); // clear the key
+            jl_gc_write_atomic(table, tab[i + 1], jl_value_t, NULL, relaxed); // and the value
         }
     }
 }
@@ -2691,7 +2690,7 @@ static void strip_specializations_(jl_method_instance_t *mi) JL_CANSAFEPOINT
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
-                jl_gc_wb(codeinst, stripped);
+                jl_gc_wb(codeinst, (void*)&codeinst->inferred, stripped);
                 jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
             }
         }

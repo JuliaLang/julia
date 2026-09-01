@@ -403,7 +403,7 @@ void stk_push(jl_value_t *s, jl_value_t *v)
     check_stack("push", s);
     dynstack_t *stk = *(dynstack_t **)s;
     if (stk->size < stk->capacity) {
-        jl_gc_wb((jl_value_t *)stk, v);
+        jl_gc_wb((jl_value_t *)stk, (void *)&stk->data[stk->size], v);
         stk->data[stk->size++] = v;
     }
     else {
@@ -413,7 +413,8 @@ void stk_push(jl_value_t *s, jl_value_t *v)
         newstk->data[newstk->size++] = v;
         jl_gc_schedule_foreign_sweepfunc(ptls, (jl_value_t *)(newstk));
         jl_gc_wb_back((jl_value_t *)newstk);
-        jl_gc_wb(s, (jl_value_t *)newstk);
+        // The replaced stack pointer is the field at offset 0 of `s`.
+        jl_gc_wb(s, (void *)s, (jl_value_t *)newstk);
         *(dynstack_t **)s = newstk;
     }
 }

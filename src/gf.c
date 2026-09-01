@@ -282,8 +282,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
             if (i > 0)
                 memcpy((char*)jl_svec_data(nc), jl_svec_data(specializations), sizeof(void*) * i);
             for (int j = 0; j < ncl - cl; j++) {
-                jl_gc_wb_fresh(nc, jl_nothing);
-                jl_svec_data(nc)[j+i] = jl_nothing;
+                jl_gc_write_fresh(nc, jl_svec_data(nc)[j+i], jl_value_t, jl_nothing);
             }
             if (i < cl)
                 memcpy((char*)jl_svec_data(nc) + sizeof(void*) * (i + ncl - cl),
@@ -599,7 +598,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
                 return codeinst;
             jl_debuginfo_t *debuginfo = jl_atomic_load_relaxed(&codeinst->debuginfo);
             if (di != debuginfo) {
-                jl_gc_wb(codeinst, di);
+                jl_gc_wb(codeinst, (void*)&codeinst->debuginfo, di);
                 if (!(debuginfo == NULL && jl_atomic_cmpswap_relaxed(&codeinst->debuginfo, &debuginfo, di)))
                     if (!(debuginfo && jl_egal((jl_value_t*)debuginfo, (jl_value_t*)di)))
                         continue;
@@ -1099,10 +1098,8 @@ static void drop_all_methcache(jl_methcache_t *mc) JL_CANSAFEPOINT
             }
         }
     }
-    // Deletion barrier: snapshot the old cache/leafcache for SATB collectors.
-    jl_gc_wb(mc, NULL);
-    jl_atomic_store_relaxed(&mc->cache, jl_nothing);
-    jl_atomic_store_relaxed(&mc->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_gc_write_atomic(mc, mc->cache, jl_value_t, jl_nothing, relaxed);
+    jl_gc_write_atomic(mc, mc->leafcache, jl_genericmemory_t, (jl_genericmemory_t*)jl_an_empty_memory_any, relaxed);
     JL_UNLOCK(&mc->writelock);
 }
 
@@ -2481,8 +2478,7 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_ins
     if (!replaced_ci) {
         // We know all backedges are deleted - clear them eagerly
         // Clears both array and flags
-        jl_gc_wb(replaced_mi, NULL);
-        replaced_mi->backedges = NULL;
+        jl_gc_write(replaced_mi, replaced_mi->backedges, jl_array_t, NULL);
         jl_atomic_fetch_and_relaxed(&replaced_mi->flags, ~MI_FLAG_BACKEDGES_ALL);
     }
     JL_GC_PUSH1(&backedges);
@@ -2798,9 +2794,8 @@ static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *
                     jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
             }
             // remove this entry (cf. `jl_eqtable_pop`)
-            jl_gc_wb(table, NULL); // deletion barrier: snapshot the overwritten key/value for SATB collectors
-            jl_atomic_store_relaxed(&tab[i], jl_nothing); // clear the key
-            jl_atomic_store_relaxed(&tab[i + 1], NULL); // and the value
+            jl_gc_write_atomic(table, tab[i], jl_value_t, jl_nothing, relaxed); // clear the key
+            jl_gc_write_atomic(table, tab[i + 1], jl_value_t, NULL, relaxed); // and the value
         }
         else {
             alive++;
@@ -2957,15 +2952,13 @@ static int erase_method_backedges(jl_typemap_entry_t *def, void *closure) JL_CAN
         for (i = 0; i < l; i++) {
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
             if ((jl_value_t*)mi != jl_nothing) {
-                jl_gc_wb(mi, NULL);
-                mi->backedges = 0;
+                jl_gc_write(mi, mi->backedges, jl_array_t, NULL);
             }
         }
     }
     else {
         jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
-        jl_gc_wb(mi, NULL);
-        mi->backedges = 0;
+        jl_gc_write(mi, mi->backedges, jl_array_t, NULL);
     }
     JL_UNLOCK(&method->writelock);
     return 1;
