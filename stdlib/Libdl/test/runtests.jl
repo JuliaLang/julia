@@ -343,6 +343,10 @@ end
     lazy_name_lazy_lib = LazyLibrary(libname)
     @test dlpath(lazy_name_lazy_lib) == realpath(string(libname))
 
+    # Test that `show` is compact
+    @test repr(libccalllazyfoo) == "LazyLibrary($(repr(lclf_path)))"
+    @test repr(lazy_name_lazy_lib) == "LazyLibrary($(repr(string(libname))))"
+
     # Test parallel loading doesn't return C_NULL (issue #60378)
     script = """
     using Libdl
