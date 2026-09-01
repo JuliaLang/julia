@@ -320,27 +320,20 @@ JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const vo
 // function is used when its caller has verified that there is a young reference in the
 // object that's being passed as an argument to this function.
 STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT;
-// Write barrier function that must be used after pointer writes to heap-allocated objects –
-// the value of the field being written must also point to a heap-allocated object.
-// If a generational collector is used, it may check whether the two function arguments are
-// in different GC generations (i.e. if the first argument points to an old object and the
-// second argument points to a young object), and if so, call the write barrier slow-path.
+// Write barrier function that must be used immediately before a pointer write to a
+// heap-allocated object. The value being written must point to a heap-allocated
+// object, or be NULL when the field is being cleared.
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
-// Freshly allocated objects are known to be in the young generation until the next safepoint,
-// so write barriers can be omitted until the next allocation. This function is a no-op that
-// can be used to annotate that a write barrier would be required were it not for this property
-// (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
-// As an optimization, the current_task is explicitly added to the remset while it is running.
-// Upon deschedule, we conservatively move the write barrier into the young generation.
-// This allows the omission of write barriers for all GC roots on the current task stack (JL_GC_PUSH_*),
-// as well as the Task's explicit fields (but only for the current task).
-// This function is a no-op that can be used to annotate that a write barrier would be required were
-// it not for this property (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
-// Used to annotate that a write barrier would be required, but may be omitted because `ptr`
-// is known to be an old object.
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// Annotates that a write barrier can (possibly) be elided: `parent` was allocated after the
+// last safepoint so it is guaranteed young
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// Annotates that a write barrier can (possibly) be elided: the store writes a field of the
+// current task (parent == jl_current_task), which is handled specially by the GC
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// Annotates that a write barrier can (possibly) be elided: `ptr` is known to be an old object
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+
+
 // Write-barrier function that must be used after copying multiple fields of an object into
 // another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.
