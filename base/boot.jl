@@ -690,13 +690,11 @@ struct PartialTask
     PartialTask(@nospecialize(fetch_type)) = new(fetch_type)
 end
 
-# Wraps the signature type of a recorded call edge to mark that the enclosing
-# CodeInstance was inferred in the presence of a possible method ambiguity for that
-# call: the inferred results already account for a MethodError from ambiguous dispatch
-# and no call target was devirtualized, so they remain valid when a method addition
-# merely introduces or extends an ambiguity over the signature (an addition that can
-# win the dispatch still invalidates). The wrapper appears only in the signature slot
-# of a call-edge group; callee objects are never wrapped.
+# Wraps the signature of a call-edge group to record that the caller was inferred for
+# a possible ambiguity at that call: it already allows for a MethodError from ambiguous
+# dispatch and devirtualized nothing, so a method addition that only creates or extends
+# an ambiguity over the signature leaves it valid. Only signature slots are wrapped,
+# never callees.
 struct PossiblyAmbiguous
     sig
     PossiblyAmbiguous(@nospecialize(sig)) = new(sig)

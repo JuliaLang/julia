@@ -259,12 +259,9 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         end
     end
     nmatches = length(info.results)
-    # A call inferred in the presence of a possible ambiguity records its edge group
-    # with the signature wrapped in `Core.PossiblyAmbiguous`: inference pessimized the
-    # call for a MethodError from ambiguous dispatch and the optimizer devirtualized
-    # nothing, so the compiled code tolerates method additions that merely introduce or
-    # extend an ambiguity over this signature. The optimized single-edge format has no
-    # signature slot to carry the marker, so such calls always use the group format.
+    # A call inferred for a possible ambiguity records its group with the signature
+    # wrapped in `Core.PossiblyAmbiguous` (see boot.jl); the single-edge format has no
+    # signature slot, so such calls always use a group.
     marked = any_ambig(info)
     if !marked && nmatches == length(info.edges) == 1 && fully_covering(info)
         # try the optimized format for the representation, if possible and applicable

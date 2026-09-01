@@ -601,13 +601,10 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         empty!(matches)
         maxworld[] = 0
     else
-        # A fresh ambiguity can make dispatch throw a MethodError at points the recorded
-        # matches used to win (a method whose overlap is fully covered by an ambiguity is
-        # pruned from this include_ambiguous=false lookup, so the set comparison below
-        # cannot see it). A call edge recorded with its signature wrapped in
-        # `Core.PossiblyAmbiguous` was inferred with that pessimization (may-throw
-        # MethodError, no devirtualized targets), so any such change is tolerable there;
-        # for a plain edge it must invalidate.
+        # A fresh ambiguity can make dispatch throw where a recorded match used to win,
+        # yet stay invisible to the set comparison below (a method whose overlap is
+        # covered by the ambiguity is pruned from this include_ambiguous=false lookup).
+        # A marked edge was inferred for that outcome; a plain one must invalidate.
         if has_ambig[] != 0 && !marked
             maxworld[] = 0
         end

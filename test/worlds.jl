@@ -681,15 +681,11 @@ let ci = method_instance(iter61667, ()).cache
     @test ci.max_world == typemax(UInt)
 end
 
-# Ambiguity-tolerant backedges (Core.PossiblyAmbiguous call-edge marker): a
-# newly-inserted method that is pairwise-ambiguous with a callee can only turn
-# "dispatch to the callee" into "throw a MethodError" over the affected intersection.
-# A caller whose call-edge group for the callee carries the marker on its signature
-# slot was inferred with that pessimization (may-throw MethodError, no
-# devirtualization) and must survive such an insertion; a caller recording the callee
-# through a plain group or the optimized single-edge format must be invalidated. A new
-# method that outright wins part of the callee's dispatch must invalidate either way:
-# the marker tolerates ambiguities only.
+# Ambiguity-tolerant backedges: inserting a method that is pairwise-ambiguous with a
+# callee only turns "dispatch to the callee" into a MethodError over the overlap. A
+# caller whose call-edge group is marked `Core.PossiblyAmbiguous` was inferred for that
+# outcome and survives; a plain group or single-edge record is invalidated. A method
+# that wins part of the callee's dispatch invalidates either way.
 function ambig_rt_find_mi(f, target::Type)
     for m in methods(f)
         for spec in Base.specializations(m)

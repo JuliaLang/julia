@@ -3738,6 +3738,25 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
     end
 end
 
+# The specialization of `f` for `target`, and the CodeInstance in its cache that is still
+# valid in the current world (a revalidated package-image entry), if any. Query before
+# calling the specialization: a call would compile a fresh, valid CodeInstance.
+function ambig_find_mi(f, target::Type)
+    for m in methods(f), spec in Base.specializations(m)
+        spec === nothing && continue
+        spec.specTypes == target && return spec
+    end
+    return nothing
+end
+function ambig_valid_ci(mi::Core.MethodInstance)
+    ci = isdefined(mi, :cache) ? mi.cache : nothing
+    while ci !== nothing
+        ci.max_world == typemax(UInt) && return ci
+        ci = isdefined(ci, :next) ? ci.next : nothing
+    end
+    return nothing
+end
+
 precompile_test_harness("Ambiguity-pruned dispatch edge revalidation") do load_path
     # A method added after an image is built can be pairwise-ambiguous with a recorded
     # dispatch match without changing the count returned by the include_ambiguous=false
@@ -3774,26 +3793,9 @@ precompile_test_harness("Ambiguity-pruned dispatch edge revalidation") do load_p
     # compiling such code adds a fresh, valid CodeInstance for the same specialization
     # (@nospecialize routes the concrete call's compile signature there).
     @eval let
-        m = only(methods(AmbigPruneB.caller))
-        target = Tuple{typeof(AmbigPruneB.caller), Int8, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
+        mi = ambig_find_mi(AmbigPruneB.caller, Tuple{typeof(AmbigPruneB.caller), Int8, Any})
         @test mi !== nothing
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        revalidated = false
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                revalidated = true
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
-        @test !revalidated
+        @test ambig_valid_ci(mi) === nothing
     end
     # Dispatch in the ambiguous region must now throw rather than return the stale result.
     @eval @test_throws MethodError AmbigPruneB.caller(Int8(1), "hi")
@@ -3827,33 +3829,11 @@ precompile_test_harness("PossiblyAmbiguous edge tolerates build-time ambiguity")
     @eval using AmbigTolB
 
     invokelatest() do
-        m = only(methods(AmbigTolB.caller))
-        target = Tuple{typeof(AmbigTolB.caller), Int8, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            spec === nothing && continue
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
+        mi = ambig_find_mi(AmbigTolB.caller, Tuple{typeof(AmbigTolB.caller), Int8, Any})
         @test mi !== nothing
-        # The precompiled CodeInstance must have survived revalidation. Check before
-        # calling caller, since calling it would create a fresh, valid CodeInstance.
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        revalidated = false
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                revalidated = true
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
-        @test revalidated
-        # Behavior is unchanged from build time: the covered region dispatches, the
-        # ambiguous region throws. The calls go through `inferencebarrier` so that compiling
-        # this closure does not itself create a CodeInstance for `caller` before the
-        # scan above runs (which would make the scan pass spuriously).
+        @test ambig_valid_ci(mi) !== nothing
+        # behavior is unchanged from build time (`inferencebarrier` keeps this closure from
+        # compiling `caller` itself, which would create a fresh CodeInstance)
         @test Base.inferencebarrier(AmbigTolB.caller)(Int8(1), 2) === 1
         @test_throws MethodError Base.inferencebarrier(AmbigTolB.caller)(Int8(1), "hi")
     end
@@ -3892,33 +3872,10 @@ precompile_test_harness("Post-build pruned-only ambiguity conservatively invalid
     @eval using AmbigElseB
 
     invokelatest() do
-        m = only(methods(AmbigElseB.caller))
-        target = Tuple{typeof(AmbigElseB.caller), Int8, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            spec === nothing && continue
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
+        mi = ambig_find_mi(AmbigElseB.caller, Tuple{typeof(AmbigElseB.caller), Int8, Any})
         @test mi !== nothing
-        # The precompiled CodeInstance must have survived revalidation. Check before
-        # calling caller, since calling it would create a fresh, valid CodeInstance.
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        revalidated = false
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                revalidated = true
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
-        @test !revalidated
-        # Behavior after re-inference is unchanged either way: the covered region
-        # dispatches to the recorded match, the newly-ambiguous region throws. The calls
-        # go through `inferencebarrier` so that compiling this closure does not itself
-        # create a CodeInstance for `caller` before the scan above runs.
+        @test ambig_valid_ci(mi) === nothing
+        # after re-inference the covered region still dispatches and the ambiguous region throws
         @test Base.inferencebarrier(AmbigElseB.caller)(Int8(1), 2) === 1
         @test_throws MethodError Base.inferencebarrier(AmbigElseB.caller)(Int8(1), "hi")
     end
@@ -3954,30 +3911,10 @@ precompile_test_harness("Marked call edge does not tolerate a new winning method
     @eval using AmbigWinB
 
     invokelatest() do
-        m = only(methods(AmbigWinB.caller))
-        target = Tuple{typeof(AmbigWinB.caller), Int8, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            spec === nothing && continue
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
+        mi = ambig_find_mi(AmbigWinB.caller, Tuple{typeof(AmbigWinB.caller), Int8, Any})
         @test mi !== nothing
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        revalidated = false
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                revalidated = true
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
-        @test !revalidated
-        # the newcomer wins in its region; the old match still wins elsewhere; the
-        # build-time ambiguity still throws (inferencebarrier: see the comment in the
-        # "Ambiguity-pruned dispatch edge revalidation" test)
+        @test ambig_valid_ci(mi) === nothing
+        # the newcomer wins its region, the old match keeps the rest, the ambiguity still throws
         @test Base.inferencebarrier(AmbigWinB.caller)(Int8(1), 2) === 3
         @test Base.inferencebarrier(AmbigWinB.caller)(Int8(1), 1.5) === 1
         @test_throws MethodError Base.inferencebarrier(AmbigWinB.caller)(Int8(1), "hi")
@@ -4015,27 +3952,9 @@ precompile_test_harness("Deleted ambiguity partner still revalidates a marked ca
     @eval using AmbigDelB
 
     invokelatest() do
-        m = only(methods(AmbigDelB.caller))
-        target = Tuple{typeof(AmbigDelB.caller), Int8, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            spec === nothing && continue
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
+        mi = ambig_find_mi(AmbigDelB.caller, Tuple{typeof(AmbigDelB.caller), Int8, Any})
         @test mi !== nothing
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        revalidated = false
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                revalidated = true
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
-        @test revalidated
+        @test ambig_valid_ci(mi) !== nothing
         # the formerly-ambiguous region now dispatches to the surviving method
         @test Base.inferencebarrier(AmbigDelB.caller)(Int8(1), "hi") === 1
         @test Base.inferencebarrier(AmbigDelB.caller)(Int8(1), 2) === 1
@@ -4077,26 +3996,9 @@ precompile_test_harness("Marked group edge tolerates an unchanged ambiguity") do
     # B1 loads with the build-time ambiguity unchanged: must revalidate
     @eval using AmbigPairB1
     invokelatest() do
-        m = only(methods(AmbigPairB1.caller))
-        target = Tuple{typeof(AmbigPairB1.caller), Any, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            spec === nothing && continue
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
+        mi = ambig_find_mi(AmbigPairB1.caller, Tuple{typeof(AmbigPairB1.caller), Any, Any})
         @test mi !== nothing
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        validated_ci = nothing
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                validated_ci = ci
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
+        validated_ci = ambig_valid_ci(mi)
         @test validated_ci !== nothing
         if validated_ci !== nothing
             # the pair does not fully cover, so the group has a -2 Int header; the
@@ -4120,27 +4022,9 @@ precompile_test_harness("Marked group edge tolerates an unchanged ambiguity") do
     @eval AmbigPairA.m(x::Int8, y::String) = 3
     @eval using AmbigPairB2
     invokelatest() do
-        m = only(methods(AmbigPairB2.caller))
-        target = Tuple{typeof(AmbigPairB2.caller), Any, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            spec === nothing && continue
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
+        mi = ambig_find_mi(AmbigPairB2.caller, Tuple{typeof(AmbigPairB2.caller), Any, Any})
         @test mi !== nothing
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        revalidated = false
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                revalidated = true
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
-        @test !revalidated
+        @test ambig_valid_ci(mi) === nothing
         @test Base.inferencebarrier(AmbigPairB2.caller)(Int8(1), "hi") === 3
     end
 end
