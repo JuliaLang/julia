@@ -387,26 +387,6 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 }
 
 
-// this is a version of memcpy that preserves atomic memory ordering
-// which makes it safe to use for objects that can contain memory references
-// without risk of creating pointers out of thin air
-// TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
-//       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
-static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size_t n) JL_NOTSAFEPOINT
-{
-    size_t i;
-    if (dstp < srcp || dstp > srcp + n) {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_release(dstp + i, jl_atomic_load_relaxed(srcp + i));
-        }
-    }
-    else {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_release(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
-        }
-    }
-}
-
 static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, size_t nb) JL_NOTSAFEPOINT
 {
     assert(nb == jl_datatype_size(jl_typeof(src)));

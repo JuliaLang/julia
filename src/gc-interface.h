@@ -341,18 +341,29 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
 // Write-barrier function that must be used before draining the finalizer queue.
 STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue) JL_NOTSAFEPOINT;
-// Write-barrier function that must be used after copying fields of elements of genericmemory objects
-// into another. It should be semantically equivalent to triggering multiple write barriers – one
-// per field of the object being copied, but may be special-cased for performance reasons.
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const struct _jl_value_t *owner, struct _jl_genericmemory_t *src, char* src_p,
+
+// The following `jl_gc_*` operations are fused barrier + copy / clear / etc. memory operations.
+// This fusion is required for correctness: the barrier must observe the src / dst for the
+// corresponding memory operation, which means that a separate barrier would be forced to race.
+
+// Copies `n` elements of the pointer-containing inline element type of `dt` (the
+// datatype of both genericmemory objects) from `srcdata` (element data of `src`) to
+// `destdata` (element data of the genericmemory owned by `owner`).
+STATIC_INLINE void jl_gc_genericmemory_copy_ptr(const struct _jl_value_t *owner, char *destdata,
+                                          struct _jl_genericmemory_t *src, char *srcdata,
                                           size_t n, struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
-// Similar to jl_gc_wb_genericmemory_copy but must be used when copying *boxed* elements of a genericmemory
-// object. Note that this barrier also performs the copying unlike jl_gc_wb_genericmemory_copy_ptr.
-// `*dest_pp`, `*src_pp` and `*n` will be advanced past any elements the barrier copied inline, so that
-// the caller's trailing memmove_refs picks up where the barrier left off.
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const struct _jl_value_t *owner, _Atomic(void*) ** dest_pp,
-                                          struct _jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
-                                          size_t* n) JL_NOTSAFEPOINT;
+// Copies `n` boxed elements from `src_p` (element data of `src`) to `dest_p` (element
+// data of the genericmemory owned by `dest_owner`). The copy preserves per-element
+// atomic ordering and handles overlapping spans (cf. `memmove_refs`).
+STATIC_INLINE void jl_gc_genericmemory_copy_boxed(const struct _jl_value_t *dest_owner, _Atomic(void*) *dest_p,
+                                          struct _jl_genericmemory_t *src, _Atomic(void*) *src_p,
+                                          size_t n) JL_NOTSAFEPOINT;
+// Clears (zeroes) `nbytes` bytes at `data`, a span of whole elements of the genericmemory
+// `m` owned by `owner`. Clearing only deletes references, so a collector that records
+// only insertions implements this as a plain `memset`.
+STATIC_INLINE void jl_gc_genericmemory_clear(const struct _jl_value_t *owner,
+                                          struct _jl_genericmemory_t *m, char *data,
+                                          size_t nbytes) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }
 #endif
