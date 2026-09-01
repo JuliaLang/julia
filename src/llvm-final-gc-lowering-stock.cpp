@@ -56,13 +56,16 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto parent = target->getArgOperand(0);
+    Value *callee = target->getCalledOperand();
     // A NULL child means a field is being cleared (e.g. memoryrefunset!): no
     // young object is stored, so the generational barrier never needs to
     // remember the parent for it. Skip such children and never load their tag
     // (which would dereference null). If every child is NULL there is nothing
     // to remember, so emit no barrier; the caller erases the call.
     SmallVector<Value*, 8> children;
-    for (unsigned i = 1; i < target->arg_size(); i++) {
+    // Field barriers carry (slot, child) pairs; the object barrier carries children only.
+    unsigned stride = isFieldWriteBarrier(callee) ? 2 : 1;
+    for (unsigned i = writeBarrierFirstChildArg(callee); i < target->arg_size(); i += stride) {
         Value *child = target->getArgOperand(i);
         if (isa<ConstantPointerNull>(child->stripPointerCasts()))
             continue;
@@ -94,17 +97,12 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     MDBuilder MDB(parent->getContext());
     SmallVector<uint32_t, 2> Weights{1, 9};
     auto trigTerm = SplitBlockAndInsertIfThen(shouldTrigger, mayTrigTerm, false,
-                                                MDB.createBranchWeights(Weights));
+                                            MDB.createBranchWeights(Weights));
     trigTerm->getParent()->setName("trigger_wb");
     builder.SetInsertPoint(trigTerm);
-    if (target->getCalledOperand() == write_barrier_func) {
-        auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
-        // Propagate CancellationLowering's reset-region annotation to the
-        // slow-path call, so lowerQueueGCRoot selects the reset-safe entry.
-        if (auto *MD = target->getMetadata("julia.reset_region"))
-            qr->setMetadata("julia.reset_region", MD);
-    }
-    else {
-        assert(false);
-    }
+    auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+    // Propagate CancellationLowering's reset-region annotation to the
+    // slow-path call, so lowerQueueGCRoot selects the reset-safe entry.
+    if (auto *MD = target->getMetadata("julia.reset_region"))
+        qr->setMetadata("julia.reset_region", MD);
 }

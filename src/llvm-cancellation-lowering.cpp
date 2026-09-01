@@ -579,7 +579,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // unpublish the region around the operation and
                     // republish it on the way out (so the region even
                     // survives the operation).
-                    if (Callee && (Callee == alloc_obj_func || Callee == write_barrier_func))
+                    if (Callee && (Callee == alloc_obj_func || isWriteBarrierFunc(Callee)))
                         continue;
                     UnsafePoints.push_back(CI);
                 }
@@ -683,7 +683,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 Function *Callee = CI->getCalledFunction();
                 if (!Callee)
                     continue;
-                if (region_open && (Callee == alloc_obj_func || Callee == write_barrier_func)) {
+                if (region_open && (Callee == alloc_obj_func || isWriteBarrierFunc(Callee))) {
                     CI->setMetadata("julia.reset_region", MDNode::get(F.getContext(), {}));
                     Changed = true;
                 }
