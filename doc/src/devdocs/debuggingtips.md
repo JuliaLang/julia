@@ -1,5 +1,55 @@
 # [gdb debugging tips](@id gdb-debugging-tips)
 
+## Pretty-printing Julia values (gdb and lldb)
+
+The repository ships debugger extensions that make `print` render Julia runtime
+values the way Julia would show them, instead of as raw pointers. They also
+teach the debugger to silently skip the benign SIGSEGVs the GC uses to stop the
+world at safepoints (real segfaults still stop the debugger), which otherwise
+interrupt every GC when debugging.
+
+For gdb, source [`contrib/julia_gdb.py`](https://github.com/JuliaLang/julia/blob/master/contrib/julia_gdb.py)
+(interactively, from `~/.gdbinit`, or with `-x`):
+
+```
+$ gdb -x contrib/julia_gdb.py --args ./julia script.jl
+(gdb) print v
+$1 = 3-element Vector{Int64} = {1, 2, 3}
+(gdb) print (jl_datatype_t*)$jl_typeof(v)
+$2 = Vector{Int64}
+```
+
+For lldb, import [`contrib/julia_lldb.py`](https://github.com/JuliaLang/julia/blob/master/contrib/julia_lldb.py)
+(interactively, from `~/.lldbinit`, or with `-o`):
+
+```
+$ lldb -o 'command script import contrib/julia_lldb.py' -- ./julia script.jl
+(lldb) p v
+(jl_value_t *) v = 0x00007fffe2b41ab0 3-element Vector{Int64} = {1, 2, 3}
+(lldb) jl-typeof v
+Vector{Int64}
+```
+
+Any pointer whose static type is a Julia runtime type (`jl_value_t*`,
+`jl_datatype_t*`, `jl_sym_t*`, `jl_svec_t*`, `jl_array_t*`, `jl_method_t*`,
+`jl_task_t*`, ...) is rendered from its *runtime* type tag, so a plain
+`jl_value_t*` prints as whatever it actually holds: numbers, strings, symbols,
+types, arrays with their elements, structs with their fields, methods with
+their signatures, and so on. The scripts read struct layouts from the debug
+info, so they need a build with debug info (the default for source builds) but
+do not need to match the exact Julia version.
+
+Both scripts provide a `jl-safepoint-filter [on|off]` command to control the
+SIGSEGV filtering described above, and the gdb script additionally provides
+`jl-handle-signals` to fully ignore the signals Julia uses internally (useful
+when profiling under the debugger).
+
+!!! note
+    If the debugger appears to hang at startup for minutes, it is usually
+    `debuginfod` trying to download debug info for the system libraries over
+    the network. Run with `DEBUGINFOD_URLS=` in the environment (or answer
+    `n` to gdb's debuginfod prompt) to disable it.
+
 ## Displaying Julia variables
 
 Within `gdb`, any `jl_value_t*` object `obj` can be displayed using
