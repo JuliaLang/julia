@@ -3597,9 +3597,9 @@ function insert_struct_shim(ctx, fieldtypes, name)
     map(ex->_insert_fieldtype_struct_shim(ctx, name, ex), fieldtypes)
 end
 
-# Replace all (call core.apply_type ...) with (call core.apply_type_or_typeapp ...)
-# in an expression tree. Used for typegroup to handle TypeVar/TypeApp references
-# during type resolution before real DataTypes exist.
+# Used to handle TypeVar/TypeApp references during type resolution before real
+# DataTypes exist.  flisp: "Skips method bodies since constructors should use
+# plain apply_type for correct effects inference."
 function _replace_type_constructors(ctx, ex)
     if is_leaf(ex)
         return ex
@@ -3613,6 +3613,8 @@ function _replace_type_constructors(ctx, ex)
             push!(new_children, _replace_type_constructors(ctx, ex[i]))
         end
         return @ast ctx ex [K"call" new_children...]
+    elseif k === K"method" || is_quoted(ex)
+        ex
     else
         return mapchildren(e->_replace_type_constructors(ctx, e), ex)
     end
