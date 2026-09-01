@@ -883,7 +883,7 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
 function write(io::IO, x1, xs...; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    # token-gate between the per-value writes (generic-IO cancel convention)
+    # check for cancellations between each write
     tok = resolve_cancel_token(cancel)
     @cancel_check tok
     written::Int = write(io, x1)
@@ -1029,14 +1029,11 @@ function read!(s::IO, A::AbstractArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL
     return A
 end
 
-# BitArray I/O (moved from bitarray.jl, which loads before the `cancel`
-# plumbing). These must accept `cancel` themselves: a keyword call
-# dispatches only among keyword-accepting methods, so without it
-# `write(io, B; cancel=...)` would fall through to the generic per-element
-# array loop above and produce the wrong - unpacked - format; likewise
-# `read!` would consume the unpacked format and skip tail validation.
+# bitarray.jl loads before cancellation machinery in bootstrap order, so
+# write the specialization here.
+# TODO: because the generic `write` design relies on a bug (#9498), we have to
+# explicitly add a `cancel` kwarg to avoid hitting the ::AbstractArray method
 function write(s::IO, B::BitArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    # entry gate, then the packed representation as always
     @cancel_check resolve_cancel_token(cancel)
     return write(s, B.chunks)
 end
