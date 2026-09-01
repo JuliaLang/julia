@@ -64,7 +64,7 @@ STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSA
     }
 }
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, ptr);
 }
@@ -93,6 +93,12 @@ STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOT
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, (void*)0);
+}
+
+STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT
+{
+    // logs the module: the only location this collector can name anyway
+    mmtk_gc_wb_fast(mod, from);
 }
 
 // The fused operations log the whole destination object before its elements change,

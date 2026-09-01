@@ -321,9 +321,12 @@ JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const vo
 // object that's being passed as an argument to this function.
 STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT;
 // Write barrier function that must be used immediately before a pointer write to a
-// heap-allocated object. The value being written must point to a heap-allocated
-// object, or be NULL when the field is being cleared.
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// heap-allocated object – the value being written must also point to a heap-allocated
+// object, or be NULL when the field is being cleared. `slot` is the address of the field
+// being written and must not be NULL: a collector may record the modified field, the
+// modified object, or both. When no single field can name the write, use one of the
+// fused operations below (or `jl_gc_multi_wb` / `jl_gc_wb_module_usings`) instead.
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
 // Annotates that a write barrier can (possibly) be elided: `parent` was allocated after the
 // last safepoint so it is guaranteed young
 STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
@@ -341,6 +344,10 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
 // Write-barrier function that must be used before draining the finalizer queue.
 STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue) JL_NOTSAFEPOINT;
+// Records that a reference to module `from` was stored into the malloc'd `usings` list of
+// module `mod`. The list has no per-slot GC metadata, so the module object is the only
+// nameable location; the GC's module scan walks the list.
+STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT;
 
 // The following `jl_gc_*` operations are fused barrier + copy / clear / etc. memory operations.
 // This fusion is required for correctness: the barrier must observe the src / dst for the
