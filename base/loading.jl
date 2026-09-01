@@ -272,7 +272,7 @@ struct LoadingCache
     require_parsed::Set{String}
     identified_where::Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, String}}}
     identified::Dict{String, Union{Nothing, Tuple{PkgId, String}}}
-    located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}
+    located::Dict{Union{Tuple{PkgId, String}, Tuple{PkgId, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing) # n.b.: all access to and through this are protected by require_lock
 LoadingCache() = LoadingCache(
@@ -283,7 +283,7 @@ LoadingCache() = LoadingCache(
     Set{String}(),
     Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, String}}}(),
     Dict{String, Union{Nothing, Tuple{PkgId, String}}}(),
-    Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}()
+    Dict{Union{Tuple{PkgId, String}, Tuple{PkgId, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}()
 )
 
 
@@ -436,7 +436,7 @@ function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
     which is not listed as a dep in the load path manifests, so resorting to search
     in the stdlib Project.tomls for true deps"""
     stdlib_projfile = locate_project_file(joinpath(Sys.STDLIB, stdlib.name))
-    stdlib_projfile === nothing && return nothing
+    stdlib_projfile isa String || return nothing
     found = explicit_project_deps_get(stdlib_projfile, depname)
     if found !== nothing
         @debug "$(repr("text/plain", stdlib)) indeed depends on $depname in project $stdlib_projfile"
@@ -484,7 +484,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
         specenv = get(cache.located, (pkg, stopenv), missing)
         specenv === missing || return specenv
     end
-    (env′, spec) = @label found begin
+    (env′, spec) = (@label found begin
         if pkg.uuid === nothing
             # The project we're looking for does not have a Project.toml (n.b. - present
             # `Project.toml` without UUID gets a path-based dummy UUID). It must have
@@ -496,7 +496,12 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 found = implicit_manifest_pkgid(env, pkg.name)
                 if found !== nothing && found.uuid === nothing
                     @assert found.name == pkg.name
-                    break found (env, implicit_manifest_uuid_load_spec(env, pkg))
+                    spec = implicit_manifest_uuid_load_spec(env, pkg)
+                    if spec === nothing
+                        break found (env, nothing)
+                    else
+                        break found (env, spec)
+                    end
                 end
                 if !(loading_extension || precompiling_extension)
                     stopenv == env && break found (nothing, nothing)
@@ -525,7 +530,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
             end
         end
         (nothing, nothing)
-    end
+    end)::Union{Tuple{Nothing, Nothing}, Tuple{String, Nothing}, Tuple{String, PkgLoadSpec}}
     if spec !== nothing && !isfile_casesensitive(spec.path)
         spec = nothing
     end
@@ -2075,7 +2080,7 @@ function compilecache_freshest_path(pkg::PkgId;
             if staledeps === true
                 continue
             end
-            staledeps, _, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            staledeps, _, _ = staledeps::Union{Tuple{Vector{Any}, Nothing, UInt128}, Tuple{Vector{Any}, String, UInt128}}
             # finish checking staledeps module graph
             @label next_dep for dep in staledeps
                 dep isa Module && continue
@@ -2259,7 +2264,7 @@ end
             if staledeps === true
                 continue
             end
-            staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            staledeps, ocachefile, newbuild_id = staledeps::Union{Tuple{Vector{Any}, Nothing, UInt128}, Tuple{Vector{Any}, String, UInt128}}
             startedloading = length(staledeps) + 1
             try # any exit from here (goto, break, continue, return) will end_loading
                 # finish checking staledeps module graph, while acquiring all start_loading locks
@@ -2305,7 +2310,7 @@ end
                         if modstaledeps === true
                             continue
                         end
-                        modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+                        modstaledeps, modocachepath, _ = modstaledeps::Union{Tuple{Vector{Any}, Nothing, UInt128}, Tuple{Vector{Any}, String, UInt128}}
                         staledeps[i] = (modspec, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
                         continue next_dep
                     end
@@ -2329,7 +2334,7 @@ end
                 for i in eachindex(staledeps)
                     dep = staledeps[i]
                     dep isa Module && continue
-                    modspec, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{PkgLoadSpec, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
+                    modspec, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Union{Tuple{PkgLoadSpec, PkgId, UInt128, String, Vector{Any}, Nothing}, Tuple{PkgLoadSpec, PkgId, UInt128, String, Vector{Any}, String}}
                     set_pkgorigin_version_path(modkey, modspec.path)
                     dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
                     if !isa(dep, Module)
@@ -2690,7 +2695,7 @@ function __require(into::Module, mod::Symbol)
         if uuidkey_env === nothing
             where = PkgId(into)
             if where.uuid === nothing
-                hint, dots = invokelatest(check_for_hint, into, mod)
+                hint, dots = invokelatest(check_for_hint, into, mod)::Tuple{Bool, String}
                 hint_message = hint ? ", maybe you meant `import/using $(dots)$(mod)`" : ""
                 install_message = if mod != :Pkg
                     start_sentence = hint ? "Otherwise, run" : "Run"
@@ -3989,10 +3994,13 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
             any_not_relocatable = true
         elseif depot === :no_depot_found
             any_no_depot_found = true
-        elseif isnothing(srcdepot)
-            srcdepot = depot
-        elseif depot != srcdepot
-            multiple_depots_found = true
+        else
+            depot = depot::String
+            if isnothing(srcdepot)
+                srcdepot = depot
+            elseif depot != srcdepot
+                multiple_depots_found = true
+            end
         end
     end
     if any_no_depot_found
@@ -4018,7 +4026,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         elseif depot === :not_relocatable
             @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", _group=:relocatable)
         else
-            inc.filename = restore_depot_path(inc.filename, depot)
+            inc.filename = restore_depot_path(inc.filename, depot::String)
         end
     end
 

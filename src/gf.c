@@ -3452,8 +3452,186 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     JL_GC_POP();
 }
 
+// walk up to the enclosing package root: the topmost enclosing module below `Main`
+// (`Base`'s parent chain terminates in `Main`, so a plain parent walk would conflate
+// every package)
+static jl_module_t *module_root(jl_module_t *m) JL_NOTSAFEPOINT
+{
+    while (m->parent != NULL && m->parent != m && m->parent != jl_main_module)
+        m = m->parent;
+    return m;
+}
+
+// whether some component of `t` (looking through unions, unionalls, varargs, and
+// `Type{T}`) is a type whose defining module lives under `root`
+static int type_rooted_in(jl_value_t *t, jl_module_t *root) JL_NOTSAFEPOINT
+{
+    t = jl_unwrap_unionall(t);
+    if (jl_is_uniontype(t))
+        return type_rooted_in(((jl_uniontype_t*)t)->a, root) ||
+               type_rooted_in(((jl_uniontype_t*)t)->b, root);
+    if (jl_is_vararg(t)) {
+        jl_value_t *T = jl_unwrap_vararg(t);
+        return T != NULL && type_rooted_in(T, root);
+    }
+    if (jl_is_some_Type(t))
+        return type_rooted_in(jl_some_Type_T(t), root);
+    if (!jl_is_datatype(t))
+        return 0;
+    jl_module_t *m = ((jl_datatype_t*)t)->name->module;
+    return m != NULL && module_root(m) == root;
+}
+
+// the standard piracy criterion: the definer owns at least one argument type
+static int definer_owns_sig_type(jl_method_t *method) JL_NOTSAFEPOINT
+{
+    jl_value_t *sig = jl_unwrap_unionall((jl_value_t*)method->sig);
+    if (!jl_is_datatype(sig))
+        return 0;
+    jl_module_t *root = module_root(method->module);
+    for (size_t i = 1; i < jl_nparams(sig); i++) {
+        if (type_rooted_in(jl_tparam(sig, i), root))
+            return 1;
+    }
+    return 0;
+}
+
+// JULIA_WARN_EXTENSION display modes; undeclared extensions are recorded regardless
+enum {
+    WARN_EXTENSION_SILENT = 0,
+    WARN_EXTENSION_PIRACY,  // only methods whose definer owns neither function nor arg type
+    WARN_EXTENSION_ALL,
+    WARN_EXTENSION_ERROR,   // like ALL, but throw instead of warn
+    WARN_EXTENSION_SCOPED,  // only functions owned by the listed package roots
+};
+static _Atomic(int) warn_extension_mode = -1;
+static _Atomic(char*) warn_extension_scope = NULL;
+static jl_mutex_t extension_log_lock;
+
+static int get_warn_extension_mode(void) JL_NOTSAFEPOINT
+{
+    int mode = jl_atomic_load_acquire(&warn_extension_mode);
+    if (mode != -1)
+        return mode;
+    char *e = getenv("JULIA_WARN_EXTENSION");
+    if (e == NULL || e[0] == '\0' || !strcmp(e, "0") || !strcmp(e, "no"))
+        mode = WARN_EXTENSION_SILENT;
+    else if (!strcmp(e, "piracy"))
+        mode = WARN_EXTENSION_PIRACY;
+    else if (!strcmp(e, "error"))
+        mode = WARN_EXTENSION_ERROR;
+    else if (!strcmp(e, "all") || !strcmp(e, "1") || !strcmp(e, "yes"))
+        mode = WARN_EXTENSION_ALL;
+    else {
+        char *scope = strdup(e);
+        char *expected = NULL;
+        if (!jl_atomic_cmpswap(&warn_extension_scope, &expected, scope))
+            free(scope);
+        mode = WARN_EXTENSION_SCOPED;
+    }
+    jl_atomic_store_release(&warn_extension_mode, mode);
+    return mode;
+}
+
+static int extension_scope_contains(const char *name) JL_NOTSAFEPOINT
+{
+    size_t namelen = strlen(name);
+    for (char *p = jl_atomic_load_relaxed(&warn_extension_scope); p != NULL; ) {
+        char *comma = strchr(p, ',');
+        size_t len = comma ? (size_t)(comma - p) : strlen(p);
+        if (len == namelen && !strncmp(p, name, len))
+            return 1;
+        p = comma ? comma + 1 : NULL;
+    }
+    return 0;
+}
+
+// `Base.Experimental.UNDECLARED_EXTENSION_LOG`, resolved lazily so that recording starts
+// only once Base is bootstrapped (its binding also GC-roots the log)
+static jl_array_t *undeclared_extension_log(void) JL_CANSAFEPOINT
+{
+    static _Atomic(jl_array_t*) cached = NULL;
+    jl_array_t *a = jl_atomic_load_relaxed(&cached);
+    if (a != NULL)
+        return a;
+    if (jl_base_module == NULL)
+        return NULL;
+    jl_value_t *expmod = jl_get_global(jl_base_module, jl_symbol("Experimental"));
+    if (expmod == NULL || !jl_is_module(expmod))
+        return NULL;
+    jl_value_t *log = jl_get_global((jl_module_t*)expmod, jl_symbol("UNDECLARED_EXTENSION_LOG"));
+    if (log == NULL || !jl_is_array(log))
+        return NULL;
+    jl_atomic_store_relaxed(&cached, (jl_array_t*)log);
+    return (jl_array_t*)log;
+}
+
+// typename of the `i`-th (0-based) signature slot, looking through `Type{X}` so that a
+// constructor method is attributed to the constructed type
+static jl_typename_t *sig_callee_typename(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    jl_value_t *ft = jl_unwrap_unionall(jl_tparam(sig, i));
+    if (jl_is_some_Type(ft))
+        ft = jl_unwrap_unionall(jl_some_Type_T(ft));
+    if (!jl_is_datatype(ft))
+        return NULL;
+    return ((jl_datatype_t*)ft)->name;
+}
+
+static void check_undeclared_extension(jl_method_t *method) JL_CANSAFEPOINT
+{
+    jl_value_t *sig = jl_unwrap_unionall((jl_value_t*)method->sig);
+    if (!jl_is_datatype(sig) || jl_nparams(sig) == 0)
+        return;
+    jl_typename_t *tn = sig_callee_typename(sig, 0);
+    // a keyword method is a method of `Core.kwcall`; attribute it to the function
+    // being called with keywords, in the third slot
+    if (tn != NULL && jl_kwcall_type && tn == jl_kwcall_type->name && jl_nparams(sig) > 2)
+        tn = sig_callee_typename(sig, 2);
+    if (tn == NULL)
+        return;
+    if (tn->extension_point || method->module == NULL || tn->module == NULL)
+        return;
+    if (module_root(method->module) == module_root(tn->module))
+        return;
+    int owns_type = definer_owns_sig_type(method);
+    if (!jl_generating_output()) {
+        jl_array_t *log = undeclared_extension_log();
+        if (log != NULL) {
+            JL_GC_PUSH1(&log);
+            JL_LOCK(&extension_log_lock);
+            jl_array_ptr_1d_push(log, (jl_value_t*)method);
+            jl_array_ptr_1d_push(log, owns_type ? jl_true : jl_false);
+            JL_UNLOCK(&extension_log_lock);
+            JL_GC_POP();
+        }
+    }
+    int show;
+    switch (get_warn_extension_mode()) {
+    case WARN_EXTENSION_PIRACY: show = !owns_type; break;
+    case WARN_EXTENSION_ALL:
+    case WARN_EXTENSION_ERROR: show = 1; break;
+    case WARN_EXTENSION_SCOPED:
+        show = extension_scope_contains(jl_symbol_name(module_root(tn->module)->name));
+        break;
+    default: show = 0; break;
+    }
+    if (!show)
+        return;
+    const char *kind = owns_type ? "dependent compiled code will be invalidated"
+                                 : "type piracy: it owns neither the function nor an argument type";
+    if (get_warn_extension_mode() == WARN_EXTENSION_ERROR)
+        jl_errorf("Module %s extends %s.%s, which is not declared an extension point (JULIA_WARN_EXTENSION=error)",
+                  jl_symbol_name(method->module->name),
+                  jl_symbol_name(tn->module->name), jl_symbol_name(tn->singletonname));
+    jl_printf(JL_STDERR, "WARNING: Module %s extends %s.%s, which is not declared an extension point (%s).\n",
+              jl_symbol_name(method->module->name),
+              jl_symbol_name(tn->module->name), jl_symbol_name(tn->singletonname), kind);
+}
+
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
+    check_undeclared_extension(method);
     jl_typemap_entry_t *newentry = jl_method_table_add(mt, method, simpletype);
     JL_GC_PUSH1(&newentry);
     JL_LOCK(&world_counter_lock);

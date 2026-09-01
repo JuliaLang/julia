@@ -817,15 +817,14 @@ function find_cached_ci(interp::AbstractInterpreter, result::InferenceResult)
 end
 
 # Iterate a series of back-edges that need registering, based on the provided forward edge list.
-# Back-edges are returned as (invokesig, item), where the item is a Binding, MethodInstance, or
-# MethodTable.
 struct ForwardToBackedgeIterator
     forward_edges::SimpleVector
 end
 
+# yields `(invokesig_index, item_index)` pairs into `forward_edges` (0 = no invokesig),
+# so that iteration stays concretely typed; decode via `backedge_invokesig`/`backedge_item`
 function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
     edges = it.forward_edges
-    i > length(edges) && return nothing
     while i ≤ length(edges)
         item = edges[i]
         if item isa Int
@@ -835,29 +834,23 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
             # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
             i += 1
             continue
-        elseif isa(item, Core.Binding)
-            return ((nothing, item), i + 1)
-        end
-        if isa(item, CodeInstance)
-            item = get_ci_mi(item)
-            return ((nothing, item), i + 1)
-        elseif isa(item, MethodInstance) # regular dispatch
-            return ((nothing, item), i + 1)
+        elseif isa(item, Core.Binding) || isa(item, CodeInstance) || isa(item, MethodInstance)
+            return ((0, i), i + 1)
         else
-            invokesig = item
-            callee = edges[i+1]
-            isa(callee, Method) && (i += 2; continue) # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
-            if isa(callee, MethodTable)
-                # abstract dispatch (legacy style edges)
-                return ((invokesig, callee), i + 2)
-            else
-                # `invoke` edge
-                callee = isa(callee, CodeInstance) ? get_ci_mi(callee) : callee::MethodInstance
-                return ((invokesig, callee), i + 2)
-            end
+            # `item` is an invoke signature, followed by the callee
+            isa(edges[i+1], Method) && (i += 2; continue) # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
+            return ((i, i + 1), i + 2)
         end
     end
     return nothing
+end
+
+backedge_invokesig(edges::SimpleVector, k::Int) = k == 0 ? nothing : edges[k]
+
+function backedge_item(edges::SimpleVector, k::Int)
+    item = edges[k]
+    isa(item, CodeInstance) && (item = get_ci_mi(item))
+    return item::Union{Core.Binding, MethodTable, MethodInstance}
 end
 
 # record the backedges
@@ -875,7 +868,9 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
     # `Compiler` is loaded before `Set` during bootstrap, so keep the signatures
     # for each identity-keyed dependency in a small vector.
     seen = IdDict{Any,Vector{Any}}()
-    for (invokesig, item) in backedges
+    for (invokesig_idx, item_idx) in backedges
+        invokesig = backedge_invokesig(edges, invokesig_idx)
+        item = backedge_item(edges, item_idx)
         if haskey(seen, item)
             signatures = seen[item]
             duplicate_found = false
