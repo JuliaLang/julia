@@ -256,7 +256,7 @@ function generate_llvm_dialect_docs()
 
         """
     body = if isfile(tblgen) && isfile(td)
-        read(`\$tblgen -gen-dialect-docs --dialect julia -I \$incdir -I \$(dirname(td)) \$td`, String)
+        read(`$tblgen -gen-dialect-docs --dialect julia -I $incdir -I $(dirname(td)) $td`, String)
     else
         @warn "llvm-dialects-tblgen not available; emitting a stub Julia dialect reference" tblgen
         """
