@@ -479,7 +479,7 @@ time they took, when that share reaches one percent. Unlike the other percentage
 here the share is estimated, from the count and a per-dispatch cost measured on this machine,
 rather than measured directly: timing each dispatch would cost several times more than the
 dispatch. It is also a lower bound, since the boxing and lost inlining that come with the
-type instability behind it are not included. See [`@code_warntype`](@ref) and the
+type instability behind it are not included. See [`InteractiveUtils.@code_warntype`](@ref) and the
 [Performance Tips](@ref man-performance-tips).
 
 Optionally provide a description string to print before the time report.
@@ -846,7 +846,7 @@ As for [`@allocations`](@ref), if the expression is a function call then the dis
 call itself is excluded. To include it, use `@dispatches (()->f(1))()`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@allocations`](@ref),
-and [`@code_warntype`](@ref).
+and [`InteractiveUtils.@code_warntype`](@ref).
 
 ```julia-repl
 julia> f(x) = sum(x);
