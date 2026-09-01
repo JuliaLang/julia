@@ -39,8 +39,14 @@ MARCH := rv64gc
 
 # also set JULIA_CPU_TARGET to the expanded form of rv64gc
 # (it normally copies the value of MCPU, which we don't set)
-JULIA_CPU_TARGET := generic-rv64,i,m,a,f,d,zicsr,zifencei,c
+JULIA_CPU_TARGET := generic-rv64,i,m,a,f,d,zicsr,c
 ```
+
+`zifencei` is deliberately absent even though it is part of `rv64gc`. The
+default Linux user-space ABI prohibits direct execution of `fence.i`, so
+`hwprobe` does not report the extension. Julia uses `hwprobe` for host feature
+detection, and therefore cannot match a system image that requires `zifencei`
+when running with `-C native`.
 
 ### Cross-compilation
 
