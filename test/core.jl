@@ -8788,3 +8788,64 @@ let T = TypeVar(:T)
     a = UnionAll(T, Union{Vector{T}, Int64})
     @test Union{T, a} == Union{a, T} == Union{T, Int64, Vector}
 end
+# issue #52533: an unrelated try/catch should not keep values rooted in its PhiC
+# slots for the remainder of the enclosing function
+mutable struct Issue52533 end
+@noinline function issue52533(freed::Ref{Bool}, throw_::Bool)
+    b = nothing
+    try
+        x = Issue52533()
+        finalizer(_ -> (freed[] = true), x)
+        b = x
+        throw_ && Base.inferencebarrier(throw)(ErrorException("52533"))
+        Base.inferencebarrier(identity)(nothing)
+    catch
+        b isa Issue52533 && Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533(Ref(false), false)  # normal exit from the try region
+@test issue52533(Ref(false), true)   # exit through the catch block
+
+# ... and this holds for a value the try region never touches on the executed
+# path: slot2ssa snapshots each PhiC variable into its slot ahead of the `enter`,
+# so the region pins whatever the variable held on the way in
+@noinline issue52533_never() = Base.inferencebarrier(false)::Bool
+@noinline function issue52533_beside(freed::Ref{Bool})
+    b = Issue52533()
+    finalizer(_ -> (freed[] = true), b)
+    Base.donotdelete(b)
+    try
+        Base.inferencebarrier(identity)(nothing)
+        issue52533_never() && (b = nothing)
+    catch
+        b === nothing || Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533_beside(Ref(false))
+
+# jl_array_len must compute the length from the dimensions: an N-d array may be
+# backed by a Memory with excess capacity and/or a nonzero memoryref offset
+# (e.g. from `reshape` of a `sizehint!`ed vector), so reading the Memory length
+# splatted/copied too many elements (and could read out of bounds)
+let f = (x...) -> length(x)
+    v = collect(1.0:9.0)
+    sizehint!(v, 100)
+    m = reshape(v, 3, 3)
+    @test f(m...) == 9
+    @test length(Core.svec(m...)) == 9
+    m2 = ccall(:jl_array_copy, Ref{Matrix{Float64}}, (Any,), m)
+    @test m2 == m
+    @test length(m2.ref.mem) == 9
+    # nonzero memoryref offset
+    w = collect(1:9)
+    sizehint!(w, 1000; first=true)
+    m3 = reshape(w, 3, 3)
+    @test f(m3...) == 9
+    @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
+end

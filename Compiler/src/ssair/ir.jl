@@ -1438,7 +1438,10 @@ function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from
             idx = first(stmts)
             while idx <= last(stmts)
                 stmt = compact.result[idx][:stmt]
-                stmt === nothing && continue
+                if stmt === nothing
+                    idx += 1
+                    continue
+                end
                 isa(stmt, PhiNode) || break
                 i = findfirst(x::Int32->x==bb_rename_pred[from], stmt.edges)
                 if i !== nothing

@@ -42,8 +42,10 @@ end
 function print(io::IO, xs...)
     lock(io)
     try
-        for x in xs
-            print(io, x)
+        # xs[i] might be a known Union, and under --trim that gets split regardless of length.
+        # In contrast, `for x in xs` will fall back to Any for unions longer than 3.
+        for i in 1:nfields(xs)
+            print(io, xs[i])
         end
     finally
         unlock(io)
@@ -134,13 +136,13 @@ function print_to_string(xs...)
         return ""
     end
     siz::Int = 0
-    for x in xs
-        siz += _str_sizehint(x)
+    for i in 1:nfields(xs)
+        siz += _str_sizehint(xs[i])
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
-    for x in xs
-        print(s, x)
+    for i in 1:nfields(xs)
+        print(s, xs[i])
     end
     takestring!(s)
 end
@@ -150,14 +152,14 @@ function string_with_env(env, xs...)
         return ""
     end
     siz::Int = 0
-    for x in xs
-        siz += _str_sizehint(x)
+    for i in 1:nfields(xs)
+        siz += _str_sizehint(xs[i])
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
-    for x in xs
-        print(env_io, x)
+    for i in 1:nfields(xs)
+        print(env_io, xs[i])
     end
     takestring!(s)
 end

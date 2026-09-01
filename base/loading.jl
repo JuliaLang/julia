@@ -3166,6 +3166,13 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     end
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
+    # When this worker is producing a native object pkgimage, retain raw
+    # inferred IR on `CodeInstance.inferred` for the non-inlineable methods
+    # that would otherwise be discarded, so the irgen pass can short-circuit
+    # `typeinf_ext` instead of re-inferring. `jl_finalize_precompile_inferred`
+    # clears them (and the flag) before staticdata serialization.
+    keep_ir = JLOptions().outputo != C_NULL
+    keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     try
         Base.include(Base.__toplevel__, input)
     catch ex
@@ -3174,6 +3181,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         exit(125) # we define status = 125 means PrecompileableError
     finally
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
+        keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 0)
     end
     # check that the package defined the expected module so we can give a nice error message if not
     m = maybe_root_module(pkg)
