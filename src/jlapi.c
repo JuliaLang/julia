@@ -921,9 +921,25 @@ JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
 //       the mingw compiler ships additional definitions, but only for use in C code.
 //       remove this when we switch to ucrt, make the version in openlibm portable,
 //       or figure out how to reexport the defs from libmingwex (see JuliaLang/julia#38466).
+
+// Bundled openlibm and system fenv headers use different RISC-V FE_* encodings.
+// Access frm directly so rounding does not depend on which library supplies the
+// dynamic fegetround/fesetround symbols.
+#if defined(_CPU_RISCV64_) && !defined(_OS_WINDOWS_)
+static_assert(FE_TONEAREST == 0 && FE_TOWARDZERO == 1 &&
+              FE_DOWNWARD == 2 && FE_UPWARD == 3,
+              "riscv64 fenv rounding constants expected to be raw frm encodings");
+#endif
+
 JL_DLLEXPORT int jl_get_fenv_rounding(void)
 {
+#if defined(_CPU_RISCV64_) && !defined(_OS_WINDOWS_)
+    uint64_t frm;
+    __asm__ volatile("frrm %0" : "=r"(frm));
+    return (int)frm;
+#else
     return fegetround();
+#endif
 }
 
 /**
@@ -935,7 +951,14 @@ JL_DLLEXPORT int jl_get_fenv_rounding(void)
  */
 JL_DLLEXPORT int jl_set_fenv_rounding(int i)
 {
+#if defined(_CPU_RISCV64_) && !defined(_OS_WINDOWS_)
+    if ((unsigned)i > 3)
+        return -1;
+    __asm__ volatile("fsrm %0" :: "r"((uint64_t)i));
+    return 0;
+#else
     return fesetround(i);
+#endif
 }
 
 static int exec_program(char *program) JL_CANSAFEPOINT

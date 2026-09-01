@@ -216,7 +216,11 @@ See [`RoundingMode`](@ref) for available modes.
 """
 :rounding
 
-setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:jl_set_fenv_rounding, Int32, (Int32,), i)
+function setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer)
+    ret = ccall(:jl_set_fenv_rounding, Int32, (Int32,), i)
+    ret == 0 || error("could not set hardware rounding mode to code ", i)
+    return nothing
+end
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:jl_get_fenv_rounding, Int32, ())
 
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
