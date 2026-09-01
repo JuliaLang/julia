@@ -6974,12 +6974,11 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
-            // Deletion barrier before overwriting the scope: a SATB collector
-            // must snapshot the current task's old scope. Keyed on the parent
-            // (current task); a generational collector elides this since the
-            // current task is always a root.
-#ifdef MMTK_PLAN_CONCURRENTIMMIX
+#ifdef MMTK_SNAPSHOT_BARRIER
+            // Barrier is needed to snapshot old scope value
             emit_write_barrier(ctx, get_current_task(ctx), scope_to_restore);
+#else
+            // No barrier required: old Tasks are implicitly in the GC remset
 #endif
             ctx.alias().gcframe.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
@@ -10371,8 +10370,13 @@ static jl_llvm_functions_t
                 Value *scope_boxed = boxed(ctx, scope);
                 Value *scope_ptr = get_scope_field(ctx);
                 LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
+#ifdef MMTK_SNAPSHOT_BARRIER
+                // Barrier is needed to snapshot scope value before replacement
+                emit_write_barrier(ctx, get_current_task(ctx), scope_boxed);
+#else
+                // No barrier required: old Tasks are implicitly in the GC remset
+#endif
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
-                // NOTE: wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
                 ctx.alias().gcframe.decorateInst(current_scope);
                 ctx.alias().gcframe.decorateInst(scope_store);
                 // Installing a new scope invalidates the task's cached

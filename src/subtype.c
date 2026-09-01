@@ -6216,7 +6216,8 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
     int i;
     for (i = 0; i < ntvars; i++) {
         assert(jl_is_unionall(ua));
-        jl_svecset(vec, i, ua->var);
+        jl_gc_wb_fresh(vec, ua->var);
+        jl_svec_data(vec)[i] = (jl_value_t*)ua->var;
         ua = (jl_unionall_t*)ua->body;
     }
     return vec;
