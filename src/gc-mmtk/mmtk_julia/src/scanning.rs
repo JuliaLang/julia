@@ -23,6 +23,8 @@ use crate::JuliaVM;
 #[cfg(feature = "concurrentimmix")]
 use dashmap::DashMap;
 #[cfg(feature = "concurrentimmix")]
+use mmtk::plan::Pause;
+#[cfg(feature = "concurrentimmix")]
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct StackRootBuffer {
@@ -191,6 +193,21 @@ impl Scanning<JuliaVM> for VMScanning {
         let mut roots_closure = RootsWorkClosure::from_roots_work_factory(&mut factory);
         unsafe {
             jl_gc_scan_vm_specific_roots(&mut roots_closure as _);
+        }
+
+        // Only InitialMark needs this: every other pause marks `to_finalize` later in
+        // the same pause via `scan_finalizers_in_rust`.
+        #[cfg(feature = "concurrentimmix")]
+        if SINGLETON
+            .get_plan()
+            .concurrent()
+            .and_then(|plan| plan.current_pause())
+            == Some(Pause::InitialMark)
+        {
+            let nodes = crate::julia_finalizer::to_finalize_root_nodes();
+            if !nodes.is_empty() {
+                factory.create_process_pinning_roots_work(nodes);
+            }
         }
     }
 
