@@ -595,6 +595,11 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         empty!(matches)
         maxworld[] = 0
     else
+        # FIXME: the edge format does not encode whether or not this ambiguity was accounted
+        # for in inference / optimizer / etc. so we are forced to invalidate conservatively.
+        if has_ambig[] != 0
+            maxworld[] = 0
+        end
         # setdiff!(result, expected)
         if length(result) ≠ n
             maxworld[] = 0
