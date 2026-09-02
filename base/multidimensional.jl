@@ -2,7 +2,7 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import .Base: eltype, length, size, first, last, in, getindex, setindex!,
+    import .Base: eltype, length, size, first, last, lastindex, front, tail, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
                   convert, show, iterate, promote_rule, to_indices, copy,
                   isassigned, lastindex, firstindex
@@ -101,6 +101,9 @@ module IteratorsMD
     length(::CartesianIndex{N}) where {N} = N
     length(::Type{CartesianIndex{N}}) where {N} = N
 
+    # access to index tuple
+    Tuple(I::CartesianIndex) = I.I
+
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
     firstindex(index::CartesianIndex) = firstindex(index.I)
@@ -108,13 +111,20 @@ module IteratorsMD
     Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
-    # access to index tuple
-    Tuple(index::CartesianIndex) = index.I
+    # apply tuple interface
+    getindex(I::CartesianIndex, i::Integer) = getindex(Tuple(I), i)
+    getindex(I::CartesianIndex, i) = CartesianIndex(getindex(Tuple(I), i))
+    Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, Tuple(I), default)
+
+    first(I::CartesianIndex) = first(Tuple(I))
+    last(I::CartesianIndex) = last(Tuple(I))
+    lastindex(I::CartesianIndex) = lastindex(Tuple(I))
+    front(I::CartesianIndex) = CartesianIndex(front(Tuple(I)))
+    tail(I::CartesianIndex) = CartesianIndex(tail(Tuple(I)))
 
     Base.setindex(x::CartesianIndex,i,j) = CartesianIndex(Base.setindex(Tuple(x),i,j))
 
-    # equality
-    Base.:(==)(a::CartesianIndex{N}, b::CartesianIndex{N}) where N = a.I == b.I
+    Base.:(==)(a::CartesianIndex{N}, b::CartesianIndex{N}) where N = Tuple(a) == Tuple(b)
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
