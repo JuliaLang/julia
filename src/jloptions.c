@@ -380,6 +380,11 @@ static const char opts_hidden[] =
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
 {
+    // ensure the defaults are in place before parsing over them; a no-op when
+    // the loader (or a previous call) already initialized the options, but a
+    // static build may parse options (e.g. from a constructor) before any
+    // other runtime entry point has run
+    jl_init_options();
     enum { opt_machinefile = 300,
            opt_color,
            opt_history_file,
