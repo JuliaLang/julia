@@ -1137,7 +1137,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->last_started_running_at, 0);
     jl_atomic_store_relaxed(&t->running_time_ns, 0);
     jl_atomic_store_relaxed(&t->finished_at, 0);
-    jl_timing_task_init(t);
     jl_atomic_store_relaxed(&t->preempt_request, 0);
     jl_atomic_store_relaxed(&t->bound_cancel_token, jl_nothing);
     t->bound_cancel_default = 0;
@@ -1154,6 +1153,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
 #ifdef _COMPILER_ASAN_ENABLED_
     t->ctx.asan_fake_stack = NULL;
 #endif
+    // Last, since it can allocate (and thus run GC): `t` must be fully
+    // initialized before this call.
+    jl_timing_task_init(t);
     return t;
 }
 
