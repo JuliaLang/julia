@@ -427,8 +427,9 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"isdefined"
         # Convert isdefined expr to function for closure converted variables
         var = ex[1]
-        binfo = get_binding(ctx, var)
-        if is_boxed(binfo)
+        if kind(var) === K"static_parameter"
+            ex
+        elseif (binfo = get_binding(ctx, var); is_boxed(binfo))
             access = is_self_captured(ctx, var) ? captured_var_access(ctx, var) : var
             @ast ctx ex [K"call"
                 "isdefined"::K"core"
