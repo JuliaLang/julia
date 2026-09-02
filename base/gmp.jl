@@ -174,8 +174,8 @@ Base.unsafe_convert(::Type{mpz_t}, t::Tuple{Base.RefValue{MPZView},Memory{Limb}}
     return d
 end
 
-# An `n`-limb buffer for an output that must not overlap any of `avoid`:
-# `x`'s own limbs when they are big enough and none of those, else a new one.
+# An `n`-limb buffer for an output that must not overlap any of `avoid`: `x`'s
+# own limbs if they are big enough and not among `avoid`, otherwise a new one.
 @inline function _dest(x::BigInt, n::Int, avoid::Vararg{Memory{Limb},N}) where {N}
     d = x.d
     return (length(d) >= n && !any(m -> m === d, avoid)) ? d : Memory{Limb}(undef, n)
@@ -226,17 +226,24 @@ function _take!(x::BigInt, sz::Cint, p::Ptr{Limb})
     x.size = Int(sz)
     return x
 end
+_take!(x::BigInt, s::Scratch) = _take!(x, s.size, s.d)
 
-# Run `f` on a GMP-owned output mpz, move it into `x`, free it, return `f`'s value.
-function with_output(f::F, x::BigInt) where {F}
-    s = Scratch()
-    ccall((:__gmpz_init, libgmp), Cvoid, (scratch_t,), s)
+# The GMP-owned scratch object for an output `x`, and its init/clear entry
+# points. `MPQ` extends these for `Rational{BigInt}`.
+_scratch(::BigInt) = Scratch()
+_init!(s::Scratch) = (ccall((:__gmpz_init, libgmp), Cvoid, (scratch_t,), s); s)
+_clear!(s::Scratch) = ccall((:__gmpz_clear, libgmp), Cvoid, (scratch_t,), s)
+
+# Run `f` on a GMP-owned scratch output, move it into `x`, free it, and return
+# `f`'s value. Only the output needs GMP-owned limbs; inputs stay views.
+function with_output(f::F, x) where {F}
+    s = _init!(_scratch(x))
     try
         ret = f(s)
-        _take!(x, s.size, s.d)
+        _take!(x, s)
         return ret
     finally
-        ccall((:__gmpz_clear, libgmp), Cvoid, (scratch_t,), s)
+        _clear!(s)
     end
 end
 
@@ -290,9 +297,6 @@ function _ucmp(ad::Memory{Limb}, an::Int, bd::Memory{Limb}, bn::Int)
     return Int(_mpn_cmp(ad, bd, an % mp_size_t))
 end
 
-# Move `y`'s limbs into `x`. `y` must be a temporary that no longer escapes.
-@inline _move!(x::BigInt, y::BigInt) = (x.d = y.d; x.size = y.size; x)
-
 function set!(x::BigInt, a::BigInt)
     x === a && return x
     n = abs(a.size)
@@ -302,7 +306,6 @@ function set!(x::BigInt, a::BigInt)
     x.size = a.size
     return x
 end
-set(a::BigInt) = set!(BigInt(), a)
 
 function _addsub!(x::BigInt, a::BigInt, b::BigInt, negb::Bool)
     as = a.size
@@ -467,7 +470,9 @@ function _rdiv_r!(x::BigInt, a::BigInt, b::BigInt, down::Bool)
     tdiv_r!(r, a, b)
     rs = r.size
     rs != 0 && ((rs < 0) != bneg) == down && _addsub!(r, r, b, !down)
-    return r === x ? x : _move!(x, r)
+    r === x && return x
+    x.d, x.size = r.d, r.size   # `r` was a temporary, so its buffer just moves
+    return x
 end
 
 fdiv_q!(x::BigInt, a::BigInt, b::BigInt) = _rdiv_q!(x, a, b, true)
@@ -727,12 +732,11 @@ for op in (:add_ui, :sub_ui, :mul_ui, :mul_si, :mul_2exp, :fdiv_q_2exp, :pow_ui,
     end
 end
 
-for op in (:neg, :com, :sqrt)
+for op in (:neg, :com, :sqrt, :set)
     op! = Symbol(op, :!)
-    @eval begin
-        $op(a::BigInt) = $op!(BigInt(), a)
-        $op!(x::BigInt) = $op!(x, x)
-    end
+    @eval $op(a::BigInt) = $op!(BigInt(), a)
+    op === :set && continue # MPZ.set!(x) would make no sense
+    @eval $op!(x::BigInt) = $op!(x, x)
 end
 
 # None of these writes its operand, so a borrowed view is sound throughout.
@@ -749,9 +753,28 @@ popcount(a::BigInt) = Int(signed(ccall((:__gmpz_popcount, libgmp), Culong, (mpz_
 mpn_popcount(d::MP, s::Integer) = Int(ccall((:__gmpn_popcount, libgmp), Culong, (Ptr{Limb}, Csize_t), d, s))
 mpn_popcount(a::BigInt) = mpn_popcount(a.d, abs(a.size))
 
-cmp(a::BigInt, b::BigInt) = Int(ccall((:__gmpz_cmp, libgmp), Cint, (mpz_t, mpz_t), a, b))
-cmp_si(a::BigInt, b) = Int(ccall((:__gmpz_cmp_si, libgmp), Cint, (mpz_t, Clong), a, b))
-cmp_ui(a::BigInt, b) = Int(ccall((:__gmpz_cmp_ui, libgmp), Cint, (mpz_t, Culong), a, b))
+# The signed `size` orders first: its sign is the number's, and with equal signs
+# more limbs means a larger magnitude. Only equal sizes need the limbs compared.
+function cmp(a::BigInt, b::BigInt)
+    as, bs = a.size, b.size
+    as != bs && return as < bs ? -1 : 1
+    as == 0 && return 0
+    c = _ucmp(a.d, abs(as), b.d, abs(as))
+    return as < 0 ? -c : c
+end
+
+# Compare `a` with the one-limb magnitude `v` carrying sign `neg`.
+function _cmp_mag(a::BigInt, v::Limb, neg::Bool)
+    as = a.size
+    bs = v == 0 ? 0 : (neg ? -1 : 1)
+    as != bs && return as < bs ? -1 : 1
+    as == 0 && return 0
+    a1 = @inbounds a.d[1]
+    c = a1 == v ? 0 : (a1 < v ? -1 : 1)
+    return as < 0 ? -c : c
+end
+cmp_si(a::BigInt, b) = ((v, neg) = _magsign(b); _cmp_mag(a, Limb(v), neg))
+cmp_ui(a::BigInt, b) = _cmp_mag(a, Limb(b), false)
 cmp_d(a::BigInt, b) = Int(ccall((:__gmpz_cmp_d, libgmp), Cint, (mpz_t, Cdouble), a, b))
 
 mpn_cmp(a::BigInt, b::BigInt, c) = _mpn_cmp(a.d, b.d, c)
@@ -871,20 +894,15 @@ function BigInt(x::Integer)
     # On 64-bit Windows, `Clong` is `Int32`, not `Int64`, so construction of
     # `Int64` constants, e.g. `BigInt(3)`, uses this method.
     isbits(x) && typemin(Clong) <= x <= typemax(Clong) && return BigInt((x % Clong)::Clong)
-    nd = ndigits(x, base=2)
-    z = MPZ.realloc2(nd)
-    d = z.d
+    n = cld(ndigits(x, base=2), BITS_PER_LIMB)
+    z = BigInt()
+    d = MPZ._ensure!(z, n)
     ux = unsigned(x < 0 ? -%(x) : x)
-    size = 0
-    limbnbits = sizeof(Limb) << 3
-    while nd > 0
-        size += 1
-        @inbounds d[size] = ux % Limb
-        ux >>= limbnbits
-        nd -= limbnbits
+    @inbounds for i in 1:n
+        d[i] = ux % Limb
+        ux >>= BITS_PER_LIMB
     end
-    z.size = x < 0 ? -size : size
-    z
+    return MPZ._finish!(z, d, n, x < 0)
 end
 
 
@@ -1442,17 +1460,18 @@ if Limb === UInt64 === UInt
 
     using .Base: HASH_SECRET, hash_bytes
 
-    struct LimbView <: AbstractVector{UInt8}
+    # UnsafeLimbView provides a safe iterator interface to BigInt limb data
+    struct UnsafeLimbView <: AbstractVector{UInt8}
         bigint::BigInt
         start_byte::Int
         num_bytes::Int
     end
 
-    function Base.size(view::LimbView)
+    function Base.size(view::UnsafeLimbView)
         return (view.num_bytes,)
     end
 
-    function Base.getindex(view::LimbView, i::Int)
+    function Base.getindex(view::UnsafeLimbView, i::Int)
         @boundscheck checkbounds(view, i)
         limb_index = div(view.start_byte + i - 2, 8) + 1
         byte_in_limb = (view.start_byte + i - 2) % 8
@@ -1460,12 +1479,12 @@ if Limb === UInt64 === UInt
         return UInt8((limb >> (8 * byte_in_limb)) & 0xff)
     end
 
-    function Base.iterate(view::LimbView, state::Int = 1)
+    function Base.iterate(view::UnsafeLimbView, state::Int = 1)
         state > view.num_bytes && return nothing
         return @inbounds(view[state]), state + 1
     end
 
-    function Base.length(view::LimbView)
+    function Base.length(view::UnsafeLimbView)
         return view.num_bytes
     end
 
@@ -1478,7 +1497,8 @@ if Limb === UInt64 === UInt
         leading_zero_bytes = div(leading_zeros(@inbounds n.d[us]), 8)
         num_bytes = 8 * us - leading_zero_bytes
 
-        limb_view = LimbView(n, 1, num_bytes)
+        # Use UnsafeLimbView for safe iterator-based access
+        limb_view = UnsafeLimbView(n, 1, num_bytes)
         return hash_bytes(limb_view, h, HASH_SECRET)
     end
 
@@ -1515,7 +1535,8 @@ if Limb === UInt64 === UInt
         trailing_zero_bytes = div(pow, 8)
         num_bytes = 8 * asz - (leading_zero_bytes + trailing_zero_bytes)
 
-        limb_view = LimbView(x, trailing_zero_bytes + 1, num_bytes)
+        # Use UnsafeLimbView for safe iterator-based access
+        limb_view = UnsafeLimbView(x, trailing_zero_bytes + 1, num_bytes)
         return hash_bytes(limb_view, h, HASH_SECRET)
     end
 end
@@ -1559,25 +1580,17 @@ mutable struct _MPQ
 end
 const mpq_t = Ref{_MPQ}
 
-_init!(q::_MPQ) = (ccall((:__gmpq_init, libgmp), Cvoid, (mpq_t,), q); q)
-_clear!(q::_MPQ) = ccall((:__gmpq_clear, libgmp), Cvoid, (mpq_t,), q)
-
-function _take!(z::Rational{BigInt}, q::_MPQ)
+# Hook `Rational{BigInt}` into `MPZ.with_output`.
+MPZ._scratch(::Rational{BigInt}) = _MPQ()
+MPZ._init!(q::_MPQ) = (ccall((:__gmpq_init, libgmp), Cvoid, (mpq_t,), q); q)
+MPZ._clear!(q::_MPQ) = ccall((:__gmpq_clear, libgmp), Cvoid, (mpq_t,), q)
+function MPZ._take!(z::Rational{BigInt}, q::_MPQ)
     MPZ._take!(z.num, q.num_size, q.num_d)
     MPZ._take!(z.den, q.den_size, q.den_d)
     return z
 end
-
-# Only the output needs GMP-owned limbs; `mpq_add` and friends take const operands.
-function _with_output(f::F, z::Rational{BigInt}) where {F}
-    q = _init!(_MPQ())
-    try
-        f(q)
-        return _take!(z, q)
-    finally
-        _clear!(q)
-    end
-end
+# `mpq` results always come back as the rational itself.
+_with_output(f::F, z::Rational{BigInt}) where {F} = (MPZ.with_output(f, z); z)
 
 function Rational{BigInt}(num::BigInt, den::BigInt)
     if iszero(den)
