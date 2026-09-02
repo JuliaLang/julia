@@ -250,6 +250,15 @@ JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, si
     return 1;
 }
 
+JL_DLLEXPORT NOINLINE int failed_to_unwind_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
+{
+    if (maxsize < 1) {
+        return 0;
+    }
+    bt_data[0].uintptr = (uintptr_t) &failed_to_unwind_fun;
+    return 1;
+}
+
 static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;
 // Return backtrace information as an svec of (bt1, bt2, [sp])
 //

@@ -2175,6 +2175,7 @@ JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) 
 JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
+JL_DLLEXPORT NOINLINE int failed_to_unwind_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT;
 
 // Values a compiled cancellation reset point's setjmp returns when a
