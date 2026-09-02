@@ -170,6 +170,9 @@ const ISAs_by_family = Dict(
         "a64fx" => "a64fx",
         "apple_m1" => "apple-a14",
     ]),
+    "loongarch64" => _make_isa_list("loongarch64", [
+        "loongarch64" => "",
+    ]),
     "riscv64" => _make_isa_list("riscv64", [
         "riscv64" => "",
     ]),

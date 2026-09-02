@@ -266,6 +266,8 @@ JL_DLLEXPORT char *jl_expand_sysimage_keyword(const char *cpu_target) JL_NOTSAFE
 #include <cpufeatures/target_tables_x86_64.h>
 #elif defined(__aarch64__) || defined(_M_ARM64)
 #include <cpufeatures/target_tables_aarch64.h>
+#elif defined(__loongarch__)
+#include <cpufeatures/target_tables_loongarch64.h>
 #elif defined(__riscv) && __riscv_xlen == 64
 #include <cpufeatures/target_tables_riscv64.h>
 #else

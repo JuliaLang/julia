@@ -740,6 +740,11 @@ const char *plt_asm_aarch64 =
 const char *plt_asm_x86_64 =
     "jmpq  *${0:a}\n";
 
+const char *plt_asm_loongarch64 =
+    "pcalau12i $$t0, %pc_hi20(${0})\n"
+    "ld.d      $$t0, $$t0, %pc_lo12(${0})\n"
+    "jr        $$t0";
+
 const char *plt_asm_riscv64 =
     "1b: auipc t3, %pcrel_hi(${0})\n"
     "    ld    t3, %pcrel_lo(1b)(t3)\n"
@@ -774,6 +779,9 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
     }
     else if (out.TargetTriple.getArch() == Triple::x86_64) {
         Code = plt_asm_x86_64;
+    }
+    else if (out.TargetTriple.isLoongArch()) {
+        Code = plt_asm_loongarch64;
     }
     else if (out.TargetTriple.getArch() == Triple::riscv64) {
         Code = plt_asm_riscv64;
@@ -2245,7 +2253,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     }
 
     CodeModel::Model CMModel = CodeModel::Small;
-    if (TheTriple.isPPC() || TheTriple.isRISCV() ||
+    if (TheTriple.isPPC() || TheTriple.isRISCV() || TheTriple.isLoongArch() ||
         (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())) {
         // On PPC the small model is limited to 16bit offsets. For very large images the small code model
         CMModel = CodeModel::Medium; //  isn't good enough on x86 so use Medium, it has no cost because only the image goes in .ldata

@@ -20,7 +20,7 @@
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-#  if defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_RISCV64_)
+#  if defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_LOONG_) || defined(_CPU_RISCV64_)
 #    define JL_ELF_TLS_VARIANT 2
 #    define JL_ELF_TLS_INIT_SIZE 0
 #  elif defined(_CPU_AARCH64_)
@@ -703,6 +703,8 @@ static void jl_check_tls(void) JL_NOTSAFEPOINT
     asm("mrs %0, tpidr_el0" : "=r"(tp));
 #elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
     asm("mrc p15, 0, %0, c13, c0, 3" : "=r"(tp));
+#elif defined(_CPU_LOONG_)
+    asm("move %0, $tp" : "=r"(tp));
 #elif defined(_CPU_RISCV64_)
     asm("mv %0, tp" : "=r"(tp));
 #else

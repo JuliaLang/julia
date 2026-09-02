@@ -696,6 +696,7 @@ INCLUDED_CXX_FILES := \
 	codegen.cpp:abi_llvm.cpp \
 	codegen.cpp:abi_arm.cpp \
 	codegen.cpp:abi_aarch64.cpp \
+        codegen.cpp:abi_loongarch64.cpp \
 	codegen.cpp:abi_riscv.cpp \
 	codegen.cpp:abi_ppc64le.cpp \
 	codegen.cpp:abi_win32.cpp \

@@ -405,6 +405,7 @@ static bool is_native_simd_type(jl_datatype_t *dt) JL_CANSAFEPOINT {
 
 #include "abi_arm.cpp"
 #include "abi_aarch64.cpp"
+#include "abi_loongarch64.cpp"
 #include "abi_riscv.cpp"
 #include "abi_ppc64le.cpp"
 #include "abi_win32.cpp"
@@ -430,6 +431,8 @@ static bool is_native_simd_type(jl_datatype_t *dt) JL_CANSAFEPOINT {
   typedef ABI_ARMLayout DefaultAbiState;
 #elif defined _CPU_AARCH64_
   typedef ABI_AArch64Layout DefaultAbiState;
+#elif defined _CPU_LOONG_
+  typedef ABI_LoongArchLayout DefaultAbiState;
 #elif defined _CPU_RISCV64_
   typedef ABI_RiscvLayout DefaultAbiState;
 #elif defined _CPU_PPC64_

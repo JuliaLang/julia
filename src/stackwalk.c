@@ -973,7 +973,8 @@ void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_entry) JL_NOTSAFEP
 // The probe follows the approach used by LLVM's aarch64 TSAN runtime:
 // https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
 #if defined(__GLIBC__) && (defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || \
-                           defined(_CPU_X86_64_) || defined(_CPU_X86_))
+                           defined(_CPU_X86_64_) || defined(_CPU_X86_)) || \
+                           defined(_CPU_LOONG_)
 // Index of the mangled SP within glibc's jmp_buf.
 #if defined(_CPU_AARCH64_)
 #define LONG_JMP_SP_ENV_SLOT 13
@@ -981,6 +982,8 @@ void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_entry) JL_NOTSAFEP
 #define LONG_JMP_SP_ENV_SLOT 0
 #elif defined(_CPU_X86_64_)
 #define LONG_JMP_SP_ENV_SLOT 6
+#elif defined(_CPU_LOONG_)
+#define LONG_JMP_SP_ENV_SLOT 1
 #else
 #define LONG_JMP_SP_ENV_SLOT 4
 #endif
@@ -1009,6 +1012,8 @@ static NOINLINE uintptr_t probe_mangled_sp(uintptr_t *sp) JL_NOTSAFEPOINT
     asm volatile ("mov %0, sp" : "=r" (*sp));
 #elif defined(_CPU_X86_64_)
     asm volatile ("movq %%rsp, %0" : "=r" (*sp));
+#elif defined(_CPU_LOONG_)
+    asm volatile ("move  %0, $sp" : "=r" (*sp));
 #else
     asm volatile ("movl %%esp, %0" : "=r" (*sp));
 #endif
@@ -1179,7 +1184,7 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 
 // Reject values that cannot be user-space longjmp targets. A wrong mangling
 // scheme otherwise turns both values into effectively random addresses.
-#if defined(_CPU_X86_64_) || defined(_CPU_RISCV64_)
+#if defined(_CPU_X86_64_) || defined(_CPU_RISCV64_) || defined(_CPU_LOONG_)
 #define JL_VA_USER_BITS 47
 #elif defined(_CPU_AARCH64_)
 // AArch64 uses its full unsigned VA range, including bit 47 on 48-bit kernels,
@@ -1365,6 +1370,59 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->pc = mc->regs[30];
     mc->regs[0] = val;
     return valid_longjmp_target(mc->sp, mc->pc);
+    #elif defined(_CPU_LOONG_)
+    // Precise layout based on sysdeps/loongarch/setjmp.S
+    // jmp_buf memory layout (offset * 8 bytes):
+    // 0: ra (mangled via PTR_MANGLE)
+    // 1: sp (mangled via PTR_MANGLE)
+    // 2: x (reserved)
+    // 3: fp (r29)
+    // 4: s0 (r20)
+    // 5: s1 (r21)
+    // 6: s2 (r22)
+    // 7: s3 (r23)
+    // 8: s4 (r24)
+    // 9: s5 (r25)
+    // 10: s6 (r26)
+    // 11: s7 (r27)
+    // 12: s8 (r28)
+    // 13+: f24-f31 (if not soft-float)
+    //
+    // IMPORTANT NOTES:
+    // 1. tp (r2), s10 (r30), and s11 (r31) are NOT saved by setjmp. Do NOT restore them.
+    // 2. PC is not explicitly saved. The longjmp target is RA, so PC = RA.
+    // 3. Field Mapping Discrepancy:
+    //    The assembly writes RA to offset 0 and SP to offset 1.
+    //    However, the C struct defines offset 0 as `__pc` and offset 1 as `__sp`.
+    //    This means `jbp->__pc` actually holds the saved RA, and `jbp->__sp` holds the saved SP.
+    //    The `__regs` array starts at offset 4 (s0).
+    // NOTE: floating‑point registers f24‑f31 are NOT restored for now.
+
+    struct __jmp_buf_internal_tag *jbp = (*_ctx);
+
+    // 1. Restore RA (r1) and SP (r3), apply PTR_DEMANGLE
+    mc->__pc = jl_ptr_demangle(jbp->__pc);
+    mc->__gregs[3] = jl_ptr_demangle(jbp->__sp);      // Restore SP from __sp field
+
+    // 2. Restore FP (r29 / s9)
+    mc->__gregs[29] = jbp->__fp;     // Restore FP from __fp field
+
+    // 3. Restore callee-saved registers s0-s8 (r20-r28)
+    mc->__gregs[20] = jbp->__regs[0]; // s0
+    mc->__gregs[21] = jbp->__regs[1]; // s1
+    mc->__gregs[22] = jbp->__regs[2]; // s2
+    mc->__gregs[23] = jbp->__regs[3]; // s3
+    mc->__gregs[24] = jbp->__regs[4]; // s4
+    mc->__gregs[25] = jbp->__regs[5]; // s5
+    mc->__gregs[26] = jbp->__regs[6]; // s6
+    mc->__gregs[27] = jbp->__regs[7]; // s7
+    mc->__gregs[28] = jbp->__regs[8]; // s8
+
+    // 4. Set Return Value: a0(r4)=1 for longjmp return
+    mc->__gregs[4] = 1;
+
+    // 5. Validate longjmp target (sp/pc validity)
+    return valid_longjmp_target(mc->__gregs[3], mc->__pc);
     #elif defined(_CPU_RISCV64_)
     // https://github.com/bminor/glibc/blob/master/sysdeps/riscv/bits/setjmp.h
     // https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/libunwind/src/Registers.hpp -> Registers_riscv

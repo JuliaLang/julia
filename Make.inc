@@ -1126,6 +1126,9 @@ MCPU=native
 else ifneq (,$(findstring riscv64,$(ARCH)))
 # RISC-V doesn't have a native option
 $(error Building for RISC-V requires a specific MARCH to be set))
+else ifneq (,$(findstring loongarch64,$(ARCH)))
+MARCH=loongarch64
+MTUNE=loongarch64
 else
 MARCH=native
 MTUNE=native
@@ -1192,6 +1195,9 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 DIST_ARCH:=arm
 endif
+ifneq (,$(findstring loongarch64,$(ARCH)))
+DIST_ARCH:=loongarch64
+endif
 ifneq (,$(findstring riscv64,$(ARCH)))
 DIST_ARCH:=riscv64
 endif
@@ -1219,6 +1225,10 @@ OPENBLAS_DYNAMIC_ARCH:=1
 BINARY:=64
 endif
 
+ifneq (,$(findstring loongarch64,$(ARCH)))
+OPENBLAS_DYNAMIC_ARCH:=1
+endif
+
 # Set MARCH-specific flags
 ifneq ($(MARCH),)
 CC += -march=$(MARCH)
@@ -1227,7 +1237,9 @@ FC += -march=$(MARCH)
 # On RISC-V, don't forward the MARCH ISA string to JULIA_CPU_TARGET,
 # as it's always incompatible with LLVM's CPU target name parser.
 ifeq (,$(findstring riscv64,$(ARCH)))
+ifeq (,$(findstring loongarch64,$(ARCH)))
 JULIA_CPU_TARGET ?= $(MARCH)
+endif
 endif
 endif
 

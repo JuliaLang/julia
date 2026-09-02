@@ -1307,6 +1307,19 @@ namespace {
         options.MCOptions.ABIName = "lp64";
 #endif
 #endif
+
+#if defined(_CPU_LOONG_)
+    // LoongArch: detect float ABI via compiler-defined macros
+#if defined(__loongarch_soft_float)
+    options.MCOptions.ABIName = "lp64s";
+#elif defined(__loongarch_single_float)
+    options.MCOptions.ABIName = "lp64f";
+#elif defined(__loongarch_double_float) || defined(__loongarch_hard_float)
+    options.MCOptions.ABIName = "lp64d";
+#else
+    options.MCOptions.ABIName = "lp64d";
+#endif
+#endif
         auto [TheCPU, FeaturesStr] = jl_get_llvm_target(jl_options.cpu_target, jl_generating_output());
         std::string errorstr;
         const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, errorstr);
@@ -1325,6 +1338,11 @@ namespace {
 #endif
         if (TheTriple.isAArch64())
             codemodel = CodeModel::Small;
+        if (TheTriple.isLoongArch()) {
+	    // For the LoongArch architecture, the default LLVM code model is Medium
+            // https://github.com/llvm/llvm-project/pull/132173
+            codemodel = CodeModel::Medium;
+        }
 #if JL_LLVM_VERSION < 200000
         else if (TheTriple.isRISCV()) {
             // RISC-V only supports large code model from LLVM 20
