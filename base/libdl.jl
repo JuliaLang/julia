@@ -433,7 +433,7 @@ end
 
 function Base.show(io::IO, ll::LazyLibrary)
     print(io, "LazyLibrary(")
-    show(io, string(ll.path))
+    show(io, ll.path)
     print(io, ")")
 end
 
