@@ -1341,7 +1341,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
     // while svec is supposedly immutable, in practice we sometimes publish it
     // first and set the values lazily. Those users occasionally might need to
     // instead use jl_atomic_store_release here.
-    jl_gc_wb(t, x);
+    jl_gc_wb(t, (void*)((_Atomic(jl_value_t*)*)jl_svec_data(t) + i), x);
     jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
     return (jl_value_t*)x;
 }
@@ -1380,6 +1380,26 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 
+// this is a version of memcpy that preserves atomic memory ordering
+// which makes it safe to use for objects that can contain memory references
+// without risk of creating pointers out of thin air
+// TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
+//       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
+static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size_t n) JL_NOTSAFEPOINT
+{
+    size_t i;
+    if (dstp < srcp || dstp > srcp + n) {
+        for (i = 0; i < n; i++) {
+            jl_atomic_store_release(dstp + i, jl_atomic_load_relaxed(srcp + i));
+        }
+    }
+    else {
+        for (i = 0; i < n; i++) {
+            jl_atomic_store_release(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
+        }
+    }
+}
+
 // write barriers
 
 #ifndef WITH_THIRD_PARTY_HEAP
@@ -1399,7 +1419,7 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 // `jl_value_t *` field), and `val` is the new value to store.
 #define jl_gc_write(parent, field, type, val) do { \
     type *_jl_write_val = (val); \
-    jl_gc_wb((parent), _jl_write_val); \
+    jl_gc_wb((parent), (void*)&(field), _jl_write_val); \
     (field) = _jl_write_val; \
 } while (0)
 
@@ -1407,7 +1427,7 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 // `order` is relaxed or release.
 #define jl_gc_write_atomic(parent, field, type, val, order) do { \
     type *_jl_write_val = (val); \
-    jl_gc_wb((parent), _jl_write_val); \
+    jl_gc_wb((parent), (void*)&(field), _jl_write_val); \
     jl_atomic_store_##order(&(field), _jl_write_val); \
 } while (0)
 

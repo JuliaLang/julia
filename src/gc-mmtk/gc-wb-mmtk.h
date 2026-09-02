@@ -56,7 +56,7 @@ STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSA
     }
 }
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, ptr);
 }
@@ -66,22 +66,62 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
     mmtk_gc_wb_fast(ptr, (void*)0);
 }
 
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+#ifdef MMTK_SNAPSHOT_BARRIER
+    mmtk_gc_wb_fast(parent, ptr);
+#endif
+}
+
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+#ifdef MMTK_SNAPSHOT_BARRIER
+    mmtk_gc_wb_fast(parent, ptr);
+#endif
+}
+
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, (void*)0);
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) ** dest_pp,
-                                          jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
-                                          size_t* n) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_fast(dest_owner, (void*)0);
+    // logs the module: the only location this collector can name anyway
+    mmtk_gc_wb_fast(mod, from);
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
+// The fused operations log the whole destination object before its elements change,
+// which covers both the insertion side (StickyImmix) and the snapshot of the
+// overwritten values (ConcurrentImmix).
+
+STATIC_INLINE void jl_gc_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) *dest_p,
+                                          jl_genericmemory_t *src, _Atomic(void*) *src_p,
+                                          size_t n) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(dest_owner, (void*)0);
+    memmove_refs(dest_p, src_p, n);
+}
+
+STATIC_INLINE void jl_gc_genericmemory_copy_ptr(const jl_value_t *owner, char *destdata,
+                                          jl_genericmemory_t *src, char *srcdata,
                                           size_t n, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(owner, (void*)0);
+    memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * dt->layout->size / sizeof(void*));
+}
+
+STATIC_INLINE void jl_gc_genericmemory_clear(const jl_value_t *owner JL_UNUSED,
+                                          jl_genericmemory_t *m JL_UNUSED, char *data,
+                                          size_t nbytes) JL_NOTSAFEPOINT
+{
+#ifdef MMTK_SNAPSHOT_BARRIER
+    // a deletion barrier must snapshot the overwritten references before the clear
+    mmtk_gc_wb_fast(owner, (void*)0);
+#endif
+    memset(data, 0, nbytes);
 }
 
 
