@@ -267,6 +267,11 @@ static ObjCache::Hash hashModule(const llvm::Module &M) JL_NOTSAFEPOINT
     Hasher.update(LLVM_VERSION_STRING);
     Hasher.update(JL_CODEGEN_SRC_HASH);
     Hasher.update(jl_gc_image_abi());
+    // Compiled code depends on the system image's type layouts.
+    if (jl_base_module) {
+        Hasher.update({(uint8_t *)&jl_base_module->build_id,
+                       sizeof jl_base_module->build_id});
+    }
     // Compiled code needs to have the same jl_tls_offset value as the running
     // process (see LowerPTLSPass).
     Hasher.update({(uint8_t *)&jl_tls_offset, sizeof jl_tls_offset});
