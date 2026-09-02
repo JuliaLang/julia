@@ -671,9 +671,6 @@ void jl_timing_task_init(jl_task_t *t)
     char *fiber_name;
     jl_method_instance_t *mi = NULL;
     if (start_name[0] == '#') {
-        // This lookup can allocate and hence run GC, so it must only be done
-        // once `t` is fully initialized, and with `t` rooted. It can also fail
-        // (e.g. if `t->start` is not callable with zero arguments).
         JL_GC_PUSH1(&t);
         mi = jl_apply_lookup(&t->start, 1, jl_get_world_counter());
         JL_GC_POP();
