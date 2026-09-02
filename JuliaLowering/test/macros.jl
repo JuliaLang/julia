@@ -1044,6 +1044,15 @@ end
           end); expr_compat_mode) == (0, [4,5,6], [4,5,6])
 
     @test JuliaLowering.include_string(test_mod, """@fastmath 1 <= 2 <= 3""")
+
+    # top-level nospecialize
+    JuliaLowering.include_string(test_mod, """
+    module NospecializeMod
+        @nospecialize
+        f(x) = x
+    end
+    first(methods(NospecializeMod.f)).nospecialize
+    """) == -1
 end
 
 @testset "empty meta" begin

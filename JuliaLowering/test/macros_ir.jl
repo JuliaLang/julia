@@ -202,6 +202,13 @@ cmdmac`hello`12345
 1   (return "hello from cmdmac with suffix 12345")
 
 ########################################
+# @nospecialize at top-level
+@nospecialize
+#---------------------
+1   (meta :nospecialize)
+2   (return core.nothing)
+
+########################################
 # @nospecialize (zero args)
 function foo(a)
     @nospecialize

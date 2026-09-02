@@ -729,7 +729,8 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         #-----------------------------------------------------------------------
         # Heads not emitted from parsing
         ([K"meta" s vs...],
-         when=(meta=est_syntax_name(s, ""); meta in ("nospecialize", "specialize"))) ->
+         when=(meta=est_syntax_name(s, "");
+               !ctx.toplevel && meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
              newleaf(st, K"nothing")
         ([K"meta" s gen], when=est_syntax_name(s, "") === "generated") ->
