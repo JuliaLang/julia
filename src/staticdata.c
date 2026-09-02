@@ -186,7 +186,10 @@ static htable_t nullptrs;
 // must be "toplevel" in this queue. For types, parameters and field types must appear
 // before the "wrapper" type so they can be properly recached against the running system.
 static arraylist_t serialization_queue;
-static arraylist_t layout_table;     // cache of `position(s)` for each `id` in `serialization_order`
+static arraylist_t layout_table;     // cache of `position(s)` for each `id` in `serialization_order` (low bit is LAYOUT_IN_CONST_DATA)
+// Set in the low bit of a `layout_table` entry when the object was written to
+// `s->const_data` rather than `s->s`, so the position refers to that stream
+#define LAYOUT_IN_CONST_DATA ((uintptr_t)1)
 static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
 static arraylist_t deferred_supers;  // deferred datatype super fields, handled by jl_serialize_reachable once the pre-order recursion has unwound
 
@@ -386,7 +389,7 @@ typedef struct {
     arraylist_t memref_list;    // a list of memoryref locations
     arraylist_t relocs_list;    // a list of (location, target) pairs, see description at top
     arraylist_t gctags_list;    //      "
-    arraylist_t uniquing_types; // a list of locations that reference types that must be de-duplicated
+    arraylist_t uniquing_types; // a list of locations that reference types that must be de-duplicated (low bits hold a UNIQUING_* kind tag)
     arraylist_t uniquing_super; // a list of datatypes, used in super fields, that need to be marked in uniquing_types once they are reached, for handling unique-ing of them on deserialization
     arraylist_t uniquing_objs;  // a list of locations that reference non-types that must be de-duplicated
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
@@ -495,6 +498,14 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 #define NBOX_C 1024
 
+// Each entry in `uniquing_types` is an offset with a kind tag stored in its
+// low two bits, describing what the offset refers to:
+#define UNIQUING_KIND_MASK    ((uintptr_t)3)
+#define UNIQUING_FIELD        0 // a regular pointer field (or a datatype's super field) at that offset in the image
+#define UNIQUING_TYPETAG      1 // the type tag of the object at that offset in the image (GC bits must be ignored)
+#define UNIQUING_GVAR         2 // an index (offset >> 2) into the gvars table, rather than an image offset
+#define UNIQUING_DELAYED_SUPER 3 // a datatype at that offset whose super field was delayed via `uniquing_super`
+
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     // ignore items that are given a special relocation representation
@@ -524,45 +535,59 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
     return 1;
 }
 
+// Classification of how an object must be handled on deserialization of an
+// incremental image, as computed by `caching_tag`:
+//  - CACHING_NONE: the object is serialized as-is.
+//  - CACHING_UNIQUING: the object may already exist in the loading process (it
+//    belongs to a type/method/module from an earlier image), so it must be
+//    looked up and de-duplicated against the existing copy at load time.
+//  - CACHING_RECACHING: the object is new to this image but depends on types
+//    in the worklist, so it must be (re)inserted into the relevant caches at
+//    load time.
+#define CACHING_NONE      0
+#define CACHING_UNIQUING  1
+#define CACHING_RECACHING 2
+
 static int caching_tag(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFEPOINT
 {
     if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         jl_value_t *m = mi->def.value;
         if (jl_is_method(m) && jl_object_in_image(m))
-            return 1 + type_in_worklist(mi->specTypes, query_cache);
+            return type_in_worklist(mi->specTypes, query_cache) ? CACHING_RECACHING : CACHING_UNIQUING;
     }
     if (jl_is_binding(v)) {
         jl_globalref_t *gr = ((jl_binding_t*)v)->globalref;
         if (!gr)
-            return 0;
+            return CACHING_NONE;
         if (!jl_object_in_image((jl_value_t*)gr->mod))
-            return 0;
-        return 1;
+            return CACHING_NONE;
+        return CACHING_UNIQUING;
     }
     if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars)
-            return 0; // aka !is_cacheable from jltypes.c
+            return CACHING_NONE; // aka !is_cacheable from jltypes.c
         if (jl_object_in_image((jl_value_t*)dt->name))
-            return 1 + type_in_worklist(v, query_cache);
+            return type_in_worklist(v, query_cache) ? CACHING_RECACHING : CACHING_UNIQUING;
     }
     jl_value_t *dtv = jl_typeof(v);
     if (jl_is_datatype_singleton((jl_datatype_t*)dtv)) {
-        return 1 - type_in_worklist(dtv, query_cache); // these are already recached in the datatype in the image
+        // these are already recached in the datatype in the image
+        return type_in_worklist(dtv, query_cache) ? CACHING_NONE : CACHING_UNIQUING;
     }
-    return 0;
+    return CACHING_NONE;
 }
 
 static int needs_recaching(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFEPOINT
 {
-    return caching_tag(v, query_cache) == 2;
+    return caching_tag(v, query_cache) == CACHING_RECACHING;
 }
 
 static int needs_uniquing(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFEPOINT
 {
     assert(!jl_object_in_image(v));
-    return caching_tag(v, query_cache) == 1;
+    return caching_tag(v, query_cache) == CACHING_UNIQUING;
 }
 
 // whether `record_field_change` has already registered a replacement for `addr`
@@ -1643,14 +1668,14 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         if (object_id_expected)
             write_uint(f, jl_object_id(v));
         if (s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t, s->query_cache))
-            arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(f)|1));
+            arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(f) | UNIQUING_TYPETAG));
         if (f == s->const_data)
             write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED | GC_IN_IMAGE);
         else
             write_gctaggedfield(s, t);
         size_t reloc_offset = ios_pos(f);
         assert(item < layout_table.len && layout_table.items[item] == NULL);
-        layout_table.items[item] = (void*)(reloc_offset | (f == s->const_data)); // store the inverse mapping of `serialization_order` (`id` => object-as-streampos)
+        layout_table.items[item] = (void*)(reloc_offset | (f == s->const_data ? LAYOUT_IN_CONST_DATA : 0)); // store the inverse mapping of `serialization_order` (`id` => object-as-streampos)
 
         if (s->incremental) {
             if (needs_uniquing(v, s->query_cache)) {
@@ -1674,7 +1699,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     for (size_t i = s->uniquing_super.len; i > 0; i--) {
                         if (s->uniquing_super.items[i - 1] == (void*)v) {
                             s->uniquing_super.items[i - 1] = arraylist_pop(&s->uniquing_super);
-                            arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(reloc_offset|3));
+                            arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(reloc_offset | UNIQUING_DELAYED_SUPER));
                         }
                     }
                 }
@@ -2211,10 +2236,10 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
         assert(reloc_item < layout_table.len);
         uintptr_t reloc_base = (uintptr_t)layout_table.items[reloc_item];
         assert(reloc_base != 0 && "layout offset missing for relocation item");
-        if (reloc_base & 1) {
+        if (reloc_base & LAYOUT_IN_CONST_DATA) {
             // convert to a ConstDataRef
             tag = ConstDataRef;
-            reloc_base &= ~(uintptr_t)1;
+            reloc_base &= ~LAYOUT_IN_CONST_DATA;
             assert(LLT_ALIGN(reloc_base, sizeof(void*)) == reloc_base);
             reloc_base /= sizeof(void*);
             assert(reloc_offset == 0);
@@ -2588,7 +2613,7 @@ static uint32_t write_gvars(jl_serializer_state *s, arraylist_t *globals, arrayl
         uintptr_t item = backref_id(s, g, s->link_ids_gvars);
         uintptr_t reloc = get_reloc_for_item(item, 0);
         write_reloc_t(s->gvar_record, reloc);
-        record_uniquing(s, (jl_value_t*)g, ((i << 2) | 2)); // mark as gvar && !tag
+        record_uniquing(s, (jl_value_t*)g, ((i << 2) | UNIQUING_GVAR)); // mark as gvar && !tag
     }
     for (size_t i = 0; i < external_fns->len; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
@@ -4518,11 +4543,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         // check whether we are operating on the typetag
         // (needing to ignore GC bits) or a regular field
         // and check whether this is a gvar index
-        int tag = (item & 3);
-        item &= ~(uintptr_t)3;
+        int tag = (item & UNIQUING_KIND_MASK);
+        item &= ~UNIQUING_KIND_MASK;
         uintptr_t *pfld;
         jl_value_t **obj, *newobj;
-        if (tag == 3) {
+        if (tag == UNIQUING_DELAYED_SUPER) {
             obj = (jl_value_t**)(image_base + item);
             pfld = NULL;
             for (size_t i = 0; i < delay_list.len; i += 2) {
@@ -4535,7 +4560,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             }
             assert(pfld);
         }
-        else if (tag == 2) {
+        else if (tag == UNIQUING_GVAR) {
             if (image->gvars_base == NULL)
                 continue;
             item >>= 2;
@@ -4545,13 +4570,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         }
         else {
             pfld = (uintptr_t*)(image_base + item);
-            if (tag == 1)
+            if (tag == UNIQUING_TYPETAG)
                 obj = (jl_value_t**)jl_typeof(jl_valueof(pfld));
             else
                 obj = *(jl_value_t***)pfld;
             if ((char*)obj > (char*)pfld) {
                 // this must be the super field
-                assert(tag == 0);
+                assert(tag == UNIQUING_FIELD);
                 arraylist_push(&delay_list, obj);
                 arraylist_push(&delay_list, pfld);
                 ptrhash_put(&new_dt_objs, (void*)obj, obj); // mark obj as invalid
@@ -4603,7 +4628,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             assert(newobj && newobj != jl_nothing);
             arraylist_push(&cleanup_list, (void*)obj);
         }
-        if (tag == 1)
+        if (tag == UNIQUING_TYPETAG)
             *pfld = (uintptr_t)newobj | GC_OLD_MARKED | GC_IN_IMAGE;
         else
             *pfld = (uintptr_t)newobj;
@@ -4660,12 +4685,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     for (size_t i = 0; i < s.uniquing_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_objs.items[i];
         // check whether this is a gvar index
-        int tag = (item & 3);
-        assert(tag == 0 || tag == 2);
-        item &= ~(uintptr_t)3;
+        int tag = (item & UNIQUING_KIND_MASK);
+        assert(tag == UNIQUING_FIELD || tag == UNIQUING_GVAR);
+        item &= ~UNIQUING_KIND_MASK;
         uintptr_t *pfld;
         jl_value_t **obj, *newobj;
-        if (tag == 2) {
+        if (tag == UNIQUING_GVAR) {
             if (image->gvars_base == NULL)
                 continue;
             item >>= 2;
