@@ -785,6 +785,28 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test all(isabspath, source_files) context=source_files
         end
 
+        # An inlinee whose body folds away entirely is only reached through its
+        # caller; its definition line must still be reported in both modes.
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "ident.jl")
+            write(srcfile, """
+                ident(x) = x
+                caller(x) = ident(x) + 1
+                caller(1)
+                """)
+            for exe in (cov_exename, cov_exename_hit)
+                outfile = joinpath(dir, "ident.info")
+                run(`$exe --code-coverage=$outfile --code-coverage=@$srcfile $srcfile`)
+                record = only(filter(contains("SF:" * srcfile),
+                                     split(read(outfile, String), "end_of_record")))
+                rm(outfile)
+                hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                            for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+                @test get(hits, 1, 0) > 0 context=record
+                @test get(hits, 2, 0) > 0 context=record
+            end
+        end
+
         # The unknown-module heuristic requires relative sysimage source paths.
         mktempdir() do tdir
             srcfile = joinpath(realpath(tdir), "paths.jl")

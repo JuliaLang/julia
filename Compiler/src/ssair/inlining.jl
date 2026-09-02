@@ -324,7 +324,15 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     debuginfo = inline_target isa IRCode ? inline_target.debuginfo : inline_target.ir.debuginfo
     topline = new_inlined_at = ir_inline_linetable!(debuginfo, di, inlined_at)
     if should_insert_coverage(def.module, di)
-        insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
+        # Codegen records coverage at debug-location transitions and, when it
+        # first enters an inlinee (`line0` in `coverageVisitStmt`), also records
+        # the inlinee's definition line. The inlinee's own first marker therefore
+        # already covers its definition line, so in hit mode (idempotent
+        # recording) the entry marker at the inlining site is redundant. Count
+        # mode keeps it so the definition line counts every call.
+        if JLOptions().code_coverage_mode != 0 || !has_coverage_effect(ir)
+            insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
+        end
     end
     spvals_ssa = nothing
     if !validate_sparams(mi.sparam_vals)
@@ -907,6 +915,13 @@ function may_have_fcalls(m::Method)
     src = m.source
     isa(src, MaybeCompressed) || return true
     return ccall(:jl_ir_flag_has_fcall, Bool, (Any,), src)
+end
+
+function has_coverage_effect(ir::IRCode)
+    for idx in 1:length(ir.stmts)
+        isexpr(ir.stmts[idx][:stmt], :code_coverage_effect) && return true
+    end
+    return false
 end
 
 function strip_coverage_effects!(src::CodeInfo)
