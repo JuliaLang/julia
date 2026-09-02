@@ -401,108 +401,62 @@ mul_ui!(x::BigInt, a::BigInt, b) = _mul_mag!(x, a, Limb(b), false)
 mul_si!(x::BigInt, a::BigInt, b) = ((v, neg) = _magsign(b); _mul_mag!(x, a, Limb(v), neg))
 
 # Truncated division: q = trunc(a/b) and r = a - q*b, so `r` carries `a`'s
-# sign. `mpn_tdiv_qr` writes both outputs and forbids overlap among them and
-# its inputs, so each variant below gives the output it does not want scratch
-# limbs, and only the wanted one a `_dest` buffer.
-function tdiv_q!(x::BigInt, a::BigInt, b::BigInt)
+# sign. Either output may be `nothing` when it is not wanted; every call site
+# passes a literal, so each combination compiles to its own body. `mpn_tdiv_qr`
+# writes both outputs and forbids overlap among them and its inputs, so an
+# unwanted output gets scratch limbs and a wanted one a `_dest` buffer.
+# Returns whether the remainder is nonzero, which the rounding variants need.
+function _tdiv!(q::Union{BigInt,Nothing}, r::Union{BigInt,Nothing}, a::BigInt, b::BigInt)
     Base.@cancel_check
     as, bs = a.size, b.size
     bs == 0 && throw(DivideError())
     an, bn = abs(as), abs(bs)
-    an < bn && (x.size = 0; return x)
+    if an < bn # |a| < |b|: the quotient is 0 and the remainder is `a`
+        q === nothing || (q.size = 0)
+        r === nothing || set!(r, a)
+        return as != 0
+    end
     ad, bd = a.d, b.d
-    neg = (as < 0) != (bs < 0)
+    qneg = (as < 0) != (bs < 0)
     if bn == 1
         v = @inbounds bd[1]
-        qd = _ensure!(x, an)
-        _mpn_divrem_1(qd, ad, an % mp_size_t, v)
-        return _finish!(x, qd, an, neg)
+        if q === nothing
+            rl = _mpn_mod_1(ad, an % mp_size_t, v)
+        else
+            # `mpn_divrem_1` allows `qp == np`, and `v` is already read, so `q`
+            # may alias either input.
+            qd = _ensure!(q, an)
+            rl = _mpn_divrem_1(qd, ad, an % mp_size_t, v)
+            _finish!(q, qd, an, qneg)
+        end
+        if r !== nothing
+            rd = _ensure!(r, 1)
+            @inbounds rd[1] = rl
+            _finish!(r, rd, 1, as < 0)
+        end
+        return rl != 0
     end
     qn = an - bn + 1
-    qd = _dest(x, qn, ad, bd)
-    _mpn_tdiv_qr(qd, Memory{Limb}(undef, bn), ad, an % mp_size_t, bd, bn % mp_size_t)
-    return _finish!(x, qd, qn, neg)
-end
-
-function tdiv_r!(x::BigInt, a::BigInt, b::BigInt)
-    Base.@cancel_check
-    as, bs = a.size, b.size
-    bs == 0 && throw(DivideError())
-    an, bn = abs(as), abs(bs)
-    an < bn && return set!(x, a)
-    ad, bd = a.d, b.d
-    if bn == 1
-        rl = _mpn_mod_1(ad, an % mp_size_t, @inbounds bd[1])
-        d = _ensure!(x, 1)
-        @inbounds d[1] = rl
-        return _finish!(x, d, 1, as < 0)
-    end
-    rd = _dest(x, bn, ad, bd)
-    _mpn_tdiv_qr(Memory{Limb}(undef, an - bn + 1), rd, ad, an % mp_size_t, bd, bn % mp_size_t)
-    return _finish!(x, rd, bn, as < 0)
-end
-
-function tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt)
-    Base.@cancel_check
-    as, bs = a.size, b.size
-    bs == 0 && throw(DivideError())
-    an, bn = abs(as), abs(bs)
-    if an < bn
-        x.size = 0
-        set!(y, a)
-        return x, y
-    end
-    ad, bd = a.d, b.d
-    neg = (as < 0) != (bs < 0)
-    if bn == 1
-        v = @inbounds bd[1]
-        # `mpn_divrem_1` allows `qp == np`, and `v` is already read, so `x`
-        # may alias either input here, as in `tdiv_q!`.
-        qd = _ensure!(x, an)
-        rl = _mpn_divrem_1(qd, ad, an % mp_size_t, v)
-        rdy = _ensure!(y, 1)
-        @inbounds rdy[1] = rl
-        _finish!(x, qd, an, neg)
-        _finish!(y, rdy, 1, as < 0)
-        return x, y
-    end
-    qn = an - bn + 1
-    qd = _dest(x, qn, ad, bd)
-    rd = _dest(y, bn, ad, bd, qd)
+    qd = q === nothing ? Memory{Limb}(undef, qn) : _dest(q, qn, ad, bd)
+    rd = r === nothing ? Memory{Limb}(undef, bn) : _dest(r, bn, ad, bd, qd)
     _mpn_tdiv_qr(qd, rd, ad, an % mp_size_t, bd, bn % mp_size_t)
-    _finish!(x, qd, qn, neg)
-    _finish!(y, rd, bn, as < 0)
-    return x, y
+    q === nothing || _finish!(q, qd, qn, qneg)
+    r === nothing && return any(!iszero, @view rd[1:bn])
+    _finish!(r, rd, bn, as < 0)
+    return r.size != 0
 end
+
+tdiv_q!(x::BigInt, a::BigInt, b::BigInt) = (_tdiv!(x, nothing, a, b); x)
+tdiv_r!(x::BigInt, a::BigInt, b::BigInt) = (_tdiv!(nothing, x, a, b); x)
+tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt) = (_tdiv!(x, y, a, b); (x, y))
 tdiv_qr(a::BigInt, b::BigInt) = tdiv_qr!(BigInt(), BigInt(), a, b)
 
-# Floor (`down`) and ceiling division. The truncated result is off by one
+# Floor (`down`) and ceiling division. The truncated quotient is off by one
 # exactly when the remainder is nonzero and carries the "wrong" sign, which is
 # `a`'s, so `wrong` is known before the division runs.
 function _rdiv_q!(x::BigInt, a::BigInt, b::BigInt, down::Bool)
-    Base.@cancel_check
-    as, bs = a.size, b.size
-    bs == 0 && throw(DivideError())
-    an, bn = abs(as), abs(bs)
-    wrong = ((as < 0) != (bs < 0)) == down
-    # |a| < |b|: the truncated quotient is 0 and the remainder is `a`.
-    an < bn && return set_si!(x, (as != 0 && wrong) ? (down ? -1 : 1) : 0)
-    ad, bd = a.d, b.d
-    neg = (as < 0) != (bs < 0)
-    # Only whether the discarded remainder is nonzero matters.
-    if bn == 1
-        v = @inbounds bd[1]
-        qd = _ensure!(x, an)
-        rnz = _mpn_divrem_1(qd, ad, an % mp_size_t, v) != 0
-        _finish!(x, qd, an, neg)
-    else
-        qn = an - bn + 1
-        qd = _dest(x, qn, ad, bd)
-        rd = Memory{Limb}(undef, bn)
-        _mpn_tdiv_qr(qd, rd, ad, an % mp_size_t, bd, bn % mp_size_t)
-        _finish!(x, qd, qn, neg)
-        rnz = any(!iszero, @view rd[1:bn])
-    end
+    wrong = ((a.size < 0) != (b.size < 0)) == down
+    rnz = _tdiv!(x, nothing, a, b)
     wrong && rnz && (down ? _dec!(x) : _inc!(x))
     return x
 end
