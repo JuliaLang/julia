@@ -144,18 +144,21 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     end
 end
 
-function _eval_dot(world::UInt, mod, ex::SyntaxTree)
-    if kind(ex) === K"."
-        mod = _eval_dot(world, mod, ex[1])
-        ex = ex[2]
-    end
-    if kind(ex) === K"inert"
-        ex = ex[1]
-    end
-    kind(ex) === K"Value" && return ex.value
-    kind(ex) in KSet"Identifier Symbol" && mod isa Module ?
-        _invoke_in_world(world, getproperty, mod, Symbol(syntax_name(ex))) :
+function _eval_dot(world::UInt, ex::SyntaxTree)
+    if kind(ex) === K"." && numchildren(ex) == 2
+        lhs = _eval_dot(world, ex[1])
+        lhs isa Module || return nothing
+        rhs = kind(ex[2]) === K"inert" ? ex[2][1] : ex[2]
+        kind(rhs) in KSet"Identifier Symbol" || return nothing
+        _invoke_in_world(world, getproperty, lhs, Symbol(syntax_name(rhs)))
+    elseif kind(ex) === K"Value"
+        ex.value
+    elseif kind(ex) === K"Identifier"
+        _invoke_in_world(world, getproperty,
+                         syntax_module(ex), Symbol(syntax_name(ex)))
+    else
         nothing
+    end
 end
 
 # If macroexpand(ex[1]) is an identifier or dot-expression, we can simply grab
@@ -163,26 +166,19 @@ end
 # code (which, TODO: does not use the correct world age, and it isn't clear the
 # language is meant to support this).
 function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
-    sc = st0.context::SyntaxContext
-    mod = syntax_module(sc)
     st = expand_forms_1(ctx, st0)
     try
-        if kind(st) === K"Value"
-            st.value
-        elseif kind(st) === K"Identifier"
-            _invoke_in_world(ctx.world, getproperty,
-                             syntax_module(st), Symbol(syntax_name(st)))
-        elseif kind(st) === K"." &&
-                # TODO: correct mod?
-                (ed = _eval_dot(ctx.world, mod, st); !isnothing(ed))
+        ed = _eval_dot(ctx.world, st)
+        if !isnothing(ed)
             ed
         else
             # `ex` might contain a nontrivial mix of scopes so we can't just
             # `eval()` it, as it's already been partially lowered by this point.
             # Instead, we repeat the latter parts of `lower()` here.
-             ctx2, st2 = expand_forms_2(st, ctx.world)
-             ctx3, st3 = resolve_scopes(ctx2, st2)
-             ctx4, st4 = convert_closures(ctx3, st3)
+            mod = syntax_module(st)::Module
+            ctx2, st2 = expand_forms_2(st, ctx.world)
+            ctx3, st3 = resolve_scopes(ctx2, st2)
+            ctx4, st4 = convert_closures(ctx3, st3)
             _ctx5, st5 = linearize_ir(ctx4, st4)
             expr_form  = to_lowered_expr(st5)
             ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
