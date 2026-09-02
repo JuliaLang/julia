@@ -10,6 +10,7 @@ use libc::c_char;
 use log::*;
 use mmtk::memory_manager;
 use mmtk::scheduler::GCWorker;
+use mmtk::util::alloc::AllocationOptions;
 use mmtk::util::api_util::NullableObjectReference;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference, OpaquePointer};
@@ -233,6 +234,37 @@ pub extern "C" fn mmtk_alloc(
         size
     );
     memory_manager::alloc::<JuliaVM>(unsafe { &mut *mutator }, size, align, offset, semantics)
+}
+
+/// Like [`mmtk_alloc`], but allows the caller to change the default allocation behavior.
+///
+/// This is used for allocation sites that cannot block for a GC, such as Julia's permanent
+/// (immortal) allocation, which is annotated `JL_NOTSAFEPOINT`.
+#[no_mangle]
+pub extern "C" fn mmtk_alloc_with_options(
+    mutator: *mut Mutator<JuliaVM>,
+    size: usize,
+    align: usize,
+    offset: usize,
+    semantics: AllocationSemantics,
+    options: AllocationOptions,
+) -> Address {
+    debug_assert!(
+        mmtk::util::conversions::raw_is_aligned(
+            size,
+            <JuliaVM as mmtk::vm::VMBinding>::MIN_ALIGNMENT
+        ),
+        "Alloc size {} is not aligned to min alignment",
+        size
+    );
+    memory_manager::alloc_with_options::<JuliaVM>(
+        unsafe { &mut *mutator },
+        size,
+        align,
+        offset,
+        semantics,
+        options,
+    )
 }
 
 #[no_mangle]

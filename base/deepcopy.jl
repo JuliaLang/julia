@@ -2,7 +2,7 @@
 
 # deep copying
 
-# Note: deepcopy_internal(::Any, ::IdDict) is
+# Note: deepcopy_impl(::Any, ::IdDict) is
 #       only exposed for specialization by libraries
 
 """
@@ -18,9 +18,9 @@ have the same effect as serializing and then deserializing it.
 
 While it isn't normally necessary, user-defined types can override the default `deepcopy`
 behavior by defining a specialized version of the function
-`deepcopy_internal(x::T, dict::IdDict)` (which shouldn't otherwise be used),
+`deepcopy_impl(x::T, dict::IdDict)` (which shouldn't otherwise be used),
 where `T` is the type to be specialized for, and `dict` keeps track of objects copied
-so far within the recursion. Within the definition, `deepcopy_internal` should be used
+so far within the recursion. Within the definition, `deepcopy_impl` should be used
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
 
@@ -31,26 +31,34 @@ updated as appropriate before returning.
 """
 function deepcopy(@nospecialize x)
     isbitstype(typeof(x)) && return x
-    return deepcopy_internal(x, IdDict())::typeof(x)
+    return deepcopy_impl(x, IdDict())::typeof(x)
 end
 
-deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex,
-                           Core.CancellationTokenSource},
-                  stackdict::IdDict) = x
-deepcopy_internal(x::Tuple, stackdict::IdDict) =
-    ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
-deepcopy_internal(x::Module, stackdict::IdDict) = error("deepcopy of Modules not supported")
+"""
+    deepcopy_impl(x, stackdict::IdDict)
 
-function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
+If necessary this function can be specialized to override Julia's deepcopy
+behaviour.
+
+See also: [`deepcopy`](@ref).
+"""
+deepcopy_impl(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex,
+                       Core.CancellationTokenSource},
+              stackdict::IdDict) = x
+deepcopy_impl(x::Tuple, stackdict::IdDict) =
+    ntuple(i->deepcopy_impl(x[i], stackdict), length(x))
+deepcopy_impl(x::Module, stackdict::IdDict) = error("deepcopy of Modules not supported")
+
+function deepcopy_impl(x::SimpleVector, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
-    y = Core.svec(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
+    y = Core.svec(Any[deepcopy_impl(x[i], stackdict) for i = 1:length(x)]...)
     stackdict[x] = y
     return y
 end
 
-function deepcopy_internal(x::String, stackdict::IdDict)
+function deepcopy_impl(x::String, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
@@ -59,7 +67,7 @@ function deepcopy_internal(x::String, stackdict::IdDict)
     return y
 end
 
-function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
+function deepcopy_impl(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
     if ismutable(x)
@@ -72,7 +80,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
             if isdefined(x, i)
                 xi = getfield(x, i)
                 if !isbits(xi)
-                    xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                    xi = deepcopy_impl(xi, stackdict)::typeof(xi)
                 end
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi)
             end
@@ -85,7 +93,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
             if isdefined(x, i)
                 xi = getfield(x, i)
                 if !isbits(xi)
-                    xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                    xi = deepcopy_impl(xi, stackdict)::typeof(xi)
                 end
                 flds[i] = xi
             else
@@ -98,7 +106,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     return y::T
 end
 
-function deepcopy_internal(x::Memory, stackdict::IdDict)
+function deepcopy_impl(x::Memory, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
@@ -118,7 +126,7 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
         if Core.memoryref_isassigned(xi, :not_atomic, false)
             xi = Core.memoryrefget(xi, :not_atomic, false)
             if !isbits(xi)
-                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                xi = deepcopy_impl(xi, stackdict)::typeof(xi)
             end
             di = Core.memoryrefnew(dr, i, false)
             Core.memoryrefset!(di, xi, :not_atomic, false)
@@ -126,28 +134,28 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
     end
     return dest
 end
-function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
+function deepcopy_impl(x::Array{T, N}, stackdict::IdDict) where {T, N}
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
     y = stackdict[x] = Array{T, N}(undef, ntuple(Returns(0), Val{N}()))
-    setfield!(y, :ref, deepcopy_internal(x.ref, stackdict))
+    setfield!(y, :ref, deepcopy_impl(x.ref, stackdict))
     setfield!(y, :size, x.size)
     y
 end
-function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
+function deepcopy_impl(x::GenericMemoryRef, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
     mem = getfield(x, :mem)
-    dest = memoryref(deepcopy_internal(mem, stackdict)::typeof(mem))
+    dest = memoryref(deepcopy_impl(mem, stackdict)::typeof(mem))
     i = memoryrefoffset(x)
     i == 1 || (dest = Core.memoryrefnew(dest, i, true))
     return dest
 end
 
 
-function deepcopy_internal(x::Union{Dict,IdDict}, stackdict::IdDict)
+function deepcopy_impl(x::Union{Dict,IdDict}, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
@@ -159,12 +167,12 @@ function deepcopy_internal(x::Union{Dict,IdDict}, stackdict::IdDict)
     dest = empty(x)
     stackdict[x] = dest
     for (k, v) in x
-        dest[deepcopy_internal(k, stackdict)] = deepcopy_internal(v, stackdict)
+        dest[deepcopy_impl(k, stackdict)] = deepcopy_impl(v, stackdict)
     end
     dest
 end
 
-function deepcopy_internal(x::AbstractLock, stackdict::IdDict)
+function deepcopy_impl(x::AbstractLock, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
@@ -173,11 +181,11 @@ function deepcopy_internal(x::AbstractLock, stackdict::IdDict)
     return y
 end
 
-function deepcopy_internal(x::GenericCondition, stackdict::IdDict)
+function deepcopy_impl(x::GenericCondition, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
-    y = typeof(x)(deepcopy_internal(x.lock, stackdict))
+    y = typeof(x)(deepcopy_impl(x.lock, stackdict))
     stackdict[x] = y
     return y
 end
@@ -191,7 +199,7 @@ end
 # (owner = nothing, next = nothing, aux = 0) rather than copies of the
 # originals; the `task` reference is kept as-is (`deepcopy` of a Task is
 # the identity, see above).
-function deepcopy_internal(x::Core.WaitEntryN, stackdict::IdDict)
+function deepcopy_impl(x::Core.WaitEntryN, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end

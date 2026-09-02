@@ -4029,6 +4029,67 @@ precompile_test_harness("Marked group edge tolerates an unchanged ambiguity") do
     end
 end
 
+precompile_test_harness("pkgimage type cache dedup") do dir
+    # Check deduplication when a type precedes its supertype in the image.
+    # The unused IFD binding preserves that order.
+    write(joinpath(dir, "DedupColors.jl"),
+          """
+          module DedupColors
+              export CAbstractGray, CGray
+              abstract type CAbstractGray{T} end
+              struct CGray{T} <: CAbstractGray{T}
+                  val::T
+              end
+              Base.adjoint(c::CAbstractGray) = c
+          end
+          """)
+    write(joinpath(dir, "DedupTrigger.jl"),
+          """
+          module DedupTrigger
+              using DedupColors
 
+              const IFD = Dict{UInt16, Any}
+
+              function readdata!(target::AbstractArray)
+                  fill!(reinterpret(UInt8, view(target, 1:length(target))), 0x00)
+              end
+
+              function load()
+                  ifd = IFD()
+                  ifd[0x0106] = UInt16(1)
+                  type = Int(ifd[0x0106]) == 2 ? Ref : CGray
+                  pixeltype = type{UInt8}
+                  cache = Array{pixeltype}(undef, 2, 2)
+                  readdata!(cache)
+                  Matrix(cache')
+              end
+
+              load()
+          end
+          """)
+    Base.compilecache(Base.PkgId("DedupColors"))
+    Base.compilecache(Base.PkgId("DedupTrigger"))
+    @eval using DedupColors
+    M = invokelatest() do
+        Memory{DedupColors.CGray{UInt8}}
+    end
+    @eval using DedupTrigger
+    invokelatest() do
+        CGrayU8 = DedupColors.CGray{UInt8}
+        for T in (Memory{CGrayU8}, DenseVector{CGrayU8})
+            tn = T.name
+            n = 0
+            for t in tn.cache
+                if t isa DataType && t.name === tn &&
+                        length(t.parameters) == length(T.parameters) &&
+                        all(i -> t.parameters[i] === T.parameters[i], eachindex(T.parameters))
+                    n += 1
+                end
+            end
+            @test n == 1
+        end
+        @test M === Memory{DedupColors.CGray{UInt8}}
+    end
+end
 
 finish_precompile_test!()
