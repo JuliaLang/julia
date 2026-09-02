@@ -7,7 +7,7 @@ module SharedArrays
 
 using Mmap, Distributed, Random
 
-import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_internal,
+import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_impl,
              show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, cconvert
 import Base: Array
 import Random
@@ -387,7 +387,7 @@ end
 
 convert(T::Type{<:SharedArray}, a::Array) = T(a)::T
 
-function deepcopy_internal(S::SharedArray{T,N}, stackdict::IdDict) where {T,N}
+function deepcopy_impl(S::SharedArray{T,N}, stackdict::IdDict) where {T,N}
     haskey(stackdict, S) && return stackdict[S]
     if isempty(procs(S))
         R = SharedArray{T,N}(size(S), Int[], Future[], S.segname, copy(S.s))
