@@ -168,7 +168,18 @@ This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
+# Scoped marker set to `true` in the dynamic scope of the workers of any
+# `@threads` loop (and inherited by tasks spawned from them). Used to reject
+# nested use of `@threads :static`. The default (`false`) is provided via
+# `hasdefault`/`getdefault` methods in scopedvalues.jl.
+struct ThreadsLoopKey <: Base.AbstractScopedValue{Bool} end
+const IN_THREADS_LOOP = ThreadsLoopKey()
+
 function threading_run(fun, static)
+    # `:static` pins one worker per thread, so concurrent `:static` loops must
+    # take turns rather than interleave their pinned workers. (The lock const
+    # is defined in threads_overloads.jl, after lock.jl is loaded.)
+    static && lock(_static_loop_lock)
     ccall(:jl_enter_threaded_region, Cvoid, ())
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
@@ -180,7 +191,7 @@ function threading_run(fun, static)
     tok = Base.CancellationToken(src)
     cr = nothing
     try
-        Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
+        Base.ScopedValues.with(Base.CANCEL_TOKEN => tok, IN_THREADS_LOOP => true) do
             for i = 1:n
                 t = Task(() -> fun(i)) # pass in tid
                 t.sticky = static
@@ -222,6 +233,7 @@ function threading_run(fun, static)
         end
     finally
         ccall(:jl_exit_threaded_region, Cvoid, ())
+        static && unlock(_static_loop_lock)
     end
     failed_tasks = filter!(istaskfailed, tasks)
     if !isempty(failed_tasks)
@@ -238,8 +250,8 @@ function _threading_run_expr(schedule)
     quote
         if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
             threading_run(threadsfor_fun, false)
-        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
-            error("`@threads :static` cannot be used concurrently or nested")
+        elseif IN_THREADS_LOOP[] # :static
+            error("`@threads :static` cannot be used nested inside another `@threads` loop")
         else # :static
             threading_run(threadsfor_fun, true)
         end
@@ -693,7 +705,8 @@ is not uniform/has a large spread.
 them, assigning each task specifically to each thread. In particular, the value of
 [`threadid()`](@ref Threads.threadid) is guaranteed to be constant within one iteration.
 Specifying `:static` is an error if used from inside another `@threads` loop or from a
-thread other than 1.
+thread other than 1. Concurrent (non-nested) `:static` loops, e.g. from independent tasks,
+wait for each other and run one after the other.
 
 !!! note
     `:static` scheduling exists for supporting transition of code written before Julia 1.3.

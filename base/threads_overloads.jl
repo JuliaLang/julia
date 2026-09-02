@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Serializes concurrent `@threads :static` loops (see `threading_run` in
+# threadingconstructs.jl). Defined here because threadingconstructs.jl is
+# loaded before lock.jl.
+Core.eval(Threads, :(const _static_loop_lock = ReentrantLock()))
+
 """
     Threads.foreach(f, channel::Channel;
                     schedule::Threads.AbstractSchedule=Threads.FairSchedule(),

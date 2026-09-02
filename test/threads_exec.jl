@@ -864,9 +864,20 @@ end
 @test _atthreads_static_schedule(threadpoolsize(:default)) == threadpoolsize(:interactive) .+ (1:threadpoolsize(:default))
 @test _atthreads_static_schedule(1) == [threadpoolsize(:interactive) + 1;]
 @test_throws(
-    "`@threads :static` cannot be used concurrently or nested",
+    "`@threads :static` cannot be used nested inside another `@threads` loop",
     @threads(for i = 1:1; _atthreads_static_schedule(threadpoolsize(:default)); end),
 )
+@test_throws(
+    "`@threads :static` cannot be used nested inside another `@threads` loop",
+    @threads(:static, for i = 1:1; _atthreads_static_schedule(threadpoolsize(:default)); end),
+)
+# issue #62747: concurrent (non-nested) `:static` loops serialize rather than error
+let expected = threadpoolsize(:interactive) .+ (1:threadpoolsize(:default))
+    t1 = @async _atthreads_static_schedule(threadpoolsize(:default))
+    t2 = @async _atthreads_static_schedule(threadpoolsize(:default))
+    @test fetch(t1) == expected
+    @test fetch(t2) == expected
+end
 
 # dynamic schedule
 function _atthreads_dynamic_schedule(n)
