@@ -1363,6 +1363,8 @@ void jl_cache_type_(jl_datatype_t *type)
     unsigned hv = typekey_hash(type->name, key, n, 0);
     if (hv) {
         assert(hv == type->hash);
+        // Type cache keys must be unique.
+        assert(jl_lookup_cache_type_(type) == NULL);
         cache_insert_type_set(type, hv);
     }
     else {
