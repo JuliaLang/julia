@@ -1001,6 +1001,16 @@ _MPQ(x::BigInt,y::BigInt) = _MPQ(x.alloc, x.size, x.d,
 _MPQ() = _MPQ(BigInt(), BigInt())
 _MPQ(x::Rational{BigInt}) = _MPQ(x.num, x.den)
 
+# GMP only supports aliasing between arguments passed as the *same* mpq_t: an
+# input sharing BigInts with the output must not be handed over as a separate
+# struct, or it reads freed limbs once the output is reallocated.
+function _MPQ(zq::_MPQ, x::Rational{BigInt})
+    z = zq.rat
+    x === z && return zq
+    (x.num === z.num || x.den === z.den) && return _MPQ(MPZ.set(x.num), MPZ.set(x.den))
+    return _MPQ(x)
+end
+
 function sync_rational!(xq::_MPQ)
     xq.rat.num.alloc = xq.num_alloc
     xq.rat.num.size  = xq.num_size
@@ -1024,7 +1034,7 @@ end
 # define set, set_ui, set_si, set_z, and their inplace versions
 function set!(z::Rational{BigInt}, x::Rational{BigInt})
     zq = _MPQ(z)
-    ccall((:__gmpq_set, libgmp), Cvoid, (mpq_t, mpq_t), zq, _MPQ(x))
+    ccall((:__gmpq_set, libgmp), Cvoid, (mpq_t, mpq_t), zq, _MPQ(zq, x))
     return sync_rational!(zq)
 end
 
@@ -1063,7 +1073,7 @@ function add!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     end
     zq = _MPQ(z)
     ccall((:__gmpq_add, libgmp), Cvoid,
-          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(zq, x), _MPQ(zq, y))
     return sync_rational!(zq)
 end
 
@@ -1077,7 +1087,7 @@ function sub!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     end
     zq = _MPQ(z)
     ccall((:__gmpq_sub, libgmp), Cvoid,
-          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(zq, x), _MPQ(zq, y))
     return sync_rational!(zq)
 end
 
@@ -1090,7 +1100,7 @@ function mul!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     end
     zq = _MPQ(z)
     ccall((:__gmpq_mul, libgmp), Cvoid,
-          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(zq, x), _MPQ(zq, y))
     return sync_rational!(zq)
 end
 
@@ -1111,7 +1121,7 @@ function div!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     end
     zq = _MPQ(z)
     ccall((:__gmpq_div, libgmp), Cvoid,
-          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(zq, x), _MPQ(zq, y))
     return sync_rational!(zq)
 end
 
