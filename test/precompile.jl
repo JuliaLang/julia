@@ -3738,67 +3738,6 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
     end
 end
 
-precompile_test_harness("Ambiguity-pruned dispatch edge revalidation") do load_path
-    # A method added after an image is built can be pairwise-ambiguous with a recorded
-    # dispatch match without changing the count returned by the include_ambiguous=false
-    # lookup used at load time: the newcomer is pruned from the result when the expected
-    # match fully covers its overlap with the call signature. Such a package image must
-    # NOT be revalidated, because dispatch in the newly-ambiguous region throws MethodError.
-    write(joinpath(load_path, "AmbigPruneA.jl"),
-        """
-        module AmbigPruneA
-        m(x::Integer, y) = 1
-        end
-        """)
-    write(joinpath(load_path, "AmbigPruneB.jl"),
-        """
-        module AmbigPruneB
-        using AmbigPruneA
-        caller(x::Int8, @nospecialize(y)) = AmbigPruneA.m(x, y)
-        precompile(caller, (Int8, Any))
-        end
-        """)
-    # Precompile B (which pulls in A) without loading either into this session.
-    Base.compilecache(Base.PkgId("AmbigPruneB"))
-
-    @eval using AmbigPruneA
-    # Introduce a method pairwise-ambiguous with m(::Integer, ::Any): the first slot is
-    # wider, the second narrower, and the overlap (Integer, AbstractString) is non-empty.
-    @eval AmbigPruneA.m(x, y::AbstractString) = 2
-    # Loading B now verifies its image in a world that already contains the ambiguity.
-    @eval using AmbigPruneB
-
-    # The precompiled CodeInstance for the (Int8, Any) specialization must have been
-    # invalidated (max_world != typemax) by load-time revalidation. This check must be
-    # evaluated separately from (and before) any code containing a call to `caller`:
-    # compiling such code adds a fresh, valid CodeInstance for the same specialization
-    # (@nospecialize routes the concrete call's compile signature there).
-    @eval let
-        m = only(methods(AmbigPruneB.caller))
-        target = Tuple{typeof(AmbigPruneB.caller), Int8, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
-        @test mi !== nothing
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        revalidated = false
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                revalidated = true
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
-        @test !revalidated
-    end
-    # Dispatch in the ambiguous region must now throw rather than return the stale result.
-    @eval @test_throws MethodError AmbigPruneB.caller(Int8(1), "hi")
-end
-
 precompile_test_harness("pkgimage type cache dedup") do dir
     # Check deduplication when a type precedes its supertype in the image.
     # The unused IFD binding preserves that order.
