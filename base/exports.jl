@@ -1013,6 +1013,7 @@ export
     mktemp,
     mktempdir,
     mtime,
+    atime,
     mv,
     operm,
     pwd,
