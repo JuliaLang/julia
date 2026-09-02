@@ -7722,6 +7722,31 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
     throwconditional(c, x)
 end == Bool
 
+# A frame owned by another inference cache must not trigger sourceless cached-edge reuse.
+recursed_edge_cache_owner61177(x::Int) = x + 1
+let
+    world = Base.get_world_counter()
+    owner_a, owner_b = Ref(nothing), Ref(nothing)
+    interp_a = Compiler.NativeInterpreter(world;
+        inf_params=Compiler.InferenceParams(; cache_owner=owner_a))
+    interp_b = Compiler.NativeInterpreter(world;
+        inf_params=Compiler.InferenceParams(; cache_owner=owner_b))
+    target_mi = Base.method_instance(recursed_edge_cache_owner61177, (Int,))
+    target_ci = Core.CodeInstance(target_mi, owner_b, Int, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    Compiler.code_cache(interp_b)[target_mi] = target_ci
+
+    caller = Compiler.InferenceState(
+        Compiler.InferenceResult(target_mi, Compiler.typeinf_lattice(interp_a)),
+        :global, interp_a)
+    Compiler.add_curr_ssaflag!(caller, Compiler.IR_FLAG_INLINE)
+    reinferred = Compiler.abstract_call_method(interp_b, target_mi.def, target_mi.specTypes,
+        Core.svec(), false, Compiler.StmtInfo(true, false), caller)
+    @test !isready(reinferred)
+    @test caller.callstack[end].cache_mode == Compiler.CACHE_MODE_LOCAL
+end
+
 # issue #61177: effects of a recursive `@inline` function must not degrade on re-inference
 f61177(@nospecialize x) = x isa Int ? @inline(f61177(x + 1)) + x : 0
 let eff = Base.infer_effects(f61177)

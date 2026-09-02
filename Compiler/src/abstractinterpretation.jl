@@ -686,16 +686,6 @@ function abstract_call_method(interp::AbstractInterpreter,
         infmi = frame_instance(sv′)
         if method === infmi.def
             if infmi.specTypes::Type == sig::Type
-                # if regular inference of this cycle has already finished, return the
-                # cached result before typeinf_edge can locally re-infer it
-                cached, missing_source_edge = lookup_cached_edge(interp, method, infmi, sv,
-                    is_stmt_inline(get_curr_ssaflag(sv)),
-                    #=edgecycle=#true, #=edgelimited=#false, #=edgerecursed=#true)
-                cached !== nothing && return cached
-                if missing_source_edge isa CodeInstance
-                    return return_cached_result(interp, method, missing_source_edge, nothing, sv,
-                        #=edgecycle=#true, #=edgelimited=#false, #=edgerecursed=#true)
-                end
                 # avoid widening when detecting self-recursion
                 topmost = nothing
                 edgecycle = true

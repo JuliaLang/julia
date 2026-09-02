@@ -1060,17 +1060,12 @@ function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
     nothing
 end
 
-# Walk through `mi`'s upstream call chain, starting at `parent`. If a parent
-# frame matching `mi` is encountered, then there is a cycle in the call graph
-# (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
-# we "resolve" it by merging the call chain, which entails updating each intermediary
-# frame's `cycleid` field. Finally, we return `mi`'s pre-existing frame.
-# If no cycles are found, `nothing` is returned instead.
-function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+# Find `mi` in the contiguous inference portion of `parent`'s upstream call chain.
+function find_call_cycle(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
     # TODO (#48913) implement a proper recursion handling for irinterp:
     # This works most of the time currently just because the irinterp code doesn't get used much with
     # `@assume_effects`, so it never sees a cycle normally, but that may not be a sustainable solution.
-    parent isa InferenceState || return false
+    parent isa InferenceState || return nothing
     frames = parent.callstack
     uncached = false
     for frameid = reverse(1:length(frames))
@@ -1078,18 +1073,27 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
         isa(frame, InferenceState) || break
         uncached |= !is_cached(frame) # ensure we never add a (globally) uncached frame to a cycle
         if is_same_frame(interp, mi, frame)
-            if uncached
-                # our attempt to speculate into a constant call lead to an undesired self-cycle
-                # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
-                # with the limited flag and abort (set return type to Any) now
-                poison_callstack!(parent, frame)
-                return true
-            end
-            merge_call_chain!(interp, parent, frame)
-            return frame
+            return frame, uncached
         end
     end
-    return false
+    return nothing
+end
+
+# Resolve a cycle by merging its call chain and return `mi`'s pre-existing frame.
+# Return `true` for an unresolvable cycle and `false` when no cycle was found.
+function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+    cycle = find_call_cycle(interp, mi, parent)
+    cycle === nothing && return false
+    frame, uncached = cycle
+    if uncached
+        # our attempt to speculate into a constant call lead to an undesired self-cycle
+        # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
+        # with the limited flag and abort (set return type to Any) now
+        poison_callstack!(parent::InferenceState, frame)
+        return true
+    end
+    merge_call_chain!(interp, parent::InferenceState, frame)
+    return frame
 end
 
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
@@ -1294,6 +1298,12 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     if cached !== nothing
         return cached
     elseif missing_source_edge !== nothing
+        # Reuse a sourceless result only when `mi` is already active in this
+        # interpreter's inference cycle; otherwise local inference may recover source.
+        if edgerecursed && find_call_cycle(interp, mi, caller) !== nothing
+            return return_cached_result(interp, method, missing_source_edge, nothing, caller,
+                edgecycle, edgelimited, edgerecursed)
+        end
         # A globally published executable target exists, but its source was discarded.
         # Re-infer only the source/facts and certify that local work with a local proof.
         cache_mode = CACHE_MODE_LOCAL
