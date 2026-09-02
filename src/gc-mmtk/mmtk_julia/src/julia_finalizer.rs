@@ -231,15 +231,16 @@ fn next_finalizer_object(
     None
 }
 
-/// The entries of `to_finalize`, as root nodes for the InitialMark snapshot.
-pub fn to_finalize_root_nodes() -> Vec<ObjectReference> {
-    let list = ArrayListT::to_finalize_list();
-    let mut nodes = Vec::with_capacity(list.len / 2);
+/// Report every reference in `queue` to the concurrent marking closure, for a mutator that is
+/// about to empty it.
+pub fn wb_finalizer_queue(mutator: &mut Mutator<JuliaVM>, queue: *const libc::c_void) {
+    use mmtk::MutatorContext;
+    // `queue` is the `arraylist_t` the mutator is about to reset; see gc-common.c.
+    let queue = unsafe { &*(queue as *const ArrayListT) };
     let mut i = 0;
-    while let Some((_, obj, _)) = next_finalizer_object(list, &mut i) {
-        nodes.push(obj);
+    while let Some((_, obj, _)) = next_finalizer_object(queue, &mut i) {
+        mutator.barrier().load_weak_reference(obj);
     }
-    nodes
 }
 
 // gc_mark_finlist in gc.c

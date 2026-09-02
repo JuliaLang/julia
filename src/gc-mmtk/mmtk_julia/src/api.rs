@@ -593,6 +593,14 @@ pub extern "C" fn mmtk_object_reference_write_post(
 }
 
 #[no_mangle]
+pub extern "C" fn mmtk_gc_wb_finalizer_queue(
+    mutator: &'static mut Mutator<JuliaVM>,
+    queue: *const libc::c_void,
+) {
+    crate::julia_finalizer::wb_finalizer_queue(mutator, queue);
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_object_reference_write_slow(
     mutator: &'static mut Mutator<JuliaVM>,
     src: ObjectReference,
