@@ -217,6 +217,8 @@ end
 const scratch_t = Ref{Scratch}
 
 # Copy a GMP-owned mpz, given as its signed size and limb pointer, into `x`.
+# No normalization: every mpz function leaves its output with a nonzero top
+# limb, so `BigInt`'s invariant carries over as is.
 function _take!(x::BigInt, sz::Cint, p::Ptr{Limb})
     n = abs(Int(sz))
     d = _ensure!(x, n)
@@ -454,7 +456,9 @@ function tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt)
     neg = (as < 0) != (bs < 0)
     if bn == 1
         v = @inbounds bd[1]
-        qd = _dest(x, an, ad, bd)
+        # `mpn_divrem_1` allows `qp == np`, and `v` is already read, so `x`
+        # may alias either input here, as in `tdiv_q!`.
+        qd = _ensure!(x, an)
         rl = _mpn_divrem_1(qd, ad, an % mp_size_t, v)
         rdy = _ensure!(y, 1)
         @inbounds rdy[1] = rl
@@ -601,7 +605,9 @@ function mul_2exp!(x::BigInt, a::BigInt, c)
     ad = a.d
     off, sh = divrem(s, BITS_PER_LIMB)
     n = an + off + (sh > 0)
-    d = Memory{Limb}(undef, n)
+    # In place is fine: `mpn_lshift` permits overlap when `rp >= up`, which
+    # holds with `rp = d + off`, and `copyto!` on one buffer is a memmove.
+    d = _ensure!(x, n)
     if sh == 0
         copyto!(d, off+1, ad, 1, an)
     else
@@ -635,7 +641,9 @@ function fdiv_q_2exp!(x::BigInt, a::BigInt, c)
     lost = neg && (any(!iszero, @view ad[1:off]) ||
                    (sh > 0 && (@inbounds ad[off+1]) & ((one(Limb) << sh) - one(Limb)) != 0))
     n = an - off
-    d = Memory{Limb}(undef, n)
+    # In place is fine: `mpn_rshift` permits overlap when `rp <= up`, which
+    # holds with `up = ad + off`, and `lost` has already read the low limbs.
+    d = _ensure!(x, n)
     if sh == 0
         copyto!(d, 1, ad, off+1, n)
     else
@@ -661,7 +669,7 @@ function sqrt!(x::BigInt, a::BigInt)
     an = as # `as > 0` here, so the size and the limb count agree
     ad = a.d
     sn = cld(an, 2)
-    d = Memory{Limb}(undef, sn)
+    d = _dest(x, sn, ad) # mpn_sqrtrem forbids overlap between `sp` and `up`
     _mpn_sqrt(d, ad, an % mp_size_t)
     return _finish!(x, d, sn, false)
 end
@@ -845,6 +853,16 @@ end # module MPZ
 
 const ZERO = BigInt()
 const ONE  = MPZ.set_ui(one(Limb))
+
+# Packages used to hand a `BigInt` to GMP as `Ref{BigInt}`, relying on it being
+# laid out as an `__mpz_struct`. It no longer is: the limbs live in a `Memory`,
+# so the C side would read `size` as alloc/size and take the `Memory` object
+# itself for the limb pointer. Fail loudly instead of corrupting memory. Both
+# `ccall(..., (Ref{BigInt},), x)` and `Ref(x)` reach this method.
+function Base.unsafe_convert(::Type{Ref{BigInt}}, ::Base.RefValue{BigInt})
+    throw(ArgumentError("`BigInt` cannot be passed to C as `Ref{BigInt}`: its limbs are GC-managed, so it is not an `__mpz_struct`. " *
+                        "For arguments GMP only reads, use `Base.GMP.MPZ.mpz_t`; for ones it writes, use `Base.GMP.MPZ.with_output`."))
+end
 
 widen(::Type{Int128})  = BigInt
 widen(::Type{UInt128}) = BigInt

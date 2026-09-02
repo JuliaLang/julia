@@ -1319,6 +1319,8 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     n = cld(x.prec, 8*sizeof(Limb))      # limbs
     b = n * sizeof(Limb)                 # bytes
     sd = MPZ._ensure!(s, n)
+    # A finite nonzero BigFloat's significand has its top bit set, so the top
+    # limb copied below is nonzero and `BigInt`'s invariant holds.
     s.size = n
     xd = x.d
     GC.@preserve sd xd memcpy(pointer(sd), Base.unsafe_convert(Ptr{Limb}, xd), b)
