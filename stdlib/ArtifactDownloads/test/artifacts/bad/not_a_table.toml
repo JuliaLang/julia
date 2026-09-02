@@ -1,0 +1,4 @@
+broken_artifact = "this should not exist"
+
+[arty]
+git-tree-sha1 = "43563e7631a7eafae1f9f8d9d332e3de44ad7239"

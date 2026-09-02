@@ -1,0 +1,10 @@
+[does_not_exist]
+git-tree-sha1 = "0000000000000000000000000000000000000000"
+
+[[does_not_exist.download]]
+url = "https://github.com/staticfloat/small_bin/raw/master/doesnotexist.tar.gz"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[[does_not_exist.download]]
+url = "https://github.com/staticfloat/small_bin/raw/master/socrates.tar.gz"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"

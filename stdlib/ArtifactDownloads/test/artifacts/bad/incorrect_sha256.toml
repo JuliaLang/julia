@@ -1,0 +1,6 @@
+[broken_artifact]
+git-tree-sha1 = "0000000000000000000000000000000000000000"
+
+[[broken_artifact.download]]
+url = "https://github.com/staticfloat/small_bin/raw/master/socrates.tar.gz"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
