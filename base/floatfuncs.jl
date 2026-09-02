@@ -236,7 +236,9 @@ function isapprox(x::Integer, y::Integer;
     else
         # We need to take the difference `max` - `min` when comparing unsigned integers.
         _x, _y = x < y ? (x, y) : (y, x)
-        return norm(_y - _x) <= max(atol, rtol*max(norm(_x), norm(_y)))
+        # Equal arguments cannot overflow, so keep the `Number` method's guard: without it a
+        # `NaN` tolerance (e.g. `rtol*0 == Inf*0`) would reject them.
+        return x == y || norm(_y - _x) <= max(atol, rtol*max(norm(_x), norm(_y)))
     end
 end
 

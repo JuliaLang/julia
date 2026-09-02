@@ -286,6 +286,22 @@ end
     end
 end
 
+@testset "isapprox(x, x) for integers agrees with the `Number` method" begin
+    tolerances = (0, 1, 0.5, 1e-8, Inf, NaN, -1)
+    for T in (Base.BitInteger_types..., BigInt)
+        for x in (T(0), T(5), T === BigInt ? BigInt(1) << 200 : typemax(T))
+            for atol in tolerances, rtol in tolerances
+                # equal arguments cannot overflow, so the `Integer` method has no reason to
+                # deviate from the `Number` method it specializes
+                @test isapprox(x, x; atol, rtol) ==
+                      invoke(isapprox, Tuple{Number,Number}, x, x; atol, rtol) == true
+            end
+        end
+    end
+    @test isapprox(0, 0; rtol=Inf)
+    @test isapprox(5, 5; atol=NaN)
+end
+
 @testset "Conversion from floating point to unsigned integer near extremes (#51063)" begin
     @test_throws InexactError UInt32(4.2949673f9)
     @test_throws InexactError UInt64(1.8446744f19)
