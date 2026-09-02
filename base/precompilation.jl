@@ -317,7 +317,7 @@ can_fancyprint(io::IO) = @something(get(io, :force_fancyprint, nothing), (Base.u
 # captures `Pkg.precompile` output.
 unstable_iocontext(io::IOContext{IO}) = io
 unstable_iocontext(io::IOContext) = IOContext{IO}(io.io, io.dict)
-unstable_iocontext(io::IO) = IOContext{IO}(io, Base.ImmutableDict{Symbol, Any}())
+unstable_iocontext(io::IO) = IOContext{IO}(io)
 
 function printpkgstyle(io, header, msg; color=:green)
     return @lock io begin
