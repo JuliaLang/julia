@@ -31,6 +31,12 @@ Multi-threading changes
 
 * A new `AbstractSpinLock` is defined with `SpinLock <: AbstractSpinLock` ([#55944]).
 * A new `PaddedSpinLock <: AbstractSpinLock` is defined. It has extra padding to avoid false sharing ([#55944]).
+* On Apple Silicon, `Sys.CPU_THREADS` and `Sys.EFFECTIVE_CPU_THREADS` now count all CPU cores rather
+  than only the highest-performance tier. This affects the the following defaults: `--threads=auto`
+  (`JULIA_NUM_THREADS=auto`), the `--gcthreads` default, `--procs=auto`, `Distributed.addprocs()`,
+  and `JULIA_NUM_PRECOMPILE_TASKS`. Set `JULIA_CPU_THREADS` to override the detected count. The
+  performance-core heuristic has been improved and now lives in LinearAlgebra, where it continues
+  to size the default BLAS thread pool ([#62891], [JuliaLang/LinearAlgebra.jl#1686](https://github.com/JuliaLang/LinearAlgebra.jl/pull/1686)).
 
 New library functions
 ---------------------
@@ -155,3 +161,4 @@ Deprecated or removed
 [#59882]: https://github.com/JuliaLang/julia/issues/59882
 [#60025]: https://github.com/JuliaLang/julia/issues/60025
 [#60681]: https://github.com/JuliaLang/julia/issues/60681
+[#62891]: https://github.com/JuliaLang/julia/issues/62891
