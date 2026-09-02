@@ -955,7 +955,7 @@ end
               :T),
               Expr(:block, Expr(:return, Expr(:static_parameter, 1))))
     local f
-    @test (f = fl_eval(test_mod, ex)) isa Function
+    @test (f = jl_eval(test_mod, ex)) isa Function
     @test f(String) == String
     @test (f = jl_eval(test_mod, ex; expr_compat_mode=true)) isa Function
     @test f(String) == String
@@ -972,12 +972,21 @@ end
                         Expr(:tuple, :x, :y,
                              Expr(:static_parameter, 1),
                              Expr(:static_parameter, 2)))))
-    @test (f = fl_eval(test_mod, ex)) isa Function
+    @test (f = jl_eval(test_mod, ex)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
     @test (f = jl_eval(test_mod, ex; expr_compat_mode=true)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
     @test (f = jl_eval(test_mod, ex; expr_compat_mode=false)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
+
+    ex = Expr(:function,
+         Expr(:where,
+              Expr(:tuple, Expr(:(::), Expr(:curly, :Type, :T))),
+              :T),
+              Expr(:block, Expr(:isdefined, Expr(:static_parameter, 1))))
+
+    @test (f = jl_eval(test_mod, ex)) isa Function
+    @test f(String) == true
 end
 
 # duplicated in base tests

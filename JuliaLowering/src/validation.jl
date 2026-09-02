@@ -269,6 +269,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
+    [K"isdefined" [K"static_parameter" [K"Value"]]] -> pass()
     [K"lambda" _...] -> vst1_raw_lambda(vcx, st)
     [K"with-static-parameters" lam sps...] ->
         vst1_raw_lambda(vcx, lam) & all(vst1_ident, vcx, sps; lhs=true)
@@ -1379,6 +1380,7 @@ vst2_ident_val(vcx, st) = @stm st begin
     [K"core"] -> pass()
     [K"top"] -> pass()
     [K"thisfunction"] -> pass()
+    [K"static_parameter"] -> pass()
     _ -> @fail(st, "expected identifier (val)")
 end
 
