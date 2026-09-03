@@ -762,8 +762,6 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         ]
         [K"symbolicgoto" lab] ->
             @mknode(st; value=syntax_name(lab), children=nothing)
-        [K"oldsymbolicgoto" lab] ->
-            @mknode(st; value=syntax_name(lab), children=nothing)
         [K"symboliclabel" lab] ->
             @mknode(st; value=syntax_name(lab), children=nothing)
         [K"symbolicblock" id body] -> let s = syntax_name(id)

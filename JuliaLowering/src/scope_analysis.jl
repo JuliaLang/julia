@@ -1,18 +1,4 @@
 # Lowering pass 3: scope and variable analysis
-
-"""
-Key to use when transforming names into bindings
-"""
-struct NameKey
-    name::String
-    layer::ScopeLayer
-end
-
-function NameKey(ex::SyntaxTree)
-    @jl_assert kind(ex) === K"Identifier" ex
-    NameKey(syntax_name(ex), (ex.context::SyntaxContext).layer)
-end
-
 struct ScopeInfo
     # index into ctx.scopes
     id::ScopeId

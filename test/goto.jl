@@ -99,7 +99,7 @@ let lowered = Meta.lower(@__MODULE__, quote
         end
     end)
     @test lowered.head === :error
-    @test occursin("goto from a try/finally block is not permitted", lowered.args[1])
+    @test occursin("`goto` out of a `try` block is not permitted with `finally`", lowered.args[1])
 end
 
 let lowered = Meta.lower(@__MODULE__, quote
@@ -115,7 +115,7 @@ let lowered = Meta.lower(@__MODULE__, quote
         end
     end)
     @test lowered.head === :error
-    @test occursin("goto from a catch/finally block is not permitted", lowered.args[1])
+    @test occursin("`goto` out of a `catch` block is not permitted with `finally`", lowered.args[1])
 end
 
 let lowered = Meta.lower(@__MODULE__, quote
@@ -131,53 +131,8 @@ let lowered = Meta.lower(@__MODULE__, quote
         end
     end)
     @test lowered.head === :error
-    @test occursin("goto from an else/finally block is not permitted", lowered.args[1])
+    @test occursin("`goto` out of an `else` block is not permitted with `finally`", lowered.args[1])
 end
-
-# Test that oldsymbolicgoto (old syntax version / @goto) from try/catch/else with finally is allowed
-let lowered = Meta.lower(@__MODULE__, quote
-        function goto_test6_old_try()
-            try
-                $(Expr(:oldsymbolicgoto, :a))
-            finally
-            end
-            $(Expr(:symboliclabel, :a))
-            return
-        end
-    end)
-    @test lowered.head !== :error
-end
-
-let lowered = Meta.lower(@__MODULE__, quote
-        function goto_test6_old_catch()
-            try
-                error()
-            catch
-                $(Expr(:oldsymbolicgoto, :a))
-            finally
-            end
-            $(Expr(:symboliclabel, :a))
-            return
-        end
-    end)
-    @test lowered.head !== :error
-end
-
-let lowered = Meta.lower(@__MODULE__, quote
-        function goto_test6_old_else()
-            try
-            catch
-            else
-                $(Expr(:oldsymbolicgoto, :a))
-            finally
-            end
-            $(Expr(:symboliclabel, :a))
-            return
-        end
-    end)
-    @test lowered.head !== :error
-end
-
 
 function goto_test6()
     @goto a

@@ -139,7 +139,7 @@ end
 function syntax_name(st)
     @jl_assert kind(st) in KSet"""
     Identifier Placeholder Symbol core top globalref symboliclabel symbolicgoto
-    unknown_head oldsymbolicgoto
+    unknown_head
     """ st
     st.value::String
 end
