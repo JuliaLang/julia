@@ -432,8 +432,9 @@ mutable struct LazyLibrary
 end
 
 function Base.show(io::IO, ll::LazyLibrary)
+    path = replace(string(ll.path), string(PrivateShlibdirGetter()) * Base.Filesystem.path_separator => "")
     print(io, "LazyLibrary(")
-    show(io, ll.path)
+    show(io, path)
     print(io, ")")
 end
 
