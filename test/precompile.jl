@@ -3801,4 +3801,53 @@ precompile_test_harness("pkgimage type cache dedup") do dir
     end
 end
 
+# Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
+# the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
+# precompile in a child whose stderr is a pty and look for the color escapes in its output.
+if !Sys.iswindows() # child-on-fake-pty tests are skipped on Windows (see misc.jl)
+    @testset "precompile output to a TTY is colored" begin
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        mkdepottempdir() do depot
+            pkg_path = joinpath(depot, "dev", "ColorTTY")
+            mkpath(joinpath(pkg_path, "src"))
+            write(joinpath(pkg_path, "src", "ColorTTY.jl"), "module ColorTTY end\n")
+            write(joinpath(pkg_path, "Project.toml"),
+                """
+                name = "ColorTTY"
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            write(joinpath(pkg_path, "Manifest.toml"),
+                """
+                julia_version = "$(VERSION.major).$(VERSION.minor).0"
+                manifest_format = "2.0"
+
+                [[deps.ColorTTY]]
+                path = "."
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            # `stderr` is passed through untouched so the driver has to wrap the raw TTY itself
+            cmd = addenv(`$(Base.julia_cmd()) --color=yes --startup-file=no --project=$pkg_path -e 'Base.Precompilation.precompilepkgs(["ColorTTY"]; fancyprint=false)'`,
+                         "JULIA_DEPOT_PATH" => depot)
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, devnull, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            output = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(output, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            out = String(take!(output))
+            @test success(p)
+            @test occursin("ColorTTY", out)
+            @test occursin("\e[32m", out) # the green ✓ of the precompiled package
+        end
+    end
+end
+
 finish_precompile_test!()
