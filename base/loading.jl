@@ -3493,6 +3493,18 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     # in the output. We removed it above to avoid including any code we may
     # have compiled for error handling and validation.
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
+
+    # remap docstring source paths for BUILD_PATH_PREFIX_MAP
+    for mod in Docs.modules
+        moduleroot(mod) === m || continue
+        for multidoc in values(Docs.meta(mod))
+            for docstr in values(multidoc.docs)
+                path = get(docstr.data, :path, nothing)
+                path isa String && (docstr.data[:path] = ccall(:jl_map_build_path, Any, (Any,), path)::String)
+            end
+        end
+    end
+
     @lock require_lock end_loading(pkg, m)
     # insert_extension_triggers(pkg)
     # run_package_callbacks(pkg)
