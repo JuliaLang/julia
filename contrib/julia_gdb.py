@@ -166,6 +166,22 @@ def jl_value(addr):
     return gdb.Value(addr).cast(gdb.lookup_type("jl_value_t").pointer())
 
 
+def unboxed_struct_loc(rt, v):
+    """A core location for an unboxed Julia struct value in a JIT frame
+    (e.g. a by-reference argument): its debug-info type name resolves to
+    the Julia datatype, its address to the payload. None if not that."""
+    st = v.type.strip_typedefs()
+    if st.code != gdb.TYPE_CODE_STRUCT or v.address is None:
+        return None
+    tname = st.name or st.tag or v.type.name
+    if not tname:
+        return None
+    dt = rt.resolve_type_name(tname, size=st.sizeof)
+    if dt == 0:
+        return None
+    return ("inline", dt, int(v.address))
+
+
 def loc_to_gdb_value(rt, loc):
     """Convert a core location to a gdb.Value: jl_value_t* for boxed values,
     a native typed value for unboxed primitives, void* otherwise."""
@@ -410,9 +426,14 @@ class JlCommand(gdb.Command):
             else:
                 try:
                     v = gdb.parse_and_eval(base)
-                    loc0 = ("val", int(v))
                 except gdb.error:
                     continue
+                try:
+                    loc0 = ("val", int(v))
+                except gdb.error:
+                    loc0 = unboxed_struct_loc(rt, v)
+                    if loc0 is None:
+                        continue
             parsed_any = True
             try:
                 self.finish(rt, rt.eval_accessors(loc0, accessors))

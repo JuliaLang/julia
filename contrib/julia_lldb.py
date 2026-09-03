@@ -336,7 +336,20 @@ def jl_cmd(debugger, command, exe_ctx, result, internal_dict):
             val = frame.EvaluateExpression(base)
             if not val.IsValid() or val.GetError().Fail():
                 continue
-            loc0 = ("val", val.GetValueAsUnsigned())
+            canon = val.GetType().GetCanonicalType()
+            if canon.GetTypeClass() == lldb.eTypeClassStruct:
+                # unboxed Julia struct value (e.g. a by-reference argument):
+                # resolve its debug-info type name to the Julia datatype
+                laddr = val.GetLoadAddress()
+                if laddr == lldb.LLDB_INVALID_ADDRESS:
+                    continue
+                dt = rt.resolve_type_name(canon.GetName(),
+                                          size=canon.GetByteSize())
+                if dt == 0:
+                    continue
+                loc0 = ("inline", dt, laddr)
+            else:
+                loc0 = ("val", val.GetValueAsUnsigned())
         parsed_any = True
         try:
             loc = rt.eval_accessors(loc0, accessors)

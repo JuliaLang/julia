@@ -1057,3 +1057,38 @@ class JuliaRuntime:
         for key in accessors:
             loc = self.getfield(loc, key)
         return loc
+
+    def resolve_type_name(self, name, size=None):
+        """Address of the concrete jl_datatype_t named by a dotted path like
+        "Main.MaybeInt" (as debug info names unboxed struct values), or 0.
+        Parametric names cannot be resolved this way. When `size` is given,
+        the type's layout size must match it (a guard against unrelated
+        same-named native types)."""
+        if not name or "{" in name:
+            return 0
+        parts = name.split(".")
+        if not all(p.isidentifier() for p in parts):
+            return 0
+        try:
+            mod = self.root_module(parts[0])
+            if mod == 0:
+                return 0
+            loc = ("val", mod)
+            for p in parts[1:]:
+                loc = self.getfield(loc, p)
+                if loc[0] != "val":
+                    return 0
+            dt = loc[1]
+            if self.datatype_qualname(self.typeof_addr(dt)) != \
+                    "Core.DataType":
+                return 0
+            laddr = self.field_u(dt, "jl_datatype_t", "layout")
+            if laddr == 0:
+                return 0
+            if size is not None and \
+                    self.field_u(laddr, "jl_datatype_layout_t",
+                                 "size") != size:
+                return 0
+            return dt
+        except JLDebugError:
+            return 0
