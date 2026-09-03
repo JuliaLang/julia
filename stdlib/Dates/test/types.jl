@@ -180,7 +180,12 @@ end
     @test_throws ArgumentError Dates.Time(0, 0, 0, 0, -1)
     @test_throws ArgumentError Dates.Time(0, 0, 0, 0, 1000)
     @test_throws ArgumentError Dates.Time(0, 0, 0, 0, 0, -1)
-    @test_throws ArgumentError Dates.Time(0, 0, 0, 0, 0, 1000)
+    # the nanosecond part may carry a full fractional second (e.g. from parsing
+    # with the `n` code) as long as the sub-second parts stay below one second
+    @test Dates.Time(0, 0, 0, 0, 0, 1000) == Dates.Time(0, 0, 0, 0, 1)
+    @test Dates.Time(0, 0, 0, 0, 0, 999999999) == Dates.Time(0, 0, 0, 999, 999, 999)
+    @test_throws ArgumentError Dates.Time(0, 0, 0, 0, 0, 1000000000)
+    @test_throws ArgumentError Dates.Time(0, 0, 0, 1, 0, 999999999)
 end
 a = Dates.DateTime(2000)
 b = Dates.Date(2000)

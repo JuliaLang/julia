@@ -90,6 +90,19 @@ function Base.floor(t::Time, p::TimePeriod)
     return Time(Nanosecond(nanoseconds - mod(nanoseconds, value(Nanosecond(p)))))
 end
 
+Base.floor(dt::Timestamp, p::DatePeriod) = Timestamp(UTN(unixns(value(Base.floor(Date(dt), p)), 0)))
+
+function Base.floor(dt::Timestamp, p::TimePeriod)
+    value(p) < 1 && throw(DomainError(p))
+    # anchor at the rounding epoch 0000-01-01 so results agree with flooring
+    # the equivalent DateTime; that epoch is more than typemax(Int64)
+    # nanoseconds before 1970, hence the Int128 intermediate, and the result
+    # wraps back to Int64 like the rest of Timestamp arithmetic
+    epochns = Int128(UNIXEPOCHDAYS - DATEEPOCH) * NS_PER_DAY
+    nanoseconds = Int128(value(dt)) + epochns
+    return Timestamp(UTN((nanoseconds - mod(nanoseconds, value(Nanosecond(p))) - epochns) % Int64))
+end
+
 """
     floor(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> T
 
@@ -122,7 +135,8 @@ end
 """
     floor(dt::TimeType, p::Period)::TimeType
 
-Return the nearest `Date` or `DateTime` less than or equal to `dt` at resolution `p`.
+Return the nearest `Date`, `DateTime`, or `Timestamp` less than or equal to `dt`
+at resolution `p`.
 
 For convenience, `p` may be a type instead of a value: `floor(dt, Dates.Hour)` is a shortcut
 for `floor(dt, Dates.Hour(1))`.
@@ -143,7 +157,8 @@ Base.floor(::Dates.TimeType, ::Dates.Period)
 """
     ceil(dt::TimeType, p::Period)::TimeType
 
-Return the nearest `Date` or `DateTime` greater than or equal to `dt` at resolution `p`.
+Return the nearest `Date`, `DateTime`, or `Timestamp` greater than or equal to
+`dt` at resolution `p`.
 
 For convenience, `p` may be a type instead of a value: `ceil(dt, Dates.Hour)` is a shortcut
 for `ceil(dt, Dates.Hour(1))`.
@@ -195,8 +210,9 @@ end
 """
     floorceil(dt::TimeType, p::Period) -> (TimeType, TimeType)
 
-Simultaneously return the `floor` and `ceil` of a `Date` or `DateTime` at resolution `p`.
-More efficient than calling both `floor` and `ceil` individually.
+Simultaneously return the `floor` and `ceil` of a `Date`, `DateTime`, or
+`Timestamp` at resolution `p`. More efficient than calling both `floor` and
+`ceil` individually.
 """
 function floorceil(dt::TimeType, p::Period)
     f = floor(dt, p)
@@ -217,7 +233,7 @@ end
 """
     round(dt::TimeType, p::Period, [r::RoundingMode]) -> TimeType
 
-Return the `Date` or `DateTime` nearest to `dt` at resolution `p`. By default
+Return the `Date`, `DateTime`, or `Timestamp` nearest to `dt` at resolution `p`. By default
 (`RoundNearestTiesUp`), ties (e.g., rounding 9:30 to the nearest hour) will be rounded up.
 
 For convenience, `p` may be a type instead of a value: `round(dt, Dates.Hour)` is a shortcut
