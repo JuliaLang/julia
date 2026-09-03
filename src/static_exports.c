@@ -12,15 +12,12 @@
 #ifdef JL_LIBRARY_STATIC
 
 #include "libsupport.h"
-#include "jl_exported_data.inc"
+#include "jloptions.h"
 
-// Definitions of the exported pointers `jl_<name>`. These must come before
-// julia.h is included, since inside libjulia-internal it redefines each of
-// these names as a macro for the internal copy (jl_data_globals_defs.inc).
-#define XX(name, type) JL_DLLEXPORT const void *jl_##name;
-JL_EXPORTED_DATA_POINTERS(XX)
-JL_CONST_GLOBAL_VARS(XX)
-#undef XX
+// Define the public data symbols (see the comments in the .inc). These must
+// come before julia.h is included, since inside libjulia-internal it redefines
+// the pointer names as macros for the internal copies (jl_data_globals_defs.inc).
+#include "jl_exported_data_defs.inc"
 
 // Addresses of the above in the order of JL_EXPORTED_DATA_POINTERS followed by
 // JL_CONST_GLOBAL_VARS, so that export_jl_sysimg_globals (jltypes.c) can fill
@@ -43,11 +40,6 @@ JL_HIDDEN const void **const jl_static_exported_data_ptrs[] = {
 
 // n.b. `jl_small_typeof` is not defined here: the system image linked into the
 // binary defines it (aotcompile.cpp), and export_jl_small_typeof fills it in.
-
-// Data symbols that live in libjulia in the shared build (jl_options, jl_n_threads, ...)
-#define XX(name, type) JL_DLLEXPORT type name;
-JL_EXPORTED_DATA_SYMBOLS(XX)
-#undef XX
 
 // The runtime's exported functions are defined under their `ijl_` names
 // (jl_internal_funcs.inc); libjulia normally re-exports them as `jl_`. Provide
