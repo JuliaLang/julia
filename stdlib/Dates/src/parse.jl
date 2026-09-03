@@ -146,12 +146,27 @@ If successful, returns a 2-element tuple `(values, pos)`:
     # Unpacks the value tuple returned by `tryparsenext_core` into separate variables.
     value_tuple = Expr(:tuple, value_names...)
 
+    normalize_fraction = if T === DateTime && Nanosecond in tokens
+        quote
+            millisecond_from_nanoseconds, nanosecond_remainder =
+                divrem(nanosecond, Int64(1000000))
+            if nanosecond_remainder != 0
+                raise && throw(ArgumentError("Fractional second is not exactly representable as a DateTime"))
+                return nothing
+            end
+            millisecond += millisecond_from_nanoseconds
+        end
+    else
+        nothing
+    end
+
     return quote
         val = tryparsenext_core(str, pos, len, df, raise)
         val === nothing && return nothing
         values, pos, num_parsed = val
         $(assign_defaults...)
         $value_tuple = values
+        $normalize_fraction
         return $(Expr(:tuple, output_names...)), pos
     end
 end
@@ -176,7 +191,9 @@ end
     @inbounds while i <= max_pos
         c, ii = iterate(str, i)::Tuple{Char, Int}
         if '0' <= c <= '9'
-            d = d * 10 + (c - '0')
+            digit = Int64(c - '0')
+            d > div(typemax(Int64) - digit, 10) && return nothing
+            d = d * 10 + digit
         else
             break
         end

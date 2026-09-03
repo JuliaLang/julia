@@ -4,34 +4,49 @@
 DocTestSetup = :(using Dates)
 ```
 
-The `Dates` module provides two types for working with dates: [`Date`](@ref) and [`DateTime`](@ref),
-representing day and millisecond precision, respectively; both are subtypes of the abstract [`TimeType`](@ref).
+The `Dates` module provides three types for working with dates: [`Date`](@ref),
+[`DateTime`](@ref), and [`Timestamp`](@ref). They provide day, millisecond, and
+nanosecond precision, respectively. All three are subtypes of the abstract
+[`TimeType`](@ref).
 The motivation for distinct types is simple: some operations are much simpler, both in terms of
 code and mental reasoning, when the complexities of greater precision don't have to be dealt with.
 For example, since the [`Date`](@ref) type only resolves to the precision of a single date (i.e.
 no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer
 time, and leap seconds are unnecessary and avoided.
 
-Both [`Date`](@ref) and [`DateTime`](@ref) are basically immutable [`Int64`](@ref) wrappers.
-The single `instant` field of either type is actually a `UTInstant{P}` type, which
+[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) are immutable [`Int64`](@ref)
+wrappers. The single `instant` field of each type is a `UTInstant{P}` type, which
 represents a continuously increasing machine timeline based on the UT second [^1]. The
 [`DateTime`](@ref) type is not aware of time zones (*naive*, in Python parlance),
 analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
-compiles the [IANA time zone database](https://www.iana.org/time-zones). Both [`Date`](@ref) and
-[`DateTime`](@ref) are based on the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) standard, which follows the proleptic Gregorian calendar.
+compiles the [IANA time zone database](https://www.iana.org/time-zones). [`Date`](@ref),
+[`DateTime`](@ref), and [`Timestamp`](@ref) are based on the
+[ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) standard, which follows the
+proleptic Gregorian calendar.
 One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last
 day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists.
 The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is the day before
 `0001-01-01`, and year `-0001` (yes, negative one for the year) is 2 BC/BCE, year `-0002` is 3
 BC/BCE, etc.
 
+For instants finer than a millisecond, the [`Timestamp`](@ref) type provides nanosecond
+precision. Its value is a count of nanoseconds since
+the unix epoch `1970-01-01T00:00:00`, the same representation used by nanosecond timestamps
+in Apache Arrow, numpy, and pandas — which bounds its representable range to the years 1677
+through 2262. It supports integer and period construction, accessors, arithmetic,
+rounding, adjusters, ranges, parsing, and formatting. It compares directly with
+[`DateTime`](@ref) and supports mixed arithmetic when the `DateTime` value is in
+range. Use [`DateTime`](@ref) for instants outside the [`Timestamp`](@ref) range
+or when sub-millisecond precision is not needed.
+
 [^1]:
     The notion of the UT second is actually quite fundamental. There are basically two different notions
     of time generally accepted, one based on the physical rotation of the earth (one full rotation
     = 1 day), the other based on the SI second (a fixed, constant value). These are radically different!
     Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different
-    absolute length depending on the day! Anyway, the fact that [`Date`](@ref) and [`DateTime`](@ref)
+    absolute length depending on the day! Anyway, the fact that [`Date`](@ref),
+    [`DateTime`](@ref), and [`Timestamp`](@ref)
     are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds
     and all their complexity can be avoided. This basis of time is formally called [UT](https://en.wikipedia.org/wiki/Universal_Time)
     or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every
@@ -39,8 +54,9 @@ BC/BCE, etc.
 
 ## Constructors
 
-[`Date`](@ref) and [`DateTime`](@ref) types can be constructed by integer or [`Period`](@ref)
-types, by parsing, or through adjusters (more on those later):
+[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) values can be
+constructed by integer or [`Period`](@ref) types, by parsing, or through
+function-based adjuster constructors (more on those later):
 
 ```jldoctest
 julia> DateTime(2013)
@@ -78,12 +94,19 @@ julia> Date(Dates.Year(2013),Dates.Month(7),Dates.Day(1))
 
 julia> Date(Dates.Month(7),Dates.Year(2013))
 2013-07-01
+
+julia> Timestamp(2013,7,1,12,30,59,1,2,3)
+2013-07-01T12:30:59.001002003
+
+julia> Timestamp(Date(2013,7,1), Time(12,30,59) + Dates.Nanosecond(42))
+2013-07-01T12:30:59.000000042
 ```
 
-[`Date`](@ref) or [`DateTime`](@ref) parsing is accomplished by the use of format strings. Format
+[`Date`](@ref), [`DateTime`](@ref), or [`Timestamp`](@ref) parsing uses format strings. Format
 strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period
-to parse and passing the text to parse and format string to a [`Date`](@ref) or [`DateTime`](@ref)
-constructor, of the form `Date("2015-01-01",dateformat"y-m-d")` or
+to parse and passing the text to parse and format string to a [`Date`](@ref),
+[`DateTime`](@ref), or [`Timestamp`](@ref) constructor, of the form
+`Date("2015-01-01",dateformat"y-m-d")` or
 `DateTime("20150101",dateformat"yyyymmdd")`.
 
 Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent
@@ -146,9 +169,9 @@ For convenience, you may pass the format string directly (e.g., `Date("2015-01-0
 although this form incurs performance costs if you are parsing the same format repeatedly, as
 it internally creates a new `DateFormat` object each time.
 
-As well as via the constructors, a `Date` or `DateTime` can be constructed from
-strings using the [`parse`](@ref) and [`tryparse`](@ref) functions, but with
-an optional third argument of type `DateFormat` specifying the format; for example,
+As well as via the constructors, a `Date`, `DateTime`, or `Timestamp` can be
+constructed from strings using the [`parse`](@ref) and [`tryparse`](@ref)
+functions, with an optional third argument of type `DateFormat` specifying the format; for example,
 `parse(Date, "06.23.2013", dateformat"m.d.y")`, or
 `tryparse(DateTime, "1999-12-31T23:59:59")` which uses the default format.
 The notable difference between the functions is that with [`tryparse`](@ref),
@@ -166,9 +189,12 @@ A full suite of parsing and formatting tests and examples is available in [`stdl
 
 Finding the length of time between two [`Date`](@ref) or [`DateTime`](@ref) is straightforward
 given their underlying representation as `UTInstant{Day}` and `UTInstant{Millisecond}`, respectively.
-The difference between [`Date`](@ref) is returned in the number of [`Day`](@ref), and [`DateTime`](@ref)
-in the number of [`Millisecond`](@ref). Similarly, comparing [`TimeType`](@ref) is a simple matter
-of comparing the underlying machine instants (which in turn compares the internal [`Int64`](@ref) values).
+The difference between [`Date`](@ref) is returned in the number of [`Day`](@ref), [`DateTime`](@ref)
+in the number of [`Millisecond`](@ref), and [`Timestamp`](@ref) in the number of
+[`Nanosecond`](@ref) — including differences between a [`Timestamp`](@ref) and a
+[`DateTime`](@ref), which promote to [`Timestamp`](@ref). Similarly, comparing [`TimeType`](@ref)
+is a simple matter of comparing the underlying machine instants (which in turn compares the
+internal [`Int64`](@ref) values).
 
 ```jldoctest
 julia> dt = Date(2012,2,29)
@@ -599,8 +625,9 @@ julia> canonicalize(t2-t1) # creates a CompoundPeriod
 
 ## Rounding
 
-[`Date`](@ref) and [`DateTime`](@ref) values can be rounded to a specified resolution (e.g., 1
-month or 15 minutes) with [`floor`](@ref), [`ceil`](@ref), or [`round`](@ref):
+[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) values can be rounded
+to a specified resolution (e.g., 1 month or 15 minutes) with [`floor`](@ref),
+[`ceil`](@ref), or [`round`](@ref):
 
 ```jldoctest
 julia> floor(Date(1985, 8, 16), Dates.Month)
@@ -637,9 +664,10 @@ That may seem confusing, given that the hour (12) is not divisible by 10. The re
 was chosen is that it is 17,676,660 hours after `0000-01-01T00:00:00`, and 17,676,660 is divisible
 by 10.
 
-As Julia [`Date`](@ref) and [`DateTime`](@ref) values are represented according to the ISO 8601
-standard, `0000-01-01T00:00:00` was chosen as base (or "rounding epoch") from which to begin the
-count of days (and milliseconds) used in rounding calculations. (Note that this differs slightly
+As Julia [`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) values are
+represented according to the ISO 8601 standard, `0000-01-01T00:00:00` was chosen
+as the base (or "rounding epoch") from which to begin the count of days and
+sub-day units used in rounding calculations. (Note that this differs slightly
 from Julia's internal representation of [`Date`](@ref) s using [Rata Die notation](https://en.wikipedia.org/wiki/Rata_Die);
 but since the ISO 8601 standard is most visible to the end user, `0000-01-01T00:00:00` was chosen as the rounding
 epoch instead of the `0000-12-31T00:00:00` used internally to minimize confusion.)
@@ -697,6 +725,7 @@ Dates.TimeType
 Dates.DateTime
 Dates.Date
 Dates.Time
+Dates.Timestamp
 Dates.TimeZone
 Dates.UTC
 ```
@@ -719,15 +748,24 @@ Dates.Date(::Function, ::Any, ::Any, ::Any)
 Dates.Date(::Dates.TimeType)
 Dates.Date(::AbstractString, ::AbstractString)
 Dates.Date(::AbstractString, ::Dates.DateFormat)
-Dates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
+Dates.Time(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
 Dates.Time(::Dates.TimePeriod)
 Dates.Time(::Function, ::Any...)
-Dates.Time(::Dates.DateTime)
+Dates.Time(::Dates.AbstractDateTime)
 Dates.Time(::AbstractString, ::AbstractString)
 Dates.Time(::AbstractString, ::Dates.DateFormat)
+Dates.Timestamp(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
+Dates.Timestamp(::Dates.Period)
+Dates.Timestamp(::Function, ::Any...)
+Dates.Timestamp(::Dates.Date, ::Dates.Time)
+Dates.Timestamp(::Dates.TimeType)
+Dates.Timestamp(::AbstractString, ::AbstractString)
+Dates.Timestamp(::AbstractString, ::Dates.DateFormat)
 Dates.now()
 Dates.now(::Type{Dates.UTC})
-Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, TimeType})
+Dates.now(::Type{Dates.Timestamp})
+Dates.now(::Type{Dates.Timestamp}, ::Type{Dates.UTC})
+Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, Type{Timestamp}, TimeType})
 ```
 
 #### Accessor Functions
@@ -736,6 +774,9 @@ Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, TimeType})
 Dates.year
 Dates.month
 Dates.week
+Dates.weeksinyear
+Dates.isoyear
+Dates.isoweekdate
 Dates.day
 Dates.hour
 Dates.minute
@@ -753,6 +794,12 @@ Dates.Second(::DateTime)
 Dates.Millisecond(::DateTime)
 Dates.Microsecond(::Dates.Time)
 Dates.Nanosecond(::Dates.Time)
+Dates.Hour(::Dates.Timestamp)
+Dates.Minute(::Dates.Timestamp)
+Dates.Second(::Dates.Timestamp)
+Dates.Millisecond(::Dates.Timestamp)
+Dates.Microsecond(::Dates.Timestamp)
+Dates.Nanosecond(::Dates.Timestamp)
 Dates.yearmonth
 Dates.monthday
 Dates.yearmonthday
@@ -810,8 +857,8 @@ Dates.periods
 
 #### Rounding Functions
 
-`Date` and `DateTime` values can be rounded to a specified resolution (e.g., 1 month or 15 minutes)
-with `floor`, `ceil`, or `round`.
+`Date`, `DateTime`, and `Timestamp` values can be rounded to a specified
+resolution (e.g., 1 month or 15 minutes) with `floor`, `ceil`, or `round`.
 
 ```@docs
 Base.floor(::Dates.TimeType, ::Dates.Period)
@@ -843,6 +890,8 @@ Dates.datetime2epochms
 Dates.today
 Dates.unix2datetime
 Dates.datetime2unix
+Dates.unix2timestamp
+Dates.timestamp2unix
 Dates.julian2datetime
 Dates.datetime2julian
 Dates.rata2datetime
@@ -884,6 +933,7 @@ Months of the Year:
 
 ```@docs
 ISODateTimeFormat
+ISOTimestampFormat
 ISODateFormat
 ISOTimeFormat
 RFC1123Format
