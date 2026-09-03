@@ -95,6 +95,11 @@ Compiler/Runtime improvements
   information. This prevents coverage from writing `.cov` files for Base sources into the Julia installation
   ([#62514]).
 
+* Debug information emitted for JIT-compiled code at `-g2` now describes unboxed values
+  accurately: primitive types carry their DWARF encoding (so `Float64` locals display as
+  floats in a debugger), struct locals list their fields by name with offsets, and type
+  names include their parameters (`Complex{Float64}` rather than `Complex`).
+
 Command-line option changes
 ---------------------------
 
