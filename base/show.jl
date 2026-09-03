@@ -489,10 +489,19 @@ end
 
 Write a text representation of a value `x` to the output stream `io`. New types `T`
 should overload `show(io::IO, x::T)`. The representation used by `show` generally
-includes Julia-specific formatting and type information, and should be parseable
-Julia code when possible.
+includes Julia-specific formatting and type information.
 
 [`repr`](@ref) returns the output of `show` as a string.
+
+The output *should* be parseable Julia code that, after parsing and evaluation,
+is equal to the value: that is, `eval(Meta.parse(repr(x))) == x` *should*
+be `true`. However, there are occasional counter-examples of types where
+this is impractical, such as self-referential data structures or cases
+where accurate parsing would require a verbose and awkward `show` format.
+
+`show` is not a text-based serialization format. For more reliable serialization
+of *arbitrary* Julia types, use the `Serialization` standard library or similar
+packages rather than `show`.
 
 For a more verbose human-readable text output for objects of type `T`, define
 `show(io::IO, ::MIME"text/plain", ::T)` in addition. Checking the `:compact`
@@ -509,6 +518,39 @@ julia> show("Hello World!")
 "Hello World!"
 julia> print("Hello World!")
 Hello World!
+```
+
+# Extended help
+
+Example of round-tripping:
+```jldoctest
+julia> Int8(2) == eval(Meta.parse(repr(Int8(2))))
+true
+```
+
+Example of a technical reason preventing round-tripping (a self-referential object):
+```julia
+mutable struct X
+    x::X
+    function X()
+        x = new()
+        x.x = x
+    end
+end
+```
+
+Example of intentionally not round-tripping to avoid verbose output:
+```jldoctest
+julia> struct A a end
+
+julia> x = 2 |> Int8 |> A
+A(2)
+
+julia> y = x.a |> repr |> Meta.parse |> eval |> A
+A(2)
+
+julia> x == y
+false
 ```
 """
 show(io::IO, @nospecialize(x)) = show_default(io, x)
