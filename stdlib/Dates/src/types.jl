@@ -195,22 +195,17 @@ end
     Timestamp
 
 `Timestamp` represents a point in time according to the proleptic Gregorian
-calendar with nanosecond resolution. It wraps a `UTInstant{Nanosecond}`: an
-`Int64` count of nanoseconds since the unix epoch `1970-01-01T00:00:00`, the
-same physical representation as Apache Arrow's `timestamp[ns]`, numpy's
-`datetime64[ns]`, and pandas timestamps. This makes `Timestamp` 8 bytes and
-`isbits`, and lets value buffers be shared with those systems without
-conversion, though each layers its own conventions on top: numpy reserves
-`typemin(Int64)` as its `NaT` sentinel (so pandas' range starts one
-nanosecond later), and Arrow carries time zone and validity information
-separately.
+calendar with nanosecond resolution. Its value is an `Int64` count of
+nanoseconds since the Unix epoch, `1970-01-01T00:00:00`.
 
 Nanosecond resolution in 64 bits bounds the representable range to
 `1677-09-21T00:12:43.145224192` through `2262-04-11T23:47:16.854775807`
-(`typemin(Timestamp)`/`typemax(Timestamp)`); constructing a `Timestamp` outside
-this range throws an `ArgumentError`. Like `DateTime`, the type uses fixed-point
-arithmetic and is thus prone to underflowing and overflowing: adding a period
-that would leave the representable range wraps around rather than throwing.
+(`typemin(Timestamp)` and `typemax(Timestamp)`); constructing a `Timestamp`
+outside this range throws an `ArgumentError`. Like `DateTime`, the type uses
+fixed-point arithmetic and is thus prone to underflowing and overflowing:
+adding a period that would leave the representable range wraps around rather
+than throwing.
+
 For instants outside this range, or when nanosecond resolution is not needed,
 use [`DateTime`](@ref), which covers ±146 million years at millisecond
 resolution. The two types compare directly. Mixed arithmetic promotes
@@ -229,6 +224,14 @@ julia> DateTime(ts) # floors to millisecond resolution
 
 !!! compat "Julia 1.14"
     `Timestamp` requires Julia 1.14 or later.
+
+# Extended help
+
+The representation is the same as Apache Arrow's `timestamp[ns]`, numpy's
+`datetime64[ns]`, and pandas timestamps, so nanosecond-timestamp value buffers
+from those systems can be reinterpreted as `Timestamp`s directly. Note that
+numpy reserves `typemin(Int64)` as its `NaT` sentinel, so the pandas range
+begins one nanosecond after `typemin(Timestamp)`.
 """
 struct Timestamp <: AbstractDateTime
     instant::UTInstant{Nanosecond}
