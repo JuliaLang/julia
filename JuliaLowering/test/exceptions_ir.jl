@@ -365,3 +365,60 @@ end
 6   TestMod.b
 7   (pop_exception %₁)
 8   (return %₆)
+
+########################################
+# Error: unmatched goto from try
+begin
+    try
+        @goto lab
+    finally
+    end
+    @label lab
+end
+#---------------------
+LoweringError:
+begin
+    try
+        @goto lab
+#             └─┘ ── `goto` out of a `try` block is not permitted with `finally`
+    finally
+    end
+
+########################################
+# Error: unmatched goto from catch
+begin
+    try
+    catch
+        @goto lab
+    finally
+    end
+    @label lab
+end
+#---------------------
+LoweringError:
+    try
+    catch
+        @goto lab
+#             └─┘ ── `goto` out of a `catch` block is not permitted with `finally`
+    finally
+    end
+
+########################################
+# Error: unmatched goto from else
+begin
+    try
+    catch
+    else
+        @goto lab
+    finally
+    end
+    @label lab
+end
+#---------------------
+LoweringError:
+    catch
+    else
+        @goto lab
+#             └─┘ ── `goto` out of a `else` block is not permitted with `finally`
+    finally
+    end
