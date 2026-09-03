@@ -242,7 +242,7 @@ GCChecker::ensureObjectForSymbol(SymbolRef Sym, ProgramStateRef &State,
   }
   if (!Object) {
     SVal S = C.getSValBuilder().conjureSymbolVal(
-        C.getCFGElementRef(), C.getLocationContext(), Type,
+        C.getCFGElementRef(), C.getStackFrame(), Type,
         C.blockCount());
     Object = dyn_cast_or_null<SymbolConjured>(S.getAsSymbol());
   }
@@ -658,10 +658,10 @@ ProgramStateRef GCChecker::bindRootRegionToCurrentValue(
   if (ShouldConjure && !ValueType.isNull() &&
       isGCTrackedType(ValueType)) {
     Value = C.getSValBuilder().conjureSymbolVal(
-        nullptr, C.getCFGElementRef(), C.getLocationContext(), ValueType,
+        nullptr, C.getCFGElementRef(), C.getStackFrame(), ValueType,
         C.blockCount());
     State = State->bindLoc(loc::MemRegionVal(Region), Value,
-                           C.getLocationContext());
+                           C.getStackFrame());
     ValueObjects = getObjectsForSVal(State, Value);
   }
   GCObjectSet Objects = ValueObjects;
@@ -678,7 +678,7 @@ const MemRegion *GCChecker::getStorageRegionForExpr(const Expr *E,
   if (!E)
     return nullptr;
   const Expr *Inner = E->IgnoreParenCasts();
-  const auto *LCtx = C.getLocationContext();
+  const auto *LCtx = C.getStackFrame();
   if (const auto *UO = dyn_cast<UnaryOperator>(Inner)) {
     if (UO->getOpcode() == UO_Deref) {
       if (const MemRegion *Region =
@@ -726,7 +726,7 @@ const MemRegion *GCChecker::getBindingRegionForExprResult(
     if (const auto *VD = Parents[0].get<VarDecl>()) {
       if (VD->getInit() && VD->getInit()->IgnoreParenCasts() == Result) {
         if (const MemRegion *Region =
-                State->getLValue(VD, C.getLocationContext()).getAsRegion())
+                State->getLValue(VD, C.getStackFrame()).getAsRegion())
           return Region->StripCasts();
       }
       return nullptr;
@@ -751,7 +751,7 @@ const MemRegion *GCChecker::getRootingRegionForExpr(const Expr *E,
   if (!E)
     return nullptr;
   const Expr *Inner = E->IgnoreParenCasts();
-  const auto *LCtx = C.getLocationContext();
+  const auto *LCtx = C.getStackFrame();
   if (const auto *UO = dyn_cast<UnaryOperator>(Inner)) {
     if (UO->getOpcode() == UO_Deref) {
       if (const MemRegion *Region =
@@ -795,9 +795,9 @@ SVal GCChecker::getOrConjurePointerValue(Loc LValue, QualType Type,
   if (Type.isNull() || !Type->isPointerType())
     return Value;
   Value = C.getSValBuilder().conjureSymbolVal(
-      nullptr, C.getCFGElementRef(), C.getLocationContext(), Type,
+      nullptr, C.getCFGElementRef(), C.getStackFrame(), Type,
       C.blockCount());
-  State = State->bindLoc(LValue, Value, C.getLocationContext());
+  State = State->bindLoc(LValue, Value, C.getStackFrame());
   return Value;
 }
 
