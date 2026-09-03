@@ -346,6 +346,8 @@ STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *p
 // per field of the object being copied, but may be special-cased for performance reasons.
 STATIC_INLINE void jl_gc_multi_wb(const void *parent,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
+// Write-barrier function that must be used before draining the finalizer queue.
+STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue) JL_NOTSAFEPOINT;
 // Write-barrier function that must be used after copying fields of elements of genericmemory objects
 // into another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.

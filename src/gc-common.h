@@ -189,7 +189,7 @@ extern jl_mutex_t finalizers_lock;
 // If an object pointer has `GC_FIN_CFUNC_TAG` set, the next pointer is an unboxed c function pointer.
 // If an object pointer has `GC_FIN_COBJ_TAG` set, the current pointer is a c object pointer.
 //   It must be aligned at least 4, and it finalized immediately (at "quiescence").
-// `to_finalize` should not have tagged pointers.
+// `to_finalize` carries the same tags: `sweep_finalizer_list` moves entries over unchanged.
 #define GC_FIN_CFUNC_TAG 1
 #define GC_FIN_COBJ_TAG  2
 #define GC_FIN_TAG_MASK  3
