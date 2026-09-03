@@ -764,6 +764,31 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
         void **lst = ptls2->gc_tls_common.heap.mallocarrays.items;
         // filter without preserving order
         while (n < l) {
+            if ((uintptr_t)lst[n] & 2) {
+                // A task with a malloc'd exception stack buffer
+                // (see `jl_gc_track_malloced_excstack`).
+                jl_task_t *t = (jl_task_t*)((uintptr_t)lst[n] & ~3);
+                if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
+                    // Keep the entry only while the task still owns a malloc'd buffer
+                    // (it may have been replaced by a GC-allocated one).
+                    if (t->excstack && t->excstack->malloced) {
+                        n++;
+                        continue;
+                    }
+                }
+                else {
+                    jl_excstack_t *s = t->excstack;
+                    if (s && s->malloced) {
+                        // NULL the field so that a duplicate entry for this task
+                        // does not free the buffer again.
+                        t->excstack = NULL;
+                        free(s);
+                    }
+                }
+                l--;
+                lst[n] = lst[l];
+                continue;
+            }
             jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[n] & ~1);
             if (gc_marked(jl_astaggedvalue(m)->bits.gc)) {
                 n++;
@@ -2544,9 +2569,12 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     jl_excstack_t *excstack = ta->excstack;
                     gc_heap_snapshot_record_task_to_frame_edge(ta, excstack);
                     size_t itr = ta->excstack->top;
-                    gc_setmark_buf(ptls, excstack, bits,
-                                    sizeof(jl_excstack_t) +
-                                        sizeof(uintptr_t) * excstack->reserved_size);
+                    // Malloc'd buffers are not GC objects: they are freed by
+                    // the malloced-memory sweep and must not be marked.
+                    if (!excstack->malloced)
+                        gc_setmark_buf(ptls, excstack, bits,
+                                        sizeof(jl_excstack_t) +
+                                            sizeof(uintptr_t) * excstack->reserved_size);
                     gc_mark_excstack(ptls, excstack, itr);
                 }
                 const jl_datatype_layout_t *layout = jl_task_type->layout;

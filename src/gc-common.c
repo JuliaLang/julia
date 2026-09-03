@@ -744,6 +744,15 @@ void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, i
     small_arraylist_push(&ptls->gc_tls_common.heap.mallocarrays, a);
 }
 
+// tracking tasks whose exception stack buffer is malloc'd (see `jl_reserve_excstack`).
+// The entry is tagged with bit 1 to distinguish it from a genericmemory entry.
+void jl_gc_track_malloced_excstack(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    // This is **NOT** a GC safe point.
+    void *a = (void*)((uintptr_t)ct | 2);
+    small_arraylist_push(&ct->ptls->gc_tls_common.heap.mallocarrays, a);
+}
+
 // =========================================================================== //
 // GC Debug
 // =========================================================================== //
