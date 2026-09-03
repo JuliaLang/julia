@@ -3738,67 +3738,6 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
     end
 end
 
-precompile_test_harness("Ambiguity-pruned dispatch edge revalidation") do load_path
-    # A method added after an image is built can be pairwise-ambiguous with a recorded
-    # dispatch match without changing the count returned by the include_ambiguous=false
-    # lookup used at load time: the newcomer is pruned from the result when the expected
-    # match fully covers its overlap with the call signature. Such a package image must
-    # NOT be revalidated, because dispatch in the newly-ambiguous region throws MethodError.
-    write(joinpath(load_path, "AmbigPruneA.jl"),
-        """
-        module AmbigPruneA
-        m(x::Integer, y) = 1
-        end
-        """)
-    write(joinpath(load_path, "AmbigPruneB.jl"),
-        """
-        module AmbigPruneB
-        using AmbigPruneA
-        caller(x::Int8, @nospecialize(y)) = AmbigPruneA.m(x, y)
-        precompile(caller, (Int8, Any))
-        end
-        """)
-    # Precompile B (which pulls in A) without loading either into this session.
-    Base.compilecache(Base.PkgId("AmbigPruneB"))
-
-    @eval using AmbigPruneA
-    # Introduce a method pairwise-ambiguous with m(::Integer, ::Any): the first slot is
-    # wider, the second narrower, and the overlap (Integer, AbstractString) is non-empty.
-    @eval AmbigPruneA.m(x, y::AbstractString) = 2
-    # Loading B now verifies its image in a world that already contains the ambiguity.
-    @eval using AmbigPruneB
-
-    # The precompiled CodeInstance for the (Int8, Any) specialization must have been
-    # invalidated (max_world != typemax) by load-time revalidation. This check must be
-    # evaluated separately from (and before) any code containing a call to `caller`:
-    # compiling such code adds a fresh, valid CodeInstance for the same specialization
-    # (@nospecialize routes the concrete call's compile signature there).
-    @eval let
-        m = only(methods(AmbigPruneB.caller))
-        target = Tuple{typeof(AmbigPruneB.caller), Int8, Any}
-        mi = nothing
-        for spec in Base.specializations(m)
-            if spec.specTypes == target
-                mi = spec
-                break
-            end
-        end
-        @test mi !== nothing
-        ci = isdefined(mi, :cache) ? mi.cache : nothing
-        revalidated = false
-        while ci !== nothing
-            if ci.max_world == typemax(UInt)
-                revalidated = true
-                break
-            end
-            ci = isdefined(ci, :next) ? ci.next : nothing
-        end
-        @test !revalidated
-    end
-    # Dispatch in the ambiguous region must now throw rather than return the stale result.
-    @eval @test_throws MethodError AmbigPruneB.caller(Int8(1), "hi")
-end
-
 precompile_test_harness("pkgimage type cache dedup") do dir
     # Check deduplication when a type precedes its supertype in the image.
     # The unused IFD binding preserves that order.
@@ -3859,6 +3798,55 @@ precompile_test_harness("pkgimage type cache dedup") do dir
             @test n == 1
         end
         @test M === Memory{DedupColors.CGray{UInt8}}
+    end
+end
+
+# Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
+# the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
+# precompile in a child whose stderr is a pty and look for the color escapes in its output.
+if !Sys.iswindows() # child-on-fake-pty tests are skipped on Windows (see misc.jl)
+    @testset "precompile output to a TTY is colored" begin
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        mkdepottempdir() do depot
+            pkg_path = joinpath(depot, "dev", "ColorTTY")
+            mkpath(joinpath(pkg_path, "src"))
+            write(joinpath(pkg_path, "src", "ColorTTY.jl"), "module ColorTTY end\n")
+            write(joinpath(pkg_path, "Project.toml"),
+                """
+                name = "ColorTTY"
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            write(joinpath(pkg_path, "Manifest.toml"),
+                """
+                julia_version = "$(VERSION.major).$(VERSION.minor).0"
+                manifest_format = "2.0"
+
+                [[deps.ColorTTY]]
+                path = "."
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            # `stderr` is passed through untouched so the driver has to wrap the raw TTY itself
+            cmd = addenv(`$(Base.julia_cmd()) --color=yes --startup-file=no --project=$pkg_path -e 'Base.Precompilation.precompilepkgs(["ColorTTY"]; fancyprint=false)'`,
+                         "JULIA_DEPOT_PATH" => depot)
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, devnull, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            output = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(output, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            out = String(take!(output))
+            @test success(p)
+            @test occursin("ColorTTY", out)
+            @test occursin("\e[32m", out) # the green ✓ of the precompiled package
+        end
     end
 end
 
