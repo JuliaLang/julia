@@ -298,14 +298,20 @@ class JuliaPrettyPrinter(gdb.printing.PrettyPrinter):
         super().__init__("julia")
 
     def __call__(self, val):
-        t = val.type
+        # look through typedefs on the pointer itself too: JIT debug info
+        # types boxed values as typedefs of jl_value_t* named after the
+        # Julia type (e.g. "Array{Int64, 1}")
+        t = val.type.strip_typedefs()
         if t.code != gdb.TYPE_CODE_PTR:
             return None
+        names = set()
+        if val.type.code == gdb.TYPE_CODE_PTR:
+            names.add(val.type.target().name)
         target = t.target()
-        name = target.name
+        names.add(target.name)
         stripped = target.strip_typedefs()
-        tag = stripped.tag or stripped.name
-        if name not in JULIA_POINTER_TYPES and tag not in JULIA_POINTER_TYPES:
+        names.add(stripped.tag or stripped.name)
+        if names.isdisjoint(JULIA_POINTER_TYPES):
             return None
         try:
             if int(val) == 0:
