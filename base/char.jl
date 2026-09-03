@@ -48,6 +48,15 @@ a `Char` value may store information that cannot be converted to a Unicode
 codepoint — converting such a `Char` to `UInt32` will throw an error.
 The [`isvalid(c::Char)`](@ref) function can be used to query whether `c`
 represents a valid Unicode character.
+
+*Note:* Characters can also be converted to integers using `Int(c::Char)`;
+this returns the Unicode code point of `c`. Example:
+
+    julia> Int('a')
+    97
+
+    julia> Int('é')
+    233
 """
 Char
 
