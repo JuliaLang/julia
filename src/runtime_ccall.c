@@ -22,6 +22,36 @@
 jl_value_t *jl_libdl_dlid_func JL_GLOBALLY_ROOTED;
 jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 
+// Foreign link policy: for each `LibraryID` registered here, whether AOT codegen
+// should bind that library's `ccall`/`cglobal` sites by direct external symbol
+// reference (`true`) or leave them to the run-time lookup (`false`).
+jl_genericmemory_t *jl_foreign_link_policy JL_GLOBALLY_ROOTED = NULL; // eqtable LibraryID => Bool; marked in gc_mark_roots
+static jl_mutex_t link_policy_map_lock;
+
+JL_DLLEXPORT void jl_set_foreign_link_policy(jl_value_t *id, int native)
+{
+    if (!jl_typeis(id, (jl_value_t*)jl_libraryid_type))
+        jl_type_error("jl_set_foreign_link_policy", (jl_value_t*)jl_libraryid_type, id);
+    JL_LOCK(&link_policy_map_lock);
+    jl_genericmemory_t *t = jl_foreign_link_policy;
+    if (t == NULL)
+        jl_foreign_link_policy = t = jl_alloc_memory_any(32);
+    int inserted;
+    jl_foreign_link_policy = jl_eqtable_put(t, id, native ? jl_true : jl_false, &inserted);
+    JL_UNLOCK(&link_policy_map_lock);
+}
+
+// 1 if `id` is to be bound natively, 0 if it is to be looked up at run time,
+// -1 if no policy was set for it
+JL_DLLEXPORT int jl_get_foreign_link_policy(jl_value_t *id) JL_NOTSAFEPOINT
+{
+    JL_LOCK_NOGC(&link_policy_map_lock);
+    jl_genericmemory_t *t = jl_foreign_link_policy;
+    jl_value_t *policy = t == NULL ? NULL : jl_eqtable_get(t, id, NULL);
+    JL_UNLOCK_NOGC(&link_policy_map_lock);
+    return policy == NULL ? -1 : policy == jl_true;
+}
+
 // map from user-specified lib names to handles
 static htable_t libMap;
 static jl_mutex_t libmap_lock;
@@ -456,6 +486,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
 void jl_init_runtime_ccall(void)
 {
     JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
+    JL_MUTEX_INIT(&link_policy_map_lock, "link_policy_map_lock");
     strhash_new(&libMap, 16);
     uv_mutex_init(&trampoline_lock);
 }

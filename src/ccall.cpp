@@ -44,6 +44,7 @@ extern "C" JL_DLLEXPORT jl_value_t *ijl_genericmemory_owner(jl_genericmemory_t *
 
 STATISTIC(EmittedCCalls, "Number of ccalls emitted");
 STATISTIC(DeferredCCallLookups, "Number of ccalls looked up at runtime");
+STATISTIC(NativeLinkedCCalls, "Number of ccalls bound by direct external symbol reference");
 STATISTIC(LiteralCCalls, "Number of ccalls directly emitted through a pointer");
 STATISTIC(RetBoxedCCalls, "Number of ccalls that were retboxed");
 STATISTIC(SRetCCalls, "Number of ccalls that were marked sret");
@@ -721,6 +722,17 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     }
 }
 
+// Is this call site eligible for native linking, i.e. should it reference the
+// external symbol directly instead of resolving it lazily via a PLT at runtime?
+static bool is_native_link_target(jl_codectx_t &ctx, const native_sym_arg_t &symarg) JL_NOTSAFEPOINT
+{
+    if (!ctx.emission_context.imaging_mode)
+        return false;
+    if (symarg.f_name == nullptr || symarg.lib_id == nullptr)
+        return false;
+    return jl_get_foreign_link_policy(symarg.lib_id) == 1;
+}
+
 // --- code generator for cglobal ---
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayRef<jl_cgval_t> argv, size_t nargs) JL_CANSAFEPOINT;
@@ -735,7 +747,15 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         native_sym_arg_t sym = {};
         JL_GC_PUSH3(&sym.gcroot[0], &sym.gcroot[1], &sym.gcroot[2]);
         interpret_foreignsymbol(ctx, sym, arg);
-        Value *res = runtime_sym_lookup(ctx, sym, ctx.f);
+        Value *res;
+        bool native_linked = is_native_link_target(ctx, sym);
+        if (native_linked) {
+            // Reference the data symbol directly; the system linker binds it.
+            res = jl_Module->getOrInsertGlobal(sym.f_name, getInt8Ty(ctx.builder.getContext()));
+        }
+        else {
+            res = runtime_sym_lookup(ctx, sym, ctx.f);
+        }
         JL_GC_POP();
         return mark_julia_type(ctx, res, false, (jl_value_t*)jl_voidpointer_type);
     } else {
@@ -2231,6 +2251,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         ++LiteralCCalls;
         null_pointer_check(ctx, symarg.jl_ptr, nullptr);
         llvmf = symarg.jl_ptr;
+    }
+    else if (is_native_link_target(ctx, symarg)) {
+        // Emit a plain external call and let the system linker bind it
+        ++NativeLinkedCCalls;
+        llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype).getCallee();
     }
     else if (!ctx.params->use_jlplt) {
         if ((symarg.f_lib && !((symarg.f_lib == JL_EXE_LIBNAME) ||

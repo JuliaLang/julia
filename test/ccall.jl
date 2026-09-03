@@ -2207,7 +2207,7 @@ end
 
 # `ccall`/`cglobal` record `dlid(lib)` where the call is written
 module TestAbstractLibraryIdentity
-using Test, Libdl
+using Test, Libdl, InteractiveUtils
 using Libdl: AbstractLibrary, LibraryID, LazyLibrary, LazyLibraryPath, dlid
 
 const libccalltest_path = Libdl.dlpath("libccalltest")
@@ -2262,4 +2262,33 @@ cglobal_declaring() = cglobal((:my_global, declaring_lib))
     @test length(only(code_lowered(cglobal_declaring)).code[1].args[1].args) == 3
     @test_throws ErrorException @eval uses_misdeclared() = ccall((:my_symbol, misdeclared_lib), Cint, ())
 end
+
+# foreign link policy; must not affect JIT codegen
+@testset "foreign link policy" begin
+    registered = LibraryID(Base.UUID(0xaabbccddeeff00112233445566778899), "libbar")
+    other = LibraryID(Base.UUID(0x11111111222233334444555555555555), "libfoo")
+    policy(id) = ccall(:jl_get_foreign_link_policy, Cint, (Any,), id)
+    setpolicy!(id, native) = ccall(:jl_set_foreign_link_policy, Cvoid, (Any, Cint), id, native)
+    @test policy(registered) == -1
+    setpolicy!(registered, true)
+    @test policy(registered) == 1
+    @test policy(other) == -1
+    # keyed by value; setting again replaces the entry
+    @test policy(LibraryID(registered.pkg, "lib" * "bar")) == 1
+    @test policy(LibraryID(registered.pkg, "LIBBAR")) == -1
+    setpolicy!(registered, false)
+    @test policy(registered) == 0
+    setpolicy!(registered, true)
+    @test policy(registered) == 1
+    @test_throws TypeError setpolicy!("not an identity", true)
+
+    # a policy must not change what the JIT emits
+    setpolicy!(dlid(named_lib), true)
+    ir = sprint(io -> code_llvm(io, echo_p_named, Tuple{Ptr{Cvoid}};
+                                raw=true, dump_module=false, optimize=true, debuginfo=:none))
+    @test occursin("jl_lazy_load_and_lookup", ir)
+    @test !occursin("@test_echo_p", ir)
+    p = Ptr{Cvoid}(UInt(0xfeedface))
+    @test echo_p_named(p) === p
 end
+end # module TestAbstractLibraryIdentity
