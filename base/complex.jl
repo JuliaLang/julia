@@ -507,11 +507,11 @@ function robust_cinv(c::Float64, d::Float64)
 end
 
 function ssqs(x::T, y::T) where T<:Real
-    k::Int = 0
+    k = 0
     ρ = x*x + y*y
     if !isfinite(ρ) && (isinf(x) || isinf(y))
         ρ = convert(T, Inf)
-    elseif isinf(ρ) || (ρ==0 && (x!=0 || y!=0)) || ρ<nextfloat(zero(T))/(2*eps(T)^2)
+    elseif isinf(ρ) || ((x!=0 || y!=0) && ρ<nextfloat(zero(T))/(2*eps(T)^2))
         m::T = max(abs(x), abs(y))
         k = m==0 ? 0 : exponent(m)
         xk, yk = ldexp(x,-k), ldexp(y,-k)
@@ -526,7 +526,7 @@ function sqrt(z::Complex)
     if x==y==0
         return Complex(zero(x),y)
     end
-    ρ, k::Int = ssqs(x, y)
+    ρ, k = ssqs(x, y)
     if isfinite(x) ρ=ldexp(abs(x),-k)+sqrt(ρ) end
     if isodd(k)
         k = div(k-1,2)
