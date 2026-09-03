@@ -5,11 +5,11 @@
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#1##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#1#2 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#1##0
+6   TestMod.#1#2
 7   (new %₆)
-8   TestMod.#1##0
+8   TestMod.#1#2
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
 11  SourceLocation::1:2
@@ -21,8 +21,8 @@
     2   (call %₁ slot₂/x 1)
     3   (return %₂)
 14  latestworld
-15  (= slot₁/1 %₇)
-16  slot₁/1
+15  (= slot₁/#-># %₇)
+16  slot₁/#->#
 17  TestMod.xs
 18  (call top.Generator %₁₆ %₁₇)
 19  (return %₁₈)
@@ -34,11 +34,11 @@
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#2##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#3#4 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#2##0
+6   TestMod.#3#4
 7   (new %₆)
-8   TestMod.#2##0
+8   TestMod.#3#4
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
 11  SourceLocation::1:2
@@ -58,8 +58,8 @@
     10  (call %₇ %₈ %₉)
     11  (return %₁₀)
 14  latestworld
-15  (= slot₁/2 %₇)
-16  slot₁/2
+15  (= slot₁/#-># %₇)
+16  slot₁/#->#
 17  TestMod.xs
 18  TestMod.ys
 19  (call top.product %₁₇ %₁₈)
@@ -73,11 +73,11 @@
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#3##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#5#6 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#3##0
+6   TestMod.#5#6
 7   (new %₆)
-8   TestMod.#3##0
+8   TestMod.#5#6
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
 11  SourceLocation::1:2
@@ -96,16 +96,16 @@
     9   (call core.tuple %₇ %₈)
     10  (return %₉)
 14  latestworld
-15  (= slot₁/3 %₇)
-16  slot₁/3
+15  (= slot₁/#-># %₇)
+16  slot₁/#->#
 17  (call core.svec)
 18  (call core.svec)
 19  (call core.svec)
-20  (call JuliaLowering.eval_closure_type TestMod :#4##0 %₁₇ %₁₈ %₁₉)
+20  (call JuliaLowering.eval_closure_type TestMod :#7#8 %₁₇ %₁₈ %₁₉)
 21  latestworld
-22  TestMod.#4##0
+22  TestMod.#7#8
 23  (new %₂₂)
-24  TestMod.#4##0
+24  TestMod.#7#8
 25  (call core.svec %₂₄ core.Any)
 26  (call core.svec)
 27  SourceLocation::1:29
@@ -124,8 +124,8 @@
     9   (call %₇ %₈)
     10  (return %₉)
 30  latestworld
-31  (= slot₂/4 %₂₃)
-32  slot₂/4
+31  (= slot₂/#-># %₂₃)
+32  slot₂/#->#
 33  TestMod.iter
 34  (call top.Filter %₃₂ %₃₃)
 35  (call top.Generator %₁₆ %₃₄)
@@ -138,11 +138,11 @@
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#5##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#9#10 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#5##0
+6   TestMod.#9#10
 7   (new %₆)
-8   TestMod.#5##0
+8   TestMod.#9#10
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
 11  SourceLocation::1:2
@@ -152,8 +152,8 @@
     slots: [slot₁/#self#(!read) slot₂/#unused#(!read)]
     1   (return 1)
 14  latestworld
-15  (= slot₁/5 %₇)
-16  slot₁/5
+15  (= slot₁/#-># %₇)
+16  slot₁/#->#
 17  TestMod.xs
 18  (call top.Generator %₁₆ %₁₇)
 19  (return %₁₈)
@@ -173,11 +173,11 @@ LoweringError:
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#6##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#11#12 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#6##0
+6   TestMod.#11#12
 7   (new %₆)
-8   TestMod.#6##0
+8   TestMod.#11#12
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
 11  SourceLocation::1:2
@@ -198,8 +198,8 @@ LoweringError:
     11  TestMod.body
     12  (return %₁₁)
 14  latestworld
-15  (= slot₁/6 %₇)
-16  slot₁/6
+15  (= slot₁/#-># %₇)
+16  slot₁/#->#
 17  TestMod.iter
 18  (call top.Generator %₁₆ %₁₇)
 19  (return %₁₈)
@@ -211,11 +211,11 @@ LoweringError:
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#7##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#13#14 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#7##0
+6   TestMod.#13#14
 7   (new %₆)
-8   TestMod.#7##0
+8   TestMod.#13#14
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
 11  SourceLocation::1:4
@@ -226,8 +226,8 @@ LoweringError:
     1   (call JuliaLowering.interpolate_expr (inert (return x)))
     2   (return %₁)
 14  latestworld
-15  (= slot₁/7 %₇)
-16  slot₁/7
+15  (= slot₁/#-># %₇)
+16  slot₁/#->#
 17  TestMod.iter
 18  (call top.Generator %₁₆ %₁₇)
 19  (return %₁₈)
@@ -247,16 +247,16 @@ LoweringError:
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#8##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#15#16 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#8##0
+6   TestMod.#15#16
 7   (new %₆)
 8   (call core.svec)
 9   (call core.svec)
 10  (call core.svec)
-11  (call JuliaLowering.eval_closure_type TestMod :#9#8##0 %₈ %₉ %₁₀)
+11  (call JuliaLowering.eval_closure_type TestMod :#17#18 %₈ %₉ %₁₀)
 12  latestworld
-13  TestMod.#9#8##0
+13  TestMod.#17#18
 14  (call core.svec %₁₃ core.Any)
 15  (call core.svec)
 16  SourceLocation::1:2
@@ -269,25 +269,25 @@ LoweringError:
     3   slot₃/x
     4   (return %₃)
 19  latestworld
-20  TestMod.#8##0
+20  TestMod.#15#16
 21  (call core.svec %₂₀ core.Any)
 22  (call core.svec)
 23  SourceLocation::1:2
 24  (call core.svec %₂₁ %₂₂ %₂₃)
 25  (call core.define_method TestMod core.nothing %₂₄
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/9(single_assign)]
-    1   TestMod.#9#8##0
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/#->#(single_assign)]
+    1   TestMod.#17#18
     2   (new %₁)
-    3   (= slot₃/9 %₂)
-    4   slot₃/9
+    3   (= slot₃/#-># %₂)
+    4   slot₃/#->#
     5   TestMod.:
     6   (call %₅ 1 2)
     7   (call top.Generator %₄ %₆)
     8   (return %₇)
 26  latestworld
-27  (= slot₁/8 %₇)
-28  slot₁/8
+27  (= slot₁/#-># %₇)
+28  slot₁/#->#
 29  TestMod.:
 30  (call %₂₉ 1 3)
 31  (call top.Generator %₂₈ %₃₀)

@@ -313,6 +313,18 @@ function is_self_captured(ctx, x)
     end
 end
 
+# Should comply with whatever `jl_demangle_typename` expects
+function closure_type_name(ctx, ck)
+    stack = ctx.closure_bindings[ck].name_stack
+    counter() = module_unique_name(ctx.mod, first(stack))
+    self = last(stack)
+    # This should probably be a stack of identifiers instead of strings so
+    # is_internal works.  Hygiene likely doesn't matter here.
+    base = self == "#anon#" || self == "#->#" ? "#" * counter() :
+        startswith(self, '#') ? self : "#" * self
+    name_str = string(base, "#", counter())
+end
+
 function convert_local_function_decl(ctx, ex)
     ck = closure_key(ctx, ex[1])
     haskey(ctx.closure_infos, ck) && return @ast ctx ex (::K"TOMBSTONE")
@@ -320,9 +332,7 @@ function convert_local_function_decl(ctx, ex)
     closure_binds = ctx.closure_bindings[ck]
     field_syms, field_orig_bindings, field_inds, field_is_box, capt_sp =
         closure_type_fields(ctx, ex, closure_binds, false)
-    name_str = reserve_module_binding_i(
-        ctx.mod,
-        string("#", join(Iterators.reverse(closure_binds.name_stack), "#")))
+    name_str = closure_type_name(ctx, ck)
     global_clstruct = new_global_binding(ctx, ex, name_str, ctx.mod)
     sp_syms = mapsyntax(sp->newleaf(sp, K"Symbol",
                                     get_binding(ctx, syntax_id(sp)).name),

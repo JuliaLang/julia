@@ -725,11 +725,11 @@ end
 25  (call core.svec)
 26  (call core.svec)
 27  (call core.svec)
-28  (call JuliaLowering.eval_closure_type TestMod :#f##0 %₂₅ %₂₆ %₂₇)
+28  (call JuliaLowering.eval_closure_type TestMod :#f#f##0 %₂₅ %₂₆ %₂₇)
 29  latestworld
-30  TestMod.#f##0
+30  TestMod.#f#f##0
 31  (new %₃₀)
-32  TestMod.#f##0
+32  TestMod.#f#f##0
 33  (call core.svec %₃₂)
 34  (call core.svec)
 35  SourceLocation::3:5
@@ -879,11 +879,11 @@ end
 51  (call core.svec)
 52  (call core.svec)
 53  (call core.svec)
-54  (call JuliaLowering.eval_closure_type TestMod :#f##1 %₅₁ %₅₂ %₅₃)
+54  (call JuliaLowering.eval_closure_type TestMod :#f#f##1 %₅₁ %₅₂ %₅₃)
 55  latestworld
-56  TestMod.#f##1
+56  TestMod.#f#f##1
 57  (new %₅₆)
-58  TestMod.#f##1
+58  TestMod.#f#f##1
 59  (call core.svec %₅₈)
 60  (call core.svec)
 61  SourceLocation::5:5
