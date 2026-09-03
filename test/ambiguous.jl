@@ -1045,11 +1045,11 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
     # the fallback would also revalidate this edge (the pruned match set is
     # unchanged), so additionally pin that the fast-path predicate itself
     # accepts, and that it rejects when the owner does not fully cover the query
-    let newcomer_prunes_silently = Base.Compiler.ReinferUtils.newcomer_prunes_silently,
+    let newmethod_removed_silently = Base.Compiler.ReinferUtils.newmethod_removed_silently,
         ti = typeintersect(sig, mB.sig)
-        @test newcomer_prunes_silently(mA, mB, ti, sig, expecteds, 1, 2, Base.get_world_counter())
+        @test newmethod_removed_silently(mA, mB, ti, sig, expecteds, 1, 2, Base.get_world_counter())
         let sig2 = Tuple{typeof(q), Type{T}} where T, ti2 = typeintersect(sig2, mB.sig)
-            @test !newcomer_prunes_silently(mA, mB, ti2, sig2, Core.svec(mS, mA, mB), 1, 3, Base.get_world_counter())
+            @test !newmethod_removed_silently(mA, mB, ti2, sig2, Core.svec(mS, mA, mB), 1, 3, Base.get_world_counter())
         end
     end
 end
