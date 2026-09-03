@@ -477,6 +477,44 @@ class JuliaRuntime:
         except JLDebugError:
             return None
 
+    def is_union_type(self, taddr):
+        try:
+            return self.datatype_qualname(self.typeof_addr(taddr)) == \
+                "Core.Union"
+        except JLDebugError:
+            return False
+
+    def nth_union_component(self, uaddr, sel):
+        """The sel-th (0-based, depth-first) non-Union component of the
+        Union type at uaddr, mirroring jl_nth_union_component; 0 when sel
+        is out of range."""
+        count = [sel]
+
+        def walk(t):
+            while self.is_union_type(t):
+                a = walk(self.field_u(t, "jl_uniontype_t", "a"))
+                if a:
+                    return a
+                t = self.field_u(t, "jl_uniontype_t", "b")
+            if count[0] == 0:
+                return t
+            count[0] -= 1
+            return 0
+
+        return walk(uaddr)
+
+    def render_inline_field(self, ftype, faddr, fsz, depth):
+        """Render an inline-stored field: for an isbits-Union field the
+        selector byte sits after the payload (see jl_get_nth_field in
+        datatype.c) and picks the stored component."""
+        if ftype and fsz > 0 and self.is_union_type(ftype):
+            comp = self.nth_union_component(
+                ftype, self.read_uint(faddr + fsz - 1, 1))
+            if comp:
+                return self.render_unboxed(comp, faddr, depth)
+            return "<union field>"
+        return self.render_unboxed(ftype, faddr, depth)
+
     def render_unboxed(self, taddr, addr, depth):
         """Render the unboxed (inline-stored) value of type taddr at addr."""
         if depth < 0 or self.exhausted():
@@ -523,7 +561,8 @@ class JuliaRuntime:
                 p = self.read_ptr(addr + off)
                 r = self.render_value(p, depth - 1) if p else "#undef"
             else:
-                r = self.render_unboxed(ftypes[i], addr + off, depth - 1)
+                r = self.render_inline_field(ftypes[i], addr + off, size,
+                                             depth - 1)
             fname = names[i] if names and i < len(names) else str(i + 1)
             parts.append(r if istuple else "%s = %s" % (fname, r))
             self.spend(len(parts[-1]))
@@ -539,12 +578,16 @@ class JuliaRuntime:
     # ---- arrays -------------------------------------------------------------
 
     def array_info(self, addr):
-        """(dims, eltype, dataptr, elsize, isboxed, isunion) of the
-        jl_array_t (or Memory) at addr."""
+        """(dims, eltype, dataptr, elsize, isboxed, seladdr) of the
+        jl_array_t (or Memory) at addr. For union-layout element storage,
+        seladdr is the address of this view's first selector byte (the
+        selector bytes for the whole Memory sit after its last element, see
+        jl_genericmemory_typetagdata); it is 0 for non-union layouts."""
         dtaddr = self.typeof_addr(addr)
         tname = self.typename_of(dtaddr)
         params = self.field_u(dtaddr, "jl_datatype_t", "parameters")
         if tname == "GenericMemory":
+            mem_addr = addr
             mem_dt_addr = dtaddr
             dims = [self.field_u(addr, "jl_genericmemory_t", "length")]
             dataptr = self.field_u(addr, "jl_genericmemory_t", "ptr")
@@ -570,7 +613,16 @@ class JuliaRuntime:
                                "arrayelem_isboxed")
         isunion = self.field_u(mlayout, "jl_datatype_layout_t", "flags",
                                "arrayelem_isunion")
-        return dims, eltype, dataptr, elsize, isboxed, isunion
+        seladdr = 0
+        if isunion:
+            # for union layouts a memoryref's ptr_or_offset is the element
+            # *index* into the Memory, not a pointer
+            idx = 0 if mem_addr == addr else dataptr
+            memlen = self.field_u(mem_addr, "jl_genericmemory_t", "length")
+            memptr = self.field_u(mem_addr, "jl_genericmemory_t", "ptr")
+            dataptr = memptr + idx * elsize
+            seladdr = memptr + memlen * elsize + idx
+        return dims, eltype, dataptr, elsize, isboxed, seladdr
 
     def is_array_value(self, addr):
         try:
@@ -590,7 +642,8 @@ class JuliaRuntime:
     def array_children(self, addr):
         """Yield ("index", ("val", addr) | ("str", s)) pairs for the first
         MAX_ELEMS elements of the array/Memory at addr."""
-        dims, eltype, dataptr, elsize, isboxed, isunion = self.array_info(addr)
+        dims, eltype, dataptr, elsize, isboxed, seladdr = \
+            self.array_info(addr)
         n = 1
         for d in dims:
             n *= d
@@ -599,8 +652,12 @@ class JuliaRuntime:
             if isboxed:
                 p = self.read_ptr(dataptr + i * self.a.ptrsize)
                 yield str(i + 1), (("val", p) if p else ("str", "#undef"))
-            elif isunion:
-                yield str(i + 1), ("str", "<union element>")
+            elif seladdr:
+                comp = self.nth_union_component(
+                    eltype, self.read_uint(seladdr + i, 1))
+                yield str(i + 1), ("str", self.render_unboxed(
+                    comp, dataptr + i * elsize, MAX_DEPTH - 1) if comp
+                    else "<union element>")
             else:
                 yield str(i + 1), ("str", self.render_unboxed(
                     eltype, dataptr + i * elsize, MAX_DEPTH - 1))
@@ -737,6 +794,8 @@ class JuliaRuntime:
             return prim
         if qual == "Core.Nothing":
             return "nothing"
+        if qual == "Base.Missing":
+            return "missing"
         if qual == "Core.Symbol":
             name = self.symbol_name(addr)
             if name.isidentifier():
@@ -879,28 +938,38 @@ class JuliaRuntime:
                 raise JLDebugError("field %s is #undef" % key)
             return ("val", p)
         ftype = self.field_types(taddr, len(fields))[idx]
+        if ftype and size > 0 and self.is_union_type(ftype):
+            comp = self.nth_union_component(
+                ftype, self.read_uint(addr + off + size - 1, 1))
+            if comp == 0:
+                raise JLDebugError("field %s has an invalid union selector"
+                                   % key)
+            return ("inline", comp, addr + off)
         if ftype == 0 or self.datatype_qualname(self.typeof_addr(ftype)) != \
                 "Core.DataType":
-            raise JLDebugError("field %s has union layout; cannot access"
-                               % key)
+            raise JLDebugError("cannot determine layout of field %s" % key)
         return ("inline", ftype, addr + off)
 
     def array_getindex(self, addr, key):
-        dims, eltype, dataptr, elsize, isboxed, isunion = \
+        dims, eltype, dataptr, elsize, isboxed, seladdr = \
             self.array_info(addr)
         n = 1
         for d in dims:
             n *= d
         if not (1 <= key <= n):
             raise JLDebugError("index %d out of bounds (1:%d)" % (key, n))
-        if isunion:
-            raise JLDebugError("union-layout array elements are not"
-                               " supported")
         if isboxed:
             p = self.read_ptr(dataptr + (key - 1) * self.a.ptrsize)
             if p == 0:
                 raise JLDebugError("element %d is #undef" % key)
             return ("val", p)
+        if seladdr:
+            comp = self.nth_union_component(
+                eltype, self.read_uint(seladdr + (key - 1), 1))
+            if comp == 0:
+                raise JLDebugError("element %d has an invalid union"
+                                   " selector" % key)
+            return ("inline", comp, dataptr + (key - 1) * elsize)
         return ("inline", eltype, dataptr + (key - 1) * elsize)
 
     # ---- module bindings ------------------------------------------------------
