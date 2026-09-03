@@ -1039,23 +1039,9 @@ public:
         uint64_t start_time = jl_hrtime();
         {
             TimeTraceScope CompileScope("JIT Compile", Out.module->getModuleIdentifier());
-            // Embeds the optlevel, CPU, features, and sanitizers into the module, so
-            // they form part of the cache key.
+            // Embeds the optlevel, CPU, and features into the module, so they form part of
+            // the cache key.
             selectOptLevel(*Out.module);
-            {
-                // The sanitizer passes are selected by build-time defaults that the
-                // hashed sources do not reflect.
-                auto Options = OptimizationOptions::defaults();
-                std::string Sanitizers;
-                if (Options.sanitize_memory)
-                    Sanitizers += "memory,";
-                if (Options.sanitize_thread)
-                    Sanitizers += "thread,";
-                if (Options.sanitize_address)
-                    Sanitizers += "address,";
-                Out.module->addModuleFlag(Module::Warning, "julia.sanitizers",
-                                          MDString::get(*Out.ctx, Sanitizers));
-            }
             Out.module->addModuleFlag(Module::Warning, "julia.cpu",
                                       MDString::get(*Out.ctx, JIT.getTargetCPU()));
             Out.module->addModuleFlag(Module::Warning, "julia.cpu.features",
