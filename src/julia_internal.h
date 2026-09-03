@@ -2137,6 +2137,15 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
 JL_COMMON_SYMBOLS(XX)
 #undef XX
 
+// Whether this CodeInstance was produced by the native compilation pipeline
+// (owner `nothing`, or the `:trim` owner used during --trim AOT compilation),
+// as opposed to an external AbstractInterpreter. Only native-owned CIs have
+// invoke/specptr pointers that the runtime may use as direct call targets.
+STATIC_INLINE int jl_ci_owner_is_native(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    return ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_trim_sym;
+}
+
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing);
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, char storing);
 
