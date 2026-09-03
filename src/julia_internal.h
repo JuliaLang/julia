@@ -851,6 +851,8 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
 
 jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
 jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc) JL_CANSAFEPOINT;
+jl_value_t *jl_invoke_codeinst(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_apply_iterate_codeinst(jl_value_t *ci, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
