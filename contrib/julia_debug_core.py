@@ -110,13 +110,23 @@ def escape_string(s):
     return "".join(out)
 
 
+CHAR_ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r",
+                "'": "\\'", "\\": "\\\\"}
+
+
 def render_char(u):
     # Char stores the UTF-8 bytes left-aligned in a UInt32
     raw = u.to_bytes(4, "big").rstrip(b"\0") or b"\0"
     try:
-        return "'%s'" % raw.decode("utf-8")
+        c = raw.decode("utf-8")
     except UnicodeDecodeError:
         return "Char(0x%08x)" % u
+    if len(c) != 1:
+        return "Char(0x%08x)" % u
+    esc = CHAR_ESCAPES.get(c)
+    if esc is None and (ord(c) < 32 or ord(c) == 0x7f):
+        esc = "\\x%02x" % ord(c)
+    return "'%s'" % (esc if esc is not None else c)
 
 
 def is_type_kind(qual):
@@ -599,10 +609,12 @@ class JuliaRuntime:
                                    "ptr_or_offset")
             dimoff = self.a.field_offset("jl_array_t", "dimsize")
             try:
-                ndims = self.read_uint(self.svec_ref(params, 1), 8)
+                # the N parameter of Array{T, N} is a boxed Int
+                ndims = self.read_uint(self.svec_ref(params, 1),
+                                       self.a.ptrsize)
             except JLDebugError:
                 ndims = 1
-            if not (0 < ndims < 33):
+            if not (0 <= ndims < 33):
                 ndims = 1
             dims = [self.read_uint(addr + dimoff + i * self.a.ptrsize,
                                    self.a.ptrsize) for i in range(ndims)]
@@ -635,6 +647,8 @@ class JuliaRuntime:
     def render_array_summary(self, addr, depth):
         dims = self.array_info(addr)[0]
         tstr = self.render_type(self.typeof_addr(addr), depth)
+        if len(dims) == 0:
+            return "0-dimensional %s" % tstr
         if len(dims) == 1:
             return "%d-element %s" % (dims[0], tstr)
         return "%s %s" % ("×".join(str(d) for d in dims), tstr)

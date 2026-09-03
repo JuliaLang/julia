@@ -3,3 +3,5 @@ extend-ignore-words-re = ["^[a-zA-Z]?[a-zA-Z]?[a-zA-Z]?[a-zA-Z]?$"]
 
 [default.extend-words]
 indexin = "indexin"
+# glibc's siginfo_t union member, spelled with "sig"
+sigfault = "sigfault"

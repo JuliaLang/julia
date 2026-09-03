@@ -156,6 +156,11 @@ def get_rt(target, process):
     rt = core.JuliaRuntime(LldbAdapter(target, process))
     _RT[0] = rt
     _last_loc[0] = None
+    if process.IsValid():
+        # opportunistically install the safepoint stop-hook the first time
+        # we see this process (importing from ~/.lldbinit happens before a
+        # target exists, so it cannot be done at import time)
+        _install_stop_hook(target.GetDebugger())
     return rt
 
 
@@ -175,7 +180,6 @@ def rt_of(valobj):
 # --------------------------------------------------------------------------
 
 _FAULT_ADDR_RE = re.compile(r"fault address:?\s*(0x[0-9a-fA-F]+)")
-_stop_hook_installed = [False]
 
 
 def _global_uint(target, name):
@@ -218,16 +222,27 @@ class JLSafepointStopHook:
         return True
 
 
-def _install_stop_hook(debugger):
-    if _stop_hook_installed[0]:
-        return
-    if debugger.GetNumTargets() == 0:
-        return
+def _run_command(debugger, cmd):
     res = lldb.SBCommandReturnObject()
-    debugger.GetCommandInterpreter().HandleCommand(
-        "target stop-hook add -P %s.JLSafepointStopHook" % __name__, res)
-    if res.Succeeded():
-        _stop_hook_installed[0] = True
+    debugger.GetCommandInterpreter().HandleCommand(cmd, res)
+    return res.Succeeded(), (res.GetOutput() or "")
+
+
+def _stop_hook_present(debugger):
+    """Whether the *selected* target has our stop-hook. Stop hooks belong to
+    individual targets, so this must be queried rather than cached."""
+    ok, out = _run_command(debugger, "target stop-hook list")
+    return ok and "JLSafepointStopHook" in out
+
+
+def _install_stop_hook(debugger):
+    if debugger.GetNumTargets() == 0:
+        return False
+    if _stop_hook_present(debugger):
+        return True
+    ok, _ = _run_command(
+        debugger, "target stop-hook add -P %s.JLSafepointStopHook" % __name__)
+    return ok
 
 
 def jl_safepoint_filter_cmd(debugger, command, exe_ctx, result, internal_dict):
@@ -246,8 +261,8 @@ def jl_safepoint_filter_cmd(debugger, command, exe_ctx, result, internal_dict):
         result.SetError("usage: jl-safepoint-filter [on|off]")
         return
     result.AppendMessage(
-        "julia safepoint SIGSEGV filter is %s"
-        % ("on" if JLSafepointStopHook.enabled and _stop_hook_installed[0]
+        "julia safepoint SIGSEGV filter is %s for the selected target"
+        % ("on" if JLSafepointStopHook.enabled and _stop_hook_present(debugger)
            else "off"))
 
 
@@ -271,10 +286,6 @@ def jl_value_summary(valobj, internal_dict):
     if addr == 0:
         return "NULL"
     rt = rt_of(valobj)
-    if rt.a.process.IsValid():
-        # opportunistically install the safepoint stop-hook once a real
-        # process exists (importing from ~/.lldbinit happens before that)
-        _install_stop_hook(valobj.GetTarget().GetDebugger())
     try:
         return rt.render_value_capped(addr)
     except JLDebugError as e:

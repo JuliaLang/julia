@@ -511,12 +511,19 @@ gdb.events.new_objfile.connect(_try_arm_segv_condition)
 def enable_safepoint_filter():
     if _segv_catchpoint[0] is not None:
         return
+    # transactional: never leave SIGSEGV set to nostop without the
+    # catchpoint in place, or real segfaults would no longer stop gdb
     gdb.execute("handle SIGSEGV nostop noprint pass", to_string=True)
-    out = gdb.execute("catch signal SIGSEGV", to_string=True)
-    m = re.search(r"Catchpoint (\d+)", out)
-    if m is None:
-        return
-    _segv_catchpoint[0] = int(m.group(1))
+    try:
+        out = gdb.execute("catch signal SIGSEGV", to_string=True)
+        m = re.search(r"Catchpoint (\d+)", out)
+        if m is None:
+            raise gdb.error("cannot parse catchpoint id from: %s"
+                            % out.strip())
+        _segv_catchpoint[0] = int(m.group(1))
+    except Exception:
+        gdb.execute("handle SIGSEGV stop print pass", to_string=True)
+        raise
     _try_arm_segv_condition()
 
 
@@ -579,8 +586,9 @@ def register(obj=None):
     JlHandleSignalsCommand()
     try:
         enable_safepoint_filter()
-    except gdb.error:
-        pass
+    except gdb.error as e:
+        print("julia_gdb: GC safepoint SIGSEGV filter not installed (%s)"
+              % e)
 
 
 register(gdb.current_objfile())
