@@ -1489,27 +1489,36 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     assert(mc->mc_rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)
-    mc->mc_gpregs.gp_x[19] = ((long*)mctx)[0];
-    mc->mc_gpregs.gp_x[20] = ((long*)mctx)[1];
-    mc->mc_gpregs.gp_x[21] = ((long*)mctx)[2];
-    mc->mc_gpregs.gp_x[22] = ((long*)mctx)[3];
-    mc->mc_gpregs.gp_x[23] = ((long*)mctx)[4];
-    mc->mc_gpregs.gp_x[24] = ((long*)mctx)[5];
-    mc->mc_gpregs.gp_x[25] = ((long*)mctx)[6];
-    mc->mc_gpregs.gp_x[26] = ((long*)mctx)[7];
-    mc->mc_gpregs.gp_x[27] = ((long*)mctx)[8];
-    mc->mc_gpregs.gp_x[28] = ((long*)mctx)[9];
-    mc->mc_gpregs.gp_x[29] = ((long*)mctx)[10];
-    mc->mc_gpregs.gp_lr = ((long*)mctx)[11];
-    mc->mc_gpregs.gp_sp = ((long*)mctx)[12];
-    mc->mc_fpregs.fp_q[7] = ((long*)mctx)[13];
-    mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14];
-    mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15];
-    mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16];
-    mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17];
-    mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18];
-    mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19];
-    mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20];
+    // https://github.com/freebsd/freebsd-src/blob/main/lib/libc/aarch64/gen/_setjmp.S
+    // The jump buffer is a packed array of 8-byte words (the __int128_t element
+    // type in <machine/setjmp.h> only forces alignment/size, it is not the stride):
+    //   [0] magic, [1] sp, [2..13] x19..x30, [14..21] d8..d15
+    mc->mc_gpregs.gp_sp = ((long*)mctx)[1];
+    mc->mc_gpregs.gp_x[19] = ((long*)mctx)[2];
+    mc->mc_gpregs.gp_x[20] = ((long*)mctx)[3];
+    mc->mc_gpregs.gp_x[21] = ((long*)mctx)[4];
+    mc->mc_gpregs.gp_x[22] = ((long*)mctx)[5];
+    mc->mc_gpregs.gp_x[23] = ((long*)mctx)[6];
+    mc->mc_gpregs.gp_x[24] = ((long*)mctx)[7];
+    mc->mc_gpregs.gp_x[25] = ((long*)mctx)[8];
+    mc->mc_gpregs.gp_x[26] = ((long*)mctx)[9];
+    mc->mc_gpregs.gp_x[27] = ((long*)mctx)[10];
+    mc->mc_gpregs.gp_x[28] = ((long*)mctx)[11];
+    mc->mc_gpregs.gp_x[29] = ((long*)mctx)[12]; // aka fp
+    mc->mc_gpregs.gp_lr = ((long*)mctx)[13]; // aka x30
+    // d8-d15 are the low halves of q8-q15. Zero-extending is fine here: AAPCS64
+    // only requires the bottom 64 bits of v8-v15 to be preserved across a call.
+    mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14]; // aka d8
+    mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15]; // aka d9
+    mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16]; // aka d10
+    mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17]; // aka d11
+    mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18]; // aka d12
+    mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19]; // aka d13
+    mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20]; // aka d14
+    mc->mc_fpregs.fp_q[15] = ((long*)mctx)[21]; // aka d15
+    // AArch64 resumes from a signal at ELR, not LR, so the restored return
+    // address has to be installed as the pc as well.
+    mc->mc_gpregs.gp_elr = mc->mc_gpregs.gp_lr;
     mc->mc_gpregs.gp_x[0] = val;
     assert(mc->mc_gpregs.gp_sp % 16 == 0);
     return 1;
