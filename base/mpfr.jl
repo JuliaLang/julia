@@ -33,7 +33,7 @@ import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt, MPZ
 
 # A `BigInt`'s limbs are GC-managed, so libmpfr sees one through a borrowed
 # `__mpz_struct`. Sound only for entry points that do not write the mpz;
-# `mpfr_get_z`, which does, goes through a GMP-owned scratch mpz instead.
+# `mpfr_get_z`, which does, goes through a GMP-owned mpz instead.
 const mpz_t = MPZ.mpz_t
 
 import ..FastMath.sincos_fast
@@ -444,7 +444,7 @@ function _unchecked_cast(::Type{BigInt}, x::BigFloat, r::MPFRRoundingMode)
     z = BigInt()
     # mpfr_get_z writes its mpz, so it needs one that GMP owns.
     MPZ.with_output(z) do s
-        ccall((:mpfr_get_z, libmpfr), Int32, (MPZ.scratch_t, Ref{BigFloat}, MPFRRoundingMode), s, x, r)
+        ccall((:mpfr_get_z, libmpfr), Int32, (MPZ.mpz_owned_t, Ref{BigFloat}, MPFRRoundingMode), s, x, r)
     end
     return z
 end
@@ -1315,16 +1315,12 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return x.sign, 0, 0
     x == 0 && return 0, 0, x.sign
-    s = BigInt()
     n = cld(x.prec, 8*sizeof(Limb))      # limbs
-    b = n * sizeof(Limb)                 # bytes
-    sd = MPZ._ensure!(s, n)
     # A finite nonzero BigFloat's significand has its top bit set, so the top
-    # limb copied below is nonzero and `BigInt`'s invariant holds.
-    s.size = n
+    # limb copied here is nonzero and `BigInt`'s invariant holds.
     xd = x.d
-    GC.@preserve sd xd memcpy(pointer(sd), Base.unsafe_convert(Ptr{Limb}, xd), b)
-    s, x.exp - 8b, x.sign
+    s = GC.@preserve xd MPZ._take!(BigInt(), n % Cint, Base.unsafe_convert(Ptr{Limb}, xd))
+    s, x.exp - 8*n*sizeof(Limb), x.sign
 end
 
 function lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)

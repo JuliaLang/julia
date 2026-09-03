@@ -456,13 +456,8 @@ function rand!(rng::AbstractRNG, x::BigInt, sp::SamplerBigInt)
             hx < hm && break # avoid calling mpn_cmp most of the time
             MPZ.mpn_cmp(x, sp.m, nlimbs) <= 0 && break
         end
-        # normalize: drop high zero limbs so that `x.size` counts significant limbs
-        while nlimbs > 0
-            limbs[nlimbs] != 0 && break
-            nlimbs -= 1
-        end
-        x.size = nlimbs
     end
+    MPZ._finish!(x, xd, nlimbs, false)   # drops high zero limbs
     MPZ.add!(x, sp.a)
 end
 
