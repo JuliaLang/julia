@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 
 #include "llvm/ADT/SmallSet.h"
+#include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/MapVector.h>
 #include <llvm/ADT/StringSet.h>
 #include <llvm/Support/AllocatorBase.h>
@@ -899,12 +900,16 @@ private:
     std::mutex SharedBytesMutex{};
     SharedBytesT SharedBytes;
 
-    // LinkerMutex protects CISymbols, Names
+    // LinkerMutex protects CISymbols, CISymbolNames, Names
     std::mutex LinkerMutex;
     // CISymbols maps CodeInstance pointers to their ORC symbols.  If a
     // CodeInstance is eligible for garbage collection, it must be removed from
     // this map first, with unregisterCI.
     CISymbolMap CISymbols;
+    // Every ORC symbol name owned by an entry in CISymbols, so that linkOutput
+    // can test a link graph's defined symbols without rebuilding the set from
+    // all of CISymbols on every materialization.
+    DenseSet<orc::SymbolStringPtr> CISymbolNames;
     jl_name_counter_t Names;
 
     std::unique_ptr<DLSymOptimizer> DLSymOpt;
