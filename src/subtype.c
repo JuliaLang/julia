@@ -1959,7 +1959,49 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         }
         else
             e->envout[e->envidx] = val;
-        // TODO: substitute the value (if any) of this variable into previous envout entries
+        // Inner unionall frames pop (and fill their envout slots) before this
+        // one, so entries at later indices may still reference `u->var`, which
+        // is about to go out of scope. Substitute this variable's resolved
+        // value into those entries. If it has no single defined value, an
+        // entry mentioning it has no defined value either: degrade that entry
+        // to an unconstrained uncertainty marker, rewrapping the escaping var
+        // so no free typevar leaks into the environment (#57427).
+        jl_value_t *selfval = e->envout[e->envidx];
+        jl_value_t *substval = (selfval == NULL || jl_is_svec(selfval) ||
+                                jl_is_typevar(selfval) || jl_is_vararg(selfval))
+                               ? NULL : selfval;
+        jl_value_t *vi = NULL;
+        JL_GC_PUSH2(&substval, &vi);
+        // walk the top-level unionall chain alongside the envout slots to
+        // recover each slot's variable name (cosmetic, for the marker's tvar);
+        // fall back to `u->var->name` if the chain doesn't line up.
+        jl_value_t *body = u->body;
+        for (int i = e->envidx + 1; i < e->envsz; i++) {
+            jl_sym_t *vname = u->var->name;
+            if (body != NULL && jl_is_unionall(body)) {
+                vname = ((jl_unionall_t*)body)->var->name;
+                body = ((jl_unionall_t*)body)->body;
+            }
+            else {
+                body = NULL;
+            }
+            vi = e->envout[i];
+            if (vi == NULL || jl_is_svec(vi) || jl_is_vararg(vi) ||
+                !jl_has_typevar(vi, u->var))
+                continue;
+            if (substval != NULL) {
+                e->envout[i] = jl_substitute_var(vi, u->var, substval);
+            }
+            else if (jl_is_typevar(vi)) {
+                e->envout[i] = wrap_tvar_env(vi, 0);
+            }
+            else {
+                vi = jl_type_unionall(u->var, vi);
+                vi = (jl_value_t*)jl_new_typevar(vname, jl_bottom_type, vi);
+                e->envout[i] = wrap_tvar_env(vi, 0);
+            }
+        }
+        JL_GC_POP();
     }
 
     JL_GC_POP();
