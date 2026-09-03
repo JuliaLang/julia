@@ -82,8 +82,12 @@ JL_RUNTIME_EXPORTED_FUNCS(XX)
 #undef XX
 #endif // !_OS_WINDOWS_
 
-// Normally provided by the libjulia loader: the directory containing libjulia,
-// which for a static build is the directory containing the executable.
+// Normally provided by the libjulia loader: the directory of the object
+// containing libjulia. Since the static runtime is linked into whatever the
+// consumer built, that is the directory containing this executable or shared
+// library, found the same way the loader finds itself (by the address of this
+// function). Falls back to the executable's path when the containing object
+// has no name (the main program on some platforms).
 JL_DLLEXPORT const char *jl_get_libdir(void)
 {
     static char *libdir = NULL;
@@ -91,7 +95,17 @@ JL_DLLEXPORT const char *jl_get_libdir(void)
         return libdir;
     char *path = (char*)malloc_s(JL_PATH_MAX);
     size_t size = JL_PATH_MAX;
-    if (uv_exepath(path, &size) != 0) {
+    const char *modpath = NULL;
+    void *handle = jl_find_dynamic_library_by_addr((void*)&jl_get_libdir, /* throw_err */ 0, /* close */ 1);
+    if (handle != NULL)
+        modpath = jl_pathname_for_handle(handle);
+    if (modpath != NULL && modpath[0] != '\0') {
+        size = strlen(modpath);
+        if (size >= JL_PATH_MAX)
+            size = JL_PATH_MAX - 1;
+        memcpy(path, modpath, size);
+    }
+    else if (uv_exepath(path, &size) != 0) {
         free(path);
         return NULL;
     }
