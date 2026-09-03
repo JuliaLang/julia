@@ -3571,6 +3571,12 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
            $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
            -`
     cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    # A single-threaded worker gets no GC mark threads by default. Its collections are
+    # infrequent but large (the heap holds every loaded dependency), so let them mark in
+    # parallel unless the caller has configured GC threads explicitly.
+    if !haskey(ENV, "JULIA_NUM_GC_THREADS")
+        cmd = `$cmd --gcthreads=$(precompile_gcthreads())`
+    end
     # Only request per-package timing reports when explicitly asked for (e.g. by
     # precompilepkgs), so that the marker lines don't leak into normal load logs.
     report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
@@ -3588,6 +3594,10 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
     close(io.in)
     return io
 end
+
+# Mark threads for a precompile worker: a few per worker, scaled down on small machines so
+# that the driver's worker count times this stays well under the core count.
+precompile_gcthreads() = clamp(Sys.EFFECTIVE_CPU_THREADS::Int ÷ 4, 1, 4)
 
 const precompilation_stack = Vector{PkgId}()
 # Helpful for debugging when precompilation is unexpectedly nested.
