@@ -46,6 +46,9 @@ end
 
 # ignore_linenums=false is good for checking, but too noisy to use much
 function expr_equal_forgiving(e1, e2; ignore_linenums=true)
+    if e1 isa QuoteNode && e2 isa QuoteNode
+        return expr_equal_forgiving(e1.value, e2.value; ignore_linenums)
+    end
     !(e1 isa Expr && e2 isa Expr) && return e1 == e2
     if ignore_linenums
         e1, e2 = let e1b = Expr(e1.head), e2b = Expr(e2.head)
@@ -685,4 +688,19 @@ end
     @test run("baremodule M; using Base.:Iterators; end; isdefined(M, :take)")
     @test run("module Outer; f() = 1; baremodule In; import ..Outer.:f; end; end; getglobal(Outer.In,:f) === Outer.f")
     @test run("module Outer; f() = 1; baremodule In; import ..Outer: f; end; end; getglobal(Outer.In,:f) === Outer.f")
+end
+
+@testset "validation of macro-expansion-specific forms" begin
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(:escape))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape), @__MODULE__))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape, :x, :y), @__MODULE__))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope")))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope"), :x))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope"), :x, :y, :z))
 end

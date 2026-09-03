@@ -43,9 +43,11 @@ scavenge_lnn(@nospecialize(e)) =
     something(e isa Expr ? _scavenge_lnn(e) : nothing,
               LineNumberNode(0, :none))
 
-function expr_to_est(@nospecialize(e), src::SourceAttrType=scavenge_lnn(e))
-    _expr_to_est(e, src)[1]
-end
+_unescape_lnn(@nospecialize(e)) =
+    e isa LineNumberNode ? e :
+    (e isa Expr &&
+    (e.head === :escape || e.head === Symbol("hygienic-scope")) &&
+    length(e.args) > 0) ? _unescape_lnn(e.args[1]) : nothing
 
 function _get_inner_lnn(e::Expr, default::LineNumberNode)
     e.head in (:function, :macro, :module, :(=)) || return default
@@ -54,7 +56,7 @@ function _get_inner_lnn(e::Expr, default::LineNumberNode)
     b isa Expr || return default
     b.head === :block || return default
     length(b.args) >= 1 || return default
-    b_lnn = b.args[1]
+    b_lnn = _unescape_lnn(b.args[1])
     return b_lnn isa LineNumberNode ? b_lnn : default
 end
 
@@ -69,6 +71,10 @@ function is_expr_value(st::SyntaxTree)
     return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
+function expr_to_est(@nospecialize(e), src::SourceAttrType=scavenge_lnn(e))
+    _expr_to_est(e, src, false)[1]
+end
+
 # Adding more cases to this function is almost certainly wrong, since this
 # operates on arbitrary heads and arguments throughout macro expansion, not
 # well-formed syntax after expansion is done.  Most of the complexity here is
@@ -76,11 +82,11 @@ end
 # unquoted, then removed in certain forms.  If `src` is not an linenode, it is
 # assumed to be a better provenance source, so linenodes in `e` are not used for
 # provenance (but still removed).
-function _expr_to_est(@nospecialize(e), src::SourceAttrType)
+function _expr_to_est(@nospecialize(e), src::SourceAttrType, quoted::Bool)
     st = if e isa Symbol
         newleaf(src, K"Identifier", String(e))
     elseif e isa QuoteNode
-        cid, _ = _expr_to_est(e.value, src)
+        cid, _ = _expr_to_est(e.value, src, true)
         newnode(src, K"inert", SyntaxList(cid))
     elseif e isa Expr
         head_s = string(e.head)
@@ -88,11 +94,13 @@ function _expr_to_est(@nospecialize(e), src::SourceAttrType)
         src = old_src = src isa LineNumberNode ? _get_inner_lnn(e, src) : src
         cs = SyntaxTree[]
         rm_linenodes = e.head in (:block, :toplevel)
+        quoted |= e.head in (:quote, :inert)
         for arg in e.args
-            if rm_linenodes && arg isa LineNumberNode
-                src isa LineNumberNode && (src = arg)
+            if rm_linenodes && (lnn = quoted ? arg : _unescape_lnn(arg);
+                                lnn isa LineNumberNode)
+                src isa LineNumberNode && (src = lnn)
             else
-                cid, src = _expr_to_est(arg, src)
+                cid, src = _expr_to_est(arg, src, quoted)
                 push!(cs, cid)
             end
         end
@@ -516,7 +524,7 @@ function _dst_function_body(ctx, st, r, method_metas)
 end
 
 function dst_raw_lambda(ctx, st, sps)
-    argl = map(x->_expr_to_est(x::Symbol, st[1])[1], st[1].value::Vector)
+    argl = map(x->expr_to_est(x::Symbol, st[1]), st[1].value::Vector)
     @ast _ st [K"lambda" [K"block" argl...] [K"block" sps...]
         est_to_dst(with(ctx; toplevel=false), st[2])]
 end

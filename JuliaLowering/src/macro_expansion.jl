@@ -317,7 +317,7 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
     sc = (isnothing(sc0) || !known_layer(ctx, sc0.layer)) ? sc_in : sc0
     k = kind(st)
     absorb_esc = done && qdepth == 0 && sqdepth == 0
-    out = if is_leaf(st) || numchildren(st) == 0
+    out = if is_leaf(st)
         st.context !== sc ? @mknode(st; context=sc) : st
     elseif k === K"escape" && absorb_esc
         if numchildren(st) !== 1
