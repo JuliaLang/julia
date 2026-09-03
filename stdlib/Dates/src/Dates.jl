@@ -3,7 +3,7 @@
 """
     Dates
 
-The `Dates` module provides `Date`, `DateTime`, `Time` types, and related functions.
+The `Dates` module provides `Date`, `DateTime`, `Timestamp`, `Time` types, and related functions.
 
 The types are not aware of time zones, are based on UT seconds
 (86400 seconds a day, avoiding leap seconds), and
@@ -27,7 +27,7 @@ julia> d2-d1
 30 days
 ```
 
-Please see the manual section on [`Date`](@ref) and [`DateTime`](@ref)
+Please see the manual section on [`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref)
 for more information.
 """
 module Dates
@@ -53,7 +53,7 @@ include("deprecated.jl")
 export Period, DatePeriod, TimePeriod,
        Year, Quarter, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
-       TimeZone, UTC, TimeType, DateTime, Date, Time,
+       TimeZone, UTC, TimeType, DateTime, Date, Time, Timestamp,
        # periods.jl
        canonicalize,
        # accessors.jl
@@ -72,6 +72,7 @@ export Period, DatePeriod, TimePeriod,
        Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec,
        # conversions.jl
        unix2datetime, datetime2unix, now, today,
+       unix2timestamp, timestamp2unix,
        rata2datetime, datetime2rata, julian2datetime, datetime2julian,
        # adjusters.jl
        firstdayofweek, lastdayofweek,
@@ -80,7 +81,8 @@ export Period, DatePeriod, TimePeriod,
        firstdayofquarter, lastdayofquarter,
        tonext, toprev, tofirst, tolast,
        # io.jl
-       ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat, RFC1123Format, @dateformat_str
+       ISODateTimeFormat, ISODateFormat, ISOTimeFormat, ISOTimestampFormat, DateFormat,
+       RFC1123Format, @dateformat_str
 
 public format
 
