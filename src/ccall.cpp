@@ -733,6 +733,17 @@ static bool is_native_link_target(jl_codectx_t &ctx, const native_sym_arg_t &sym
     return jl_get_foreign_link_policy(symarg.lib_id) == 1;
 }
 
+// Record a ccall/cglobal usage site for the used-foreign-symbol manifest.
+static void record_used_foreign_symbol(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
+                               bool is_cglobal, bool native_linked) JL_NOTSAFEPOINT
+{
+    if (jl_get_export_foreign_symbol_usage() == nullptr)
+        return;
+    ctx.emission_context.used_foreign_symbols.push_back(
+        jl_used_foreign_symbol_t{symarg.f_name, symarg.f_lib, symarg.lib_id,
+                         is_cglobal, native_linked});
+}
+
 // --- code generator for cglobal ---
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayRef<jl_cgval_t> argv, size_t nargs) JL_CANSAFEPOINT;
@@ -756,6 +767,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         else {
             res = runtime_sym_lookup(ctx, sym, ctx.f);
         }
+        record_used_foreign_symbol(ctx, sym, /*is_cglobal=*/true, native_linked);
         JL_GC_POP();
         return mark_julia_type(ctx, res, false, (jl_value_t*)jl_voidpointer_type);
     } else {
@@ -2256,6 +2268,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         // Emit a plain external call and let the system linker bind it
         ++NativeLinkedCCalls;
         llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype).getCallee();
+        record_used_foreign_symbol(ctx, symarg, /*is_cglobal=*/false, /*native_linked=*/true);
     }
     else if (!ctx.params->use_jlplt) {
         if ((symarg.f_lib && !((symarg.f_lib == JL_EXE_LIBNAME) ||
@@ -2270,6 +2283,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else {
         ++DeferredCCallLookups;
+        record_used_foreign_symbol(ctx, symarg, /*is_cglobal=*/false, /*native_linked=*/false);
         // vararg requires musttail,
         // but musttail is incompatible with noreturn.
         if (functype->isVarArg())

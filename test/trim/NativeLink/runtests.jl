@@ -1,4 +1,5 @@
-# Verify the trimmed `NativeLink` executable binds an identified library natively
+# Verify the trimmed `NativeLink` executable binds an identified library natively and
+# that the build recorded the foreign symbols it uses
 using Test
 
 outdir = ARGS[1]
@@ -16,4 +17,14 @@ outdir = ARGS[1]
         syms = read(`$nmprog -u $exe`, String)
         @test occursin(r"\b_?jl_ver_patch\b", syms)
     end
+
+    manifest = joinpath(@__DIR__, "used-foreign-symbols.json")
+    @test isfile(manifest)
+    json = read(manifest, String)
+    @test occursin("\"package_uuid\": \"6a2ab6db-2a0d-40e1-8b5e-7a9e0d2f4c11\"", json)
+    @test occursin("\"library\": \"libjulia\"", json)
+    @test !occursin("<libjulia", json)
+    @test occursin("{\"symbol\": \"jl_ver_patch\", \"kind\": \"ccall\", \"linkage\": \"native\"}", json)
+    # everything else stays at run-time lookup
+    @test occursin("\"linkage\": \"lazy\"", json)
 end

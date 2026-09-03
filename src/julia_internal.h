@@ -540,6 +540,17 @@ extern JL_DLLEXPORT jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 extern jl_genericmemory_t *jl_foreign_link_policy JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_set_foreign_link_policy(jl_value_t *id, int native) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_get_foreign_link_policy(jl_value_t *id) JL_NOTSAFEPOINT;
+
+// Canonical text of a UUID: lowercase hex, dashed 8-4-4-4-12
+#define JL_UUID_STRING_LEN 36
+JL_DLLEXPORT void jl_uuid_to_string(const jl_uuid_t *uuid, char *out) JL_NOTSAFEPOINT;
+// Write `s` as a quoted, escaped JSON string
+JL_DLLEXPORT void jl_print_str_escape_json(ios_t *stream, const char *s, size_t len) JL_NOTSAFEPOINT;
+
+// Used-foreign-symbol export: when set to a non-empty path, AOT codegen writes a JSON
+// manifest of every ccall/cglobal usage site there.
+JL_DLLEXPORT void jl_set_export_foreign_symbol_usage(const char *path) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_get_export_foreign_symbol_usage(void) JL_NOTSAFEPOINT;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;

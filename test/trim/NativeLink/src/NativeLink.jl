@@ -10,6 +10,8 @@ const LIBJULIA = LazyLibrary("libjulia"; id = LibraryID(Base.UUID("6a2ab6db-2a0d
 native_ver_patch() = ccall((:jl_ver_patch, LIBJULIA), Cint, ())
 
 ccall(:jl_set_foreign_link_policy, Cvoid, (Any, Cint), dlid(LIBJULIA), true)
+ccall(:jl_set_export_foreign_symbol_usage, Cvoid, (Cstring,),
+      joinpath(@__DIR__, "..", "used-foreign-symbols.json"))
 
 function @main(args::Vector{String})::Cint
     println(Core.stdout, "ver patch: ", native_ver_patch())

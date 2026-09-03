@@ -2282,6 +2282,12 @@ end
     @test policy(registered) == 1
     @test_throws TypeError setpolicy!("not an identity", true)
 
+    @test ccall(:jl_get_export_foreign_symbol_usage, Ptr{Cchar}, ()) == C_NULL
+    ccall(:jl_set_export_foreign_symbol_usage, Cvoid, (Cstring,), "/tmp/deps.json")
+    @test unsafe_string(ccall(:jl_get_export_foreign_symbol_usage, Cstring, ())) == "/tmp/deps.json"
+    ccall(:jl_set_export_foreign_symbol_usage, Cvoid, (Cstring,), "")
+    @test ccall(:jl_get_export_foreign_symbol_usage, Ptr{Cchar}, ()) == C_NULL
+
     # a policy must not change what the JIT emits
     setpolicy!(dlid(named_lib), true)
     ir = sprint(io -> code_llvm(io, echo_p_named, Tuple{Ptr{Cvoid}};
