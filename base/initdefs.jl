@@ -458,8 +458,8 @@ packages.
     returned vector.
 """
 function load_path()
-    cache = LOADING_CACHE[]
-    cache !== nothing && return cache.load_path
+    stack = ENV_STACK[]
+    stack !== nothing && is_env_snapshot_current(stack.snapshot) && return stack.load_path
     paths = String[]
     for env in LOAD_PATH
         path = load_path_expand(env)

@@ -1,8 +1,6 @@
 module Precompilation
 
-using Base: CoreLogging, PkgId, UUID, SHA1, StaleCacheKey, parsed_toml,
-            project_file_manifest_path, get_deps, preferences_names,
-            base_project, isdefined
+using Base: CoreLogging, PkgId, UUID, StaleCacheKey, isdefined, ExplicitEnv
 
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}
@@ -486,300 +484,6 @@ end_progress(io, p::MiniProgressBar) = print(io, ansi_enablecursor, ansi_clearli
 
 print_progress_bottom(io::IO) = print(io, "\e[S", ansi_moveup(1), ansi_clearline, ansi_movecol1)
 
-## ExplicitEnv
-
-# This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
-# see the `kc/codeloading2.0` branch
-struct ExplicitEnv
-    path::String
-    project_deps::Dict{String, UUID}     # [deps] in the active project's Project.toml
-    project_weakdeps::Dict{String, UUID} # [weakdeps] in the active project's Project.toml
-    project_extras::Dict{String, UUID}   # [extras] in the active project's Project.toml
-    project_extensions::Dict{String, Vector{UUID}} # [extensions] in the active project's Project.toml
-    workspace_deps::Dict{String, UUID}   # union of [deps] from all workspace member Project.tomls
-    deps::Dict{UUID, Vector{UUID}}       # full dependency graph from Manifest.toml
-    weakdeps::Dict{UUID, Vector{UUID}}   # full weak dependency graph from Manifest.toml
-    extensions::Dict{UUID, Dict{String, Vector{UUID}}}
-    # Lookup name for a UUID
-    names::Dict{UUID, String}
-    lookup_strategy::Dict{UUID, Union{
-                                      SHA1,     # `git-tree-sha1` entry
-                                      String,   # `path` entry
-                                      Nothing,  # stdlib (no `path` nor `git-tree-sha1`)
-                                      Missing}} # not present in the manifest
-    #prefs::Union{Nothing, Dict{String, Any}}
-    #local_prefs::Union{Nothing, Dict{String, Any}}
-end
-
-ExplicitEnv() = ExplicitEnv(Base.active_project())
-function ExplicitEnv(::Nothing, envpath::String="")
-    ExplicitEnv(envpath,
-        Dict{String, UUID}(),     # project_deps
-        Dict{String, UUID}(),     # project_weakdeps
-        Dict{String, UUID}(),     # project_extras
-        Dict{String, Vector{UUID}}(), # project_extensions
-        Dict{String, UUID}(),     # workspace_deps
-        Dict{UUID, Vector{UUID}}(),   # deps
-        Dict{UUID, Vector{UUID}}(),   # weakdeps
-        Dict{UUID, Dict{String, Vector{UUID}}}(), # extensions
-        Dict{UUID, String}(),     # names
-        Dict{UUID, Union{SHA1, String, Nothing, Missing}}())
-end
-function ExplicitEnv(envpath::String)
-    # Handle missing project file by creating an empty environment
-    if !isfile(envpath) || project_file_manifest_path(envpath) === nothing
-        envpath = abspath(envpath)
-        return ExplicitEnv(nothing, envpath)
-    end
-    envpath = abspath(envpath)
-    project_d = parsed_toml(envpath)
-
-    # TODO: Perhaps verify that two packages with the same UUID do not have different names?
-    names = Dict{UUID, String}()
-    project_name_to_uuid = Dict{String, UUID}()
-
-    project_deps = Dict{String, UUID}()
-    project_weakdeps = Dict{String, UUID}()
-    project_extras = Dict{String, UUID}()
-
-    # Collect all direct dependencies of the project
-    for key in ["deps", "weakdeps", "extras"]
-        for (name, _uuid) in get(Dict{String, Any}, project_d, key)::Dict{String, Any}
-            v = key == "deps" ? project_deps :
-                key == "weakdeps" ? project_weakdeps :
-                key == "extras" ? project_extras :
-                error()
-            uuid = UUID(_uuid::String)
-            v[name] = uuid
-            names[uuid] = name
-            project_name_to_uuid[name] = uuid
-        end
-    end
-
-    # A package in both deps and weakdeps is in fact only a weakdep
-    for (name, _) in project_weakdeps
-        delete!(project_deps, name)
-    end
-
-    # This project might be a package, in that case, that is also a "dependency"
-    # of the project.
-    proj_name = get(project_d, "name", nothing)::Union{String, Nothing}
-    _proj_uuid = get(project_d, "uuid", nothing)::Union{String, Nothing}
-    proj_uuid = _proj_uuid === nothing ? nothing : UUID(_proj_uuid)
-
-    project_is_package = proj_name !== nothing && proj_uuid !== nothing
-    if project_is_package
-        # TODO: Error on missing uuid?
-        project_deps[proj_name] = proj_uuid
-        names[proj_uuid] = proj_name
-    end
-
-    project_extensions = Dict{String, Vector{UUID}}()
-    # Collect all extensions of the project
-    for (name, triggers) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
-        if triggers isa String
-            triggers = [triggers]
-        else
-            triggers = triggers::Vector{String}
-        end
-        uuids = UUID[]
-        for trigger in triggers
-            uuid = get(project_name_to_uuid, trigger, nothing)
-            if uuid === nothing
-                error("Trigger $trigger for extension $name not found in project")
-            end
-            push!(uuids, uuid)
-        end
-        project_extensions[name] = uuids
-    end
-
-    manifest = project_file_manifest_path(envpath)
-    manifest_d = manifest === nothing ? Dict{String, Any}() : parsed_toml(manifest)
-
-    # Dependencies in a manifest can either be stored compressed (when name is unique among all packages)
-    # in which case it is a `Vector{String}` or expanded where it is a `name => uuid` mapping.
-    deps = Dict{UUID, Union{Vector{String}, Vector{UUID}}}()
-    weakdeps = Dict{UUID, Union{Vector{String}, Vector{UUID}}}()
-    extensions = Dict{UUID, Dict{String, Vector{String}}}()
-    name_to_uuid = Dict{String, UUID}()
-    lookup_strategy = Dict{UUID, Union{SHA1, String, Nothing, Missing}}()
-
-    sizehint!(deps, length(manifest_d))
-    sizehint!(weakdeps, length(manifest_d))
-    sizehint!(extensions, length(manifest_d))
-    sizehint!(name_to_uuid, length(manifest_d))
-    sizehint!(lookup_strategy, length(manifest_d))
-
-    for (name, pkg_infos) in get_deps(manifest_d)
-        for pkg_info in pkg_infos::Vector{Any}
-            pkg_info = pkg_info::Dict{String, Any}
-            m_uuid = UUID(pkg_info["uuid"]::String)
-
-            # If we have multiple packages with the same name we will overwrite things here
-            # but that is fine since we will only use the information in here for packages
-            # with unique names
-            names[m_uuid] = name
-            name_to_uuid[name] = m_uuid
-
-            for key in ["deps", "weakdeps"]
-                deps_pkg = get(Vector{String}, pkg_info, key)::Union{Vector{String}, Dict{String, Any}}
-                d = key == "deps" ? deps :
-                    key == "weakdeps" ? weakdeps :
-                    error()
-
-                # Compressed format with unique names:
-                if deps_pkg isa Vector{String}
-                    d[m_uuid] = deps_pkg
-                # Expanded format:
-                else
-                    uuids = UUID[]
-                    for (name_dep, _dep_uuid) in deps_pkg
-                        dep_uuid = UUID(_dep_uuid::String)
-                        push!(uuids, dep_uuid)
-                        names[dep_uuid] = name_dep
-                    end
-                    d[m_uuid] = uuids
-                end
-            end
-
-            # Extensions
-            deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
-            deps_pkg_concrete = Dict{String, Vector{String}}()
-            for (ext, triggers) in deps_pkg
-                if triggers isa String
-                    triggers = [triggers]
-                else
-                    triggers = triggers::Vector{String}
-                end
-                deps_pkg_concrete[ext] = triggers
-            end
-            extensions[m_uuid] = deps_pkg_concrete
-
-            # Determine strategy to find package
-            lookup_strat = begin
-                if (path = get(pkg_info, "path", nothing)::Union{String, Nothing}) !== nothing
-                    path
-                elseif (git_tree_sha_str = get(pkg_info, "git-tree-sha1", nothing)::Union{String, Nothing}) !== nothing
-                    SHA1(git_tree_sha_str)
-                else
-                    nothing
-                end
-            end
-            lookup_strategy[m_uuid] = lookup_strat
-        end
-    end
-
-    # No matter if the deps were stored compressed or not in the manifest,
-    # we internally store them expanded
-    deps_expanded = Dict{UUID, Vector{UUID}}()
-    weakdeps_expanded = Dict{UUID, Vector{UUID}}()
-    extensions_expanded = Dict{UUID, Dict{String, Vector{UUID}}}()
-    sizehint!(deps_expanded, length(deps))
-    sizehint!(weakdeps_expanded, length(deps))
-    sizehint!(extensions_expanded, length(deps))
-
-    if proj_name !== nothing && proj_uuid !== nothing
-        deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
-        extensions_expanded[proj_uuid] = project_extensions
-        path = get(project_d, "path", nothing)::Union{String, Nothing}
-        entry_point = path !== nothing ? path : dirname(envpath)
-        lookup_strategy[proj_uuid] = entry_point
-    end
-
-    for key in ["deps", "weakdeps"]
-        d = key == "deps" ? deps :
-            key == "weakdeps" ? weakdeps :
-            error()
-        d_expanded = key == "deps" ? deps_expanded :
-                     key == "weakdeps" ? weakdeps_expanded :
-                     error()
-        for (pkg, deps) in d
-            # dependencies was already expanded so use it directly:
-            if deps isa Vector{UUID}
-                d_expanded[pkg] = deps
-                for dep in deps
-                    name_to_uuid[names[dep]] = dep
-                end
-            # find the (unique) UUID associated with the name
-            else
-                deps_pkg = UUID[]
-                sizehint!(deps_pkg, length(deps))
-                for dep in deps
-                    push!(deps_pkg, name_to_uuid[dep])
-                end
-                d_expanded[pkg] = deps_pkg
-            end
-        end
-    end
-
-    for (pkg, exts) in extensions
-        exts_expanded = Dict{String, Vector{UUID}}()
-        for (ext, triggers) in exts
-            triggers_expanded = UUID[]
-            sizehint!(triggers_expanded, length(triggers))
-            for trigger in triggers
-                push!(triggers_expanded, name_to_uuid[trigger])
-            end
-            exts_expanded[ext] = triggers_expanded
-        end
-        extensions_expanded[pkg] = exts_expanded
-    end
-
-    # Everything that does not yet have a lookup_strategy is missing from the manifest
-    for (_, uuid) in project_deps
-        get!(lookup_strategy, uuid, missing)
-    end
-
-    #=
-    # Preferences:
-    prefs = get(project_d, "preferences", nothing)
-
-    # `(Julia)LocalPreferences.toml`
-    project_dir = dirname(envpath)
-    local_prefs = nothing
-    for name in preferences_names
-        toml_path = joinpath(project_dir, name)
-        if isfile(toml_path)
-            local_prefs = parsed_toml(toml_path)
-            break
-        end
-    end
-    =#
-
-    # Collect the union of [deps] from all workspace member projects.
-    # For non-workspace projects, this is the same as project_deps.
-    workspace_deps = copy(project_deps)
-    base = base_project(envpath)
-    if base !== nothing
-        base_d = parsed_toml(base)
-        # Add deps from the workspace root project
-        for (name, _uuid) in get(Dict{String, Any}, base_d, "deps")::Dict{String, Any}
-            workspace_deps[name] = UUID(_uuid::String)
-        end
-        # Add deps from each workspace member project
-        ws = get(base_d, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
-        if ws !== nothing
-            ws_projects = get(ws, "projects", nothing)::Union{Vector{String}, Nothing, String}
-            if ws_projects isa Vector
-                ws_root = dirname(base)
-                for ws_proj in ws_projects
-                    ws_proj_dir = joinpath(ws_root, ws_proj)
-                    ws_proj_file = Base.env_project_file(ws_proj_dir)
-                    ws_proj_file isa String || continue
-                    ws_d = parsed_toml(ws_proj_file)
-                    for (name, _uuid) in get(Dict{String, Any}, ws_d, "deps")::Dict{String, Any}
-                        workspace_deps[name] = UUID(_uuid::String)
-                    end
-                end
-            end
-        end
-    end
-
-    return ExplicitEnv(envpath, project_deps, project_weakdeps, project_extras,
-                       project_extensions, workspace_deps,
-                       deps_expanded, weakdeps_expanded, extensions_expanded,
-                       names, lookup_strategy, #=prefs, local_prefs=#)
-end
 
 ## Dependency graph
 
@@ -896,13 +600,13 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
     ext_to_parent = Dict{PkgId, PkgId}()
     triggers = Dict{PkgId, Vector{PkgId}}()
 
-    # Determine which packages to consider for precompilation by walking
-    # transitive dependencies from the appropriate roots.
-    # `manifest` controls the scope: workspace_deps (all members) vs project_deps (current project).
+    # `manifest` selects workspace-wide rather than project-local roots.
     roots = manifest ? env.workspace_deps : env.project_deps
     pkg_uuids = Set{UUID}()
-    for (_, uuid) in roots
-        _collect_reachable!(pkg_uuids, env.deps, uuid)
+    if env.manifest_path !== nothing
+        for (_, uuid) in roots
+            _collect_reachable!(pkg_uuids, env.deps, uuid)
+        end
     end
 
     for dep in pkg_uuids
@@ -1109,7 +813,8 @@ precompiles only the given packages and their dependencies (unless
   package loading system. When `true` (not default): returns early instead of
   throwing when packages are not found; suppresses progress messages when not
   in an interactive session; allows packages outside the current environment to
-  be added as serial precompilation jobs; skips LOADING_CACHE initialization;
+  be added as serial precompilation jobs; reuses the environment stack established
+  by the loading system;
   and changes cachefile locking behavior.
 
 - `configs::Union{Config,Vector{Config}}`: Compilation configurations to use. Each Config
@@ -2488,9 +2193,9 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
 end
 
 function report_precompile_results!(s::PrecompileSession)
-    if !s._from_loading
+    if !s._from_loading && !Base._env_frozen()
         @lock Base.require_lock begin
-            Base.LOADING_CACHE[] = nothing
+            Base.ENV_STACK[] = nothing
         end
     end
     notify(s.first_started) # in cases of no-op or !fancyprint
@@ -2836,9 +2541,11 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
 
     try
-        if !_from_loading
+        # Share one stack across the lookups below, except when precompiling
+        # where the installed stack is pinned for `require` and must not be replaced.
+        if !_from_loading && !Base._env_frozen()
             @lock Base.require_lock begin
-                Base.LOADING_CACHE[] = Base.LoadingCache()
+                Base.ENV_STACK[] = Base.EnvironmentStack()
             end
         end
         @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
