@@ -9118,7 +9118,7 @@ static jl_llvm_functions_t
         jl_varinfo_t &varinfo = ctx.slots[i];
         uint8_t flags = jl_array_uint8_ref(src->slotflags, i);
         varinfo.isSA = (jl_vinfo_sa(flags) != 0) || varinfo.isArgument;
-        varinfo.usedUndef = (jl_vinfo_usedundef(flags) != 0) || !varinfo.isArgument;
+        varinfo.usedUndef = !varinfo.isArgument;
         if (!varinfo.isArgument) {
             varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, (jl_value_t*)jl_any_type);
         }

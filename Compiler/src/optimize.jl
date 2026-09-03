@@ -4,13 +4,7 @@
 # constants #
 #############
 
-# The slot has uses that are not statically dominated by any assignment
-# This is implied by `SLOT_USEDUNDEF`.
-# If this is not set, all the uses are (statically) dominated by the defs.
-# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
 const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
-const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
@@ -269,7 +263,10 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     nbbstate = zeros(Int, nslots)
     bb_states = Union{BBEntryState,Nothing}[
         BBEntryState(VarState[
-            VarState(slottypes[slot], typemin(Int), src.slotflags[slot] & SLOT_USEDUNDEF != 0)
+            # Conservatively assume non-argument slots may be undefined at
+            # entry (matching inference's initial state); slotflags carry no
+            # trustworthy used-undef information.
+            VarState(slottypes[slot], typemin(Int), slot > Int(src.nargs))
             for slot = 1:nslots
         ], nbbstate)
         for _ = 1:length(cfg.blocks)]
