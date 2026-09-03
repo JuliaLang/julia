@@ -1294,7 +1294,7 @@ check_exponent_err(ret) = ret == 0 || throw(ArgumentError("Invalid MPFR exponent
 set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, libmpfr), Cint, (Clong,), x))
 set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, libmpfr), Cint, (Clong,), x))
 
-function Base.deepcopy_impl(x::BigFloat, stackdict::IdDict)
+function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
     get!(stackdict, x) do
         d′ = copy(getfield(x, :d))
         y = _BigFloat(d′)

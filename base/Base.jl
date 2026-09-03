@@ -248,7 +248,7 @@ using .Sort
 include("fastmath.jl")
 using .FastMath
 
-function deepcopy_impl end
+function deepcopy_internal end
 
 # enums
 include("Enums.jl")

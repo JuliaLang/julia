@@ -149,5 +149,4 @@ public
     text_colors,
     depwarn,
     blackbox,
-    donotdelete,
-    deepcopy_impl
+    donotdelete
