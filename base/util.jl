@@ -386,11 +386,15 @@ end
 getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
-    prompt(message; default="")::Union{String, Nothing}
+    prompt(message; default="", timeout=0)::Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`.
+
+For libuv-backed input streams (e.g. `stdin` or a [`Pipe`](@ref)), a `timeout` in seconds
+greater than 0 can be provided, after which the `default` will be returned. The `timeout` is
+ignored for other input streams.
 
 See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
@@ -402,20 +406,176 @@ Enter your name: Logan
 
 julia> your_name
 "Logan"
+
+julia> Base.prompt("Proceed? y/n"; default="n", timeout=5)
+Proceed? y/n [n] timed out:
+"n"
 ```
 """
-function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
-    msg = !isempty(default) ? "$message [$default]: " : "$message: "
-    print(output, msg)
+function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="", timeout::Real = 0)
+    start_msg = isempty(default) ? message : "$message [$default]"
+    function print_msg(out, t)
+        if t > 0
+            print(out, start_msg, " ")
+            printstyled(out, t, "s", color=:light_black)
+            print(out, ": ")
+        else
+            print(out, start_msg, ": ")
+        end
+    end
+    # On a POSIX stdin TTY with a timeout, use a raw-mode mini line editor so the
+    # timeout cancels on the first keypress and the countdown can refresh in place.
+    if timeout > 0 && input isa TTY && input === stdin && !Sys.iswindows()
+        return _prompt_raw_tty(output, default, timeout, start_msg, print_msg)
+    end
+    print_msg(output, timeout)
+    if timeout > 0 && input isa LibuvStream
+        timed_out = Ref(false)
+        in_status_before = input.status
+        deadline = time() + timeout
+        timer = Timer(timeout) do t
+            lock(input.cond)
+            try
+                timed_out[] = true
+                input.status = StatusEOF
+                notify(input.cond)
+            finally
+                unlock(input.cond)
+            end
+        end
+        countdown = if output isa TTY
+            Timer(1; interval=1) do t
+                if isopen(timer) && bytesavailable(input.buffer) == 0
+                    remaining = ceil(Int, deadline - time())
+                    remaining >= 1 || return
+                    print(output, "\r\e[2K")
+                    print_msg(output, remaining)
+                end
+            end
+        else
+            nothing
+        end
+        try
+            wait_readnb(input, 1)
+        finally
+            close(timer)
+            countdown isa Timer && close(countdown)
+        end
+        if timed_out[]
+            if output isa TTY
+                print(output, "\r\e[2K", start_msg, " ")
+                printstyled(output, "timed out", color=:light_black)
+                println(output, ": ")
+            else
+                println(output, "timed out")
+            end
+            input.status = in_status_before
+            return default
+        end
+    end
     uinput = readline(input, keep=true)
     isempty(uinput) && return nothing  # Encountered an EOF
     uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
 
+function _prompt_raw_tty(output::IO, default::AbstractString, timeout::Real,
+                         start_msg::AbstractString, print_msg)
+    print_msg(output, timeout)
+    timed_out = Ref(false)
+    interrupted = Ref(false)
+    in_status_before = stdin.status
+    deadline = time() + timeout
+    chars = UInt8[]
+    timer = Timer(timeout) do t
+        lock(stdin.cond)
+        try
+            timed_out[] = true
+            stdin.status = StatusEOF
+            notify(stdin.cond)
+        finally
+            unlock(stdin.cond)
+        end
+    end
+    countdown = Timer(1; interval=1) do t
+        isopen(timer) || return
+        isempty(chars) || return
+        remaining = ceil(Int, deadline - time())
+        remaining >= 1 || return
+        print(output, "\r\e[2K")
+        print_msg(output, remaining)
+    end
+    finished = Ref(false)
+    eof_seen = Ref(false)
+    try
+        with_raw_tty(stdin) do
+            while !finished[]
+                if bytesavailable(stdin.buffer) == 0
+                    wait_readnb(stdin, 1)
+                end
+                timed_out[] && break
+                bytesavailable(stdin.buffer) > 0 || break
+                c = read(stdin, UInt8)
+                if isempty(chars) && c != 0x03 && c != 0x04
+                    # First keypress — cancel timeout and clear countdown line
+                    close(timer)
+                    close(countdown)
+                    print(output, "\r\e[2K", start_msg, ": ")
+                end
+                if c == 0x03         # ^C
+                    interrupted[] = true
+                    finished[] = true
+                elseif c == 0x04     # ^D / EOF
+                    eof_seen[] = isempty(chars)
+                    finished[] = true
+                elseif c == 0x0d || c == 0x0a   # Enter
+                    finished[] = true
+                elseif c == 0x7f || c == 0x08   # backspace / DEL
+                    if !isempty(chars)
+                        pop!(chars)
+                        print(output, "\b \b")
+                    end
+                elseif c == 0x1b     # swallow basic CSI / SS3 escape sequence
+                    if bytesavailable(stdin.buffer) == 0
+                        wait_readnb(stdin, 1)
+                    end
+                    bytesavailable(stdin.buffer) > 0 || continue
+                    n = read(stdin, UInt8)
+                    if n == UInt8('[') || n == UInt8('O')
+                        if bytesavailable(stdin.buffer) == 0
+                            wait_readnb(stdin, 1)
+                        end
+                        bytesavailable(stdin.buffer) > 0 && read(stdin, UInt8)
+                    end
+                elseif c >= 0x20     # printable (including UTF-8 continuation bytes)
+                    push!(chars, c)
+                    write(output, c)
+                end
+            end
+        end
+    finally
+        close(timer)
+        close(countdown)
+    end
+    if interrupted[]
+        println(output)
+        throw(InterruptException())
+    end
+    if timed_out[]
+        print(output, "\r\e[2K", start_msg, " ")
+        printstyled(output, "timed out", color=:light_black)
+        println(output, ": ")
+        stdin.status = in_status_before
+        return default
+    end
+    println(output)
+    eof_seen[] && return nothing
+    isempty(chars) ? default : String(chars)
+end
+
 # allow new prompt methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, stdout, message, default=default)
+prompt(message::AbstractString; kwargs...) = prompt(stdin, stdout, message; kwargs...)
 
 # Windows authentication prompt
 if Sys.iswindows()
