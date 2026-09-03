@@ -156,7 +156,6 @@ Base.finalizer
 Base.finalize
 Base.copy
 Base.deepcopy
-Base.deepcopy_impl
 Base.getproperty
 Base.setproperty!
 Base.replaceproperty!

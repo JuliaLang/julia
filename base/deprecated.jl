@@ -743,6 +743,4 @@ end
     @noinline tan_domain_error(x) = throw_finite_domainerror(:tan, x)
 end
 
-@deprecate deepcopy_internal deepcopy_impl false
-
 # END 1.14 deprecations
