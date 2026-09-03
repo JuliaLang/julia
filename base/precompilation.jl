@@ -175,7 +175,7 @@ end
 
 # A request to do precompilation work, either in a new session or merged into a running one.
 struct PrecompileRequest
-    pkgs::Vector{String}
+    pkgs::Union{Vector{String}, Vector{PkgId}}
     internal_call::Bool
     strict::Bool
     warn_loaded::Bool
@@ -1030,7 +1030,7 @@ end
 # Filter the dependency graph to only include requested packages and their transitive deps.
 # Returns true if the graph became empty (caller should return early).
 function filter_dep_graph!(direct_deps, pkg_names, ext_to_parent, requested_pkgids)
-    isempty(pkg_names) && return false
+    isempty(pkg_names) && isempty(requested_pkgids) && return false
     keep = Set{PkgId}()
     for dep_pkgid in keys(direct_deps)
         if dep_pkgid.name in pkg_names
@@ -1620,8 +1620,11 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
         BG.work_channel = Channel{PrecompileRequest}(Inf)
     end
 
-    # Capture necessary context for background task
-    pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
+    # Capture necessary context for background task. Preserve the original element
+    # type so a `Vector{PkgId}` request keeps its package identities; `do_precompile`
+    # resolves names against the active project only, which would drop workspace or
+    # manifest deps that are not direct deps of the active project.
+    requested_pkgs = copy(pkgs)
 
     # Register an atexit hook (once) to cleanly shut down background precompilation
     # before the event loop is torn down.
@@ -1632,7 +1635,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
         wc = BG.work_channel
         BG.task = Threads.@spawn :samepool begin
             try
-                ret = do_precompile(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
+                ret = do_precompile(requested_pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                                     configs, io, fancyprint, manifest, ignore_loaded, detachable, wc)
 
                 @lock BG begin
@@ -1704,8 +1707,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         did_inject = @lock BG begin
             if BG.task !== nothing && !istaskdone(BG.task) &&
                     isopen(BG.work_channel)
-                pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
-                req = PrecompileRequest(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
+                # Preserve the original element type so a `Vector{PkgId}` request keeps its
+                # package identities across the channel; the drainer resolves names against
+                # the active project only, which would drop workspace deps.
+                req = PrecompileRequest(copy(pkgs), internal_call, strict, warn_loaded, timing, _from_loading,
                                         configs, io, fancyprint′, manifest, ignore_loaded, detachable,
                                         Channel{Any}(1))
                 try
@@ -2385,10 +2390,13 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
             waiter_spawned = false
             try
                 new_env = ExplicitEnv()
-                req_pkgids = PkgId[]
-                for name in request.pkgs
-                    pkgid = Base.identify_package(name)
-                    pkgid !== nothing && push!(req_pkgids, pkgid)
+                if request.pkgs isa Vector{PkgId}
+                    # Resolved by identity; no names needed (see `do_precompile`).
+                    req_pkgids = copy(request.pkgs)
+                    req_pkg_names = String[]
+                else
+                    req_pkgids = PkgId[pkgid for name in request.pkgs if (pkgid = Base.identify_package(name)) !== nothing]
+                    req_pkg_names = copy(request.pkgs)
                 end
                 new_graph = build_dep_graph(new_env, request.manifest, request._from_loading, req_pkgids)
                 # When no specific packages were requested, treat project deps as the requested set
@@ -2402,7 +2410,7 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                     union!(s.serial_deps, new_graph.serial_deps)
                     union!(s.requested_pkgids, effective_pkgids)
                 end
-                new_pkg_names = copy(request.pkgs)
+                new_pkg_names = req_pkg_names
                 new_dd = new_graph.direct_deps
                 filter_dep_graph!(new_dd, new_pkg_names, new_graph.ext_to_parent, req_pkgids)
                 skip_pkgs = Set{PkgId}()
@@ -2457,7 +2465,7 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                 new_tasks = spawn_precompile_tasks!(s;
                     direct_deps=new_dd, was_processed=new_wp, configs=request.configs,
                     circular_deps=new_circular, requested_pkgids=effective_pkgids,
-                    pkg_names=request.pkgs, requested_pkgs=request.pkgs,
+                    pkg_names=new_pkg_names, requested_pkgs=request.pkgs,
                     from_loading=request._from_loading)
                 append!(s.injected_tasks, new_tasks)
                 waiter = Threads.@spawn :samepool begin
@@ -2704,7 +2712,9 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
                         detachable::Bool,
                         work_channel::Channel{PrecompileRequest})
     requested_pkgs = copy(pkgs)
-    pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
+    # A `Vector{PkgId}` request is resolved purely by identity (`requested_pkgids`);
+    # names are only used to filter and report the `Vector{String}` path.
+    pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[]
     if pkgs isa Vector{PkgId}
         requested_pkgids = copy(pkgs)
     else
@@ -2766,6 +2776,9 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     circular_deps = detect_circular_deps!(graph.direct_deps, graph.serial_deps, was_processed, io, graph.ext_to_parent)
 
+    # `pkg_names` is empty for a `Vector{PkgId}` request, so the graph is filtered by
+    # identity via `requested_pkgids`. Matching on name would be incorrect when two
+    # packages with different UUIDs share the same name.
     if filter_dep_graph!(graph.direct_deps, pkg_names, graph.ext_to_parent, requested_pkgids)
         @lock BG BG.result = ""
         return
