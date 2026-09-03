@@ -1522,6 +1522,14 @@ fn45187() = nothing
 @test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
 @test_throws(TypeError, @eval ccall((:fn, fn45187), Cvoid, ()))
 
+# Keep these uninlined so codegen errors in the pointer expressions remain dynamic.
+@noinline ccall_bottom_ir(ir) = ccall(Core.Intrinsics.llvmcall(ir, Ptr{Cvoid}, Tuple{}), Cvoid, ())
+@noinline cglobal_bottom_ir(ir) = cglobal(Core.Intrinsics.llvmcall(ir, Ptr{Cvoid}, Tuple{}))
+let err = ErrorException("error statically evaluating llvm IR argument")
+    @test_throws err ccall_bottom_ir("ret ptr null")
+    @test_throws err cglobal_bottom_ir("ret ptr null")
+end
+
 # test for malformed syntax errors
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))

@@ -547,6 +547,8 @@ static jl_cgval_t drop_inline_roots(const jl_cgval_t &x)
 // pointer, so that the conversion is guaranteed to be valid on this runtime branch
 static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x, const Twine &msg) JL_CANSAFEPOINT
 {
+    if (x.typ == jl_bottom_type)
+        return x;
     if (x.typ == (jl_value_t*)jl_voidpointer_type)
         return x;
     if (!jl_is_cpointer_type(x.typ))
@@ -626,7 +628,7 @@ static Value *julia_to_native(
     return slot;
 }
 
-static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg) JL_CANSAFEPOINT
+static bool interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg) JL_CANSAFEPOINT
 {
     // Initialize all fields to safe defaults
     out.f_name = nullptr;
@@ -694,8 +696,10 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     else {
         // Not a tuple - pointer expression
         jl_cgval_t arg1 = emit_expr(ctx, arg);
-        out.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr,
-            voidpointer_update(ctx, arg1, "ccall: first argument not a pointer or valid constant expression"));
+        arg1 = voidpointer_update(ctx, arg1, "ccall: first argument not a pointer or valid constant expression");
+        if (arg1.typ == jl_bottom_type)
+            return false;
+        out.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, arg1);
     }
 
     // Handle Julia internal symbol lookup for static function names
@@ -711,6 +715,7 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
             out.f_lib = jl_dlfind(out.f_name);
         }
     }
+    return true;
 }
 
 // --- code generator for cglobal ---
@@ -1522,7 +1527,10 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     bool llvmcall = false;
     std::tie(cc, llvmcall) = convert_cconv(cc_sym);
 
-    interpret_foreignsymbol(ctx, symarg, args[1]);
+    if (!interpret_foreignsymbol(ctx, symarg, args[1])) {
+        JL_GC_POP();
+        return jl_cgval_t();
+    }
     const char *&f_name = symarg.f_name;
     const char *&f_lib = symarg.f_lib;
 
