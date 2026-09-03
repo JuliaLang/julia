@@ -52,6 +52,37 @@ JL_DLLEXPORT int jl_get_foreign_link_policy(jl_value_t *id) JL_NOTSAFEPOINT
     return policy == NULL ? -1 : policy == jl_true;
 }
 
+// Write the canonical text of a UUID (lowercase hex, dashed 8-4-4-4-12) into
+// `out`, which must hold JL_UUID_STRING_LEN + 1 bytes.
+JL_DLLEXPORT void jl_uuid_to_string(const jl_uuid_t *uuid, char *out) JL_NOTSAFEPOINT
+{
+    char hex[33];
+    snprintf(hex, sizeof(hex), "%016" PRIx64 "%016" PRIx64, uuid->hi, uuid->lo);
+    size_t pos = 0;
+    for (int i = 0; i < 32; i++) {
+        if (i == 8 || i == 12 || i == 16 || i == 20)
+            out[pos++] = '-';
+        out[pos++] = hex[i];
+    }
+    out[pos] = '\0';
+}
+
+// Used-foreign-symbols JSON export path, process-local. Read by the AOT codegen
+// pipeline (aot_export_used_foreign_symbols in aotcompile.cpp).
+static char *export_foreign_symbol_usage_path = NULL;
+
+JL_DLLEXPORT void jl_set_export_foreign_symbol_usage(const char *path) JL_NOTSAFEPOINT
+{
+    if (export_foreign_symbol_usage_path)
+        free(export_foreign_symbol_usage_path);
+    export_foreign_symbol_usage_path = (path && path[0]) ? strdup(path) : NULL;
+}
+
+JL_DLLEXPORT const char *jl_get_export_foreign_symbol_usage(void) JL_NOTSAFEPOINT
+{
+    return export_foreign_symbol_usage_path;
+}
+
 // map from user-specified lib names to handles
 static htable_t libMap;
 static jl_mutex_t libmap_lock;
