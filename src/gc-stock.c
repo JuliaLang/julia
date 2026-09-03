@@ -798,6 +798,9 @@ STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_
 }
 
 jl_gc_page_stack_t global_page_pool_lazily_freed;
+// approximate (relaxed) length of global_page_pool_lazily_freed; only used to
+// decide how much of the warm cache gc_free_pages reclaims
+_Atomic(size_t) global_page_pool_lazily_freed_n;
 jl_gc_page_stack_t global_page_pool_clean;
 jl_gc_page_stack_t global_page_pool_freed;
 pagetable_t alloc_map;
@@ -1135,6 +1138,7 @@ done:
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -GC_PAGE_SZ);
         gc_alloc_map_set(pg->data, GC_PAGE_LAZILY_FREED);
         push_lf_back(&global_page_pool_lazily_freed, pg);
+        jl_atomic_fetch_add_relaxed(&global_page_pool_lazily_freed_n, 1);
     }
     gc_page_profile_write_to_file(s);
     gc_time_count_page(freedall, pg_skpd);
@@ -1487,45 +1491,26 @@ static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
     jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, -1);
 }
 
-// free all pages (i.e. through `madvise` on Linux) that were lazily freed
+// free all but a `default_collect_interval`-sized warm cache of the pages that
+// were lazily freed (i.e. through `madvise` on Linux)
 static void gc_free_pages(void) JL_NOTSAFEPOINT
 {
-    size_t n_pages_seen = 0;
-    jl_gc_page_stack_t tmp;
-    memset(&tmp, 0, sizeof(tmp));
-    while (1) {
+    // Keep roughly a `default_collect_interval`-sized set of already-mapped pages.
+    size_t keep = default_collect_interval / GC_PAGE_SZ;
+    size_t n_present = jl_atomic_load_relaxed(&global_page_pool_lazily_freed_n);
+    size_t n_to_free = n_present > keep ? n_present - keep : 0;
+    size_t n_freed = 0;
+    while (n_freed < n_to_free) {
         jl_gc_pagemeta_t *pg = pop_lf_back(&global_page_pool_lazily_freed);
         if (pg == NULL) {
             break;
         }
-        n_pages_seen++;
-        // keep the last few pages around for a while
-        if (n_pages_seen * GC_PAGE_SZ <= default_collect_interval) {
-            assert((&global_page_pool_lazily_freed != &tmp) &&
-                "Cannot push back to the same stack we are popping from; see invariant of lock-free stack");
-            push_lf_back(&tmp, pg);
-            continue;
-        }
         jl_gc_free_page(pg);
         push_lf_back(&global_page_pool_freed, pg);
+        n_freed++;
     }
-    // If concurrent page sweeping is disabled, then `gc_free_pages` will be called in the stop-the-world
-    // phase. We can guarantee, therefore, that there won't be any concurrent modifications to
-    // `global_page_pool_lazily_freed`, so it's safe to assign `tmp` back to `global_page_pool_lazily_freed`.
-    // Otherwise, we need to use the thread-safe push_lf_back/pop_lf_back functions.
-    if (jl_n_sweepthreads == 0) {
-        global_page_pool_lazily_freed = tmp;
-    }
-    else {
-        while (1) {
-            jl_gc_pagemeta_t *pg = pop_lf_back(&tmp);
-            if (pg == NULL) {
-                break;
-            }
-            assert((&global_page_pool_lazily_freed != &tmp) &&
-                "Cannot push back to the same stack we are popping from; see invariant of lock-free stack");
-            push_lf_back(&global_page_pool_lazily_freed, pg);
-        }
+    if (n_freed != 0) {
+        jl_atomic_fetch_add_relaxed(&global_page_pool_lazily_freed_n, -(ssize_t)n_freed);
     }
 }
 
