@@ -239,6 +239,9 @@ Standard library changes
   unbound only by calls with `Union{}` type parameters are reported only with the new
   `ambiguous_bottom=true` keyword argument, as for `detect_ambiguities` ([#62405]).
 
+* New macro `@test_hygienic` checks that a macro expansion does not contain unhygienic
+  names, detecting both leaked bindings and captured variable references.
+
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
