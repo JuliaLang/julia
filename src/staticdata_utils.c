@@ -587,7 +587,15 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
 {
     jl_array_t *s = (jl_array_t*)closure;
     jl_method_t *m = ml->func.method;
-    if (!jl_object_in_image((jl_value_t*)m->module))
+    int collect = !jl_object_in_image((jl_value_t*)m->module);
+    if (!collect && session_image_save)
+        // session overlays: methods defined during the session claim in-image
+        // modules (typically Main, but also `@eval Base ...`) while being
+        // runtime objects themselves; collect the still-valid ones so restore
+        // re-inserts them
+        collect = !jl_object_in_image((jl_value_t*)m) &&
+                  jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0;
+    if (collect)
         jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
     return 1;
 }

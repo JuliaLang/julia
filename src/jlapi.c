@@ -1102,6 +1102,19 @@ static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
  * @param argv Array of command-line arguments.
  * @return An integer indicating the exit status of the REPL session.
  */
+// Sanity-check `--restore[=file]` against conflicting options. The session
+// file itself is resolved and loaded by Base during startup
+// (Base.restore_session), where DEPOT_PATH is authoritative.
+// n.b. this runs pre-init, like jl_parse_opts: the jl_error calls terminate
+// the process rather than throw
+static void jl_resolve_restore_session(void) JL_NOTSAFEPOINT
+{
+    if (jl_generating_output())
+        jl_error("julia: --restore cannot be combined with --output-* options");
+    if (jl_options.image_file_specified)
+        jl_error("julia: --restore cannot be combined with -J/--sysimage");
+}
+
 JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTER_LEAVE
 {
 #ifdef USE_TRACY
@@ -1136,6 +1149,9 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
 #endif
         jl_error("Failed to self-execute");
     }
+
+    if (jl_options.restore_session)
+        jl_resolve_restore_session();
 
     JL_IMAGE_SEARCH rel = jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME;
     jl_resolve_sysimg_location(rel, NULL);
