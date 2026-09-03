@@ -182,26 +182,16 @@ Base.cconvert(::Type{mpz_t}, a::BigInt) = (Ref(_view(a)), a.d)
 Base.unsafe_convert(::Type{mpz_t}, t::Tuple{Base.RefValue{MPZView},MP}) =
     Base.unsafe_convert(mpz_t, t[1])
 
-# Capacity for `n` limbs. Contents are not preserved and `x.d` may be replaced,
-# so a caller that also reads `x`'s old limbs must bind them first.
-@inline function _ensure!(x::BigInt, n::Int)
-    d = x.d
-    if length(d) < n
-        d = MP(undef, n)
-        x.d = d
-    end
-    return d
-end
-
-# An `n`-limb buffer for an output that must not overlap any of `avoid`: `x`'s
-# own limbs if they are big enough and not among `avoid`, otherwise a new one.
+# An `n`-limb buffer for `x`'s new value: its own limbs if they are big enough
+# and not among `avoid`, otherwise a new one. `_finish!` installs it, so until
+# then `x`'s old limbs stay readable.
 @inline function _dest(x::BigInt, n::Int, avoid::Vararg{MP,N}) where {N}
     d = x.d
     return (length(d) >= n && !any(m -> m === d, avoid)) ? d : MP(undef, n)
 end
 
-# Publish `n` limbs of `d` as `x`'s value, with sign `neg`. Every kernel-backed
-# write ends here, which is what restores `BigInt`'s invariants.
+# Publish `n` limbs of `d` as `x`'s value, with sign `neg`. Every write of new
+# limbs ends here, which is what restores `BigInt`'s invariants.
 @inline function _finish!(x::BigInt, d::MP, n::Int, neg::Bool)
     x.d = d
     sz = n
@@ -223,17 +213,14 @@ _zero!(x::BigInt) = (x.size = 0; x)
     return d
 end
 
-realloc2!(x::BigInt, a) = (_ensure!(x, cld(Int(a), BITS_PER_LIMB)); x)
+realloc2!(x::BigInt, a) = (x.d = _dest(x, cld(Int(a), BITS_PER_LIMB)); x)
 
 # Copy a GMP-owned mpz, given as its signed size and limb pointer, into `x`.
-# No normalization: every mpz function leaves its output with a nonzero top
-# limb, so `BigInt`'s invariant carries over as is.
 function _take!(x::BigInt, sz::Cint, p::Ptr{Limb})
     n = abs(Int(sz))
-    d = _ensure!(x, n)
+    d = _dest(x, n)
     n > 0 && GC.@preserve d unsafe_copyto!(pointer(d), p, n)
-    x.size = Int(sz)
-    return x
+    return _finish!(x, d, n, sz < 0)
 end
 _take!(x::BigInt, s::MPZOwned) = _take!(x, s.size, s.d)
 
@@ -308,11 +295,7 @@ end
 function set!(x::BigInt, a::BigInt)
     x === a && return x
     n = abs(a.size)
-    ad = a.d
-    d = _ensure!(x, n)
-    copyto!(d, 1, ad, 1, n)
-    x.size = a.size
-    return x
+    return _finish!(x, copyto!(_dest(x, n), 1, a.d, 1, n), n, a.size < 0)
 end
 
 function _addsub!(x::BigInt, a::BigInt, b::BigInt, negb::Bool)
@@ -322,11 +305,10 @@ function _addsub!(x::BigInt, a::BigInt, b::BigInt, negb::Bool)
     bs == 0 && return set!(x, a)
     as == 0 && return negb ? neg!(x, b) : set!(x, b)
     an, bn = abs(as), abs(bs)
-    # Bind the operands before `_ensure!` can replace `x.d` out from under them.
     ad, bd = a.d, b.d
     if (as > 0) == (bs > 0)
         an < bn && ((ad, an, bd, bn) = (bd, bn, ad, an)) # longer operand first
-        d = _ensure!(x, an + 1)
+        d = _dest(x, an + 1)
         c = _mpn_add(d, ad, an % mp_size_t, bd, bn % mp_size_t)
         @inbounds d[an+1] = c
         return _finish!(x, d, an + 1, as < 0)
@@ -335,7 +317,7 @@ function _addsub!(x::BigInt, a::BigInt, b::BigInt, negb::Bool)
     rel == 0 && return _zero!(x)
     neg = (rel < 0) != (as < 0)   # the larger magnitude's sign
     rel < 0 && ((ad, an, bd, bn) = (bd, bn, ad, an))
-    d = _ensure!(x, an)
+    d = _dest(x, an)
     _mpn_sub(d, ad, an % mp_size_t, bd, bn % mp_size_t)
     return _finish!(x, d, an, neg)
 end
@@ -350,17 +332,17 @@ function _addsub_mag!(x::BigInt, a::BigInt, v::Limb, neg::Bool)
     an = abs(as)
     ad = a.d
     if as != 0 && (as > 0) != neg      # magnitudes add
-        d = _ensure!(x, an + 1)
+        d = _dest(x, an + 1)
         @inbounds d[an+1] = _mpn_add_1(d, ad, an % mp_size_t, v)
         return _finish!(x, d, an + 1, as < 0)
     elseif an > 1 || (an == 1 && (@inbounds ad[1]) >= v)   # |a| >= v
-        d = _ensure!(x, an)
+        d = _dest(x, an)
         _mpn_sub_1(d, ad, an % mp_size_t, v)
         return _finish!(x, d, an, as < 0)
     end
     # |a| < v, which `v` being one limb confines to `an <= 1`, so the result
     # is the single limb `v - |a|`, with `v`'s sign.
-    d = _ensure!(x, 1)
+    d = _dest(x, 1)
     @inbounds d[1] = v - (an == 0 ? zero(Limb) : (@inbounds ad[1]))
     return _finish!(x, d, 1, neg)
 end
@@ -397,7 +379,7 @@ function _mul_mag!(x::BigInt, a::BigInt, v::Limb, neg::Bool)
     (as == 0 || v == 0) && return _zero!(x)
     an = abs(as)
     ad = a.d
-    d = _ensure!(x, an + 1)
+    d = _dest(x, an + 1)
     @inbounds d[an+1] = _mpn_mul_1(d, ad, an % mp_size_t, v)
     return _finish!(x, d, an + 1, (as < 0) != neg)
 end
@@ -430,12 +412,12 @@ function _tdiv!(q::Union{BigInt,Nothing}, r::Union{BigInt,Nothing}, a::BigInt, b
         else
             # `mpn_divrem_1` allows `qp == np`, and `v` is already read, so `q`
             # may alias either input.
-            qd = _ensure!(q, an)
+            qd = _dest(q, an)
             rl = _mpn_divrem_1(qd, ad, an % mp_size_t, v)
             _finish!(q, qd, an, qneg)
         end
         if r !== nothing
-            rd = _ensure!(r, 1)
+            rd = _dest(r, 1)
             @inbounds rd[1] = rl
             _finish!(r, rd, 1, as < 0)
         end
@@ -513,8 +495,7 @@ function _bitop!(op::F, x::BigInt, a::BigInt, b::BigInt) where {F}
     as, bs = a.size, b.size
     an, bn = abs(as), abs(bs)
     aneg, bneg = as < 0, bs < 0
-    # Bind before `_ensure!`; `d` may then be `ad` or `bd`, which the upward
-    # scans tolerate.
+    # `d` may be `ad` or `bd`, which the upward scans tolerate.
     ad, bd = a.d, b.d
     if !aneg && !bneg
         # A non-negative magnitude is its own two's-complement expansion,
@@ -524,7 +505,7 @@ function _bitop!(op::F, x::BigInt, a::BigInt, b::BigInt) where {F}
         lo, hi = minmax(an, bn)
         hd = an >= bn ? ad : bd
         n = iszero(op(~zero(Limb), zero(Limb))) ? lo : hi
-        d = _ensure!(x, n)
+        d = _dest(x, n)
         @inbounds for i in 1:lo
             d[i] = op(ad[i], bd[i])
         end
@@ -538,7 +519,7 @@ function _bitop!(op::F, x::BigInt, a::BigInt, b::BigInt) where {F}
     # One limb beyond both operands, holding each one's sign extension: 0 or
     # ~0, so it records the result's sign and absorbs the negation's carry.
     n = max(an, bn) + 1
-    d = _ensure!(x, n)
+    d = _dest(x, n)
     @inbounds for i in 1:n
         d[i] = op(_tc(ad, an, aneg, alow, i), _tc(bd, bn, bneg, blow, i))
     end
@@ -568,7 +549,7 @@ function mul_2exp!(x::BigInt, a::BigInt, c)
     n = an + off + (sh > 0)
     # In place is fine: `mpn_lshift` permits overlap when `rp >= up`, which
     # holds with `rp = d + off`, and `copyto!` on one buffer is a memmove.
-    d = _ensure!(x, n)
+    d = _dest(x, n)
     if sh == 0
         copyto!(d, off+1, ad, 1, an)
     else
@@ -595,7 +576,7 @@ function fdiv_q_2exp!(x::BigInt, a::BigInt, c)
     # In place is fine: `mpn_rshift` permits overlap when `rp <= up`, which
     # holds with `up = ad + off`, and `lost` has already read the low limbs.
     # The extra limb leaves `_dec!` room for a carry without reallocating.
-    d = _ensure!(x, n + lost)
+    d = _dest(x, n + lost)
     if sh == 0
         copyto!(d, 1, ad, off+1, n)
     else
@@ -670,7 +651,7 @@ end
 
 function _set_mag!(x::BigInt, u::UInt64, neg::Bool)
     n = cld(64, BITS_PER_LIMB)
-    d = _ensure!(x, n)
+    d = _dest(x, n)
     return _finish!(x, _store!(d, 0, u), n, neg)
 end
 
@@ -690,7 +671,7 @@ function set_d!(x::BigInt, a)
     off, sh = divrem(e, BITS_PER_LIMB)
     w = UInt128(sig) << sh         # at most 53 + 63 bits
     n = off + cld(128, BITS_PER_LIMB)
-    d = _ensure!(x, n)
+    d = _dest(x, n)
     fill!(@view(d[1:off]), zero(Limb))
     return _finish!(x, _store!(d, off, w), n, v < 0)
 end
@@ -880,7 +861,7 @@ function BigInt(x::Integer)
     ux = unsigned(x < 0 ? -%(x) : x)
     n = cld(top_set_bit(ux), BITS_PER_LIMB)
     z = BigInt()
-    d = MPZ._ensure!(z, n)
+    d = MPZ._dest(z, n)
     @inbounds for i in 1:n
         d[i] = ux % Limb
         ux >>= BITS_PER_LIMB
