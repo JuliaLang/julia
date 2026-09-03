@@ -1,4 +1,4 @@
-PKG_BRANCH = master
-PKG_SHA1 = c9a29a786f770f00af1451b5cf9f45233ace9b0b
+PKG_BRANCH = kc/faster_parallel_test
+PKG_SHA1 = cab9bf79a01b3bbb04666e95d5ea9cff72639772
 PKG_GIT_URL := https://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
