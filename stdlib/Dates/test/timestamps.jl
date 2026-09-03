@@ -51,7 +51,7 @@ using Dates
     @test_throws ArgumentError Timestamp(Date(3000))
     # years are bounds-checked before any calendar arithmetic could wrap into range
     wrapped_year = Int64(202021879422134420)
-    @test Dates.validargs(Timestamp, wrapped_year, 1, 1, 0, 0, 0, 0, 0, 0) isa ArgumentError
+    @test Dates.validargs(Timestamp, wrapped_year, Int64(1), Int64(1), zeros(Int64, 6)...) isa ArgumentError
     @test_throws ArgumentError Timestamp(wrapped_year)
     @test tryparse(Timestamp, string(wrapped_year)) === nothing
     # the exact boundary instants are constructible
@@ -316,9 +316,9 @@ end
     # calendar-stepped ranges may end within one step of typemax
     @test length(Timestamp(2262, 1, 1):Month(1):Timestamp(2262, 4, 11)) == 4
     # step counts are computed exactly, beyond Float64's 2^53 integer precision
-    r53 = a:Nanosecond(1):(a + Nanosecond(2^55 + 5))
-    @test length(r53) == 2^55 + 6
-    @test last(r53) == a + Nanosecond(2^55 + 5)
+    r53 = a:Nanosecond(1):(a + Nanosecond(Int64(2)^55 + 5))
+    @test length(r53) == Int64(2)^55 + 6
+    @test last(r53) == a + Nanosecond(Int64(2)^55 + 5)
     @test reverse(a:Nanosecond(250):(a + Microsecond(1))) == (a + Microsecond(1)):Nanosecond(-250):a
     @test (a:Nanosecond(250):(a + Microsecond(1)))[2:3] == [a + Nanosecond(250), a + Nanosecond(500)]
 end
