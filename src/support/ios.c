@@ -466,10 +466,12 @@ int64_t ios_seek(ios_t *s, int64_t pos)
     else {
         ios_flush(s);
         int64_t fdpos = lseek(s->fd, (off_t)pos, SEEK_SET);
+        // Clear even when lseek fails (ESPIPE on pipes/sockets), else stale
+        // read data leaks into the next write+flush (#50410).
+        s->bpos = s->size = 0;
         if (fdpos == (int64_t)-1)
             return fdpos;
         s->fpos = fdpos;
-        s->bpos = s->size = 0;
     }
     return 0;
 }
@@ -483,10 +485,11 @@ int64_t ios_seek_end(ios_t *s)
     else {
         ios_flush(s);
         int64_t fdpos = lseek(s->fd, 0, SEEK_END);
+        // See #50410: reset buffer state even on lseek failure.
+        s->bpos = s->size = 0;
         if (fdpos == (int64_t)-1)
             return fdpos;
         s->fpos = fdpos;
-        s->bpos = s->size = 0;
     }
     return 0;
 }
@@ -523,11 +526,12 @@ int64_t ios_skip(ios_t *s, int64_t offs)
         else if (s->state == bst_rd)
             offs -= (s->size - s->bpos);
         int64_t fdpos = lseek(s->fd, (off_t)offs, SEEK_CUR);
+        // See #50410: reset buffer state even on lseek failure.
+        s->bpos = s->size = 0;
+        s->_eof = 0;
         if (fdpos == (int64_t)-1)
             return fdpos;
         s->fpos = fdpos;
-        s->bpos = s->size = 0;
-        s->_eof = 0;
     }
     return 0;
 }
