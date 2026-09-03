@@ -3478,10 +3478,15 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         return Future(CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
     end
 
-    # Run the abstract_call without restricting abstract call
-    # sites. Otherwise, our behavior model of abstract_call
-    # below will be wrong.
+    # NOTE We need to sync the implementation here with that of `Core.Compiler.return_type`.
+    # In particular, this tfunc should not use the module-wide `max_methods` setting
+    # until we refactor the `Core.Compiler.return_type` API so that it can observe
+    # the caller module context.
+    f = singleton_type(argtypes_vec[1])
+    max_methods = get_max_methods(interp, f)
     if isa(sv, InferenceState)
+        # Run the abstract_call without restricting abstract call sites.
+        # Otherwise, our behavior model of abstract_call below will be wrong.
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
     end
@@ -3489,7 +3494,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     # in return_type inference. Currently passing `nothing` which means any
     # slot-dependent refinements will be widened. This is conservative but
     # may miss some precision opportunities.
-    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
+    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, max_methods)
     tt = Core.Box(tt)
     return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
