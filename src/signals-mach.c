@@ -819,39 +819,6 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     pthread_mutex_unlock(&ctx_rewrite_lock);
 }
 
-static void jl_exit_thread0_cb(int signo)
-{
-    jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
-    jl_atexit_hook(128);
-    jl_raise(signo);
-}
-
-static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
-
-    host_thread_state_t state;
-    if (!jl_thread_suspend_and_get_state2(0, &state)) {
-        // thread 0 is gone? just do the signal ourself
-        jl_raise(signo);
-    }
-
-    // This aborts `sleep` and other syscalls.
-    kern_return_t ret = thread_abort(thread);
-    HANDLE_MACH_ERROR("thread_abort", ret);
-
-    ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
-    memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-
-    jl_noreturn_call_in_state(&state, (void (*)(void))&jl_exit_thread0_cb, signo, 0);
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-    ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state", ret);
-
-    ret = thread_resume(thread);
-    HANDLE_MACH_ERROR("thread_resume", ret);
-}
 
 static int profile_started = 0;
 mach_timespec_t timerprof;

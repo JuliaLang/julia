@@ -966,6 +966,9 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;
 extern _Atomic(int) jl_sigint_dispatch_pending;
+// The signal that requested graceful process termination (0 = none); see
+// jl_request_process_termination in signal-handling.c.
+JL_DLLEXPORT int jl_process_term_signo(void) JL_NOTSAFEPOINT;
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;

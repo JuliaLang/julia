@@ -1950,15 +1950,17 @@ JL_DLLEXPORT int jl_abandon_task_withdraw(int16_t tid)
 
 // cancellation token sources -----------------------------------------------
 
-// CAS-max the source's state to `sev` (a nonzero severity); returns whether
-// the state was raised. Mirrors `Base._raise_state!`.
+// Advance the source's state to its join with `sev` (a nonzero state byte:
+// severity plus optionally the terminate bit); returns whether the state
+// changed. Mirrors `Base._raise_state!`.
 static int cancel_source_raise_state(jl_cancel_source_t *src, uint8_t sev) JL_NOTSAFEPOINT
 {
     uint8_t old = jl_atomic_load_relaxed(&src->state);
     while (1) {
-        if (old >= sev)
+        uint8_t nw = jl_cancel_state_join(old, sev);
+        if (nw == old)
             return 0;
-        if (jl_atomic_cmpswap(&src->state, &old, sev))
+        if (jl_atomic_cmpswap(&src->state, &old, nw))
             return 1;
     }
 }
@@ -1996,8 +1998,7 @@ static void cancel_source_attach(jl_cancel_source_t *src) JL_NOTSAFEPOINT
         // child_head read) so that either the canceller's walk observes
         // this node, or this load observes the cancelled state.
         uint8_t pst = jl_atomic_load(&p->state);
-        if (pst > sev)
-            sev = pst;
+        sev = jl_cancel_state_join(sev, pst);
     }
     if (sev != 0)
         cancel_source_raise_state(src, sev);

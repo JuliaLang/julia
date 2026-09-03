@@ -53,6 +53,20 @@ New language features
   and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
   cancellation continues under the cancelled scope unless it re-arms one itself
   (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
+* Termination signals now request graceful termination through the cancellation system:
+  they cancel a process-wide root cancellation source (with a terminate flag on the
+  resulting `Base.CancellationRequest`s, see `Base.is_terminate_request` and
+  `Base.process_terminating`), the governed work unwinds (running its `finally` blocks),
+  and the process exits through the ordinary exit path - `atexit` hooks run on a sound
+  stack instead of a frame interrupted at an arbitrary point - before dying by the
+  signal, preserving the exit status. This covers `SIGTERM` on Unix, console
+  close/logoff/shutdown and Ctrl+Break events on Windows, and - with
+  `Base.exit_on_sigint` enabled, as it is for non-interactive scripts - `SIGINT` (which
+  previously also printed a backtrace on ^C; the graceful exit is quiet). A repeat
+  termination signal (or one during startup) terminates the process abruptly. `SIGQUIT`
+  remains an abrupt dump-and-die: it prints the all-task backtraces and exits
+  immediately - it no longer runs `atexit` hooks - so it works even on a process that
+  cannot cooperate with a graceful request ([#62774]).
 
 Language changes
 ----------------
