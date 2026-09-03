@@ -2721,9 +2721,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
     prop_metas = getmeta(body, :method_metas, nothing)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),
-        mangled = reserve_module_binding_simple(
-            ctx.layer.mod,
-            string("#", n, "#kw_body"))
+        mangled = string("#", n, "#kw_body#", module_unique_name(ctx.layer.mod))
         # probably not desirable, but fixes eval-into-closed-module
         m1_sc = escape_layer(mtable.context::SyntaxContext, true)
         @mknode(newsym(ctx, mtable, mangled);
@@ -4357,11 +4355,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"tuple" as...] -> (nothing, as, @ast(ctx, sig, "Any"::K"core"))
         end
         if isnothing(name)
-            @static if VERSION < v"1.14.0-DEV.3063"
-                name = newsym(ctx, sig, "#anon#")
-            else
-                name = newsym(ctx, sig, string(module_next_counter(ctx.layer.mod)))
-            end
+            name = newsym(ctx, sig, "#anon#")
             @ast ctx ex [K"block" [K"local" name] expand_function_def(
                 ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett)]
         else
@@ -4371,11 +4365,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"->"
         sig, wheres = flatten_wheres(ex[1])
         @jl_assert kind(sig) === K"tuple" ex
-        @static if VERSION < v"1.14.0-DEV.3063"
-            name = newsym(ctx, sig, "#->#")
-        else
-            name = newsym(ctx, sig, string(module_next_counter(ctx.layer.mod)))
-        end
+        name = newsym(ctx, sig, "#->#")
         rett = @ast(ctx, sig, "Any"::K"core")
         @ast ctx ex [K"block" [K"local" name] expand_function_def(
             ctx, ex, SyntaxList(name, children(sig)...), wheres, ex[2], rett)]
