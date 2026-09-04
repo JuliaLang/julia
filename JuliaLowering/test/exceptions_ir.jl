@@ -419,6 +419,6 @@ LoweringError:
     catch
     else
         @goto lab
-#             └─┘ ── `goto` out of a `else` block is not permitted with `finally`
+#             └─┘ ── `goto` out of an `else` block is not permitted with `finally`
     finally
     end
