@@ -205,11 +205,11 @@ begin
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
         @test ci.owner === nothing
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
     end
 
     @test isnothing(pr48932_caller(42))
@@ -304,11 +304,11 @@ begin take!(GLOBAL_BUFFER)
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
         @test ci.owner === nothing
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
     end
     @test isnothing(pr48932_caller_unuse(42))
     @test "foo" == String(take!(GLOBAL_BUFFER))
@@ -462,4 +462,32 @@ let mi = Base.method_instance(co_caller, (COBox,))
     ci = mi.cache
     @test ci.owner === InvalidationTesterToken()
     @test ci.max_world == typemax(UInt)
+end
+
+# A call site where inference learned nothing records no edges of its own, but the
+# optimizer may still commit to the matched method, by emitting an `:invoke` for it or by
+# inlining its body. Such a site must record its dispatch dependency, so that a method
+# added later invalidates the caller.
+module UninformativeCommit
+    global CALLEE = identity
+    @noinline uninf_invoke(@nospecialize x) = CALLEE(x)
+    @inline uninf_inline(x) = CALLEE(x)
+    invoke_caller(v::Vector{Any}) = uninf_invoke(v[1])
+    inline_caller(v::Vector{Any}) = uninf_inline(v[1])
+end
+let tester_ci(f) = let ci = Base.method_instance(f, (Vector{Any},)).cache
+        @test ci.owner === InvalidationTesterToken()
+        ci
+    end
+    @test only(Base.return_types(UninformativeCommit.invoke_caller, (Vector{Any},);
+        interp=InvalidationTester())) === Any
+    @test only(Base.return_types(UninformativeCommit.inline_caller, (Vector{Any},);
+        interp=InvalidationTester())) === Any
+    @test tester_ci(UninformativeCommit.invoke_caller).max_world == typemax(UInt)
+    @test tester_ci(UninformativeCommit.inline_caller).max_world == typemax(UInt)
+
+    @eval UninformativeCommit uninf_invoke(x::Int) = "specific"
+    @eval UninformativeCommit uninf_inline(x::Int) = "specific"
+    @test tester_ci(UninformativeCommit.invoke_caller).max_world != typemax(UInt)
+    @test tester_ci(UninformativeCommit.inline_caller).max_world != typemax(UInt)
 end
