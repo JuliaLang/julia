@@ -3623,7 +3623,9 @@ extern const jl_image_pointers_t jl_image_pointers;
 #endif
 
 // Look up a data symbol of an image. A NULL `handle` denotes the system image
-// that was statically linked into this binary.
+// that was statically linked into this binary (an executable or a shared
+// library); it has no library handle of its own, and its symbols are direct
+// references resolved by the static linker.
 static void jl_image_sym(void *handle, const char *name, void **out, const void *static_addr) JL_NOTSAFEPOINT
 {
 #ifdef JL_LIBRARY_STATIC
@@ -3885,15 +3887,15 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOI
         return image;
     }
 
-    // the sysimage is part of this binary: no consistency check is needed and
-    // `handle` is only used to compute the load address
+    // The sysimage is part of this binary, so no consistency check is needed,
+    // and `handle` is ignored: the runtime may just as well be linked into a
+    // shared library as into the executable, so the load base is found from
+    // the address of the image's own data.
+    (void)handle;
     (*jl_image_unpack)(NULL, &image);
     assert(image.pointers == &jl_image_pointers);
-#ifdef _OS_WINDOWS_
-    if (handle == NULL)
-        handle = jl_RTLD_DEFAULT_handle;
-#endif
-    image.base = jl_image_base(handle, image.pointers);
+    image.base = jl_image_base(jl_find_dynamic_library_by_addr((void*)image.pointers, /* throw_err */ 0, /* close */ 1),
+                               image.pointers);
     return image;
 }
 #else
