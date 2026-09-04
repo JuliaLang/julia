@@ -2165,3 +2165,16 @@ const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
+
+# The `dlopen(lib)` that a `ccall` with a runtime library value performs on first use runs
+# in the latest world, like `invokelatest`, so a `dlopen` method defined after the calling
+# code was compiled is still used when the site first executes.
+struct LatestWorldLib end
+const latest_world_lib = LatestWorldLib()
+latest_world_lib_ccall(x) = ccall((:testUcharX, latest_world_lib), Int32, (UInt8,), x)
+function define_dlopen_then_ccall(x)
+    # this method lands in a newer world than the one the enclosing function runs in
+    Core.eval(@__MODULE__, :(Base.Libc.Libdl.dlopen(::LatestWorldLib) = Base.Libc.Libdl.dlopen(libccalltest)))
+    return latest_world_lib_ccall(x)
+end
+@test define_dlopen_then_ccall(3) == ccall((:testUcharX, libccalltest), Int32, (UInt8,), 3)

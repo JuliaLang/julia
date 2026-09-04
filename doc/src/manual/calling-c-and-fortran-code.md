@@ -975,7 +975,8 @@ However, it is assumed that the library location and handle does not change
 once it is determined, so the result of the call may be cached and reused.
 Therefore, the number of times the `dlopen` expression executes is unspecified,
 and returning different values for multiple calls will result in unspecified
-(but valid) behavior.
+(but valid) behavior. The call runs in the latest world age, as if through
+[`invokelatest`](@ref Base.invokelatest).
 
 ### Computed Function Names
 

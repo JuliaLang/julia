@@ -64,6 +64,10 @@ Language changes
   (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
+* The `Libdl.dlopen(lib)` call that the runtime makes on first use of a `ccall` or `cglobal`
+  whose library is a runtime value (e.g. a `LazyLibrary` or a custom type) now runs in the
+  latest world age, as if through `invokelatest`, rather than in the world of the calling
+  code. A `dlopen` method defined after the caller was compiled is now used at that site.
 
 Compiler/Runtime improvements
 -----------------------------
