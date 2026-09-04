@@ -1244,11 +1244,38 @@ jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image)
     return parse_sysimg(image, pkgimg_init_cb, NULL);
 }
 
+// LLVM lowers `fptrunc float to bfloat` to `vcvtneps2bf16` whenever the target
+// has avx512bf16 or avxneconvert. That instruction always treats subnormal
+// inputs as zero and flushes subnormal outputs, irrespective of MXCSR, so the
+// conversion silently breaks the IEEE denormal semantics that LLVM IR promises
+// by default (JuliaMath/BFloat16s.jl#125). Until this is fixed upstream
+// (llvm/llvm-project#221052), keep both features out of the feature strings
+// handed to LLVM so that the conversion falls back to the exact `__truncsfbf2`
+// helper. Only the strings are adjusted, not the feature bits: those also gate
+// sysimage/pkgimage matching, and clearing them would reject cached images
+// built for e.g. znver4. The features must be explicitly negated rather than
+// merely dropped, since the CPU name alone re-enables them.
+static void disable_bf16_conversion_features(llvm::SmallVectorImpl<std::string> &features)
+{
+    static const char *const names[] = {"avx512bf16", "avxneconvert"};
+    auto is_bf16 = [&](const std::string &f) {
+        for (auto name : names)
+            if (f.size() > 1 && f.compare(1, std::string::npos, name) == 0)
+                return true;
+        return false;
+    };
+    features.erase(std::remove_if(features.begin(), features.end(), is_bf16), features.end());
+    for (auto name : names)
+        features.push_back(std::string("-") + name);
+}
+
 std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(const char *cpu_target, bool imaging, uint32_t &flags)
 {
     ensure_jit_target(cpu_target, imaging);
     flags = jit_targets[0].en.flags;
-    return get_llvm_target_vec(jit_targets[0]);
+    auto res = get_llvm_target_vec(jit_targets[0]);
+    disable_bf16_conversion_features(res.second);
+    return res;
 }
 
 const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
@@ -1343,7 +1370,11 @@ llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(const char *cpu
         }
         X86::disable_depends(features_en);
         jl_target_spec_t ele;
-        std::tie(ele.cpu_name, ele.cpu_features) = get_llvm_target_str(target);
+        auto res0 = get_llvm_target_noext(target);
+        disable_bf16_conversion_features(res0.second);
+        ele.cpu_name = std::move(res0.first);
+        ele.cpu_features = join_feature_strs(res0.second);
+        append_ext_features(ele.cpu_features, target.ext_features);
         ele.data = serialize_target_data(target.name, features_en, features_dis,
                                          target.ext_features);
         ele.flags = target.en.flags;

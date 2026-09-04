@@ -131,6 +131,15 @@ end
 # In function: julia_compiled_fptrunc_3480
 # @test compiled_fptrunc(Core.BFloat16, 1.234) === reinterpret(Core.BFloat16, 0b0_01111111_0011110)
 @test compiled_fptrunc(Float32, 1.234) === 1.234f0
+# Float32 -> BFloat16 must preserve subnormals: x86 `vcvtneps2bf16` flushes them
+# unconditionally and must not be selected (JuliaMath/BFloat16s.jl#125)
+let x = reinterpret(Float32, 0x00400000) # 2^-127, exactly the bf16 subnormal 0x0040
+    @test reinterpret(UInt16, compiled_fptrunc(Core.BFloat16, x)) === 0x0040
+    @test reinterpret(UInt16, compiled_fptrunc(Core.BFloat16, -x)) === 0x8040
+    # vectorized path
+    ys = [compiled_fptrunc(Core.BFloat16, x) for x in fill(x, 64)]
+    @test all(y -> reinterpret(UInt16, y) === 0x0040, ys)
+end
 @test_throws ErrorException compiled_fptrunc(Float64, 1.234f0)
 @test_throws ErrorException compiled_fptrunc(Int32, 1.234)
 @test_throws ErrorException compiled_fptrunc(Float32, 1234)
