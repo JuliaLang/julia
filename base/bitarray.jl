@@ -1014,7 +1014,7 @@ function deleteat!(B::BitVector, inds)
 end
 
 function deleteat!(B::BitVector, inds::AbstractVector{Bool})
-    length(inds) == length(B) || throw(BoundsError(B, inds))
+    length(inds) == length(B) || throw(BoundsError(B, (LogicalIndex(inds),)))
 
     n = new_l = length(B)
     y = findfirst(inds)

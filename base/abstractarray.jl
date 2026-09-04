@@ -1091,7 +1091,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     idf, isf = first(destinds), first(srcinds)
     Δi = idf - isf
     (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
+        throw(BoundsError(dest, srcinds.indices))
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             # Single-index implementation
@@ -3715,7 +3715,7 @@ function _keepat!(a::AbstractVector, inds)
 end
 
 function _keepat!(a::AbstractVector, m::AbstractVector{Bool})
-    length(m) == length(a) || throw(BoundsError(a, m))
+    length(m) == length(a) || throw(BoundsError(a, (LogicalIndex(m),)))
     j = firstindex(a)
     for i in eachindex(a, m)
         @inbounds begin

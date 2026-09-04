@@ -2007,7 +2007,7 @@ end
 # Simpler and more efficient version for logical indexing
 function deleteat!(a::Vector, inds::AbstractVector{Bool})
     n = length(a)
-    length(inds) == n || throw(BoundsError(a, inds))
+    length(inds) == n || throw(BoundsError(a, (LogicalIndex(inds),)))
     p = 1
     for (q, i) in enumerate(inds)
         @inbounds _copy_item!(a, p, q)
