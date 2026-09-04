@@ -1249,16 +1249,16 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     return result;
 }
 
-//------------------------------------------------------------------------------
-// Parsing API and utils for calling parser from runtime
-
-// Internal C entry point to parser
+// currently used during bootstrap, by Core.include, and by jlapi.c.
 // `text` is passed as a pointer to allow raw non-String buffers to be used
 // without copying.
-jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                     size_t lineno, size_t offset, jl_value_t *options, jl_module_t *inmodule)
+JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
+                                  jl_module_t *inmodule)
 {
     jl_value_t *parser = NULL;
+    int lno = 1;
+    int offset = 0;
+    jl_value_t *options = (jl_value_t *)jl_all_sym;
     if (inmodule) {
         parser = jl_get_global(inmodule, jl_symbol("#_internal_julia_parse"));
     }
@@ -1267,7 +1267,7 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
     }
     if (!parser || parser == jl_nothing) {
         // In bootstrap, directly call the builtin parser.
-        jl_value_t *result = jl_fl_parse(text, text_len, filename, lineno, offset, options);
+        jl_value_t *result = jl_fl_parse(text, text_len, filename, lno, offset, options);
         return result;
     }
     jl_value_t **args;
@@ -1277,7 +1277,7 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
     args[2] = filename;
-    args[3] = jl_box_long(lineno);
+    args[3] = jl_box_long(lno);
     args[4] = jl_box_long(offset);
     args[5] = options;
     jl_task_t *ct = jl_current_task;
@@ -1293,17 +1293,6 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
     JL_TYPECHK(parse, long, jl_svecref(result, 1));
     JL_GC_POP();
     return result;
-}
-
-// parse an entire string as a file, reading multiple expressions
-JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
-                                      const char *filename, size_t filename_len, size_t lineno)
-{
-    jl_value_t *fname = jl_pchar_to_string(filename, filename_len);
-    JL_GC_PUSH1(&fname);
-    jl_value_t *p = jl_parse(text, text_len, fname, lineno, 0, (jl_value_t*)jl_all_sym, NULL);
-    JL_GC_POP();
-    return jl_svecref(p, 0);
 }
 
 #ifdef __cplusplus
