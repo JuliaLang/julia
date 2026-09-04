@@ -2370,10 +2370,12 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOT
     }
 
 // initialization functions
+
+// How jl_resolve_sysimg_location interprets a non-absolute jl_options.image_file
 typedef enum {
-    JL_IMAGE_CWD = 0,
-    JL_IMAGE_JULIA_HOME = 1,
-    JL_IMAGE_IN_MEMORY = 2
+    JL_IMAGE_CWD = 0,        // leave the path as-is (resolved against the current directory)
+    JL_IMAGE_JULIA_HOME = 1, // resolve the path relative to julia_bindir
+    JL_IMAGE_IN_MEMORY = 2   // the image is already loaded; the path is informational only
 } JL_IMAGE_SEARCH;
 
 typedef enum {
