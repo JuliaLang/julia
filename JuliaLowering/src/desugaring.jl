@@ -2176,15 +2176,15 @@ function error_if_unmatched_symbolicgoto(ctx, st, hint)
         NameKey(r) in defs || (unmatched = r)
     end
     isnothing(unmatched) || throw(LoweringError(
-        unmatched, "`goto` out of a `$hint` block is not permitted with `finally`"))
+        unmatched, "`goto` out of $hint block is not permitted with `finally`"))
 end
 
 function expand_try(ctx, ex)
     (try_, catch_, else_, finally_) = match_try(ex)
     if !isnothing(finally_)
-        error_if_unmatched_symbolicgoto(ctx, try_, "try")
-        !isnothing(catch_) && error_if_unmatched_symbolicgoto(ctx, catch_, "catch")
-        !isnothing(else_) && error_if_unmatched_symbolicgoto(ctx, else_, "else")
+        error_if_unmatched_symbolicgoto(ctx, try_, "a `try`")
+        !isnothing(catch_) && error_if_unmatched_symbolicgoto(ctx, catch_, "a `catch`")
+        !isnothing(else_) && error_if_unmatched_symbolicgoto(ctx, else_, "an `else`")
     end
     try_body = @ast ctx try_ [K"scope_block" [K"neutral_scope"] try_]
     if isnothing(catch_)
