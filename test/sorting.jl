@@ -1145,6 +1145,25 @@ end
     @test partialsort!(view(copy(a), :, 6), 500:501) == [500, 501]
 end
 
+@testset "radix sort extensibility (#60184)" begin
+    # Note: these are internal behaviors and could break.
+    # These tests ensure that they don't break unintentionally.
+    struct A60184 u::UInt end
+
+    uint_order = Order.ord(isless, a -> a.u, false)
+
+    Sort.uint_map(a::A60184, ::typeof(uint_order)) = a.u
+    Sort.uint_unmap(::Type{A60184}, u::UInt, ::typeof(uint_order)) = A60184(u)
+    Sort.UIntMappable(::Type{A60184}, ::typeof(uint_order)) = UInt
+
+    v = map(A60184, rand(UInt, 3));
+    @test sort(v; order = uint_order) == A60184.(sort([a.u for a in v]))
+    v = map(A60184, rand(UInt, 41));
+    @test sort(v; order = uint_order) == A60184.(sort([a.u for a in v]))
+    v = map(A60184, rand(UInt, 401));
+    @test sort(v; order = uint_order) == A60184.(sort([a.u for a in v]))
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
