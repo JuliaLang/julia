@@ -42,45 +42,27 @@ JL_HIDDEN const void **const jl_static_exported_data_ptrs[] = {
 // binary defines it (aotcompile.cpp), and export_jl_small_typeof fills it in.
 
 // The runtime's exported functions are defined under their `ijl_` names
-// (jl_internal_funcs.inc); libjulia normally re-exports them as `jl_`. Provide
-// the `jl_` names here as tail-jump thunks. Each thunk lives in its own section
-// so that --gc-sections can drop the unused ones, and is weak so that functions
-// which the runtime also defines under their `jl_` name (e.g. jl_egal) win.
-#if defined(_OS_WINDOWS_)
-// TODO: COFF needs a different mechanism (e.g. a .def file with aliases)
+// (jl_internal_funcs.inc); the public `jl_` names are provided by the loader's
+// trampolines (cli/trampolines/*.S), which the static build compiles into the
+// archive as weak symbols. Each trampoline jumps through its `jl_<name>_addr`
+// slot; the loader fills the slots with dlsym at load time, while here they
+// are bound to the internal implementations at link time. The `__asm__` label
+// references the `ijl_` symbol directly, since spelling `ijl_<name>` in C
+// would clash with the real prototypes julia.h declares for these functions.
+#if defined(_OS_DARWIN_) || (defined(_OS_WINDOWS_) && defined(_CPU_X86_))
+#define JL_TRAMPOLINE_TARGET(name) "_i" name // C ABI symbols have an underscore prefix
 #else
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-#define JL_THUNK_BRANCH "jmp "
-#elif defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
-#define JL_THUNK_BRANCH "b "
-#elif defined(_CPU_RISCV64_)
-#define JL_THUNK_BRANCH "tail "
-#elif defined(_CPU_PPC64_)
-#define JL_THUNK_BRANCH "b "
-#else
-#error "unsupported architecture for static jl_ function thunks"
+#define JL_TRAMPOLINE_TARGET(name) "i" name
 #endif
-#if defined(_OS_DARWIN_)
-#define XX(name) __asm__( \
-    ".section __TEXT,__text,regular,pure_instructions\n" \
-    "\t.globl _" #name "\n" \
-    "\t.weak_definition _" #name "\n" \
-    "\t.p2align 2\n" \
-    "_" #name ":\n" \
-    "\t" JL_THUNK_BRANCH "_i" #name "\n");
-#else
-#define XX(name) __asm__( \
-    ".section .text." #name ",\"ax\",@progbits\n" \
-    "\t.weak " #name "\n" \
-    "\t.type " #name ",@function\n" \
-    "\t.p2align 2\n" \
-    #name ":\n" \
-    "\t" JL_THUNK_BRANCH "i" #name "\n" \
-    "\t.size " #name ", .-" #name "\n");
-#endif
+typedef void (jl_tramp_target_t)(void);
+#define XX(name) \
+    extern jl_tramp_target_t jl_static_impl_##name __asm__(JL_TRAMPOLINE_TARGET(#name)); \
+    JL_HIDDEN jl_tramp_target_t *const name##_addr = &jl_static_impl_##name;
 JL_RUNTIME_EXPORTED_FUNCS(XX)
+#ifdef _OS_WINDOWS_
+JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
+#endif
 #undef XX
-#endif // !_OS_WINDOWS_
 
 // Normally provided by the libjulia loader: the directory of the object
 // containing libjulia. Since the static runtime is linked into whatever the

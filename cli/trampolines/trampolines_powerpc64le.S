@@ -10,7 +10,7 @@
 // See 64-Bit ELF V2 ABI Specification: Power Architecture v1.4
 
 #define XX(name) \
-.global CNAME(name); \
+GLOBAL(CNAME(name)); \
 .type CNAME(name)##, @function; \
 .cfi_startproc; \
 CNAME(name)##: ; \
@@ -25,5 +25,9 @@ CNAME(name)##: ; \
 .size CNAME(name)##,.-CNAME(name)##; \
 
 JL_RUNTIME_EXPORTED_FUNCS(XX)
+#ifndef JL_LIBRARY_STATIC
+// in the static build the codegen functions are defined directly (their
+// fallbacks are renamed to the public names, see jl_static_codegen_fallbacks.inc)
 JL_CODEGEN_EXPORTED_FUNCS(XX)
+#endif
 #undef XX

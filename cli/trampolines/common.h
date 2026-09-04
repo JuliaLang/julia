@@ -2,6 +2,15 @@
 
 #include "../../src/support/platform.h"
 
+// In a static build of libjulia-internal the trampolines are linked into the
+// same binary as the runtime, which defines a few of these names itself
+// (e.g. jl_egal); weak definitions let the runtime's own definitions win.
+#ifdef JL_LIBRARY_STATIC
+#define GLOBAL(name) .weak name
+#else
+#define GLOBAL(name) .global name
+#endif
+
 // Preprocessor annoyances
 #define CONCAT_(x,y)    x##y
 #define CONCAT(x,y)     CONCAT_(x, y)
