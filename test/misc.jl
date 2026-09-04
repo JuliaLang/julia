@@ -1552,6 +1552,15 @@ end
 # a function that allocates iff no constprop
 @inline maybealloc59278(n, _) = ntuple(i->rand(), n)
 
+# allocates once per iteration; the result escapes so it cannot be optimized away
+const alloc_sink_fastpath = Ref{Any}(nothing)
+@noinline function allocs_inlined_fastpath(n)
+    for i in 1:n
+        alloc_sink_fastpath[] = Ref{Int}(i)
+    end
+    nothing
+end
+
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
 
@@ -1575,6 +1584,9 @@ end
     @test ((@allocated treshape59278(X, n, m))==0) == ((@allocations treshape59278(X, n, m))==0)
     # TODO: would be nice to have but not yet reliable
     #@test ((@allocated begin treshape59278(X, n, m) end)==0) == ((@allocations begin treshape59278(X, n, m) end)==0)
+
+    # test that `@allocations` counts the expected number of allocations (even on fastpaths)
+    @test (@allocations allocs_inlined_fastpath(1000)) >= 1000
 
     # test that all wrapped allocations are counted and constprop is not done
     @test (@allocated @noinline maybealloc59278(10, [])) > (@allocated maybealloc59278(10, 0)) > 0
