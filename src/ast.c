@@ -1351,26 +1351,6 @@ JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
     return jl_svecref(p, 0);
 }
 
-// this is for parsing one expression out of a string, keeping track of
-// the current position.
-JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
-                                         int offset, int greedy)
-{
-    jl_value_t *fname = jl_cstr_to_string("none");
-    JL_GC_PUSH1(&fname);
-    jl_value_t *result = jl_parse(text, text_len, fname, 1, offset,
-                                  (jl_value_t*)(greedy ? jl_statement_sym : jl_atom_sym), NULL);
-    JL_GC_POP();
-    return result;
-}
-
-// deprecated
-JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
-                                             const char *filename, size_t filename_len)
-{
-    return jl_parse_all(text, text_len, filename, filename_len, 1);
-}
-
 #ifdef __cplusplus
 }
 #endif
