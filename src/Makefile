@@ -261,6 +261,11 @@ CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 STATIC_OBJS := $(SRCS:%=$(BUILDDIR)/%.static.o)
+# The loader's trampolines provide the public `jl_*` function names; in the
+# static build their `*_addr` slots are bound at link time (see static_exports.c)
+ifneq (,$(wildcard $(JULIAHOME)/cli/trampolines/trampolines_$(ARCH).S))
+STATIC_OBJS += $(BUILDDIR)/static_trampolines.o
+endif
 
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
@@ -506,6 +511,8 @@ $(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj $(BUILDDIR)/interprete
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/julia-task-dispatcher.h $(SRCDIR)/objcache.h
 $(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj $(BUILDDIR)/jltypes.static.o: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/static_exports.static.o: $(SRCDIR)/jl_exported_data_defs.inc $(SRCDIR)/jl_exported_data.inc $(SRCDIR)/jl_exported_funcs.inc
+$(BUILDDIR)/static_trampolines.o: $(JULIAHOME)/cli/trampolines/trampolines_$(ARCH).S $(JULIAHOME)/cli/trampolines/common.h $(SRCDIR)/jl_exported_funcs.inc | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) -DJL_LIBRARY_STATIC -Wa$(COMMA)--noexecstack -c $< -o $@)
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvm-codegen-shared.h $(BUILDDIR)/julia_version.h
 $(BUILDDIR)/llvm-alloc-helpers.o $(BUILDDIR)/llvm-alloc-helpers.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
 $(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
@@ -596,9 +603,7 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 # A self-contained static runtime: the runtime objects plus the support
 # libraries that libjulia-internal.so links in statically. Consumers still need
 # the sysimage object (which supplies jl_image_unpack, jl_small_typeof, ...) and
-# the external libraries (libunwind, LLVMSupport, zstd, ...). Since Julia code
-# reaches most of these symbols through ccall, link the archive with
-# --whole-archive (or an equivalent) rather than relying on C references.
+# the external libraries (libunwind, LLVMSupport, zstd, ...).
 STATIC_LIBS := $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING)
 $(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(STATIC_LIBS)
 	@rm -rf $@
