@@ -228,17 +228,87 @@ function isapprox(x::Number, y::Number;
          (nans && isnan(x) && isnan(y))
 end
 
+"""
+    _uabsdiff(x::Integer, y::Integer)
+
+The exact `|x - y|`, in a type wide enough to hold it, as [`uabs`](@ref Base.uabs) is for
+`|x|`: `x - y` overflows (`typemax(Int8) - typemin(Int8)`) and `promote(x, y)` throws for a
+mixed signed/unsigned pair with a negative operand (`promote(-1, 0x1)`). Distinct from
+`absdiff`, which returns the raw difference as well and does overflow.
+"""
+_uabsdiff(x::Integer, y::Integer) = x < y ? y - x : x - y
+
+# `Bool` is an `Integer` but not a `BitInteger`, and it promotes to the type of the other
+# operand, so the generic method would overflow for e.g. `_uabsdiff(true, typemin(Int8))`.
+# `false`/`true` convert losslessly to every integer type, which also keeps the pair to one
+# signedness rather than sending it down the mixed path.
+_uabsdiff(x::Bool, y::BitInteger) = _uabsdiff(oftype(y, x), y)
+_uabsdiff(x::BitInteger, y::Bool) = _uabsdiff(x, oftype(x, y))
+
+# Equal signedness: promotion is lossless. `max - min` is at most
+# `typemax(T) - typemin(T)`, so it fits in the unsigned type of the same width.
+function _uabsdiff(x::BitUnsigned, y::BitUnsigned)
+    lo, hi = minmax(x, y)
+    return hi - lo
+end
+function _uabsdiff(x::BitSigned, y::BitSigned)
+    lo, hi = minmax(x, y)
+    # wraps when the signs differ, i.e. mod 2^n which is `hi - lo`
+    return unsigned(hi) - unsigned(lo)
+end
+
+# Mixed signedness, in the common unsigned type: returns `(m, u, d, carried)`, where `u` is
+# `y`, `d` is `|x - y|` reduced mod `2^n`, and `carried` says it wrapped. The exact `|x - y|`
+# is `d` if it did not, and `m + u` in a wider type if it did, `m` then holding `|x|`.
+function _mixed_uabsdiff(x::BitSigned, y::BitUnsigned)
+    U = promote_type(unsigned(typeof(x)), typeof(y))
+    v, u = x % U, y % U # `x % U` is `x` reduced mod `2^nbits(U)`
+    # `ifelse` keeps the sign test a `select`, since the sign of `x` is not predictable.
+    d = ifelse(x < y, u - v, v - u)
+    return -v, u, d, (x < 0) & (d < u) # a carry needs `x < 0` and leaves `d` below `u`
+end
+
+function _uabsdiff(x::BitSigned, y::BitUnsigned)
+    m, u, d, carried = _mixed_uabsdiff(x, y)
+    return carried ? widen(m) + widen(u) : d
+end
+_uabsdiff(x::BitUnsigned, y::BitSigned) = _uabsdiff(y, x)
+
+# Returns `|x - y| <= b`. Only a mixed signed/unsigned pair can exceed the common unsigned
+# type, and only by carrying out of it. No bound in that type reaches a difference that
+# carried. So a wider type is built only for an out-of-range tolerance, and
+# `Int128`/`UInt128` never reaches `BigInt`.
+_uabsdiff_le(x::Integer, y::Integer, b::Real) = _uabsdiff(x, y) <= b
+# The carried case, kept out of the hot path: below 128 bits `widen` is cheap enough to be
+# inlined, which would enlarge the caller. Returning a `Bool` keeps the call from boxing. Its
+# guard stays at the call site, folding away for a bound the unsigned type can hold.
+@noinline _widesum_le(m::T, u::T, b::Real) where {T<:BitUnsigned} = widen(m) + widen(u) <= b
+function _uabsdiff_le(x::BitSigned, y::BitUnsigned, b::Real)
+    m, u, d, carried = _mixed_uabsdiff(x, y)
+    carried & (b > typemax(d)) && return _widesum_le(m, u, b)
+    return (d <= b) & !carried # a carry puts the difference out of range for `b`
+end
+_uabsdiff_le(x::BitUnsigned, y::BitSigned, b::Real) = _uabsdiff_le(y, x, b)
+
+# The `rtol` scale, and whether it overflowed. Overflow means the bound outgrew the type
+# holding it, so it exceeds every representable difference and the comparison is `true`.
+_scaled_rtol(rtol::Real, scale::Integer) = (rtol * scale, false)
+_scaled_rtol(rtol::BitInteger, scale::BitInteger) = mul_with_overflow(promote(rtol, scale)...)
+
 function isapprox(x::Integer, y::Integer;
                   atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
-    if norm === abs && atol < 1 && rtol == 0
-        return x == y
-    else
-        # We need to take the difference `max` - `min` when comparing unsigned integers.
-        _x, _y = minmax(x, y)
-        # note: check x == y to avoid NaN comparisons for e.g. rtol=Inf and x==y==0
-        return x == y || norm(_y - _x) <= max(atol, rtol*max(norm(_x), norm(_y)))
+    # note: check x == y to avoid NaN comparisons for e.g. rtol=Inf and x==y==0
+    if norm === abs
+        atol < 1 && rtol == 0 && return x == y
+        x == y && return true # before the bound, which a negative `rtol` cannot even form
+        # `uabs` rather than `abs` so that `typemin` is exact and `max` cannot promote across
+        # signedness; `abs` is then the identity on it and on the result of `_uabsdiff`
+        b, overflowed = _scaled_rtol(rtol, max(uabs(x), uabs(y)))
+        return overflowed || _uabsdiff_le(x, y, max(atol, b))
     end
+    return x == y ||
+        norm(_uabsdiff(x, y)) <= max(atol, rtol*max(norm(uabs(x)), norm(uabs(y))))
 end
 
 """
