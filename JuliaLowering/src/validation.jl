@@ -261,7 +261,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
     [K"symboliclabel" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
-    [K"oldsymbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicblock" lab body] ->
         vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
@@ -1175,7 +1174,6 @@ function _assert_syntaxtree_node(st::SyntaxTree)
             [K"label"] -> (true,Int)
             [K"symboliclabel"] -> (true,String)
             [K"symbolicgoto"] -> (true,String)
-            [K"oldsymbolicgoto"] -> (true,String)
             [K"Value"] -> (true,Any)
             [K"slot"] -> (true,Int)
             [K"static_parameter"] -> (true,Int)
@@ -1264,7 +1262,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     Identifier BindingId Placeholder nothing static_parameter
     Bool Char Float Float32 BinInt OctInt HexInt Integer
     SourceLocation String Symbol Value core top
-    latestworld latestworld_if_toplevel symbolicgoto oldsymbolicgoto symboliclabel TOMBSTONE
+    latestworld latestworld_if_toplevel symbolicgoto symboliclabel TOMBSTONE
     """ ? pass() : @fail(st, "unrecognized leaf kind $(kind(st))")
 
     [K"call" [K"static_eval" cg] xs...] -> est_syntax_name(cg, "") === "cglobal" ?
