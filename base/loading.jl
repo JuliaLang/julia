@@ -3558,6 +3558,12 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         cpu_target = nothing
     end
     push!(opts, "--output-ji", output)
+    # A single-threaded worker gets no GC mark threads by default. Its collections are
+    # infrequent but large (the heap holds every loaded dependency), so let them mark in
+    # parallel unless the caller has configured GC threads explicitly.
+    if !haskey(ENV, "JULIA_NUM_GC_THREADS")
+        push!(opts, "--gcthreads=$(precompile_gcthreads())")
+    end
     if isassigned(PRECOMPILE_TRACE_COMPILE)
         push!(opts, "--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])")
         push!(opts, "--trace-compile-timing")
@@ -3571,12 +3577,6 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
            $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
            -`
     cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
-    # A single-threaded worker gets no GC mark threads by default. Its collections are
-    # infrequent but large (the heap holds every loaded dependency), so let them mark in
-    # parallel unless the caller has configured GC threads explicitly.
-    if !haskey(ENV, "JULIA_NUM_GC_THREADS")
-        cmd = `$cmd --gcthreads=$(precompile_gcthreads())`
-    end
     # Only request per-package timing reports when explicitly asked for (e.g. by
     # precompilepkgs), so that the marker lines don't leak into normal load logs.
     report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
