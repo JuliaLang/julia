@@ -2229,7 +2229,16 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
         // object and is skipped.
         uint32_t frame_kind = nroots & JL_GCFRAME_KIND_MASK;
         for (uint32_t i = 0; i < nr; i++) {
-            if (frame_kind == JL_GCFRAME_FINLIST) {
+            if (frame_kind == JL_GCFRAME_INDIRECT) {
+                // slots hold addresses of local `jl_value_t*` variables
+                void **slot = (void **)gc_read_stack(&rts[i], offset, lb, ub);
+                new_obj = (jl_value_t *)gc_read_stack(slot, offset, lb, ub);
+                if (new_obj == NULL)
+                    continue;
+                if (gc_is_tagged_pointer(new_obj))
+                    continue;
+            }
+            else if (frame_kind == JL_GCFRAME_FINLIST) {
                 new_obj = (jl_value_t *)gc_read_stack(&rts[i], offset, lb, ub);
                 if (gc_ptr_tag(new_obj, GC_FIN_CFUNC_TAG)) {
                     // handle tagged pointers in finalizer list
@@ -2240,15 +2249,6 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
                 if (gc_ptr_tag(new_obj, GC_FIN_COBJ_TAG))
                     continue;
                 if (new_obj == NULL)
-                    continue;
-            }
-            else if (frame_kind == JL_GCFRAME_INDIRECT) {
-                // slots hold addresses of local `jl_value_t*` variables
-                void **slot = (void **)gc_read_stack(&rts[i], offset, lb, ub);
-                new_obj = (jl_value_t *)gc_read_stack(slot, offset, lb, ub);
-                if (new_obj == NULL)
-                    continue;
-                if (gc_is_tagged_pointer(new_obj))
                     continue;
             }
             else {
