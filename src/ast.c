@@ -132,41 +132,11 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
     return symbol(fl_ctx, buf);
 }
 
-static int jl_is_number(jl_value_t *v)
-{
-    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-    // only the typename lineage matters here, so walk the wrapper supertypes,
-    // which are set at definition and never deferred
-    while (t != NULL && t != jl_any_type) {
-        if (t->name == jl_number_type->name)
-            return 1;
-        t = ((jl_datatype_t*)jl_unwrap_unionall(t->name->wrapper))->super;
-    }
-    return 0;
-}
-
-// Check whether v is a scalar for purposes of inlining fused-broadcast
-// arguments when lowering; should agree with broadcast.jl on what is a
-// scalar.  When in doubt, return false, since this is only an optimization.
-static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    argcount(fl_ctx, "julia-scalar?", nargs, 1);
-    if (fl_isnumber(fl_ctx, args[0]) || fl_isstring(fl_ctx, args[0]))
-        return fl_ctx->T;
-    else if (iscvalue(args[0]) && fl_ctx->jl_sym == cv_type((cvalue_t*)ptr(args[0]))) {
-        jl_value_t *v = *(jl_value_t**)cptr(args[0]);
-        if (jl_is_number(v) || jl_is_string(v))
-            return fl_ctx->T;
-    }
-    return fl_ctx->F;
-}
-
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod) JL_CANSAFEPOINT;
 
 static const builtinspec_t julia_flisp_ast_ext[] = { // TODO: can we kill these safepoint?
     { "defined-julia-global", fl_defined_julia_global }, // NOLINT(julia-first-decl-annotations)
     { "current-julia-module-counter", fl_module_unique_name }, // NOLINT(julia-first-decl-annotations)
-    { "julia-scalar?", fl_julia_scalar },
     { NULL, NULL }
 };
 
@@ -820,21 +790,6 @@ static jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl
     fl_context_t *fl_ctx = &ctx->fl;
     value_t arg = julia_to_scm(fl_ctx, expr);
     value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, funcname)), arg);
-    jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
-    JL_GC_PUSH1(&result);
-    jl_ast_ctx_leave(ctx);
-    JL_GC_POP();
-    return result;
-}
-
-jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
-                                       jl_module_t *inmodule, const char *file, int line)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
-    fl_context_t *fl_ctx = &ctx->fl;
-    value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, funcname)), arg,
-                          symbol(fl_ctx, file), fixnum(line));
     jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
     JL_GC_PUSH1(&result);
     jl_ast_ctx_leave(ctx);
