@@ -2204,3 +2204,62 @@ Libdl.dlid(::NoIdentityLib) = nothing
     @test dlid(NoIdentityLib()) === nothing
 end
 end
+
+# `ccall`/`cglobal` record `dlid(lib)` where the call is written
+module TestAbstractLibraryIdentity
+using Test, Libdl
+using Libdl: AbstractLibrary, LibraryID, LazyLibrary, LazyLibraryPath, dlid
+
+const libccalltest_path = Libdl.dlpath("libccalltest")
+
+const named_id = LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60001), "libccalltest")
+const named_lib = LazyLibrary(LazyLibraryPath(dirname(libccalltest_path),
+                                              basename(libccalltest_path)); id=named_id)
+
+echo_p_named(x) = ccall((:test_echo_p, named_lib), Ptr{Cvoid}, (Ptr{Cvoid},), x)
+
+module InterpretedCGlobal
+import ..named_lib
+Base.Experimental.@compiler_options compile=min optimize=0 infer=false
+address() = cglobal((:test_echo_p, named_lib))
+end
+
+@testset "identified library resolves" begin
+    p = Ptr{Cvoid}(UInt(0xdeadbeef))
+    @test echo_p_named(p) === p
+    # the interpreter sees the recorded identity too
+    @test InterpretedCGlobal.address() == cglobal((:test_echo_p, named_lib))
+end
+
+# the recorded identity is visible in lowered code as a third tuple element
+struct DeclaringLib <: AbstractLibrary end
+Libdl.dlid(::DeclaringLib) = LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60002), "libdeclaring")
+const declaring_lib = DeclaringLib()
+
+struct SilentLib <: AbstractLibrary end
+Libdl.dlid(::SilentLib) = nothing
+const silent_lib = SilentLib()
+
+struct MisdeclaredLib <: AbstractLibrary end
+Libdl.dlid(::MisdeclaredLib) = "not an identity"
+const misdeclared_lib = MisdeclaredLib()
+
+uses_declaring() = ccall((:my_symbol, declaring_lib), Cint, ())
+uses_silent() = ccall((:my_symbol, silent_lib), Cint, ())
+uses_string() = ccall((:my_symbol, "libbar"), Cint, ())
+cglobal_declaring() = cglobal((:my_global, declaring_lib))
+
+@testset "identity recorded at the call site" begin
+    let fptr = only(code_lowered(uses_declaring)).code[1].args[1]
+        @test fptr.head === :tuple
+        @test length(fptr.args) == 3
+        @test fptr.args[1] == QuoteNode(:my_symbol)
+        @test fptr.args[2] == GlobalRef(@__MODULE__, :declaring_lib)
+        @test fptr.args[3] === LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60002), "libdeclaring")
+    end
+    @test length(only(code_lowered(uses_silent)).code[1].args[1].args) == 2
+    @test length(only(code_lowered(uses_string)).code[1].args[1].args) == 2
+    @test length(only(code_lowered(cglobal_declaring)).code[1].args[1].args) == 3
+    @test_throws ErrorException @eval uses_misdeclared() = ccall((:my_symbol, misdeclared_lib), Cint, ())
+end
+end

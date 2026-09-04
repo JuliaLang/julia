@@ -943,6 +943,11 @@ typedef struct JL_ALIGNED_ATTR(16) {
     uint64_t hi;
 } jl_uuid_t;
 
+typedef struct {
+    jl_uuid_t pkg;
+    jl_value_t *name;
+} jl_libraryid_t;
+
 // Reading or writing requires `lock`:
 //   scanned_methods, usings
 // Reading or writing requires `Base.require_lock`:

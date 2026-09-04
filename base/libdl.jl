@@ -509,8 +509,9 @@ end
 
 dlid(ll::LazyLibrary) = ll.id
 
-# Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows how to call `dlopen()`.
+# Register these so that `ccall()` lowering knows how to call `dlopen()` and `dlid()`.
 Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
+Base.unsafe_store!(cglobal(:jl_libdl_dlid_func, Any), dlid)
 
 function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
     handle = @atomic :acquire ll.handle

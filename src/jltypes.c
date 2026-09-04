@@ -4690,7 +4690,6 @@ void post_boot_hooks(void)
     jl_undefvarerror_type    = (jl_datatype_t*)core("UndefVarError");
     jl_fielderror_type       = (jl_datatype_t*)core("FieldError");
     jl_atomicerror_type      = (jl_datatype_t*)core("ConcurrencyViolationError");
-    jl_abstractlibrary_type  = (jl_datatype_t*)core("AbstractLibrary");
     jl_boundserror_type      = (jl_datatype_t*)core("BoundsError");
     jl_typeerror_type        = (jl_datatype_t*)core("TypeError");
     jl_argumenterror_type    = (jl_datatype_t*)core("ArgumentError");
@@ -4710,6 +4709,11 @@ void post_boot_hooks(void)
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
+
+    jl_abstractlibrary_type = (jl_datatype_t*)core("AbstractLibrary");
+    jl_libraryid_type = (jl_datatype_t*)core("LibraryID");
+    assert(jl_datatype_size(jl_libraryid_type) == sizeof(jl_libraryid_t));
+    assert(jl_field_offset(jl_libraryid_type, 1) == offsetof(jl_libraryid_t, name));
 
     jl_const_type = (jl_datatype_t*)core("Const");
     jl_partial_struct_type = (jl_datatype_t*)core("PartialStruct");
