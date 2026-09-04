@@ -625,10 +625,52 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
     return load_sysimg_target(image, match_pkgimg_target, NULL);
 }
 
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+// LLVM selects vcvtneps2bf16 for f32-to-bf16 conversions despite the
+// instruction unconditionally flushing subnormal inputs. Until LLVM provides
+// a narrower workaround (llvm/llvm-project#221052), disable the feature groups
+// that enable this instruction. This also disables other native x86 BF16
+// operations. Keep the feature bits intact because image matching uses them;
+// only these strings control code generation. Explicit negatives are needed
+// because the CPU name otherwise enables the features again.
+static void disable_native_bf16_codegen(std::string &features) JL_NOTSAFEPOINT
+{
+    static const char *const names[] = {"avx512bf16", "avxneconvert"};
+    std::string out;
+    size_t pos = 0;
+    do {
+        size_t end = features.find(',', pos);
+        if (end == std::string::npos)
+            end = features.size();
+        std::string tok = features.substr(pos, end - pos);
+        bool skip = tok.size() < 2;
+        for (auto name : names)
+            if (!skip && tok.compare(1, std::string::npos, name) == 0)
+                skip = true;
+        if (!skip) {
+            if (!out.empty())
+                out += ',';
+            out += tok;
+        }
+        pos = end + 1;
+    } while (pos <= features.size());
+    for (auto name : names) {
+        if (!out.empty())
+            out += ',';
+        out += '-';
+        out += name;
+    }
+    features = std::move(out);
+}
+#else
+static void disable_native_bf16_codegen(std::string &) JL_NOTSAFEPOINT {}
+#endif
+
 jl_llvm_target_t jl_get_llvm_target(const char *cpu_target, bool imaging)
 {
     init_jit_targets(cpu_target, imaging);
     auto &spec = jit_targets[0];
+    disable_native_bf16_codegen(spec.cpu_features);
     CF_DEBUG("[cpufeatures] jl_get_llvm_target: cpu='%s' features='%s'\n",
              spec.cpu_name.c_str(), spec.cpu_features.c_str());
     return {spec.cpu_name.c_str(), spec.cpu_features.c_str()};
@@ -676,6 +718,7 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
         auto &s = specs[i];
         jl_target_spec_t &ele = result.specs[i];
         ele.cpu_name = strdup(s.cpu_name.c_str());
+        disable_native_bf16_codegen(s.cpu_features);
         ele.cpu_features = strdup(s.cpu_features.c_str());
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
