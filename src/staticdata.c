@@ -3622,14 +3622,23 @@ extern const uint32_t jl_system_image_checksum;
 extern const jl_image_pointers_t jl_image_pointers;
 #endif
 
-// Look up a data symbol of an image. A NULL `handle` denotes the system image
-// that was statically linked into this binary (an executable or a shared
-// library); it has no library handle of its own, and its symbols are direct
-// references resolved by the static linker.
+#ifdef JL_LIBRARY_STATIC
+// Handle sentinel denoting the system image that was statically linked into
+// this binary (an executable or a shared library). It has no library handle of
+// its own, and NULL is not usable as the sentinel (it is what a failed dlopen
+// returns, and on Windows it denotes the executable's module), so use the
+// address of a private object, which no real handle can equal.
+static const char jl_static_sysimage_handle_tag = 0;
+#define JL_STATIC_SYSIMAGE_HANDLE ((void*)&jl_static_sysimage_handle_tag)
+#endif
+
+// Look up a data symbol of an image; the symbols of the statically linked
+// system image (see JL_STATIC_SYSIMAGE_HANDLE) are direct references resolved
+// by the static linker.
 static void jl_image_sym(void *handle, const char *name, void **out, const void *static_addr) JL_NOTSAFEPOINT
 {
 #ifdef JL_LIBRARY_STATIC
-    if (handle == NULL) {
+    if (handle == JL_STATIC_SYSIMAGE_HANDLE) {
         *out = (void*)static_addr;
         return;
     }
@@ -3892,7 +3901,7 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOI
     // shared library as into the executable, so the load base is found from
     // the address of the image's own data.
     (void)handle;
-    (*jl_image_unpack)(NULL, &image);
+    (*jl_image_unpack)(JL_STATIC_SYSIMAGE_HANDLE, &image);
     assert(image.pointers == &jl_image_pointers);
     image.base = jl_image_base(jl_find_dynamic_library_by_addr((void*)image.pointers, /* throw_err */ 0, /* close */ 1),
                                image.pointers);
