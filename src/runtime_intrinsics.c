@@ -422,6 +422,7 @@ JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 // run time version of pointerref intrinsic (warning: i is not rooted)
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
 {
+    jl_check_rc("pointerref");
     JL_TYPECHK(pointerref, pointer, p);
     JL_TYPECHK(pointerref, long, i)
     JL_TYPECHK(pointerref, long, align);
@@ -442,6 +443,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
 // run time version of pointerset intrinsic (warning: x is not gc-rooted)
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i, jl_value_t *align)
 {
+    jl_check_rc("pointerset");
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
     JL_TYPECHK(pointerset, long, align);
@@ -465,6 +467,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
 {
+    jl_check_rc("atomic_pointerref");
     JL_TYPECHK(atomic_pointerref, pointer, p);
     JL_TYPECHK(atomic_pointerref, symbol, order)
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 0);
@@ -485,6 +488,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order)
 {
+    jl_check_rc("atomic_pointerset");
     JL_TYPECHK(atomic_pointerset, pointer, p);
     JL_TYPECHK(atomic_pointerset, symbol, order);
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 0, 1);
@@ -508,6 +512,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_v
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order)
 {
+    jl_check_rc("atomic_pointerswap");
     JL_TYPECHK(atomic_pointerswap, pointer, p);
     JL_TYPECHK(atomic_pointerswap, symbol, order);
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
@@ -532,6 +537,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
 {
+    jl_check_rc("atomic_pointermodify");
     JL_TYPECHK(atomic_pointermodify, pointer, p);
     JL_TYPECHK(atomic_pointermodify, symbol, order)
     (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
@@ -585,6 +591,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *expected, jl_value_t *x, jl_value_t *success_order_sym, jl_value_t *failure_order_sym)
 {
+    jl_check_rc("atomic_pointerreplace");
     JL_TYPECHK(atomic_pointerreplace, pointer, p);
     JL_TYPECHK(atomic_pointerreplace, symbol, success_order_sym);
     JL_TYPECHK(atomic_pointerreplace, symbol, failure_order_sym);
@@ -635,6 +642,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
 
 JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym, jl_value_t *syncscope_sym)
 {
+    jl_check_rc("atomic_fence");
     JL_TYPECHK(fence, symbol, order_sym);
     JL_TYPECHK(fence, symbol, syncscope_sym);
     enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 1, 1);
@@ -675,6 +683,7 @@ jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v)
 
 // The auto-switching behavior here is deprecated, but preserved for Core.Intrinsics.cglobal
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
+    jl_check_rc("cglobal"); // symbol lookup in shared libraries is machine state
     JL_TYPECHK(cglobal, type, ty);
     jl_value_t *rt =
         ty == (jl_value_t*)jl_nothing_type ? (jl_value_t*)jl_voidpointer_type : // a common case
@@ -1772,6 +1781,7 @@ un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
+    jl_check_rc("have_fma");
     JL_TYPECHK(have_fma, datatype, typ); // TODO what about float16/bfloat16?
     if (typ == (jl_value_t*)jl_float32_type)
         return jl_cpu_has_fma(32);

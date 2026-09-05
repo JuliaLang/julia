@@ -801,8 +801,17 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     int last_in = ct->ptls->in_pure_callback;
     size_t last_age = ct->world_age;
+    // Generator expansion is always permitted, even when reached from pure
+    // evaluation mode: generators are already language-contractually required
+    // to be pure functions of their argument types, and trapping only when
+    // the expansion is uncached would make behavior depend on cache warmth
+    // (i.e. not be consistent). Suspend the mode while the generator runs.
+    uint16_t last_rc = ct->rcjulia;
+    jl_rc_frame_t *last_rc_frames = ct->rc_frames;
 
     JL_TRY {
+        ct->rcjulia = 0;
+        ct->rc_frames = NULL;
         ct->ptls->in_pure_callback = 1;
         ct->world_age = jl_atomic_load_relaxed(&def->primary_world);
         if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter))
@@ -900,10 +909,14 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
         ct->ptls->in_pure_callback = last_in;
         jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         ct->world_age = last_age;
+        ct->rcjulia = last_rc;
+        ct->rc_frames = last_rc_frames;
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
         jl_atomic_store_relaxed(&jl_lineno, last_lineno);
+        ct->rcjulia = last_rc;
+        ct->rc_frames = last_rc_frames;
         jl_rethrow();
     }
     JL_GC_POP();
