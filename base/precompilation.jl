@@ -45,12 +45,22 @@ end
 # killed mid-imaging), degrading to bounded oversubscription instead of hanging.
 # `ntokens` tracks tokens actually held, so releases only post back while it is
 # positive and tokenless acquires can never over-post.
+#
+# Slots are handed out by priority rather than in request order: a package that a
+# long chain of other packages is waiting on starts before one nothing depends on,
+# so the environment's critical path is not delayed behind leaves that happened to
+# become ready first (see `schedule_priorities`).
 mutable struct WorkerLimiter
-    const sem::Base.Semaphore
+    const cond::Threads.Condition   # guards `active`, `seq` and `waiting`
+    const max::Int
     const jobserver::Bool
+    active::Int
+    seq::Int
+    const waiting::Vector{Tuple{Float64,Int}} # (priority, -request order) of tasks waiting for a slot
     @atomic ntokens::Int
 end
-WorkerLimiter(sem::Base.Semaphore, jobserver::Bool) = WorkerLimiter(sem, jobserver, 0)
+WorkerLimiter(max::Int, jobserver::Bool) =
+    WorkerLimiter(Threads.Condition(), max, jobserver, 0, 0, Tuple{Float64,Int}[], 0)
 
 # How long an acquire keeps polling for a baseline token before proceeding
 # without one. Generous enough that it is only ever hit when the pool has been
@@ -97,13 +107,35 @@ function _jobserver_release_baseline(w::WorkerLimiter)
     end
 end
 
-function Base.acquire(w::WorkerLimiter; cancel=Returns(false))
-    Base.acquire(w.sem)
+function _acquire_slot(w::WorkerLimiter, priority::Float64)
+    @lock w.cond begin
+        key = (priority, -(w.seq += 1))
+        push!(w.waiting, key)
+        # admitted when a slot is free and no waiter outranks us
+        while w.active >= w.max || maximum(w.waiting) != key
+            wait(w.cond)
+        end
+        deleteat!(w.waiting, findfirst(==(key), w.waiting)::Int)
+        w.active += 1
+    end
+    return nothing
+end
+
+function _release_slot(w::WorkerLimiter)
+    @lock w.cond begin
+        w.active -= 1
+        notify(w.cond)
+    end
+    return nothing
+end
+
+function Base.acquire(w::WorkerLimiter; priority::Float64=0.0, cancel=Returns(false))
+    _acquire_slot(w, priority)
     if w.jobserver
         try
             _jobserver_acquire_baseline(w; cancel)
         catch
-            Base.release(w.sem)
+            _release_slot(w)
             rethrow()
         end
     end
@@ -112,12 +144,12 @@ end
 
 function Base.release(w::WorkerLimiter)
     w.jobserver && _jobserver_release_baseline(w)
-    Base.release(w.sem)
+    _release_slot(w)
     return nothing
 end
 
-function Base.acquire(f, w::WorkerLimiter; cancel=Returns(false))
-    Base.acquire(w; cancel)
+function Base.acquire(f, w::WorkerLimiter; priority::Float64=0.0, cancel=Returns(false))
+    Base.acquire(w; priority, cancel)
     try
         return f()
     finally
@@ -2140,25 +2172,77 @@ function precompile_pkgs_maybe_cachefile_lock(f, s::PrecompileSession, pkg_confi
             # wait until the lock is available
             cachefile = @invokelatest Base.mkpidlock_hook(() -> begin
                     job.lock_holder = ""
-                    Base.acquire(f, s.parallel_limiter; cancel=() -> should_stop(s))
+                    # this worker already had a slot before it waited for the lock, so take the next one
+                    Base.acquire(f, s.parallel_limiter; priority=Inf, cancel=() -> should_stop(s))
                 end,
                 pidfile; stale_age)
         finally
-            Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s)) # re-acquire so the outer release is balanced
+            Base.acquire(s.parallel_limiter; priority=Inf, cancel=() -> should_stop(s)) # re-acquire so the outer release is balanced
         end
     end
     return cachefile
+end
+
+# Rough proxy for how long a package takes to precompile, used only to order
+# scheduling: the bytes of Julia source next to its entry file.
+function precompile_cost_estimate(spec::Union{Nothing,Base.PkgLoadSpec})
+    spec === nothing && return 1.0
+    total = 0
+    try
+        for (root, _, files) in walkdir(dirname(spec.path))
+            for f in files
+                endswith(f, ".jl") && (total += filesize(joinpath(root, f)))
+            end
+        end
+    catch
+    end
+    return max(1.0, Float64(total))
+end
+
+# Scheduling priority of each package: its own estimated cost plus that of the
+# longest chain of packages that cannot start until it is done. Handing worker
+# slots out in this order starts the environment's critical path as early as
+# possible; in a cold precompile of a large environment the last package on that
+# path, not the total amount of work, sets the wall-clock time.
+function schedule_priorities(direct_deps::Dict{PkgId,Vector{PkgId}}, cost::Dict{PkgId,Float64})
+    dependents = Dict{PkgId,Vector{PkgId}}()
+    for (pkg, deps) in direct_deps, dep in deps
+        push!(get!(Vector{PkgId}, dependents, dep), pkg)
+    end
+    height = Dict{PkgId,Float64}()
+    visiting = Set{PkgId}()
+    function h(pkg::PkgId)
+        haskey(height, pkg) && return height[pkg]
+        pkg in visiting && return 0.0 # circular dependency, reported elsewhere
+        push!(visiting, pkg)
+        best = 0.0
+        for d in get(dependents, pkg, PkgId[])
+            best = max(best, h(d))
+        end
+        delete!(visiting, pkg)
+        return height[pkg] = get(cost, pkg, 1.0) + best
+    end
+    for pkg in keys(direct_deps)
+        h(pkg)
+    end
+    return height
 end
 
 function spawn_precompile_tasks!(s::PrecompileSession;
         direct_deps, was_processed, configs, circular_deps,
         requested_pkgids, pkg_names, requested_pkgs, from_loading)
     batch_tasks = Task[]
+    sourcespecs = Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}}(pkg => Base.locate_package_load_spec(pkg) for pkg in keys(direct_deps))
+    priorities = if Base.get_bool_env("JULIA_PRECOMPILE_PRIORITY", true) === false
+        Dict{PkgId,Float64}() # request order, for comparison
+    else
+        schedule_priorities(direct_deps, Dict{PkgId,Float64}(pkg => precompile_cost_estimate(spec) for (pkg, spec) in sourcespecs))
+    end
     for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
         @lock s.cache_lock s.cachepath_cache[pkg] = freshpaths
-        sourcespec = Base.locate_package_load_spec(pkg)
+        sourcespec = sourcespecs[pkg]
         single_requested_pkg = length(requested_pkgs) == 1 &&
             (pkg in requested_pkgids || pkg.name in pkg_names)
         for config in configs
@@ -2215,7 +2299,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     @lock s.cache_lock push!(freshpaths, freshpath)
                 end
                 if !circular && is_stale
-                    Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s))
+                    Base.acquire(s.parallel_limiter; priority=get(priorities, pkg, 0.0), cancel=() -> should_stop(s))
                     is_serial_dep = pkg in s.serial_deps
                     is_project_dep = pkg in s.project_deps
 
@@ -2809,7 +2893,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         configs, io, logio, logcalls, fancyprint, hascolor,
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
         time_start, print_lock,
-        parallel_limiter=WorkerLimiter(Base.Semaphore(num_tasks), precompile_jobserver !== :none), num_tasks,
+        parallel_limiter=WorkerLimiter(num_tasks, precompile_jobserver !== :none), num_tasks,
         start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids, requested_all,
         direct_deps=graph.direct_deps,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
