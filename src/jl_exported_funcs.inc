@@ -582,6 +582,20 @@
     YY(JLJITGetGlobalPrefix) \
     YY(JLJITGetDataLayoutString) \
     YY(JLJITGetIRCompileLayer) \
+    YY(JLDialectsAttachContext) \
+    YY(JLDialectsDisposeContext) \
+    YY(JLDialectsVerifyModule) \
+    YY(JLDialectsGCAllocBytesSizeType) \
+    YY(JLBuildGetPGCStack) \
+    YY(JLBuildGetPGCStackOrNew) \
+    YY(JLBuildGCLoaded) \
+    YY(JLBuildNewGCFrame) \
+    YY(JLBuildPushGCFrame) \
+    YY(JLBuildPopGCFrame) \
+    YY(JLBuildGetGCFrameSlot) \
+    YY(JLBuildGCAllocBytes) \
+    YY(JLBuildQueueGCRoot) \
+    YY(JLBuildSafepoint) \
 
 
 // end of file
