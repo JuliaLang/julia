@@ -355,9 +355,7 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
     if (AS != AddressSpace::Tracked && AS != AddressSpace::Derived)
         return V;
     V = decay_derived(ctx, V);
-    Function *F = prepare_call(pointer_from_objref_func);
-    CallInst *Call = ctx.builder.CreateCall(F, V);
-    Call->setAttributes(F->getAttributes());
+    CallInst *Call = ctx.builder.create<julia::PointerFromObjref>(V);
     ++EmittedPointerFromObjref;
     return Call;
 }
@@ -1984,10 +1982,9 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
     ++EmittedTypeof;
     assert(v != NULL && !isa<AllocaInst>(v) && "expected a conditionally boxed value");
     Value *nonnull = maybenull ? null_pointer_cmp(ctx, v) : ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
-    Function *typeof = prepare_call(jl_typeof_func);
-    auto val = emit_guarded_test(ctx, nonnull, Constant::getNullValue(justtag ? ctx.types().T_size : typeof->getReturnType()), [&] () JL_CANSAFEPOINT {
+    auto val = emit_guarded_test(ctx, nonnull, Constant::getNullValue(justtag ? ctx.types().T_size : ctx.types().T_prjlvalue), [&] () JL_CANSAFEPOINT {
         // e.g. emit_typeof(ctx, v)
-        Value *typetag = ctx.builder.CreateCall(typeof, {v});
+        Value *typetag = ctx.builder.create<julia::Typeof>(v);
         if (notag)
             return typetag;
         Value *tag = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, typetag), ctx.types().T_size);
@@ -2649,7 +2646,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type, true);
         }
         else {
-            Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
+            Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, jl_calltramp::call);
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
         }
         emit_typecheck(ctx, ret, jltype, fname);
@@ -3424,14 +3421,13 @@ static bool isLoadFromConstGV(Value *v)
         return (isLoadFromConstGV(SL->getTrueValue()) &&
                 isLoadFromConstGV(SL->getFalseValue()));
     if (auto call = dyn_cast<CallInst>(v)) {
-        auto callee = call->getCalledFunction();
-        if (callee && callee->getName() == "julia.typeof") {
+        if (isa<julia::Typeof>(call)) {
             return true;
         }
-        if (callee && callee->getName() == "julia.get_pgcstack") {
+        if (isa<julia::GetPGCStack>(call)) {
             return true;
         }
-        if (callee && callee->getName() == "julia.gc_loaded") {
+        if (isa<julia::GCLoaded>(call)) {
             return isLoadFromConstGV(call->getArgOperand(0)) &&
                    isLoadFromConstGV(call->getArgOperand(1));
         }
@@ -3759,7 +3755,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     Value *ptr = LI;
     if (AS) {
         assert(AS == AddressSpace::Loaded);
-        ptr = ctx.builder.CreateCall(prepare_call(gc_loaded_func), { mem, ptr });
+        ptr = ctx.builder.create<julia::GCLoaded>(mem, ptr);
     }
     setName(ctx.emission_context, ptr, "memory_data");
     return ptr;
@@ -4386,7 +4382,6 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
 {
     ++EmittedAllocObjs;
     Value *current_task = get_current_task(ctx);
-    Function *F = prepare_call(jl_alloc_obj_func);
 
     // Build operand bundles for GC pointer info
     SmallVector<OperandBundleDef, 2> bundles;
@@ -4404,8 +4399,10 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
         bundles.push_back(OperandBundleDef("julia.gc_alloc_zeroinit", region_values));
     }
 
-    auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(ctx.types().T_size, static_size), maybe_decay_untracked(ctx, jt)}, bundles);
-    call->setAttributes(F->getAttributes());
+    llvm_dialects::Builder::WithOperandBundles wob(ctx.builder, bundles);
+    CallInst *call = ctx.builder.create<julia::GCAllocObj>(
+        current_task, ConstantInt::get(ctx.types().T_size, static_size),
+        maybe_decay_untracked(ctx, jt));
     if (static_size > 0)
         call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), static_size));
     call->addRetAttr(Attribute::getWithAlignment(call->getContext(), Align(align)));
@@ -4462,7 +4459,7 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
     for (auto ptr : ptrs) {
         decay_ptrs.push_back(maybe_decay_untracked(ctx, ptr));
     }
-    ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
+    ctx.builder.create<julia::WriteBarrier>(decay_ptrs[0], ArrayRef<Value*>(decay_ptrs).drop_front());
 }
 
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,
@@ -5286,7 +5283,7 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
     Value *data = CreateSimplifiedExtractValue(ctx, newref, 0);
     unsigned AS = AddressSpace::Loaded;
     Value *mem = CreateSimplifiedExtractValue(ctx, newref, 1);
-    // rebuild GEP on data, so that we manually hoist this gc_loaded_func call over it, back to the original load
+    // rebuild GEP on data, so that we manually hoist this julia.gc_loaded call over it, back to the original load
     // we should add this to llvm-julia-licm too, so we can attempt hoisting over PhiNodes too (which aren't defined yet here)
     IRBuilder<>::InsertPointGuard resetIP(ctx.builder);
     SmallVector<GetElementPtrInst*,0> GEPlist;
@@ -5295,7 +5292,7 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
         GEPlist.push_back(GEP);
         data = GEP->getPointerOperand()->stripPointerCastsSameRepresentation();
     }
-    data = ctx.builder.CreateCall(prepare_call(gc_loaded_func), { mem, data });
+    data = ctx.builder.create<julia::GCLoaded>(mem, data);
     if (!GEPlist.empty()) {
         for (auto &GEP : make_range(GEPlist.rbegin(), GEPlist.rend())) {
             GetElementPtrInst *GEP2 = cast<GetElementPtrInst>(GEP->clone());

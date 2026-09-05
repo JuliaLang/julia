@@ -11,6 +11,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
 #include "analyzer_annotations.h"
+#include "JuliaDialect.h"
 
 struct JuliaPassContext;
 
@@ -49,23 +50,11 @@ struct JuliaPassContext {
     llvm::MDNode *tbaa_gcframe;
     llvm::MDNode *tbaa_tag;
 
-    // Intrinsics.
-    llvm::Function *pgcstack_getter;
-    llvm::Function *adoptthread_func;
-    llvm::Function *gcroot_flush_func;
-    llvm::Function *gc_preserve_begin_func;
-    llvm::Function *gc_preserve_end_func;
-    llvm::Function *pointer_from_objref_func;
-    llvm::Function *gc_loaded_func;
-    llvm::Function *alloc_obj_func;
-    llvm::Function *typeof_func;
-    llvm::Function *blackbox_func;
-    llvm::Function *write_barrier_func;
+    // Runtime functions that are not part of the Julia dialect (see
+    // JuliaDialect.td). Julia dialect ops are recognized with isa<julia::Op>
+    // on the call instead, and their declarations are found with
+    // julia::getOpDeclaration.
     llvm::Function *pop_handler_noexcept_func;
-    llvm::Function *call_func;
-    llvm::Function *call2_func;
-    llvm::Function *call3_func;
-    llvm::Function *cancel_point_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -103,6 +92,14 @@ struct JuliaPassContext {
     // to the module.
     llvm::Function *getOrDeclare(
         const jl_intrinsics::IntrinsicDescription &desc);
+
+    // Returns the declaration of the Julia dialect op `OpT` in the current
+    // module, or nullptr if the module does not use the op.
+    template <typename OpT>
+    llvm::Function *getOpDeclaration() const JL_NOTSAFEPOINT
+    {
+        return julia::getOpDeclaration<OpT>(*module);
+    }
 
 private:
     llvm::Module *module;

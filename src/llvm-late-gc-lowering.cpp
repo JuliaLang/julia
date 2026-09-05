@@ -235,8 +235,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             }
         }
         else if (auto CI = dyn_cast<CallInst>(CurrentV)) {
-            auto callee = CI->getCalledFunction();
-            if (callee && callee->getName() == "julia.gc_loaded") {
+            if (isa<julia::GCLoaded>(CI)) {
                 CurrentV = CI->getArgOperand(0);
                 continue;
             }
@@ -882,15 +881,14 @@ static bool isLoadFromConstGV(Value *v, bool &task_local, PhiSet *seen = nullptr
         return true;
     }
     if (auto call = dyn_cast<CallInst>(v)) {
-        auto callee = call->getCalledFunction();
-        if (callee && callee->getName() == "julia.typeof") {
+        if (isa<julia::Typeof>(call)) {
             return true;
         }
-        if (callee && callee->getName() == "julia.get_pgcstack") {
+        if (isa<julia::GetPGCStack>(call)) {
             task_local = true;
             return true;
         }
-        if (callee && callee->getName() == "julia.gc_loaded") {
+        if (isa<julia::GCLoaded>(call)) {
             return isLoadFromConstGV(call->getArgOperand(0), task_local, seen) &&
                    isLoadFromConstGV(call->getArgOperand(1), task_local, seen);
         }
@@ -1215,10 +1213,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                 }
                 auto callee = CI->getCalledFunction();
-                if (callee && callee == typeof_func) {
+                if (isa<julia::Typeof>(CI)) {
                     MaybeNoteDef(S, BBS, CI, SmallVector<int, 1>{-2});
                 }
-                else if (callee && callee->getName() == "julia.gc_loaded") {
+                else if (isa<julia::GCLoaded>(CI)) {
                     continue;
                 }
                 else {
@@ -1255,7 +1253,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 NoteOperandUses(S, BBS, I);
                 if (!CI->canReturnTwice()) {
                     if (callee) {
-                        if (callee == gc_preserve_begin_func) {
+                        if (isa<julia::GCPreserveBegin>(CI)) {
                             SmallVector<int, 0> args;
                             for (Use &U : CI->args()) {
                                 Value *V = U;
@@ -1280,13 +1278,13 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             continue;
                         }
                         // Known functions emitted in codegen that are not safepoints
-                        if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
-                            callee == gc_preserve_end_func || callee == typeof_func ||
-                            callee == blackbox_func ||
-                            callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
+                        if (isa<julia::PointerFromObjref>(CI) || isa<julia::GCPreserveBegin>(CI) ||
+                            isa<julia::GCPreserveEnd>(CI) || isa<julia::Typeof>(CI) ||
+                            isa<julia::Blackbox>(CI) ||
+                            isa<julia::GetPGCStack>(CI) || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                             callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                            callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
+                            isa<julia::WriteBarrier>(CI) || isa<julia::GCLoaded>(CI) || callee == pop_handler_noexcept_func ||
                             callee->getName() == "memcmp") {
                             continue;
                         }
@@ -1914,7 +1912,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             }
             Value *callee = CI->getCalledOperand();
 
-            if (write_barrier_func && callee == write_barrier_func) {
+            if (isa<julia::WriteBarrier>(CI)) {
                 assert(CI->arg_size() >= 1);
                 write_barriers.push_back(CI);
                 ChangesMade = true;
@@ -1922,10 +1920,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
 
-            if (callee && (callee == gcroot_flush_func || callee == gc_preserve_begin_func
-                        || callee == gc_preserve_end_func)) {
+            if (isa<julia::GCRootFlush>(CI) || isa<julia::GCPreserveBegin>(CI)
+                        || isa<julia::GCPreserveEnd>(CI)) {
                 /* No replacement */
-            } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
+            } else if (isa<julia::PointerFromObjref>(CI)) {
                 auto *obj = CI->getOperand(0);
 #if JL_LLVM_VERSION >= 200000
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
@@ -1935,7 +1933,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
-            } else if (gc_loaded_func != nullptr && callee == gc_loaded_func) {
+            } else if (isa<julia::GCLoaded>(CI)) {
                 auto *obj = CI->getOperand(1);
 #if JL_LLVM_VERSION >= 200000
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
@@ -1945,7 +1943,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
-            } else if (blackbox_func != nullptr && callee == blackbox_func) {
+            } else if (isa<julia::Blackbox>(CI)) {
                 // Lower julia.blackbox(ptr) to an "=r,0" inline asm on the raw
                 // untracked pointer. At this point GC frame lowering has already
                 // run, so there are no GC-tracked address spaces left and the
@@ -1966,7 +1964,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 out->takeName(CI);
                 CI->replaceAllUsesWith(out);
                 UpdatePtrNumbering(CI, out, S);
-            } else if (alloc_obj_func && callee == alloc_obj_func) {
+            } else if (isa<julia::GCAllocObj>(CI)) {
                 assert(CI->arg_size() == 3);
 
                 // Initialize an IR builder.
@@ -2016,6 +2014,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 // size of the object to allocate, to save one indirection, and doesn't set
                 // the type tag. (Note that if the size is not a constant, it will call
                 // gc_alloc_obj, and will redundantly set the tag.)
+                // This op is created via the runtime-typed intrinsic
+                // description rather than llvm_dialects::Builder: its
+                // signature is target dependent (the size type), which
+                // llvm-dialects cannot yet express in a declaration, and the
+                // allocsize attribute requires a non-varargs declaration.
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
                 auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
                 auto newI = builder.CreateCall(
@@ -2104,7 +2107,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 
                 // Update the pointer numbering.
                 UpdatePtrNumbering(CI, newI, S);
-            } else if (typeof_func && callee == typeof_func) {
+            } else if (isa<julia::Typeof>(CI)) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
@@ -2115,13 +2118,13 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if ((call_func && callee == call_func) ||
-                       (call2_func && callee == call2_func) ||
-                       (call3_func && callee == call3_func)) {
+            } else if (isa<julia::JuliaCall>(CI) || isa<julia::JuliaCall2>(CI) ||
+                       isa<julia::JuliaCall3>(CI)) {
                 assert(T_prjlvalue);
+                bool is_call2 = isa<julia::JuliaCall2>(CI);
                 size_t nargs = CI->arg_size();
                 size_t nframeargs = nargs-1;
-                if (callee == call2_func)
+                if (is_call2)
                     nframeargs -= 2;
                 else
                     nframeargs -= 1;
@@ -2131,7 +2134,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 Value *new_callee = *(arg_it++);
                 assert(arg_it != CI->arg_end());
                 ReplacementArgs.push_back(*(arg_it++));
-                if (callee == call2_func) {
+                if (is_call2) {
                     assert(arg_it != CI->arg_end());
                     ReplacementArgs.push_back(*(arg_it++));
                 }
@@ -2151,14 +2154,14 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
                     Builder.CreateAddrSpaceCast(Frame, PointerType::getUnqual(T_prjlvalue->getContext())));
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
-                if (callee == call2_func) {
+                if (is_call2) {
                     // move trailing arg to the end now
                     Value *front = ReplacementArgs.front();
                     ReplacementArgs.erase(ReplacementArgs.begin());
                     ReplacementArgs.push_back(front);
                 }
-                FunctionType *FTy = callee == call3_func ? JuliaType::get_jlfunc3_ty(CI->getContext()) :
-                                    callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) :
+                FunctionType *FTy = isa<julia::JuliaCall3>(CI) ? JuliaType::get_jlfunc3_ty(CI->getContext()) :
+                                    is_call2 ? JuliaType::get_jlfunc2_ty(CI->getContext()) :
                                                            JuliaType::get_jlfunc_ty(CI->getContext());
 #if JL_LLVM_VERSION >= 200000
                 CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI->getIterator());
@@ -2322,14 +2325,10 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
                                          ArrayRef<int> Colors, Value *GCFrame,
                                          Instruction *InsertBefore) {
     // Get the slot address.
-    auto slotAddress = CallInst::Create(
-        getOrDeclare(jl_intrinsics::getGCFrameSlot),
-        {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-#if JL_LLVM_VERSION >= 200000
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
-#else
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
-#endif
+    llvm_dialects::Builder builder(InsertBefore);
+    auto slotAddress = builder.create<julia::GetGCFrameSlot>(
+        GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot),
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)));
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
     // Pointee types don't have semantics, so the optimizer is
@@ -2347,14 +2346,10 @@ void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColor
                                          ArrayRef<int> Colors, Value *GCFrame,
                                          Instruction *InsertBefore) {
     // Get the slot address.
-    auto slotAddress = CallInst::Create(
-        getOrDeclare(jl_intrinsics::getGCFrameSlot),
-        {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-#if JL_LLVM_VERSION >= 200000
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
-#else
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
-#endif
+    llvm_dialects::Builder builder(InsertBefore);
+    auto slotAddress = builder.create<julia::GetGCFrameSlot>(
+        GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot),
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)));
     // Reset the slot to NULL.
     Value *Val = ConstantPointerNull::get(T_prjlvalue);
 #if JL_LLVM_VERSION >= 200000
@@ -2408,19 +2403,15 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
     // Insert instructions for the actual gc frame
     if (MaxColor != -1 || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
         // Create and push a GC frame.
-        auto gcframe = CallInst::Create(
-            getOrDeclare(jl_intrinsics::newGCFrame),
-            {ConstantInt::get(T_int32, 0)},
-            "gcframe");
-        gcframe->insertBefore(F->getEntryBlock().begin());
+        llvm_dialects::Builder entryBuilder(&F->getEntryBlock(), F->getEntryBlock().begin());
+        auto gcframe = entryBuilder.create<julia::NewGCFrame>(
+            ConstantInt::get(T_int32, 0), "gcframe");
 
-        auto pushGcframe = CallInst::Create(
-            getOrDeclare(jl_intrinsics::pushGCFrame),
-            {gcframe, ConstantInt::get(T_int32, 0)});
-        if (isa<Argument>(pgcstack))
-             pushGcframe->insertAfter(gcframe);
-         else
-             pushGcframe->insertAfter(cast<Instruction>(pgcstack));
+        Instruction *pushAnchor = isa<Argument>(pgcstack) ?
+            static_cast<Instruction*>(gcframe) : cast<Instruction>(pgcstack);
+        llvm_dialects::Builder pushBuilder(pushAnchor->getParent(), std::next(pushAnchor->getIterator()));
+        auto pushGcframe = pushBuilder.create<julia::PushGCFrame>(
+            gcframe, ConstantInt::get(T_int32, 0));
 
         // we don't run memsetopt after this, so run a basic approximation of it
         // that removes any redundant memset calls in the prologue since getGCFrameSlot already includes the null store
@@ -2461,17 +2452,17 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
-        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
+        auto replace_alloca = [gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
             // Pick a slot for the alloca.
             AI->getAlign();
             unsigned align = AI->getAlign().value() / sizeof(void*); // TODO: use DataLayout pointer size
             assert(align <= 16 / sizeof(void*) && "Alignment exceeds llvm-final-gc-lowering abilities");
             if (align > 1)
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
-            Instruction *slotAddress = CallInst::Create(
-                getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-            slotAddress->insertAfter(gcframe);
+            llvm_dialects::Builder slotBuilder(gcframe->getParent(), std::next(gcframe->getIterator()));
+            Instruction *slotAddress = slotBuilder.create<julia::GetGCFrameSlot>(
+                gcframe, ConstantInt::get(T_int32, AllocaSlot - 2),
+                "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
             slotAddress->takeName(AI);
 
             // Check for lifetime intrinsics on this alloca, we can't keep them
@@ -2501,10 +2492,10 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             auto Base = SI->getValueOperand();
             //auto Tracked = TrackCompositeType(Base->getType());
             for (unsigned i = 0; i < Store.second; ++i) {
-                auto slotAddress = CallInst::Create(
-                    getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                    {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-                slotAddress->insertAfter(gcframe);
+                llvm_dialects::Builder slotBuilder(gcframe->getParent(), std::next(gcframe->getIterator()));
+                auto slotAddress = slotBuilder.create<julia::GetGCFrameSlot>(
+                    gcframe, ConstantInt::get(T_int32, AllocaSlot - 2),
+                    "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
                 assert(Elem->getType() == T_prjlvalue);
@@ -2529,14 +2520,8 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
         // Insert GCFrame pops
         for (auto &BB : *F) {
             if (isa<ReturnInst>(BB.getTerminator())) {
-                auto popGcframe = CallInst::Create(
-                    getOrDeclare(jl_intrinsics::popGCFrame),
-                    {gcframe});
-#if JL_LLVM_VERSION >= 200000
-                popGcframe->insertBefore(BB.getTerminator()->getIterator());
-#else
-                popGcframe->insertBefore(BB.getTerminator());
-#endif
+                llvm_dialects::Builder popBuilder(BB.getTerminator());
+                popBuilder.create<julia::PopGCFrame>(gcframe);
             }
         }
     }
@@ -2576,6 +2561,7 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
 
 PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
+    julia::ScopedDialects dialects(F.getContext());
     auto GetDT = [&AM, &F]() -> DominatorTree & {
         return AM.getResult<DominatorTreeAnalysis>(F);
     };
