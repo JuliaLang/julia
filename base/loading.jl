@@ -3419,9 +3419,91 @@ end
 const newly_inferred = []
 
 # this is called in the external process that generates precompiled package files
+# Sampling profiler for a precompile worker, enabled by pointing
+# `JULIA_PRECOMPILE_PROFILE` at a directory. Every worker then writes
+# `<pkg>-<pid>.profdata`, the raw sample buffer, and `<pkg>-<pid>.profsyms`, its
+# instruction pointers resolved to stack frames. The dump is deliberately split
+# that way because an instruction pointer can only be resolved by the process
+# that recorded it, while everything else is better done afterwards in a session
+# that can load Profile. See the "Profiling package precompilation" devdocs.
+#
+# This runs inside the worker, so it only uses `ccall` and `Base.StackTraces`:
+# loading a package here would place it in the output image's dependency list.
+const _precompile_profile_nmeta = 4 # threadid, taskid, cpu_cycle_clock, sleepstate
+
+function _precompile_profile_start(pkg::PkgId)
+    dir = get(ENV, "JULIA_PRECOMPILE_PROFILE", "")
+    isempty(dir) && return nothing
+    delay = something(tryparse(Float64, get(ENV, "JULIA_PRECOMPILE_PROFILE_DELAY", "")), 0.001)
+    nsamples = something(tryparse(Int, get(ENV, "JULIA_PRECOMPILE_PROFILE_NSAMPLES", "")), 10_000_000)
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), nsamples, round(UInt64, 1e9 * delay))
+    if status != 0
+        @warn "Could not allocate the precompile profile buffer" pkg status
+        return nothing
+    end
+    status = ccall(:jl_profile_start_timer, Cint, (Bool,), false)
+    if status != 0
+        @warn "Could not start the precompile profiler" pkg status
+        return nothing
+    end
+    prefix = joinpath(abspath(dir), string(pkg.name, "-", getpid()))
+    # `_postoutput` runs after the package image has been written, so dumping
+    # there covers image generation as well as `include`. It only runs when
+    # native code is emitted; without it, fall back to `atexit`, which runs
+    # before the `.ji` is written and so covers `include` alone.
+    if JLOptions().outputo != C_NULL
+        postoutput(() -> _precompile_profile_dump(prefix))
+    else
+        atexit(() -> _precompile_profile_dump(prefix))
+    end
+    return nothing
+end
+
+function _precompile_profile_dump(prefix::String)
+    ccall(:jl_profile_stop_timer, Cvoid, ())
+    len = Int(ccall(:jl_profile_len_data, Csize_t, ()))
+    ptr = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
+    data = Vector{UInt}(undef, len)
+    unsafe_copyto!(pointer(data), ptr, len)
+    try
+        mkpath(dirname(prefix))
+        open(prefix * ".profdata", "w") do io
+            write(io, data)
+        end
+        # Mark the metadata trailer of each block so it is not mistaken for an
+        # instruction pointer: a block ends with the four metadata fields
+        # followed by two null entries.
+        meta = falses(len)
+        for i in (_precompile_profile_nmeta + 2):len
+            if data[i] == 0 && data[i-1] == 0 && data[i-2] != 0
+                meta[(i-_precompile_profile_nmeta-1):i] .= true
+            end
+        end
+        ips = Set{UInt}()
+        for i in 1:len
+            (meta[i] || data[i] == 0) && continue
+            push!(ips, data[i])
+        end
+        open(prefix * ".profsyms", "w") do io
+            println(io, "# ip\tinlined\tline\tfrom_c\tfunc\tfile")
+            for ip in ips, sf in StackTraces.lookup(convert(Ptr{Cvoid}, ip))
+                println(io, ip, '\t', sf.inlined ? 1 : 0, '\t', sf.line, '\t',
+                        sf.from_c ? 1 : 0, '\t', sf.func, '\t', sf.file)
+            end
+        end
+        if ccall(:jl_profile_is_buffer_full, Cint, ()) != 0
+            @warn "The precompile profile buffer filled up; raise JULIA_PRECOMPILE_PROFILE_NSAMPLES or JULIA_PRECOMPILE_PROFILE_DELAY" prefix
+        end
+    catch ex
+        @warn "Could not write the precompile profile" prefix exception=(ex, catch_backtrace())
+    end
+    return nothing
+end
+
 function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String},
                                     preresolved::Vector{Pair{PkgId,String}}=Pair{PkgId,String}[])
+    _precompile_profile_start(pkg)
 
     @lock require_lock begin
     m = start_loading(pkg, UInt128(0), false)
@@ -3517,7 +3599,7 @@ const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                            internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
-                           report_timing::Bool=false,
+                           report_timing::Bool=false, profile_dir::Union{Nothing,String}=nothing,
                            preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
     @nospecialize internal_stderr internal_stdout
     depot_path = String[abspath(x) for x in DEPOT_PATH]
@@ -3574,6 +3656,8 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
     # Only request per-package timing reports when explicitly asked for (e.g. by
     # precompilepkgs), so that the marker lines don't leak into normal load logs.
     report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
+    # Ask this worker to profile itself; see `_precompile_profile_start`.
+    profile_dir === nothing || (cmd = addenv(cmd, "JULIA_PRECOMPILE_PROFILE" => profile_dir))
     io = open(pipeline(cmd, stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
@@ -3637,11 +3721,11 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false, profile_dir::Union{Nothing,String}=nothing)
     @nospecialize internal_stderr internal_stdout
     spec = locate_package_load_spec(pkg)
     spec === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts, signal_channel, report_timing)
+    return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts, signal_channel, report_timing, profile_dir)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
@@ -3650,6 +3734,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
                       pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false,
+                      profile_dir::Union{Nothing,String}=nothing,
                       preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
 
     @nospecialize internal_stderr internal_stdout
@@ -3688,7 +3773,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, preresolved)
+        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, profile_dir, preresolved)
 
         # Report the PID of the compilation subprocess
         if pid_channel !== nothing

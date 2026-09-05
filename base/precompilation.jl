@@ -279,12 +279,14 @@ mutable struct BackgroundPrecompileState
     confirm_deadline::Float64  # time() deadline for confirmation
     info_requested::Bool  # whether SIGINFO/SIGUSR1 has been broadcast at least once
     key_listening::Bool  # whether a key listener task is currently consuming stdin
+    profile_dir::Union{Nothing, String}  # directory for worker profile dumps, or nothing to not profile
+    profile_pkgs::Union{Nothing, Set{String}}  # packages to profile, or nothing for all of them
 end
 Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false, false)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false, false, nothing, nothing)
 
 # Serializes the inject-vs-launch decision in `_precompilepkgs` with the launch
 # itself. Lock ordering: acquired before (outside) BG.lock, never while holding it.
@@ -1105,6 +1107,14 @@ precompiles only the given packages and their dependencies (unless
                   samples may be missed. Linux/macOS only, `-` elsewhere.
   Values under 5 ms and zero counts are dimmed for readability.
 
+- `profile::Union{Bool,AbstractString,AbstractVector{<:AbstractString}}`: When not `false`,
+  each selected package's worker samples itself and writes its profile to a file. Pass `true`
+  for every package, or a package name or list of names to profile only those. The dumps are
+  read back in a separate session; see the "Profiling package precompilation" devdocs.
+
+- `profile_dir::Union{Nothing,AbstractString}`: Where to write those dumps. Defaults to a
+  fresh temporary directory, whose path is printed when profiling starts.
+
 - `_from_loading::Bool`: Internal flag indicating the call originated from the
   package loading system. When `true` (not default): returns early instead of
   throwing when packages are not found; suppresses progress messages when not
@@ -1175,6 +1185,48 @@ function preresolved_snapshot(s::PrecompileSession)
     @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
 end
 
+# Turn the `profile` / `profile_dir` keywords of `precompilepkgs` into the
+# settings that `spawn_precompile_tasks!` hands to each worker. Kept on `BG`
+# rather than on the session so a request merged into a running background run
+# picks it up, the same way `verbose` does.
+function setup_worker_profiling!(profile, profile_dir, io)
+    if profile === false
+        if profile_dir !== nothing
+            throw(ArgumentError("`profile_dir` was given but `profile` is false; pass `profile=true` to enable profiling"))
+        end
+        # clear any setting left by an earlier profiling run
+        @lock BG begin
+            BG.profile_dir = nothing
+            BG.profile_pkgs = nothing
+        end
+        return nothing
+    end
+    pkgs = if profile === true
+        nothing
+    elseif profile isa AbstractString
+        Set{String}((profile,))
+    else
+        Set{String}(profile)
+    end
+    dir = profile_dir === nothing ? mktempdir(; prefix="jl_precompile_profile_", cleanup=false) : abspath(String(profile_dir))
+    mkpath(dir)
+    @lock BG begin
+        BG.profile_dir = dir
+        BG.profile_pkgs = pkgs
+    end
+    which = pkgs === nothing ? "all packages" : join(sort!(collect(pkgs)), ", ")
+    printpkgstyle(io, :Profiling, "$which into $dir", color = Base.info_color())
+    return nothing
+end
+
+# The directory this package's worker should dump its profile into, or `nothing`.
+function worker_profile_dir(pkg::PkgId)
+    dir, pkgs = @lock BG (BG.profile_dir, BG.profile_pkgs)
+    dir === nothing && return nothing
+    (pkgs === nothing || pkg.name in pkgs) || return nothing
+    return dir
+end
+
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -1189,10 +1241,13 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         fancyprint::Bool = can_fancyprint(io) && !timing && !verbose,
                         manifest::Bool=false,
                         ignore_loaded::Bool=true,
-                        detachable::Bool=false)
+                        detachable::Bool=false,
+                        profile::Union{Bool,AbstractString,AbstractVector{<:AbstractString}}=false,
+                        profile_dir::Union{Nothing,AbstractString}=nothing)
     # verbose timing mode requires timing to be enabled (per-package breakdown
     # is only shown alongside timing lines in non-fancy mode)
     verbose && (timing = true)
+    setup_worker_profiling!(profile, profile_dir, io)
     @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, verbose, _from_loading,
@@ -2255,6 +2310,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
+                                                  profile_dir=worker_profile_dir(pkg),
                                                   preresolved=preresolved_snapshot(s))
                             end
                         else
@@ -2281,6 +2337,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
+                                                  profile_dir=worker_profile_dir(pkg),
                                                   preresolved=preresolved_snapshot(s))
                             end
                         end
