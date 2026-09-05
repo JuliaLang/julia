@@ -189,6 +189,13 @@ Standard library changes
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 
+#### ArtifactDownloads
+
+* New `ArtifactDownloads` standard library holding the artifact download, verification, installation
+  and authoring code that was previously only available through `Pkg.Artifacts` and
+  `Pkg.PlatformEngines`. `LazyArtifacts` depends on it instead of on `Pkg`, which makes
+  `using` a package with lazy artifacts about 125ms faster ([#55755], [#62983]).
+
 #### JuliaSyntaxHighlighting
 
 #### LinearAlgebra

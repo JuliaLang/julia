@@ -1,0 +1,25 @@
+[arty]
+git-tree-sha1 = "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
+
+[[arty.download]]
+url = "https://github.com/staticfloat/small_bin/raw/master/socrates.tar.gz"
+sha256 = "e65d2f13f2085f2c279830e863292312a72930fee5ba3c792b14c33ce5c5cc58"
+
+[[arty.download]]
+url = "https://github.com/staticfloat/small_bin/raw/master/socrates.tar.bz2"
+sha256 = "13fc17b97be41763b02cbb80e9d048302cec3bd3d446c2ed6e8210bddcd3ac76"
+
+[socrates]
+git-tree-sha1 = "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
+lazy = true
+
+[[socrates.download]]
+url = "https://github.com/staticfloat/small_bin/raw/91f3ecf327d1de943fe076657833252791ba9f60/socrates.tar.gz"
+sha256 = "e65d2f13f2085f2c279830e863292312a72930fee5ba3c792b14c33ce5c5cc58"
+
+[collapse_the_symlink]
+git-tree-sha1 = "69a468bd51751f4ed7eda31c240e775df06d6ee6"
+
+[[collapse_the_symlink.download]]
+url = "https://github.com/staticfloat/small_bin/raw/91f3ecf327d1de943fe076657833252791ba9f60/collapse_the_symlink/collapse_the_symlink.tar.gz"
+sha256 = "956c1201405f64d3465cc28cb0dec9d63c11a08cad28c381e13bb22e1fc469d3"
