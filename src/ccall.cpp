@@ -547,6 +547,8 @@ static jl_cgval_t drop_inline_roots(const jl_cgval_t &x)
 // pointer, so that the conversion is guaranteed to be valid on this runtime branch
 static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x, const Twine &msg) JL_CANSAFEPOINT
 {
+    if (x.typ == jl_bottom_type)
+        return x;
     if (x.typ == (jl_value_t*)jl_voidpointer_type)
         return x;
     if (!jl_is_cpointer_type(x.typ))
