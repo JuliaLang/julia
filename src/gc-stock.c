@@ -308,10 +308,36 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
 #endif
 }
 
+// A pool object without page metadata is a corpse: an object of a GC region
+// that a reset freed while a reference to it lived on (gc-regions.h). The
+// mark would fault on it; name it instead, then abort.
+static NOINLINE void gc_region_corpse_report(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
+{
+    char *data = gc_page_data(o);
+    uintptr_t addr = (uintptr_t)data;
+    int state = -1;   // -1: no table level exists for this address
+    pagetable1_t *r1 = alloc_map.meta1[REGION_INDEX(addr)];
+    if (r1 != NULL) {
+        pagetable0_t *r0 = r1->meta0[REGION1_INDEX(addr)];
+        if (r0 != NULL)
+            state = r0->meta[REGION0_INDEX(addr)];
+    }
+    uintptr_t tag = o->header;
+    jl_safe_printf("CORPSE o=%p page=%p map_state=%d tag=%p\n",
+                   (void*)o, (void*)data, state, (void*)tag);
+    jl_datatype_t *vt = (jl_datatype_t*)(tag & ~(uintptr_t)15);
+    if (vt != NULL)
+        jl_safe_printf("CORPSE type=%s\n", jl_symbol_name(vt->name->name));
+    abort();
+}
+
 STATIC_INLINE void gc_setmark_pool(jl_ptls_t ptls, jl_taggedvalue_t *o,
                                    uint8_t mark_mode) JL_NOTSAFEPOINT
 {
-    gc_setmark_pool_(ptls, o, mark_mode, page_metadata((char*)o));
+    jl_gc_pagemeta_t *meta = page_metadata((char*)o);
+    if (__unlikely(meta == NULL))
+        gc_region_corpse_report(o);
+    gc_setmark_pool_(ptls, o, mark_mode, meta);
 }
 
 STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,

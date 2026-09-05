@@ -232,6 +232,17 @@ JL_DLLEXPORT uint64_t jl_gc_heap_reserve(uint64_t bytes) JL_NOTSAFEPOINT
 void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     void *p = pg->data;
+    // A region owns its pages: a reset parks them on the region's own fresh
+    // list and only a reset or a census gives a cell back. Nothing should
+    // reach this entry with a tagged page. If something does, keep the page
+    // instead of freeing it: the objects on it are reachable, and returning
+    // it to the allocator would hand live memory to the next claim. The
+    // page leaks, and the line below says so.
+    if (pg->region_n != 0) {
+        jl_safe_printf("FREEPAGE-TAGGED page %p region %d - a tagged page must never free; "
+                       "the page is kept\n", p, (int)pg->region_n);
+        return;
+    }
     gc_alloc_map_set((char*)p, GC_PAGE_FREED);
     // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;
