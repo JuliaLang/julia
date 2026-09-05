@@ -1212,8 +1212,23 @@ struct _jl_gcframe_t {
 
 #define jl_pgcstack (jl_current_task->gcstack)
 
-#define JL_GC_ENCODE_PUSHARGS(n)   (((size_t)(n))<<2)
-#define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|1)
+// The low two bits of jl_gcframe_t.nroots encode the frame kind; the
+// remaining bits hold the number of roots:
+//   JL_GCFRAME_DIRECT:   slots hold object pointers (JL_GC_PUSHARGS, codegen)
+//   JL_GCFRAME_INDIRECT: slots hold addresses of local `jl_value_t*`
+//                        variables (JL_GC_PUSH1..8)
+//   JL_GCFRAME_INTERP:   direct roots of an interpreter frame (interpreter.c;
+//                        located via a frame-pointer word by stackwalk.c)
+//   JL_GCFRAME_FINLIST:  in-flight finalizer list, the only kind whose slots
+//                        may carry GC_FIN_* tags (see gc-common.h)
+#define JL_GCFRAME_DIRECT    0
+#define JL_GCFRAME_INDIRECT  1
+#define JL_GCFRAME_INTERP    2
+#define JL_GCFRAME_FINLIST   3
+#define JL_GCFRAME_KIND_MASK ((size_t)3)
+
+#define JL_GC_ENCODE_PUSHARGS(n)   ((((size_t)(n))<<2)|JL_GCFRAME_DIRECT)
+#define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|JL_GCFRAME_INDIRECT)
 #define JL_GC_DECODE_NROOTS(n)     (n >> 2)
 
 #ifdef __clang_gcanalyzer__
