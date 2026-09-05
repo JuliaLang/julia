@@ -207,16 +207,16 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1_lam(vcx, st)
     [K"flatten" g] -> vst1_generator(vcx, g)
     [K"generator" _...] -> vst1_generator(vcx, st)
-    [K"comprehension" [K"flatten" g]] -> vst1_generator(vcx, g)
-    [K"comprehension" g] -> vst1_generator(vcx, g)
+    [K"comprehension" [K"flatten" g]] -> vst1(vcx, g)
+    [K"comprehension" g] -> vst1(vcx, g)
     [K"comprehension" xs...] ->
         # HACK: We shouldn't be creating trees here, but this is extremely rare
         # (deprecated even in 2016)
         vst1_generator(vcx, @ast _ st [K"generator" xs...])
     [K"typed_comprehension" t [K"flatten" g]] ->
-        vst1(vcx, t) & vst1_generator(vcx, g)
+        vst1(vcx, t) & vst1(vcx, g)
     [K"typed_comprehension" t g] ->
-        vst1(vcx, t) & vst1_generator(vcx, g)
+        vst1(vcx, t) & vst1(vcx, g)
     [K"comparison" xs...] ->
         length(xs) < 3 || iseven(length(xs)) ?
         @fail(st, "`comparison` expects n>=3 args and odd n") :
@@ -269,11 +269,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
-    [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
-        all(vst1_ident, vcx, b1; lhs=true) &
-        all(vst1_ident, vcx, b2; lhs=true) &
-        (kind(st[3]) === K"->" ? vst1_lam(vcx, st[3]) :
-            vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), st[3]))
+    [K"lambda" _...] -> vst1_raw_lambda(vcx, st)
+    [K"with-static-parameters" lam sps...] ->
+        vst1_raw_lambda(vcx, lam) & all(vst1_ident, vcx, sps; lhs=true)
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
     [K"generated"] -> pass()
@@ -1081,6 +1079,16 @@ vst1_iter(vcx, st) = @stm st begin
     _ -> @fail(st, "expected one of `=`, `in`, `∈`")
 end
 
+vst1_raw_lambda(vcx, st) = @stm st begin
+    [K"lambda" [K"Value"] body] -> let args = st[1].value
+        (args isa Vector && all(a->a isa Symbol, args) ? pass() :
+        @fail(args, "expected Vector of Symbol")) &
+        vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), body)
+    end
+    [K"lambda" _...] -> @fail(st, "malformed `lambda`")
+    _ -> @fail(st, "expected `lambda`")
+end
+
 #-------------------------------------------------------------------------------
 # Pre-macro-expansion (st0) is mostly a subset of st1, except with `macrocall`
 # and `quote`.
@@ -1304,6 +1312,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"method_defs" id [K"block" sps...] body] ->
         (kind(id) === K"nothing" ? pass() : vst2_ident_val(vcx, id)) &
         all(vst2_typevar, vcx, sps) & vst2(with(vcx; in_method_defs=true), body)
+    [K"no_method_defs" id] -> vst2_ident_val(vcx, id)
     [K"new" t args...] -> vst2(vcx, t) & all(vst2, vcx, args)
     [K"splatnew" t arg] -> vst2(vcx, t) & vst2(vcx, arg)
     [K"softscope"] -> pass()
