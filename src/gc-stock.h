@@ -119,6 +119,8 @@ typedef struct _jl_gc_pagemeta_t {
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
     uint16_t thread_n;        // thread id of the heap that owns this page
+    uint8_t region_n;         // the GC region that claimed this page, 0 = the default heap
+    struct _jl_gc_pagemeta_t *region_next; // the chain of one region's pages (gc-regions.h)
     char *data;
 } jl_gc_pagemeta_t;
 

@@ -56,7 +56,7 @@ GC_SRCS := gc-common gc-stacks gc-alloc-profiler gc-heap-snapshot
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 GC_SRCS += gc-mmtk
 else
-GC_SRCS += gc-stock gc-debug gc-pages gc-page-profiler
+GC_SRCS += gc-stock gc-regions gc-debug gc-pages gc-page-profiler
 endif
 
 SRCS := \
@@ -422,7 +422,8 @@ $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc-common.h $(SRC
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
 $(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h
 $(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
-$(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
+$(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-regions.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
+$(BUILDDIR)/gc-regions.o $(BUILDDIR)/gc-regions.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-regions.h
 $(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj: $(SRCDIR)/gc-heap-snapshot.h
 $(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj: $(SRCDIR)/gc-alloc-profiler.h
 $(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj: $(SRCDIR)/gc-page-profiler.h
@@ -582,7 +583,7 @@ CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(DEBUGFLAGS_CLAN
 # Additional headers from dependency links, categorized by usage, for adding as fake compiler targets.
 # Adding these as compiler inputs doesn't always work (due to missing includes), but if we don't add them, they won't work at all.
 ADDITIONAL_C_HEADERS := builtin_proto.h common_symbols1.inc common_symbols2.inc gc-alloc-profiler.h \
-	gc-common.h gc-heap-snapshot.h gc-page-profiler.h gc-stock.h serialize.h \
+	gc-common.h gc-heap-snapshot.h gc-page-profiler.h gc-regions.h gc-stock.h serialize.h \
 	support/htable.h support/htable.inc
 ADDITIONAL_CXX_HEADERS := debug-registry.h debuginfo.h intrinsics.h jitlayers.h llvm-alloc-helpers.h \
 	llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-julia-passes.inc \

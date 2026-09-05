@@ -5,6 +5,7 @@
 #include "gc-alloc-profiler.h"
 #include "gc-heap-snapshot.h"
 #include "gc-page-profiler.h"
+#include "gc-regions.h"
 #include "julia.h"
 #include "julia_atomics.h"
 #include "julia_gcext.h"
@@ -683,7 +684,7 @@ STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_
 {
     assert(GC_PAGE_OFFSET >= sizeof(void*));
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
-    pg->pool_n = p - ptls2->gc_tls.heap.norm_pools;
+    pg->pool_n = p - ptls2->gc_tls.heap.active_pools;
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     pg->has_young = 0;
     pg->has_marked = 0;
@@ -705,9 +706,20 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     // Do not pass in `ptls` as argument. This slows down the fast path
     // in small_alloc significantly
     jl_ptls_t ptls = jl_current_task->ptls;
+    int cr = ptls->gc_tls.heap.current_region;
+    jl_gc_region_state_t *rs = cr != 0 ? ptls->gc_tls.heap.regions[cr] : NULL;
     jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
     pg->thread_n = ptls->tid;
+    // The page carries the region that claimed it; a region chains its
+    // pages so a reset frees them without a walk of the heap.
+    pg->region_n = cr;
+    pg->region_next = NULL;
+    if (rs != NULL) {
+        pg->region_next = rs->pages;
+        rs->pages = pg;
+        rs->n_pages++;
+    }
     set_page_metadata(pg);
     push_lf_back(&ptls->gc_tls.page_metadata_allocd, pg);
     jl_taggedvalue_t *fl = gc_reset_page(ptls, p, pg);
@@ -723,7 +735,16 @@ STATIC_INLINE jl_value_t *jl_gc_small_alloc_inner(jl_ptls_t ptls, int offset,
     // Use the pool offset instead of the pool address as the argument
     // to workaround a llvm bug.
     // Ref https://llvm.org/bugs/show_bug.cgi?id=27190
+#ifdef JL_NO_REGION_ALLOC
+    // The stock-only build: the pool address computes exactly as vanilla,
+    // and jl_gc_region_set refuses, because regions cannot allocate here.
     jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + offset);
+#else
+    // `offset` is the stable norm_pools-relative encoding the JIT bakes in;
+    // decode it to a pool index and address the CURRENT region's array.
+    size_t pool_idx = ((size_t)offset - offsetof(jl_tls_states_t, gc_tls.heap.norm_pools)) / sizeof(jl_gc_pool_t);
+    jl_gc_pool_t *p = ptls->gc_tls.heap.active_pools + pool_idx;
+#endif
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 #ifdef MEMDEBUG
     return jl_gc_big_alloc(ptls, osize, NULL);
@@ -990,6 +1011,13 @@ done:
 // the actual sweeping over all allocated pages in a memory pool
 STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
+    // A region's pages are not swept: a reset or a census of the region
+    // frees their cells. A sweep would link the cells into norm_pools while
+    // the region owns them through its own cursors.
+    if (pg->region_n != 0) {
+        push_lf_back(allocd, pg);
+        return;
+    }
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
@@ -3633,6 +3661,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
         p[i].freelist = NULL;
         p[i].newpages = NULL;
     }
+    jl_gc_region_init_heap(heap);
     small_arraylist_new(&common_heap->weak_refs, 0);
     small_arraylist_new(&common_heap->live_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
