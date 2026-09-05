@@ -352,6 +352,10 @@ void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz) JL
 
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
 {
+    // A window on a region past its census threshold gets a census of the
+    // open region instead of a stock collection (gc-regions.h).
+    if (__unlikely(ptls->gc_tls.heap.current_region != 0) && jl_gc_region_maybe_census(ptls))
+        return;
     if (jl_atomic_load_relaxed(&gc_heap_stats.heap_size) >= jl_atomic_load_relaxed(&gc_heap_stats.heap_target) || jl_gc_debug_check_other()) {
         jl_gc_collect(JL_GC_AUTO);
     }

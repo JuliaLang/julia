@@ -68,6 +68,17 @@ JL_DLLEXPORT uint64_t jl_gc_region_stat(int i)
     return (i >= 0 && i < 8) ? jl_atomic_load_relaxed(&region_collect_stats[i]) : 0;
 }
 
+// The page count that triggers a census on the open region from the
+// allocator (jl_gc_region_maybe_census in gc-regions.h). 0 = never.
+_Atomic(int) jl_gc_region_census_page_threshold = 0;
+
+// Set the threshold, process-wide. It takes effect at the next page a window
+// claims on any thread.
+JL_DLLEXPORT void jl_gc_region_census_threshold(int pages)
+{
+    jl_atomic_store_relaxed(&jl_gc_region_census_page_threshold, pages);
+}
+
 STATIC_INLINE int region_valid(int n) JL_NOTSAFEPOINT
 {
     return n > 0 && n < JL_GC_MAX_REGIONS;
@@ -175,6 +186,17 @@ JL_DLLEXPORT int jl_gc_region_parent_of(int child)
     if (!region_valid(child))
         return 0;
     return region_parent[child];
+}
+
+// The page count of a region on the calling heap: the observable a census
+// bounds.
+JL_DLLEXPORT int jl_gc_region_pages(int n)
+{
+    if (!region_valid(n))
+        return 0;
+    jl_thread_heap_t *heap = &jl_current_task->ptls->gc_tls.heap;
+    jl_gc_region_state_t *rs = heap->regions[n];
+    return rs == NULL ? 0 : (int)rs->n_pages;
 }
 
 // 1 when an escape quarantined region n, 0 otherwise (a bad region number
@@ -793,8 +815,9 @@ static void region_census_end(void) JL_NOTSAFEPOINT
 // before claiming new pages. Only pages with survivors get the cell walk.
 // The pool freelists are rebuilt from scratch, so wholesale pages cannot
 // leave stale entries. Cells at or past a pool's bump cursor stay owned by
-// the cursor, and the cursor page is kept, so the next window continues
-// allocation from the rebuilt freelist. Fills stats slots 4..7.
+// the cursor, and the cursor page is kept, so a census of the open region
+// leaves allocation to continue from the rebuilt freelist. Fills stats
+// slots 4..7.
 static int64_t region_scoped_sweep(jl_thread_heap_t *heap, int n)
 {
     int64_t freed = 0;
@@ -977,8 +1000,9 @@ static void region_census_mark(jl_ptls_t ptls, jl_ptls_t *tls_states, int nthrea
 }
 
 // The stop-the-world census on region n, from the execution roots of every
-// thread. The caller owns the preconditions; the region is not current.
-// Returns the number of freed cells, or ERACE.
+// thread. The caller owns the preconditions. Two callers: jl_gc_region_collect
+// (the region is not current) and jl_gc_region_census_open (the region is
+// current, mid-window). Returns the number of freed cells, or ERACE.
 static int64_t region_census_core(jl_task_t *ct, jl_ptls_t ptls, jl_thread_heap_t *heap, int n)
 {
     // Stop the world the way jl_gc_collect does. jl_safepoint_start_gc
@@ -1130,6 +1154,22 @@ JL_DLLEXPORT int64_t jl_gc_region_collect_coop(int n)
     jl_atomic_store_relaxed(&region_collect_stats[3], t_sweep - t_mark);
     region_run_finalizer_list(ct, &dead);
     return freed;
+}
+
+// The census of the open region, from the allocator when the region passed
+// the page threshold: a computation whose garbage dies inside the window,
+// not at its boundary, keeps its live state and gets its dead cells back
+// without the region growing without bound. Pending finalizers, a
+// quarantine and a live child region fall through to the ordinary path.
+// Returns 1 when a census ran.
+int jl_gc_region_census_open(jl_ptls_t ptls)
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    int n = heap->current_region;
+    if (heap->regions[n]->finalizers.len != 0 || jl_gc_region_quarantined(n) ||
+        ((heap->region_haschild_mask >> n) & 1))
+        return 0;
+    return region_census_core(jl_current_task, ptls, heap, n) >= 0;
 }
 
 
