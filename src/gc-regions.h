@@ -6,14 +6,14 @@
 //
 // A region is a numbered set of pool pages with its own allocation cursors.
 // A thread allocates into region n while a window on n is open
-// (jl_gc_region_set); the stock collector never sweeps a region page. The
-// design and the rules an application must keep are in
-// doc/src/devdocs/gc-regions.md. Every entry point takes region numbers; the
-// numbering and its meaning belong to the application.
+// (jl_gc_region_set), and frees every object of the region at once with a
+// reset, without a trace. The design and the rules an application must keep
+// are in doc/src/devdocs/gc-regions.md. Every entry point takes region
+// numbers; the numbering and its meaning belong to the application.
 //
 // The stock collector implements the regions (src/gc-regions.c); a build
 // with a third-party heap gets the stubs at the end of this file, so the
-// callers in gf.c and jltypes.c compile unchanged.
+// callers in gc-common.c, gf.c and jltypes.c compile unchanged.
 
 #ifndef JL_GC_REGIONS_H
 #define JL_GC_REGIONS_H
@@ -25,10 +25,15 @@
 extern "C" {
 #endif
 
-// The refusal codes.
+// The refusal codes. An entry that returns a count returns the code cast
+// to its unsigned type: (uint64_t)-2 stands for -2.
 enum {
     JL_GC_REGION_EINVAL = -1,       // a bad region number, or a build that
                                     // cannot allocate in a region
+    JL_GC_REGION_EBUSY = -2,        // the region is current, or this heap
+                                    // runs region finalizers now
+    JL_GC_REGION_EFINALIZERS = -6,  // finalizers are pending after the bounded
+                                    // rounds of the reset
 };
 
 #ifndef WITH_THIRD_PARTY_HEAP
@@ -38,8 +43,17 @@ enum {
 // current, or a refusal code.
 JL_DLLEXPORT int jl_gc_region_set(int n);
 JL_DLLEXPORT int jl_gc_region_current(void);
+// Free every object of region n on the calling thread's heap. Returns the
+// number of pages the region held, or a refusal code.
+JL_DLLEXPORT uint64_t jl_gc_region_reset(int n);
 
 // --- the hooks the rest of the runtime calls --------------------------------
+// A finalizer on a region object goes to the region's own list. Returns 1
+// when it took the registration.
+int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f);
+// A memory with malloc'd data allocated in a region is tracked by the
+// region. Returns 1 when it took the memory.
+int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 // Install a parked region on a thread: the stock collection parks every
 // window before it runs and installs it again after.
 void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
@@ -49,14 +63,44 @@ void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
 void jl_gc_region_prepare_stock_collection(void) JL_NOTSAFEPOINT;
 void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT;
 void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT;
+// Mark every region finalizer list as a root of the stock collection.
+void jl_gc_region_mark_finalizer_lists(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 // Per-heap initialization.
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
 
+// The brackets around a finalizer list: finalizers run with region 0
+// installed, whatever window the thread holds, and while they run no window
+// opens and no region entry runs on the thread. `begin` returns the parked
+// region for `end`. A finalizer does not task-switch (the contract of
+// Base.finalizer), so the depth is per thread.
+STATIC_INLINE int jl_gc_region_finalizers_begin(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    int parked = heap->current_region;
+    if (parked != 0)
+        jl_gc_region_install_task(ptls, 0);
+    heap->finalizer_depth++;
+    return parked;
+}
+
+STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    heap->finalizer_depth--;
+    if (parked != 0)
+        jl_gc_region_install_task(ptls, parked);
+}
+
 #else // WITH_THIRD_PARTY_HEAP
 
-// A third-party heap has no regions: every window is refused.
+// A third-party heap has no regions: every window is refused and every hook
+// declines.
 STATIC_INLINE int jl_gc_region_set(int n) { (void)n; return JL_GC_REGION_EINVAL; }
 STATIC_INLINE int jl_gc_region_current(void) { return 0; }
+STATIC_INLINE int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f) { (void)ptls; (void)v; (void)f; return 0; }
+STATIC_INLINE int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) { (void)ptls; (void)m; (void)isaligned; return 0; }
+STATIC_INLINE int jl_gc_region_finalizers_begin(jl_ptls_t ptls) { (void)ptls; return 0; }
+STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) { (void)ptls; (void)parked; }
 
 #endif // WITH_THIRD_PARTY_HEAP
 

@@ -41,6 +41,10 @@ typedef struct {
     uint8_t current_region;
     uint8_t saved_region;   // parked by a stock collection: every thread
                             // runs the collection with region 0 installed
+    uint8_t finalizer_depth; // > 0 while finalizers run on this thread: the
+                            // window is parked and region 0 installed, no
+                            // window opens and no region entry runs until
+                            // they return (jl_gc_region_finalizers_begin)
     // The live pool array of the current region: norm_pools for region 0,
     // regions[n]->pools for region n. Allocation paths decode their stable
     // norm_pools-relative offset into an index and address through this
@@ -56,13 +60,31 @@ typedef struct {
     // --------------------------------------------------------------------------
 } jl_thread_heap_t;
 
-// The state of one region on one heap: the allocation cursors and the page
-// chain. A heap holds a pointer to it in `regions[n]` once the region is
-// used on that heap.
+// The state of one region on one heap: the allocation cursors, the page
+// chains, and the two lists a reset and a census work through. A heap holds
+// a pointer to it in `regions[n]` once the region is used on that heap.
 typedef struct _jl_gc_region_state_t {
     jl_gc_pool_t pools[JL_GC_N_MAX_POOLS];
     struct _jl_gc_pagemeta_t *pages;   // chained through region_next
+    struct _jl_gc_pagemeta_t *fresh_pages; // wholly dead pages, ready for
+                                       // reuse; their metadata is stale -
+                                       // gc_add_page resets a page when it
+                                       // claims it, so nobody resets one here
+    struct _jl_gc_pagemeta_t *pages_tail; // last link of `pages`, so a reset
+                                       // parks the whole chain in O(1)
     uint32_t n_pages;                  // pages on `pages`
+    uint32_t n_fresh;                  // pages on `fresh_pages`
+    arraylist_t finalizers;            // (tagged object, function) pairs
+                                       // registered on this region's
+                                       // objects: the reset runs them all
+                                       // before it frees; the cooperative
+                                       // census runs the dead ones after
+                                       // its sweep, with the filter off
+    small_arraylist_t mallocarrays;    // memories with malloc'd data
+                                       // allocated in this region: their
+                                       // data is freed by the reset (all
+                                       // of it) and by the census (the
+                                       // dead), never by the stock sweep
 } jl_gc_region_state_t;
 
 typedef struct {

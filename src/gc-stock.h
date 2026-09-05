@@ -498,6 +498,9 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t *
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop_serial(jl_ptls_t ptls);
+// The free of a memory's malloc'd data, shared with the reset of a region
+// (gc-regions.c).
+void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void gc_sweep_pool_parallel(jl_ptls_t ptls);
 void gc_free_pages(void);

@@ -633,7 +633,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
     reset_thread_gc_counts();
 }
 
-static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
+void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
     assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED);
@@ -706,8 +706,29 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     // Do not pass in `ptls` as argument. This slows down the fast path
     // in small_alloc significantly
     jl_ptls_t ptls = jl_current_task->ptls;
+    // A region reuses its own wholly-dead pages (parked by a reset or a
+    // census sweep) before claiming new ones; the page is already mapped,
+    // tagged, and in the allocd stack. The open window made the region's
+    // state on this heap, so `rs` is never NULL here.
     int cr = ptls->gc_tls.heap.current_region;
     jl_gc_region_state_t *rs = cr != 0 ? ptls->gc_tls.heap.regions[cr] : NULL;
+    if (rs != NULL) {
+        jl_gc_pagemeta_t *fp = rs->fresh_pages;
+        if (fp != NULL) {
+            rs->fresh_pages = fp->region_next;
+            fp->osize = p->osize;
+            fp->thread_n = ptls->tid;
+            fp->region_next = rs->pages;
+            rs->pages = fp;
+            if (fp->region_next == NULL)
+                rs->pages_tail = fp;
+            rs->n_fresh--;
+            rs->n_pages++;
+            jl_taggedvalue_t *fl = gc_reset_page(ptls, p, fp);
+            p->newpages = fl;
+            return fl;
+        }
+    }
     jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
     pg->thread_n = ptls->tid;
@@ -718,6 +739,8 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     if (rs != NULL) {
         pg->region_next = rs->pages;
         rs->pages = pg;
+        if (pg->region_next == NULL)
+            rs->pages_tail = pg;
         rs->n_pages++;
     }
     set_page_metadata(pg);
@@ -3203,6 +3226,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
             if (ptls2 != NULL)
                 gc_mark_finlist(mq, &ptls2->finalizers, 0);
         }
+        // A region's finalizer list is a root too: the reset runs it, so its
+        // objects and functions must survive every collection until then.
+        jl_gc_region_mark_finalizer_lists(mq);
         gc_mark_finlist(mq, &finalizer_list_marked, orig_marked_len);
         // "Flush" the mark stack before flipping the reset_age bit
         // so that the objects are not incorrectly reset.
