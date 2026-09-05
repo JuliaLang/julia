@@ -7,6 +7,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "processor.h"
 
 #ifdef _COMPILER_TSAN_ENABLED_
 #include <sanitizer/tsan_interface.h>
@@ -351,8 +352,10 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     if (pthread_getspecific(jl_task_exit_key))
         abort();
 #endif
-    if (jl_get_pgcstack() != NULL)
+    if (jl_get_pgcstack() != NULL) {
+        fprintf(stderr, "fatal: jl_init_threadtls called on a thread that already belongs to the runtime\n");
         abort();
+    }
     jl_ptls_t ptls;
 #if defined(_OS_WINDOWS_)
     ptls = (jl_ptls_t)_aligned_malloc(sizeof(jl_tls_states_t), alignof(jl_tls_states_t));
@@ -477,10 +480,27 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
+static int image_is_initialized(void *image) JL_NOTSAFEPOINT
+{
+    jl_image_pointers_t *pointers;
+    if (!jl_dlsym(image, "jl_image_pointers", (void **)&pointers, 0, 0)) {
+        // cannot have been initialized.
+        assert(0 && "no jl_image_pointers in library");
+        return 0;
+    }
+    // Loading an image stores the runtime's pgcstack getter into the
+    // image's `jl_pgcstack_func_slot`; until then the slot holds the image's
+    // built-in default getter.
+    jl_get_pgcstack_func_t getter;
+    jl_pgcstack_key_t key;
+    jl_pgcstack_getkey(&getter, &key);
+    return *(jl_get_pgcstack_func_t*)pointers->ptls->pgcstack_func_slot == getter;
+}
+
 JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_ENTER
 {
+    void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
     if (!jl_is_initialized()) {
-        void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
         void *handle = jl_find_dynamic_library_by_addr(retaddr, 0, 0);
         if (handle == NULL) {
             fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
@@ -492,6 +512,26 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_E
         jl_init_options();
         jl_init_with_image_handle(handle);
         return &jl_get_current_task()->gcstack;
+    }
+
+    void *handle = jl_find_dynamic_library_by_addr(retaddr, 0, 1);
+    if (handle == NULL) {
+        assert(0 && "caller of jl_autoinit_and_adopt_thread not in any library");
+        fprintf(stderr, "error: thread adoption failed due to bad sysimage lookup\n"
+                        "       (this should not happen, please file a bug report)\n");
+        exit(1);
+    }
+    if (jl_get_pgcstack() != NULL || !image_is_initialized(handle)) {
+        const char *caller = jl_pathname_for_symbol(retaddr);
+        const char *loaded = jl_options.image_file;
+        fprintf(stderr, "error: a Julia runtime is already initialized in this process with image\n"
+                        "           %s\n"
+                        "       so the image\n"
+                        "           %s\n"
+                        "       cannot also be initialized. Loading two Julia images into one process\n"
+                        "       requires each to use its own private copy of libjulia.\n",
+                        loaded ? loaded : "<unknown>", caller ? caller : "<unknown>");
+        abort();
     }
 
     return jl_adopt_thread();
