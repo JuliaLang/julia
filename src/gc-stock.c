@@ -364,6 +364,17 @@ STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
 
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls, jl_value_t *value)
 {
+    // A weak reference to a region object has no defined clearing: the
+    // weak_refs list is the common one, so a region reset frees the target
+    // without nulling the weakref, and the target is never swept - the
+    // weakref would dangle. Refuse it. The check runs only while a region
+    // is in use (the barrier arms at the first window).
+    if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on))) {
+        jl_gc_pagemeta_t *m = page_metadata((char*)jl_astaggedvalue(value));
+        if (m != NULL && m->region_n != 0)
+            jl_error("cannot make a WeakRef to a GC region object: "
+                     "its region reset would leave the reference dangling");
+    }
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
                                                   jl_weakref_type);
     wr->value = value;  // NOTE: wb not needed here

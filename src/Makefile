@@ -425,7 +425,7 @@ $(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj: $(SRCDIR)/gc-common.h $(S
 $(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-regions.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
 $(BUILDDIR)/gc-regions.o $(BUILDDIR)/gc-regions.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-regions.h
 $(BUILDDIR)/gc-common.o $(BUILDDIR)/gc-common.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-regions.h
-$(addprefix $(BUILDDIR)/,task.o task.dbg.obj gf.o gf.dbg.obj jltypes.o jltypes.dbg.obj): $(SRCDIR)/gc-regions.h
+$(addprefix $(BUILDDIR)/,task.o task.dbg.obj gf.o gf.dbg.obj jltypes.o jltypes.dbg.obj staticdata.o staticdata.dbg.obj): $(SRCDIR)/gc-regions.h
 $(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj: $(SRCDIR)/gc-heap-snapshot.h
 $(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj: $(SRCDIR)/gc-alloc-profiler.h
 $(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj: $(SRCDIR)/gc-page-profiler.h

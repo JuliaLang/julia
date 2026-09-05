@@ -13,7 +13,8 @@
 //
 // The stock collector implements the regions (src/gc-regions.c); a build
 // with a third-party heap gets the stubs at the end of this file, so the
-// callers in task.c, gc-common.c, gf.c and jltypes.c compile unchanged.
+// callers in task.c, gc-common.c, gf.c, jltypes.c and staticdata.c compile
+// unchanged.
 
 #ifndef JL_GC_REGIONS_H
 #define JL_GC_REGIONS_H

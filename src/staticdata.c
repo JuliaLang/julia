@@ -76,6 +76,7 @@ External links:
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "gc-regions.h"
 #include "julia_gcext.h"
 #include "builtin_proto.h"
 #include "processor.h"
@@ -3362,6 +3363,11 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
                                          ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos, jl_array_t *module_init_order)
 {
+    // A window open during image output would write region-tagged pages
+    // and region cursors into the image, where they have no meaning on
+    // load; refuse, rather than emit a corrupt image.
+    if (jl_gc_region_current() != 0)
+        jl_error("cannot write a system image while a GC region window is open");
     if (jl_options.strip_ir || jl_options.trim) {
         // make sure this is precompiled for jl_foreach_reachable_mtable
         jl_get_loaded_modules();
