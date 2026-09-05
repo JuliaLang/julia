@@ -28,6 +28,24 @@ JL_DLLEXPORT uint64_t jl_get_pg_size(void)
 
 static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
 
+// Prefault. When set, the kernel populates a block at the claim
+// (MAP_POPULATE), so no later first touch of a page takes a page fault -
+// and none takes what a first touch pays on top of the fault once per few
+// MB of new pages: the refill of the core's per-CPU free list from the
+// zone, under the zone lock with interrupts off, 300-500 us. Set by
+// jl_gc_heap_reserve: a hard real-time loop claims its heap before it
+// starts and never faults inside.
+static int gc_prefault_blocks = 0;
+// The blocks mapped so far, so that a reserve can populate what the runtime
+// already holds - the startup block above all, whose untouched pages a loop
+// reaches long after the pools claimed them. A block is never unmapped. The
+// table holds the first GC_MAX_BLOCKS blocks (64 GB at the default block
+// size); a block past the table is mapped but not populated by a reserve.
+#define GC_MAX_BLOCKS 4096
+static char *gc_block_start[GC_MAX_BLOCKS];
+static size_t gc_block_size[GC_MAX_BLOCKS];
+static int gc_block_count = 0;
+
 void jl_gc_init_page(void)
 {
     if (GC_PAGE_SZ * block_pg_cnt < jl_page_size)
@@ -51,8 +69,12 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 #else
     if (GC_PAGE_SZ > jl_page_size)
         pages_sz += GC_PAGE_SZ;
-    char *mem = (char*)mmap(0, pages_sz, PROT_READ | PROT_WRITE,
-                            MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    int flags = MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS;
+#ifdef MAP_POPULATE
+    if (gc_prefault_blocks)
+        flags |= MAP_POPULATE;
+#endif
+    char *mem = (char*)mmap(0, pages_sz, PROT_READ | PROT_WRITE, flags, -1, 0);
     if (mem == MAP_FAILED)
         return NULL;
 #endif
@@ -62,6 +84,11 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
         mem = (char*)gc_page_data(mem + GC_PAGE_SZ - 1);
     jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped, pages_sz);
     jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, pages_sz);
+    if (gc_block_count < GC_MAX_BLOCKS) {
+        gc_block_start[gc_block_count] = mem;
+        gc_block_size[gc_block_count] = GC_PAGE_SZ * pg_cnt;
+        gc_block_count++;
+    }
     return mem;
 }
 
@@ -162,6 +189,43 @@ exit:
 #endif
     errno = last_errno;
     return meta;
+}
+
+// Claim `bytes` of page blocks now, populated, into the clean pool - and
+// prefault every block claimed from here on. jl_gc_alloc_page serves the
+// clean pool before it maps anything, so a loop whose heap fits the
+// reserve maps nothing and faults nothing while it runs. The region tag of
+// a page is set at its pool claim, so a page can wait here untagged.
+// Returns the bytes mapped, rounded up to whole blocks.
+JL_DLLEXPORT uint64_t jl_gc_heap_reserve(uint64_t bytes) JL_NOTSAFEPOINT
+{
+    gc_prefault_blocks = 1;
+    // First what is already mapped: populate every block the runtime holds,
+    // writable, so no page of them faults later. MADV_POPULATE_WRITE needs
+    // Linux 5.14; where it is missing the blocks mapped before the reserve
+    // keep their lazy pages, and only the blocks from here on are populated.
+#ifdef MADV_POPULATE_WRITE
+    uv_mutex_lock(&gc_pages_lock);
+    for (int i = 0; i < gc_block_count; i++)
+        madvise(gc_block_start[i], gc_block_size[i], MADV_POPULATE_WRITE);
+    uv_mutex_unlock(&gc_pages_lock);
+#endif
+    uint64_t mapped = 0;
+    while (mapped < bytes) {
+        uv_mutex_lock(&gc_pages_lock);
+        char *data = jl_gc_try_alloc_pages(); // unlocks and throws when the OS refuses
+        int n = block_pg_cnt;
+        jl_gc_pagemeta_t *meta = (jl_gc_pagemeta_t*)malloc_s(n * sizeof(jl_gc_pagemeta_t));
+        for (int i = 0; i < n; i++) {
+            jl_gc_pagemeta_t *pg = &meta[i];
+            pg->data = data + GC_PAGE_SZ * i;
+            gc_alloc_map_maybe_create(pg->data);
+            push_lf_back(&global_page_pool_clean, pg);
+        }
+        uv_mutex_unlock(&gc_pages_lock);
+        mapped += (uint64_t)n * GC_PAGE_SZ;
+    }
+    return mapped;
 }
 
 // return a page to the freemap allocator

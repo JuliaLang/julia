@@ -100,6 +100,8 @@ JL_DLLEXPORT int jl_gc_region_quarantined(int n);
 JL_DLLEXPORT uint64_t jl_gc_region_stat(int i);
 // The escape barrier, called by the write barrier while a region is in use.
 JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
+// Prefault the pool heap so a later allocation never faults (gc-pages.c).
+JL_DLLEXPORT uint64_t jl_gc_heap_reserve(uint64_t bytes) JL_NOTSAFEPOINT;
 
 // --- the hooks the rest of the runtime calls --------------------------------
 // The census filter: the region whose census runs now, 0 otherwise. The mark
