@@ -308,7 +308,9 @@ static void region_lazy_init(jl_thread_heap_t *heap, int n) JL_NOTSAFEPOINT
 
 // Open a window on region n, or close it (n = 0). Every region's cursors
 // live in its own array, so the switch is one pointer store; the inlined
-// allocation fast path is untouched. Returns the region that was current;
+// allocation fast path is untouched. The window belongs to the calling
+// task: it follows the task across a task switch, and the task stays on its
+// thread while the window is open. Returns the region that was current;
 // EINVAL for a bad region number, EBUSY while finalizers run on this thread.
 JL_DLLEXPORT int jl_gc_region_set(int n)
 {
@@ -336,6 +338,16 @@ JL_DLLEXPORT int jl_gc_region_set(int n)
     if (__unlikely(!jl_atomic_load_relaxed(&jl_gc_region_barrier_on)))
         jl_atomic_store_release(&jl_gc_region_barrier_on, 1);
     region_lazy_init(heap, n);
+    // An open window pins the task: a region's pages live in the thread
+    // heap, so a task holding a window must not migrate. The stickiness
+    // it had is restored when the window closes.
+    if (old == 0 && n != 0) {
+        ct->sticky_before_region = ct->sticky;
+        ct->sticky = 1;
+    }
+    else if (n == 0 && old != 0) {
+        ct->sticky = ct->sticky_before_region;
+    }
     heap->active_pools = (n == 0) ? heap->norm_pools : heap->regions[n]->pools;
     heap->current_region = (uint8_t)n;
     return old;
@@ -348,8 +360,7 @@ JL_DLLEXPORT int jl_gc_region_current(void)
     return jl_current_task->ptls->gc_tls.heap.current_region;
 }
 
-// Install a parked region on this thread: the stock collection parks every
-// window before it runs and installs it again after.
+// Install a task's parked region on this thread at a task switch.
 void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT
 {
     jl_thread_heap_t *heap = &ptls->gc_tls.heap;

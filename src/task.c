@@ -34,6 +34,7 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "gc-regions.h"
 #include "threading.h"
 #include "julia_assert.h"
 
@@ -519,6 +520,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     jl_signal_fence();
     jl_set_pgcstack(&t->gcstack);
     jl_signal_fence();
+    jl_gc_region_task_switch(ptls, lastt, t);
     lastt->ptls = NULL;
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
@@ -1151,6 +1153,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
     t->sticky = 1;
+    t->region = 0;
+    t->sticky_before_region = 0;
     t->gcstack = NULL;
     t->excstack = NULL;
     t->ctx.started = 0;
@@ -1616,6 +1620,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     jl_atomic_store_relaxed(&ct->tid, ptls->tid);
     ct->threadpoolid = jl_threadpoolid(ptls->tid);
     ct->sticky = 1;
+    ct->region = 0;
+    ct->sticky_before_region = 0;
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;

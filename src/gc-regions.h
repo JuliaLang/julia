@@ -13,7 +13,7 @@
 //
 // The stock collector implements the regions (src/gc-regions.c); a build
 // with a third-party heap gets the stubs at the end of this file, so the
-// callers in gc-common.c, gf.c and jltypes.c compile unchanged.
+// callers in task.c, gc-common.c, gf.c and jltypes.c compile unchanged.
 
 #ifndef JL_GC_REGIONS_H
 #define JL_GC_REGIONS_H
@@ -38,6 +38,24 @@ enum {
                                     // rounds of the reset
 };
 
+// --- the runtime's own allocations ------------------------------------------
+// The runtime allocates on behalf of the task that runs it, and what it
+// allocates outlives any window that task holds: it belongs to region 0.
+// The C sites - inference, compilation, type instantiation, the dispatch
+// cache (gf.c, jltypes.c) - close the window with jl_gc_region_set(0) and
+// reopen it after; they never park the task, and an exception past the
+// bracket leaves the window closed, which is coherent. The lazily
+// initialized state of Base (OncePerProcess, OncePerThread in lock.jl) can
+// park the task on a lock, and a closed window would let the parked task
+// migrate. So Base brackets its initializers with this pair instead:
+// `suspend` installs region 0 and returns the parked region, `resume`
+// installs the parked region again (0: nothing to do); the window stays
+// open in between - the task stays pinned to its thread and the window
+// counts as open - and a `finally` in Base runs the resume on the
+// exception path. The pair lives in gc-common.c and is exported for the
+// ccall from Base; a third-party heap has no window to park.
+JL_DLLEXPORT int jl_gc_region_suspend(void);
+JL_DLLEXPORT void jl_gc_region_resume(int parked);
 // Borrow a region for the next allocations of this thread, and give it
 // back. The window is untouched: a borrow is not a window. A replacement
 // buffer is allocated in the region of the buffer it replaces this way.
@@ -67,8 +85,7 @@ int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f);
 // A memory with malloc'd data allocated in a region is tracked by the
 // region. Returns 1 when it took the memory.
 int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
-// Install a parked region on a thread: the stock collection parks every
-// window before it runs and installs it again after.
+// Install a task's parked region on a thread at a task switch.
 void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
 // Install a borrowed region on a thread (jl_gc_region_borrow); the region
 // becomes live on this heap.
@@ -83,6 +100,15 @@ void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT;
 void jl_gc_region_mark_finalizer_lists(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 // Per-heap initialization.
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
+
+// The window follows the task: park the region of the task that leaves,
+// install the region of the task that arrives.
+STATIC_INLINE void jl_gc_region_task_switch(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t *t) JL_NOTSAFEPOINT
+{
+    lastt->region = ptls->gc_tls.heap.current_region;
+    if (t->region != lastt->region)
+        jl_gc_region_install_task(ptls, t->region);
+}
 
 // The brackets around a finalizer list: finalizers run with region 0
 // installed, whatever window the thread holds, and while they run no window
@@ -109,12 +135,13 @@ STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) JL_NO
 
 #else // WITH_THIRD_PARTY_HEAP
 
-// A third-party heap has no regions: every window is refused and every hook
-// declines.
+// A third-party heap has no regions: every window is refused, every hook
+// declines, and the task switch carries nothing.
 STATIC_INLINE int jl_gc_region_set(int n) { (void)n; return JL_GC_REGION_EINVAL; }
 STATIC_INLINE int jl_gc_region_current(void) { return 0; }
 STATIC_INLINE int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f) { (void)ptls; (void)v; (void)f; return 0; }
 STATIC_INLINE int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) { (void)ptls; (void)m; (void)isaligned; return 0; }
+STATIC_INLINE void jl_gc_region_task_switch(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t *t) { (void)ptls; (void)lastt; (void)t; }
 STATIC_INLINE int jl_gc_region_finalizers_begin(jl_ptls_t ptls) { (void)ptls; return 0; }
 STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) { (void)ptls; (void)parked; }
 

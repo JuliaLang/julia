@@ -695,6 +695,21 @@ const PerStateHasrun        = 0x01
 const PerStateErrored       = 0x02
 const PerStateConcurrent    = 0x03
 
+# Lazily initialized state outlives any GC region window the task that
+# first needs it holds (src/gc-regions.h): the value, and the tables of a
+# OncePerThread, belong to region 0 whatever window is open. The slow
+# path of each Once runs with the window suspended; the task stays pinned
+# to its thread while it may park on a lock inside, and the window comes
+# back on every exit.
+function with_region_window_suspended(f::F, args...) where {F}
+    parked = ccall(:jl_gc_region_suspend, Cint, ())
+    try
+        return f(args...)
+    finally
+        ccall(:jl_gc_region_resume, Cvoid, (Cint,), parked)
+    end
+end
+
 """
     OncePerProcess{T}(init::Function)() -> T
 
@@ -745,7 +760,7 @@ OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeo
 @inline function (once::OncePerProcess{T,F})() where {T,F}
     state = (@atomic :acquire once.state)
     if state != PerStateHasrun
-        (@noinline function init_perprocesss(once::OncePerProcess{T,F}, state::UInt8) where {T,F}
+        with_region_window_suspended((@noinline function init_perprocesss(once::OncePerProcess{T,F}, state::UInt8) where {T,F}
             state == PerStateErrored && error("OncePerProcess initializer failed previously")
             once.allow_compile_time || __precompile__(false)
             lock(once.lock)
@@ -770,7 +785,7 @@ OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeo
             state == PerStateHasrun || @atomic :release once.state = PerStateHasrun
             unlock(once.lock)
             nothing
-        end)(once, state)
+        end), once, state)
     end
     return once.value::T
 end
@@ -861,7 +876,7 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
     xs = @atomic :monotonic once.xs
     # n.b. length(xs) >= length(ss)
     if tid <= 0 || tid > length(ss) || (@atomic :acquire ss[tid]) != PerStateHasrun
-        (@noinline function init_perthread(once::OncePerThread{T,F}, tid::Int) where {T,F}
+        with_region_window_suspended((@noinline function init_perthread(once::OncePerThread{T,F}, tid::Int) where {T,F}
             local ss = @atomic :acquire once.ss
             local xs = @atomic :monotonic once.xs
             local len = length(ss)
@@ -940,7 +955,7 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                 unlock(PerThreadLock)
             end
             nothing
-        end)(once, tid)
+        end), once, tid)
         xs = @atomic :monotonic once.xs
     end
     return xs[tid]

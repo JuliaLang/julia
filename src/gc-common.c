@@ -317,6 +317,19 @@ JL_DLLEXPORT void jl_gc_region_unborrow(int lent)
 #endif
 }
 
+// The bracket around the runtime's own allocations on behalf of a task
+// that holds a window (gc-regions.h): region 0 is installed between the
+// two calls, the window stays open. It is the borrow of region 0.
+JL_DLLEXPORT int jl_gc_region_suspend(void)
+{
+    return jl_gc_region_borrow(0);
+}
+
+JL_DLLEXPORT void jl_gc_region_resume(int parked)
+{
+    jl_gc_region_unborrow(parked);
+}
+
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
 
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
