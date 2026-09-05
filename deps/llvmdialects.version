@@ -1,0 +1,4 @@
+# -*- makefile -*-
+## source build
+LLVMDIALECTS_BRANCH=julia-release/21.x
+LLVMDIALECTS_SHA1=deefc4d6bbd4c50ad97ee4aa5771defcea0f9bb7

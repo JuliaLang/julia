@@ -153,6 +153,7 @@ PERLCOLOR:="\033[35m"
 FLISPCOLOR:="\033[32m"
 JULIACOLOR:="\033[32;1m"
 DTRACECOLOR:="\033[32;1m"
+TBLGENCOLOR:="\033[32;1m"
 
 SRCCOLOR:="\033[33m"
 BINCOLOR:="\033[37;1m"
@@ -168,6 +169,7 @@ PERLCOLOR:=""
 FLISPCOLOR:=""
 JULIACOLOR:=""
 DTRACECOLOR:=""
+TBLGENCOLOR:=""
 
 SRCCOLOR:=""
 BINCOLOR:=""
@@ -963,6 +965,8 @@ JCXXFLAGS += -DUSE_NVTX
 JCFLAGS += -DUSE_NVTX
 endif
 
+LLVMDIALECTS:=-lllvm_dialects
+
 ifneq ($(findstring $(OS),WINNT FreeBSD OpenBSD),)
   USE_LINKER_GC := 0
   USE_RT_STATIC_LIBGCC := 0
@@ -1322,6 +1326,8 @@ else
 LLVM_CONFIG := $(build_depsbindir)/llvm-config$(EXE)
 endif
 endif # LLVM_CONFIG undefined
+
+DIALECTS_TBLGEN := $(build_depsbindir)/llvm-dialects-tblgen$(EXE)
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
 JCPPFLAGS_COMMON+=-DSYSTEM_LLVM
@@ -2054,6 +2060,7 @@ PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_DTRACE = printf '    %b %b\n' $(DTRACECOLOR)DTRACE$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_TBLGEN = printf '    %b %b\n' $(TBLGENCOLOR)TBLGEN$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 
 else
 QUIET_MAKE =
@@ -2064,6 +2071,7 @@ PRINT_PERL = printf "%s\n" $(call shell_escape,$(1)); $(1)
 PRINT_FLISP = printf "%s\n" $(call shell_escape,$(1)); $(1)
 PRINT_JULIA = printf "%s\n" $(call shell_escape,$(1)); $(1)
 PRINT_DTRACE = printf "%s\n" $(call shell_escape,$(1)); $(1)
+PRINT_TBLGEN = printf "%s\n" $(call shell_escape,$(1)); $(1)
 
 endif # VERBOSE
 

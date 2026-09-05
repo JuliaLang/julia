@@ -101,6 +101,10 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 DEP_LIBS += llvm
 endif
 
+# llvm-dialects is always built from source, against either the in-tree
+# or the system LLVM
+DEP_LIBS += llvmdialects
+
 ifeq ($(USE_SYSTEM_LLD), 0)
 DEP_LIBS += lld
 endif
@@ -213,7 +217,7 @@ DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd lmdb p7zip csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
-	terminfo cpufeatures
+	terminfo cpufeatures llvmdialects
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -269,6 +273,7 @@ include $(SRCDIR)/sanitizers.mk
 include $(SRCDIR)/ittapi.mk
 include $(SRCDIR)/nvtx.mk
 include $(SRCDIR)/llvm.mk
+include $(SRCDIR)/llvmdialects.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk
 include $(SRCDIR)/openlibm.mk
