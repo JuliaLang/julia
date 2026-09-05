@@ -3403,12 +3403,12 @@ function load_path_setup_code(load_path::Bool=true)
     """
     if load_path
         load_path = map(abspath, Base.load_path())
-        path_sep = Sys.iswindows() ? ';' : ':'
+        path_sep = Filesystem.path_list_separator
         any(path -> path_sep in path, load_path) &&
             error("LOAD_PATH entries cannot contain $(repr(path_sep))")
         code *= """
         append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
-        ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
+        ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Filesystem.path_list_separator)))
         Base.set_active_project(nothing)
         """
     end
@@ -3429,7 +3429,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
-    ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
+    ENV["JULIA_LOAD_PATH"] = join(load_path, Filesystem.path_list_separator)
     set_active_project(nothing)
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
