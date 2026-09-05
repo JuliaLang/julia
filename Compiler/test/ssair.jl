@@ -800,6 +800,26 @@ end
 end
 @test f_unreachable_phinode_edge2(1, 2) == 2
 
+# Preserve an undefined incoming value when slot2ssa creates a PhiNode (#55388).
+function undef_phinode55388(nextstate, loopcond, valuecond, returncond)
+    nextstate && @goto state3
+    while loopcond
+        ct = valuecond ? [] : nothing
+        if returncond
+            return
+            @label state3
+        end
+        Base.donotdelete(ct)
+    end
+    nothing
+end
+let src = code_typed1(undef_phinode55388, (Bool, Bool, Bool, Bool))
+    @test any(src.code) do stmt
+        isa(stmt, PhiNode) || return false
+        return any(i -> !isassigned(stmt.values, i), eachindex(stmt.edges))
+    end
+end
+
 global global_error_switch::Bool = true
 function gen_must_throw_phinode_edge(world::UInt, source, _)
     ci = make_codeinfo(Any[
