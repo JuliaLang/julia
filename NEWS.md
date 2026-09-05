@@ -97,6 +97,11 @@ Compiler/Runtime improvements
 * Coverage now records only whether each source line ran by default, and reports a count of 1 for executed
   lines in `.cov` files and LCOV tracefiles. Use `--code-coverage-mode=count` to collect execution counts
   instead. The default `hit` mode avoids the load and increment at each instrumentation point ([#62724]).
+* A process collecting coverage with `--code-coverage=user`, `all` or `@<path>` now precompiles package
+  images with coverage counters compiled in and keeps using that code, instead of recompiling package
+  code as it runs (with `@<path>`, only the packages under the tracked path are instrumented). The
+  instrumentation is part of the cache identity (see `Base.CacheFlags`), so the instrumented variants
+  live next to the plain ones in the depot and can be cached across CI runs.
 
 Command-line option changes
 ---------------------------

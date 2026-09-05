@@ -198,6 +198,7 @@ typedef struct {
     void *relocs_base;       // reloc_t* for GC sweep
     jl_module_t *top_mod;    // owning top-level module
     size_t idx;              // range index in image_tree (for serialization)
+    int coverage_trusted;    // the image's code collects the requested coverage
 } image_metadata_t;
 
 void jl_init_staticdata(void)
@@ -268,6 +269,14 @@ JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
         return (jl_value_t*)meta->top_mod;
     // The object is runtime allocated
     return (jl_value_t*)jl_nothing;
+}
+
+// Whether the code instance's image already collects the requested coverage
+// (see jl_register_image_coverage).
+JL_DLLEXPORT int jl_codeinst_coverage_trusted(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    image_metadata_t *meta = external_blob_metadata((jl_value_t*)ci);
+    return meta != NULL && meta->coverage_trusted;
 }
 
 // hash of definitions for predefined function pointers
@@ -3440,6 +3449,12 @@ static uint8_t jl_get_toplevel_syntax_version(void) JL_CANSAFEPOINT
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos) JL_CANSAFEPOINT
 {
     write_uint8(f, jl_cache_flags());
+    // coverage instrumentation of the image, part of the cache identity
+    write_uint8(f, jl_image_coverage_config());
+    const char *coverage_path = jl_image_coverage_path();
+    size_t coverage_path_len = strlen(coverage_path);
+    write_int32(f, coverage_path_len);
+    ios_write(f, coverage_path, coverage_path_len);
     // write the syntax version marker. Note that unlike a VersionNumber, this is
     // private to the serialization format and only needs to be reloaded by the
     // same version of Julia that wrote it. As a result, we don't store the full
@@ -4538,6 +4553,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     meta->base = (uintptr_t)image_base;
     meta->relocs_base = (void*)relocs_base;
     meta->idx = n_linkage_blobs();
+    // adopt the image's coverage counters
+    meta->coverage_trusted = jl_register_image_coverage(image->coverage, !s.incremental);
     if (restored == NULL) {
         meta->top_mod = jl_top_module;
     } else {
@@ -4596,6 +4613,29 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
         // Syntax version mismatch is not fatal to load
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
+        uint8_t coverage = read_uint8(f);
+        uint8_t requested_coverage = jl_image_coverage_config();
+        // Path coverage can select ordinary caches for out-of-scope dependencies.
+        // On a coverage build these may carry the sysimage's instrumentation,
+        // even when its mode cannot serve the active request. Restore the image
+        // without trusting its counters; the Julia loader checks the package's
+        // scope, and jl_register_image_coverage decides instrumentation trust.
+        int ordinary_dependency = (requested_coverage & 3) == JL_LOG_PATH &&
+                                  jl_match_cache_coverage(0, coverage);
+        if (!jl_match_cache_coverage(requested_coverage, coverage) && !ordinary_dependency)
+            return jl_get_exceptionf(jl_errorexception_type, "Pkgimage coverage instrumentation mismatch");
+        // Path-scoped counters require the same path unless the image is being
+        // restored as an ordinary dependency without relying on its counters.
+        size_t coverage_path_len = read_int32(f);
+        char *coverage_path = (char*)malloc_s(coverage_path_len + 1);
+        ios_read(f, coverage_path, coverage_path_len);
+        coverage_path[coverage_path_len] = '\0';
+        int coverage_path_matched = (requested_coverage & 3) != JL_LOG_PATH ||
+                                    (coverage & 3) != JL_LOG_PATH || ordinary_dependency ||
+                                    strcmp(coverage_path, jl_image_coverage_path()) == 0;
+        free(coverage_path);
+        if (!coverage_path_matched)
+            return jl_get_exceptionf(jl_errorexception_type, "Pkgimage coverage path mismatch");
 
         (void)read_uint8(f); // syntax_version
 
@@ -4752,9 +4792,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
         return jl_get_exceptionf(jl_errorexception_type,
             "Cache file \"%s\" not found.\n", fname);
     }
-    jl_image_t pkgimage = {};
-    // a plain .ji cache carries no (instrumented) native code
-    jl_register_image_coverage(NULL, /* is_sysimg */ 0);
+    jl_image_t pkgimage = {}; // a plain .ji cache carries no (instrumented) native code
     jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, completeinfo, pkgname, 1);
     ios_close(&f);
     return ret;
@@ -4769,8 +4807,6 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
 
     if (buf.kind == JL_IMAGE_KIND_SO)
         assert(image->fptrs.ptrs); // jl_load_sysimg should already be run
-
-    jl_register_image_coverage(buf.coverage, /* is_sysimg */ 1);
 
     JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char *)buf.data, buf.size);
@@ -4790,8 +4826,6 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 
     // Despite the name, this function actually parses the pkgimage
     jl_image_t pkgimage = jl_load_pkgimg(buf);
-
-    jl_register_image_coverage(buf.coverage, /* is_sysimg */ 0);
 
     if (ignore_native) {
         // Must disable using native code in possible downstream users of this code:

@@ -1623,10 +1623,33 @@ end
     @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
-    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
+    @test cf.coverage == 0
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3, coverage=0)"
 
     # Round trip CacheFlags
     @test parse(Base.CacheFlags, repr(cf)) == cf
+
+    # the tracked path belongs to a path-scoped instrumentation only
+    cf = Base.CacheFlags(cf; coverage=3, coverage_path="/some/dir")
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3, coverage=3, coverage_path=\"/some/dir\")"
+    @test parse(Base.CacheFlags, repr(cf)) == cf
+    @test Base.CacheFlags(cf; coverage=1).coverage_path == ""
+    other = Base.CacheFlags(cf; coverage_path="/some/other dir")
+    @test Base.translate_cache_flags(other, cf) == ["--code-coverage=@/some/other dir", "--code-coverage-mode=hit"]
+
+    # Counts can serve hit requests, and all-scope images can serve narrower
+    # scopes; path images must agree on the tracked path.
+    for (requested, compatible) in ((1, (1, 2, 5, 6)), (2, (2, 6)),
+                                  (3, (2, 3, 6, 7)), (5, (5, 6)),
+                                  (6, (6,)), (7, (6, 7)))
+        req = Base.CacheFlags(cf; coverage=requested)
+        for actual in (0, 1, 2, 3, 5, 6, 7)
+            image = Base.CacheFlags(cf; coverage=actual)
+            @test Base.match_cache_coverage(req, image) == (actual in compatible)
+        end
+    end
+    @test !Base.match_cache_coverage(cf, other)
+    @test !Base.match_cache_coverage(other, cf)
 end
 
 empty!(Base.DEPOT_PATH)
@@ -1780,7 +1803,8 @@ end
 
 @testset "code coverage disabled during precompilation" begin
     mkdepottempdir() do depot
-        cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
+        cov_test_dir = joinpath(depot, "CovTest.jl")
+        cp(joinpath(@__DIR__, "project", "deps", "CovTest.jl"), cov_test_dir)
         cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
         # Do not let an outer tracefile redirect .cov output.
         cov_exename = Base.julia_cmd()[1]
@@ -1790,7 +1814,22 @@ end
             end
             @test !cov_exists()
         end
-        cov_exists() = !isempty(filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"))))
+        cov_files() = filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
+        cov_exists() = !isempty(cov_files())
+        # whether any line was recorded as executed (a coverage-instrumented
+        # package image lists its lines with zero counts as soon as it is loaded)
+        function cov_hit()
+            for cov_file in cov_files()
+                hit = open(cov_file) do io
+                    any(eachline(io)) do line
+                        m = match(r"^\s*(\d+) ", line)
+                        m !== nothing && parse(Int, m[1]) > 0
+                    end
+                end
+                hit && return true
+            end
+            return false
+        end
 
         rm_cov_files() # clear out any coverage files first
         @test !cov_exists()
@@ -1802,7 +1841,7 @@ end
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
-            @test !cov_exists()
+            @test !cov_hit()
             rm_cov_files()
 
             # same again but call foo(), which is in the pkgimage, and should generate coverage
@@ -1810,7 +1849,7 @@ end
                 `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test cov_exists()
+            @test cov_hit()
             rm_cov_files()
 
             # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
@@ -1818,7 +1857,7 @@ end
                 `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test cov_exists()
+            @test cov_hit()
             rm_cov_files()
         end
     end

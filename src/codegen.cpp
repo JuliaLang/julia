@@ -3370,22 +3370,35 @@ static GlobalVariable *newCoverageCounter(jl_codectx_t &ctx)
     return counter;
 }
 
+// Images allocate no runtime slots: the image table records (file, line,
+// user code) for every counter and the loader registers them after relocation.
+static GlobalVariable *imageCoverageCounter(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
+{
+    auto &c = ctx.emission_context.image_coverage_counters[{filename.data(), line}];
+    if (!c.first)
+        c.first = newCoverageCounter(ctx);
+    // A sysimage records Base's own sources relative to the base directory, so
+    // such a location is never user code, whatever module the enclosing thunk
+    // happens to be compiled in (`sysimg.jl` evaluates into an anonymous
+    // module, for one). Package images only ever record absolute paths.
+    c.second |= is_user_code && jl_isabspath(filename.data());
+    return c.first;
+}
+
 // Record a line as instrumented without emitting a counter update, so that
 // unreached lines are still reported (with a zero count).
-static void coverageAllocLine(jl_codectx_t &ctx, StringRef filename, int line)
+static void coverageAllocLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
 {
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     if (ctx.emission_context.imaging_mode) {
-        GlobalVariable *&c = ctx.emission_context.image_coverage_counters[{filename.data(), line}];
-        if (!c)
-            c = newCoverageCounter(ctx);
+        imageCoverageCounter(ctx, filename, line, is_user_code);
         return;
     }
     jl_coverage_alloc_line(filename.data(), line);
 }
 
-static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
+static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
 {
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
@@ -3394,12 +3407,7 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
     // visible to alias analysis and stable across processes.
     GlobalVariable *counter;
     if (ctx.emission_context.imaging_mode) {
-        // Images allocate no runtime slots; the image records (file, line) for
-        // every counter and the loader registers them after relocation.
-        GlobalVariable *&c = ctx.emission_context.image_coverage_counters[{filename.data(), line}];
-        if (!c)
-            c = newCoverageCounter(ctx);
-        counter = c;
+        counter = imageCoverageCounter(ctx, filename, line, is_user_code);
     }
     else {
         // Allocating the runtime slot marks the line as instrumented, even if
@@ -9150,12 +9158,9 @@ static jl_llvm_functions_t
         coverage_mode = JL_LOG_NONE;
     if (!JL_FEAT_TEST(ctx, track_allocations))
         malloc_log_mode = JL_LOG_NONE;
-    // While generating an image, only the code emitted into the image itself
-    // is instrumented; the generating process's own workload is not tracked.
-    // An image is only trusted to carry coverage for `--code-coverage=all`
-    // (see `jl_register_image_coverage`), so narrower scopes do not
-    // instrument image code either.
-    if (ctx.emission_context.imaging_mode ? coverage_mode != JL_LOG_ALL : jl_generating_output())
+    // Images are instrumented only for the configurations they can carry
+    // (jl_image_coverage_config); the generating process itself is not tracked.
+    if (ctx.emission_context.imaging_mode ? jl_image_coverage_config() == 0 : jl_generating_output())
         coverage_mode = JL_LOG_NONE;
 
     StringRef dbgFuncName = ctx.name;
@@ -10175,8 +10180,8 @@ static jl_llvm_functions_t
             bool is_tracked = in_tracked_path(newdbg.file);
             if (do_coverage(newdbg.is_user_code, is_tracked)) {
                 if (newdbg.line0 != 0 && (dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid || newdbg.line0 != prev_lineinfo[dbg].line))
-                    coverageVisitLine(ctx, newdbg.file, newdbg.line0);
-                coverageVisitLine(ctx, newdbg.file, newdbg.line);
+                    coverageVisitLine(ctx, newdbg.file, newdbg.line0, newdbg.is_user_code);
+                coverageVisitLine(ctx, newdbg.file, newdbg.line, newdbg.is_user_code);
             }
         }
     };
@@ -10209,13 +10214,13 @@ static jl_llvm_functions_t
             if (do_coverage(is_user_code, is_tracked)) {
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
-                    coverageAllocLine(ctx, file, extraline);
+                    coverageAllocLine(ctx, file, extraline, is_user_code);
                 for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
                         break;
                     if (lineidx.loc > 0)
-                        coverageAllocLine(ctx, file, lineidx.loc);
+                        coverageAllocLine(ctx, file, lineidx.loc, is_user_code);
                 }
             }
         };

@@ -126,18 +126,17 @@ end
 function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::Method, validation_world::UInt)
     # foreign CIs (owner !== nothing) aren't run as native code here, so instrumenting them is moot
     codeinst.owner === nothing || return false
-    # when every loaded image already carries coverage counters matching the
-    # requested collection, image code can be kept as-is (note that generated
-    # functions whose expansion is cached then do not re-run, so the generators
-    # themselves report no coverage)
-    if ccall(:jl_image_coverage_trusted, Cint, ()) != 0
-        return false
-    end
     if JLOptions().code_coverage != 0 || JLOptions().malloc_log != 0
         # test if the code needs to run with instrumentation, in which case we cannot use existing generated code
         if isdefined(def, :debuginfo) ? # generated_only functions do not have debuginfo, so fall back to considering their codeinst debuginfo though this may be slower and less reliable
             should_instrument(def.module, def.debuginfo) :
             isdefined(codeinst, :debuginfo) && should_instrument(def.module, codeinst.debuginfo)
+            # image code that already carries the counters is kept (its cached
+            # generated-function expansions then do not re-run the generators);
+            # allocation tracking always needs fresh code
+            if JLOptions().malloc_log == 0 && ccall(:jl_codeinst_coverage_trusted, Cint, (Any,), codeinst) != 0
+                return false
+            end
             return true
         end
         gensig = gen_staged_sig(def, mi)

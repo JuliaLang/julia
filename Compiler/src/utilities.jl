@@ -385,8 +385,10 @@ inlining_enabled() = (JLOptions().can_inline == 1)
 
 function instrumentation_enabled(m::Module, only_if_affects_optimizer::Bool)
     if generating_output()
-        # Only coverage statements may alter code emitted into an image.
-        return only_if_affects_optimizer && JLOptions().code_coverage == 2
+        # images carry coverage statements only for the configurations in
+        # jl_image_coverage_config; the generating process itself is not instrumented
+        only_if_affects_optimizer || return false
+        ccall(:jl_image_coverage_config, UInt8, ()) != 0 || return false
     end
     cov = JLOptions().code_coverage
     if cov == 1 # user

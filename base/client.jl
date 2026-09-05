@@ -339,10 +339,10 @@ function exec_options(opts)
     end
 
     # drop all caches if code coverage is enabled. Do it here not earlier, so julia has a chance
-    # of starting up quickly. When the loaded images already carry matching coverage
-    # instrumentation, existing code collects coverage as-is and the caches stay.
+    # of starting up quickly. Not needed when the sysimage already collects the
+    # requested coverage (package images are judged as they are loaded).
     if Base.JLOptions().code_coverage == 2 &&
-       ccall(:jl_image_coverage_trusted, Cint, ()) == 0
+       ccall(:jl_sysimage_coverage_trusted, Cint, ()) == 0
         Base.drop_all_caches()
     end
 

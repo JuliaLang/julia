@@ -174,9 +174,9 @@ typedef struct {
     // were presented in `codeinfos`; consumed by staticdata.c to rewrite each
     // MethodInstance's `cache` field into a `next`-linked list
     SmallVector<jl_code_instance_t*, 0> jl_ci_order;
-    // coverage counters emitted into the image: (file, line, counter symbol);
-    // serialized as the `jl_image_coverage` table for registration at load time
-    SmallVector<std::tuple<std::string, int32_t, std::string>, 0> jl_coverage_entries;
+    // coverage counters emitted into the image: (file, line, flags, symbol),
+    // serialized as the `jl_image_coverage` table
+    SmallVector<std::tuple<std::string, int32_t, uint32_t, std::string>, 0> jl_coverage_entries;
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -1028,8 +1028,9 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
 
     data->jl_coverage_entries.reserve(out.image_coverage_counters.size());
     for (auto &covctr : out.image_coverage_counters) {
-        data->jl_coverage_entries.push_back({covctr.first.first, covctr.first.second,
-                                             covctr.second->getName().str()});
+        uint32_t flags = covctr.second.second ? JL_IMAGE_COVERAGE_USER : 0;
+        data->jl_coverage_entries.push_back({covctr.first.first, covctr.first.second, flags,
+                                             covctr.second.first->getName().str()});
     }
 
     for (auto &[ci, funcs] : out.ci_funcs) {
@@ -2578,22 +2579,17 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                                        GlobalVariable::InternalLinkage,
                                                        cpu_target_data, "jl_cpu_target_string");
 
-            // Emit the coverage counter table if the image was compiled with
-            // coverage instrumentation; layouts match jl_image_coverage_t and
-            // jl_image_coverage_entry_t. The loader registers the counters so
-            // instrumented image code contributes to coverage reports. Only
-            // `--code-coverage=all` instruments image code (see `emit_function`),
-            // and only such an image can be trusted by the loader. The table is
-            // emitted even when empty (e.g. a JLL package with no compiled
-            // code): its presence marks the image as instrumented.
-            if (jl_options.code_coverage == JL_LOG_ALL) {
+            // Emit the coverage counter table (jl_image_coverage_t); the loader
+            // registers the counters so image code contributes to reports. An
+            // empty table still marks the image as instrumented.
+            if (jl_image_coverage_config() != 0) {
                 Type *T_i32 = Type::getInt32Ty(Context);
                 Type *T_i64 = Type::getInt64Ty(Context);
                 StructType *ET = StructType::get(Context, {T_ptr, T_ptr, T_i32, T_i32});
                 StringMap<GlobalVariable*> files;
                 SmallVector<Constant*, 0> entries;
                 entries.reserve(coverage_entries.size());
-                for (auto &[file, line, sym] : coverage_entries) {
+                for (auto &[file, line, flags, sym] : coverage_entries) {
                     GlobalVariable *&fgv = files[file];
                     if (!fgv) {
                         auto fdata = ConstantDataArray::getString(Context, file, true);
@@ -2605,20 +2601,24 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                     counter->setVisibility(GlobalValue::HiddenVisibility);
                     counter->setDSOLocal(true);
                     entries.push_back(ConstantStruct::get(ET, {(Constant*)fgv, (Constant*)counter,
-                        ConstantInt::get(T_i32, line), ConstantInt::get(T_i32, 0)}));
+                        ConstantInt::get(T_i32, line), ConstantInt::get(T_i32, flags)}));
                 }
                 auto entries_arr = ConstantArray::get(ArrayType::get(ET, entries.size()), entries);
                 auto entries_gv = new GlobalVariable(metadataM, entries_arr->getType(), true,
                                                      GlobalVariable::PrivateLinkage, entries_arr,
                                                      "jl_coverage_entries");
-                StructType *CT = StructType::get(Context, {T_i32, T_i32, T_i64, T_ptr});
+                auto path_data = ConstantDataArray::getString(Context, jl_image_coverage_path(), true);
+                auto path_gv = new GlobalVariable(metadataM, path_data->getType(), true,
+                                                  GlobalVariable::PrivateLinkage, path_data,
+                                                  "jl_coverage_path");
+                StructType *CT = StructType::get(Context, {T_i32, T_i32, T_i64, T_ptr, T_ptr});
                 auto cov = new GlobalVariable(metadataM, CT, true,
                                               GlobalVariable::ExternalLinkage,
                                               ConstantStruct::get(CT, {
                                                   ConstantInt::get(T_i32, jl_options.code_coverage),
                                                   ConstantInt::get(T_i32, jl_options.code_coverage_mode),
                                                   ConstantInt::get(T_i64, entries.size()),
-                                                  (Constant*)entries_gv}),
+                                                  (Constant*)entries_gv, (Constant*)path_gv}),
                                               "jl_image_coverage");
                 addComdat(cov, TheTriple);
             }

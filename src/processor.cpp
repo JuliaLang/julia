@@ -40,6 +40,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
     jl_image_t res{};
     res.is_split = image.is_split;
     res.heap_checksum = image.heap_checksum;
+    res.coverage = image.coverage;
 
     if (image.kind != JL_IMAGE_KIND_SO)
         return res;

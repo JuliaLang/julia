@@ -14,6 +14,54 @@ static int codegen_imaging_mode(void) JL_NOTSAFEPOINT
     return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
 }
 
+// Coverage configuration of the images this process compiles and requires:
+// scope in bits 0-1, mode in bit 2, 0 for uninstrumented. A `@path` scope
+// (JL_LOG_PATH) refers to the tracked path of this process (jl_options.tracked_path),
+// which the images record. Allocation counters are never compiled into images.
+JL_DLLEXPORT uint8_t jl_image_coverage_config(void) JL_NOTSAFEPOINT
+{
+    if (jl_options.malloc_log != JL_LOG_NONE)
+        return 0;
+    int scope = jl_options.code_coverage;
+    if (scope == JL_LOG_NONE)
+        return 0;
+    return (uint8_t)(scope | ((jl_options.code_coverage_mode & 1) << 2));
+}
+
+// The tracked path of a `@path` instrumented image built by this process
+// (empty for the other configurations).
+JL_DLLEXPORT const char *jl_image_coverage_path(void) JL_NOTSAFEPOINT
+{
+    if ((jl_image_coverage_config() & 3) != JL_LOG_PATH || jl_options.tracked_path == NULL)
+        return "";
+    return jl_options.tracked_path;
+}
+
+// coverage configuration of the sysimage (0 if uninstrumented)
+static uint8_t sysimg_coverage_config = 0;
+
+// Whether an image with coverage configuration `actual` serves a process
+// requiring `requested`. Without coverage, only images at most as instrumented
+// as the sysimage will do (instrumented code is slower and its cached effects
+// are pessimized). With coverage, the image scope must cover the requested one
+// (`all` covers every scope, a `@path` image covers the same path, which the
+// caller compares) and its mode must serve it (counts also tell whether a line
+// ran). Under a `@path` request only the packages under the tracked path need
+// instrumented images, so plain images pass here and the loader
+// (Base.match_cache_coverage) decides per package which variant to load.
+// The cache loader and image trust both use this rule.
+JL_DLLEXPORT int jl_match_cache_coverage(uint8_t requested, uint8_t actual) JL_NOTSAFEPOINT
+{
+    if (requested == 0)
+        return actual == 0 || actual == sysimg_coverage_config;
+    unsigned rscope = requested & 3, ascope = actual & 3;
+    if (actual == 0)
+        return rscope == JL_LOG_PATH;
+    unsigned rmode = requested >> 2, amode = actual >> 2;
+    return (ascope == JL_LOG_ALL || ascope == rscope) &&
+           (amode == rmode || (amode == JL_COVERAGE_MODE_COUNT && rmode == JL_COVERAGE_MODE_HIT));
+}
+
 // Logging for code coverage and memory allocation
 
 #define logdata_blocksize 32 // target getting nearby lines in the same general cache area and reducing calls to malloc by chunking
@@ -173,42 +221,56 @@ JL_DLLEXPORT void jl_coverage_register_counter(logdata_counter_t *slot, logdata_
     uv_mutex_unlock(&coverage_lock);
 }
 
-// Whether the sysimage carries coverage counters matching the current options.
 static int sysimg_coverage_matched = 0;
-// Whether any other image was loaded without matching coverage counters.
-static int unmatched_image_loaded = 0;
 
-// Whether image code can be trusted to already collect the requested coverage,
-// making the usual invalidation of image code (Compiler.reinfer) unnecessary.
-JL_DLLEXPORT int jl_image_coverage_trusted(void) JL_NOTSAFEPOINT
+// Whether the sysimage's code already collects the requested coverage (other
+// images are queried per code instance, see jl_codeinst_coverage_trusted).
+JL_DLLEXPORT int jl_sysimage_coverage_trusted(void) JL_NOTSAFEPOINT
 {
-    // image code carries no allocation counters, so allocation tracking
-    // always needs freshly instrumented code
-    if (jl_options.malloc_log != JL_LOG_NONE)
-        return 0;
-    return sysimg_coverage_matched && !unmatched_image_loaded;
+    return sysimg_coverage_matched;
 }
 
-// Adopt the counters compiled into a just-loaded image. Registering a counter
-// allocates the canonical per-line slot, so instrumented-but-unreached lines
-// are still reported (with a zero count), matching JIT instrumentation.
-void jl_register_image_coverage(const void *table, int is_sysimg)
+// Whether the code of an image with coverage table `cov` collects the
+// requested coverage.
+static int image_coverage_compatible(const jl_image_coverage_t *cov) JL_NOTSAFEPOINT
+{
+    uint8_t config = jl_image_coverage_config();
+    if (cov == NULL || config == 0)
+        return 0;
+    if (!jl_match_cache_coverage(config, (uint8_t)(cov->scope | (cov->mode << 2))))
+        return 0;
+    // a `@path` image collects coverage for its own tracked path only
+    if (cov->scope == JL_LOG_PATH && strcmp(cov->tracked_path, jl_image_coverage_path()) != 0)
+        return 0;
+    return 1;
+}
+
+// Adopt the counters of a just-loaded image; returns whether its code collects
+// the requested coverage. Registering a counter allocates the per-line slot, so
+// unreached lines are still reported with a zero count. A `user` request
+// registers only the user-code entries of an `all` image, and a `@path`
+// request only its entries under the tracked path.
+int jl_register_image_coverage(const void *table, int is_sysimg)
 {
     const jl_image_coverage_t *cov = (const jl_image_coverage_t*)table;
-    int matched = cov != NULL &&
-                  jl_options.code_coverage == JL_LOG_ALL &&
-                  cov->scope == JL_LOG_ALL &&
-                  cov->mode == (uint32_t)jl_options.code_coverage_mode;
-    if (is_sysimg)
+    int matched = image_coverage_compatible(cov);
+    if (is_sysimg) {
         sysimg_coverage_matched = matched;
-    else if (!matched && jl_options.code_coverage != JL_LOG_NONE)
-        unmatched_image_loaded = 1;
+        sysimg_coverage_config = cov ? (uint8_t)(cov->scope | (cov->mode << 2)) : 0;
+    }
     if (!matched)
-        return;
+        return 0;
+    int user_only = jl_options.code_coverage == JL_LOG_USER;
+    int path_only = jl_options.code_coverage == JL_LOG_PATH;
     for (uint64_t i = 0; i < cov->nentries; i++) {
         const jl_image_coverage_entry_t *e = &cov->entries[i];
+        if (user_only && !(e->flags & JL_IMAGE_COVERAGE_USER))
+            continue;
+        if (path_only && !jl_path_is_tracked(e->file))
+            continue;
         jl_coverage_register_counter(jl_coverage_data_pointer(e->file, e->line), e->counter);
     }
+    return 1;
 }
 
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT

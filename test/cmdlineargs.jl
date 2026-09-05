@@ -656,14 +656,21 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
-            # there may be a trailing separator here so use rstrip
-            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), Base.Filesystem.path_separator[1]))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) context=(expected, got)
+
+        if Sys.iswindows()
+            # A drive root must keep its separator so that package-image workers
+            # do not reinterpret it as a drive-relative path.
+            drive, _ = splitdrive(realpath(inputfile))
+            root = drive * Base.Filesystem.path_separator
+            @test readchomp(`$cov_exename -E "unsafe_string(Base.JLOptions().tracked_path)" --code-coverage=@$root`) == root
+        end
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
@@ -778,11 +785,14 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             # `sort` inlines generated `Base.merge` code with no recorded module.
             write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
             outfile = joinpath(dir, "user.info")
-            run(`$cov_exename --code-coverage=$outfile --code-coverage=user $srcfile`)
-            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
-            rm(outfile)
-            @test !isempty(source_files)
-            @test all(isabspath, source_files) context=source_files
+            for exe in (cov_exename, cov_exename_hit)
+                run(`$exe --code-coverage=$outfile --code-coverage=user $srcfile`)
+                source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+                rm(outfile)
+                @test !isempty(source_files)
+                # a sysimage records its own Base sources with relative paths
+                @test all(isabspath, source_files) context=(exe, source_files)
+            end
         end
 
         # An inlinee whose body folds away entirely is only reached through its
@@ -927,13 +937,154 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
     end
 
+    # Coverage-instrumented package images: a process collecting coverage
+    # precompiles a variant of each package image with counters compiled in
+    # and keeps using that code instead of recompiling it; the variant is keyed
+    # on the coverage configuration, so a plain process keeps its plain image.
+    if Base.JLOptions().use_pkgimages != 0
+        # Out-of-scope stdlibs can use the build's bundled images even when
+        # their instrumentation mode cannot serve the active coverage request.
+        mktempdir() do dir
+            stdlib_exename = addenv(`$(Base.julia_cmd()[1]) --startup-file=no`,
+                                   "JULIA_DEPOT_PATH" => dir * (Sys.iswindows() ? ';' : ':'))
+            @test success(`$stdlib_exename -e 'using Test'`)
+            @test success(`$stdlib_exename --compiled-modules=strict --code-coverage=@$dir --code-coverage-mode=count -e 'using Test'`)
+        end
+        mktempdir() do dir
+            dir = realpath(mkdir(joinpath(dir, "coverage ü space")))
+            depot = joinpath(dir, "depot")
+            pkgdir = joinpath(dir, "CovPkg")
+            depdir = joinpath(dir, "CovDep")
+            mkpath(joinpath(pkgdir, "src"))
+            mkpath(joinpath(depdir, "src"))
+            write(joinpath(pkgdir, "Project.toml"), """
+                name = "CovPkg"
+                uuid = "3b1e5c4e-2f1c-4d1b-9a7a-2b7f0c6c9d10"
+                version = "0.1.0"
+                [deps]
+                CovDep = "7c0d3f52-8a6e-4b3d-b1c2-5e9f8a7d6c21"
+                """)
+            write(joinpath(pkgdir, "src", "CovPkg.jl"), """
+                module CovPkg
+                using CovDep
+                f(x) = x + 1
+                g(x) = x - 1
+                precompile(f, (Int,))
+                precompile(g, (Int,))
+                end
+                """)
+            write(joinpath(depdir, "Project.toml"), """
+                name = "CovDep"
+                uuid = "7c0d3f52-8a6e-4b3d-b1c2-5e9f8a7d6c21"
+                version = "0.1.0"
+                """)
+            write(joinpath(depdir, "src", "CovDep.jl"), """
+                module CovDep
+                h(x) = 2x
+                precompile(h, (Int,))
+                end
+                """)
+            pkg_exename = addenv(`$(Base.julia_cmd()[1]) --startup-file=no --color=no --pkgimages=yes`,
+                                 "JULIA_DEPOT_PATH" => depot,
+                                 "JULIA_LOAD_PATH" => join([dir, "@stdlib"], Sys.iswindows() ? ';' : ':'))
+            # the cache configuration, whether the package's image code is
+            # trusted to collect coverage, whether its cached effects are
+            # untainted, and a call into it
+            probe = """
+                using CovPkg
+                ci = Base.method_instance(CovPkg.f, (Int,)).cache
+                trusted = ccall(:jl_codeinst_coverage_trusted, Cint, (Any,), ci)
+                effect_free = Base.Compiler.is_effect_free(Base.Compiler.decode_effects(ci.ipo_purity_bits))
+                println(Base.CacheFlags().coverage, " ", trusted, " ", Int(effect_free), " ", CovPkg.f(1))
+                """
+            covfile = replace(joinpath(dir, "pkg-%p.info"), "%" => "%%")
+            infos() = filter(endswith(".info"), readdir(dir))
+            cachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovPkg")
+            depcachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovDep")
+            njis() = count(endswith(".ji"), readdir(cachedir))
+            ndepjis() = count(endswith(".ji"), readdir(depcachedir))
+
+            @test readchomp(`$pkg_exename -e $probe`) == "0 0 1 2"
+            @test njis() == 1
+            @test ndepjis() == 1
+            plain_files = readdir(cachedir)
+            # `user` precompiles an instrumented variant and trusts it; only the
+            # collecting process writes coverage output, not the worker
+            @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=user -e $probe`) == "1 1 0 2"
+            @test njis() == 2
+            @test ndepjis() == 2
+            user_files = setdiff(readdir(cachedir), plain_files)
+            @test length(infos()) == 1
+            info = read(joinpath(dir, only(infos())), String)
+            record = only(filter(contains(r"^SF:.*CovPkg\.jl$"m), split(info, "end_of_record")))
+            @test occursin(r"^DA:3,1$"m, record) # f, called
+            @test occursin(r"^DA:4,0$"m, record) # g, instrumented but not called
+            @test occursin(r"^SF:.*CovDep\.jl$"m, info) # the dependency is user code
+            @test !occursin(r"^SF:.*[/\\]base[/\\]"m, info) # Base is not user code
+            rm(joinpath(dir, only(infos())))
+            # the plain variant is untouched
+            @test readchomp(`$pkg_exename -e $probe`) == "0 0 1 2"
+            @test njis() == 2
+            # `@path` instruments only the packages under the tracked path, in a
+            # variant keyed on the path; the dependency outside it keeps its
+            # plain image
+            @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$pkgdir -e $probe`) == "3 1 0 2"
+            @test njis() == 3
+            @test ndepjis() == 2
+            info = read(joinpath(dir, only(infos())), String)
+            record = only(filter(contains(r"^SF:.*CovPkg\.jl$"m), split(info, "end_of_record")))
+            @test occursin(r"^DA:3,1$"m, record) # f, called
+            @test occursin(r"^DA:4,0$"m, record) # g, instrumented but not called
+            @test !occursin(r"^SF:.*CovDep\.jl$"m, info) # outside the tracked path
+            rm(joinpath(dir, only(infos())))
+            @test readchomp(`$pkg_exename -E "Base.CacheFlags().coverage_path" --code-coverage=@$pkgdir`) == repr(pkgdir)
+            @test readchomp(`$pkg_exename -E "Base.CacheFlags().coverage_path" --code-coverage=user`) == "\"\""
+            # a path covering the dependency requests its instrumented variant too
+            @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$dir -e $probe`) == "3 1 0 2"
+            @test njis() == 4
+            @test ndepjis() == 3
+            info = read(joinpath(dir, only(infos())), String)
+            @test occursin(r"^SF:.*CovDep\.jl$"m, info)
+            rm(joinpath(dir, only(infos())))
+            @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$pkgdir -e $probe`) == "3 1 0 2"
+            @test njis() == 4
+            rm(joinpath(dir, only(infos())))
+            # `all` is another variant; allocation tracking and count mode
+            # request their own configurations
+            @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=all -e $probe`) == "2 1 0 2"
+            @test njis() == 5
+            rm(joinpath(dir, only(infos())))
+            # (on a build with an instrumented sysimage the plain process may pick
+            # the equally instrumented `all` variant, with its cached effects)
+            @test occursin(r"^0 0 [01] 2$", readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=all --track-allocation=all -e $probe`))
+            @test njis() == 5
+            @test readchomp(`$pkg_exename -E "Base.CacheFlags().coverage" --code-coverage=user --code-coverage-mode=count`) == "5"
+            # an `all` image also serves a `user` request (without its Base lines)
+            foreach(f -> rm(joinpath(cachedir, f); recursive=true), user_files)
+            @test njis() == 4
+            @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=user -e $probe`) == "1 1 0 2"
+            @test njis() == 4
+            rm(joinpath(dir, only(infos())))
+            # Count mode needs its own native image; a warm consumer must reuse
+            # it, including when the tracked directory has a trailing separator.
+            @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$pkgdir --code-coverage-mode=count -e $probe`) == "7 1 0 2"
+            @test njis() == 5
+            rm(joinpath(dir, only(infos())))
+            cache_contents = Dict(f => read(joinpath(cachedir, f)) for f in readdir(cachedir))
+            path_with_separator = pkgdir * Base.Filesystem.path_separator
+            @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$path_with_separator --code-coverage-mode=count -e $probe`) == "7 1 0 2"
+            @test Dict(f => read(joinpath(cachedir, f)) for f in readdir(cachedir)) == cache_contents
+            rm(joinpath(dir, only(infos())))
+        end
+    end
+
     # --track-allocation
     alloc_exename = `$(Base.julia_cmd()) --startup-file=no --color=no --track-allocation=none`
     # Image code carries no allocation counters, so allocation tracking must
     # never trust the loaded images (which would keep their code in use).
-    @test readchomp(`$alloc_exename -E "ccall(:jl_image_coverage_trusted, Cint, ())"
+    @test readchomp(`$alloc_exename -E "ccall(:jl_sysimage_coverage_trusted, Cint, ())"
         --track-allocation=all`) == "0"
-    @test readchomp(`$alloc_exename -E "ccall(:jl_image_coverage_trusted, Cint, ())"
+    @test readchomp(`$alloc_exename -E "ccall(:jl_sysimage_coverage_trusted, Cint, ())"
         --code-coverage=all --track-allocation=all`) == "0"
     @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
     @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
@@ -950,7 +1101,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(memfile)
         @test popfirst!(got) == "        0 g(x) = x + 123456"
         @test popfirst!(got) == "        - function f(x)"
-        @test popfirst!(got) == "        -     []"
+        # Coverage-image effects can keep this unused allocation in the IR;
+        # either way, it contributes no allocated bytes.
+        @test popfirst!(got) in ("        -     []", "        0     []")
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags
             @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
