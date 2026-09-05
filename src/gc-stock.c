@@ -2457,22 +2457,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         }
         // Symbols are always marked
         assert(vtag != (uintptr_t)jl_symbol_type && vtag != jl_symbol_tag << 4);
-        if (vtag == (jl_datatype_tag << 4) ||
-            vtag == (jl_unionall_tag << 4) ||
-            vtag == (jl_uniontype_tag << 4) ||
-            vtag == (jl_typeeq_tag << 4) ||
-            vtag == (jl_typeegal_tag << 4) ||
-            vtag == (jl_tvar_tag << 4) ||
-            vtag == (jl_vararg_tag << 4) ||
-            vtag == (jl_globalref_tag << 4) ||
-            vtag == (jl_gotoifnot_tag << 4) ||
-            vtag == (jl_returnnode_tag << 4) ||
-            vtag == (jl_enternode_tag << 4) ||
-            vtag == (jl_pinode_tag << 4) ||
-            vtag == (jl_phinode_tag << 4) ||
-            vtag == (jl_phicnode_tag << 4) ||
-            vtag == (jl_upsilonnode_tag << 4) ||
-            vtag == (jl_quotenode_tag << 4)) {
+        if (vtag >= jl_max_tags << 4) {
+            jl_datatype_t *vt = (jl_datatype_t *)vtag;
+            if (__unlikely(!jl_is_datatype(vt) || vt->smalltag))
+                gc_dump_queue_and_abort(ptls, vt);
+        }
+        else if (vtag - (jl_gc_generic_tags_first << 4) <=
+                 (jl_gc_generic_tags_last - jl_gc_generic_tags_first) << 4) {
             // these objects have pointers in them, but no other special handling
             // so we want these to fall through to the end
             vtag = (uintptr_t)ijl_small_typeof[vtag / sizeof(*ijl_small_typeof)];
@@ -2631,11 +2622,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_setmark(ptls, o, bits, dtsz);
             }
             return;
-        }
-        else {
-            jl_datatype_t *vt = (jl_datatype_t *)vtag;
-            if (__unlikely(!jl_is_datatype(vt) || vt->smalltag))
-                gc_dump_queue_and_abort(ptls, vt);
         }
         jl_datatype_t *vt = (jl_datatype_t *)vtag;
         if (vt->name == jl_genericmemory_typename) {
