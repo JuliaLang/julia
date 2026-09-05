@@ -3543,6 +3543,22 @@ void export_jl_small_typeof(void)
     memcpy(&jl_small_typeof, &ijl_small_typeof, sizeof(jl_small_typeof));
 }
 
+#ifdef JL_LIBRARY_STATIC
+// defined in static_exports.c
+extern const void **const jl_static_exported_data_ptrs[];
+
+void export_jl_sysimg_globals(void)
+{
+    // There is no libjulia to export the globals through; the public copies are
+    // defined by libjulia-internal itself (static_exports.c), but their names are
+    // macros for the internal copies here, so they are reached through a table.
+    size_t i = 0;
+#define XX(name, type) *jl_static_exported_data_ptrs[i++] = (const void*)jl_##name;
+    JL_EXPORTED_DATA_POINTERS(XX)
+    JL_CONST_GLOBAL_VARS(XX)
+#undef XX
+}
+#else
 void export_jl_sysimg_globals(void)
 {
     // Use jl_dlsym to reference "jl_"#name from the jl_libjulia_handle instead
@@ -3562,6 +3578,7 @@ void export_jl_sysimg_globals(void)
     JL_CONST_GLOBAL_VARS(YY)
 #undef YY
 }
+#endif
 
 #define XX(name) \
     ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type; \
