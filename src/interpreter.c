@@ -149,7 +149,9 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
             result = invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst);
 
         } else {
-            if (codeinst->owner != jl_nothing) {
+            if (codeinst->owner != jl_nothing || jl_is_abioverride(codeinst->def)) {
+                // the generic fallback below may not implement this codeinst's
+                // semantics or calling convention, so it must not be used here
                 jl_error("Failed to invoke or compile external codeinst");
             }
             result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, jl_get_ci_mi(codeinst));

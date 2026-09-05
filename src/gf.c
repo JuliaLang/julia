@@ -4597,6 +4597,27 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
 }
 
+// Call a specific CodeInstance, compiling it first if necessary. Unlike `jl_invoke`,
+// this does not permit substituting different code for the same method instance,
+// which matters when the CodeInstance implements semantics (foreign `owner`) or a
+// calling convention (`ABIOverride`) that differ from the plain method.
+JL_DLLEXPORT jl_value_t *jl_invoke_codeinst(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    if (!invoke) {
+        jl_compile_codeinst(codeinst);
+        invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    }
+    if (invoke)
+        return invoke(F, args, nargs, codeinst);
+    if (codeinst->owner != jl_nothing || jl_is_abioverride(codeinst->def)) {
+        // the generic fallback below may not implement this codeinst's
+        // semantics or calling convention, so it must not be used here
+        jl_error("Failed to invoke or compile external codeinst");
+    }
+    return jl_invoke(F, args, nargs, jl_get_ci_mi(codeinst));
+}
+
 jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     size_t world = jl_current_task->world_age;

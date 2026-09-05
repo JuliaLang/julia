@@ -979,6 +979,11 @@ static const auto jlinvokeoc_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto jlinvokecodeinst_func = new JuliaFunction<>{
+    XSTR(jl_invoke_codeinst),
+    get_func2_sig,
+    get_func_attrs,
+};
 static const auto jlopaque_closure_call_func = new JuliaFunction<>{
     XSTR(jl_f_opaque_closure_call),
     get_func_sig,
@@ -6021,8 +6026,18 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             return jl_cgval_t();
         }
         assert(jl_is_method_instance(mi));
-        if (mi == ctx.linfo) {
-            // handle self-recursion specially (TODO: assuming ci is a valid invoke for mi?)
+        bool self_call = mi == ctx.linfo;
+        if (self_call && ci != (jl_value_t*)ctx.codeinst) {
+            // the shortcut below reuses the function currently being emitted, which is
+            // only valid if both the invoke target and this function carry the plain
+            // native semantics and calling convention of `mi` (a foreign `owner` or an
+            // `ABIOverride` implies different code or a different signature)
+            jl_code_instance_t *target = (jl_code_instance_t*)ci;
+            self_call = (ci == nullptr || (target->owner == jl_nothing && !jl_is_abioverride(target->def))) &&
+                        (ctx.codeinst == nullptr || (ctx.codeinst->owner == jl_nothing && !jl_is_abioverride(ctx.codeinst->def)));
+        }
+        if (self_call) {
+            // handle self-recursion specially
             Function *f = ctx.f;
             FunctionType *ft = f->getFunctionType();
             if (ft == ctx.types().T_jlfunc) {
@@ -6037,7 +6052,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                 unsigned return_roots = 0;
                 jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
                 StringRef protoname = f->getName();
-                result = emit_call_specfun_other(ctx, mi, ctx.rettype, protoname, argv, nargs, &cc, &return_roots, rt);
+                if (ctx.codeinst) // derive the signature from the codeinst `f` was built for (its ABI may be overridden)
+                    result = emit_call_specfun_other(ctx, ctx.codeinst, protoname, argv, nargs, &cc, &return_roots, rt);
+                else
+                    result = emit_call_specfun_other(ctx, mi, ctx.rettype, protoname, argv, nargs, &cc, &return_roots, rt);
             }
             handled = true;
         }
@@ -6053,7 +6071,15 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
-                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        Value *r;
+                        if (codeinst->owner != jl_nothing || jl_is_abioverride(codeinst->def)) {
+                            // `jl_invoke` may substitute different code for the method instance,
+                            // so the call must go through the codeinst itself (see `emit_tojlinvoke`)
+                            r = emit_jlcall(ctx, jlinvokecodeinst_func, track_pjlvalue(ctx, literal_pointer_val(ctx, ci)), argv, nargs, julia_call2);
+                        }
+                        else {
+                            r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        }
                         result = mark_julia_type(ctx, r, true, rt);
                     }
                     else {
@@ -7670,6 +7696,13 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, j
     if (theFunc) {
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
+    else if (codeinst->owner != jl_nothing || jl_is_abioverride(codeinst->def)) {
+        // `jl_invoke` may substitute different code for the method instance (a
+        // foreign `owner` implies different semantics; an `ABIOverride` a
+        // different signature), so the call must go through the codeinst itself
+        theFunc = prepare_call(jlinvokecodeinst_func);
+        theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
+    }
     else {
         jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
         bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
@@ -7960,7 +7993,7 @@ std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_c
         jl_returninfo_t targetspec = get_specsig_function(out, M, target, "", abi, codeinst->rettype, target_is_opaque_closure);
         if (from_abi.specsig)
             emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
-                    target, mi->specTypes, codeinst->rettype, &targetspec, nullptr);
+                    target, abi, codeinst->rettype, &targetspec, nullptr);
         else
             gen_invoke_wrapper(mi, abi, codeinst->rettype, from_abi.rt, targetspec, -1, from_abi.is_opaque_closure, gf_thunk_name, M, out);
     }
