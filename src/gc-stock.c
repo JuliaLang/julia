@@ -3711,6 +3711,27 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     return recollect;
 }
 
+// A deferred collection re-arms the trigger. maybe_collect fires on
+// heap_size >= heap_target, and a deferral that only resets the thread's
+// allocation counter leaves the target where it is: the very next
+// allocation walks back in here and defers again, about 20 ns per
+// allocation while the collector is disabled. Grant what a real collection
+// grants at least: 5 % of the heap, or default_collect_interval/8 while the
+// heap is small. The owed collection then runs when that allowance is
+// spent, and deferred_alloc keeps the bytes it postponed.
+static void gc_defer_collection(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+    static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
+    jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
+    uint64_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
+    uint64_t grant = heap_size / 20;
+    if (grant < default_collect_interval / 8)
+        grant = default_collect_interval / 8;
+    jl_atomic_store_relaxed(&gc_heap_stats.heap_target, heap_size + grant);
+}
+
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 {
     JL_PROBE_GC_BEGIN(collection);
@@ -3718,10 +3739,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
-        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
-        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
-        static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
+        gc_defer_collection(ptls);
         return;
     }
     jl_gc_debug_print();
