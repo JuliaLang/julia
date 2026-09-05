@@ -914,9 +914,18 @@ end
     # flisp bug: isdefined throws because `_` is assumed global
     @testset "placeholder" for p_inner in [maybe_int(:_), Expr(:(=), maybe_int(:_), 1)],
         p_block in [p_inner, Expr(:block, p_inner)]
-        @test run(test_mod, Expr(:let, p_block,
-                                 Expr(:block, Expr(:islocal, :_)))) == false
+        ex = Expr(:let, p_block, Expr(:block, Expr(:islocal, :_)))
+        @test run(test_mod, ex) == false context=ex
     end
+    # placeholder should still run rhs
+    @test run(test_mod, :(let v = Int[]
+                              let _ = push!(v, 1); end
+                              length(v)
+                          end)) == 1
+    @test run(test_mod, :(let v::Vector{Int} = Int[]
+                              let _ = push!(v, 1); end
+                              length(v)
+                          end)) == 1
 
     # assignment forms
     @test run(test_mod,
