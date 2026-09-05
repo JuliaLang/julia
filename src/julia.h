@@ -715,8 +715,10 @@ typedef struct {
         // If set, this type's egality can be determined entirely by comparing
         // the non-padding bits of this datatype.
         uint16_t isbitsegal : 1;
-        uint16_t unused_bits : 3;
-        uint16_t padding : 5;
+        // trailing bits of `size` that are not part of the value (primitive types);
+        // bounded by 8 * (MAX_ALIGN - 1) + 7
+        uint16_t unused_bits : 7;
+        uint16_t padding : 1;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
