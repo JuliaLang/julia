@@ -323,7 +323,14 @@ Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
 struct PrivateShlibdirGetter; end
 const private_shlibdir = Base.OncePerProcess{String}() do
     libname = ifelse(isdebugbuild(), "libjulia-internal-debug", "libjulia-internal")
-    dirname(dlpath(libname))
+    handle = dlopen(libname; throw_error=false)
+    if handle === nothing
+        # No libjulia-internal shared library (e.g. the runtime is statically
+        # linked into this executable): fall back to the standard layout
+        # relative to the executable's directory.
+        return abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
+    end
+    return dirname(dlpath(handle))
 end
 Base.string(::PrivateShlibdirGetter) = private_shlibdir()
 
