@@ -240,6 +240,8 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 #include <cpufeatures/target_tables_x86_64.h>
 #elif defined(_CPU_AARCH64_)
 #include <cpufeatures/target_tables_aarch64.h>
+#elif defined(__loongarch__)
+#include <cpufeatures/target_tables_loongarch64.h>
 #elif defined(__riscv) && __riscv_xlen == 64
 #include <cpufeatures/target_tables_riscv64.h>
 #else

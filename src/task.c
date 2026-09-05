@@ -1383,6 +1383,55 @@ static void jl_set_fiber(jl_ucontext_t *t)
 #define PUSH_RET(ctx, stk) \
     if (unw_set_reg(ctx, UNW_ARM_R14, 0)) /* put NULL into the LR */ \
         abort();
+#elif defined(_CPU_LOONG_)
+// 1. Define semantic register macros.
+// Priority: Use official enum names from header if available; fallback to hardcoded values otherwise.
+// https://github.com/libunwind/libunwind/blob/master/include/libunwind-loongarch64.h
+#ifndef UNW_LOONGARCH64_RA
+    #ifdef UNW_LOONGARCH64_R1
+        #define UNW_LOONGARCH64_RA UNW_LOONGARCH64_R1
+    #else
+        #define UNW_LOONGARCH64_RA 1
+    #endif
+#endif
+
+#ifndef UNW_LOONGARCH64_SP
+    #ifdef UNW_LOONGARCH64_R3
+        #define UNW_LOONGARCH64_SP UNW_LOONGARCH64_R3
+    #else
+        #define UNW_LOONGARCH64_SP 3
+    #endif
+#endif
+
+#ifndef UNW_LOONGARCH64_PC
+    // Explicitly defined as 33 in the provided header file.
+    #define UNW_LOONGARCH64_PC 33
+#endif
+
+#define PUSH_RET(c, stk) do { \
+    unw_word_t ret_addr; \
+    /* Retrieve the return address from the RA register */ \
+    if (unw_get_reg((c), UNW_LOONGARCH64_RA, &ret_addr) != 0) { \
+        ret_addr = 0; \
+    } \
+    (stk) -= 8; \
+    *((uintptr_t*)(stk)) = (uintptr_t)ret_addr; \
+    /* Force 16-byte alignment: ~0xfUL is equivalent to & -16 */ \
+    (stk) = (char*)((uintptr_t)(stk) & ~0xfUL); \
+} while (0)
+
+#define SIMULATE_CALL(c, stk, func) do { \
+    PUSH_RET(c, stk); \
+    unw_word_t func_addr = (unw_word_t)(func); \
+    unw_set_reg((c), UNW_LOONGARCH64_PC, func_addr); \
+    unw_set_reg((c), UNW_LOONGARCH64_SP, (unw_word_t)(stk)); \
+} while (0)
+
+#define INIT_FIBER_CONTEXT(c, sp, func) do { \
+    memset(c, 0, sizeof(*c)); \
+    unw_set_reg((c), UNW_LOONGARCH64_SP, (unw_word_t)(sp)); \
+    unw_set_reg((c), UNW_LOONGARCH64_PC, (unw_word_t)(func)); \
+} while (0)
 #else
 #error please define how to simulate a CALL on this platform
 #endif
@@ -1500,6 +1549,15 @@ CFI_NORETURN
                     // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
+#elif defined(_CPU_LOONG_)
+    // LoongArch64 Context Switch Entry
+    asm volatile(
+        " move $r3, %0\n"      // sp = stk
+        " move $r1, $zero\n"   // ra = 0
+        " move $r22, $zero\n"  // fp = 0
+        " jr %1\n"             // jump to fn
+        " break 0\n"           // trap (never reached)
+        : : "r"(stk), "r"(fn) : "memory" );
 #elif defined(_CPU_RISCV64_)
     asm volatile(
         " mv sp, %0;\n"

@@ -9340,7 +9340,7 @@ static jl_llvm_functions_t
 
     // Add strong stack protection for debug builds only when using the large code model,
     // otherwise LLVM might try to relocate the stack canary out of range (see e.g. #59303)
-#if defined(JL_DEBUG_BUILD) && !(defined(_CPU_AARCH64_) || defined(_CPU_RISCV_))
+#if defined(JL_DEBUG_BUILD) && !(defined(_CPU_AARCH64_) || defined(_CPU_RISCV_) || defined(_CPU_LOONG_))
     FnAttrs.addAttribute(Attribute::StackProtectStrong);
 #endif
 
@@ -11304,6 +11304,16 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
     }
     PrintStatistics();
 }
+
+#if defined(_CPU_LOONG_)
+extern "C" {
+    __attribute__((visibility("default")))
+    void (*jl_init_codegen_addr)(void) = jl_init_codegen_impl;
+
+    __attribute__((visibility("default")))
+    void (*jl_teardown_codegen_addr)(void) = jl_teardown_codegen_impl;
+}
+#endif
 
 // the rest of this file are convenience functions
 // that are exported for assisting with debugging from gdb

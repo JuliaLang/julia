@@ -439,7 +439,7 @@ public:
     jl_codegen_output_t(Module &M) JL_NOTSAFEPOINT
       : M(M), DL(M.getDataLayout()), TargetTriple(M.getTargetTriple())
     {
-        if (TargetTriple.isRISCV())
+        if (TargetTriple.isRISCV() || TargetTriple.isLoongArch())
             use_swiftcc = false;
     }
 
