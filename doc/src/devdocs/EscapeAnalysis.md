@@ -57,6 +57,9 @@ The symbols on the side of each call argument and SSA statements represent the f
 - `X` (red): this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
 - `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref Base.Compiler.EscapeAnalysis.EscapeInfo), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
 - `′`: this value has additional object field / array element information in its `AliasInfo` property
+- `↓`: this value may become reachable from a location the GC scans (`has_heap_capture(result.state[x])` holds)
+- `†`: this value may be registered with a finalizer (`has_finalizer_escape(result.state[x])` holds);
+  shown in place of `↓`, since `FinalizerEscape` implies `HeapCapture`
 
 Escape information of each call argument and SSA value can be inspected programmatically as like:
 ```@repl EAUtils
@@ -76,6 +79,21 @@ which is composed of the following properties:
 - `x.ReturnEscape::BitSet`: records SSA statements where `x` can escape to the caller via return
 - `x.ThrownEscape::BitSet`: records SSA statements where `x` can be thrown as exception
   (used for the [exception handling](@ref EA-Exception-Handling) described below)
+- `x.HeapCapture::Bool`: indicates `x` may become reachable from a location the GC scans,
+  e.g. a field of a (possibly heap-allocated) object, a global binding, GC frame roots
+  set up for `GC.@preserve` or `:foreigncall`, the finalizer list, or the exception state.
+  Note that this property tracks reachability from GC-traced memory rather than escape in
+  the traditional sense: a value can be stored into an object that never escapes the frame
+  and still have `HeapCapture` set, since the GC would trace it through that object.
+  It also does not track ABI-level rooting performed by codegen (e.g. a callee keeping a
+  GC-tracked argument alive across a safepoint in its GC frame), which is an artifact of
+  the calling convention rather than of the analyzed program.
+- `x.FinalizerEscape::Bool`: indicates `x` may be registered with a finalizer via
+  `Core.finalizer`, either as the finalized object or as the callback.
+  This is a refinement of `HeapCapture` (`FinalizerEscape` implies `HeapCapture`) that is
+  separated out because it has strictly stronger lifetime semantics than the other
+  `HeapCapture` sources: the finalizer list outlives the current frame, and the callback
+  is eventually invoked on the object at an arbitrary later point.
 - `x.AliasInfo`: maintains all possible values that can be aliased to fields or array elements of `x`
   (used for the [alias analysis](@ref EA-Alias-Analysis) described below)
 - `x.ArgEscape::Int` (not implemented yet): indicates it will escape to the caller through

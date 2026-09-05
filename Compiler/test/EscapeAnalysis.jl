@@ -1716,4 +1716,162 @@ end
 @test (@code_escapes scope_folding()) isa EAUtils.EscapeResult
 @test (@code_escapes scope_folding_opt()) isa EAUtils.EscapeResult
 
+# HeapCapture
+# ===========
+# `HeapCapture` tracks whether a value may become reachable from a location the GC scans:
+# fields of a (possibly heap-allocated) object, a global binding, GC frame roots set up
+# for `GC.@preserve`/`:foreigncall`, the finalizer list, or the exception state.
+
+@noinline hc_fin_callback(x) = (println("finalizing"); nothing)
+
+@testset "HeapCapture" begin
+    # storing into a local heap-allocated object taints the stored value,
+    # even when that object itself doesn't escape the frame
+    let result = code_escapes((SafeRef{String},)) do a
+            r = Ref{Any}()
+            r[] = a
+            return r
+        end
+        @test has_heap_capture(result.state[Argument(2)])
+        @test !has_all_escape(result.state[Argument(2)])
+    end
+
+    # plain field reads don't taint
+    let result = code_escapes((SafeRef{String},)) do s
+            s[]
+        end
+        @test !has_heap_capture(result.state[Argument(2)])
+    end
+
+    # mutating a bitstype field of an argument doesn't taint the argument
+    let result = code_escapes((SafeRef{Int},)) do c
+            c[] = c[] + 1
+            return c[]
+        end
+        @test !has_heap_capture(result.state[Argument(2)])
+    end
+
+    # values captured into a fresh allocation are tainted (the allocation may be on the heap),
+    # but bitstype values are not (they are stored by value)
+    let result = code_escapes((SafeRef{String},Int)) do a, b
+            t = tuple(a, b)
+            return t
+        end
+        @test has_heap_capture(result.state[Argument(2)])
+        @test !has_heap_capture(result.state[Argument(3)])
+    end
+
+    # global store means all escape, which includes `HeapCapture`
+    let result = code_escapes((SafeRef{String},)) do a
+            global GV = a
+            nothing
+        end
+        @test has_heap_capture(result.state[Argument(2)])
+    end
+
+    # `Core.finalizer` registers its arguments in the GC-scanned finalizer list:
+    # this sets the dedicated `FinalizerEscape` bit, which implies `HeapCapture`
+    # (the finalizer list outlives the frame, unlike the other `HeapCapture` sources)
+    let result = code_escapes((SafeRef{String},)) do s
+            Core.finalizer(hc_fin_callback, s)
+            return s.x
+        end
+        @test has_finalizer_escape(result.state[Argument(2)])
+        @test has_heap_capture(result.state[Argument(2)])
+    end
+
+    # ... but ordinary `HeapCapture` sources don't set `FinalizerEscape`
+    let result = code_escapes((SafeRef{String},)) do a
+            r = Ref{Any}()
+            r[] = a
+            return r
+        end
+        @test has_heap_capture(result.state[Argument(2)])
+        @test !has_finalizer_escape(result.state[Argument(2)])
+    end
+
+    # `GC.@preserve`d values are rooted in a GC frame
+    let result = code_escapes((SafeRef{String},)) do s
+            GC.@preserve s begin end
+            return s.x
+        end
+        @test has_heap_capture(result.state[Argument(2)])
+    end
+
+    # thrown objects enter the GC-scanned exception state (even without a try/catch)
+    let result = code_escapes((Bool,SafeRef{String},)) do c, s
+            c && throw(s)
+            return 0
+        end
+        @test has_heap_capture(result.state[Argument(3)])
+    end
+
+    # the taint propagates through ϕ merges
+    let result = code_escapes((Bool,SafeRef{String},SafeRef{String},)) do c, a, b
+            x = c ? a : b
+            r = Ref{Any}()
+            r[] = x
+            return r
+        end
+        @test has_heap_capture(result.state[Argument(3)])
+        @test has_heap_capture(result.state[Argument(4)])
+    end
+end
+
+# interprocedural HeapCapture
+@noinline hc_store!(r, a) = (r[] = a; nothing)
+@noinline hc_read(s) = s.x
+@noinline hc_identity(x) = x
+@noinline hc_finalize!(s) = (Core.finalizer(hc_fin_callback, s); nothing)
+
+# a cache callback that unconditionally claims the best-case `true` for every callee,
+# mimicking the `:effect_free`+`:inaccessiblememonly` fallback of `GetNativeEscapeCache`
+struct ReturnTrueEscapeCache end
+(::ReturnTrueEscapeCache)(codeinst) = true
+
+@testset "HeapCapture interprocedural" begin
+    # callee stores the argument => the caller sees the taint via the cached summary
+    let result = code_escapes((SafeRef{String},)) do a
+            s = SafeRef{Any}(nothing)
+            hc_store!(s, a)
+            return s.x === nothing
+        end
+        @test has_heap_capture(result.state[Argument(2)])
+        @test !has_finalizer_escape(result.state[Argument(2)])
+    end
+
+    # callee registers a finalizer => the caller sees both taints via the cached summary
+    let result = code_escapes((SafeRef{String},)) do s
+            hc_finalize!(s)
+            return s.x
+        end
+        @test has_finalizer_escape(result.state[Argument(2)])
+        @test has_heap_capture(result.state[Argument(2)])
+    end
+
+    # callee returns the argument and the caller stores the result:
+    # the taint is applied by the caller through the replayed ret-arg aliasing
+    let result = code_escapes((SafeRef{String},)) do a
+            r = Ref{Any}()
+            r[] = hc_identity(a)
+            return r
+        end
+        @test has_heap_capture(result.state[Argument(2)])
+    end
+
+    # callee only reads the argument => no taint
+    let result = code_escapes((SafeRef{String},)) do s
+            return hc_read(s)
+        end
+        @test !has_heap_capture(result.state[Argument(2)])
+
+        # however the `cache === true` fallback must still taint the argument, since
+        # `:effect_free`+`:inaccessiblememonly` still permit the callee to store the
+        # argument into a freshly allocated (caller-invisible) object that the GC traces
+        estate = EscapeAnalysis.analyze_escapes(result.ir, 2,
+            Compiler.SimpleInferenceLattice.instance, ReturnTrueEscapeCache())
+        @test has_heap_capture(estate[Argument(2)])
+    end
+end
+
 end # module test_EA
