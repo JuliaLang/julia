@@ -82,6 +82,17 @@ instead, because the hook it dumps from only runs when native code is emitted.
 
 ## Caveats
 
+  * **Only Julia threads are sampled.** A worker's parallel image generation runs on raw
+    libuv threads that have no Julia thread state, so the profiler cannot see them: every
+    sample comes from the worker's main thread. What that thread does while the shards run is
+    wait, which shows up as `uv_thread_join` and was 12% of one measured worker. To see inside
+    image generation, use `JULIA_IMAGE_TIMINGS=1` for the per-shard timers, or Tracy.
+  * The effective sampling rate is lower than the requested one, because each sample has to
+    unwind a deep stack. One worker running for about 10 s produced roughly 5,000 samples at a
+    nominal 1 ms period. Read the profile as proportions, not as wall-clock time.
+  * Self time and inclusive time say very different things here. Type inference was 47% of one
+    worker inclusive but 9% by innermost frame, because its leaves are the runtime's own
+    subtyping and method lookup, which are attributed to those C functions instead.
   * Resolving symbols happens in the worker after sampling stops, and shows up in the worker's
     reported total time. Wall-clock numbers from a profiled run are not comparable with an
     unprofiled one; take timings separately.
