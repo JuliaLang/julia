@@ -12,7 +12,8 @@
 // numbering and its meaning belong to the application.
 //
 // The stock collector implements the regions (src/gc-regions.c); a build
-// with a third-party heap has none.
+// with a third-party heap gets the stubs at the end of this file, so the
+// callers in gf.c and jltypes.c compile unchanged.
 
 #ifndef JL_GC_REGIONS_H
 #define JL_GC_REGIONS_H
@@ -50,6 +51,12 @@ void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT;
 void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT;
 // Per-heap initialization.
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
+
+#else // WITH_THIRD_PARTY_HEAP
+
+// A third-party heap has no regions: every window is refused.
+STATIC_INLINE int jl_gc_region_set(int n) { (void)n; return JL_GC_REGION_EINVAL; }
+STATIC_INLINE int jl_gc_region_current(void) { return 0; }
 
 #endif // WITH_THIRD_PARTY_HEAP
 

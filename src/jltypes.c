@@ -12,6 +12,7 @@
 #endif
 #include "julia.h"
 #include "julia_internal.h"
+#include "gc-regions.h"
 #include "builtin_proto.h"
 #include "julia_assert.h"
 
@@ -1402,6 +1403,9 @@ typedef struct _jl_typestack_t jl_typestack_t;
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                        jl_typestack_t *stack, jl_typeenv_t *env, int check, int nothrow);
+static jl_value_t *inst_datatype_new(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
+                                     jl_typestack_t *stack, jl_typeenv_t *env, int check, int nothrow,
+                                     jl_typename_t *tn, int istuple, int isnamedtuple, int cacheable);
 
 // Build an environment mapping a TypeName's parameters to parameter values.
 // This is the environment needed for instantiating a type's supertype and field types.
@@ -2096,7 +2100,6 @@ static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *en
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                        jl_typestack_t *stack, jl_typeenv_t *env, int check, int nothrow)
 {
-    jl_typestack_t top;
     jl_typename_t *tn = dt->name;
     int istuple = (tn == jl_tuple_typename);
     int isnamedtuple = (tn == jl_namedtuple_typename);
@@ -2185,6 +2188,23 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (stack_lkup)
         return stack_lkup;
 
+    // Past the caches this call makes a new type and stores it into the type
+    // cache. That state belongs to region 0, whatever window the caller holds
+    // (see jl_type_infer in gf.c); a cache hit above pays nothing for it.
+    int saved_region = jl_gc_region_set(0);
+    jl_value_t *ndt = inst_datatype_new(dt, p, iparams, ntp, stack, env, check, nothrow,
+                                        tn, istuple, isnamedtuple, cacheable);
+    if (saved_region > 0)
+        jl_gc_region_set(saved_region);
+    return ndt;
+}
+
+// The cache-miss path of inst_datatype_inner: make the type, then cache it.
+static jl_value_t *inst_datatype_new(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
+                                     jl_typestack_t *stack, jl_typeenv_t *env, int check, int nothrow,
+                                     jl_typename_t *tn, int istuple, int isnamedtuple, int cacheable)
+{
+    jl_typestack_t top;
     // check parameters against bounds in type definition
     // for whether this is even valid
     if (check && !istuple) {
