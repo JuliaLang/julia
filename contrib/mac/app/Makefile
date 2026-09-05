@@ -5,8 +5,12 @@
 JULIAHOME := $(abspath ../../..)
 include ../../../Make.inc
 
-# X.Y.Z or X.Y.Z-hash
-JULIA_VERSION_OPT_COMMIT:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
+# X.Y.Z or X.Y.Z-hash (JULIA_COMMIT is JULIA_VERSION for release builds, see Make.inc)
+ifeq ($(JULIA_COMMIT),$(JULIA_VERSION))
+JULIA_VERSION_OPT_COMMIT:=$(JULIA_VERSION)
+else
+JULIA_VERSION_OPT_COMMIT:=$(JULIA_VERSION)-$(JULIA_COMMIT)
+endif
 
 # X.Y
 JULIA_VERSION_MAJOR_MINOR:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+')
