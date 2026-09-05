@@ -303,6 +303,8 @@ static std::string get_host_feature_string()
 // ============================================================================
 
 static std::vector<tp::LLVMTargetSpec> jit_targets;
+// The sysimage clone selected at load time (unset until a sysimage is loaded).
+static int32_t sysimage_matched_target_index = -1;
 
 // If cpu_target starts with "sysimage", replace it with the target string
 // stored in the loaded sysimage. Otherwise return as-is.
@@ -496,6 +498,9 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
     auto match_result = match_image_targets(id, target, rejection_reason);
     if (match_result.first == UINT32_MAX)
         return UINT32_MAX;
+
+    // Remember which sysimage clone was selected so Base can report it.
+    sysimage_matched_target_index = match_result.first;
 
     // Clamp JIT vector features to match the sysimage target's vector width.
     // On x86, AVX/AVX-512 change how VecElement tuples are passed in registers
@@ -1069,6 +1074,10 @@ extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());
     return arr;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_get_sysimage_matched_target_index(void) {
+    return sysimage_matched_target_index;
 }
 
 extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) {
