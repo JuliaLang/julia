@@ -322,6 +322,9 @@ arguments with matching type may be given to the generic `Point` constructor.
 
 What's really going on here is that `Point`, `Point{Float64}` and `Point{Int64}` are all different
 constructor functions. In fact, `Point{T}` is a distinct constructor function for each type `T`.
+Because they are distinct functions, [`methods`](@ref) applied to `Point` lists only the methods
+dispatching on `Point` itself, and applied to `Point{Int64}` only those dispatching on
+`Point{Int64}`. [`constructors(Point)`](@ref constructors) lists the methods of all of them at once.
 Without any explicitly provided inner constructors, the declaration of the composite type `Point{T<:Real}`
 automatically provides an inner constructor, `Point{T}`, for each possible type `T<:Real`, that
 behaves just like non-parametric default inner constructors do. It also provides a single general

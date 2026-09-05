@@ -1717,10 +1717,13 @@ The methods are ordered from most to least specific. The relative order of
 methods without a specificity relationship (i.e. ambiguous or incomparable)
 is unspecified.
 
+For a type `T`, this only returns the methods dispatching on `T` itself. Use
+[`constructors`](@ref) to also get those of its parameterizations.
+
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
 
-See also [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), [`methodswith`](@ref Main.InteractiveUtils.methodswith).
+See also [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), [`methodswith`](@ref Main.InteractiveUtils.methodswith), [`constructors`](@ref).
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
@@ -1746,6 +1749,48 @@ function methods(@nospecialize(f),
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
+
+"""
+    constructors(T::Type, [module])
+
+Return the constructor methods applicable to `T` or to any of its parameterizations if it is a `UnionAll`.
+
+`T` and `T{Int}` are separate constructor functions, so [`methods`](@ref) on one of them misses those
+written for the other. `constructors(T)`, however, matches on `Type{<:T}` covering all of them,
+including generic ones such as `(::Type{S})(x) where S<:T`.
+
+If `module` is specified, only return methods defined in that module. A list of modules can
+also be specified as an array or set.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+# Examples
+```jldoctest
+julia> struct Point{T}
+           x::T
+           y::T
+       end
+
+julia> length(methods(Point))
+1
+
+julia> length(constructors(Point))
+2
+```
+
+See also [`methods`](@ref), [`which`](@ref), [`methodswith`](@ref Main.InteractiveUtils.methodswith).
+"""
+function constructors(@nospecialize(T::Type),
+                      mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
+    world = get_world_counter()
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
+    ms = _methods_by_ftype(Tuple{Type{<:T}, Vararg{Any}}, -1, world)::Vector{Any}
+    # Union{} <: T always holds, so the query also matches boot.jl's Union{}(a...)
+    filter!(m -> (m::Core.MethodMatch).method.sig !== Tuple{Type{Union{}}, Vararg{Any}}, ms)
+    return matches_to_methods(ms, typeof(T).name, mod)
+end
+constructors(@nospecialize(T::Type), mod::Module) = constructors(T, (mod,))
 
 # low-level method lookup functions used by the compiler
 
