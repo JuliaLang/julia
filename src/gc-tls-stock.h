@@ -39,6 +39,8 @@ typedef struct {
     // is the default heap: norm_pools and the pages the stock collector sweeps.
 #define JL_GC_MAX_REGIONS 64
     uint8_t current_region;
+    uint8_t saved_region;   // parked by a stock collection: every thread
+                            // runs the collection with region 0 installed
     // The live pool array of the current region: norm_pools for region 0,
     // regions[n]->pools for region n. Allocation paths decode their stable
     // norm_pools-relative offset into an index and address through this

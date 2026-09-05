@@ -38,7 +38,17 @@ enum {
 JL_DLLEXPORT int jl_gc_region_set(int n);
 JL_DLLEXPORT int jl_gc_region_current(void);
 
-// --- per-heap initialization -------------------------------------------------
+// --- the hooks the rest of the runtime calls --------------------------------
+// Install a parked region on a thread: the stock collection parks every
+// window before it runs and installs it again after.
+void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
+// The brackets around a stock collection: park every open window before it,
+// install the windows again after it. Between them, every pass of the
+// collection clears the marks it left on region pages after its sweep.
+void jl_gc_region_prepare_stock_collection(void) JL_NOTSAFEPOINT;
+void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT;
+void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT;
+// Per-heap initialization.
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
 
 #endif // WITH_THIRD_PARTY_HEAP

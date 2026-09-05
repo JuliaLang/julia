@@ -3292,6 +3292,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_scrub();
         gc_verify_tags();
         gc_sweep_pool();
+        // Region pages are not swept: clear the marks this pass left on
+        // them, so the next pass traverses the region objects again.
+        jl_gc_region_clear_stock_marks();
     }
 
     JL_PROBE_GC_SWEEP_END();
@@ -3598,6 +3601,9 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
+        // Every thread runs the collection with region 0 installed; the
+        // open windows are parked here and installed again after.
+        jl_gc_region_prepare_stock_collection();
 #ifndef __clang_gcanalyzer__
         if (_jl_gc_collect(ptls, collection)) {
             // recollect
@@ -3606,6 +3612,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
             assert(!ret);
         }
 #endif
+        jl_gc_region_finish_stock_collection();
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 

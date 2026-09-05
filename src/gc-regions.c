@@ -28,6 +28,74 @@ STATIC_INLINE int region_valid(int n) JL_NOTSAFEPOINT
     return n > 0 && n < JL_GC_MAX_REGIONS;
 }
 
+// --- the brackets around a stock collection ----------------------------------------
+// A stock collection coexists with live regions by two brackets around it
+// and a clear after every pass. Before: every thread's window is parked and
+// region 0 installed, so the sweep prologue's cursor sync sees norm_pools
+// everywhere. After each pass: every region page the mark touched
+// (has_marked is the card) gets its cells' low header bits cleared - the
+// mark walked region objects normally, which keeps liveness exact through
+// them, and the clear keeps the bits clean for the next pass; a freelist link
+// survives the blind clear because an aligned pointer carries zero low bits.
+// Region pages are never swept and region objects never grow old, so they
+// never enter a remembered set. The clear runs after every pass, not once
+// per collection: a forced full collection runs a second, young pass, and a
+// region object still marked from the first pass would not be traversed
+// again, so its region-0 children would be swept from under it. After the
+// last pass: the parked windows are installed again.
+
+void jl_gc_region_prepare_stock_collection(void) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        heap->saved_region = heap->current_region;
+        if (heap->current_region != 0)
+            jl_gc_region_install_task(ptls2, 0);
+    }
+}
+
+void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        for (int n = 1; n < JL_GC_MAX_REGIONS; n++) {
+            if (heap->regions[n] == NULL)
+                continue;
+            for (jl_gc_pagemeta_t *pg = heap->regions[n]->pages; pg != NULL; pg = pg->region_next) {
+                if (!pg->has_marked)
+                    continue;
+                int osize = pg->osize;
+                char *cell = pg->data + GC_PAGE_OFFSET;
+                char *end = pg->data + GC_PAGE_SZ;
+                for (; cell + osize <= end; cell += osize)
+                    ((jl_taggedvalue_t*)cell)->header &= ~(uintptr_t)(GC_MARKED | GC_OLD);
+                pg->has_marked = 0;
+                pg->has_young = 0;
+                pg->nold = 0;
+                pg->prev_nold = 0;
+            }
+        }
+    }
+}
+
+void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        if (heap->saved_region != 0)
+            jl_gc_region_install_task(ptls2, heap->saved_region);
+    }
+}
+
 // --- windows -----------------------------------------------------------------------
 
 // The state of a region on a heap is made on the heap's first use of the
@@ -78,12 +146,24 @@ JL_DLLEXPORT int jl_gc_region_current(void)
     return jl_current_task->ptls->gc_tls.heap.current_region;
 }
 
+// Install a parked region on this thread: the stock collection parks every
+// window before it runs and installs it again after.
+void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    region_lazy_init(heap, n);
+    heap->active_pools = (n == 0) ? heap->norm_pools : heap->regions[n]->pools;
+    heap->current_region = (uint8_t)n;
+}
+
+
 
 // --- initialization ----------------------------------------------------------------------
 
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT
 {
     heap->current_region = 0;
+    heap->saved_region = 0;
     heap->active_pools = heap->norm_pools;
     memset(heap->regions, 0, sizeof(heap->regions)); // no region has state yet
 }
