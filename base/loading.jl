@@ -3558,6 +3558,12 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         cpu_target = nothing
     end
     push!(opts, "--output-ji", output)
+    # A single-threaded worker gets no GC mark threads by default. Its collections are
+    # infrequent but large (the heap holds every loaded dependency), so let them mark in
+    # parallel unless the caller has configured GC threads explicitly.
+    if !haskey(ENV, "JULIA_NUM_GC_THREADS")
+        push!(opts, "--gcthreads=$(precompile_gcthreads())")
+    end
     if isassigned(PRECOMPILE_TRACE_COMPILE)
         push!(opts, "--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])")
         push!(opts, "--trace-compile-timing")
@@ -3588,6 +3594,10 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
     close(io.in)
     return io
 end
+
+# Mark threads for a precompile worker: a few per worker, scaled down on small machines so
+# that the driver's worker count times this stays well under the core count.
+precompile_gcthreads() = clamp(Sys.EFFECTIVE_CPU_THREADS::Int ÷ 4, 1, 4)
 
 const precompilation_stack = Vector{PkgId}()
 # Helpful for debugging when precompilation is unexpectedly nested.
