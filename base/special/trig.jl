@@ -721,6 +721,261 @@ function acos(x::T) where T <: Union{Float32, Float64}
     end
 end
 
+# Inverse trigonometric functions in half-turns
+#
+# asinpi, acospi and atanpi reuse the argument reductions and the rational
+# approximations of asin, acos and atan above, rescaled by a double-double 1/π.
+# The π/2, π, atan(1) and atan(Inf) that those reductions add become 1/2, 1,
+# 1/4 and 1/2, exact in binary floating point rather than rounded constants.
+# The results at ±1 and ±Inf, and the whole quadrant table of atanpi(y, x),
+# are exact as a consequence.
+const INV_PI_HI = 0.3183098861837907            # (1/π).hi
+const INV_PI_LO = -1.9678676675182486e-17       # (1/π).lo
+const ATANPI_1_O_2_HI = 0.14758361765043326     # (atan(0.5)/π).hi
+const ATANPI_1_O_2_LO = 1.1095511164473943e-17  # (atan(0.5)/π).lo
+const ATANPI_3_O_2_HI = 0.3128329581890012      # (atan(1.5)/π).hi
+const ATANPI_3_O_2_LO = -1.4076885713501453e-17 # (atan(1.5)/π).lo
+# atan(1.0)/π and atan(Inf)/π are exactly 0.25 and 0.5
+
+"""
+    divpi(x)
+
+Compute `x/π` with a single rounding.
+"""
+@inline function divpi(x::Float64)
+    hi, lo = two_mul(x, INV_PI_HI)
+    return hi + muladd(x, INV_PI_LO, lo)
+end
+
+"""
+    acospi_kernel(x)
+
+Compute `acos(1-2x)/π = 2asin(√x)/π` on x∈(0; 1/4] as an unevaluated sum `hi + lo`.
+"""
+@inline function acospi_kernel(x::Float64)
+    # asin above approximates asin(s) = s + s*arc_tRt(s²) on s∈[0; 1/2]. Taking
+    # s = √x = shi + slo makes s² exactly x, so
+    #     w ≡ acos(1-2x) = 2asin(√x) = 2*(shi + slo + shi*arc_tRt(x))
+    # dropping slo*arc_tRt(x), which stays under 2^-57 of w. Fast2Sum then
+    # renormalizes whi + wlo to w + werr for the scaling by the double-double 1/π.
+    shi, slo = two_sqrt(x)
+    whi = 2.0*shi
+    wlo = 2.0*muladd(shi, arc_tRt(x), slo)
+    w = whi + wlo
+    werr = (whi - w) + wlo
+    hi, lo = two_mul(w, INV_PI_HI)
+    return hi, muladd(w, INV_PI_LO, lo) + werr*INV_PI_HI
+end
+
+"""
+    asinpi(x::T) where T -> float(T)
+
+Compute ``\\arcsin(x)/\\pi``, the inverse sine of `x` in half-turns, more accurately than
+`asin(x)/pi`.
+
+Throw a [`DomainError`](@ref) if `abs(x) > 1`, return a `T(NaN)` if `isnan(x)`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`sinpi`](@ref), [`asind`](@ref), [`acospi`](@ref), [`atanpi`](@ref).
+
+# Examples
+```jldoctest
+julia> asinpi(0.5) # asin(0.5) is π/6, a sixth of a half-turn
+0.16666666666666666
+
+julia> asin(0.5)/pi
+0.16666666666666669
+
+julia> asinpi(1)
+0.5
+```
+"""
+function asinpi(x::Float64)
+    absx = abs(x)
+    if absx >= 1.0
+        absx == 1.0 && return copysign(0.5, x)
+        asin_domain_error(x)
+    elseif absx < 0.5
+        # if |x| sufficiently small, asin(x)/π is x/π to within a rounding
+        absx < ASIN_X_MIN_THRESHOLD(Float64) && return copysign(divpi(absx), x)
+        # asin(x)/π = (x/π)*(1 + x²R(x²))
+        hi, lo = two_mul(x, INV_PI_HI)
+        return hi + muladd(hi, arc_tRt(x*x), muladd(x, INV_PI_LO, lo))
+    end
+    # else 1/2 <= |x| < 1, where asin(|x|)/π = 1/2 - acos(|x|)/π
+    hi, lo = acospi_kernel((1.0 - absx)/2)
+    r = 0.5 - hi
+    return copysign(r + (((0.5 - r) - hi) - lo), x)
+end
+
+"""
+    acospi(x::T) where T -> float(T)
+
+Compute ``\\arccos(x)/\\pi``, the inverse cosine of `x` in half-turns, more accurately than
+`acos(x)/pi`.
+
+Throw a [`DomainError`](@ref) if `abs(x) > 1`, return a `T(NaN)` if `isnan(x)`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`cospi`](@ref), [`acosd`](@ref), [`asinpi`](@ref), [`atanpi`](@ref).
+
+# Examples
+```jldoctest
+julia> acospi(0.5) # acos(0.5) is π/3, a third of a half-turn
+0.3333333333333333
+
+julia> acos(0.5)/pi
+0.33333333333333337
+
+julia> acospi(-1)
+1.0
+```
+"""
+function acospi(x::Float64)
+    absx = abs(x)
+    if absx >= 1.0
+        absx == 1.0 && return x > 0.0 ? 0.0 : 1.0
+        acos_domain_error(x)
+    elseif absx < 0.5
+        # if |x| sufficiently small, acos(x)/π is 1/2 to within a rounding
+        absx < ACOS_X_MIN_THRESHOLD(Float64) && return 0.5
+        # acos(x)/π = 1/2 - (x/π)*(1 + x²R(x²))
+        hi, lo = two_mul(x, INV_PI_HI)
+        a = muladd(hi, arc_tRt(x*x), muladd(x, INV_PI_LO, lo))
+        r = 0.5 - hi
+        return r + (((0.5 - r) - hi) - a)
+    end
+    hi, lo = acospi_kernel((1.0 - absx)/2)
+    x > 0.0 && return hi + lo
+    # acos(x)/π = 1 - acos(|x|)/π for x < 0
+    r = 1.0 - hi
+    return r + (((1.0 - r) - hi) - lo)
+end
+
+"""
+    atanpi(y::T) where T -> float(T)
+    atanpi(y::T, x::S) where {T,S} -> float(promote_type(T,S))
+
+Compute ``\\arctan(y)/\\pi`` or ``\\arctan(y/x)/\\pi`` respectively, the inverse tangent in
+half-turns, more accurately than `atan(y)/pi` or `atan(y,x)/pi`.
+
+Return a `NaN` if `isnan(y)` or `isnan(x)`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`tanpi`](@ref), [`atand`](@ref), [`asinpi`](@ref), [`acospi`](@ref).
+
+# Examples
+```jldoctest
+julia> atanpi(1)
+0.25
+
+julia> atanpi(Inf)
+0.5
+
+julia> atanpi(-1, -1) # third quadrant, i.e. -135°
+-0.75
+```
+"""
+function atanpi(x::Float64)
+    absx = abs(x)
+    # for large |x| the correction to 1/2 is below half an ulp; NaN falls through
+    absx >= ATAN_LARGE_X(Float64) && return copysign(0.5, x)
+    # 7/16 is the radius atan_pq is fitted on. Past it, atan(x)/π is taken as
+    # atan(c)/π + atan(xr)/π around a center c ∈ {1/2, 1, 3/2, ∞}, the breakpoints
+    # chosen so that xr = (x-c)/(1+c*x) stays inside that radius. See atan above.
+    if absx < 7/16
+        # if |x| sufficiently small, atan(x)/π is x/π to within a rounding
+        absx < ATAN_SMALL_X(Float64) && return copysign(divpi(absx), x)
+        p, q = atan_pq(x)
+        hi, lo = two_mul(x, INV_PI_HI)
+        return hi - (hi*(p + q) - muladd(x, INV_PI_LO, lo))
+    end
+    if absx < 19/16 # 7/16 <= |x| < 19/16
+        if absx < 11/16 # 7/16 <= |x| < 11/16
+            zhi = ATANPI_1_O_2_HI
+            zlo = ATANPI_1_O_2_LO
+            xr = (2.0*absx - 1.0)/(2.0 + absx)
+        else # 11/16 <= |x| < 19/16
+            zhi = 0.25
+            zlo = 0.0
+            xr = (absx - 1.0)/(absx + 1.0)
+        end
+    else
+        if absx < 39/16 # 19/16 <= |x| < 39/16
+            zhi = ATANPI_3_O_2_HI
+            zlo = ATANPI_3_O_2_LO
+            xr = (absx - 1.5)/(1.0 + 1.5*absx)
+        else # 39/16 <= |x| < 2.0^66
+            zhi = 0.5
+            zlo = 0.0
+            xr = -1.0/absx
+        end
+    end
+    # end of argument reduction
+    p, q = atan_pq(xr)
+    t = xr - xr*(p + q)
+    thi, tlo = two_mul(t, INV_PI_HI)
+    z = zhi + thi
+    return copysign(z + (((zhi - z) + thi) + (muladd(t, INV_PI_LO, tlo) + zlo)), x)
+end
+
+function atanpi(y::T, x::T) where T<:Union{Float32,Float64}
+    # The special cases are those of atan(y, x), scaled by 1/π. Unlike there,
+    # every one of them is exactly representable, so no π_lo correction is needed
+    # and each collapses to a magnitude selected by signbit(x), signed by y:
+    # atanpi is odd in y, and a negative x adds a half-turn.
+    if isnan(x) | isnan(y)
+        return isnan(x) ? x : y
+    end
+
+    if x == T(1.0) # then y/x = y and x > 0
+        return atanpi(y)
+    end
+
+    if iszero(y)
+        return signbit(x) ? flipsign(one(T), y) : y # ±0 for x > 0, ±1 for x < 0
+    elseif iszero(x)
+        return flipsign(T(0.5), y)
+    end
+
+    if isinf(x)
+        isinf(y) && return flipsign(signbit(x) ? T(0.75) : T(0.25), y)
+        return flipsign(signbit(x) ? one(T) : zero(T), y)
+    end
+
+    # x wasn't Inf, but y is
+    isinf(y) && return flipsign(T(0.5), y)
+
+    ypw = poshighword(y)
+    xpw = poshighword(x)
+    k = reinterpret(Int32, ypw -% xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
+
+    if k > ATAN2_RATIO_THRESHOLD(T) # |y/x| > threshold
+        z = T(0.5)
+    elseif x < 0 && k < -ATAN2_RATIO_THRESHOLD(T) # 0 > |y|/x > threshold
+        z = zero(T)
+    else # safe to do y/x
+        z = atanpi(abs(y/x))
+    end
+
+    return flipsign(signbit(x) ? one(T) - z : z, y)
+end
+
+for f in (:asinpi, :acospi, :atanpi)
+    @eval $f(x::Union{Float16,Float32}) = oftype(x, $f(Float64(x)))
+end
+asinpi(x::AbstractFloat) = asin(x)/oftype(x, pi)
+acospi(x::AbstractFloat) = acos(x)/oftype(x, pi)
+atanpi(x::AbstractFloat) = atan(x)/oftype(x, pi)
+atanpi(y::Real, x::Real) = atanpi(promote(float(y), float(x))...)
+atanpi(::T, ::T) where {T<:AbstractFloat} = Base.no_op_err("atanpi", T)
+
 # Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
 @inline function sinpi_kernel(x::Float64)
     _sinpi_kernel_f64(x)

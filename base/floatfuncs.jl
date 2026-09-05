@@ -328,6 +328,17 @@ end
     return Txy, T(xy-Txy)
 end
 
+# two-sqrt: returns (hi, lo) with hi + lo ≈ √x to about twice the working
+# precision, for finite x > 0, by one Newton step lo = (x - hi²)/(2hi) off the
+# rounded root. Unlike `two_mul` this is not error-free: x - hi² is exact, but
+# the division rounds once. Uses a hardware fma when available.
+@assume_effects :consistent @inline function two_sqrt(x::Float64)
+    s = Core.Intrinsics.sqrt_llvm(x)
+    Core.Intrinsics.have_fma(Float64) && return s, fma_float(-s, s, x)/(2*s)
+    s², s²err = two_mul(s, s)
+    return s, ((x - s²) - s²err)/(2*s)
+end
+
 function fma_emulated(a::Float64, b::Float64,c::Float64)
     abhi, ablo = @inline two_mul(a, b)
     if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)

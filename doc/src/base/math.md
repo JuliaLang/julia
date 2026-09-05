@@ -117,6 +117,9 @@ Base.Math.sinpi
 Base.Math.cospi
 Base.Math.tanpi
 Base.Math.sincospi
+Base.Math.asinpi
+Base.Math.acospi
+Base.Math.atanpi
 ```
 
 ### Hyperbolic

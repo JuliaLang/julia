@@ -676,7 +676,8 @@ end
         @testset "f: $f" for f in (
             # all strictly increasing
             identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
-            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, n1), Base.Fix2(atand, n1),
+            sin, sind, sinpi, tan, tand, tanpi, asin, asind, asinpi, atan, atand, atanpi,
+            Base.Fix2(atan, n1), Base.Fix2(atand, n1), Base.Fix2(atanpi, n1),
             Base.Fix1(round, typ), Base.Fix1(trunc, typ), +, ∘(-, -), ∘(-, cosc),
             rounders_typ...,
             Base.Fix1(*, n1), Base.Fix2(*, n1), Base.Fix2(/, n1),
@@ -950,7 +951,7 @@ end
 
 @testset "vectorization of 2-arg functions" begin
     binary_math_functions = [
-        copysign, flipsign, log, atan, hypot, max, min,
+        copysign, flipsign, log, atan, atanpi, hypot, max, min,
     ]
     @testset "$f" for f in binary_math_functions
         x = y = 2
@@ -1167,11 +1168,10 @@ end
         @test atan(T(Inf), -absr) === T(pi)/2
         @test atan(-T(Inf), -absr) === -T(pi)/2
         # |y/x| above high threshold
-        atanpi = T(1.5707963267948966)
-        @test atan(T(2.0^61), T(1.0)) === atanpi # m==0
-        @test atan(-T(2.0^61), T(1.0)) === -atanpi # m==1
-        @test atan(T(2.0^61), -T(1.0)) === atanpi # m==2
-        @test atan(-T(2.0^61), -T(1.0)) === -atanpi # m==3
+        @test atan(T(2.0^61), T(1.0)) === T(pi)/2 # m==0
+        @test atan(-T(2.0^61), T(1.0)) === -T(pi)/2 # m==1
+        @test atan(T(2.0^61), -T(1.0)) === T(pi)/2 # m==2
+        @test atan(-T(2.0^61), -T(1.0)) === -T(pi)/2 # m==3
         @test atan(-T(Inf), -absr) === -T(pi)/2
         # |y|/x between 0 and low threshold
         @test atan(T(2.0^-61), -T(1.0)) === T(pi) # m==2
@@ -1225,6 +1225,105 @@ end
         @test atand(-absr, +absr) === -T(45.0)
         @test atand(+absr, -absr) === T(135.0)
         @test atand(-absr, -absr) === -T(135.0)
+    end
+end
+
+@testset "asinpi, acospi and atanpi" begin
+    @testset "exactly representable results, $T" for T in (Float16, Float32, Float64)
+        # asinpi and atanpi are odd
+        for (f, x, y) in ((asinpi, T(0), T(0)), (asinpi, T(1), T(0.5)),
+                          (atanpi, T(0), T(0)), (atanpi, T(1), T(0.25)),
+                          (atanpi, T(Inf), T(0.5)))
+            @test f(x) === y context = (f, x)
+            @test f(-x) === -y context = (f, x)
+        end
+        # acospi reflects about the quarter turn instead
+        for (x, y) in ((T(0), T(0.5)), (T(1), T(0)))
+            @test acospi(x) === y context = x
+            @test acospi(-x) === one(T) - y context = x
+        end
+
+        for f in (asinpi, acospi, atanpi)
+            @test isnan_type(T, f(T(NaN))) context = f
+        end
+        for f in (asinpi, acospi)
+            @test_throws DomainError f(nextfloat(T(1)))
+            @test_throws DomainError f(prevfloat(-T(1)))
+        end
+    end
+
+    @testset "accuracy, $T" for T in (Float32, Float64)
+        for (f, xs) in ((asinpi, range(-one(T), one(T), length = 5000)),
+                        (acospi, range(-one(T), one(T), length = 5000)),
+                        (atanpi, range(-T(4), T(4), length = 5000)),
+                        (atanpi, T(2) .^ range(-T(30), T(30), length = 5000)))
+            @test ulp_error_maximum(f, xs) < 1 context = f
+        end
+        # both sides of every seam of the argument reduction
+        for b in (T(7/16), T(11/16), T(19/16), T(39/16))
+            @test ulp_error_maximum(atanpi, nextfloat.(b, -3:3)) < 1 context = b
+        end
+        for f in (asinpi, acospi), b in (T(0.5), T(0.975), one(T))
+            @test ulp_error_maximum(f, nextfloat.(b, -3:0)) < 1 context = (f, b)
+        end
+    end
+
+    @testset "atanpi(y, x), $T" for T in (Float32, Float64)
+        r = T(2.5)
+        # Negating `y` reflects the result and negating `x` reflects it about the
+        # quarter turn, and in half-turns both stay exact.
+        for (y, x, v) in ((T(0), r, T(0)),             # `y` zero
+                          (r, T(0), T(0.5)),           # `x` zero
+                          (r, r, T(0.25)),             # equal magnitudes
+                          (T(Inf), T(Inf), T(0.25)),
+                          (r, T(Inf), T(0)),           # `x` infinite, `y` finite
+                          (T(Inf), r, T(0.5)),         # `y` infinite, `x` finite
+                          (T(2.0^61), T(1), T(0.5)))   # |y/x| above the threshold
+            @test atanpi(y, x) === v context = (y, x)
+            @test atanpi(-y, x) === -v context = (y, x)
+            @test atanpi(y, -x) === one(T) - v context = (y, x)
+            @test atanpi(-y, -x) === v - one(T) context = (y, x)
+        end
+        # |y/x| below the threshold, where the quotient is not formed at all
+        @test atanpi(T(2.0^-61), -T(1.0)) === T(1)
+        @test atanpi(-T(2.0^-61), -T(1.0)) === -T(1)
+
+        @test isnan_type(T, atanpi(T(NaN), r))
+        @test isnan_type(T, atanpi(r, T(NaN)))
+    end
+    @test atanpi(Float16(1), -Float16(1)) === Float16(0.75)
+
+    @testset "BigFloat" begin
+        @test asinpi(big(1.0)) == 1//2
+        @test asinpi(big(-1.0)) == -1//2
+        @test acospi(big(1.0)) == 0
+        @test acospi(big(-1.0)) == 1
+        @test atanpi(big(1.0)) == 1//4
+        @test atanpi(BigFloat(Inf)) == 1//2
+        @test atanpi(big(-1.0), big(-1.0)) == -3//4
+        for f in (asinpi, acospi, atanpi)
+            @test isnan(f(big(NaN))) context = f
+        end
+        for f in (asinpi, acospi)
+            @test_throws DomainError f(big(1.5))
+        end
+    end
+
+    @testset "promotion and non-float arguments" begin
+        @test asinpi(1//2) === asinpi(0.5)
+        @test acospi(0) === 0.5
+        @test atanpi(1) === 0.25
+        @test atanpi(1, -1) === 0.75
+        @test atanpi(1.0f0, -1.0) === 0.75
+        for f in (asinpi, acospi, atanpi)
+            @test f(missing) === missing context = f
+        end
+        @test atanpi(missing, 1) === missing
+        @test atanpi(1, missing) === missing
+        @test @inferred(asinpi(Float16(0.5))) isa Float16
+        @test @inferred(acospi(0.5f0)) isa Float32
+        @test @inferred(atanpi(0.5)) isa Float64
+        @test @inferred(atanpi(0.5f0, 1.0f0)) isa Float32
     end
 end
 
