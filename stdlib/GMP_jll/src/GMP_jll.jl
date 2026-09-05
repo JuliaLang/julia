@@ -9,6 +9,9 @@ end
 
 export libgmp, libgmpxx
 
+# This package's UUID, as in its Project.toml; names this JLL in each library's identity
+const _pkg_uuid = Base.UUID("781609d7-10c4-51f6-84f2-b8444358ff6d")
+
 # These get calculated in __init__()
 const PATH = Ref("")
 const PATH_list = String[]
@@ -24,7 +27,8 @@ const libgmp = LazyLibrary(
         BundledLazyLibraryPath("libgmp.10.dylib")
     else
         BundledLazyLibraryPath("libgmp.so.10")
-    end
+    end;
+    id = LibraryID(_pkg_uuid, "libgmp")
 )
 
 libgmpxx_path::String = ""
@@ -36,6 +40,7 @@ const libgmpxx = LazyLibrary(
     else
         BundledLazyLibraryPath("libgmpxx.so.4")
     end,
+    id = LibraryID(_pkg_uuid, "libgmpxx"),
     dependencies = if Sys.isfreebsd()
         LazyLibrary[libgmp, libgcc_s]
     elseif Sys.isapple()

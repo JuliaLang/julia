@@ -55,7 +55,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 }
 
 typedef struct {
-    jl_value_t *gcroot[2];     // GC roots for strings [f_name, f_lib]
+    jl_value_t *gcroot[3];     // GC roots [f_name, f_lib, lib_id]
 
     // Static name resolution (compile-time known)
     const char *f_name;        // static function name
@@ -64,6 +64,7 @@ typedef struct {
     // Dynamic name resolution (simple runtime expressions)
     jl_value_t *f_name_expr;   // expression for function name
     jl_value_t *f_lib_expr;    // expression for library name
+    jl_value_t *lib_id;        // value returned by dlid() at definition time
 
     // Runtime pointer
     Value *jl_ptr;             // callable pointer expression result
@@ -636,6 +637,8 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     out.jl_ptr = nullptr;
     out.gcroot[0] = nullptr;
     out.gcroot[1] = nullptr;
+    out.gcroot[2] = nullptr;
+    out.lib_id = nullptr;
 
     // Check if this is a tuple (normalized by julia-syntax.scm)
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
@@ -660,8 +663,8 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                 }
              }
         }
-        else if (nargs == 2) {
-            // Two element tuple: (func_name, lib_name)
+        else if (nargs == 2 || nargs == 3) {
+            // Three element tuple: (func_name, lib_ref, lib_id)
             jl_value_t *fname_arg = jl_array_ptr_ref(tuple_args, 0);
             jl_value_t *lib_arg = jl_array_ptr_ref(tuple_args, 1);
             out.f_name_expr = fname_arg;
@@ -688,6 +691,11 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                 else if (jl_is_string(lib_val)) {
                     out.f_lib = jl_string_data(lib_val);
                 }
+            }
+
+            if (nargs == 3) {
+                out.lib_id = jl_array_ptr_ref(tuple_args, 2);
+                out.gcroot[2] = out.lib_id;
             }
         }
     }
@@ -725,7 +733,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
         // Name lookup form
         native_sym_arg_t sym = {};
-        JL_GC_PUSH2(&sym.gcroot[0], &sym.gcroot[1]);
+        JL_GC_PUSH3(&sym.gcroot[0], &sym.gcroot[1], &sym.gcroot[2]);
         interpret_foreignsymbol(ctx, sym, arg);
         Value *res = runtime_sym_lookup(ctx, sym, ctx.f);
         JL_GC_POP();
@@ -1516,7 +1524,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
-    JL_GC_PUSH4(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1]);
+    JL_GC_PUSH5(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1], &symarg.gcroot[2]);
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;

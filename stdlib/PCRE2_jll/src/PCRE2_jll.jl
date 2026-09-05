@@ -23,7 +23,8 @@ const libpcre2_8 = LazyLibrary(
         BundledLazyLibraryPath("libpcre2-8.so.0")
     else
         error("PCRE2_jll: Library 'libpcre2_8' is not available for $(Sys.KERNEL)")
-    end
+    end;
+    id = LibraryID(Base.UUID("efcefdf7-47ab-520b-bdef-62a2eaa19f15"), "libpcre2_8")
 )
 
 function eager_mode()

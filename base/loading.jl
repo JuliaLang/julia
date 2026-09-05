@@ -2881,7 +2881,7 @@ function maybe_loaded_precompile(key::PkgId, buildid::UInt128)
 end
 
 function module_build_id(m::Module)
-    hi, lo = ccall(:jl_module_build_id, NTuple{2,UInt64}, (Any,), m)
+    lo, hi = ccall(:jl_module_build_id, NTuple{2,UInt64}, (Any,), m)
     return (UInt128(hi) << 64) | lo
 end
 
@@ -3097,10 +3097,10 @@ function __require_prelocked(pkg::PkgId, env)
     # just load the file normally via include
     # for unknown dependencies
     uuid = pkg.uuid
-    uuid = (uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, uuid))
-    old_uuid = ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), __toplevel__)
+    uuid = (uuid === nothing ? UUID(0) : uuid)
+    old_uuid = ccall(:jl_module_uuid, UUID, (Any,), __toplevel__)
     if uuid !== old_uuid
-        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
+        ccall(:jl_set_module_uuid, Cvoid, (Any, UUID), __toplevel__, uuid)
     end
     __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_syntax_version)
     unlock(require_lock)
@@ -3111,7 +3111,7 @@ function __require_prelocked(pkg::PkgId, env)
         __toplevel__.var"#_internal_julia_parse" = Core._parse
         lock(require_lock)
         if uuid !== old_uuid
-            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
+            ccall(:jl_set_module_uuid, Cvoid, (Any, UUID), __toplevel__, old_uuid)
         end
     end
     return loaded
@@ -3439,9 +3439,9 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     end
     end
 
-    uuid_tuple = pkg.uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, pkg.uuid)
+    uuid = pkg.uuid === nothing ? UUID(0) : pkg.uuid
 
-    ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
+    ccall(:jl_set_module_uuid, Cvoid, (Any, UUID), Base.__toplevel__, uuid)
     if source !== nothing
         task_local_storage()[:SOURCE_PATH] = source
     end
