@@ -389,6 +389,23 @@ end
 # In function: julia_compiled_fptrunc_3480
 # @test compiled_fptrunc(Core.BFloat16, 1.234) === reinterpret(Core.BFloat16, 0b0_01111111_0011110)
 @test compiled_fptrunc(Float32, 1.234) === 1.234f0
+# Float32 to BFloat16 conversion must preserve subnormals (JuliaMath/BFloat16s.jl#125).
+@noinline compiled_bfloat_fptrunc(x::Float32) = Core.Intrinsics.fptrunc(Core.BFloat16, x)
+let x = reinterpret(Float32, 0x00400000) # 2^-127, exactly the bf16 subnormal 0x0040
+    @test reinterpret(UInt16, compiled_bfloat_fptrunc(x)) === 0x0040
+    @test reinterpret(UInt16, compiled_bfloat_fptrunc(-x)) === 0x8040
+end
+@static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+    script = """
+        using InteractiveUtils
+        @noinline f(x::Float32) = Core.Intrinsics.fptrunc(Core.BFloat16, x)
+        code_native(stdout, f, (Float32,); debuginfo=:none, dump_module=false)
+    """
+    for cpu_target in ("native,+avx512bf16,+avx512vl", "native,+avxneconvert")
+        asm = read(`$(Base.julia_cmd(; cpu_target)) --startup-file=no -e $script`, String)
+        @test !occursin("vcvtneps2bf16", asm)
+    end
+end
 @test_throws ErrorException compiled_fptrunc(Float64, 1.234f0)
 @test_throws ErrorException compiled_fptrunc(Int32, 1.234)
 @test_throws ErrorException compiled_fptrunc(Float32, 1234)
