@@ -703,7 +703,7 @@ See also `norm` in the [`LinearAlgebra`](@ref man-linalg) standard library.
 julia> a = Int64(10)^10;
 
 julia> hypot(a, a)
-1.4142135623730951e10
+14142135623.730951
 
 julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError with -2.914184810805068e18:
