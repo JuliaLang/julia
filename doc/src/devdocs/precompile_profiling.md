@@ -6,9 +6,12 @@ that session therefore shows you the driver waiting on its children and nothing 
 the time actually went. This page describes how to sample the workers themselves with the
 [`Profile`](@ref lib-profiling) stdlib.
 
-For zone-level timing of the same processes, such as how long inference or image generation
-took as labelled regions rather than as sampled stacks, see
-[Profiling package precompilation with Tracy](@ref).
+This complements Tracy rather than replacing it. Tracy can also sample call stacks in a
+worker, see [Enabling stack trace samples](@ref), and its sampler covers every thread in the
+process, including the image-generation threads this profiler cannot see, alongside the
+labelled zones and a timeline. What this page offers instead is a profile from any build,
+without `WITH_TRACY`, with the JIT-compiled Julia frames resolved, which Tracy's sampler does
+not yet do, in a form the `Profile` tooling already reads.
 
 ## Collecting a profile
 
@@ -86,7 +89,8 @@ instead, because the hook it dumps from only runs when native code is emitted.
     libuv threads that have no Julia thread state, so the profiler cannot see them: every
     sample comes from the worker's main thread. What that thread does while the shards run is
     wait, which shows up as `uv_thread_join` and was 12% of one measured worker. To see inside
-    image generation, use `JULIA_IMAGE_TIMINGS=1` for the per-shard timers, or Tracy.
+    image generation, use `JULIA_IMAGE_TIMINGS=1` for the per-shard timers, or Tracy's sampler,
+    which enumerates every thread in the process.
   * The effective sampling rate is lower than the requested one, because each sample has to
     unwind a deep stack. One worker running for about 10 s produced roughly 5,000 samples at a
     nominal 1 ms period. Read the profile as proportions, not as wall-clock time.
