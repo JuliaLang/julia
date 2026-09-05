@@ -605,3 +605,83 @@ let code = """
     # JULIA_COPY_STACKS is broken on Windows (#35147)
     @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end
+
+# A spinner that unwinds via an exception must pass on the wakeup duty
+# (the last-spinner rule): work enqueued while it held the spinner slot had
+# its wakeup gated on that slot, and no other worker will ever look for it.
+let code = """
+    using Base.Threads
+    ran = Atomic{Int}(0)
+    victim = Task(() -> (ran[] = 1))
+    victim.sticky = false
+    done = Channel{Bool}(1)
+    calls = Ref(0)
+    trypop = q -> begin
+        calls[] += 1
+        calls[] == 1 && return nothing   # not a Task: keep polling (take a spinner slot)
+        schedule(victim)                 # wakeup is gated on our own spinner slot
+        error("boom")
+    end
+    checkempty = () -> true
+    a = Task(() -> begin
+        try
+            ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypop, [], checkempty)
+        catch
+        end
+        Libc.systemsleep(0.5)            # block this thread without yielding
+        put!(done, ran[] == 1)
+    end)
+    a.sticky = true
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), a, 1)  # first default-pool thread
+    schedule(a)
+    exit(take!(done) ? 0 : 1)
+    """
+    cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no -t2,1 -e $code`
+    @test success(cmd)
+end
+
+# A throwing checkempty unwinds from inside the sleep transition, after the
+# thread has published its sleep state: the handler must un-publish it and
+# hand on any wake that was suppressed on this thread's account, or the
+# scheduled task strands with the pool's wakeups gated.
+let code = """
+    using Base.Threads
+    ran = Atomic{Int}(0)
+    victim = Task(() -> (ran[] = 1))
+    victim.sticky = false
+    done = Channel{Bool}(1)
+    calls = Ref(0)
+    # The throw must land on the post-publish recheck, the check_empty from
+    # inside the sleep transition. Don't count calls: how many quick polls
+    # precede the transition varies (two normally, one under rr or a
+    # JULIA_DEBUG_SLEEPWAKE build, where the spin is skipped). The recheck is
+    # the only check_empty immediately preceded by another check_empty, since
+    # the loop calls trypop before each quick poll but sleep_thread does not.
+    after_check = Ref(false)
+    trypop = q -> (after_check[] = false; nothing)   # never a task: keep polling
+    checkempty = () -> begin
+        calls[] += 1
+        if after_check[]                 # second in a row: we are past publish
+            schedule(victim)
+            error("boom")
+        end
+        after_check[] = true
+        return true
+    end
+    a = Task(() -> begin
+        try
+            ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypop, [], checkempty)
+        catch
+        end
+        Libc.systemsleep(0.5)            # block this thread without yielding
+        put!(done, ran[] == 1)
+    end)
+    a.sticky = true
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), a, 1)  # first default-pool thread
+    schedule(a)
+    exit(take!(done) ? 0 : 1)
+    """
+    cmd = addenv(`$(Base.julia_cmd()) --depwarn=error --startup-file=no -t2,1 -e $code`,
+                 "JULIA_THREAD_SLEEP_THRESHOLD" => "1")
+    @test success(cmd)
+end
