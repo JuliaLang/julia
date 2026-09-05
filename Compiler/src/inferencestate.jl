@@ -268,7 +268,7 @@ struct WorldWithRange
 end
 
 intersect(world::WorldWithRange, valid_worlds::WorldRange) =
-    WorldWithRange(world.this, intersect(world.valid_worlds, valid_worlds))
+    WorldWithRange(world.this, intersect(world.valid_worlds, valid_worlds, world.this))
 
 # `InferenceState` and `IRInterpretationState` are defined together in a `typegroup`
 # block so each can reference the other in its `callstack` field type. They are not
@@ -1329,7 +1329,10 @@ has_mustalias(::AbstractLattice, ::IRInterpretationState) = false
 
 # work towards converging the valid age range for sv
 function update_valid_age!(sv::AbsIntState, world, valid_worlds::WorldRange)
-    valid_worlds = intersect(sv.valid_worlds, valid_worlds)
+    if !(world in valid_worlds)
+        error("invalid age range update")
+    end
+    valid_worlds = intersect(sv.valid_worlds, valid_worlds, UInt(world))
     if !(world in valid_worlds)
         error("invalid age range update")
     end

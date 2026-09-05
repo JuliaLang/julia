@@ -522,6 +522,182 @@ static inline jl_callptr_t jl_invoke_api_callptr(jl_invoke_api_t type) JL_NOTSAF
 // useful constants
 extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 
+// === world age segments ===
+//
+// World ages form an append-only DAG (matching the shape of the precompile
+// graph) rather than a single linear sequence: a world is a packed
+// (segment, index) pair with the segment id in the high bits. Segments are
+// maximal linear runs of worlds. Segment 0 is the boot segment; while it is
+// the only segment, packed worlds coincide with the historical linear
+// numbering and every query below degenerates to the integer compares it
+// replaced.
+//
+// A segment's parent set is fixed at its creation and only ever references
+// segments that are closed (will allocate no further worlds), at their full
+// extent. This yields the central decomposition used by jl_world_reaches,
+// the two-point visibility predicate ("running at world (sb, ib), can I see
+// something that happened at world (sa, ia)?"):
+//
+//    (sa, ia) preceq (sb, ib)  iff  sa == sb ? ia <= ib
+//                                           : sa is an ancestor of sb
+//
+// Segment-level ancestry is answered by an immutable per-segment bitset
+// built when the segment is created, so readers need no locks. Segment ids
+// are assigned in creation order and are therefore topologically sorted; for
+// segments that have never been materialized (plain linear operation, and
+// the reserved all-ones segment that sentinel values like ~(size_t)0 fall
+// in), ancestry falls back to the chain order sa < sb, which agrees with the
+// DAG on any prefix of history that is still a pure chain.
+//
+// Joins in the DAG are not symmetric: a segment's first parent continues its
+// trunk (the main branch), and the remaining parents are side branches whose
+// events semantically happen after the main-branch events preceding the join
+// point and before those following it. Each segment therefore imposes a
+// total order on its entire visible cone -- the three-point predicate
+// (sa, ia) preceq_[observer] (sb, ib), see jl_world_ordered_before -- in
+// which trunk worlds order as themselves and a side branch's worlds order at
+// its merge point (recursively, by the side branch's own total order within
+// one merge point). jl_world_join computes the earliest world in the
+// observer's order whose history includes two given worlds; interval bounds
+// from different branches are incomparable under the two-point predicate, so
+// intersecting validity intervals must use this join rather than an integer
+// max.
+//
+// Integer comparison of two worlds remains exact whenever both lie on one
+// trunk -- e.g. the spine, the chain of segments the world counter has
+// traversed -- because segment ids and indices are both monotone along it.
+// Sites that compare worlds all known to be on the spine (e.g. the world
+// counter, method insertion worlds, and invalidation caps, which only ever
+// happen at the spine head) may therefore still use integer compares; sites
+// that test a stored world bound against an arbitrary query world must use
+// the predicates below.
+
+// 16 bits of segment id on every platform (real environments can graft
+// several segments per loaded image, so fewer is not enough), with the rest
+// of the word as the index. On 32-bit platforms a run's index space is only
+// 16 bits; when it is exhausted, jl_world_next_locked simply continues the
+// trunk in a fresh run segment.
+#define JL_WORLD_IDX_BITS (8 * sizeof(size_t) - 16)
+#define JL_WORLD_IDX_MASK ((~(size_t)0) >> 16)
+// number of allocatable segments; the top segment id is never allocated so
+// that sentinel worlds (~(size_t)0 and values near it) fall in an
+// unmaterialized segment
+#define JL_WORLD_MAX_SEGMENTS ((size_t)0xffff)
+#define JL_WORLD_PACK(seg, idx) ((((size_t)(seg)) << JL_WORLD_IDX_BITS) | (size_t)(idx))
+
+STATIC_INLINE size_t jl_world_seg(size_t world) JL_NOTSAFEPOINT
+{
+    return world >> JL_WORLD_IDX_BITS;
+}
+STATIC_INLINE size_t jl_world_idx(size_t world) JL_NOTSAFEPOINT
+{
+    return world & JL_WORLD_IDX_MASK;
+}
+
+// Segment kinds, for serializing world histories. The boot prefix (the
+// worlds the system image was built at, shared verbatim by every process
+// that loads it) is never materialized and reports JL_WORLD_SEG_BOOT. Spine
+// runs are the maximal linear stretches of this process's own history
+// between graft events. Image runs are runs grafted from a loaded package
+// image, identified stably by (image id, run ordinal). Other segments
+// (e.g. fabricated by tests) are not serializable.
+enum jl_world_seg_kind {
+    JL_WORLD_SEG_BOOT = 0,
+    JL_WORLD_SEG_RUN = 1,
+    JL_WORLD_SEG_IMAGE = 2,
+    JL_WORLD_SEG_OTHER = 3,
+};
+
+// Join-position sentinel: the segment lies on the observer's trunk, so a
+// world's position in the observer's total order is the world itself.
+#define JL_WORLD_POS_TRUNK (~(size_t)0)
+
+typedef struct {
+    uint32_t id;
+    uint32_t anc_nbits;         // number of valid bits in anc_row (== id)
+    _Atomic(size_t) end_idx;    // terminal index once closed; JL_WORLD_IDX_MASK while open
+    uint8_t kind;               // enum jl_world_seg_kind
+    uint32_t run;               // RUN: spine run ordinal; IMAGE: run ordinal within the origin image
+    uint64_t image_id;          // IMAGE: origin image id; 0 otherwise
+    uint32_t nparents;
+    size_t *parents;            // parent worlds; parents[0] is the trunk (main-branch) parent
+    // This segment's total order over its visible cone (the three-point
+    // predicate): for each ancestor segment, either JL_WORLD_POS_TRUNK (the
+    // ancestor is on this segment's trunk -- its chain of first parents --
+    // and its worlds are positioned at themselves), or the trunk world at
+    // which the ancestor's branch was merged. Joins are asymmetric: a side
+    // branch's events are positioned at its merge point, i.e. after every
+    // main-branch event before the join and before every one after it.
+    // Positions are trunk worlds and compare exactly as integers. 0 = unset.
+    size_t *join_pos;
+
+#ifdef __cplusplus
+    uint64_t anc_row[1];        // ancestor segment bitset, immutable after publication
+#else
+    uint64_t anc_row[];         // ancestor segment bitset, immutable after publication
+#endif
+} jl_world_segment_t;
+
+JL_DLLEXPORT int jl_world_seg_reaches(size_t sa, size_t sb) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_new_segment(size_t *parent_worlds, size_t nparents) JL_CANSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_advance_into_segment(size_t *extra_parent_worlds, size_t nextra) JL_CANSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_next_locked(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_world_init_runs(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_new_image_run(uint64_t image_id, uint32_t run, size_t *parent_worlds, size_t nparents) JL_CANSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_image_run(uint64_t image_id, uint32_t run) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_world_segment_t *jl_world_get_segment(size_t seg) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_world_nsegments(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_join(size_t a, size_t b, size_t observer) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_spine_join(size_t a, size_t b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_world_ordered_before(size_t a, size_t b, size_t observer) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_world_on_trunk(size_t w, size_t observer) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_world_cap_meet(size_t a, size_t b) JL_NOTSAFEPOINT;
+
+// mirror of Core.WorldToken
+typedef struct {
+    size_t world;
+} jl_worldtoken_t;
+
+// a preceq b: does world `a` precede (or equal) world `b` in the world DAG,
+// i.e. is the state of the world as of `a` part of the history of `b`?
+STATIC_INLINE int jl_world_reaches(size_t a, size_t b) JL_NOTSAFEPOINT
+{
+    if (jl_world_seg(a) == jl_world_seg(b))
+        return a <= b;
+    return jl_world_seg_reaches(jl_world_seg(a), jl_world_seg(b));
+}
+
+// Had an entry with the given `min_world` bound already been created as of
+// `world`?
+STATIC_INLINE int jl_world_at_least(size_t world, size_t min_world) JL_NOTSAFEPOINT
+{
+    return jl_world_reaches(min_world, world);
+}
+
+// Is `world` still covered by validity bounds capped (inclusively) at
+// `max_world`? `max_world == ~(size_t)0` means the entry has not been
+// invalidated; otherwise `max_world + 1` is the world of the invalidating
+// event and the entry is invalid exactly in that world's future cone.
+STATIC_INLINE int jl_world_at_most(size_t world, size_t max_world) JL_NOTSAFEPOINT
+{
+    if (max_world == ~(size_t)0)
+        return 1;
+    return !jl_world_reaches(max_world + 1, world);
+}
+
+// Is `world` within the validity bounds [min_world, max_world]?
+STATIC_INLINE int jl_world_in_range(size_t world, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+{
+    return jl_world_at_least(world, min_world) && jl_world_at_most(world, max_world);
+}
+
+// Is the entire (spine) world range [query_min, query_max] within the
+// validity bounds [min_world, max_world]?
+STATIC_INLINE int jl_world_range_in_range(size_t query_min, size_t query_max, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+{
+    return jl_world_at_least(query_min, min_world) && jl_world_at_most(query_max, max_world);
+}
+
 typedef void (*tracer_cb)(jl_value_t *tracee);
 extern tracer_cb jl_newmeth_tracer;
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee) JL_CANSAFEPOINT;
@@ -1160,6 +1336,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b J
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_bpart_reresolve_loaded(jl_binding_t *b, jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;

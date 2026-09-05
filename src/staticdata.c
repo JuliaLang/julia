@@ -315,6 +315,10 @@ typedef struct {
     jl_ptls_t ptls;
     jl_image_t *image;
     int8_t incremental;
+    // incremental only: the serialized data captures worlds above the shared
+    // prefix (world tokens), so the image carries its world-segment table and
+    // serializes world bounds verbatim for translation at load time
+    int8_t world_table_mode;
 } jl_serializer_state;
 
 static jl_value_t *jl_bigint_type = NULL;
@@ -622,7 +626,7 @@ static int codeinst_may_be_runnable(jl_code_instance_t *ci, int incremental) {
         return 1;
     if (incremental)
         return 0;
-    return jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= max_world;
+    return jl_world_in_range(jl_typeinf_world, jl_atomic_load_relaxed(&ci->min_world), max_world);
 }
 
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
@@ -1049,6 +1053,13 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     if (t == jl_task_type) {
         jl_error("Task cannot be serialized");
     }
+    if (s->incremental && (jl_value_t*)t == (jl_value_t*)jl_worldtoken_type &&
+        !jl_world_reaches(((jl_worldtoken_t*)v)->world, jl_require_world)) {
+        // a world capture above the shared prefix escapes into the image:
+        // serialize this process's world-segment table so the loader can
+        // graft this image's world history
+        s->world_table_mode = 1;
+    }
     if (s->incremental && needs_uniquing(v, s->query_cache) && t == jl_binding_type) {
         jl_binding_t *b = (jl_binding_t*)v;
         if (b->globalref == NULL)
@@ -1324,7 +1335,9 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             newm_data->min_world = data->min_world;
             newm_data->max_world = data->max_world;
             newm_data->flags = data->flags;
-            if (s->incremental) {
+            if (s->incremental && !s->world_table_mode) {
+                // (in world-table mode the bounds are kept verbatim and
+                // translated by segment at load)
                 if (data->max_world != ~(size_t)0)
                     newm_data->max_world = 0;
                 newm_data->min_world = jl_require_world;
@@ -1343,7 +1356,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
         for (i = 0; i < module_usings_length(m); i++) {
             struct _jl_module_using *data = module_usings_getidx(m, i);
             write_pointerfield(s, (jl_value_t*)data->mod);
-            if (s->incremental) {
+            if (s->incremental && !s->world_table_mode) {
                 // TODO: Drop dead ones entirely?
                 write_uint(s->s, jl_require_world);
                 write_uint(s->s, data->max_world == ~(size_t)0 ? ~(size_t)0 : 1);
@@ -1786,7 +1799,10 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 jl_typemap_entry_t *newentry = (jl_typemap_entry_t*)&s->s->buf[reloc_offset];
                 if (jl_atomic_load_relaxed(&newentry->max_world) == ~(size_t)0) {
                     if (jl_atomic_load_relaxed(&newentry->min_world) > 1) {
-                        jl_atomic_store_relaxed(&newentry->min_world, ~(size_t)0);
+                        // in world-table mode min_world is kept verbatim and
+                        // translated by segment at load time
+                        if (!s->world_table_mode)
+                            jl_atomic_store_relaxed(&newentry->min_world, ~(size_t)0);
                         jl_atomic_store_relaxed(&newentry->max_world, WORLD_AGE_REVALIDATION_SENTINEL);
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
@@ -1797,7 +1813,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     jl_atomic_store_relaxed(&newentry->max_world, 0);
                 }
             }
-            else if (s->incremental && jl_is_binding_partition(v)) {
+            else if (s->incremental && !s->world_table_mode && jl_is_binding_partition(v)) {
+                // (in world-table mode, the whole partition chain keeps its
+                // verbatim world bounds and is translated by segment at load)
                 jl_binding_partition_t *newbpart = (jl_binding_partition_t*)&s->s->buf[reloc_offset];
                 size_t max_world = jl_atomic_load_relaxed(&newbpart->max_world);
                 if (max_world == ~(size_t)0) {
@@ -1815,6 +1833,20 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     jl_atomic_store_relaxed(&newbpart->max_world, 0);
                 }
             }
+            else if (s->incremental && jl_typetagis(v, jl_worldtoken_type)) {
+                assert(f == s->s);
+                jl_worldtoken_t *newtok = (jl_worldtoken_t*)&f->buf[reloc_offset];
+                if (!jl_world_reaches(newtok->world, jl_require_world)) {
+                    // Captured above the shared prefix: the world is kept
+                    // verbatim, and the loader translates its segment through
+                    // the image's world-segment table onto the grafted copy of
+                    // this process's world history.
+                    assert(s->world_table_mode);
+                    arraylist_push(&s->fixup_objs, (void*)reloc_offset);
+                }
+                // else: part of the shared prefix; remains valid as an
+                // absolute world in any loading process
+            }
             else if (jl_is_method(v)) {
                 assert(f == s->s);
                 write_padding(f, sizeof(jl_method_t) - tot); // hidden fields
@@ -1822,7 +1854,10 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 jl_method_t *newm = (jl_method_t*)&f->buf[reloc_offset];
                 if (s->incremental) {
                     if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
-                        jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
+                        // in world-table mode primary_world is kept verbatim
+                        // and translated by segment at load time
+                        if (!s->world_table_mode)
+                            jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
                         int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
                         int new_dispatch_status = 0;
                         if (!(dispatch_status & METHOD_SIG_LATEST_ONLY))
@@ -1853,7 +1888,10 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 if (s->incremental) {
                     if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
                         //assert(jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec); // some code (such as !==) might add a method lookup restriction but not keep the edges
-                        jl_atomic_store_release(&newci->min_world, ~(size_t)0);
+                        // in world-table mode min_world is kept verbatim and
+                        // translated by segment at load time
+                        if (!s->world_table_mode)
+                            jl_atomic_store_release(&newci->min_world, ~(size_t)0);
                         jl_atomic_store_release(&newci->max_world, WORLD_AGE_REVALIDATION_SENTINEL);
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
@@ -3322,6 +3360,40 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_write_arraylist(s.relocs, &s.fixup_types);
     }
     jl_write_arraylist(s.relocs, &s.fixup_objs);
+    // World-segment table: present when the serialized data captures worlds
+    // above the shared prefix (world tokens). Rows describe every segment of
+    // this process's world history, so that a loading process can graft this
+    // image's own spine runs (with their true parent structure) and translate
+    // the verbatim-serialized worlds by segment. Boot-prefix segments map
+    // verbatim; runs grafted from dependency images resolve through their
+    // stable (image id, run ordinal) identity.
+    write_uint8(s.relocs, s.world_table_mode);
+    if (s.world_table_mode) {
+        write_uint64(s.relocs, s.worklist_key);
+        uint32_t nsegs = jl_world_nsegments();
+        write_uint32(s.relocs, nsegs);
+        for (uint32_t i = 0; i < nsegs; i++) {
+            jl_world_segment_t *seg = jl_world_get_segment(i);
+            uint8_t kind = seg ? seg->kind : JL_WORLD_SEG_BOOT;
+            write_uint8(s.relocs, kind);
+            if (kind == JL_WORLD_SEG_RUN) {
+                size_t end = jl_atomic_load_relaxed(&seg->end_idx);
+                if (end == JL_WORLD_IDX_MASK) {
+                    // the still-open run: this image's history ends at the save counter
+                    assert(jl_world_seg(jl_atomic_load_relaxed(&jl_world_counter)) == i);
+                    end = jl_world_idx(jl_atomic_load_relaxed(&jl_world_counter));
+                }
+                write_uint(s.relocs, end);
+                write_uint32(s.relocs, seg->nparents);
+                for (uint32_t p = 0; p < seg->nparents; p++)
+                    write_uint(s.relocs, seg->parents[p]);
+            }
+            else if (kind == JL_WORLD_SEG_IMAGE) {
+                write_uint64(s.relocs, seg->image_id);
+                write_uint32(s.relocs, seg->run);
+            }
+        }
+    }
     write_uint(f, relocs.size);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&relocs, 0);
@@ -3908,19 +3980,28 @@ JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
 int IMAGE_NATIVE_CODE_TAINTED = 0;
 
 // TODO: This should possibly be in Julia
-static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit, int no_replacement) JL_CANSAFEPOINT
+static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit, int no_replacement, int grafted) JL_CANSAFEPOINT
 {
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
     size_t raw_kind = bpart->kind;
     enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & PARTITION_MASK_KIND);
     if (!unchanged_implicit && jl_bkind_is_some_implicit(kind)) {
-        // TODO: Should we actually update this in place or delete it from the partitions list
-        // and allocate a fresh bpart?
-        jl_update_loaded_bpart(b, bpart);
-        bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
-        if (jl_atomic_load_relaxed(&bpart->min_world) > jl_require_world)
-            goto invalidated;
+        if (grafted) {
+            // the grafted resolution stays valid in its own branch's cone; if
+            // this process's resolution differs, the partition is capped and
+            // a fresh spine resolution is prepended
+            if (jl_bpart_reresolve_loaded(b, bpart) != NULL)
+                goto invalidated;
+        }
+        else {
+            // TODO: Should we actually update this in place or delete it from the partitions list
+            // and allocate a fresh bpart?
+            jl_update_loaded_bpart(b, bpart);
+            bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
+            if (jl_atomic_load_relaxed(&bpart->min_world) > jl_require_world)
+                goto invalidated;
+        }
     }
     {
         if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
@@ -3943,9 +4024,14 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
         }
         else {
             // Binding partition was invalidated
-            assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
-            jl_atomic_store_relaxed(&bpart->min_world,
-                jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+            if (!grafted) {
+                assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
+                jl_atomic_store_relaxed(&bpart->min_world,
+                    jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+            }
+            // (a grafted partition keeps its branch worlds; the
+            // changed-since-prefix signal is already carried by its
+            // min_world lying above the prefix)
         }
     }
 invalidated:
@@ -3961,7 +4047,7 @@ invalidated:
             if (!jl_atomic_load_relaxed(&bedge->partitions))
                 continue;
             JL_UNLOCK(&b->globalref->mod->lock);
-            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
+            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0, grafted);
             JL_LOCK(&b->globalref->mod->lock);
         }
         JL_UNLOCK(&b->globalref->mod->lock);
@@ -3980,7 +4066,7 @@ invalidated:
                 if (!jl_atomic_load_relaxed(&importee->partitions))
                     continue;
                 JL_UNLOCK(&mod->lock);
-                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0, 0);
+                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0, 0, grafted);
                 JL_LOCK(&mod->lock);
             }
         }
@@ -4000,6 +4086,17 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
     return unchanged_implicit;
 }
 
+// Translate a world serialized verbatim by another process through the
+// image's world-segment map (identity for the shared boot prefix, grafted
+// segments for the image's own runs and its dependencies' runs).
+static size_t world_remap(size_t w, size_t *segmap, uint32_t maplen)
+{
+    size_t seg = jl_world_seg(w);
+    if (seg >= maplen || segmap[seg] == ~(size_t)0)
+        jl_error("cannot translate a serialized world with no stable segment identity");
+    return JL_WORLD_PACK(segmap[seg], jl_world_idx(w));
+}
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t *depmods, uint32_t checksum,
                                 /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
@@ -4007,7 +4104,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
-                                                 pkgcachesizes *cachesizes) JL_CANSAFEPOINT JL_GC_DISABLED
+                                                 pkgcachesizes *cachesizes,
+                                                 size_t *worldtoken_graft) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
     int en = jl_gc_enable(0);
@@ -4108,6 +4206,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         jl_atomic_store_release(&jl_world_counter, jl_require_world);
         jl_typeinf_world = read_uint(f);
         jl_set_gs_ctr(gs_ctr);
+        // the image's worlds become the closed, shared boot prefix; this
+        // process's own history starts in a fresh spine run
+        jl_world_init_runs();
     }
     else {
         offset_restored = jl_read_offset(&s);
@@ -4178,6 +4279,59 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         arraylist_new(&s.fixup_types, 0);
     }
     jl_read_arraylist(s.relocs, &s.fixup_objs);
+    // World-segment table (see the write side): graft this image's spine runs
+    // into the world DAG and prepare the segment translation map used to
+    // rebase the image's verbatim-serialized worlds.
+    size_t *world_segmap = NULL;
+    uint32_t world_segmap_len = 0;
+    size_t graft_head = 0; // the final world of the image's last run
+    if (read_uint8(s.relocs)) {
+        assert(s.incremental);
+        uint64_t self_id = read_uint64(s.relocs);
+        uint32_t nsegs = read_uint32(s.relocs);
+        world_segmap = (size_t*)malloc_s(nsegs * sizeof(size_t));
+        world_segmap_len = nsegs;
+        uint32_t nruns = 0;
+        for (uint32_t i = 0; i < nsegs; i++) {
+            uint8_t kind = read_uint8(s.relocs);
+            if (kind == JL_WORLD_SEG_BOOT) {
+                // the shared prefix maps verbatim
+                world_segmap[i] = i;
+            }
+            else if (kind == JL_WORLD_SEG_RUN) {
+                size_t end = read_uint(s.relocs);
+                uint32_t np = read_uint32(s.relocs);
+                size_t *parents = np ? (size_t*)malloc_s(np * sizeof(size_t)) : NULL;
+                for (uint32_t p = 0; p < np; p++) {
+                    size_t pw = read_uint(s.relocs);
+                    size_t pseg = jl_world_seg(pw);
+                    if (pseg >= i || world_segmap[pseg] == ~(size_t)0)
+                        jl_error("world-segment table has an untranslatable parent");
+                    parents[p] = JL_WORLD_PACK(world_segmap[pseg], jl_world_idx(pw));
+                }
+                size_t base = jl_world_new_image_run(self_id, nruns++, parents, np);
+                free(parents);
+                world_segmap[i] = jl_world_seg(base);
+                jl_world_segment_t *newseg = jl_world_get_segment(world_segmap[i]);
+                jl_atomic_store_relaxed(&newseg->end_idx, end);
+                graft_head = base + end;
+            }
+            else if (kind == JL_WORLD_SEG_IMAGE) {
+                uint64_t image_id = read_uint64(s.relocs);
+                uint32_t run = read_uint32(s.relocs);
+                size_t w = jl_world_image_run(image_id, run);
+                if (w == ~(size_t)0)
+                    jl_error("the world history of a dependency image was not grafted (dependency image mismatch?)");
+                world_segmap[i] = jl_world_seg(w);
+            }
+            else {
+                // not serializable (e.g. a fabricated test segment); error
+                // only if something actually references it
+                world_segmap[i] = ~(size_t)0;
+            }
+        }
+        assert(graft_head != 0 && "world-table image must contain at least one spine run");
+    }
     // Perform the uniquing of objects that we don't "own" and consequently can't promise
     // weren't created by some other package before this one got loaded:
     // - iterate through all objects that need to be uniqued. The first encounter has to be the
@@ -4408,8 +4562,28 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
         if (jl_typetagis(obj, jl_typemap_entry_type) || jl_is_method(obj) || jl_is_code_instance(obj)) {
-            jl_array_ptr_1d_push(*internal_methods, obj);
             assert(s.incremental);
+            if (world_segmap) {
+                // rebase the entry's verbatim-serialized creation world onto
+                // the grafted copy of the saving process's world history;
+                // activation later preserves these per-entry worlds
+                if (jl_typetagis(obj, jl_typemap_entry_type)) {
+                    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)obj;
+                    jl_atomic_store_relaxed(&entry->min_world,
+                        world_remap(jl_atomic_load_relaxed(&entry->min_world), world_segmap, world_segmap_len));
+                }
+                else if (jl_is_method(obj)) {
+                    jl_method_t *m = (jl_method_t*)obj;
+                    jl_atomic_store_relaxed(&m->primary_world,
+                        world_remap(jl_atomic_load_relaxed(&m->primary_world), world_segmap, world_segmap_len));
+                }
+                else {
+                    jl_code_instance_t *ci = (jl_code_instance_t*)obj;
+                    jl_atomic_store_relaxed(&ci->min_world,
+                        world_remap(jl_atomic_load_relaxed(&ci->min_world), world_segmap, world_segmap_len));
+                }
+            }
+            jl_array_ptr_1d_push(*internal_methods, obj);
         }
         else if (jl_is_method_instance(obj)) {
             jl_method_instance_t *newobj = jl_specializations_get_or_insert((jl_method_instance_t*)obj);
@@ -4440,6 +4614,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                 // Rebuild cross-image usings backedges
                 for (size_t i = 0; i < module_usings_length(mod); ++i) {
                     struct _jl_module_using *data = module_usings_getidx(mod, i);
+                    if (world_segmap) {
+                        // translate the entries' verbatim world bounds onto
+                        // the grafted copy of the image's world history
+                        data->min_world = world_remap(data->min_world, world_segmap, world_segmap_len);
+                        if (data->max_world != ~(size_t)0)
+                            data->max_world = world_remap(data->max_world, world_segmap, world_segmap_len);
+                    }
                     if (external_blob_index((jl_value_t*)data->mod) != mod_idx) {
                         jl_add_usings_backedge(data->mod, mod);
                     }
@@ -4451,10 +4632,17 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             // child links were dropped at serialization)
             jl_cancel_source_relink((jl_cancel_source_t*)obj);
         }
+        else if (jl_typetagis(obj, jl_worldtoken_type)) {
+            assert(s.incremental && world_segmap);
+            jl_worldtoken_t *tok = (jl_worldtoken_t*)obj;
+            tok->world = world_remap(tok->world, world_segmap, world_segmap_len);
+        }
         else {
             abort();
         }
     }
+    if (worldtoken_graft)
+        *worldtoken_graft = graft_head;
     if (s.incremental) {
         int no_replacement = jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0;
         for (size_t i = 0; i < s.fixup_objs.len; i++) {
@@ -4470,13 +4658,26 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                     if ((jl_value_t*)b == jl_nothing)
                         continue;
                     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
-                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit, no_replacement)) {
+                    if (world_segmap) {
+                        // translate the verbatim world bounds of the whole
+                        // partition chain: the image's binding history
+                        for (jl_binding_partition_t *p = bpart; p != NULL && jl_is_binding_partition((jl_value_t*)p);
+                                p = jl_atomic_load_relaxed(&p->next)) {
+                            jl_atomic_store_relaxed(&p->min_world,
+                                world_remap(jl_atomic_load_relaxed(&p->min_world), world_segmap, world_segmap_len));
+                            size_t pmax = jl_atomic_load_relaxed(&p->max_world);
+                            if (pmax != ~(size_t)0)
+                                jl_atomic_store_relaxed(&p->max_world, world_remap(pmax, world_segmap, world_segmap_len));
+                        }
+                    }
+                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit, no_replacement, world_segmap != NULL)) {
                         unchanged_implicit = all_usings_unchanged_implicit(mod);
                     }
                 }
             }
         }
     }
+    free(world_segmap);
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
 
@@ -4656,7 +4857,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 ios_close(f);
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes);
+            size_t worldtoken_graft = 0;
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes, &worldtoken_graft);
             JL_SIGATOMIC_END();
 
             // Add roots to methods
@@ -4680,13 +4882,23 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             JL_LOCK(&world_counter_lock);
             // allocate a world for the new methods, and insert them there, invalidating content as needed
             size_t world = jl_atomic_load_relaxed(&jl_world_counter);
-            if (new_methods)
-                world += 1;
-            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
-            // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
-            // allow users to start running in this updated world
-            if (new_methods)
-                jl_atomic_store_release(&jl_world_counter, world);
+            if (worldtoken_graft) {
+                // this image's world history was grafted as its own spine
+                // runs (it contains captured world tokens); its content
+                // activates at its original, per-entry worlds, and the spine
+                // then merges the image's final run
+                jl_activate_methods(extext_methods, internal_methods, 0, pkgname);
+                jl_world_advance_into_segment(&worldtoken_graft, 1);
+            }
+            else {
+                if (new_methods)
+                    world = jl_world_next_locked();
+                jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+                // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
+                // allow users to start running in this updated world
+                if (new_methods)
+                    jl_atomic_store_release(&jl_world_counter, world);
+            }
             // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
 
@@ -4729,7 +4941,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL);
+                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT

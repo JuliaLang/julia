@@ -747,7 +747,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_cached_uninferred(jl_code_instance_t *codein
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
         if (codeinst->owner != (void*)jl_uninferred_sym)
             continue;
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
+        if (jl_world_in_range(world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world))) {
             return codeinst;
         }
     }
@@ -805,7 +805,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
         ct->world_age = jl_atomic_load_relaxed(&def->primary_world);
-        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter))
+        if (!jl_world_at_least(jl_atomic_load_acquire(&jl_world_counter), ct->world_age))
             jl_error("The generator method cannot run until it is added to a method table.");
 
         // invoke code generator
@@ -1221,7 +1221,7 @@ JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
 JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
 {
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_t *b = jl_get_module_binding(mod, name, 1);
     jl_value_t *gf = jl_get_existing_strong_gf(b, new_world);
     if (gf) {
