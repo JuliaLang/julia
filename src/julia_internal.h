@@ -549,7 +549,11 @@ JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize) JL_NOTSAFEPOINT;
 extern arraylist_t image_remset;
 extern jl_mutex_t image_remset_lock;
 
-// pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
+// Pool size classes use mimalloc's bin spacing: 8-byte spacing through 64
+// bytes, then 4 bins per power of two (relative waste <= 1/8) up to 10240,
+// mimalloc's small-object max for a 64 KiB page (waste <= ~page/6).
+// The classes that are not multiples of 16 (24, 40, 56) can only be reached
+// through `jl_gc_szclass_align8`; `jl_gc_szclass` skips them.
 static const int jl_gc_sizeclasses[] = {
 #ifdef _P64
     8,
@@ -560,55 +564,24 @@ static const int jl_gc_sizeclasses[] = {
 #else
     4, 8, 12,
 #endif
-
-    // 16 pools at 8-byte spacing
-    // the 8-byte aligned pools are only used for Strings
-    16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136,
-    // 8 pools at 16-byte spacing
-    144, 160, 176, 192, 208, 224, 240, 256,
-
-    // the following tables are computed for maximum packing efficiency via the formula:
-    // pg = GC_SMALL_PAGE ? 2^12 : 2^14
-    // sz = (div.(pg-8, rng).÷16)*16; hcat(sz, (pg-8).÷sz, pg .- (pg-8).÷sz.*sz)'
-
-#ifdef GC_SMALL_PAGE
-    // rng = 15:-1:2 (14 pools)
-    272, 288, 304, 336, 368, 400, 448, 496, 576, 672, 816, 1008, 1360, 2032
-//  15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, /pool
-//  16, 64, 144, 64, 48, 96, 64, 128, 64, 64, 16, 64, 16, 32, bytes lost
-#else
-    // rng = 60:-4:32 (8 pools)
-    272, 288, 304, 336, 368, 400, 448, 496,
-//  60, 56, 53, 48, 44, 40, 36, 33, /pool
-//  64, 256, 272, 256, 192, 384, 256,  16, bytes lost
-
-    // rng = 30:-2:16 (8 pools)
-    544, 576, 624, 672, 736, 816, 896, 1008,
-//  30, 28, 26, 24, 22, 20, 18, 16, /pool
-//  64, 256, 160, 256, 192,  64, 256, 256, bytes lost
-
-    // rng = 15:-1:8 (8 pools)
-    1088, 1168, 1248, 1360, 1488, 1632, 1808, 2032
-//   15, 14, 13, 12, 11, 10, 9, 8, /pool
-//   64, 32, 160, 64, 16, 64, 112,  128, bytes lost
-#endif
+    // 7 bins at 8-byte spacing
+    16, 24, 32, 40, 48, 56, 64,
+    // 4 bins per power of two
+    80, 96, 112, 128,
+    160, 192, 224, 256,
+    320, 384, 448, 512,
+    640, 768, 896, 1024,
+    1280, 1536, 1792, 2048,
+    2560, 3072, 3584, 4096,
+    5120, 6144, 7168, 8192,
+    10240
 };
-#ifdef GC_SMALL_PAGE
 #ifdef _P64
+#  define JL_GC_N_POOLS 37
+#elif MAX_ALIGN > 4
+#  define JL_GC_N_POOLS 38
+#else
 #  define JL_GC_N_POOLS 39
-#elif MAX_ALIGN > 4
-#  define JL_GC_N_POOLS 40
-#else
-#  define JL_GC_N_POOLS 41
-#endif
-#else
-#ifdef _P64
-#  define JL_GC_N_POOLS 49
-#elif MAX_ALIGN > 4
-#  define JL_GC_N_POOLS 50
-#else
-#  define JL_GC_N_POOLS 51
-#endif
 #endif
 static_assert(sizeof(jl_gc_sizeclasses) / sizeof(jl_gc_sizeclasses[0]) == JL_GC_N_POOLS, "");
 
@@ -634,47 +607,50 @@ STATIC_INLINE int jl_gc_alignment(size_t sz) JL_NOTSAFEPOINT
 }
 JL_DLLEXPORT int jl_alignment(size_t sz) JL_NOTSAFEPOINT;
 
-// the following table is computed as:
-// [searchsortedfirst(jl_gc_sizeclasses, i) - 1 for i = 0:16:jl_gc_sizeclasses[end]]
-static const uint8_t szclass_table[] =
-#ifdef GC_SMALL_PAGE
-    {0,1,3,5,7,9,11,13,15,17,18,19,20,21,22,23,24,25,26,27,28,28,29,29,30,30,31,31,31,32,32,32,33,33,33,33,33,34,34,34,34,34,34,35,35,35,35,35,35,35,35,35,36,36,36,36,36,36,36,36,36,36,36,36,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38};
-#else
-    {0,1,3,5,7,9,11,13,15,17,18,19,20,21,22,23,24,25,26,27,28,28,29,29,30,30,31,31,31,32,32,32,33,33,33,34,34,35,35,35,36,36,36,37,37,37,37,38,38,38,38,38,39,39,39,39,39,40,40,40,40,40,40,40,41,41,41,41,41,42,42,42,42,42,43,43,43,43,43,44,44,44,44,44,44,44,45,45,45,45,45,45,45,45,46,46,46,46,46,46,46,46,46,47,47,47,47,47,47,47,47,47,47,47,48,48,48,48,48,48,48,48,48,48,48,48,48,48};
-#endif
-static_assert(sizeof(szclass_table) == 128, "");
+// Index of the class for `sz > 64` in `jl_gc_sizeclasses`, whose bins above 64
+// are 4 per power of two: for sz in (2^b, 2^(b+1)], bins are spaced 2^(b-2).
+// `N` is the number of arch-specific classes preceding the 16..64 bins.
+STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_big(unsigned sz, int N) JL_NOTSAFEPOINT
+{
+    unsigned b = 31 - __builtin_clz(sz - 1); // sz in (2^b, 2^(b+1)], b >= 6
+    unsigned sub = (sz - (1u << b) - 1) >> (b - 2);
+    return N + 7 + 4 * (b - 6) + sub;
+}
 
 STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz) JL_NOTSAFEPOINT
 {
-    assert(sz <= 2032);
+    assert(sz <= 10240);
 #ifdef _P64
     if (sz <= 8)
         return 0;
-    const int N = 0;
+    const int N = 1;
 #elif MAX_ALIGN > 4
     if (sz <= 8)
         return (sz >= 4 ? 1 : 0);
-    const int N = 1;
+    const int N = 2;
 #else
     if (sz <= 12)
         return (sz >= 8 ? 2 : (sz >= 4 ? 1 : 0));
-    const int N = 2;
+    const int N = 3;
 #endif
-    uint8_t klass = szclass_table[(sz + 15) / 16];
-    return klass + N;
+    if (sz <= 64) // 16-byte aligned bins 16, 32, 48, 64
+        return N + 2 * ((sz + 15) / 16) - 2;
+    return jl_gc_szclass_big(sz, N);
 }
 
+// Strings only need 8-byte alignment, so they may also use the bins between
+// the 16-byte aligned ones (24, 40, 56).
 STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFEPOINT
 {
-    if (sz >= 16 && sz <= 152) {
+    if (sz >= 16 && sz <= 64) {
 #ifdef _P64
-        const int N = 0;
-#elif MAX_ALIGN > 4
         const int N = 1;
-#else
+#elif MAX_ALIGN > 4
         const int N = 2;
+#else
+        const int N = 3;
 #endif
-        return (sz + 7)/8 - 1 + N;
+        return N + (sz + 7)/8 - 2;
     }
     return jl_gc_szclass(sz);
 }
@@ -682,7 +658,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define JL_SMALL_BYTE_ALIGNMENT 16
 // JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
 #define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
-#define GC_MAX_SZCLASS (2032-sizeof(void*))
+#define GC_MAX_SZCLASS (10240-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
 
 /* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
