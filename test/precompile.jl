@@ -3850,4 +3850,45 @@ if !Sys.iswindows() # child-on-fake-pty tests are skipped on Windows (see misc.j
     end
 end
 
+# Worker-side precompile profiling: `profile_dir` makes the worker sample itself and
+# write a raw buffer plus the symbols those samples resolve to.
+@testset "precompile profiling" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        pkgpath = joinpath(dir, "ProfMe")
+        mkpath(joinpath(pkgpath, "src"))
+        write(joinpath(pkgpath, "Project.toml"),
+              """
+              name = "ProfMe"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+              """)
+        write(joinpath(pkgpath, "src", "ProfMe.jl"),
+              """
+              module ProfMe
+              f(x) = sum(abs2, x) + length(string(x))
+              precompile(f, (Vector{Int},))
+              end
+              """)
+        profdir = joinpath(dir, "profiles")
+        pushfirst!(LOAD_PATH, dir)
+        try
+            pkg = Base.identify_package("ProfMe")
+            @test pkg !== nothing
+            @test Base.compilecache(pkg; profile_dir=profdir) isa Tuple
+            dumps = filter(f -> startswith(f, "ProfMe-"), readdir(profdir))
+            @test count(endswith(".profdata"), dumps) == 1
+            @test count(endswith(".profsyms"), dumps) == 1
+            prefix = joinpath(profdir, chopsuffix(only(filter(endswith(".profdata"), dumps)), ".profdata"))
+            # the raw buffer is a `Vector{UInt}`, and every symbol line names a frame
+            @test filesize(prefix * ".profdata") % sizeof(UInt) == 0
+            syms = filter(l -> !startswith(l, "#"), readlines(prefix * ".profsyms"))
+            @test !isempty(syms)
+            @test all(l -> length(split(l, '\t')) == 6, syms)
+            @test all(l -> tryparse(UInt64, first(split(l, '\t'))) !== nothing, syms)
+        finally
+            popfirst!(LOAD_PATH)
+        end
+    end end
+end
+
 finish_precompile_test!()
