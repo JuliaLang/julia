@@ -29,8 +29,8 @@ extern "C" {
 // The refusal codes. An entry that returns a count returns the code cast
 // to its unsigned type: (uint64_t)-2 stands for -2.
 enum {
-    JL_GC_REGION_EINVAL = -1,       // a bad region number, or a build that
-                                    // cannot allocate in a region
+    JL_GC_REGION_EINVAL = -1,       // a bad region number, a bad tree edge,
+                                    // or a build that cannot allocate in a region
     JL_GC_REGION_EBUSY = -2,        // the region is current, a window is open,
                                     // or this heap runs region finalizers now
     JL_GC_REGION_ERACE = -3,        // lost the race for the safepoint; retry
@@ -40,6 +40,7 @@ enum {
                                     // is retained
     JL_GC_REGION_EFINALIZERS = -6,  // finalizers are pending; a cooperative
                                     // census runs them first
+    JL_GC_REGION_ECHILD = -7,       // the region has a live child region
 };
 
 // --- the runtime's own allocations ------------------------------------------
@@ -78,6 +79,11 @@ JL_DLLEXPORT int jl_gc_region_current(void);
 JL_DLLEXPORT uint64_t jl_gc_region_reset(int n);
 // Close the window of a task that reaches its end (task.c).
 void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
+// Free region n on every heap at once, with the world stopped.
+JL_DLLEXPORT uint64_t jl_gc_region_reset_global(int n);
+// The region tree: declare the parent of a region before either is used.
+JL_DLLEXPORT int jl_gc_region_declare_parent(int child, int parent);
+JL_DLLEXPORT int jl_gc_region_parent_of(int child);
 // A census frees the dead objects of one region and keeps the live ones.
 // The stop-the-world census; the cooperative census, which needs every
 // other thread parked GC-safe.

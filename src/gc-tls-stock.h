@@ -57,6 +57,17 @@ typedef struct {
     // until then, and always NULL for region 0, whose pools are norm_pools.
     // The state is never freed: a reset parks the pages for the next window.
     struct _jl_gc_region_state_t *regions[JL_GC_MAX_REGIONS];
+    // The tree's reset bookkeeping, per heap (a region's pages are per heap).
+    // A region is "live" between a region_set onto it and its reset. Its
+    // parent counts its live children; region_haschild bit r is set while
+    // region r has at least one live child. A leaf reset is then one bit
+    // test: refuse to reset a region whose haschild bit is set, because a
+    // live descendant may reference into it (a legal leaf -> trunk edge that
+    // the reset would dangle). Zero-initialized: no region is live, none has
+    // a child.
+    uint64_t region_live_mask;             // bit r: region r is live here
+    uint64_t region_haschild_mask;         // bit r: region r has a live child
+    uint8_t region_child_count[JL_GC_MAX_REGIONS];
     // --------------------------------------------------------------------------
 } jl_thread_heap_t;
 
