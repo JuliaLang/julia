@@ -1076,60 +1076,64 @@ typedef struct {
 
 // constants and type objects -------------------------------------------------
 
+/*
+ * Some very hot code is sensitive to the ordering of the smalltags
+ * here. Notably, the GC mark phase uses a range query
+ * (jl_gc_generic_tags_first/jl_gc_generic_tags_last) to quickly recognize
+ * smalltags that require no special handling.  The kinds (typeofbottom through
+ * datatype) are also important to keep contiguous.
+ */
 #define JL_SMALL_TYPEOF(XX) \
-    /* kinds */ \
     XX(typeofbottom) \
-    XX(datatype) \
-    XX(unionall) \
-    XX(uniontype) \
-    /* type parameter objects */ \
-    XX(vararg) \
-    XX(tvar) \
+    /* tags for objects with generic GC marking */ \
+      /* kinds (also includes typeofbottom) */ \
+        XX(unionall) \
+        XX(uniontype) \
+        XX(typeeq) \
+        XX(typeegal) \
+        XX(datatype) \
+      XX(tvar) \
+      XX(vararg) \
+      XX(gotoifnot) \
+      XX(returnnode) \
+      XX(enternode) \
+      XX(pinode) \
+      XX(phinode) \
+      XX(phicnode) \
+      XX(upsilonnode) \
+      XX(globalref) \
+      XX(quotenode) \
     XX(symbol) \
-    XX(module) \
     /* special GC objects */ \
-    XX(simplevector) \
-    XX(string) \
-    XX(task) \
+      XX(module) \
+      XX(simplevector) \
+      XX(string) \
+      XX(task) \
+      XX(cancel_source) \
+      XX(wait_entry) \
     /* bits types with special allocators */ \
-    XX(bool) \
-    XX(nothing) \
-    XX(char) \
-    /*XX(float16)*/ \
-    /*XX(float32)*/ \
-    /*XX(float64)*/ \
-    /*XX(bfloat16)*/ \
-    XX(int16) \
-    XX(int32) \
-    XX(int64) \
-    XX(int8) \
-    XX(uint16) \
-    XX(uint32) \
-    XX(uint64) \
-    XX(uint8) \
-    XX(addrspacecore) \
-    XX(intrinsic) \
-    /* AST objects */ \
+      XX(bool) \
+      XX(nothing) \
+      XX(char) \
+      /*XX(float16)*/ \
+      /*XX(float32)*/ \
+      /*XX(float64)*/ \
+      /*XX(bfloat16)*/ \
+      XX(int16) \
+      XX(int32) \
+      XX(int64) \
+      XX(int8) \
+      XX(uint16) \
+      XX(uint32) \
+      XX(uint64) \
+      XX(uint8) \
+      XX(addrspacecore) \
+      XX(intrinsic) \
     XX(argument) \
     /* XX(newvarnode) */ \
     XX(slotnumber) \
     XX(ssavalue) \
-    XX(gotoifnot) \
-    XX(returnnode) \
-    XX(enternode) \
-    XX(pinode) \
-    XX(phinode) \
-    XX(phicnode) \
-    XX(upsilonnode) \
-    XX(globalref) \
     XX(gotonode) \
-    XX(quotenode) \
-    XX(typeeq) \
-    XX(typeegal) \
-    XX(cancel_source) \
-    XX(wait_entry) \
-    /* Add new tags here to keep existing builds ABI stable - we don't guarantee ABI \
-       stability, but it'll help PkgEval to not break it unnecessarily */ \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,
@@ -1137,6 +1141,8 @@ enum jl_small_typeof_tags {
     JL_SMALL_TYPEOF(XX)
 #undef XX
     jl_tags_count,
+    jl_gc_generic_tags_first = jl_unionall_tag,
+    jl_gc_generic_tags_last = jl_quotenode_tag,
     jl_bitstags_first = jl_char_tag, // n.b. bool is not considered a bitstype, since it can be compared by pointer
     jl_max_tags = 64
 };
@@ -1820,10 +1826,7 @@ STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 STATIC_INLINE int jl_is_kindtag(uintptr_t t) JL_NOTSAFEPOINT
 {
     t >>= 4;
-    return (t==(uintptr_t)jl_uniontype_tag || t==(uintptr_t)jl_datatype_tag ||
-            t==(uintptr_t)jl_unionall_tag || t==(uintptr_t)jl_typeeq_tag ||
-            t==(uintptr_t)jl_typeegal_tag ||
-            t==(uintptr_t)jl_typeofbottom_tag);
+    return t - jl_typeofbottom_tag <= jl_datatype_tag - jl_typeofbottom_tag;
 }
 
 STATIC_INLINE int jl_is_type(jl_value_t *v) JL_NOTSAFEPOINT
