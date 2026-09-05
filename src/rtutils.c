@@ -633,6 +633,7 @@ JL_DLLEXPORT int jl_is_operator(const char *sym) JL_NOTSAFEPOINT;
 
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
 static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+static size_t jl_static_show_tagged_word(JL_STREAM *out, uintptr_t w, jl_value_t *u, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
 static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *prev, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
 
 static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
@@ -1437,6 +1438,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                     jl_value_t **ptr = ((jl_value_t**)m->ptr) + j;
                     n += jl_static_show_x(out, *ptr, depth, ctx);
                 }
+                else if (layout->flags.arrayelem_istagged) {
+                    uintptr_t w = ((uintptr_t*)m->ptr)[j];
+                    n += jl_static_show_tagged_word(out, w, el_type, depth, ctx);
+                }
                 else {
                     char *ptr = ((char*)m->ptr) + j * layout->size;
                     if (layout->flags.arrayelem_islocked) {
@@ -1546,11 +1551,16 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 }
                 else {
                     jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(vt, i);
-                    if (jl_is_uniontype(ft)) {
-                        uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
-                        ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
+                    if (jl_is_uniontype(ft) && jl_field_istagged(vt, i)) {
+                        n += jl_static_show_tagged_word(out, *(uintptr_t*)fld_ptr, (jl_value_t*)ft, depth, ctx);
                     }
-                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth, ctx);
+                    else {
+                        if (jl_is_uniontype(ft)) {
+                            uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
+                            ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
+                        }
+                        n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth, ctx);
+                    }
                 }
                 if ((istuple || isnamedtuple) && tlen == 1)
                     n += jl_printf(out, ",");
@@ -1571,6 +1581,22 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ">");
     }
     return n;
+}
+
+// show one tagged union word in place, without allocating
+static size_t jl_static_show_tagged_word(JL_STREAM *out, uintptr_t w, jl_value_t *u,
+                                         struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
+{
+    if (w == 0)
+        return jl_printf(out, "#<undef>");
+    if (jl_tagged_word_isptr(w))
+        return jl_static_show_x(out, (jl_value_t*)w, depth, ctx);
+    unsigned k = jl_tagged_union_kbits(u);
+    jl_datatype_t *t = jl_nth_tagged_member(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
+    if (t == NULL) // corrupt word; static show must survive it
+        return jl_printf(out, "#<taggedword %p>", (void*)w);
+    uint64_t payload = (uint64_t)w >> k;
+    return jl_static_show_x_(out, (jl_value_t*)&payload, t, depth, ctx);
 }
 
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT

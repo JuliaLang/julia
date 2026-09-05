@@ -609,6 +609,7 @@ struct DataTypeLayout
     nfields::UInt32
     npointers::UInt32
     firstptr::Int32
+    ntaggedptrs::UInt32
     alignment::UInt16
     flags::UInt16
     # haspadding : 1;
@@ -619,7 +620,7 @@ struct DataTypeLayout
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
     # unused_bits : 7;
-    # padding : 1;
+    # arrayelem_istagged : 1;
 end
 
 function DataTypeLayout(dt::DataType)
@@ -667,6 +668,7 @@ function aligned_sizeof(@nospecialize T::Type)
         al = datatype_alignment(T)
         return LLT_ALIGN(Core.sizeof(T), al)
     end
+    # boxed values and tagged unions both occupy one pointer-sized word
     return Core.sizeof(Ptr{Cvoid})
 end
 
@@ -714,6 +716,14 @@ datatype_npointers(dt::DataType) = (@_foldable_meta; datatype_npointers(DataType
 datatype_npointers(dtl::DataTypeLayout) = dtl.npointers
 
 """
+    Base.datatype_ntaggedptrs(dt::DataType)::Int
+
+Return the number of tagged union words in the layout of a datatype.
+"""
+datatype_ntaggedptrs(dt::DataType) = (@_foldable_meta; datatype_ntaggedptrs(DataTypeLayout(dt)))
+datatype_ntaggedptrs(dtl::DataTypeLayout) = dtl.ntaggedptrs
+
+"""
     Base.datatype_pointerfree(dt::DataType)::Bool
 
 Return whether instances of this type can contain references to gc-managed memory.
@@ -721,7 +731,7 @@ Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
     @_foldable_meta
-    return datatype_npointers(dt) == 0
+    return datatype_npointers(dt) == 0 && datatype_ntaggedptrs(dt) == 0
 end
 
 """
@@ -745,9 +755,11 @@ Can be called on any `isconcretetype`, but only meaningful on `Memory`.
 0 = inlinealloc
 1 = isboxed
 2 = isbitsunion
+3 = tagged union word
 """
 datatype_arrayelem(dt::DataType) = (@_foldable_meta; datatype_arrayelem(DataTypeLayout(dt)))
-datatype_arrayelem(dtl::DataTypeLayout) = (dtl.flags >> 3) & 3
+datatype_arrayelem(dtl::DataTypeLayout) =
+    (dtl.flags & (1 << 15)) != 0 ? 3 : Int((dtl.flags >> 3) & 3)
 
 datatype_layoutsize(dt::DataType) = (@_foldable_meta; datatype_layoutsize(DataTypeLayout(dt)))
 datatype_layoutsize(dtl::DataTypeLayout) = dtl.size % Int

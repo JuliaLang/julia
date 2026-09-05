@@ -275,6 +275,7 @@
     XX(jl_isa) \
     XX(jl_isa_compileable_sig) \
     XX(jl_islayout_inline) \
+    XX(jl_uniontype_istagged) \
     XX(jl_istopmod) \
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
