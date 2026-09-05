@@ -376,6 +376,8 @@ static Value *emit_plt(
 
 class AbiLayout {
 public:
+    // True while classifying variadic arguments.
+    bool varargs = false;
     virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) JL_CANSAFEPOINT = 0;
     virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) JL_CANSAFEPOINT = 0;
@@ -398,6 +400,21 @@ static bool is_native_simd_type(jl_datatype_t *dt) JL_CANSAFEPOINT {
             // Not homogeneous
             return false;
     // Type is homogeneous.  Check if it maps to LLVM vector.
+    return jl_special_vector_alignment(n, ft0) != 0;
+}
+
+// Match the `VecElement` tuples lowered as LLVM vectors.
+static bool is_vector_type(jl_datatype_t *dt) JL_CANSAFEPOINT
+{
+    if (!jl_is_tuple_type(dt))
+        return false;
+    uint32_t n = jl_datatype_nfields(dt);
+    if (n == 0)
+        return false;
+    jl_value_t *ft0 = jl_field_type(dt, 0);
+    for (uint32_t i = 1; i < n; ++i)
+        if (jl_field_type(dt, i) != ft0)
+            return false;
     return jl_special_vector_alignment(n, ft0) != 0;
 }
 
@@ -1307,11 +1324,16 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                if (jl_datatype_size(bt) < 4) {
+                size_t sz = jl_datatype_size(bt);
+                if (sz < 4) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
                         ab.addAttribute(Attribute::ZExt);
+                }
+                else if (sz == 4 && ctx->TargetTriple.isRISCV64()) {
+                    // RISC-V sign-extends all 32-bit arguments to XLEN.
+                    ab.addAttribute(Attribute::SExt);
                 }
             }
         }
@@ -1324,6 +1346,8 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
 
         // Whether or not LLVM wants us to emit a pointer to the data
         assert(t && "LLVM type should not be null");
+        if (nreqargs > 0 && i == nreqargs)
+            abi->varargs = true;
         bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, LLVMCtx, t);
 
         if (jl_is_cpointer_type(tti)) {
@@ -1345,10 +1369,16 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
             if (!llvmcall && cc == CallingConv::C) {
                 if (pat->isIntegerTy() && pat->getPrimitiveSizeInBits() < sizeof(int) * 8)
                     pat = getInt32Ty(lrt->getContext());
-                if (pat->isFloatingPointTy() && pat->getPrimitiveSizeInBits() < sizeof(double) * 8)
+                // Default argument promotion does not widen `_Float16` or `__bf16`.
+                if (pat->isFloatTy())
                     pat = getDoubleTy(lrt->getContext());
                 ab.removeAttribute(Attribute::SExt);
                 ab.removeAttribute(Attribute::ZExt);
+                if (ctx->TargetTriple.isRISCV64() && pat->isIntegerTy() &&
+                        pat->getPrimitiveSizeInBits() <= 32) {
+                    // RISC-V applies the same XLEN extension to variadic integers.
+                    ab.addAttribute(Attribute::SExt);
+                }
             }
         }
 
@@ -1364,6 +1394,18 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
     // If return value is boxed it must be non-null.
     if (retboxed)
         RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::NonNull);
+    else if (ctx->TargetTriple.isRISCV64() && rt != jl_bottom_type &&
+             jl_is_primitivetype(rt) && lrt->isIntegerTy()) {
+        // RISC-V returns integers as if passed as the first named argument.
+        size_t sz = jl_datatype_size(rt);
+        if (sz < 4) {
+            bool issigned = jl_signed_type && jl_subtype(rt, (jl_value_t*)jl_signed_type);
+            RetAttrs = RetAttrs.addAttribute(LLVMCtx, issigned ? Attribute::SExt : Attribute::ZExt);
+        }
+        else if (sz == 4) {
+            RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::SExt);
+        }
+    }
     if (rt == jl_bottom_type)
         FnAttrs = FnAttrs.addAttribute(LLVMCtx, Attribute::NoReturn);
 

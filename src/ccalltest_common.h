@@ -4,6 +4,7 @@
 #include <complex.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <stdarg.h>
 
 #include "../src/support/platform.h"
 #include "../src/support/dtypes.h"

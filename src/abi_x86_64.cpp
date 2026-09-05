@@ -38,6 +38,12 @@
 
 enum ArgClass { Integer, Sse, SseUp, X87, X87Up, ComplexX87, NoClass, Memory };
 
+static bool is_fp_scalar_type(jl_value_t *t)
+{
+    return t == (jl_value_t*)jl_float64_type || t == (jl_value_t*)jl_float32_type ||
+           t == (jl_value_t*)jl_float16_type || t == (jl_value_t*)jl_bfloat16_type;
+}
+
 struct ABI_x86_64Layout : AbiLayout {
 
 // used to track the state of the ABI generator during
@@ -118,8 +124,7 @@ struct Classification {
 void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const JL_CANSAFEPOINT
 {
     // Floating point types
-    if (dt == jl_float64_type || dt == jl_float32_type || dt == jl_float16_type ||
-        dt == jl_bfloat16_type) {
+    if (is_fp_scalar_type((jl_value_t*)dt)) {
         accum.addField(offset, Sse);
     }
     // Misc types
@@ -147,7 +152,16 @@ void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) con
     else if (is_native_simd_type(dt)) {
         accum.addField(offset, Sse);
     }
-    // Other struct types
+    // GCC passes one-element floating-point vectors in memory.
+    else if (is_vector_type(dt) && jl_datatype_nfields(dt) == 1 &&
+             is_fp_scalar_type(jl_tparam0(jl_field_type(dt, 0)))) {
+        accum.addField(offset, Memory);
+    }
+    // Other 64-bit vectors use class SSE.
+    else if (is_vector_type(dt) && jl_datatype_size(dt) == 8) {
+        accum.addField(offset, Sse);
+    }
+    // Other aggregates, including GCC's smaller multi-element vectors.
     else if (jl_datatype_size(dt) <= 16 && dt->layout && !jl_is_layout_opaque(dt->layout)) {
         size_t i;
         for (i = 0; i < jl_datatype_nfields(dt); ++i) {
@@ -255,6 +269,9 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
             return types[0];
         case Integer:
             assert(size > 8);
+            // Keep i128 intact so register exhaustion spills the whole argument.
+            if (size == 16 && jl_is_primitivetype(dt))
+                return Type::getInt128Ty(ctx);
             types[1] = Type::getIntNTy(ctx, (nbits-64));
             return StructType::get(ctx,ArrayRef<Type*>(&types[0],2));
         case Sse:
