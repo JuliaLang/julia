@@ -1787,3 +1787,7 @@ include("test_spec_roundtrip_julia.jl")
 include("test_spec_html_common.jl")
 include("test_spec_html_github.jl")
 include("test_spec_html_julia.jl")
+
+@testset "Header accepts any integer level" begin
+    @test Markdown.Header("x", Int32(2)) isa Markdown.Header{2}
+end
