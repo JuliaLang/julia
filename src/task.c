@@ -333,6 +333,12 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     // ensure that state is cleared
     ct->ptls->in_finalizer = 0;
     ct->ptls->in_pure_callback = 0;
+    // A window belongs to its task. A task that reaches its end inside one,
+    // through a return or a throw, closes it here: the count of open windows
+    // is process-wide, and a task that died holding one would refuse every
+    // census and every global reset for the life of the process
+    // (gc-regions.c).
+    jl_gc_region_close_window(ct);
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     // let the runtime know this task is dead and find a new task to run
     jl_value_t *done = jl_atomic_load_relaxed(&task_done_hook_func);

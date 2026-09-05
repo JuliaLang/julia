@@ -30,12 +30,15 @@ extern "C" {
 enum {
     JL_GC_REGION_EINVAL = -1,       // a bad region number, or a build that
                                     // cannot allocate in a region
-    JL_GC_REGION_EBUSY = -2,        // the region is current, or this heap
-                                    // runs region finalizers now
+    JL_GC_REGION_EBUSY = -2,        // the region is current, a window is open,
+                                    // or this heap runs region finalizers now
+    JL_GC_REGION_ERACE = -3,        // lost the race for the safepoint; retry
+    JL_GC_REGION_EUNSAFE = -4,      // another thread runs managed code
+                                    // (cooperative census only)
     JL_GC_REGION_EQUARANTINED = -5, // the region was escaped from; its memory
                                     // is retained
-    JL_GC_REGION_EFINALIZERS = -6,  // finalizers are pending after the bounded
-                                    // rounds of the reset
+    JL_GC_REGION_EFINALIZERS = -6,  // finalizers are pending; a cooperative
+                                    // census runs them first
 };
 
 // --- the runtime's own allocations ------------------------------------------
@@ -72,13 +75,40 @@ JL_DLLEXPORT int jl_gc_region_current(void);
 // Free every object of region n on the calling thread's heap. Returns the
 // number of pages the region held, or a refusal code.
 JL_DLLEXPORT uint64_t jl_gc_region_reset(int n);
-// Queries: the region of an object, whether an escape quarantined it.
+// Close the window of a task that reaches its end (task.c).
+void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
+// A census frees the dead objects of one region and keeps the live ones.
+// The stop-the-world census; the cooperative census, which needs every
+// other thread parked GC-safe.
+JL_DLLEXPORT int64_t jl_gc_region_collect(int n);
+JL_DLLEXPORT int64_t jl_gc_region_collect_coop(int n);
+// Queries: the region of an object, whether an escape quarantined a region,
+// the phase times and counts of the last census (see jl_gc_region_stat).
 JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v);
 JL_DLLEXPORT int jl_gc_region_quarantined(int n);
+JL_DLLEXPORT uint64_t jl_gc_region_stat(int i);
 // The escape barrier, called by the write barrier while a region is in use.
 JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
 
 // --- the hooks the rest of the runtime calls --------------------------------
+// The census filter: the region whose census runs now, 0 otherwise. The mark
+// loops read it once per object array and pass it down as a parameter.
+extern _Atomic(int) jl_gc_region_census_target;
+// The filter as the mark loops read it. The stock-only build
+// (JL_NO_REGION_ALLOC) opens no window, so no region initializes and no
+// census runs: the filter is the constant 0, and the compiler folds the
+// census branches out of the mark loops.
+STATIC_INLINE int jl_gc_region_census_filter(void) JL_NOTSAFEPOINT
+{
+#ifdef JL_NO_REGION_ALLOC
+    return 0;
+#else
+    return jl_atomic_load_relaxed(&jl_gc_region_census_target);
+#endif
+}
+// The claim of a task the census meets outside the region. Returns 1 the
+// first time a task is met in this census, 0 afterwards.
+int jl_gc_region_census_claim_task(jl_value_t *task) JL_NOTSAFEPOINT;
 // A finalizer on a region object goes to the region's own list. Returns 1
 // when it took the registration.
 int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f);
@@ -98,7 +128,8 @@ void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT;
 void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT;
 // Mark every region finalizer list as a root of the stock collection.
 void jl_gc_region_mark_finalizer_lists(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
-// Per-heap initialization.
+// Process and per-heap initialization.
+void jl_gc_region_init(void);
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
 
 // The window follows the task: park the region of the task that leaves,
@@ -142,6 +173,7 @@ STATIC_INLINE int jl_gc_region_current(void) { return 0; }
 STATIC_INLINE int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f) { (void)ptls; (void)v; (void)f; return 0; }
 STATIC_INLINE int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) { (void)ptls; (void)m; (void)isaligned; return 0; }
 STATIC_INLINE void jl_gc_region_task_switch(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t *t) { (void)ptls; (void)lastt; (void)t; }
+STATIC_INLINE void jl_gc_region_close_window(jl_task_t *ct) { (void)ct; }
 STATIC_INLINE int jl_gc_region_finalizers_begin(jl_ptls_t ptls) { (void)ptls; return 0; }
 STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) { (void)ptls; (void)parked; }
 
