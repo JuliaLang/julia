@@ -14,6 +14,17 @@
 # Set to zero to turn off extra precompile (e.g. for the REPL)
 JULIA_PRECOMPILE ?= 1
 
+# Set to 1 to compile coverage instrumentation into the sysimage and the
+# stdlib pkgimages. The resulting images collect coverage without recompiling
+# any image code when run with `--code-coverage=all` in the default `hit`
+# mode, but carry the instrumentation overhead in every use. Intended for
+# coverage CI, not for released builds.
+JULIA_COVERAGE_IMAGES ?= 0
+# The generating processes instrument only the images they compile, and the
+# pkgimage workers inherit the setting through `Base.CacheFlags`. Recursively
+# expanded because Make.user is read below.
+JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all)
+
 # Set FORCE_ASSERTIONS to 1 to enable assertions in the C and C++ portions
 # of the Julia code base. You may also want to set LLVM_ASSERTIONS to 1,
 # which will enable assertions in LLVM.
