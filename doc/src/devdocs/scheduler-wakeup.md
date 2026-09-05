@@ -1,90 +1,77 @@
 # Task scheduler wakeups
 
-This page documents the sleep/wake handshake used by Julia's task scheduler and,
-in particular, why `jl_wakeup_threadpool` may wake only a *single* worker per
-multiqueue insert instead of broadcasting to every thread.
+This page describes how threads in the task scheduler go to sleep and how they
+are woken when work arrives. The code is in
+[`src/scheduler.c`](https://github.com/JuliaLang/julia/blob/master/src/scheduler.c).
 
-## The problem
+## Sleeping and waking
 
-Every `@spawn` that lands in the multiqueue used to call `jl_wakeup_thread(-1)`,
-which loops over *all* threads and issues a `uv_cond_signal` to each sleeping
-one. On an oversubscribed machine a burst of spawns therefore produces an
-``O(nthreads)`` "wake storm" per insert (JuliaLang/julia#61820,
-JuliaLang/julia#50425): every idle worker is woken, races for the one new task,
-and all but one immediately go back to sleep.
+A thread that finds no work in `jl_task_get_next` goes to sleep in this order:
 
-`jl_wakeup_threadpool(tpid)` replaces that broadcast. A multiqueue insert wakes
-at most one sleeping worker *in the task's pool*. A burst of ``N`` inserts wakes
-up to ``N`` workers. There is no peer-to-peer cascade: a woken worker simply
-pops its task and runs it.
-
-## Why waking one worker is enough
-
-Correctness rests on the same store-buffering fence (`[^store_buffering_1]` in
-[`src/scheduler.c`](https://github.com/JuliaLang/julia/blob/master/src/scheduler.c))
-that the broadcast path relied on. The relevant per-thread invariant is:
-
-> A worker is observed `sleeping` by the waker, **or** it has not yet committed
-> to its sleep transition and is therefore guaranteed to re-check its queue and
-> find the freshly-inserted task.
-
-The consumer's sleep transition in `jl_task_get_next` is, in order:
-
-1. publish `sleep_check_state = sleeping`,
+1. set `sleep_check_state = sleeping`,
 2. `jl_fence()`,
-3. re-check the queue (`check_empty`); abort the sleep if work appeared,
+3. check the queue again, and stop if work appeared,
 4. decrement `n_threads_running`,
-5. park on the condition variable while `may_sleep` holds.
+5. wait on its condition variable while `sleep_check_state` is still `sleeping`.
 
-The enqueuer fences after the insert and then inspects each candidate's
-`sleep_check_state`. Because the consumer publishes `sleeping` in step 1 — before
-it re-checks the queue in step 3 — the enqueuer either sees `sleeping` (and wakes
-the worker) or the worker will itself observe the new task in step 3. Either way
-the task is serviced.
+A thread that enqueues a task calls `jl_fence()` after the insert and then reads
+the `sleep_check_state` of the threads in the task's pool. The two fences
+(`[^store_buffering_1]` in `scheduler.c`) ensure that either the enqueuer sees
+the sleeping state and wakes that thread, or the check in step 3 sees the new
+task.
 
-## Why the wake must *not* be skipped using `n_threads_running`
+`jl_wakeup_threadpool` wakes at most one sleeping thread in the pool per insert.
+It tries the thread that went to sleep most recently first, since its core is
+likely to be warm.
 
-A tempting optimization is to skip the scan entirely when
-`n_threads_running >= jl_n_threads` ("everything is already running, nothing is
-parked"). This is **unsound**, for two independent reasons:
+## Searchers
 
-1. **The count lags the per-thread state.** `n_threads_running` is decremented in
-   step 4, *after* the consumer has already re-checked its queue in step 3. In
-   the window between steps 1 and 4 a worker has published `sleeping` and may
-   have already read its queue as empty, yet is still counted as running. An
-   enqueuer that consults the count therefore reads stale "all running"
-   information and skips a wake the worker actually needs.
+A thread that fails to pop a task can become a searcher: it keeps polling the
+queues until the sleep threshold passes, then goes to sleep. Each pool counts its
+searchers in `n_spinning`. A thread gets a searcher slot while
+`2 * n_spinning < pool size`, so at most half the pool (rounded up) polls at
+once. A thread that does not get a slot goes to sleep right away.
 
-2. **The count is global but the wake is pool-local.** Busy workers in one pool
-   keep `n_threads_running` high while another pool is entirely parked. A
-   cross-pool insert (e.g. spawning an `:interactive` task from a `:default`
-   worker) would then be dropped, stranding the task indefinitely.
+Each pool also counts the tasks in its multiqueue in `n_ready`. `multiq_insert`
+and `multiq_deletemin` update it under the heap lock, so a task is counted before
+any thread can pop it. `jl_wakeup_threadpool` wakes a thread only when
+`n_spinning < n_ready`, that is, when there are more pending tasks than
+searchers looking for them.
 
-Scanning `sleep_check_state` avoids both problems: that flag is set in step 1,
-*before* the re-check, so a scan never misses a worker in the danger window, and
-it is inspected per-pool.
+A woken thread starts as a searcher. `wake_thread` increments `n_spinning` for
+the target before the compare-and-swap on its `sleep_check_state`, and the woken
+thread takes over that slot. If the compare-and-swap fails, the waker decrements
+`n_spinning` again.
+
+Two rules make it safe to skip a wake:
+
+1. A searcher that goes to sleep releases its slot before step 1. An enqueuer
+   that skipped its wake because it counted this searcher is then ordered before
+   the check in step 3, which finds the task.
+2. A searcher that leaves `jl_task_get_next` without reaching step 3 runs the
+   wake check again if it held the pool's last slot. This covers finding a task,
+   running the `^C` dispatch pass (which can block on a lock), and unwinding an
+   exception.
+
+A waker whose compare-and-swap fails follows rule 2 as well, since its temporary
+increment may have made another enqueuer skip its wake. `drain_pool_wakeups`
+repeats the check until no more slots are released this way.
+
+`trypoptask`, `checkempty` and libuv callbacks run Julia code that can throw,
+including during the sleep sequence. The exception handlers restore
+`sleep_check_state` and `n_threads_running`, release the slot, and run the wake
+check again.
 
 ## TLA+ model
 
-The directory [`scheduler-wakeup/`](https://github.com/JuliaLang/julia/tree/master/doc/src/devdocs/scheduler-wakeup)
-contains a small TLA+ model of this handshake that makes the argument above
-machine-checkable.
-
-* [`SchedulerWake.tla`](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/scheduler-wakeup/SchedulerWake.tla)
-  models the sleep transition as the same discrete steps listed above, so the
-  model checker explores every interleaving of that window against an enqueuer
-  that wakes one worker by scanning `sleep_check_state`.
-* `MCFixed` — a concrete instance (two workers sharing a pool, plus a cross-pool
-  producer). TLC explores the full state space with no deadlock and no
-  `NoLostWakeup` violation.
-
-To reproduce, with [`tla2tools.jar`](https://github.com/tlaplus/tlaplus/releases):
+[`scheduler-wakeup/SchedulerWake.tla`](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/scheduler-wakeup/SchedulerWake.tla)
+models this protocol with each step as an atomic action. `NoLostWakeup` states
+that a pool with queued tasks always has a thread that will run them, and
+`SpinCountOK` that `n_spinning` matches the slots held. `MCFixed` checks two
+threads sharing a pool plus a producer in a second pool. To run it with
+[`tla2tools.jar`](https://github.com/tlaplus/tlaplus/releases):
 
 ```sh
 cd doc/src/devdocs/scheduler-wakeup
 java -cp tla2tools.jar tlc2.TLC -config MCFixed.cfg MCFixed.tla
 ```
-
-Toggling the model back to the unsound `n_threads_running` short-circuit (by
-making `Wakeup` return early when `nrun >= N`) makes TLC report a `NoLostWakeup`
-violation, confirming the danger window described above is real.
