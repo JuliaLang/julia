@@ -289,6 +289,8 @@ extern "C" JL_DLLEXPORT jl_llvm_target_t jl_get_llvm_target(const char *cpu_targ
 extern "C" JL_DLLEXPORT jl_llvm_target_t jl_get_llvm_disasm_target(void) JL_NOTSAFEPOINT;
 
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() JL_CANSAFEPOINT;
+// Return the sysimage clone selected at load time, serialized like `jl_reflect_clone_targets`
+extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_matched_target(void) JL_CANSAFEPOINT;
 extern "C" JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords) JL_CANSAFEPOINT;
 #endif
 
