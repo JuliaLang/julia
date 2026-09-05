@@ -140,15 +140,24 @@ public:
   };
 
 private:
+  // Strip references, atomics, pointers and arrays to reach the type that
+  // carries a declaration. Note this drops typedef sugar as soon as the
+  // typedef names a pointer: `typedef struct Foo *Bar` reduces to `struct Foo`,
+  // so anything keyed off the declaration must accept the tag as well.
+  static QualType stripToDeclaredType(QualType QT) {
+    if (QT->isReferenceType())
+      return stripToDeclaredType(QT->getPointeeType().getUnqualifiedType());
+    if (const auto *AT = QT->getAs<AtomicType>())
+      return stripToDeclaredType(AT->getValueType().getUnqualifiedType());
+    if (QT->isPointerType() || QT->isArrayType())
+      return stripToDeclaredType(
+          clang::QualType(QT->getPointeeOrArrayElementType(), 0));
+    return QT;
+  }
+
   template <typename callback>
   static bool isJuliaType(callback f, QualType QT) {
-    if (QT->isReferenceType())
-      return isJuliaType(f, QT->getPointeeType().getUnqualifiedType());
-    if (const auto *AT = QT->getAs<AtomicType>())
-      return isJuliaType(f, AT->getValueType().getUnqualifiedType());
-    if (QT->isPointerType() || QT->isArrayType())
-      return isJuliaType(
-          f, clang::QualType(QT->getPointeeOrArrayElementType(), 0));
+    QT = stripToDeclaredType(QT);
     const TypedefType *TT = QT->getAs<TypedefType>();
     if (TT) {
       if (f(TT->getDecl()->getName()))
@@ -160,6 +169,10 @@ private:
     }
     return f(TD->getName());
   }
+
+  // True if the type is declared JL_GC_TRACKED_TYPE, on the typedef or on the
+  // tag it resolves to.
+  static bool hasGCTrackedAnnotation(QualType QT);
   template <typename callback>
   static SymbolRef walkToRoot(callback f, const ProgramStateRef &State,
                               const MemRegion *Region);

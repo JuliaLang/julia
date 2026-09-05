@@ -442,7 +442,7 @@ static void makeSafeName(GlobalObject &G)
 }
 
 namespace { // file-local namespace
-class egal_set {
+class JL_GC_TRACKED_TYPE egal_set {
 public:
     jl_genericmemory_t *list = (jl_genericmemory_t*)jl_an_empty_memory_any;
     jl_genericmemory_t *keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;

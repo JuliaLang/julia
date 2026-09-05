@@ -718,7 +718,7 @@ const extern uint64_t _jl_buff_tag[3];
 #define jl_buff_tag ((uintptr_t)LLT_ALIGN((uintptr_t)&_jl_buff_tag[1],16))
 JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT;
 
-typedef void jl_gc_tracked_buffer_t; // For the benefit of the static analyzer
+typedef void jl_gc_tracked_buffer_t JL_GC_TRACKED_TYPE; // For the benefit of the static analyzer
 STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz) JL_CANSAFEPOINT
 {
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
@@ -963,7 +963,7 @@ extern _Atomic(int) jl_sigint_dispatch_pending;
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
 
-typedef struct jl_typeenv_t {
+typedef struct JL_GC_TRACKED_TYPE jl_typeenv_t {
     jl_tvar_t *var;
     jl_value_t *val;
     struct jl_typeenv_t *prev;
@@ -1674,7 +1674,7 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data,
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
-struct _jl_excstack_t { // typedef in julia.h
+struct JL_GC_TRACKED_TYPE _jl_excstack_t { // typedef in julia.h
     size_t top;
     size_t reserved_size;
     // Pack all stack entries into a growable buffer to amortize allocation
@@ -1964,9 +1964,9 @@ STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(
 typedef int (*jl_typemap_visitor_fptr)(jl_typemap_entry_t *l, void *closure) JL_CANSAFEPOINT;
 int jl_typemap_visitor(jl_typemap_t *a, jl_typemap_visitor_fptr fptr, void *closure) JL_CANSAFEPOINT;
 
-struct typemap_intersection_env;
+struct JL_GC_TRACKED_TYPE typemap_intersection_env;
 typedef int (*jl_typemap_intersection_visitor_fptr)(jl_typemap_entry_t *l, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
-struct typemap_intersection_env {
+struct JL_GC_TRACKED_TYPE typemap_intersection_env {
     // input values
     jl_typemap_intersection_visitor_fptr const fptr; // fptr to call on a match
     jl_value_t *const type; // type to match
