@@ -2039,6 +2039,19 @@ function current_image_targets()
     return parse_image_targets(targets)
 end
 
+"""
+    matched_sysimage_target()
+
+Return the `ImageTarget` describing the system image clone that was selected for
+the host CPU when the system image was loaded, or `nothing` if no compiled system
+image is loaded. Unlike [`Sys.sysimage_target`](@ref), which gives the target
+string the image was built with, this identifies the specific clone in use.
+"""
+function matched_sysimage_target()
+    targets = parse_image_targets(@ccall jl_get_sysimage_matched_target()::Vector{UInt8})
+    return isempty(targets) ? nothing : only(targets)
+end
+
 function show(io::IO, it::ImageTarget)
     print(io, it.name)
     if !isempty(it.ext_features)
