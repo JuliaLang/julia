@@ -518,7 +518,10 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
             std::string type_str = jl_is_datatype(x.typ) ? jl_symbol_name(((jl_datatype_t*)x.typ)->name->name) : "<unknown type>";
             return "unbox::" + type_str;
         });
-        auto combined_ai = best_aliasinfo(ctx, x.typ);
+        // The pointers written back here are a second view of the ones the separate
+        // roots buffer holds, which is what keeps them alive; a value buffer cannot
+        // serve as a gc frame, so it is never itself a root.
+        auto combined_ai = private_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
         recombine_value(ctx, x, combined, combined_ai, alignment, false);
         p = combined;
         ai = combined_ai;
@@ -1010,14 +1013,13 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
         setName(ctx.emission_context, strct, "atomic_pointerref_box");
         Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e);
         Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
-        jl_aliasinfo_t ai = best_aliasinfo(ctx, ety);
         LoadInst *load = ctx.builder.CreateAlignedLoad(loadT, thePtr, Align(nb));
         setName(ctx.emission_context, load, "atomic_pointerref");
-        ai.decorateInst(load);
+        ctx.alias().data.decorateInst(load);
         load->setOrdering(llvm_order);
         thePtr = strct;
         StoreInst *store = ctx.builder.CreateAlignedStore(load, thePtr, Align(julia_alignment(ety)));
-        ai.decorateInst(store);
+        best_aliasinfo(ctx, ety).decorateInst(store);
         return mark_julia_type(ctx, strct, true, ety);
     }
     else {
@@ -1296,7 +1298,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 y_ptr = decay_derived(ctx, y_ptr);
                 ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
                 setName(ctx.emission_context, ifelse_result, "ifelse_result");
-                ifelse_ai = x.aliasinfo.merge(ctx, y.aliasinfo);
+                ifelse_ai = x.aliasinfo.merge(y.aliasinfo);
                 if (ifelse_ai.tbaa == NULL) {
                     // LLVM won't return a TBAA result for the root, but mark_julia_slot requires it: make it now
                     auto *OffsetNode = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 0));

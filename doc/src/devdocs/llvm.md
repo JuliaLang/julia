@@ -50,9 +50,39 @@ Julia emits two orthogonal kinds of alias metadata: LLVM's
 [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata) describes the
 layout/type of the data at a location (see `jl_tbaacache_t` in `src/codegen.cpp` for the
 inclusion relationships), while `!alias.scope`/`!noalias` metadata describes the disjoint
-memory regions (GC frame, stack, heap data, constant; see `jl_noaliascache_t`). Codegen
-tracks both together in `jl_aliasinfo_t`, with some standard pairings precomputed in
-`jl_aliascache_t`.
+memory regions (GC frame, the assignable fields of a mutable heap object, its `const`
+fields, the payload of an immutable one, the element data of a `GenericMemory`; see
+`jl_noaliascache_t`). Codegen tracks both together in `jl_aliasinfo_t`, with some
+standard pairings precomputed in `jl_aliascache_t`.
+
+The two axes answer different questions, and the split is load-bearing. Whether memory
+may be written, and by whom, belongs to the region: the same value keeps its layout tag
+as it is copied between a heap object and a memory buffer, which are written very
+differently.
+`llvm-late-gc-lowering.cpp` relies on this, and roots a loaded pointer through the
+object it was loaded from only when the *region* says that object cannot drop the
+reference (`isLoadFromRootedRegion`) -- which is why a `const` field of a mutable
+object is a region of its own. What is stored belongs to the tag: under
+`jtbaa_value` sit `jtbaa_field` for an ordinary field of a user-defined layout and
+sibling tags for the object headers the runtime manages (`jtbaa_array`,
+`jtbaa_memory`, `jtbaa_datatype`), so a `setfield!` never aliases an array's length.
+
+A distinction only earns a region if a tag cannot carry it, and if the region has to
+be *worth* the extra `!noalias` operand it adds to every other access. Two things do
+not qualify. Memory that is already constant when this compilation unit runs is
+described purely by the immutable `jtbaa_const` tag and `!invariant.load`: that claim
+is stronger than a scope, because it also holds against instructions carrying no
+metadata at all, and it does not have to be unioned into the scope set of a `memcpy`
+that merely reads such memory. And a codegen-private, write-once copy of an immutable
+value -- an `sret` buffer, a spilled register, a recombined split value -- is simply
+`immutdata` like the value it copies; what makes it private is that its address is an
+`alloca`, which LLVM already reasons about. (The untyped stack slot keeps `jtbaa_stack`,
+a root-level tag that separates it on its own.)
+
+A private value buffer is therefore never what keeps a tracked pointer alive. A value
+whose pointers must stay rooted carries them in a *separate* roots buffer, which is
+`gcframe` -- the one representation that can serve as a gc frame -- and the copy written
+back into the value buffer is a second view of pointers that buffer already holds.
 
 The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 
