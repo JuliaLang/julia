@@ -20,6 +20,7 @@ using Base: unsorted_names, unwrap_unionall, rewrap_unionall, isdeprecated, Bott
     signature_type, format_bytes
 using Base.Libc
 using Markdown
+using StyledStrings: @styled_str, styled
 
 include("editless.jl")
 include("codeview.jl")
@@ -114,7 +115,16 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     if verbose
-        println(io, "  Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
+        full_target_string = Sys.sysimage_target()
+        annotated_target_string = if occursin(";", full_target_string)
+            matched_target_string = Base.matched_sysimage_target().name
+            join(map(split(full_target_string, ";")) do s
+                occursin(matched_target_string, s) ? styled"{underline:$s}" : styled(s)
+            end, ";")
+        else
+            styled(full_target_string)
+        end
+        println(io, "  Sysimage: ", annotated_target_string, " (", Sys.MACHINE, ")")
     end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
     if Base.GIT_VERSION_INFO.tagged_commit && !official_release
