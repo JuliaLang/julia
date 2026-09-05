@@ -2433,15 +2433,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void) JL_CANSAFEPOINT;
 // parsing
 JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
                                       const char *filename, size_t filename_len, size_t lineno) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
-                                         int offset, int greedy) JL_CANSAFEPOINT;
-// lowering
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *file, int line, size_t world,
                                   bool_t warn) JL_CANSAFEPOINT;
-// deprecated; use jl_parse_all
-JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
-                                             const char *filename, size_t filename_len) JL_CANSAFEPOINT;
 
 // external libraries
 enum JL_RTLD_CONSTANT {
