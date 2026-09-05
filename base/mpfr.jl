@@ -29,7 +29,12 @@ import ..Rounding: Rounding,
     rounding_raw, setrounding_raw, rounds_to_nearest, rounds_away_from_zero,
     tie_breaker_is_to_even, correct_rounding_requires_increment
 
-import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt
+import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt, MPZ
+
+# A `BigInt`'s limbs are GC-managed, so libmpfr sees one through a borrowed
+# `__mpz_struct`. Sound only for entry points that do not write the mpz;
+# `mpfr_get_z`, which does, goes through a GMP-owned mpz instead.
+const mpz_t = MPZ.mpz_t
 
 import ..FastMath.sincos_fast
 
@@ -373,7 +378,7 @@ end
 
 function BigFloat(x::BigInt, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
     z = BigFloat(;precision=precision)
-    ccall((:mpfr_set_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, x, r)
+    ccall((:mpfr_set_z, libmpfr), Int32, (Ref{BigFloat}, mpz_t, MPFRRoundingMode), z, x, r)
     return z
 end
 
@@ -437,7 +442,10 @@ end
 
 function _unchecked_cast(::Type{BigInt}, x::BigFloat, r::MPFRRoundingMode)
     z = BigInt()
-    ccall((:mpfr_get_z, libmpfr), Int32, (Ref{BigInt}, Ref{BigFloat}, MPFRRoundingMode), z, x, r)
+    # mpfr_get_z writes its mpz, so it needs one that GMP owns.
+    MPZ.with_output(z) do s
+        ccall((:mpfr_get_z, libmpfr), Int32, (MPZ.mpz_owned_t, Ref{BigFloat}, MPFRRoundingMode), s, x, r)
+    end
     return z
 end
 
@@ -607,7 +615,7 @@ for (fJ, fC) in ((:+,:add), (:*,:mul))
         # BigInt
         function ($fJ)(x::BigFloat, c::BigInt)
             z = BigFloat()
-            ccall(($(string(:mpfr_,fC,:_z)), libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, x, c, rounding_raw(BigFloat))
+            ccall(($(string(:mpfr_,fC,:_z)), libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, mpz_t, MPFRRoundingMode), z, x, c, rounding_raw(BigFloat))
             return z
         end
         ($fJ)(c::BigInt, x::BigFloat) = ($fJ)(x,c)
@@ -662,7 +670,7 @@ for (fJ, fC) in ((:-,:sub), (:/,:div))
         # BigInt
         function ($fJ)(x::BigFloat, c::BigInt)
             z = BigFloat()
-            ccall(($(string(:mpfr_,fC,:_z)), libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, x, c, rounding_raw(BigFloat))
+            ccall(($(string(:mpfr_,fC,:_z)), libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, mpz_t, MPFRRoundingMode), z, x, c, rounding_raw(BigFloat))
             return z
         end
         # no :mpfr_z_div function
@@ -671,7 +679,7 @@ end
 
 function -(c::BigInt, x::BigFloat)
     z = BigFloat()
-    ccall((:mpfr_z_sub, libmpfr), Int32, (Ref{BigFloat}, Ref{BigInt}, Ref{BigFloat}, MPFRRoundingMode), z, c, x, rounding_raw(BigFloat))
+    ccall((:mpfr_z_sub, libmpfr), Int32, (Ref{BigFloat}, mpz_t, Ref{BigFloat}, MPFRRoundingMode), z, c, x, rounding_raw(BigFloat))
     return z
 end
 
@@ -739,7 +747,7 @@ end
 # BigInt
 function div(x::BigFloat, c::BigInt)
     z = BigFloat()
-    ccall((:mpfr_div_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, x, c, RoundToZero)
+    ccall((:mpfr_div_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, mpz_t, MPFRRoundingMode), z, x, c, RoundToZero)
     ccall((:mpfr_trunc, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), z, z)
     return z
 end
@@ -808,7 +816,7 @@ end
 
 function ^(x::BigFloat, y::BigInt)
     z = BigFloat()
-    ccall((:mpfr_pow_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, x, y, rounding_raw(BigFloat))
+    ccall((:mpfr_pow_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, mpz_t, MPFRRoundingMode), z, x, y, rounding_raw(BigFloat))
     return z
 end
 
@@ -993,7 +1001,7 @@ end
 
 function cmp(x::BigFloat, y::BigInt)
     isnan(x) && return 1
-    ccall((:mpfr_cmp_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigInt}), x, y)
+    ccall((:mpfr_cmp_z, libmpfr), Int32, (Ref{BigFloat}, mpz_t), x, y)
 end
 function cmp(x::BigFloat, y::ClongMax)
     isnan(x) && return 1
@@ -1307,13 +1315,12 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return x.sign, 0, 0
     x == 0 && return 0, 0, x.sign
-    s = BigInt()
-    s.size = cld(x.prec, 8*sizeof(Limb)) # limbs
-    b = s.size * sizeof(Limb)            # bytes
-    ccall((:__gmpz_realloc2, libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
+    n = cld(x.prec, 8*sizeof(Limb))      # limbs
+    # A finite nonzero BigFloat's significand has its top bit set, so the top
+    # limb copied here is nonzero and `BigInt`'s invariant holds.
     xd = x.d
-    GC.@preserve xd memcpy(s.d, Base.unsafe_convert(Ptr{Limb}, xd), b)
-    s, x.exp - 8b, x.sign
+    s = GC.@preserve xd MPZ._take!(BigInt(), n % Cint, Base.unsafe_convert(Ptr{Limb}, xd))
+    s, x.exp - 8*n*sizeof(Limb), x.sign
 end
 
 function lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
