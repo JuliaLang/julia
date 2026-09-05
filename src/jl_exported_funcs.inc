@@ -456,6 +456,7 @@
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \
+    XX(jl_symbol_in_executable) \
     XX(jl_symbol_lookup) \
     XX(jl_symbol_n) \
     XX(jl_tagged_gensym) \
