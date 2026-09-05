@@ -1226,15 +1226,34 @@ static bool try_emit_typed_copy(jl_codectx_t &ctx, Value *dst, const jl_aliasinf
     jl_datatype_t *dt = (jl_datatype_t*)typ;
     if (dt->layout->flags.haspadding || sz != jl_datatype_size(dt))
         return false;
-    Type *T = julia_type_to_llvm(ctx, typ);
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
-    if (DL.getTypeStoreSize(T) != sz)
+    unsigned copy_bits = sz * 8;
+    unsigned chunk_bits = std::min(copy_bits, DL.getLargestLegalIntTypeSizeInBits());
+    while (chunk_bits >= 8 && (copy_bits % chunk_bits || !isPowerOf2_32(chunk_bits)))
+        chunk_bits -= 8;
+    if (chunk_bits < 8)
         return false;
-    LoadInst *load = ctx.builder.CreateAlignedLoad(T, src, align_src);
-    setName(ctx.emission_context, load, src->getName() + ".copyload");
-    src_ai.decorateInst(load);
-    StoreInst *store = ctx.builder.CreateAlignedStore(load, dst, align_dst);
-    dst_ai.decorateInst(store);
+    unsigned nchunks = copy_bits / chunk_bits;
+    if (nchunks > 3)
+        return false;
+    Type *T = IntegerType::get(ctx.builder.getContext(), chunk_bits);
+    SmallVector<LoadInst*, 3> loads;
+    uint64_t chunk_size = chunk_bits / 8;
+    for (unsigned i = 0; i < nchunks; i++) {
+        uint64_t offset = i * chunk_size;
+        Value *src_chunk = emit_ptrgep(ctx, src, offset);
+        LoadInst *load = ctx.builder.CreateAlignedLoad(T, src_chunk, commonAlignment(align_src, offset));
+        setName(ctx.emission_context, load, src->getName() + ".copyload");
+        src_ai.decorateInst(load);
+        loads.push_back(load);
+    }
+    for (unsigned i = 0; i < nchunks; i++) {
+        uint64_t offset = i * chunk_size;
+        LoadInst *load = loads[i];
+        Value *dst_chunk = emit_ptrgep(ctx, dst, offset);
+        StoreInst *store = ctx.builder.CreateAlignedStore(load, dst_chunk, commonAlignment(align_dst, offset));
+        dst_ai.decorateInst(store);
+    }
     return true;
 }
 
