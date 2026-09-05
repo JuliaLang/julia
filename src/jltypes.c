@@ -1363,6 +1363,8 @@ void jl_cache_type_(jl_datatype_t *type)
     unsigned hv = typekey_hash(type->name, key, n, 0);
     if (hv) {
         assert(hv == type->hash);
+        // Type cache keys must be unique.
+        assert(jl_lookup_cache_type_(type) == NULL);
         cache_insert_type_set(type, hv);
     }
     else {
@@ -4598,6 +4600,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_binding_type->types, 3, jl_array_any_type);
     jl_value_t *partition_next_types[2] = { (jl_value_t*)jl_binding_partition_type, (jl_value_t*)jl_binding_type };
     jl_svecset(jl_binding_partition_type->types, 3, jl_type_union(partition_next_types, 2));
+    jl_value_t *wait_entry_task_types[2] = { (jl_value_t*)jl_nothing_type, (jl_value_t*)jl_task_type };
+    jl_svecset(jl_wait_entry_type->types, 0, jl_type_union(wait_entry_task_types, 2));
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

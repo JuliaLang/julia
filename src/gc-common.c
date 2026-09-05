@@ -313,6 +313,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
         copied_list.items = copied_list._space;
     }
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
+    jl_gc_wb_finalizer_queue(&to_finalize);
     arraylist_new(&to_finalize, 0);
 
     // Finalizers shouldn't affect either rng or errno state

@@ -723,6 +723,19 @@ static unsigned julia_alignment(jl_value_t *jt)
     return alignment;
 }
 
+// Byte-rounded type for accessing an integer in Julia memory: an odd-bit
+// integer is stored zero-extended to whole bytes. Non-integers pass through.
+static Type *julia_primitive_storage_type(Type *register_type)
+{
+    auto *IT = dyn_cast<IntegerType>(register_type);
+    if (!IT)
+        return register_type;
+    unsigned storage_bits = alignTo(IT->getBitWidth(), 8);
+    if (storage_bits == IT->getBitWidth())
+        return register_type;
+    return IntegerType::get(IT->getContext(), storage_bits);
+}
+
 static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_t *jt) JL_CANSAFEPOINT
 {
     B.addAttribute(Attribute::NonNull);
@@ -1201,6 +1214,30 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 
 // --- generating various field accessors ---
 
+static bool try_emit_typed_copy(jl_codectx_t &ctx, Value *dst, const jl_aliasinfo_t &dst_ai,
+                                Value *src, const jl_aliasinfo_t &src_ai, jl_value_t *typ,
+                                uint64_t sz, Align align_dst, Align align_src, bool is_volatile) JL_CANSAFEPOINT
+{
+    // A memcpy cannot carry separate source and destination alias metadata.
+    // Limit aggregate scalarization to small values commonly carried in registers.
+    constexpr uint64_t max_typed_copy_size = 16;
+    if (sz == 0 || is_volatile || sz > max_typed_copy_size || !jl_is_pointerfree(typ))
+        return false;
+    jl_datatype_t *dt = (jl_datatype_t*)typ;
+    if (dt->layout->flags.haspadding || sz != jl_datatype_size(dt))
+        return false;
+    Type *T = julia_type_to_llvm(ctx, typ);
+    const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
+    if (DL.getTypeStoreSize(T) != sz)
+        return false;
+    LoadInst *load = ctx.builder.CreateAlignedLoad(T, src, align_src);
+    setName(ctx.emission_context, load, src->getName() + ".copyload");
+    src_ai.decorateInst(load);
+    StoreInst *store = ctx.builder.CreateAlignedStore(load, dst, align_dst);
+    dst_ai.decorateInst(store);
+    return true;
+}
+
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, Value *src,
                              jl_aliasinfo_t const &src_ai, uint64_t sz, Align align_dst, Align align_src, bool is_volatile)
 {
@@ -1236,6 +1273,9 @@ static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst
                         T1 &&sz, Align align_dst, Align align_src, bool is_volatile=false) JL_CANSAFEPOINT
 {
     auto [src_ptr, src_ai] = data_pointer_ai(ctx, src);
+    if (try_emit_typed_copy(ctx, dst, dst_ai, src_ptr, src_ai, src.typ, sz,
+                            align_dst, align_src, is_volatile))
+        return;
     emit_memcpy_llvm(ctx, dst, dst_ai, src_ptr, src_ai, sz, align_dst, align_src, is_volatile);
 }
 
@@ -2514,7 +2554,12 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return mark_julia_slot(val, jltype, NULL, result_ai, std::move(roots));
     }
     Type *realelty = elty;
-    if (Order != AtomicOrdering::NotAtomic) {
+    // The GEP above indexes by the allocation size, but the memory access
+    // itself uses the byte-rounded storage width.
+    if (Order == AtomicOrdering::NotAtomic) {
+        elty = zext_struct_type(elty);
+    }
+    else {
         if (!isboxed && !elty->isIntOrPtrTy()) {
             intcast = emit_static_alloca(ctx, elty, Align(alignment));
             setName(ctx.emission_context, intcast, "atomic_load_box");
@@ -2553,7 +2598,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
                                   isboxed, true, jltype);
     }
     if (elty != realelty)
-        instr = ctx.builder.CreateTrunc(instr, realelty);
+        instr = trunc_struct_helper(ctx, instr, realelty);
     if (intcast) {
         ctx.builder.CreateAlignedStore(instr, intcast, Align(alignment));
         instr = nullptr;
@@ -2699,7 +2744,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
         }
         realelty = elty;
-        if (Order != AtomicOrdering::NotAtomic && isa<IntegerType>(elty)) {
+        // Memory accesses use the byte-rounded storage width; realelty stays
+        // the register width.
+        if (Order == AtomicOrdering::NotAtomic)
+            elty = zext_struct_type(elty);
+        else if (isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
             unsigned bitwidth = cast<IntegerType>(elty)->getBitWidth();
             if (nb != nb2 || bitwidth != 8 * nb)
@@ -2717,8 +2766,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             else if (aliasscope || Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
                 r = emit_unbox(ctx, realelty, rhs);
             }
-            if (realelty != elty)
-                r = ctx.builder.CreateZExt(r, elty);
+            // If r is unset, the value is stored by emit_unbox_store instead,
+            // which performs the storage widening itself.
+            if (r && realelty != elty)
+                r = zext_struct_helper(ctx, r, elty);
         }
     }
     // This pre-write barrier must be emitted before the store, while also not
@@ -2739,7 +2790,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         else if (r) {
             Value *wbval = r;
             if (realelty != elty)
-                wbval = ctx.builder.CreateTrunc(wbval, realelty);
+                wbval = trunc_struct_helper(ctx, wbval, realelty);
             if (intcast) {
                 ctx.builder.CreateStore(wbval, intcast);
                 wbval = ctx.builder.CreateLoad(intcast_eltyp, intcast);
@@ -2938,7 +2989,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             else {
                 Value *realCompare = Compare;
                 if (realelty != elty)
-                    realCompare = ctx.builder.CreateTrunc(realCompare, realelty);
+                    realCompare = trunc_struct_helper(ctx, realCompare, realelty);
                 if (intcast) {
                     assert(!isboxed);
                     ctx.builder.CreateStore(realCompare, intcast);
@@ -2972,7 +3023,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 else if (intcast) {
                     Value *realCompare = Compare;
                     if (realelty != elty)
-                        realCompare = ctx.builder.CreateTrunc(realCompare, realelty);
+                        realCompare = trunc_struct_helper(ctx, realCompare, realelty);
                     emit_unbox_store(ctx, rhs, intcast, ctx.alias().stack, MaybeAlign(), intcast->getAlign());
                     r = ctx.builder.CreateLoad(realelty, intcast);
                     if (!tracked_pointers) // oldval is a slot, so put the oldval back
@@ -2981,8 +3032,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 else if (Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
                     r = emit_unbox(ctx, realelty, rhs);
                 }
-                if (realelty != elty)
-                    r = ctx.builder.CreateZExt(r, elty);
+                if (r && realelty != elty)
+                    r = zext_struct_helper(ctx, r, elty);
             }
             // As an optimization, we could hoist this pre-write barrier after the cmpxchg
             // loop if we had a barrier form that explicitly takes in `oldval`. However it
@@ -3000,11 +3051,14 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 oldval = load_union();
             }
             else {
-                assert(elty == realelty && !intcast);
+                assert(!intcast);
                 AtomicOrdering loadOrder = isboxed ? AtomicOrdering::Monotonic : AtomicOrdering::NotAtomic;
                 auto *load = emit_aliased_load(ctx, elty, ptr, Align(alignment), ai, aliasscope, loadOrder);
                 instr = load;
-                oldval = mark_julia_type(ctx, load, isboxed, jltype);
+                Value *realinstr = load;
+                if (realelty != elty)
+                    realinstr = trunc_struct_helper(ctx, realinstr, realelty);
+                oldval = mark_julia_type(ctx, realinstr, isboxed, jltype);
             }
             // Compare
             Value *first_ptr = nullptr;
@@ -3123,7 +3177,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (!is_union) {
             // For non-union, convert instr (raw Value*) to oldval (jl_cgval_t)
             if (realelty != elty)
-                instr = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, instr, realelty));
+                instr = trunc_struct_helper(ctx, instr, realelty);
             if (intcast) {
                 ctx.builder.CreateStore(instr, intcast);
                 if (tracked_pointers)
@@ -3740,7 +3794,7 @@ static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, const jl_a
                             Align alignment = Align(sizeof(void*))) // min alignment in julia's gc is pointer-aligned
 {
     // newv should already be tagged
-    ai.decorateInst(ctx.builder.CreateAlignedStore(v, newv, alignment));
+    ai.decorateInst(ctx.builder.CreateAlignedStore(zext_struct(ctx, v), newv, alignment));
 }
 
 static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t &v) JL_CANSAFEPOINT
@@ -3861,8 +3915,6 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     jl_value_t *jt = vinfo.typ;
     if (jt == (jl_value_t*)jl_bool_type)
         return track_pjlvalue(ctx, julia_bool(ctx, ctx.builder.CreateTrunc(as_value(ctx, t, vinfo), getInt1Ty(ctx.builder.getContext()))));
-    if (t == getInt1Ty(ctx.builder.getContext()))
-        return track_pjlvalue(ctx, julia_bool(ctx, as_value(ctx, t, vinfo)));
 
     if (ctx.linfo && jl_is_method(ctx.linfo->def.method) && vinfo.V && vinfo.inline_roots.empty() && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {

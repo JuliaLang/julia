@@ -91,7 +91,11 @@ macro big_expr(n, x)
     x
 end
 
-@testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
+# threads.jl runs this file inside a `@testset` that wraps the `include`, so that every
+# top-level expression here is its own thunk. Wrapping the file body in one `@testset`
+# instead lowers it into a single thunk of some 28k statements, which the runtime infers
+# and compiles as one function before the first test runs: about 25 s on a fast x86-64
+# machine, and around ten minutes on a RISC-V board.
 
 @test Threads.threadid() == 1
 @test threadpool() in (:interactive, :default) # thread 1 could be in the interactive pool
@@ -1541,7 +1545,7 @@ end
         try
             Base.Experimental.task_metrics(true)
             start_time = time_ns()
-            t = Threads.@spawn peakflops()
+            t = Threads.@spawn peakflops(1024)
             wait(t)
             end_time = time_ns()
             wall_time_delta = end_time - start_time
@@ -1555,7 +1559,7 @@ end
         end
     end
     @testset "disabled" begin
-        t = Threads.@spawn peakflops()
+        t = Threads.@spawn peakflops(1024)
         wait(t)
         @test !t.metrics_enabled
         @test isnothing(Base.Experimental.task_running_time_ns(t))
@@ -1593,7 +1597,7 @@ end
             Base.Experimental.task_metrics(true)
             start = time_ns()
             t_outer = Threads.@spawn begin
-                t_inner = Task(() -> peakflops())
+                t_inner = Task(() -> peakflops(1024))
                 t_inner.sticky = false
                 # directly yield to `t_inner` rather calling `schedule(t_inner)`
                 yield(t_inner)
@@ -1622,7 +1626,7 @@ end
             @test Base.Experimental.task_running_time_ns(t1) > 0
             @test Base.Experimental.task_wall_time_ns(t1) > 0
             foo(a, b) = a + b
-            t2 = Task(() -> (peakflops(); foo(wait())))
+            t2 = Task(() -> (peakflops(1024); foo(wait())))
             schedule(t2)
             yield()
             @assert istaskstarted(t1) && !istaskdone(t2)
@@ -1798,8 +1802,6 @@ include("threads_comprehensions.jl")
         @test @eval @allocations(f(10000)) == 0
     end
 end
-
-end # main testset
 
 
 # Forcible task abandonment (unsafe_abandon!): the victim must be running

@@ -487,6 +487,9 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_E
                             "       (this should not happen, please file a bug report)\n");
             exit(1);
         }
+        // normally done by the libjulia loader, but there is none when the
+        // runtime is linked statically into the image
+        jl_init_options();
         jl_init_with_image_handle(handle);
         return &jl_get_current_task()->gcstack;
     }
@@ -548,9 +551,6 @@ static void jl_delete_thread(void *value)
     ptls->previous_exception = NULL;
     // allow the page root_task is on to be freed
     ptls->root_task = NULL;
-    jl_free_thread_gc_state(ptls);
-    // park in safe-region from here on (this may run GC again)
-    (void)jl_gc_safe_enter(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;
@@ -604,6 +604,12 @@ static void jl_delete_thread(void *value)
 #endif
     free(ptls->bt_data);
     small_arraylist_free(&ptls->locks);
+    // Nothing can reach this thread's task now that `current_task` is
+    // cleared, so drop the GC state and park. The park is obligatory: this
+    // ptls remains in `jl_all_tls_states` forever, so the thread must be
+    // left GC-safe or every future stop-the-world would wait on it.
+    jl_free_thread_gc_state(ptls);
+    jl_gc_safe_enter_from_nonmutator(ptls);
 }
 
 //// debugging hack: if we are exiting too fast for error message printing on threads,

@@ -97,7 +97,8 @@ JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
     const char *image_path = jl_pathname_for_handle(handle);
     jl_options.image_file = image_path;
 
-    jl_resolve_sysimg_location(JL_IMAGE_JULIA_HOME, NULL);
+    // the image is already loaded, so its path must not be re-interpreted relative to julia_bindir
+    jl_resolve_sysimg_location(JL_IMAGE_IN_MEMORY, NULL);
     jl_image_buf_t sysimage = jl_set_sysimg_so(handle);
 
     jl_init_(sysimage);

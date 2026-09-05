@@ -1371,56 +1371,74 @@ function cache_file_entry(pkg::PkgId)
         uuid === nothing ? pkg.name : package_slug(uuid)
 end
 
+# Return the cache file candidates in `depot` and whether each has a pkgimage
+# next to it, from a single directory listing without opening or stat'ing any
+# entry; invalid entries are rejected during validation.
+function cachefile_candidates_in_depot(pkg::PkgId, depot::String)
+    entrypath, entryfile = cache_file_entry(pkg)
+    dir = joinpath(depot, entrypath)
+    paths = String[]
+    pkgimages = Bool[]
+    isdir(dir) || return paths, pkgimages
+    entries = readdir(dir, sort = false)
+    use_pkgimages = JLOptions().use_pkgimages != 0
+    for file in entries
+        if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
+             (pkg.uuid !== nothing && startswith(file, entryfile * "_") &&
+              endswith(file, ".ji")))
+             continue
+        end
+        push!(paths, joinpath(dir, file))
+        push!(pkgimages, use_pkgimages && ocachefile_from_cachefile(file) in entries)
+    end
+    return paths, pkgimages
+end
+
+# Sort candidates best-first: those with a pkgimage before those without, and
+# most recently modified first within each group, so that `touch`ing a cache
+# file makes it the first one tried on the next load.
+function sort_cachefile_candidates!(paths::Vector{String}, pkgimages::Vector{Bool})
+    length(paths) > 1 || return paths
+    sort_by(i) = (; pkgimage=pkgimages[i], mtime=mtime(paths[i]))
+    function sort_lt(a, b)
+        if a.pkgimage != b.pkgimage
+            return a.pkgimage < b.pkgimage
+        end
+        return a.mtime < b.mtime
+    end
+    # allocating the sort vector is less expensive than using sort!(.. by=sort_by),
+    # which would call the relatively slow mtime multiple times per path
+    p = sortperm(sort_by.(eachindex(paths)), lt=sort_lt, rev=true)
+    permute!(paths, p)
+    return paths
+end
+
+function sorted_cachefile_candidates_in_depot(pkg::PkgId, depot::String)
+    return sort_cachefile_candidates!(cachefile_candidates_in_depot(pkg, depot)...)
+end
+
+# Search the depot containing Sys.STDLIB first for bundled stdlibs.
+function cache_search_depots(sourcepath::String, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
+    stdlib_dir = joinpath(Sys.STDLIB, "") # trailing separator for path-boundary matching
+    startswith(sourcepath, stdlib_dir) || return DEPOT_PATH
+    return sort(DEPOT_PATH, by = depot -> !startswith(stdlib_dir, joinpath(depot, "")))
+end
+
+# Search one depot at a time and stop enumerating once a candidate is accepted.
+function lazy_cachefile_candidates(pkg::PkgId, sourcepath::String, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
+    return Iterators.flatten(sorted_cachefile_candidates_in_depot(pkg, depot)
+                             for depot in cache_search_depots(sourcepath, DEPOT_PATH))
+end
+
 function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
     paths = String[]
-    entrypath, entryfile = cache_file_entry(pkg)
-    for path in DEPOT_PATH
-        path = joinpath(path, entrypath)
-        isdir(path) || continue
-        for file in readdir(path, sort = false) # no sort given we sort later
-            if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
-                 (pkg.uuid !== nothing && startswith(file, entryfile * "_") &&
-                  endswith(file, ".ji")))
-                 continue
-            end
-            filepath = joinpath(path, file)
-            isfile_casesensitive(filepath) && push!(paths, filepath)
-        end
+    pkgimages = Bool[]
+    for depot in DEPOT_PATH
+        depot_paths, depot_pkgimages = cachefile_candidates_in_depot(pkg, depot)
+        append!(paths, depot_paths)
+        append!(pkgimages, depot_pkgimages)
     end
-    if length(paths) > 1
-        function sort_by(path)
-            # when using pkgimages, consider those cache files first
-            pkgimage = if JLOptions().use_pkgimages != 0
-                io = open(path, "r")
-                try
-                    if isvalid_cache_header(io) === nothing
-                        false
-                    else
-                        _, _, _, _, _, _, flags = parse_cache_header(io, path)
-                        CacheFlags(flags).use_pkgimages
-                    end
-                finally
-                    close(io)
-                end
-            else
-                false
-            end
-            (; pkgimage, mtime=mtime(path))
-        end
-        function sort_lt(a, b)
-            if a.pkgimage != b.pkgimage
-                return a.pkgimage < b.pkgimage
-            end
-            return a.mtime < b.mtime
-        end
-
-        # allocating the sort vector is less expensive than using sort!(.. by=sort_by),
-        # which would call the relatively slow mtime multiple times per path
-        p = sortperm(sort_by.(paths), lt=sort_lt, rev=true)
-        return paths[p]
-    else
-        return paths
-    end
+    return sort_cachefile_candidates!(paths, pkgimages)
 end
 
 ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Libc.Libdl.dlext)
@@ -2241,7 +2259,6 @@ end
 # returns the set of modules restored if the cache load succeeded
 @constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt128, stalecheck::Bool; reasons=nothing, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
     assert_havelock(require_lock)
-    paths = find_all_in_cache_path(pkg, DEPOT_PATH)
     newdeps = PkgId[]
     try_build_ids = UInt128[build_id]
     if build_id == UInt128(0)
@@ -2253,9 +2270,18 @@ end
             end
         end
     end
+    # iterating the lazy candidates more than once would repeat directory listings
+    paths = length(try_build_ids) == 1 ?
+        lazy_cachefile_candidates(pkg, sourcespec.path, DEPOT_PATH) :
+        find_all_in_cache_path(pkg, DEPOT_PATH)
+    # Try the driver's validated cache first; fall back to the normal search.
+    pre = get(preresolved_cachefiles, pkg, nothing)
+    pre !== nothing && (paths = Iterators.flatten(((pre,), paths)))
     for build_id in try_build_ids
-        @label next_path for path_to_try in paths::Vector{String}
-            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons, stalecheck)
+        @label next_path for path_to_try in paths
+            trusted = path_to_try === pre
+            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons,
+                                        stalecheck = stalecheck && !trusted, verify_checksums = !trusted)
             if staledeps === true
                 continue
             end
@@ -2299,9 +2325,13 @@ end
                     @assert canstart_loading(modkey, modbuild_id, stalecheck) === nothing
                     package_locks[modkey] = (current_task(), Threads.Condition(require_lock), modbuild_id)
                     startedloading = i
-                    modpaths = find_all_in_cache_path(modkey, DEPOT_PATH)
+                    mpre = get(preresolved_cachefiles, modkey, nothing)
+                    modpaths = lazy_cachefile_candidates(modkey, modspec.path, DEPOT_PATH)
+                    mpre !== nothing && (modpaths = Iterators.flatten(((mpre,), modpaths)))
                     for modpath_to_try in modpaths
-                        modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try; stalecheck)
+                        modtrusted = modpath_to_try === mpre
+                        modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try;
+                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted)
                         if modstaledeps === true
                             continue
                         end
@@ -2480,6 +2510,9 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", because they are explicitly loaded, and the process should try to avoid invalidating them
+
+# Cache files supplied by the parent precompile driver.
+const preresolved_cachefiles = Dict{PkgId,String}() # protected by require_lock
 const _require_dependencies = Any[] # a list of (mod::Module, abspath::String, fsize::UInt64, hash::UInt32, mtime::Float64) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 
@@ -3387,7 +3420,8 @@ const newly_inferred = []
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
-                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
+                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String},
+                                    preresolved::Vector{Pair{PkgId,String}}=Pair{PkgId,String}[])
 
     @lock require_lock begin
     m = start_loading(pkg, UInt128(0), false)
@@ -3400,6 +3434,9 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
+    for (k, v) in preresolved
+        preresolved_cachefiles[k] = v
+    end
     end
 
     uuid_tuple = pkg.uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, pkg.uuid)
@@ -3480,7 +3517,8 @@ const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                            internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
-                           report_timing::Bool=false)
+                           report_timing::Bool=false,
+                           preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
     @nospecialize internal_stderr internal_stdout
     depot_path = String[abspath(x) for x in DEPOT_PATH]
     dl_load_path = String[abspath(x) for x in DL_LOAD_PATH]
@@ -3545,7 +3583,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_syntax_version)), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))))
+            $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))), $(_pkg_str(preresolved)))
         """)
     close(io.in)
     return io
@@ -3611,7 +3649,8 @@ const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
-                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
+                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false,
+                      preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3649,7 +3688,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing)
+        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, preresolved)
 
         # Report the PID of the compilation subprocess
         if pid_channel !== nothing
@@ -3861,8 +3900,13 @@ function restore_depot_path(path::AbstractString, depot::AbstractString)
     replace(path, r"^@depot" => depot; count=1)
 end
 
-function resolve_depot(inc::AbstractString)
+function resolve_depot(inc::AbstractString, hint::Union{String, Nothing}=nothing)
     startswith(inc, string("@depot", Filesystem.pathsep())) || return :not_relocatable
+    # include_dependency() files usually live in the same depot as the source
+    # files of their cache, so try that depot first.
+    if hint !== nothing && ispath(restore_depot_path(inc, hint))
+        return hint
+    end
     for depot in DEPOT_PATH
         ispath(restore_depot_path(inc, depot)) && return depot
     end
@@ -3965,34 +4009,49 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     # 1. If the cache is not relocatable because of an absolute path,
     #    we ignore that path for the depot search.
     #    Recompilation will be triggered by stale_cachefile() if that absolute path does not exist.
-    # 2. If we can't find a depot for a relocatable path,
-    #    we still replace it with the depot we found from other files.
-    #    Recompilation will be triggered by stale_cachefile() because the resolved path does not exist.
-    # 3. We require that relocatable paths all resolve to the same depot.
-    # 4. We explicitly check that all relocatable paths resolve to the same depot. This has two reasons:
-    #    - We want to scan all source files in order to provide logs for 1. and 2. above.
-    #    - It is possible that a depot might be missing source files.
-    #      Assume that we have two depots on DEPOT_PATH, depot_complete and depot_incomplete.
-    #      If DEPOT_PATH=["depot_complete","depot_incomplete"] then no recompilation shall happen,
-    #      because depot_complete will be picked.
-    #      If DEPOT_PATH=["depot_incomplete","depot_complete"] we trigger recompilation and
-    #      hopefully a meaningful error about missing files is thrown.
-    #      If we were to just select the first depot we find, then whether recompilation happens would
-    #      depend on whether the first relocatable file resolves to depot_complete or depot_incomplete.
-    srcdepot = nothing
+    # 2. We require that a single depot contains all relocatable paths, and pick the first such
+    #    depot in DEPOT_PATH order. This choice does not depend on the iteration order of
+    #    `srcfiles`: with a depot missing some of the files ("depot_incomplete") and a depot
+    #    containing all of them ("depot_complete") on DEPOT_PATH, depot_complete is picked
+    #    regardless of their relative order. Probing a depot stops at its first missing file,
+    #    so files of a cache belonging to a later depot (e.g. bundled stdlib caches) do not
+    #    pay one miss per file on each depot preceding theirs.
+    # 3. If no depot contains all relocatable paths, we scan the files individually, only to
+    #    provide logs distinguishing files missing from every depot from files spread over
+    #    several. The paths keep their @depot tag and stale_cachefile() will trigger
+    #    recompilation.
     any_not_relocatable = false
     any_no_depot_found = false
     multiple_depots_found = false
+    depot_tag = string("@depot", Filesystem.pathsep())
+    relocatable_srcfiles = String[]
     for src in srcfiles
-        depot = resolve_depot(src)
-        if depot === :not_relocatable
+        if startswith(src, depot_tag)
+            push!(relocatable_srcfiles, src)
+        else
             any_not_relocatable = true
-        elseif depot === :no_depot_found
-            any_no_depot_found = true
-        elseif isnothing(srcdepot)
-            srcdepot = depot
-        elseif depot != srcdepot
-            multiple_depots_found = true
+        end
+    end
+    srcdepot = nothing
+    if !isempty(relocatable_srcfiles)
+        for depot in DEPOT_PATH
+            if all(src -> ispath(restore_depot_path(src, depot)), relocatable_srcfiles)
+                srcdepot = depot
+                break
+            end
+        end
+        if srcdepot === nothing
+            founddepot = nothing
+            for src in relocatable_srcfiles
+                depot = resolve_depot(src)
+                if depot === :no_depot_found
+                    any_no_depot_found = true
+                elseif founddepot === nothing
+                    founddepot = depot
+                elseif depot != founddepot
+                    multiple_depots_found = true
+                end
+            end
         end
     end
     if any_no_depot_found
@@ -4012,7 +4071,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     # unlike include() files, we allow each relocatable include_dependency() file to resolve
     # to a separate depot, #52161
     for inc in includes_depfiles
-        depot = resolve_depot(inc.filename)
+        depot = resolve_depot(inc.filename, srcdepot)
         if depot === :no_depot_found
             @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", _group=:relocatable)
         elseif depot === :not_relocatable
@@ -4437,7 +4496,10 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
             record_reason(reasons, :unresolved_depot)
             return true
         end
-        if !ispath(f)
+        # A single stat provides existence, mtime and size; permission errors
+        # propagate like they did from ispath()/mtime()/stat() before.
+        fstat = stat(f)
+        if !ispath(fstat)
             _f = fixup_stdlib_path(f)
             if _f != f && isfile(_f) && startswith(_f, Sys.STDLIB)
                 continue
@@ -4448,7 +4510,7 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
         end
         if ftime_req >= 0.0
             # this is an include_dependency for which we only recorded the mtime
-            ftime = mtime(f)
+            ftime = mtime(fstat)
             is_stale = ( ftime != ftime_req ) &&
                        ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
                        ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
@@ -4461,7 +4523,6 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
                 return true
             end
         else
-            fstat = stat(f)
             fsize = filesize(fstat)
             if fsize != fsize_req
                 @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"

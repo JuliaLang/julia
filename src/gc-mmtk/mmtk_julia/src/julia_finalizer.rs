@@ -13,8 +13,8 @@ use crate::jl_gc_get_marked_finalizers_list;
 use crate::jl_gc_get_thread_finalizer_list;
 use crate::jl_gc_get_to_finalize_list;
 
-// Entries in the thread-local and marked finalizer lists may have tagged object
-// pointers. These must match the `GC_FIN_*` defines in gc-common.h.
+// Entries in the thread-local, marked and `to_finalize` finalizer lists may have tagged
+// object pointers. These must match the `GC_FIN_*` defines in gc-common.h.
 /// The paired finalizer is an unboxed c function pointer.
 pub const GC_FIN_CFUNC_TAG: usize = 0x1;
 /// The object pointer is a c object pointer, not a `jl_value_t *`.  It must
@@ -195,46 +195,65 @@ fn sweep_finalizer_list(
     list.len = j;
 }
 
+/// Advance `i` to the next entry of `list` that is an object reference, returning
+/// `(slot, object, tag)`.
+fn next_finalizer_object(
+    list: &ArrayListT,
+    i: &mut usize,
+) -> Option<(usize, ObjectReference, usize)> {
+    while *i < list.len {
+        let cur = list.get(*i);
+        let slot = *i;
+        if cur.is_zero() {
+            *i += 1;
+            continue;
+        }
+        let mut tag = 0;
+        let obj = if gc_ptr_tag(cur, GC_FIN_CFUNC_TAG) {
+            *i += 1;
+            debug_assert!(*i < list.len);
+            tag = GC_FIN_CFUNC_TAG;
+            gc_ptr_clear_tag(cur, GC_FIN_CFUNC_TAG)
+        } else {
+            cur
+        };
+        if gc_ptr_tag(cur, GC_FIN_COBJ_TAG) {
+            *i += 1;
+            continue;
+        }
+        *i += 1;
+        return Some((
+            slot,
+            unsafe { ObjectReference::from_raw_address_unchecked(obj) },
+            tag,
+        ));
+    }
+    None
+}
+
+/// Report every reference in `queue` to the concurrent marking closure, for a mutator that is
+/// about to empty it.
+pub fn wb_finalizer_queue(mutator: &mut Mutator<JuliaVM>, queue: *const libc::c_void) {
+    use mmtk::MutatorContext;
+    // `queue` is the `arraylist_t` the mutator is about to reset; see gc-common.c.
+    let queue = unsafe { &*(queue as *const ArrayListT) };
+    let mut i = 0;
+    while let Some((_, obj, _)) = next_finalizer_object(queue, &mut i) {
+        mutator.barrier().load_weak_reference(obj);
+    }
+}
+
 // gc_mark_finlist in gc.c
 fn mark_finlist<T: ObjectTracer>(list: &mut ArrayListT, start: usize, tracer: &mut T) {
     if list.len <= start {
         return;
     }
-
     let mut i = start;
-    while i < list.len {
-        let cur = list.get(i);
-        let cur_i = i;
-        let mut cur_tag: usize = 0;
-
-        if cur.is_zero() {
-            i += 1;
-            continue;
-        }
-
-        let new_obj_addr = if gc_ptr_tag(cur, GC_FIN_CFUNC_TAG) {
-            // Skip next
-            i += 1;
-            debug_assert!(i < list.len);
-            cur_tag = GC_FIN_CFUNC_TAG;
-            gc_ptr_clear_tag(cur, GC_FIN_CFUNC_TAG)
-        } else {
-            // unsafe: We checked `cur.is_zero()` before.
-            cur
-        };
-        if gc_ptr_tag(cur, GC_FIN_COBJ_TAG) {
-            i += 1;
-            continue;
-        }
-
-        let new_obj = unsafe { ObjectReference::from_raw_address_unchecked(new_obj_addr) };
-
-        let traced = tracer.trace_object(new_obj);
-        // if object has moved, update the list applying the tag
-        list.set(cur_i, unsafe {
-            Address::from_usize(traced.to_raw_address() | cur_tag)
+    while let Some((slot, obj, tag)) = next_finalizer_object(list, &mut i) {
+        let traced = tracer.trace_object(obj);
+        // if the object has moved, update the list, re-applying the tag
+        list.set(slot, unsafe {
+            Address::from_usize(traced.to_raw_address() | tag)
         });
-
-        i += 1;
     }
 }
