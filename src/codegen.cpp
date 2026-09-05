@@ -9386,9 +9386,17 @@ static jl_llvm_functions_t
             subrty = debugcache.jl_di_func_sig;
         else
             subrty = get_specsig_di(ctx, debugcache, jlrettype, abi, dbuilder);
+        // At -g2, omit the mangled linkage name from DWARF so debuggers index
+        // and display the function by its Julia name: `break mycompute` in
+        // gdb then binds to every specialization, and frames show as
+        // `mycompute (a=1, b=2)` instead of `julia_mycompute_0 (...)`. The ELF
+        // symbol keeps the mangled name for profilers and `break julia_...`.
+        // gdb uses DW_AT_linkage_name as the symbol whenever it is present.
+        StringRef linkageName = ctx.emission_context.params->debug_info_level >= 2
+                                ? StringRef() : StringRef(f->getName());
         SP = dbuilder.createFunction(nullptr
                                      ,dbgFuncName      // Name
-                                     ,f->getName()     // LinkageName
+                                     ,linkageName      // LinkageName
                                      ,topfile          // File
                                      ,toplineno        // LineNo
                                      ,subrty           // Ty
