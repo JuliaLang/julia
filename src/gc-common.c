@@ -280,6 +280,43 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     ct->sticky = sticky;
 }
 
+// Borrow region `n` for the next allocations of this thread and give back
+// the region that was current. The window is untouched: the count of open
+// windows, the task's own region and the stickiness all stay as they were,
+// because a borrow is not a window. It is the way a replacement buffer is
+// allocated where the buffer it replaces lives, rather than where the open
+// window happens to be.
+//
+// A borrow is short: it brackets one allocation. Do not yield inside one,
+// because a task switch would save the borrowed region as the task's window.
+// Always give it back with a `finally`. A stock collection inside a borrow
+// is safe: its bracket saves and restores whatever region is current.
+JL_DLLEXPORT int jl_gc_region_borrow(int n)
+{
+#ifdef WITH_THIRD_PARTY_HEAP
+    (void)n;
+    return 0;
+#else
+    if (n < 0 || n >= JL_GC_MAX_REGIONS)
+        return JL_GC_REGION_EINVAL;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int lent = ptls->gc_tls.heap.current_region;
+    if (lent != n)
+        jl_gc_region_install_borrow(ptls, n);
+    return lent;
+#endif
+}
+
+JL_DLLEXPORT void jl_gc_region_unborrow(int lent)
+{
+#ifdef WITH_THIRD_PARTY_HEAP
+    (void)lent;
+#else
+    if (lent >= 0 && lent != jl_current_task->ptls->gc_tls.heap.current_region)
+        jl_gc_region_install_task(jl_current_task->ptls, lent);
+#endif
+}
+
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
 
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;

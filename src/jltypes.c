@@ -1723,6 +1723,8 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
                 jl_set_typetagof((jl_vararg_t *)t, jl_vararg_tag, 0);
                 ((jl_vararg_t *)t)->T = rT;
                 ((jl_vararg_t *)t)->N = vt->N;
+                jl_gc_wb_fresh(t, rT);
+                jl_gc_wb_fresh(t, vt->N);
             }
             JL_GC_POP();
         }
@@ -2869,6 +2871,8 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
         jl_set_typetagof(vm, jl_vararg_tag, 0);
         vm->T = t;
         vm->N = n;
+        jl_gc_wb_fresh(vm, t);
+        jl_gc_wb_fresh(vm, n);
     }
     JL_GC_POP();
     return vm;

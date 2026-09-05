@@ -155,7 +155,7 @@ struct JuliaLICM : public JuliaPassContext {
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
         if (!gc_preserve_begin_func && !write_barrier_func &&
-            !alloc_obj_func) {
+            !region_write_barrier_func && !alloc_obj_func) {
             LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write_barrier_func or alloc_obj_func found, skipping JuliaLICM\n");
             return false;
         }
@@ -256,7 +256,7 @@ struct JuliaLICM : public JuliaPassContext {
                         });
                     }
                 }
-                else if (callee == write_barrier_func) {
+                else if (callee == write_barrier_func || callee == region_write_barrier_func) {
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!makeLoopInvariant(L, call->getArgOperand(i),

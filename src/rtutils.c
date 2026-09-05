@@ -25,6 +25,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "gc-regions.h"   // the exception stack of a task is made where the task lives
 
 #ifdef __cplusplus
 extern "C" {
@@ -391,7 +392,13 @@ static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_
     if (s && s->reserved_size >= reserved_size)
         return;
     size_t bufsz = sizeof(jl_excstack_t) + sizeof(uintptr_t)*reserved_size;
+    // The buffer lives as long as the task and every later throw reuses it,
+    // so it belongs to the region of the task, whatever window the throw
+    // runs inside. Made in the open region, it would escape into the task
+    // at the first throw inside a window and quarantine the region.
+    int lent = jl_gc_region_borrow(jl_gc_region_of((jl_value_t*)ct));
     jl_excstack_t *new_s = (jl_excstack_t*)jl_gc_alloc_buf(ct->ptls, bufsz);
+    jl_gc_region_unborrow(lent);
     new_s->top = 0;
     new_s->reserved_size = reserved_size;
     if (s)

@@ -906,6 +906,7 @@ JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src)
         (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     *newsrc = *src;
+    jl_gc_multi_wb_fresh(newsrc, newsrc, jl_code_info_type);
     return newsrc;
 }
 

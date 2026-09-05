@@ -620,6 +620,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         jl_task_t *ct = jl_current_task;
         result = jl_gc_alloc(ct->ptls, isptr ? nb : jl_datatype_size(rettyp), isptr ? ety : (jl_value_t*)rettyp);
         int success = jl_atomic_cmpswap_bits((jl_datatype_t*)ety, result, pp, expected, x, nb);
+        jl_gc_multi_wb_fresh(result, result, (jl_datatype_t*)ety); // the old value, at offset 0
         if (isptr) {
             jl_value_t *z = jl_gc_alloc(ct->ptls, jl_datatype_size(rettyp), rettyp);
             *(jl_value_t**)z = result;

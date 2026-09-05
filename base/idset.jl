@@ -50,19 +50,27 @@ function push!(s::IdSet, @nospecialize(x))
     if idx >= 0
         s.list[idx + 1] = x
     else
-        if s.max < length(s.list)
-            idx = s.max
-            @assert !isassigned(s.list, idx + 1) "bucket is already occupied"
-            s.list[idx + 1] = x
-            s.max = idx + 1
-        else
-            newidx = RefValue{Int}(0)
-            setfield!(s, :list, ccall(:jl_idset_put_key, Any, (Any, Any, Ptr{Int}), s.list, x, newidx))
-            idx = newidx[]
-            s.max = idx < 0 ? -idx : idx + 1
+        # A grown key list and a rehashed index table replace the ones the
+        # set holds, so they take the region of the set, not the region of
+        # an open window (genericmemory.jl, `_region_borrow`).
+        lent = _region_borrow(s)
+        try
+            if s.max < length(s.list)
+                idx = s.max
+                @assert !isassigned(s.list, idx + 1) "bucket is already occupied"
+                s.list[idx + 1] = x
+                s.max = idx + 1
+            else
+                newidx = RefValue{Int}(0)
+                setfield!(s, :list, ccall(:jl_idset_put_key, Any, (Any, Any, Ptr{Int}), s.list, x, newidx))
+                idx = newidx[]
+                s.max = idx < 0 ? -idx : idx + 1
+            end
+            @assert s.list[s.max] === x "unexpected object in bucket"
+            setfield!(s, :idxs, ccall(:jl_idset_put_idx, Any, (Any, Any, Int), s.list, s.idxs, idx))
+        finally
+            _region_unborrow(lent)
         end
-        @assert s.list[s.max] === x "unexpected object in bucket"
-        setfield!(s, :idxs, ccall(:jl_idset_put_idx, Any, (Any, Any, Int), s.list, s.idxs, idx))
         s.count += 1
     end
     s

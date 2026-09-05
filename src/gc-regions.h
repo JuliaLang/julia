@@ -32,9 +32,17 @@ enum {
                                     // cannot allocate in a region
     JL_GC_REGION_EBUSY = -2,        // the region is current, or this heap
                                     // runs region finalizers now
+    JL_GC_REGION_EQUARANTINED = -5, // the region was escaped from; its memory
+                                    // is retained
     JL_GC_REGION_EFINALIZERS = -6,  // finalizers are pending after the bounded
                                     // rounds of the reset
 };
+
+// Borrow a region for the next allocations of this thread, and give it
+// back. The window is untouched: a borrow is not a window. A replacement
+// buffer is allocated in the region of the buffer it replaces this way.
+JL_DLLEXPORT int jl_gc_region_borrow(int n);
+JL_DLLEXPORT void jl_gc_region_unborrow(int lent);
 
 #ifndef WITH_THIRD_PARTY_HEAP
 
@@ -46,6 +54,11 @@ JL_DLLEXPORT int jl_gc_region_current(void);
 // Free every object of region n on the calling thread's heap. Returns the
 // number of pages the region held, or a refusal code.
 JL_DLLEXPORT uint64_t jl_gc_region_reset(int n);
+// Queries: the region of an object, whether an escape quarantined it.
+JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v);
+JL_DLLEXPORT int jl_gc_region_quarantined(int n);
+// The escape barrier, called by the write barrier while a region is in use.
+JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
 
 // --- the hooks the rest of the runtime calls --------------------------------
 // A finalizer on a region object goes to the region's own list. Returns 1
@@ -57,6 +70,9 @@ int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isali
 // Install a parked region on a thread: the stock collection parks every
 // window before it runs and installs it again after.
 void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
+// Install a borrowed region on a thread (jl_gc_region_borrow); the region
+// becomes live on this heap.
+void jl_gc_region_install_borrow(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
 // The brackets around a stock collection: park every open window before it,
 // install the windows again after it. Between them, every pass of the
 // collection clears the marks it left on region pages after its sweep.

@@ -791,6 +791,9 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         setName(ctx.emission_context, thePtr, "pointerref_src");
         MDNode *tbaa = best_tbaa(ctx.tbaa(), ety);
         emit_memcpy(ctx, strct, jl_aliasinfo_t::fromTBAA(ctx, tbaa), thePtr, jl_aliasinfo_t::fromTBAA(ctx, nullptr), size, Align(sizeof(jl_value_t*)), Align(align_nb));
+        // The copy stores the pointer fields of the loaded value with no
+        // barrier: the region check, from the fields of the box.
+        emit_region_write_barrier_fields(ctx, strct, (jl_datatype_t*)ety);
         return mark_julia_type(ctx, strct, true, ety);
     }
     else {
@@ -983,6 +986,9 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
         thePtr = strct;
         StoreInst *store = ctx.builder.CreateAlignedStore(load, thePtr, Align(julia_alignment(ety)));
         ai.decorateInst(store);
+        // The store puts the pointer fields of the loaded value into the
+        // box with no barrier: the region check, from the fields of the box.
+        emit_region_write_barrier_fields(ctx, strct, (jl_datatype_t*)ety);
         return mark_julia_type(ctx, strct, true, ety);
     }
     else {

@@ -111,6 +111,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str)
     m->length = jl_string_len(str);
     m->ptr = jl_string_data(str);
     jl_genericmemory_data_owner_field(m) = str;
+    jl_gc_wb_fresh(m, str);
     return m;
 }
 
@@ -278,10 +279,24 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
         memcpy(new_mem->ptr, (char*)mem->ptr + (size_t)data * elsz, len * elsz);
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
+    // The copy moves the references of `mem` into a memory allocated now, in
+    // the region of the open window. The pair check covers every element
+    // when it passes; when it fails the elements decide, one by one, for the
+    // reason gc-wb-stock.h gives for the two copy barriers. The layout of a
+    // boxed memory lists no pointer (its first_ptr is -1: the element itself
+    // is the reference), so the boxed case comes before the layout test.
+    else if (layout->flags.arrayelem_isboxed) {
+        if (data != NULL) {
+            jl_gc_region_wb_copy_boxed_check(new_mem, mem, (_Atomic(void*)*)data, len);
+            memcpy(new_mem->ptr, data, len * elsz);
+        }
+    }
     else if (layout->first_ptr != -1) {
         if (data == NULL) {
             assert(len * elsz / sizeof(void*) == 0); // make static analyzer happy
         }
+        jl_gc_region_wb_copy_inline_check(new_mem, mem, (const char*)data, len, elsz,
+                                          (jl_datatype_t*)jl_tparam1(mtype));
         memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * elsz / sizeof(void*));
     }
     else if (data != NULL) {
@@ -307,6 +322,7 @@ jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem
     jl_task_t *ct = jl_current_task;
     jl_genericmemoryref_t *m = (jl_genericmemoryref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_genericmemoryref_t), typ);
     m->mem = mem;
+    jl_gc_wb_fresh(m, mem);
     m->ptr_or_offset = data;
     return m;
 }
@@ -372,6 +388,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
         jl_lock_field((jl_mutex_t*)data);
         memcpy((char*)r, data + LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT), fsz);
         jl_unlock_field((jl_mutex_t*)data);
+        jl_gc_multi_wb_fresh(r, r, (jl_datatype_t*)eltype);
     }
     else {
         // TODO: a finalizer here could make the isunion case not quite right
