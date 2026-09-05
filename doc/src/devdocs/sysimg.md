@@ -22,6 +22,19 @@ This operation is useful for multiple reasons. A user may:
 The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
 wrapper functions to automate this process.
 
+## Coverage instrumentation
+
+Set `JULIA_COVERAGE_IMAGES=1` in `Make.user` before building Julia to instrument
+the system image and bundled package images for `all`-scope, `hit`-mode coverage.
+Matching coverage runs reuse the native code instead of recompiling it in each
+process. This configuration is intended for coverage CI: the images retain
+instrumentation overhead even when coverage is disabled, and cached inference
+effects can differ from those of an ordinary build.
+
+An incompatible request, such as count mode with a hit-mode image, retains the
+recompilation fallback. Allocation tracking also requires recompilation.
+Image generation does not record coverage hits for its own precompile workload.
+
 ## [System image optimized for multiple microarchitectures](@id sysimg-multi-versioning)
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures

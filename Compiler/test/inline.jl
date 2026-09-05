@@ -10,6 +10,41 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
+# Inlined IR drops coverage effects when the active process does not collect
+# them for the inlinee (`--code-coverage=user` and `all` cover this module).
+coverage_strip_callee() = nothing
+let mi = Base.method_instance(coverage_strip_callee, ()),
+    src = make_codeinfo(Any[Expr(:code_coverage_effect), ReturnNode(nothing)];
+                        ssavaluetypes=Any[Nothing, Nothing],
+                        slottypes=Any[typeof(coverage_strip_callee)], slotnames=[:self])
+    ir, _, _ = Compiler.retrieve_ir_for_inlining(mi, src, true)
+    collected = Base.JLOptions().code_coverage in (1, 2)
+    @test any(stmt -> isexpr(stmt, :code_coverage_effect), ir.stmts.stmt) == collected
+    @test isexpr(src.code[1], :code_coverage_effect)
+end
+
+# Hit mode omits the inlining entry marker when the inlinee carries its own
+# markers; count mode always inserts it. The rule only applies when the process
+# collects coverage for the callee, so this needs `--code-coverage=user` or `all`.
+coverage_entry_callee() = nothing
+if Base.JLOptions().code_coverage in (1, 2)
+    let mi = Base.method_instance(coverage_entry_callee, ())
+        for has_marker in (false, true)
+            code = has_marker ? Any[Expr(:code_coverage_effect), ReturnNode(nothing)] :
+                                Any[ReturnNode(nothing)]
+            src = make_codeinfo(code; ssavaluetypes=Any[Nothing for _ in code],
+                                slottypes=Any[typeof(coverage_entry_callee)], slotnames=[:self])
+            callee_ir, spec_info, di = Compiler.retrieve_ir_for_inlining(mi, src, true)
+            @test any(stmt -> isexpr(stmt, :code_coverage_effect), callee_ir.stmts.stmt) == has_marker
+            ir = make_ircode(Any[ReturnNode(nothing)])
+            Compiler.ir_prepare_inlining!(Compiler.InsertBefore(ir, SSAValue(1)), ir, callee_ir,
+                                          spec_info, di, mi, (Int32(1), Int32(0), Int32(0)), Any[])
+            inserted = any(stmt -> isexpr(stmt, :code_coverage_effect), ir.new_nodes.stmts.stmt)
+            @test inserted == (!has_marker || Base.JLOptions().code_coverage_mode != 0)
+        end
+    end
+end
+
 """
 Helper to walk the AST and call a function on every node.
 """

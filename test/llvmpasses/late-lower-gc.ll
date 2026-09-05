@@ -212,6 +212,22 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
   ret ptr addrspace(10) null
 }
 
+; Vectorization may give tracked-pointer allocas a larger alignment than the
+; 16-byte alignment guaranteed by the final GC frame.
+define void @overaligned_gc_alloca(<8 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_alloca
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %roots = alloca <8 x ptr addrspace(10)>, align 64
+; CHECK: %roots = call ptr @julia.get_gc_frame_slot
+; CHECK: store <8 x ptr addrspace(10)> %values, ptr %roots, align 16
+  store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  %root4addr = getelementptr ptr addrspace(10), ptr %roots, i64 4
+; CHECK: %root4 = load ptr addrspace(10), ptr %root4addr, align 16
+  %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+  call void @boxed_simple(ptr addrspace(10) %root4, ptr addrspace(10) %root4)
+  ret void
+}
+
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}
@@ -236,4 +252,3 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
 ; CHECK-NEXT: !10 = distinct !{!10}
 ; CHECK-NEXT: !11 = !{!12, !12, i64 0}
 ; CHECK-NEXT: !12 = !{!"jtbaa_const", !3}
-

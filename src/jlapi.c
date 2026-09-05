@@ -1298,8 +1298,22 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
         jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
-    if (jl_options.tracked_path)
-        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
+    if (jl_options.tracked_path) {
+        char *tracked_path = absrealpath(jl_options.tracked_path, 0);
+        // drop trailing separators (a bare `@` yields the working directory
+        // with one), so that the path compares equal across processes
+        size_t len = strlen(tracked_path);
+        // Keep the separator of a Windows drive root: `C:` is drive-relative,
+        // so passing it to a precompile worker would resolve a different path.
+        size_t min_len = 1;
+#ifdef _OS_WINDOWS_
+        if (len >= 3 && tracked_path[1] == ':')
+            min_len = 3;
+#endif
+        while (len > min_len && (tracked_path[len - 1] == '/' || tracked_path[len - 1] == PATHSEPSTRING[0]))
+            tracked_path[--len] = '\0';
+        jl_options.tracked_path = tracked_path;
+    }
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {

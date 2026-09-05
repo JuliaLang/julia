@@ -14,10 +14,59 @@ static int codegen_imaging_mode(void) JL_NOTSAFEPOINT
     return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
 }
 
+// Coverage configuration of the images this process compiles and requires:
+// scope in bits 0-1, mode in bit 2, 0 for uninstrumented. A `@path` scope
+// (JL_LOG_PATH) refers to the tracked path of this process (jl_options.tracked_path),
+// which the images record. Allocation counters are never compiled into images.
+JL_DLLEXPORT uint8_t jl_image_coverage_config(void) JL_NOTSAFEPOINT
+{
+    if (jl_options.malloc_log != JL_LOG_NONE)
+        return 0;
+    int scope = jl_options.code_coverage;
+    if (scope == JL_LOG_NONE)
+        return 0;
+    return (uint8_t)(scope | ((jl_options.code_coverage_mode & 1) << 2));
+}
+
+// The tracked path of a `@path` instrumented image built by this process
+// (empty for the other configurations).
+JL_DLLEXPORT const char *jl_image_coverage_path(void) JL_NOTSAFEPOINT
+{
+    if ((jl_image_coverage_config() & 3) != JL_LOG_PATH || jl_options.tracked_path == NULL)
+        return "";
+    return jl_options.tracked_path;
+}
+
+// coverage configuration of the sysimage (0 if uninstrumented)
+static uint8_t sysimg_coverage_config = 0;
+
+// Whether an image with coverage configuration `actual` serves a process
+// requiring `requested`. Without coverage, only images at most as instrumented
+// as the sysimage will do (instrumented code is slower and its cached effects
+// are pessimized). With coverage, the image scope must cover the requested one
+// (`all` covers every scope, a `@path` image covers the same path, which the
+// caller compares) and its mode must serve it (counts also tell whether a line
+// ran). Under a `@path` request only the packages under the tracked path need
+// instrumented images, so plain images pass here and the loader
+// (Base.match_cache_coverage) decides per package which variant to load.
+// The cache loader and image trust both use this rule.
+JL_DLLEXPORT int jl_match_cache_coverage(uint8_t requested, uint8_t actual) JL_NOTSAFEPOINT
+{
+    if (requested == 0)
+        return actual == 0 || actual == sysimg_coverage_config;
+    unsigned rscope = requested & 3, ascope = actual & 3;
+    if (actual == 0)
+        return rscope == JL_LOG_PATH;
+    unsigned rmode = requested >> 2, amode = actual >> 2;
+    return (ascope == JL_LOG_ALL || ascope == rscope) &&
+           (amode == rmode || (amode == JL_COVERAGE_MODE_COUNT && rmode == JL_COVERAGE_MODE_HIT));
+}
+
 // Logging for code coverage and memory allocation
 
 #define logdata_blocksize 32 // target getting nearby lines in the same general cache area and reducing calls to malloc by chunking
-typedef uint64_t logdata_block[logdata_blocksize];
+typedef _Atomic(uint64_t) logdata_counter_t;
+typedef logdata_counter_t logdata_block[logdata_blocksize];
 
 // Per-file line data: a growable array of logdata_block pointers, indexed by block number.
 typedef struct {
@@ -54,7 +103,7 @@ static logdata_vec_t *logdata_get_or_create(logdata_t *ld, const char *filename)
 
 static uv_mutex_t coverage_lock;
 
-static uint64_t *allocLine(logdata_vec_t *vec, int line) JL_NOTSAFEPOINT
+static logdata_counter_t *allocLine(logdata_vec_t *vec, int line) JL_NOTSAFEPOINT
 {
     unsigned block = line / logdata_blocksize;
     line = line % logdata_blocksize;
@@ -65,14 +114,42 @@ static uint64_t *allocLine(logdata_vec_t *vec, int line) JL_NOTSAFEPOINT
         vec->blocks[block] = (logdata_block *)calloc_s(sizeof(logdata_block));
     }
     logdata_block *data = vec->blocks[block];
-    if ((*data)[line] == 0)
-        (*data)[line] = 1;
+    if (jl_atomic_load_relaxed(&(*data)[line]) == 0)
+        jl_atomic_store_relaxed(&(*data)[line], 1);
     return &(*data)[line];
 }
 
 // Code coverage
 
 static logdata_t coverageData;
+
+// The JIT registers (runtime slot, module counter) pairs after linking. Module
+// counters are folded into the per-line runtime slots before writing a report.
+// JIT code is not unloaded, so the counter addresses remain valid.
+static arraylist_t registered_counters;
+
+// Fold the registered per-module counters into the canonical slots.
+// The caller must hold coverage_lock.
+static void fold_registered_counters(void) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < registered_counters.len; i += 2) {
+        logdata_counter_t *slot = (logdata_counter_t*)registered_counters.items[i];
+        logdata_counter_t *counter = (logdata_counter_t*)registered_counters.items[i + 1];
+        uint64_t value = jl_atomic_load_relaxed(counter);
+        if (value == 0)
+            continue;
+        if (jl_options.code_coverage_mode == JL_COVERAGE_MODE_HIT) {
+            // Folding is idempotent, so the module counter need not be reset.
+            jl_atomic_store_relaxed(slot, 2);
+        }
+        else {
+            // Reset the delta after folding it. Concurrent updates can make
+            // count mode approximate.
+            jl_atomic_store_relaxed(counter, 0);
+            jl_atomic_store_relaxed(slot, jl_atomic_load_relaxed(slot) + value);
+        }
+    }
+}
 
 static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
 {
@@ -128,12 +205,72 @@ JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line)
     uv_mutex_unlock(&coverage_lock);
 }
 
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line)
+JL_DLLEXPORT logdata_counter_t *jl_coverage_data_pointer(const char *filename, int line)
 {
     uv_mutex_lock(&coverage_lock);
-    uint64_t *ret = allocLine(logdata_get_or_create(&coverageData, filename), line);
+    logdata_counter_t *ret = allocLine(logdata_get_or_create(&coverageData, filename), line);
     uv_mutex_unlock(&coverage_lock);
     return ret;
+}
+
+JL_DLLEXPORT void jl_coverage_register_counter(logdata_counter_t *slot, logdata_counter_t *counter)
+{
+    uv_mutex_lock(&coverage_lock);
+    arraylist_push(&registered_counters, slot);
+    arraylist_push(&registered_counters, counter);
+    uv_mutex_unlock(&coverage_lock);
+}
+
+static int sysimg_coverage_matched = 0;
+
+// Whether the sysimage's code already collects the requested coverage (other
+// images are queried per code instance, see jl_codeinst_coverage_trusted).
+JL_DLLEXPORT int jl_sysimage_coverage_trusted(void) JL_NOTSAFEPOINT
+{
+    return sysimg_coverage_matched;
+}
+
+// Whether the code of an image with coverage table `cov` collects the
+// requested coverage.
+static int image_coverage_compatible(const jl_image_coverage_t *cov) JL_NOTSAFEPOINT
+{
+    uint8_t config = jl_image_coverage_config();
+    if (cov == NULL || config == 0)
+        return 0;
+    if (!jl_match_cache_coverage(config, (uint8_t)(cov->scope | (cov->mode << 2))))
+        return 0;
+    // a `@path` image collects coverage for its own tracked path only
+    if (cov->scope == JL_LOG_PATH && strcmp(cov->tracked_path, jl_image_coverage_path()) != 0)
+        return 0;
+    return 1;
+}
+
+// Adopt the counters of a just-loaded image; returns whether its code collects
+// the requested coverage. Registering a counter allocates the per-line slot, so
+// unreached lines are still reported with a zero count. A `user` request
+// registers only the user-code entries of an `all` image, and a `@path`
+// request only its entries under the tracked path.
+int jl_register_image_coverage(const void *table, int is_sysimg)
+{
+    const jl_image_coverage_t *cov = (const jl_image_coverage_t*)table;
+    int matched = image_coverage_compatible(cov);
+    if (is_sysimg) {
+        sysimg_coverage_matched = matched;
+        sysimg_coverage_config = cov ? (uint8_t)(cov->scope | (cov->mode << 2)) : 0;
+    }
+    if (!matched)
+        return 0;
+    int user_only = jl_options.code_coverage == JL_LOG_USER;
+    int path_only = jl_options.code_coverage == JL_LOG_PATH;
+    for (uint64_t i = 0; i < cov->nentries; i++) {
+        const jl_image_coverage_entry_t *e = &cov->entries[i];
+        if (user_only && !(e->flags & JL_IMAGE_COVERAGE_USER))
+            continue;
+        if (path_only && !jl_path_is_tracked(e->file))
+            continue;
+        jl_coverage_register_counter(jl_coverage_data_pointer(e->file, e->line), e->counter);
+    }
+    return 1;
 }
 
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT
@@ -145,8 +282,15 @@ JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int l
         return;
     uv_mutex_lock(&coverage_lock);
     logdata_vec_t *vec = logdata_get_or_create(&coverageData, filename);
-    uint64_t *ptr = allocLine(vec, line);
-    (*ptr)++;
+    logdata_counter_t *ptr = allocLine(vec, line);
+    if (jl_options.code_coverage_mode == JL_COVERAGE_MODE_HIT) {
+        // Match codegen's hit encoding: 2 means reached and is reported as 1.
+        jl_atomic_store_relaxed(ptr, 2);
+    }
+    else {
+        uint64_t value = jl_atomic_load_relaxed(ptr);
+        jl_atomic_store_relaxed(ptr, value + 1);
+    }
     uv_mutex_unlock(&coverage_lock);
 }
 
@@ -154,10 +298,10 @@ JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int l
 
 static logdata_t mallocData;
 
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT
+JL_DLLEXPORT logdata_counter_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&coverage_lock);
-    uint64_t *ret = allocLine(logdata_get_or_create(&mallocData, filename), line);
+    logdata_counter_t *ret = allocLine(logdata_get_or_create(&mallocData, filename), line);
     uv_mutex_unlock(&coverage_lock);
     return ret;
 }
@@ -174,8 +318,8 @@ static void clear_log_data(logdata_t *logData) JL_NOTSAFEPOINT
             if (vec->blocks[j]) {
                 logdata_block *data = vec->blocks[j];
                 for (int k = 0; k < logdata_blocksize; k++) {
-                    if ((*data)[k] > 0)
-                        (*data)[k] = 1;
+                    if (jl_atomic_load_relaxed(&(*data)[k]) > 0)
+                        jl_atomic_store_relaxed(&(*data)[k], 1);
                 }
             }
         }
@@ -195,8 +339,27 @@ JL_DLLEXPORT void jl_clear_malloc_data(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_clear_coverage_data(void) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&coverage_lock);
+    for (size_t i = 0; i < registered_counters.len; i += 2) {
+        logdata_counter_t *counter = (logdata_counter_t*)registered_counters.items[i + 1];
+        jl_atomic_store_relaxed(counter, 0);
+    }
     clear_log_data(&coverageData);
     uv_mutex_unlock(&coverage_lock);
+}
+
+// Julia filenames use UTF-8, whereas Windows fopen uses the active code page.
+static FILE *coverage_fopen(const char *filename, const char *mode) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    const wchar_t *wfilename = ios_utf8_to_wchar(filename);
+    const wchar_t *wmode = ios_utf8_to_wchar(mode);
+    FILE *file = _wfopen(wfilename, wmode);
+    free((void*)wfilename);
+    free((void*)wmode);
+    return file;
+#else
+    return fopen(filename, mode);
+#endif
 }
 
 static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFEPOINT
@@ -218,13 +381,13 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
         else
             snprintf(fullpath, sizeof(fullpath), "%s", filename);
 
-        FILE *inf = fopen(fullpath, "r");
+        FILE *inf = coverage_fopen(fullpath, "r");
         if (!inf)
             continue;
 
         char outpath[4096];
         snprintf(outpath, sizeof(outpath), "%s%s", fullpath, extension);
-        FILE *outf = fopen(outpath, "wb");
+        FILE *outf = coverage_fopen(outpath, "wb");
         if (outf) {
             int l = 1;
             unsigned block = 0;
@@ -234,7 +397,7 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
                 if (block < values->len) {
                     data = values->blocks[block];
                 }
-                uint64_t value = data ? (*data)[l] : 0;
+                uint64_t value = data ? jl_atomic_load_relaxed(&(*data)[l]) : 0;
                 if (++l >= logdata_blocksize) {
                     l = 0;
                     block++;
@@ -260,7 +423,7 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
 
 static void write_lcov_data(logdata_t *logData, const char *outfile) JL_NOTSAFEPOINT
 {
-    FILE *outf = fopen(outfile, "ab");
+    FILE *outf = coverage_fopen(outfile, "ab");
     if (!outf) return;
     size_t sz = logData->size;
     void **tab = logData->table;
@@ -279,7 +442,7 @@ static void write_lcov_data(logdata_t *logData, const char *outfile) JL_NOTSAFEP
             if (values->blocks[j]) {
                 logdata_block *data = values->blocks[j];
                 for (int k = 0; k < logdata_blocksize; k++) {
-                    uint64_t cov = (*data)[k];
+                    uint64_t cov = jl_atomic_load_relaxed(&(*data)[k]);
                     if (cov > 0) {
                         n_instrumented++;
                         if (cov > 1)
@@ -303,6 +466,7 @@ static void write_lcov_data(logdata_t *logData, const char *outfile) JL_NOTSAFEP
 JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
     uv_mutex_lock(&coverage_lock);
+    fold_registered_counters();
     if (output) {
         size_t len = strlen(output);
         if (len >= 5 && strcmp(output + len - 5, ".info") == 0) {
@@ -333,4 +497,5 @@ void jl_init_coverage(void)
     uv_mutex_init(&coverage_lock);
     strhash_new(&coverageData, 0);
     strhash_new(&mallocData, 0);
+    arraylist_new(&registered_counters, 0);
 }

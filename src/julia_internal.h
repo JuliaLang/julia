@@ -2171,8 +2171,33 @@ JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT _Atomic(uint64_t) *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_coverage_register_counter(_Atomic(uint64_t) *slot, _Atomic(uint64_t) *counter) JL_NOTSAFEPOINT;
+
+// Coverage counters compiled into an image (sysimage or pkgimage), exposed by
+// the image as the `jl_image_coverage` symbol. `scope` and `mode` record the
+// `code_coverage` and `code_coverage_mode` options the image was built with.
+typedef struct {
+    const char *file;
+    _Atomic(uint64_t) *counter;
+    int32_t line;
+    uint32_t flags; // JL_IMAGE_COVERAGE_*
+} jl_image_coverage_entry_t;
+#define JL_IMAGE_COVERAGE_USER 1 // the location is user code
+typedef struct {
+    uint32_t scope;
+    uint32_t mode;
+    uint64_t nentries;
+    const jl_image_coverage_entry_t *entries;
+    const char *tracked_path; // the `@path` of a JL_LOG_PATH image, "" otherwise
+} jl_image_coverage_t;
+int jl_register_image_coverage(const void *table, int is_sysimg) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_sysimage_coverage_trusted(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_codeinst_coverage_trusted(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_image_coverage_config(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_image_coverage_path(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_match_cache_coverage(uint8_t requested, uint8_t actual) JL_NOTSAFEPOINT;
+JL_DLLEXPORT _Atomic(uint64_t) *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT;

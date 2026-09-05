@@ -667,6 +667,13 @@ should_insert_coverage(mod::Module, debuginfo::DebugInfo) = should_instrument(mo
 
 function should_instrument(mod::Module, debuginfo::DebugInfo, only_if_affects_optimizer::Bool=false)
     instrumentation_enabled(mod, only_if_affects_optimizer) && return true
+    if generating_output()
+        # images carry path-specific coverage statements only when instrumented
+        # for the path (jl_image_coverage_config); the generating process itself
+        # is not instrumented
+        only_if_affects_optimizer || return false
+        ccall(:jl_image_coverage_config, UInt8, ()) & 3 == 3 || return false
+    end
     JLOptions().code_coverage == 3 || JLOptions().malloc_log == 3 || return false
     # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
     return _should_instrument(debuginfo)

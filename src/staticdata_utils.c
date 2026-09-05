@@ -718,7 +718,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 15;
+static const int JI_FORMAT_VERSION = 17;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 

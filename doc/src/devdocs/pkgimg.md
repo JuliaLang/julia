@@ -49,3 +49,24 @@ that were created with different flags will be rejected.
 - `--pkgimages`: To allow running without object caching enabled.
 - `-O`, `--optimize`: Reject package images generated for a lower optimization level,
   but allow for higher optimization levels to be loaded.
+- `--code-coverage`, `--code-coverage-mode`: Coverage scope and mode are recorded
+  in the cache identity. An `all` image can serve `user` or path coverage, and
+  a `count` image can serve `hit` mode. Path-scoped images require the same
+  canonical tracked path.
+
+Compatible coverage flags do not override dependency identity checks. Selecting
+a different image for an out-of-scope dependency can require rebuilding its
+dependents as well.
+
+Coverage runs create instrumented package-image variants alongside ordinary
+caches. For `--code-coverage=@<path>`, only packages whose entry file is under
+the tracked path request an instrumented variant. If another package includes
+a file under that path, the affected methods retain the recompilation fallback.
+Each image is checked independently, so instrumented package images also work
+with an ordinary system image. Reports include zero counts for instrumented
+lines that were not executed; precompilation workloads do not contribute hits.
+
+Without coverage, ordinary builds reject instrumented package images. A build
+with an instrumented system image also accepts package images with the same
+instrumentation as that system image. Allocation tracking always requires
+recompilation because images do not carry allocation counters.

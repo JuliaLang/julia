@@ -787,7 +787,7 @@ void RecursivelyVisit(callback f, Value *V) {
         User *TheUser = VU.getUser();
         if (isa<VisitInst>(TheUser))
             f(VU);
-        if (isa<CallInst>(TheUser) || isa<LoadInst>(TheUser) ||
+        if (isa<CallBase>(TheUser) || isa<LoadInst>(TheUser) ||
             isa<SelectInst>(TheUser) || isa<PHINode>(TheUser) || // TODO: should these be removed from this list?
             isa<StoreInst>(TheUser) || isa<PtrToIntInst>(TheUser) ||
             isa<ICmpInst>(TheUser) || isa<InsertElementInst>(TheUser)|| // ICmpEQ/ICmpNE can be used with ptr types
@@ -801,6 +801,47 @@ void RecursivelyVisit(callback f, Value *V) {
         llvm_dump(TheUser);
         errs() << "Unexpected instruction\n";
         abort();
+    }
+}
+
+static void CapPointerUseAlignments(Value *Root, Align MaxAlign) {
+    SmallVector<Value*, 8> Worklist{Root};
+    SmallPtrSet<Value*, 8> Seen;
+    while (!Worklist.empty()) {
+        Value *V = Worklist.pop_back_val();
+        if (!Seen.insert(V).second)
+            continue;
+        for (Use &VU : V->uses()) {
+            Instruction *I = dyn_cast<Instruction>(VU.getUser());
+            if (!I)
+                continue;
+            if (auto *LI = dyn_cast<LoadInst>(I)) {
+                LI->setAlignment(std::min(LI->getAlign(), MaxAlign));
+            }
+            else if (auto *SI = dyn_cast<StoreInst>(I)) {
+                if (&VU == &SI->getOperandUse(SI->getPointerOperandIndex()))
+                    SI->setAlignment(std::min(SI->getAlign(), MaxAlign));
+            }
+            else if (auto *RMW = dyn_cast<AtomicRMWInst>(I)) {
+                RMW->setAlignment(std::min(RMW->getAlign(), MaxAlign));
+            }
+            else if (auto *CX = dyn_cast<AtomicCmpXchgInst>(I)) {
+                CX->setAlignment(std::min(CX->getAlign(), MaxAlign));
+            }
+            else if (auto *CB = dyn_cast<CallBase>(I)) {
+                if (CB->isArgOperand(&VU)) {
+                    unsigned ArgNo = CB->getArgOperandNo(&VU);
+                    if (MaybeAlign A = CB->getParamAlign(ArgNo); A && *A > MaxAlign) {
+                        CB->removeParamAttr(ArgNo, Attribute::Alignment);
+                        CB->addParamAttr(ArgNo, Attribute::getWithAlignment(CB->getContext(), MaxAlign));
+                    }
+                }
+            }
+            else if (isa<GetElementPtrInst>(I) || isa<BitCastInst>(I) ||
+                     isa<AddrSpaceCastInst>(I) || isa<PHINode>(I) || isa<SelectInst>(I)) {
+                Worklist.push_back(I);
+            }
+        }
     }
 }
 
@@ -2463,9 +2504,14 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
         unsigned AllocaSlot = 2; // first two words are metadata
         auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
             // Pick a slot for the alloca.
-            AI->getAlign();
-            unsigned align = AI->getAlign().value() / sizeof(void*); // TODO: use DataLayout pointer size
-            assert(align <= 16 / sizeof(void*) && "Alignment exceeds llvm-final-gc-lowering abilities");
+            const Align MaxGCFrameAlign(16);
+            Align AllocaAlign = std::min(AI->getAlign(), MaxGCFrameAlign);
+            if (AI->getAlign() > MaxGCFrameAlign) {
+                // The final GC frame alloca is only 16-byte aligned. Preserve that
+                // guarantee when replacing allocas introduced by vectorization.
+                CapPointerUseAlignments(AI, MaxGCFrameAlign);
+            }
+            unsigned align = AllocaAlign.value() / sizeof(void*); // TODO: use DataLayout pointer size
             if (align > 1)
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
             Instruction *slotAddress = CallInst::Create(
