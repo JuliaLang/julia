@@ -1522,7 +1522,6 @@ fn45187() = nothing
 @test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
 @test_throws(TypeError, @eval ccall((:fn, fn45187), Cvoid, ()))
 
-# Keep these uninlined so codegen errors in the pointer expressions remain dynamic.
 @noinline ccall_bottom_ir(ir) = ccall(Core.Intrinsics.llvmcall(ir, Ptr{Cvoid}, Tuple{}), Cvoid, ())
 @noinline cglobal_bottom_ir(ir) = cglobal(Core.Intrinsics.llvmcall(ir, Ptr{Cvoid}, Tuple{}))
 let err = ErrorException("error statically evaluating llvm IR argument")

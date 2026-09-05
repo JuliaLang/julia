@@ -628,7 +628,7 @@ static Value *julia_to_native(
     return slot;
 }
 
-static bool interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg) JL_CANSAFEPOINT
+static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg) JL_CANSAFEPOINT
 {
     // Initialize all fields to safe defaults
     out.f_name = nullptr;
@@ -696,10 +696,8 @@ static bool interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     else {
         // Not a tuple - pointer expression
         jl_cgval_t arg1 = emit_expr(ctx, arg);
-        arg1 = voidpointer_update(ctx, arg1, "ccall: first argument not a pointer or valid constant expression");
-        if (arg1.typ == jl_bottom_type)
-            return false;
-        out.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, arg1);
+        out.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr,
+            voidpointer_update(ctx, arg1, "ccall: first argument not a pointer or valid constant expression"));
     }
 
     // Handle Julia internal symbol lookup for static function names
@@ -715,7 +713,6 @@ static bool interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
             out.f_lib = jl_dlfind(out.f_name);
         }
     }
-    return true;
 }
 
 // --- code generator for cglobal ---
@@ -1527,10 +1524,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     bool llvmcall = false;
     std::tie(cc, llvmcall) = convert_cconv(cc_sym);
 
-    if (!interpret_foreignsymbol(ctx, symarg, args[1])) {
-        JL_GC_POP();
-        return jl_cgval_t();
-    }
+    interpret_foreignsymbol(ctx, symarg, args[1]);
     const char *&f_name = symarg.f_name;
     const char *&f_lib = symarg.f_lib;
 
