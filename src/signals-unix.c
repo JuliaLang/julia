@@ -1150,9 +1150,10 @@ static void do_critical_profile(void)
 
         // do backtrace on thread contexts for critical signals
         // this part must be signal-handler safe
-        signal_bt_size += rec_backtrace_ctx(signal_bt_data + signal_bt_size,
+        signal_bt_size += rec_backtrace_ctx_target(signal_bt_data + signal_bt_size,
                 JL_MAX_BT_SIZE / nthreads - 1,
-                &signal_context, NULL);
+                &signal_context, NULL,
+                jl_atomic_load_relaxed(&jl_all_tls_states)[i], NULL);
         signal_bt_data[signal_bt_size++].uintptr = 0;
         jl_thread_resume(i);
     }
@@ -1187,9 +1188,10 @@ static void do_profile(void) JL_NOTSAFEPOINT
             jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
         }
         else {
-            // Get backtrace data
-            profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
-                    profile_bt_size_max - profile_bt_size_cur - 1, &signal_context, NULL);
+            // Get backtrace data; pass the suspended target for exact stack bounds.
+            profile_bt_size_cur += rec_backtrace_ctx_target((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                    profile_bt_size_max - profile_bt_size_cur - 1, &signal_context, NULL,
+                    jl_atomic_load_relaxed(&jl_all_tls_states)[tid], NULL);
         }
         jl_set_safe_restore(old_buf);
 
@@ -1223,6 +1225,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
     sigset_t sset;
     int sig, critical, profile;
     jl_sigsetset(&sset);
+#ifdef JL_USE_FRAMEHOP
+    // Pre-fault framehop's TLS off the suspend window; the first access can allocate.
+    fh_thread_register();
+#endif
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
     siginfo_t info;
 #endif
