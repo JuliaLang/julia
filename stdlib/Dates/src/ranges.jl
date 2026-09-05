@@ -8,6 +8,7 @@ Base.:(:)(a::T, b::T) where {T<:Date} = (:)(a, Day(1), b)
 
 # Given a start and end date, how many steps/periods are in between
 guess(a::DateTime, b::DateTime, c) = floor(Int64, (Int128(value(b)) - Int128(value(a))) / toms(c))
+guess(a::Timestamp, b::Timestamp, c) = floor(Int64, div(Int128(value(b)) - Int128(value(a)), tons(c)))
 guess(a::Date, b::Date, c) = Int64(div(value(b - a), days(c)))
 len(a::Time, b::Time, c) = Int64(div(value(b - a), tons(c)))
 function len(a, b, c)

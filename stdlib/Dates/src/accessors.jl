@@ -80,8 +80,11 @@ julia> isoyear(Date(2021, 12, 31))
 ```
 !!! compat "Julia 1.13"
     This function requires Julia 1.13 or later.
+
+!!! compat "Julia 1.14"
+    Support for `Timestamp` requires Julia 1.14 or later.
 """
-function isoyear(dt::DateTime)
+function isoyear(dt::Union{DateTime,Timestamp})
     thisyear = Year(dt)
     thismonth = Month(dt)
     weeknumber = week(dt)
@@ -101,7 +104,8 @@ isoyear(dt::Date) = isoyear(DateTime(dt))
 Return the ISO week date that corresponds to `dt` (see
 https://en.wikipedia.org/wiki/ISO_week_date).
 
-The return type is a tuple of `Year`, `Week` and `Int64` (from 1 to 7).
+The return type is a tuple of three `Int64` values: the ISO year, the ISO week
+number, and the ISO weekday (from 1 through 7).
 
 # Examples
 ```jldoctest
@@ -113,8 +117,11 @@ julia> isoweekdate(Date(2023, 01, 01))
 ```
 !!! compat "Julia 1.13"
     This function requires Julia 1.13 or later.
+
+!!! compat "Julia 1.14"
+    Support for `Timestamp` requires Julia 1.14 or later.
 """
-isoweekdate(dt::DateTime) = (isoyear(dt).value, week(dt), dayofweek(dt))
+isoweekdate(dt::Union{DateTime,Timestamp}) = (isoyear(dt).value, week(dt), dayofweek(dt))
 isoweekdate(dt::Date) = isoweekdate(DateTime(dt))
 
 function quarter(days)
@@ -128,6 +135,12 @@ value(dt::TimeType) = dt.instant.periods.value
 value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
+days(dt::Timestamp) = fld(value(dt), NS_PER_DAY) + UNIXEPOCHDAYS
+# time-of-day part of an instant; the unix epoch is midnight-aligned, so
+# fld/mod day arithmetic on Timestamp values works exactly as it does for the
+# Rata Die-anchored DateTime values
+msofday(dt::DateTime) = mod(value(dt), 86400000)
+nsofday(dt::Timestamp) = mod(value(dt), NS_PER_DAY)
 year(dt::TimeType) = year(days(dt))
 quarter(dt::TimeType) = quarter(days(dt))
 month(dt::TimeType) = month(days(dt))
@@ -143,6 +156,12 @@ second(t::Time) = mod(fld(value(t), 1000000000), Int64(60))
 millisecond(t::Time) = mod(fld(value(t), Int64(1000000)), Int64(1000))
 microsecond(t::Time) = mod(fld(value(t), Int64(1000)), Int64(1000))
 nanosecond(t::Time) = mod(value(t), Int64(1000))
+hour(dt::Timestamp)   = mod(fld(value(dt), 3600000000000), Int64(24))
+minute(dt::Timestamp) = mod(fld(value(dt), 60000000000), Int64(60))
+second(dt::Timestamp) = mod(fld(value(dt), 1000000000), Int64(60))
+millisecond(dt::Timestamp) = mod(fld(value(dt), Int64(1000000)), Int64(1000))
+microsecond(dt::Timestamp) = mod(fld(value(dt), Int64(1000)), Int64(1000))
+nanosecond(dt::Timestamp) = mod(value(dt), Int64(1000))
 
 dayofmonth(dt::TimeType) = day(dt)
 
@@ -157,7 +176,7 @@ for func in (:year, :month, :quarter)
         @doc """
             $($name)(dt::TimeType)::Int64
 
-        The $($name) of a `Date` or `DateTime` as an [`Int64`](@ref).
+        The $($name) of a `Date`, `DateTime`, or `Timestamp` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
     end
 end
@@ -165,11 +184,11 @@ end
 """
     week(dt::TimeType)::Int64
 
-Return the [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) of a `Date` or
-`DateTime` as an [`Int64`](@ref). Note that the first week of a year is the week that
-contains the first Thursday of the year, which can result in dates prior to January 4th
-being in the last week of the previous year. For example, `week(Date(2005, 1, 1))` is the 53rd
-week of 2004.
+Return the [ISO week number](https://en.wikipedia.org/wiki/ISO_week_date) of a
+`Date`, `DateTime`, or `Timestamp` as an [`Int64`](@ref). Note that the first
+week of a year is the week that contains the first Thursday of the year, which
+can result in dates prior to January 4th being in the last week of the previous
+year. For example, `week(Date(2005, 1, 1))` is the 53rd week of 2004.
 
 # Examples
 ```jldoctest
@@ -191,15 +210,15 @@ for func in (:day, :dayofmonth)
         @doc """
             $($name)(dt::TimeType)::Int64
 
-        The day of month of a `Date` or `DateTime` as an [`Int64`](@ref).
+        The day of month of a `Date`, `DateTime`, or `Timestamp` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
     end
 end
 
 """
-    hour(dt::DateTime)::Int64
+    hour(dt::Union{DateTime,Timestamp})::Int64
 
-The hour of day of a `DateTime` as an [`Int64`](@ref).
+The hour of day of a `DateTime` or `Timestamp` as an [`Int64`](@ref).
 """
 hour(dt::DateTime)
 
@@ -207,9 +226,9 @@ for func in (:minute, :second, :millisecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::DateTime)::Int64
+            $($name)(dt::Union{DateTime,Timestamp})::Int64
 
-        The $($name) of a `DateTime` as an [`Int64`](@ref).
+        The $($name) of a `DateTime` or `Timestamp` as an [`Int64`](@ref).
         """ $func(dt::DateTime)
     end
 end
@@ -221,8 +240,8 @@ for parts in (["year", "month"], ["month", "day"], ["year", "month", "day"])
         @doc """
             $($name)(dt::TimeType) -> ($(join(repeated(Int64, length($parts)), ", ")))
 
-        Simultaneously return the $(join($parts, ", ", " and ")) parts of a `Date` or
-        `DateTime`.
+        Simultaneously return the $(join($parts, ", ", " and ")) parts of a `Date`,
+        `DateTime`, or `Timestamp`.
         """ $func(dt::TimeType)
     end
 end
@@ -233,7 +252,7 @@ for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
         @doc """
             $($name)(t::Time)::Int64
 
-        The $($name) of a `Time` as an [`Int64`](@ref).
+        The $($name) of a `Time` or `Timestamp` as an [`Int64`](@ref).
         """ $func(t::Time)
     end
 end

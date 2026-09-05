@@ -84,6 +84,14 @@ end
 (-)(x::DateTime, y::Period) = return DateTime(UTM(value(x) - toms(y)))
 (+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
+# Timestamp calendar arithmetic reuses Date's Year/Month/Quarter handling
+# (including end-of-month day clamping) on the day part, carrying the
+# nanosecond-resolution time of day through unchanged. Like DateTime's,
+# Timestamp arithmetic is fixed-point and wraps at the ends of the range.
+(+)(x::Timestamp, y::Union{Year, Quarter, Month}) = Timestamp(UTN(unixns(value(Date(x) + y), nsofday(x))))
+(-)(x::Timestamp, y::Union{Year, Quarter, Month}) = Timestamp(UTN(unixns(value(Date(x) - y), nsofday(x))))
+(+)(x::Timestamp, y::Period) = return Timestamp(UTN(value(x) + tons(y)))
+(-)(x::Timestamp, y::Period) = return Timestamp(UTN(value(x) - tons(y)))
 (+)(y::Period, x::TimeType) = x + y
 
 # Missing support
