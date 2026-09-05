@@ -51,6 +51,26 @@ Alternatively, look at the `embedding.c` program in the Julia source tree in the
 The `cli/loader_exe.c` program is another simple example of how to set `jl_options` options while
 linking against `libjulia`.
 
+A program that embeds Julia needs more than `libjulia` at run time: the runtime loads a set
+of shared libraries out of the Julia installation, such as `libjulia-internal` and the
+libraries it in turn depends on. If the program is to be shipped without a Julia
+installation next to it, those libraries have to come along. Rather than keeping a list of
+them, ask the Julia installation you are building against:
+
+```julia-repl
+julia> Base.Linking.runtime_libraries()
+```
+
+Each path returned lies inside the Julia installation, and should be placed in the shipped
+tree at the same location relative to `Sys.BINDIR` that it has there, so that the dependency
+paths embedded in `libjulia` keep resolving. Pass `optional_components = Symbol[]` if the
+program never generates native code at run time, which drops `libjulia-codegen` and LLVM.
+This is what `juliac` does when it bundles a program it has compiled.
+
+The libraries reported are those of the runtime itself. A program that also needs libraries
+belonging to standard libraries, such as OpenBLAS, can find those in the same installation
+with `Base.Linking.library_files`, which takes the library names to look for.
+
 The first thing that must be done before calling any other Julia C function is to
 initialize Julia. This is done by calling `jl_init`, which tries to automatically determine
 Julia's install location. If you need to specify a custom location, or specify which system

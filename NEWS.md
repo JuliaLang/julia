@@ -154,6 +154,11 @@ New library functions
   `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
   image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
   original transform when an `include(mapexpr, …)`-ed file is edited.
+* `Base.Linking.runtime_libraries()` reports the shared libraries that the Julia runtime depends on, so that
+  tools which ship a program embedding the runtime (such as `juliac`) can ask Julia which libraries to bundle
+  instead of keeping their own list. The list is generated from the build system, and
+  `Base.Linking.library_files()` resolves further library names, such as those belonging to standard
+  libraries, against the same installation ([#62593]).
 
 New library features
 --------------------
