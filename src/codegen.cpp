@@ -9783,7 +9783,14 @@ static jl_llvm_functions_t
             // keep track of original (possibly boxed) value to avoid re-boxing or moving
             vi.value = theArg;
             if (debug_enabled && vi.dinfo && theArg.V) {
-                if (!theArg.inline_roots.empty() || theArg.ispointer()) {
+                if (theArg.isboxed) {
+                    // the variable's value IS the pointer in theArg.V (its
+                    // debug type is jl_value_t*); declare-at-address would
+                    // make debuggers dereference one level too many
+                    dbuilder.insertDbgValueIntrinsic(theArg.V, vi.dinfo, dbuilder.createExpression(),
+                                                        topdebugloc, ctx.builder.GetInsertBlock());
+                }
+                else if (!theArg.inline_roots.empty() || theArg.ispointer()) {
                     dbuilder.insertDeclare(theArg.V, vi.dinfo, dbuilder.createExpression(),
                                             topdebugloc, ctx.builder.GetInsertBlock());
                 }
