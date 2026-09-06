@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 890 490" font-size="13">
+<rect width="890" height="490" fill="#fcfcfb"/>
+<text x="40.0" y="30.0" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#0b0b0b" text-anchor="start" font-weight="bold">The collector on the whole machine</text>
+<text x="40.0" y="50.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="start">one full collection over a live set built by every thread; the median of the rounds</text>
+<line x1="40" y1="70" x2="62" y2="70" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">vanilla</text>
+<line x1="124.4" y1="70" x2="146.4" y2="70" stroke="#eb6834" stroke-width="3" stroke-linecap="round"/>
+<text x="152.4" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">regions, no window</text>
+<line x1="90.0" y1="110" x2="90.0" y2="410" stroke="#e8e7e4" stroke-width="1"/>
+<text x="90.0" y="428.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">1</text>
+<line x1="394.0" y1="110" x2="394.0" y2="410" stroke="#e8e7e4" stroke-width="1"/>
+<text x="394.0" y="428.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">4</text>
+<line x1="546.0" y1="110" x2="546.0" y2="410" stroke="#e8e7e4" stroke-width="1"/>
+<text x="546.0" y="428.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">8</text>
+<line x1="698.0" y1="110" x2="698.0" y2="410" stroke="#e8e7e4" stroke-width="1"/>
+<text x="698.0" y="428.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">16</text>
+<line x1="850.0" y1="110" x2="850.0" y2="410" stroke="#e8e7e4" stroke-width="1"/>
+<text x="850.0" y="428.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">32</text>
+<line x1="90" y1="410.0" x2="850" y2="410.0" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="414.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">0</text>
+<line x1="90" y1="338.2" x2="850" y2="338.2" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="342.2" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">25</text>
+<line x1="90" y1="266.4" x2="850" y2="266.4" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="270.4" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">50</text>
+<line x1="90" y1="194.6" x2="850" y2="194.6" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="198.6" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">75</text>
+<line x1="90" y1="122.8" x2="850" y2="122.8" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="126.8" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">100</text>
+<path d="M90.0,295.4 L394.0,246.7 L546.0,240.2 L698.0,219.1 L850.0,168.7" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="850.0" cy="168.7" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M90.0,292.0 L394.0,242.9 L546.0,237.1 L698.0,215.3 L850.0,155.8" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="850.0" cy="155.8" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="470.0" y="448.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="middle">threads (the GC threads are half of them)</text>
+<text x="32.0" y="260.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="middle" transform="rotate(-90 32 260.0)">one collection (ms)</text>
+<text x="40.0" y="478.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">julia ab23c8cde4 (1.13.0-rc4) · AMD RYZEN AI MAX+ 395 w/ Radeon 8060S · core 29 (one thread), cores 13,29 (several) · time-shared · 2026-09-06</text>
+</svg>

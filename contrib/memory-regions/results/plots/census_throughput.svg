@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 460" font-size="13">
+<rect width="880" height="460" fill="#fcfcfb"/>
+<text x="40.0" y="30.0" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#0b0b0b" text-anchor="start" font-weight="bold">Throughput of the event loop: what one window per B events costs</text>
+<text x="40.0" y="50.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="start">5 M events, one core; W words of garbage per event</text>
+<line x1="40" y1="70" x2="62" y2="70" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">stock GC, same handler</text>
+<line x1="232.4" y1="70" x2="254.4" y2="70" stroke="#52514e" stroke-width="3" stroke-linecap="round"/>
+<text x="260.4" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">region, a window per event and a census every 100 k</text>
+<line x1="40" y1="90" x2="62" y2="90" stroke="#eda100" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="94.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">region, a window per event</text>
+<line x1="261.20000000000005" y1="90" x2="283.20000000000005" y2="90" stroke="#eb6834" stroke-width="3" stroke-linecap="round"/>
+<text x="289.2" y="94.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">region, a window per 100 events</text>
+<line x1="518.4000000000001" y1="90" x2="540.4000000000001" y2="90" stroke="#1baf7a" stroke-width="3" stroke-linecap="round"/>
+<text x="546.4" y="94.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">region, a window per 1000 events</text>
+<line x1="90" y1="380.0" x2="790" y2="380.0" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="384.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">0 M</text>
+<line x1="90" y1="299.4" x2="790" y2="299.4" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="303.4" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">20 M</text>
+<line x1="90" y1="218.7" x2="790" y2="218.7" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="222.7" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">40 M</text>
+<line x1="90" y1="138.1" x2="790" y2="138.1" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="142.1" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">60 M</text>
+<rect x="139.0" y="173.5" width="47.4" height="206.5" fill="#2a78d6"/>
+<text x="162.7" y="168.5" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">51.2 M</text>
+<rect x="189.4" y="282.4" width="47.4" height="97.6" fill="#eda100"/>
+<text x="213.1" y="277.4" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">24.2 M</text>
+<rect x="239.8" y="164.2" width="47.4" height="215.8" fill="#eb6834"/>
+<text x="263.5" y="159.2" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">53.5 M</text>
+<rect x="290.2" y="159.7" width="47.4" height="220.3" fill="#1baf7a"/>
+<text x="313.9" y="154.7" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">54.6 M</text>
+<rect x="340.6" y="289.3" width="47.4" height="90.7" fill="#52514e"/>
+<text x="364.3" y="284.3" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">22.5 M</text>
+<text x="265.0" y="398.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">W = 3</text>
+<rect x="489.0" y="328.3" width="47.4" height="51.7" fill="#2a78d6"/>
+<text x="512.7" y="323.3" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">12.8 M</text>
+<rect x="539.4" y="298.5" width="47.4" height="81.5" fill="#eda100"/>
+<text x="563.1" y="293.5" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">20.2 M</text>
+<rect x="589.8" y="214.1" width="47.4" height="165.9" fill="#eb6834"/>
+<text x="613.5" y="209.1" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">41.1 M</text>
+<rect x="640.2" y="233.5" width="47.4" height="146.5" fill="#1baf7a"/>
+<text x="663.9" y="228.5" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">36.3 M</text>
+<rect x="690.6" y="286.4" width="47.4" height="93.6" fill="#52514e"/>
+<text x="714.3" y="281.4" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">23.2 M</text>
+<text x="615.0" y="398.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">W = 200</text>
+<text x="32.0" y="250.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="middle" transform="rotate(-90 32 250.0)">events per second</text>
+<text x="40.0" y="448.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">julia ab23c8cde4 (1.13.0-rc4) · AMD RYZEN AI MAX+ 395 w/ Radeon 8060S · core 29 · time-shared · 2026-09-06</text>
+</svg>

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 250" font-size="13">
+<rect width="1100" height="250" fill="#fcfcfb"/>
+<text x="40.0" y="30.0" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#0b0b0b" text-anchor="start" font-weight="bold">Paced events: how late the loop was at its worst</text>
+<text x="40.0" y="50.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="start">1 M events, one event per 100 µs slot; lateness is the delay past the slot start</text>
+<line x1="40" y1="70" x2="62" y2="70" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">latency p50</text>
+<line x1="153.2" y1="70" x2="175.2" y2="70" stroke="#eda100" stroke-width="3" stroke-linecap="round"/>
+<text x="181.2" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">latency p99.9</text>
+<line x1="280.8" y1="70" x2="302.8" y2="70" stroke="#eb6834" stroke-width="3" stroke-linecap="round"/>
+<text x="308.8" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">latency max</text>
+<line x1="394.0" y1="70" x2="416.0" y2="70" stroke="#1baf7a" stroke-width="3" stroke-linecap="round"/>
+<text x="422.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">lateness max</text>
+<line x1="200.0" y1="100" x2="200.0" y2="190" stroke="#e8e7e4" stroke-width="1"/>
+<text x="200.0" y="208.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">10 ns</text>
+<line x1="291.4" y1="100" x2="291.4" y2="190" stroke="#e8e7e4" stroke-width="1"/>
+<text x="291.4" y="208.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">100 ns</text>
+<line x1="382.9" y1="100" x2="382.9" y2="190" stroke="#e8e7e4" stroke-width="1"/>
+<text x="382.9" y="208.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">1.0 µs</text>
+<line x1="474.3" y1="100" x2="474.3" y2="190" stroke="#e8e7e4" stroke-width="1"/>
+<text x="474.3" y="208.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">10 µs</text>
+<line x1="565.7" y1="100" x2="565.7" y2="190" stroke="#e8e7e4" stroke-width="1"/>
+<text x="565.7" y="208.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">100 µs</text>
+<line x1="657.1" y1="100" x2="657.1" y2="190" stroke="#e8e7e4" stroke-width="1"/>
+<text x="657.1" y="208.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">1.0 ms</text>
+<line x1="748.6" y1="100" x2="748.6" y2="190" stroke="#e8e7e4" stroke-width="1"/>
+<text x="748.6" y="208.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">10 ms</text>
+<line x1="840.0" y1="100" x2="840.0" y2="190" stroke="#e8e7e4" stroke-width="1"/>
+<text x="840.0" y="208.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">100 ms</text>
+<text x="184.0" y="134.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="end">stock GC</text>
+<circle cx="277.3" cy="130.0" r="6.0" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="362.7" cy="130.0" r="6.0" fill="#eda100" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="722.2" cy="130.0" r="6.0" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="722.2" cy="130.0" r="3.3" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<text x="852.0" y="134.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">105 slot misses, 2 collections</text>
+<text x="184.0" y="174.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="end">regions</text>
+<circle cx="277.3" cy="170.0" r="6.0" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="312.5" cy="170.0" r="6.0" fill="#eda100" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="450.8" cy="170.0" r="6.0" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="451.2" cy="170.0" r="3.3" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<text x="852.0" y="174.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">0 slot misses, 0 collections</text>
+<text x="40.0" y="238.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">julia ab23c8cde4 (1.13.0-rc4) · AMD RYZEN AI MAX+ 395 w/ Radeon 8060S · core 29 · SCHED_FIFO 50 · 2026-09-06</text>
+</svg>

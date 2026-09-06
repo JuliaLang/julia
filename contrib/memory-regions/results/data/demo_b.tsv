@@ -1,0 +1,7 @@
+# demo	point	threads	mode	wall_ms	collections	gc_ms	peak_rss_mb
+B	small   (160x100, 8 spp, depth 8, 4 threads)	4	region	5.96758	0	0.0	283.828125
+B	small   (160x100, 8 spp, depth 8, 4 threads)	4	stock	5.510008	0	0.0	283.828125
+B	medium  (160x100, 24 spp, depth 8, 4 threads)	4	region	16.469077	0	0.0	285.0625
+B	medium  (160x100, 24 spp, depth 8, 4 threads)	4	stock	16.970534	2	0.265011	285.90625
+B	large   (160x100, 64 spp, depth 8, 4 threads)	4	region	42.896687	0	0.0	285.9140625
+B	large   (160x100, 64 spp, depth 8, 4 threads)	4	stock	44.225113	7	0.817343	285.9140625
