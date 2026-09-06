@@ -2774,8 +2774,10 @@ static int activate_replay_mode(void)
 {
     static int mode = -1;
     if (mode == -1) {
+        // replay of the precompile worker's activation and edge-validity results
+        // is on unless JULIA_ACTIVATE_REPLAY=0 opts out
         const char *e = getenv("JULIA_ACTIVATE_REPLAY");
-        mode = e != NULL && e[0] == '1';
+        mode = e == NULL || e[0] != '0';
     }
     return mode;
 }
