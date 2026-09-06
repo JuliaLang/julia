@@ -1,6 +1,7 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(loop-mssa(JuliaLICM)),verify' -verify-memoryssa -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 @tag = external addrspace(10) global {}, align 16
 
@@ -172,3 +173,51 @@ attributes #3 = { inaccessiblemem_or_argmemonly }
 !5 = !{!"jtbaa_data", !6, i64 0}
 !6 = !{!"jtbaa", !7, i64 0}
 !7 = !{!"jtbaa"}
+
+; COM: Keep loop-local preserve tokens inside their defining loop, while still
+; COM: sinking ends for tokens defined outside all loops to every exit.
+; CHECK-LABEL: @nested_loop_preserves
+define void @nested_loop_preserves({} addrspace(10)* %obj1, {} addrspace(10)* %obj2, i1 %inner_exit, i1 %outer_exit, i1 %err) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %current_task = bitcast {}*** %pgcstack to {}**
+  %global_token = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %obj1)
+  br label %outer
+; CHECK: outer:
+outer:
+  %obj = phi {} addrspace(10)* [ %obj1, %top ], [ %obj2, %outer.latch ]
+  br label %inner.preheader
+; CHECK: inner.preheader:
+; CHECK-NEXT: %preserve_token = call token (...) @llvm.julia.gc_preserve_begin
+; CHECK-NEXT: br label %inner
+inner.preheader:
+  br label %inner
+; CHECK: inner:
+inner:
+; CHECK-NOT: call token (...) @llvm.julia.gc_preserve_begin
+  %preserve_token = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %obj)
+; CHECK-NOT: call void @llvm.julia.gc_preserve_end
+  call void @llvm.julia.gc_preserve_end(token %preserve_token)
+  call void @llvm.julia.gc_preserve_end(token %global_token)
+; CHECK-NEXT: br i1 %err
+  br i1 %err, label %fail, label %inner.latch
+; CHECK: inner.latch:
+inner.latch:
+  br i1 %inner_exit, label %outer.latch, label %inner
+; CHECK: outer.latch:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK-NEXT: br i1 %outer_exit
+outer.latch:
+  br i1 %outer_exit, label %return, label %outer
+; CHECK: fail:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %global_token)
+; CHECK-NOT: @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK: ret void
+fail:
+  ret void
+; CHECK: return:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %global_token)
+; CHECK-NEXT: ret void
+return:
+  ret void
+}
