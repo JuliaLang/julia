@@ -3301,6 +3301,11 @@ static bool uses_specsig(jl_value_t *sig, bool needsparams, jl_value_t *rettype,
     return false; // jlcall sig won't require any box allocations
 }
 
+static bool sparam_is_closed_value(jl_value_t *sp) JL_NOTSAFEPOINT
+{
+    return !jl_is_svec(sp) && !jl_has_free_typevars(sp);
+}
+
 static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t *lam, jl_value_t *rettype, bool prefer_specsig) JL_CANSAFEPOINT
 {
     bool needsparams = false;
@@ -3309,7 +3314,7 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
             needsparams = true;
         for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
             jl_value_t *sp = jl_svecref(lam->sparam_vals, i);
-            if (jl_is_svec(sp) || jl_has_free_typevars(sp))
+            if (!sparam_is_closed_value(sp))
                 needsparams = true;
         }
     }
@@ -8115,7 +8120,7 @@ static Function *gen_cfun_wrapper(
     Module *into, jl_codegen_output_t &out,
     const function_sig_t &sig, jl_value_t *ff, const char *aliasname,
     jl_value_t *declrt, jl_value_t *sigt,
-    jl_unionall_t *unionall_env, jl_svec_t *sparam_vals, jl_array_t **closure_types) JL_CANSAFEPOINT
+    jl_unionall_t *unionall_env, jl_array_t **closure_types) JL_CANSAFEPOINT
 {
     ++GeneratedCFuncWrappers;
     // Generate a c-callable wrapper
@@ -8230,21 +8235,10 @@ static Function *gen_cfun_wrapper(
         if (aref) // a pointer to a value
             jargty = jl_tparam0(jargty);
 
-        // if we know the outer function sparams, try to fill those in now
-        // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
         jl_value_t *jargty_proper = jargty;
         bool static_at = !(unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env));
-        if (!static_at) {
-            if (sparam_vals) {
-                jargty_proper = rt1 = jl_instantiate_type_in_env(jargty, unionall_env, jl_svec_data(sparam_vals));
-                assert(jargty_proper != jargty);
-                jargty = jargty_proper;
-                static_at = true;
-            }
-            else {
-                jargty_proper = rt1 = jl_rewrap_unionall(jargty, (jl_value_t*)unionall_env);
-            }
-        }
+        if (!static_at)
+            jargty_proper = rt1 = jl_rewrap_unionall(jargty, (jl_value_t*)unionall_env);
 
         if (aref) {
             if (jargty == (jl_value_t*)jl_any_type) {
@@ -8447,6 +8441,25 @@ static const char *derive_sigt_name(jl_value_t *jargty)
     return jl_symbol_name(name);
 }
 
+static bool cfunction_type_has_static_env(jl_value_t *ty, jl_unionall_t *env,
+                                          jl_svec_t *sparam_vals) JL_NOTSAFEPOINT
+{
+    size_t nsparams = jl_svec_len(sparam_vals);
+    if ((size_t)jl_subtype_env_size((jl_value_t*)env) != nsparams)
+        return false;
+    jl_unionall_t *ua = env;
+    for (size_t i = 0; jl_is_unionall(ua); i++) {
+        jl_tvar_t *var = ua->var;
+        if (jl_has_typevar(ty, var)) {
+            jl_value_t *sp = jl_svecref(sparam_vals, i);
+            if (!sparam_is_closed_value(sp))
+                return false;
+        }
+        ua = (jl_unionall_t*)ua->body;
+    }
+    return true;
+}
+
 // Get the LLVM Function* for the C-callable entry point for a certain function
 // and argument types.
 // here argt does not include the leading function type argument
@@ -8455,55 +8468,57 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     jl_unionall_t *unionall_env = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
         ? (jl_unionall_t*)ctx.linfo->def.method->sig
         : NULL;
-    jl_svec_t *sparam_vals = NULL;
-    if (ctx.spvals_ptr == NULL && jl_svec_len(ctx.linfo->sparam_vals) > 0)
-        sparam_vals = ctx.linfo->sparam_vals;
-
-    jl_value_t *rt = declrt;
-    if (jl_is_abstract_ref_type(declrt)) {
-        declrt = jl_tparam0(declrt);
-        if (!verify_ref_type(ctx, declrt, unionall_env, 0, "cfunction")) {
-            return jl_cgval_t();
-        }
-        if (unionall_env)
-            declrt = jl_rewrap_unionall(declrt, (jl_value_t*)unionall_env);
-        rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
-    }
-
-    // some sanity checking and check whether there's a vararg
-    size_t nargt = jl_svec_len(argt);
-    bool isVa = (nargt > 0 && jl_is_vararg(jl_svecref(argt, nargt - 1)));
-    assert(!isVa); (void)isVa;
 
     jl_array_t *closure_types = NULL;
     jl_value_t *sigt = NULL; // dispatch-sig = type signature with Ref{} annotations removed and applied to the env
+    jl_value_t *rt = NULL;
     jl_svec_t *argt_inst = NULL;
     JL_GC_PUSH5(&declrt, &sigt, &rt, &closure_types, &argt_inst);
-    // Substitute known static-parameter values into the declared argument
-    // types up front: the ABI and argument-unpacking decisions below must be
-    // made on the same types the call sites use, and `gen_cfun_wrapper` cannot
-    // substitute them itself when `unionall_env` is dropped for the
-    // non-closure case. (A raw `Ref{S}` element would be unpacked as a plain
-    // `jl_value_t*`, while a call site with `S = Any` passes a `jl_value_t**`.)
-    if (unionall_env && sparam_vals) {
+
+    jl_svec_t *sparam_vals = ctx.linfo->sparam_vals;
+    size_t nargt = jl_svec_len(argt);
+    if (unionall_env && jl_svec_len(sparam_vals) > 0) {
+        if (jl_has_typevar_from_unionall(declrt, unionall_env) &&
+                cfunction_type_has_static_env(declrt, unionall_env, sparam_vals)) {
+            declrt = jl_instantiate_type_in_env(declrt, unionall_env, jl_svec_data(sparam_vals));
+        }
         for (size_t i = 0; i < nargt; i++) {
             jl_value_t *jargty = jl_svecref(argt, i);
-            if (jl_has_typevar_from_unionall(jargty, unionall_env)) {
+            if (jl_has_typevar_from_unionall(jargty, unionall_env) &&
+                    cfunction_type_has_static_env(jargty, unionall_env, sparam_vals)) {
                 if (!argt_inst)
                     argt_inst = jl_svec_copy(argt);
-                jl_svecset(argt_inst, i, jl_instantiate_type_in_env(jargty, unionall_env, jl_svec_data(sparam_vals)));
+                jl_svecset(argt_inst, i,
+                    jl_instantiate_type_in_env(jargty, unionall_env, jl_svec_data(sparam_vals)));
             }
         }
         if (argt_inst)
             argt = argt_inst;
     }
+
+    rt = declrt;
+    if (jl_is_abstract_ref_type(declrt)) {
+        declrt = jl_tparam0(declrt);
+        if (!verify_ref_type(ctx, declrt, unionall_env, 0, "cfunction")) {
+            JL_GC_POP();
+            return jl_cgval_t();
+        }
+        if (unionall_env && jl_has_typevar_from_unionall(declrt, unionall_env))
+            declrt = jl_rewrap_unionall(declrt, (jl_value_t*)unionall_env);
+        rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
+    }
+
+    // some sanity checking and check whether there's a vararg
+    bool isVa = (nargt > 0 && jl_is_vararg(jl_svecref(argt, nargt - 1)));
+    assert(!isVa); (void)isVa;
+
     Type *lrt;
     bool retboxed;
     bool static_rt;
     const std::string err = verify_ccall_sig(
             /* inputs:  */
             rt, (jl_value_t*)argt, unionall_env,
-            sparam_vals,
+            NULL,
             &ctx.emission_context,
             /* outputs: */
             lrt, ctx.builder.getContext(),
@@ -8513,9 +8528,6 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         JL_GC_POP();
         return jl_cgval_t();
     }
-    if (rt != declrt && rt != (jl_value_t*)jl_any_type)
-        jl_temporary_root(ctx, rt);
-
     function_sig_t sig("cfunction", lrt, rt, retboxed, false, argt, unionall_env, false, CallingConv::C, false, &ctx.emission_context);
     assert(sig.fargt.size() + sig.sret == sig.fargt_sig.size());
     if (!sig.err_msg.empty()) {
@@ -8540,10 +8552,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             }
         }
         if (unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env)) {
-            if (sparam_vals)
-                jargty = jl_instantiate_type_in_env(jargty, unionall_env, jl_svec_data(sparam_vals));
-            else
-                approx = true;
+            approx = true;
         }
         jl_svecset(sigt, i + 1, jargty);
     }
@@ -8570,7 +8579,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             jl_Module, ctx.emission_context,
             sig, fexpr_val.constant, name,
             declrt, sigt,
-            unionall_env, sparam_vals, &closure_types);
+            unionall_env, &closure_types);
     bool outboxed;
     if (nest) {
         // F is actually an init_trampoline function that returns the real address
@@ -8659,7 +8668,7 @@ const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval,
                            argtypes, NULL, false, CallingConv::C, false, &out);
         if (sig.err_msg.empty()) {
             //Safe b/c out holds context lock
-            Function *cw = gen_cfun_wrapper(&out.get_module(), out, sig, ff, name, declrt, sigt, NULL, NULL, NULL);
+            Function *cw = gen_cfun_wrapper(&out.get_module(), out, sig, ff, name, declrt, sigt, NULL, NULL);
             auto alias =
                 GlobalAlias::create(cw->getValueType(), cw->getType()->getAddressSpace(),
                                     GlobalValue::ExternalLinkage, name, cw,
