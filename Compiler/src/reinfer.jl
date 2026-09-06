@@ -135,6 +135,21 @@ end
     return ccall(:jl_edge_sig_replayable, Int32, (Any,), sig)
 end
 
+# min world of a replayed call edge: its match set is the recorded one (targets
+# i:i+n-1 of the edge list), whose methods became available in this session at
+# their activation worlds, so the edge is valid from the latest of those, as
+# verify_call would report for an unchanged match set
+function replayed_minworld(expecteds::Union{Core.SimpleVector, Core.InternedCodeInstance}, i::Int, n::Int)
+    minworld = get_require_world()
+    for k = i:i+n-1
+        pw = get_method_from_edge(edges_ref(expecteds, k)).primary_world
+        if minworld < pw
+            minworld = pw
+        end
+    end
+    return minworld
+end
+
 function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
     @assert isempty(workspace.stack) "workspace corrupted"
     @assert isempty(workspace.visiting) "workspace corrupted"
@@ -276,7 +291,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         sig = edge.specTypes
                         r = edge_replay_mode(sig)
                         if r == 1
-                            min_valid2, max_valid2 = get_require_world(), validation_world
+                            min_valid2, max_valid2 = replayed_minworld(initial.callees, j, 1), validation_world
                         else
                             min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, matches, workspace)
                         end
@@ -287,7 +302,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         fully_covers = edge > 0
                         r = edge_replay_mode(sig)
                         if r == 1
-                            min_valid2, max_valid2 = get_require_world(), validation_world
+                            min_valid2, max_valid2 = replayed_minworld(initial.callees, j+2, nmatches), validation_world
                         else
                             min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches, workspace)
                         end
@@ -322,7 +337,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         end
                         r = edge_replay_mode(edge)
                         if r == 1
-                            min_valid2, max_valid2 = get_require_world(), validation_world
+                            min_valid2, max_valid2 = max(get_require_world(), meth.primary_world), validation_world
                         else
                             min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
                         end
