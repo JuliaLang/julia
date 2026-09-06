@@ -1683,6 +1683,14 @@ JL_DLLEXPORT jl_svec_t *jl_ici_to_svec(jl_interned_code_instance_t *ici) JL_CANS
 JL_DLLEXPORT int jl_ici_literal(jl_interned_code_instance_t *ici, size_t i, intptr_t *out) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_edgelist_len(jl_value_t *edges) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_edgelist_ref(jl_value_t *edges, size_t i) JL_CANSAFEPOINT;
+// element of an edge list without boxing literal words (NULL for a literal);
+// enough for DebugInfo edge lists, which hold only objects
+STATIC_INLINE jl_value_t *jl_edgelist_ref_nobox(jl_value_t *edges, size_t i) JL_NOTSAFEPOINT
+{
+    if (jl_typetagis(edges, jl_interned_code_instance_type))
+        return jl_ici_ref_nobox((jl_interned_code_instance_t*)edges, i);
+    return jl_svecref(edges, i);
+}
 JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
                                      jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,

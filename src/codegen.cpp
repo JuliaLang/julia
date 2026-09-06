@@ -9891,7 +9891,7 @@ static jl_llvm_functions_t
             append_lineinfo = [&](jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to,
                                   size_t pc, bool innermost) -> bool {
             while (1) {
-                jl_value_t *didef = jl_di_def(debuginfo);
+                jl_value_t *didef = jl_di_def_ro(debuginfo);
                 if (!jl_is_symbol(didef)) // this is a path
                     func = didef; // this is inlined
                 struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
@@ -9900,9 +9900,9 @@ static jl_llvm_functions_t
                     return false;
                 if (i == 0 && lineidx.to == 0) // no update
                     return false;
-                if (pc > 0 && jl_is_debuginfo(jl_di_linetable(debuginfo))) {
+                if (pc > 0 && jl_is_debuginfo(jl_di_linetable_ro(debuginfo))) {
                     // indirection node
-                    if (!append_lineinfo((jl_debuginfo_t *)jl_di_linetable(debuginfo),
+                    if (!append_lineinfo((jl_debuginfo_t *)jl_di_linetable_ro(debuginfo),
                                          func, to, i, lineidx.to == 0))
                         return false; // no update
                 }
@@ -9972,7 +9972,7 @@ static jl_llvm_functions_t
                 if (to == 0)
                     return true;
                 pc = lineidx.pc;
-                debuginfo = (jl_debuginfo_t*)jl_edgelist_ref((jl_value_t*)debuginfo->edges, to - 1);
+                debuginfo = (jl_debuginfo_t*)jl_edgelist_ref_nobox((jl_value_t*)debuginfo->edges, to - 1);
                 func = NULL;
             }
         };
@@ -10108,15 +10108,15 @@ static jl_llvm_functions_t
     if (coverage_mode != JL_LOG_NONE) {
         // record all lines that could be covered
         std::function<void(jl_debuginfo_t *debuginfo, jl_value_t *func)> record_line_exists = [&](jl_debuginfo_t *debuginfo, jl_value_t *func) {
-            jl_value_t *didef2 = jl_di_def(debuginfo);
+            jl_value_t *didef2 = jl_di_def_ro(debuginfo);
             if (!jl_is_symbol(didef2)) // this is a path
                 func = didef2; // this is inlined
             for (size_t i = 0; i < jl_edgelist_len((jl_value_t*)debuginfo->edges); i++) {
-                jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_edgelist_ref((jl_value_t*)debuginfo->edges, i);
+                jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_edgelist_ref_nobox((jl_value_t*)debuginfo->edges, i);
                 record_line_exists(edge, NULL);
             }
-            while (jl_is_debuginfo(jl_di_linetable(debuginfo)))
-                debuginfo = (jl_debuginfo_t*)jl_di_linetable(debuginfo);
+            while (jl_is_debuginfo(jl_di_linetable_ro(debuginfo)))
+                debuginfo = (jl_debuginfo_t*)jl_di_linetable_ro(debuginfo);
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
             StringRef file = jl_cdi_file(debuginfo);
             if (file.empty())
