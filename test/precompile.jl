@@ -2206,6 +2206,171 @@ precompile_test_harness("Issue #48391") do load_path
     @test_throws ErrorException isless(x, x)
 end
 
+# Replay of the precompile worker's method-activation and edge-validity results
+# (JULIA_ACTIVATE_REPLAY): every scenario below loads in a fresh process so each
+# load order starts from the images alone.
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    global function replay_test_output(load_path, depot, body)
+        code = """
+            insert!(LOAD_PATH, 1, $(repr(load_path)))
+            insert!(DEPOT_PATH, 1, $(repr(depot)))
+            $body
+            """
+        return readchomp(`$exename -e $code`)
+    end
+end
+
+precompile_test_harness("replay: activation order") do load_path
+    write(joinpath(load_path, "ReplayDep.jl"),
+        """
+        module ReplayDep
+        f(x) = :dep
+        end
+        """)
+    # two extenders of ReplayDep.f, each precompiled without knowledge of the other;
+    # their callers are inferred against their own method only
+    write(joinpath(load_path, "ReplayExtA.jl"),
+        """
+        module ReplayExtA
+        using ReplayDep
+        ReplayDep.f(::Integer) = :a
+        callf() = ReplayDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    write(joinpath(load_path, "ReplayExtB.jl"),
+        """
+        module ReplayExtB
+        using ReplayDep
+        ReplayDep.f(::Signed) = :b
+        callf() = ReplayDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    Base.compilecache(Base.PkgId("ReplayDep"))
+    Base.compilecache(Base.PkgId("ReplayExtA"))
+    Base.compilecache(Base.PkgId("ReplayExtB"))
+    depot = DEPOT_PATH[1]
+    # whichever loads second, the more specific method wins everywhere: A's caller
+    # is invalidated by B's activation, or verified against B's method at A's load
+    for order in (("ReplayExtA", "ReplayExtB"), ("ReplayExtB", "ReplayExtA"))
+        out = replay_test_output(load_path, depot, """
+            using ReplayDep, $(order[1]), $(order[2])
+            print(Base.invokelatest(ReplayExtA.callf), " ", Base.invokelatest(ReplayExtB.callf), " ",
+                  Base.invokelatest(ReplayDep.f, 1))
+            """)
+        @test out == "b b b"
+    end
+    # a method defined in the session before loading is foreign to the image's
+    # dependency closure and must be scanned live
+    out = replay_test_output(load_path, depot, """
+        using ReplayDep
+        ReplayDep.f(::Int) = :session
+        using ReplayExtA
+        print(Base.invokelatest(ReplayExtA.callf), " ", Base.invokelatest(ReplayDep.f, 1))
+        """)
+    @test out == "session session"
+    # a deletion in the session leaves no method behind but marks the function's
+    # history, so the image's records for it cannot be replayed
+    out = replay_test_output(load_path, depot, """
+        using ReplayDep
+        ReplayDep.f(::Int) = :session
+        Base.delete_method(which(ReplayDep.f, (Int,)))
+        using ReplayExtA
+        print(Base.invokelatest(ReplayExtA.callf), " ", Base.invokelatest(ReplayDep.f, 1))
+        """)
+    @test out == "a a"
+end
+
+precompile_test_harness("replay: extension activation") do load_path
+    host_uuid = "0f0f2a5c-6c6d-4b1e-9d2a-2e7d5b7a1c01"
+    trig_uuid = "9b4b1d2e-7a3f-4c0e-8f6b-5a2c1d3e4f02"
+    mkpath(joinpath(load_path, "ReplayHost", "src")); mkpath(joinpath(load_path, "ReplayHost", "ext"))
+    mkpath(joinpath(load_path, "ReplayTrig", "src"))
+    write(joinpath(load_path, "Project.toml"),
+        """
+        [deps]
+        ReplayHost = "$host_uuid"
+        ReplayTrig = "$trig_uuid"
+        """)
+    write(joinpath(load_path, "Manifest.toml"),
+        """
+        julia_version = "$(VERSION)"
+        manifest_format = "2.0"
+
+        [[deps.ReplayHost]]
+        path = "ReplayHost"
+        uuid = "$host_uuid"
+        version = "0.1.0"
+        weakdeps = ["ReplayTrig"]
+
+            [deps.ReplayHost.extensions]
+            ReplayHostExt = "ReplayTrig"
+
+        [[deps.ReplayTrig]]
+        path = "ReplayTrig"
+        uuid = "$trig_uuid"
+        version = "0.1.0"
+        """)
+    write(joinpath(load_path, "ReplayHost", "Project.toml"),
+        """
+        name = "ReplayHost"
+        uuid = "$host_uuid"
+        version = "0.1.0"
+
+        [weakdeps]
+        ReplayTrig = "$trig_uuid"
+
+        [extensions]
+        ReplayHostExt = "ReplayTrig"
+        """)
+    write(joinpath(load_path, "ReplayHost", "src", "ReplayHost.jl"),
+        """
+        module ReplayHost
+        h(x) = :host
+        callh() = h(1)
+        precompile(callh, ())
+        end
+        """)
+    write(joinpath(load_path, "ReplayHost", "ext", "ReplayHostExt.jl"),
+        """
+        module ReplayHostExt
+        using ReplayHost, ReplayTrig
+        ReplayHost.h(::Int) = :ext
+        end
+        """)
+    write(joinpath(load_path, "ReplayTrig", "Project.toml"),
+        """
+        name = "ReplayTrig"
+        uuid = "$trig_uuid"
+        version = "0.1.0"
+        """)
+    write(joinpath(load_path, "ReplayTrig", "src", "ReplayTrig.jl"),
+        """
+        module ReplayTrig
+        end
+        """)
+    Base.compilecache(Base.PkgId(Base.UUID(host_uuid), "ReplayHost"))
+    Base.compilecache(Base.PkgId(Base.UUID(trig_uuid), "ReplayTrig"))
+    depot = DEPOT_PATH[1]
+    # the extension's worker sees the host's caller and records its invalidation;
+    # loading the trigger after the host must apply it
+    out = replay_test_output(load_path, depot, """
+        using ReplayHost
+        before = Base.invokelatest(ReplayHost.callh)
+        using ReplayTrig
+        print(before, " ", Base.invokelatest(ReplayHost.callh))
+        """)
+    @test out == "host ext"
+    # the other order: the extension activates as soon as the host arrives
+    out = replay_test_output(load_path, depot, """
+        using ReplayTrig
+        using ReplayHost
+        print(Base.invokelatest(ReplayHost.callh))
+        """)
+    @test out == "ext"
+end
+
 precompile_test_harness("Generator nospecialize") do load_path
     write(joinpath(load_path, "GenNoSpec.jl"),
         """
