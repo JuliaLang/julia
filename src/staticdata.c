@@ -3035,7 +3035,7 @@ JL_DLLEXPORT void jl_ci_materialize_all(jl_code_instance_t *ci) JL_NOTSAFEPOINT
     if (edges == NULL || !jl_typetagis(edges, jl_interned_code_instance_type))
         return;
     jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)edges;
-    if (ici->defword != 0 && jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)&ci->def) == NULL)
+    if (ici->defword != 0 && (jl_value_t*)jl_load_set_once(&ci->def) == NULL)
         jl_ici_materialize_def(ci);
     uintptr_t mask = ici->fieldmask;
     if (mask == 0)
@@ -3080,7 +3080,7 @@ JL_DLLEXPORT jl_value_t *jl_ci_def(jl_code_instance_t *ci)
 // read-only variant for signal/dump contexts (no heap write)
 JL_DLLEXPORT jl_value_t *jl_ci_def_ro(jl_code_instance_t *ci) JL_NOTSAFEPOINT
 {
-    jl_value_t *def = jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)&ci->def);
+    jl_value_t *def = (jl_value_t*)jl_load_set_once(&ci->def);
     if (def != NULL)
         return def;
     jl_value_t *edges = (jl_value_t*)jl_atomic_load_relaxed(&ci->edges);
@@ -3103,7 +3103,7 @@ JL_DLLEXPORT jl_value_t *jl_ci_def_ro(jl_code_instance_t *ci) JL_NOTSAFEPOINT
 // interned container doubles as the not-yet-converted marker.
 JL_DLLEXPORT void jl_di_materialize_all(jl_debuginfo_t *di) JL_CANSAFEPOINT
 {
-    jl_value_t *edges = jl_atomic_load_acquire((_Atomic(jl_value_t*)*)&di->edges);
+    jl_value_t *edges = (jl_value_t*)jl_load_set_once_acquire(&di->edges);
     if (edges == NULL || !jl_typetagis(edges, jl_interned_code_instance_type))
         return; // converted (or never interned)
     jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)edges;
@@ -3124,7 +3124,7 @@ JL_DLLEXPORT void jl_di_materialize_all(jl_debuginfo_t *di) JL_CANSAFEPOINT
     ICI_MATD(JL_ICI_DI_LINETABLE, &di->linetable)
     ICI_MATD(JL_ICI_DI_CODELOCS, &di->codelocs)
 #undef ICI_MATD
-    jl_value_t *lt = jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)&di->linetable);
+    jl_value_t *lt = (jl_value_t*)jl_load_set_once(&di->linetable);
     if (lt != NULL && jl_is_debuginfo(lt))
         jl_di_materialize_all((jl_debuginfo_t*)lt);
     jl_svec_t *sv = jl_ici_to_svec(ici);
