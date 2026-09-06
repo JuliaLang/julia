@@ -2958,7 +2958,7 @@ JL_DLLEXPORT jl_value_t *jl_image_ref_resolve(int is_sysimg, uint64_t key, uint6
         jl_atomic_store_release(&last, hit);
     }
     assert(offset < hit->data_size);
-    return (jl_value_t*)(hit->data_base + offset);
+    return (jl_value_t*)(hit->data_base + (uintptr_t)offset);
 }
 
 static jl_value_t *ici_decode_ref(jl_interned_code_instance_t *ici, uintptr_t w) JL_NOTSAFEPOINT
