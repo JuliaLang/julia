@@ -92,6 +92,22 @@ end
     cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no --gc-sweep-always-full -e $prog`
     @test success(cmd)
 end
+
+# The GC regions (src/gc-regions.h). Each script exits 1 at its first failed
+# check, so `success` is the assertion; a quarantine the runtime reports on
+# stderr in a clean case fails the script's own check.
+@testset "regions" begin
+    run_gctest("gc/regions_window.jl")
+    run_gctest("gc/regions_escape.jl")
+    run_gctest("gc/regions_lifetime.jl")
+    run_gctest("gc/regions_census.jl")
+    run_gctest("gc/regions_tree.jl")
+    run_gctest("gc/regions_stores.jl")
+    run_gctest("gc/regions_safety.jl")
+    run_gctest("gc/regions_containers.jl")
+    run_gctest("gc/regions_heaps.jl")
+    run_gctest("gc/regions_many.jl")
+end
 end
 
 @testset "Base.GC docstrings" begin
