@@ -3108,6 +3108,20 @@ static void _typename_check_contributor(jl_typename_t *tn, int explct, void *env
 // Is `sig`'s method-matching world provably unchanged relative to the loading
 // image's precompile worker? (all contributors to its typenames lie within the
 // dependency closure). Returns the replay mode when so, 0 otherwise.
+// Can a nominal slot type hold type objects? True for the kinds and everything
+// else under AnyType (and Any itself): such slots intersect Type-shaped slots,
+// so they can neither be keyed nor serve as a plain nominal bound.
+static int fdisj_typeside_nominal(jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    if (dt == jl_any_type)
+        return 1;
+    for (jl_datatype_t *w = dt; w != jl_any_type && w != NULL; w = w->super) {
+        if (w == jl_anytype_type)
+            return 1;
+    }
+    return 0;
+}
+
 // Bucket key for a tuple slot type: a typename such that two slots with
 // different (non-NULL) keys are provably value-disjoint. Non-abstract,
 // non-kind datatypes key by their typename (instances carry exactly that
@@ -3130,19 +3144,9 @@ static jl_typename_t *fdisj_slot_key(jl_value_t *t)
     if (!jl_is_datatype(t))
         return NULL;
     jl_datatype_t *dt = (jl_datatype_t*)t;
-    if (dt->name == jl_type_typename) {
-        // Type{X} is invariant: Type{X} ∩ Type{Y} needs X == Y, so X's base
-        // typename partitions soundly even for abstract or UnionAll-valued X.
-        // Typevar-valued X stays unkeyed; kind-typed slots (which do intersect
-        // Type{X}) never take this branch and stay in the residue.
-        jl_value_t *x = jl_tparam0(dt);
-        while (jl_is_unionall(x))
-            x = ((jl_unionall_t*)x)->body;
-        if (!jl_is_datatype(x))
-            return NULL;
-        return ((jl_datatype_t*)x)->name;
-    }
-    if (dt->name->abstract || jl_is_kind((jl_value_t*)dt))
+    // n.b. the bare `TypeEq` kind is the only DataType carrying the `Type`
+    // typename; like every kind it is unfilterable
+    if (dt->name->abstract || fdisj_typeside_nominal(dt))
         return NULL;
     return dt->name;
 }
@@ -3183,15 +3187,7 @@ static jl_typename_t *fdisj_slot0_key(jl_value_t *sig)
     if (!jl_is_datatype(t))
         return NULL;
     jl_datatype_t *dt = (jl_datatype_t*)t;
-    if (dt->name == jl_type_typename) {
-        jl_value_t *x = jl_tparam0(dt);
-        while (jl_is_unionall(x))
-            x = ((jl_unionall_t*)x)->body;
-        if (!jl_is_datatype(x))
-            return NULL;
-        return ((jl_datatype_t*)x)->name; // constructor family (abstract X fine: invariant)
-    }
-    if (dt->name->abstract || jl_is_kind((jl_value_t*)dt))
+    if (dt->name->abstract || fdisj_typeside_nominal(dt))
         return NULL;
     return dt->name;
 }
@@ -3217,29 +3213,7 @@ static jl_typename_t *fdisj_slot1_nominal_ub(jl_value_t *sig, int *typeside)
     if (!jl_is_datatype(t))
         return NULL;
     jl_datatype_t *dt = (jl_datatype_t*)t;
-    if (jl_is_typeeq((jl_value_t*)dt))
-        return NULL;
-    if (dt->name == jl_type_typename) {
-        // Type{X} with non-concrete X (concrete X would have been bucketed):
-        // the nominal bound of X still prefilters typelike queries, whose
-        // slot values are types on X's nominal chain
-        jl_value_t *x = jl_tparam0(dt);
-        if (jl_is_typevar(x))
-            x = ((jl_tvar_t*)x)->ub;
-        while (jl_is_unionall(x))
-            x = ((jl_unionall_t*)x)->body;
-        if (jl_is_typevar(x))
-            x = ((jl_tvar_t*)x)->ub;
-        if (!jl_is_datatype(x))
-            return NULL;
-        jl_datatype_t *xdt = (jl_datatype_t*)x;
-        if ((jl_value_t*)xdt == (jl_value_t*)jl_any_type || jl_is_kind((jl_value_t*)xdt) ||
-            xdt->name == jl_type_typename || jl_is_typeeq((jl_value_t*)xdt))
-            return NULL;
-        *typeside = 1;
-        return xdt->name;
-    }
-    if ((jl_value_t*)dt == (jl_value_t*)jl_any_type || jl_is_kind((jl_value_t*)dt))
+    if (fdisj_typeside_nominal(dt))
         return NULL;
     return dt->name;
 }
@@ -3257,8 +3231,7 @@ static int fdisj_slot1_is_typelike(jl_value_t *sig)
     if (!jl_is_datatype(t))
         return 1;
     jl_datatype_t *dt = (jl_datatype_t*)t;
-    return jl_is_typeeq((jl_value_t*)dt) || dt->name == jl_type_typename ||
-           jl_is_kind((jl_value_t*)dt);
+    return fdisj_typeside_nominal(dt);
 }
 
 JL_DLLEXPORT uint64_t jl_isect_memo_hits = 0, jl_isect_memo_misses = 0;

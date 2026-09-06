@@ -2310,6 +2310,26 @@ precompile_test_harness("replay: worklist-owned method tables") do load_path
     @test out == "1 1 1"
 end
 
+precompile_test_harness("replay: bare TypeEq slot") do load_path
+    # `TypeEq`, the kind of every `Type{X}`, is the only DataType carrying the
+    # `Type` typename and it has no parameters; activating a method with that
+    # slot type must not index into them (the Compiler-as-a-package load did)
+    write(joinpath(load_path, "ReplayTypeEq.jl"),
+        """
+        module ReplayTypeEq
+        f(@nospecialize x) = 1
+        f(::Core.TypeEq) = 2
+        g() = f(Type{Int}) + f(1)
+        end
+        """)
+    Base.compilecache(Base.PkgId("ReplayTypeEq"))
+    out = replay_test_output(load_path, DEPOT_PATH[1], """
+        using ReplayTypeEq
+        print(ReplayTypeEq.g(), " ", ReplayTypeEq.f(Type{Vector}))
+        """)
+    @test out == "3 2"
+end
+
 precompile_test_harness("replay: extension activation") do load_path
     host_uuid = "0f0f2a5c-6c6d-4b1e-9d2a-2e7d5b7a1c01"
     trig_uuid = "9b4b1d2e-7a3f-4c0e-8f6b-5a2c1d3e4f02"
