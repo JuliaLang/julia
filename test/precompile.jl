@@ -2282,6 +2282,34 @@ precompile_test_harness("replay: activation order") do load_path
     @test out == "a a"
 end
 
+precompile_test_harness("replay: worklist-owned method tables") do load_path
+    # methods of a method table the package itself defines carry no activation
+    # certificate; they must not break the (method, certificate) pairing of the
+    # image's method list (Revise's "External method tables" test found this)
+    write(joinpath(load_path, "ReplayOverlay.jl"),
+        """
+        module ReplayOverlay
+        Base.Experimental.@MethodTable(method_table)
+        Base.Experimental.@MethodTable(method_table_2)
+        foo() = 1
+        Base.Experimental.@overlay method_table print(x) = "print"
+        Base.Experimental.@overlay method_table show(x) = "show"
+        Base.Experimental.@overlay method_table cos(x) = "cos"
+        Base.Experimental.@overlay method_table_2 foo() = 2
+        bar() = foo()
+        baz() = bar()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ReplayOverlay"))
+    out = replay_test_output(load_path, DEPOT_PATH[1], """
+        using ReplayOverlay
+        nm(sig, mt) = length(Base._methods_by_ftype(sig, mt, -1, Base.get_world_counter()))
+        print(Base.invokelatest(ReplayOverlay.baz), " ", nm(Tuple{typeof(cos), Any}, ReplayOverlay.method_table),
+              " ", nm(Tuple{typeof(ReplayOverlay.foo)}, ReplayOverlay.method_table_2))
+        """)
+    @test out == "1 1 1"
+end
+
 precompile_test_harness("replay: extension activation") do load_path
     host_uuid = "0f0f2a5c-6c6d-4b1e-9d2a-2e7d5b7a1c01"
     trig_uuid = "9b4b1d2e-7a3f-4c0e-8f6b-5a2c1d3e4f02"

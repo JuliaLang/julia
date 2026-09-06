@@ -611,8 +611,10 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
 static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
     jl_array_t *s = (jl_array_t*)closure;
-    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0)
+    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0) {
         jl_array_ptr_1d_push(s, (jl_value_t*)ml->func.method); // extext
+        jl_array_ptr_1d_push(s, jl_nothing); // no activation certificate: keep the (method, cert) pairing
+    }
     return 1;
 }
 
