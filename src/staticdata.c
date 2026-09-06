@@ -2437,8 +2437,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 }
                 jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
-                // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID bits
-                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID);
+                // preserve only the NATIVE_CACHE_VALID and BACKEDGES_LOGGED bits
+                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) &
+                                        (JL_CI_FLAGS_NATIVE_CACHE_VALID | JL_CI_FLAGS_BACKEDGES_LOGGED));
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
                 uintptr_t fptr_type = JL_INVOKE_SPECSIG;
                 int8_t builtin_id = 0;
@@ -4340,6 +4341,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                     continue;
                 if (ptrhash_get(&serialization_order, caller) == HT_NOTFOUND)
                     continue;
+                // the loader skips store_backedges for flagged callers and
+                // registers everything else itself (see reinfer.jl)
+                jl_atomic_fetch_or_relaxed(&caller->flags, JL_CI_FLAGS_BACKEDGES_LOGGED);
                 bd[ins] = bd[i];
                 bd[ins + 1] = bd[i + 1];
                 bd[ins + 2] = bd[i + 2];

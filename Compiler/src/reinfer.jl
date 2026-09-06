@@ -3,10 +3,11 @@
 using ..Compiler.Base
 using ..Compiler: Compiler, _findsup, store_backedges, JLOptions, get_world_counter,
     _methods_by_ftype, get_methodtable, get_ci_mi, should_instrument,
-    morespecific, RefValue, get_require_world, Vector, IdDict, ci_materialize!
+    morespecific, RefValue, get_require_world, Vector, IdDict, ci_materialize!, ci_edges_svec
 using .Core: CodeInstance, MethodInstance
 
 const CI_FLAGS_NATIVE_CACHE_VALID = 0b1000
+const CI_FLAGS_BACKEDGES_LOGGED = 0b10000 # the image's backedge log carries this CodeInstance's backedges
 const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
 const _jl_debug_method_invalidation = RefValue{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
@@ -45,7 +46,8 @@ struct VerifyMethodWorkspace
     visiting::IdDict{CodeInstance,Int}
 
     # whether the image carries a backedge log that is bulk-applied after
-    # verification, making per-CodeInstance store_backedges unnecessary
+    # verification; CodeInstances it covers are flagged BACKEDGES_LOGGED and
+    # skip per-CodeInstance store_backedges, the rest still register here
     prelinked::Bool
 
     # scratch for the per-edge match details; only live within one
@@ -388,8 +390,14 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         end
                     end
                     @atomic :monotonic child.max_world = result.result_maxworld
-                    if !workspace.prelinked && result.result_maxworld == validation_world && validation_world == get_world_counter() && isdefined(child, :edges) && child.edges isa Core.SimpleVector
-                        Compiler.@zone "VERIFY_Store" store_backedges(child, child.edges)
+                    if result.result_maxworld == validation_world && validation_world == get_world_counter() &&
+                       (!workspace.prelinked || child.flags & CI_FLAGS_BACKEDGES_LOGGED == 0) && isdefined(child, :edges)
+                        # the image's backedge log covers the CodeInstances the worker
+                        # registered backedges for (flagged at save); register the rest here
+                        edges = child.edges
+                        if edges isa Union{Core.SimpleVector, Core.InternedCodeInstance}
+                            Compiler.@zone "VERIFY_Store" store_backedges(child, ci_edges_svec(edges))
+                        end
                     end
                     @assert workspace.visiting[child] == length(workspace.stack) + 1 "internal error maintaining workspace"
                     delete!(workspace.visiting, child)
