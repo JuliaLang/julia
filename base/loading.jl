@@ -1493,7 +1493,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
-        backedge_log = sv[4]
+        backedge_log = sv[4]::Union{Vector{Any}, Nothing}
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
             ccall(:jl_set_loading_closure_from_depmods, Cvoid, (Any, Any), depmods, internal_methods)
             try

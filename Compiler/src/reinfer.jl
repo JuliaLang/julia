@@ -86,7 +86,7 @@ end
 
 # Restore backedges to external targets
 # `internal_methods` = [caller1, ...], the list of worklist-owned code instances internally
-function insert_backedges(internal_methods::Vector{Any}, backedge_log)
+function insert_backedges(internal_methods::Vector{Any}, backedge_log::Union{Vector{Any}, Nothing})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
@@ -755,7 +755,7 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
 end
 
 # Wrapper to call insert_backedges in typeinf_world for external calls
-function insert_backedges_typeinf(internal_methods::Vector{Any}, backedge_log)
+function insert_backedges_typeinf(internal_methods::Vector{Any}, backedge_log::Union{Vector{Any}, Nothing})
     args = Any[insert_backedges, internal_methods, backedge_log]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end
