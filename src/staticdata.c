@@ -1259,28 +1259,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 }
             }
         }
-        // Drop DebugInfo for CodeInstances that retain neither inferred IR
-        // nor native code in this image: with nothing to symbolize and
-        // nothing to splice during inlining, the debug tree (and its
-        // codelocs/linetable strings) is unreachable dead weight. Gated for
-        // measurement via JULIA_KEEP_ALL_DEBUGINFO=1.
-        if (s->incremental) {
-            static int keepdi = -1;
-            if (keepdi == -1) {
-                char *e = getenv("JULIA_KEEP_ALL_DEBUGINFO");
-                keepdi = e != NULL && strcmp(e, "1") == 0;
-            }
-            jl_value_t *inf_now = get_replaceable_field((jl_value_t**)&ci->inferred, 1);
-            if (!keepdi &&
-                (inf_now == NULL || inf_now == jl_nothing || jl_is_uint8(inf_now)) &&
-                jl_atomic_load_relaxed(&ci->debuginfo) != NULL) {
-                int32_t invokeptr_id = 0, specfptr_id = 0;
-                if (native_functions)
-                    jl_get_function_id(native_functions, ci, &invokeptr_id, &specfptr_id);
-                if (invokeptr_id == 0 && specfptr_id == 0)
-                    record_field_change((jl_value_t**)&ci->debuginfo, NULL);
-            }
-        }
         // Intern the edge list and (where encodable) the object fields into a
         // relocation-free container. Runs after every record_field_change
         // above so field reads see the values that will actually serialize.
