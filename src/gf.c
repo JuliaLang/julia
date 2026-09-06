@@ -3242,21 +3242,11 @@ JL_DLLEXPORT uint64_t jl_isect_memo_hits = 0, jl_isect_memo_misses = 0;
 //     C <: ∃W.M (concrete types have no proper subtypes besides ⊥), and one
 //     empty slot empties the whole covariant tuple. Per-slot ∃-rewrapping of
 //     the method's unionall vars over-approximates, which only retains.
-static int fdisj_fast(void) JL_NOTSAFEPOINT
-{
-    static int on = -1;
-    if (on == -1) {
-        char *e = getenv("JULIA_FDISJ_FAST");
-        on = e == NULL || strcmp(e, "0") != 0;
-    }
-    return on;
-}
-
 static int fdisj_isect_empty(jl_value_t *msig0, jl_value_t *qsig) JL_CANSAFEPOINT
 {
     jl_value_t *msig = jl_unwrap_unionall(msig0);
     jl_value_t *uq = jl_unwrap_unionall(qsig);
-    if (fdisj_fast() && jl_is_datatype(msig) && jl_is_datatype(uq) && !jl_is_unionall(qsig)) {
+    if (jl_is_datatype(msig) && jl_is_datatype(uq) && !jl_is_unionall(qsig)) {
         size_t np = jl_nparams(msig);
         size_t nq = jl_nparams(uq);
         int mva = np > 0 && jl_is_vararg(jl_tparam(msig, np - 1));
@@ -3294,16 +3284,6 @@ static int fdisj_isect_empty(jl_value_t *msig0, jl_value_t *qsig) JL_CANSAFEPOIN
     }
     jl_isect_memo_misses++; // full-intersection fallback
     return jl_has_empty_intersection(msig0, qsig);
-}
-
-static int fdisj_v2(void) JL_NOTSAFEPOINT
-{
-    static int on = -1;
-    if (on == -1) {
-        char *e = getenv("JULIA_FDISJ_V2");
-        on = e == NULL || strcmp(e, "0") != 0;
-    }
-    return on;
 }
 
 // does `target` appear on the nominal supertype chain of `n`'s wrapper?
@@ -3439,7 +3419,7 @@ static void _typename_check_foreign_disjoint(jl_typename_t *tn, int explct, void
                 // object, type-side = the wrapper type (chain-walkable at
                 // scan time; legacy name-symbol form is still decoded)
                 jl_value_t *pfv = pf == NULL ? jl_nothing :
-                    typeside ? (fdisj_v2() ? pf->wrapper : (jl_value_t*)pf->name)
+                    typeside ? pf->wrapper
                              : (jl_value_t*)pf;
                 // rooted: typenames by their types (reachable from m->sig,
                 // held by `ms`), symbols permanently
@@ -3485,12 +3465,7 @@ static void _typename_check_foreign_disjoint(jl_typename_t *tn, int explct, void
     }
     // fail fast when the number of candidate intersections is too large for
     // this to beat ordinary verification
-    // TODO: temporary tuning knob for evaluation
-    static size_t cap = (size_t)-1;
-    if (cap == (size_t)-1) {
-        char *ev = getenv("JULIA_EDGE_FDISJ_CAP");
-        cap = ev ? (size_t)atol(ev) : 64;
-    }
+    const size_t cap = 64;
     JL_GC_PROMISE_ROOTED(memo); // held by `ms`
     jl_array_t *residue = (jl_array_t*)jl_svecref(memo, 0);
     JL_GC_PROMISE_ROOTED(residue);
@@ -3513,7 +3488,7 @@ static void _typename_check_foreign_disjoint(jl_typename_t *tn, int explct, void
     // bound's name lies on N's supertype chain
     jl_typename_t *qub = NULL;
     int qubts = 0;
-    if (fdisj_v2() && q1 == NULL)
+    if (q1 == NULL)
         qub = fdisj_slot1_nominal_ub(env->sig, &qubts);
     JL_GC_PROMISE_ROOTED(qub);
     if (q1 != NULL) {
@@ -3532,7 +3507,7 @@ static void _typename_check_foreign_disjoint(jl_typename_t *tn, int explct, void
         nisect++; \
         if (!fdisj_isect_empty((jl_value_t*)m_->sig, env->sig)) { \
             /* move-to-front: repeated dirty patterns hit on the first test */ \
-            if (fdisj_v2() && (size_t)(idx0_) >= (size_t)(stride_)) { \
+            if ((size_t)(idx0_) >= (size_t)(stride_)) { \
                 for (int s_ = 0; s_ < (stride_); s_++) { \
                     jl_value_t *tmp_ = jl_array_ptr_ref((arr_), s_); \
                     jl_array_ptr_set((arr_), s_, jl_array_ptr_ref((arr_), (idx0_) + s_)); \
@@ -3760,50 +3735,29 @@ JL_DLLEXPORT int jl_edge_sig_replayable(jl_value_t *sig) JL_CANSAFEPOINT
     }
     int clean = 1;
     int decomposed;
-    static int sc_fuse = -1;
-    if (sc_fuse == -1) {
-        char *e = getenv("JULIA_SC_FUSE");
-        sc_fuse = e == NULL || strcmp(e, "0") != 0;
-    }
-    if (sc_fuse) {
-        // single decomposition: collect the typenames once, then run the
-        // contributor check and (only if needed) the foreign-disjoint second
-        // chance over the collected list instead of re-walking the signature
-        struct _tn_collect coll = { 0 };
-        decomposed = sig_tns_foreach(_typename_collect_for_verdict, sig, &coll);
-        if (decomposed < 0)
-            decomposed = jl_foreach_top_typename_for(_typename_collect_for_verdict, sig, 1, &coll);
-        if (coll.n > TN_COLLECT_MAX)
-            decomposed = 0; // overflow: treat as undecomposable (dirty)
-        if (decomposed) {
-            for (size_t i = 0; i < coll.n && clean; i++)
-                _typename_check_contributor(coll.tns[i], 1, &clean);
-            if (!clean) {
-                // second chance: the closure does not cover all contributors
-                // to these typenames, but if no foreign contributor method
-                // intersects this signature, its match set is still provably
-                // unchanged relative to the precompile worker (deletions
-                // poison; an exact replacement's new method carries the
-                // replaced signature, so it covers the removal too)
-                struct _foreign_disjoint fenv = { sig, 1 };
-                for (size_t i = 0; i < coll.n && fenv.ok; i++)
-                    _typename_check_foreign_disjoint(coll.tns[i], 1, &fenv);
-                if (fenv.ok) {
-                    clean = 1;
-                }
-            }
-        }
-    }
-    else {
-        decomposed = sig_tns_foreach(_typename_check_contributor, sig, &clean);
-        if (decomposed < 0)
-            decomposed = jl_foreach_top_typename_for(_typename_check_contributor, sig, 1, &clean);
-        if (decomposed && !clean) {
+    // single decomposition: collect the typenames once, then run the
+    // contributor check and (only if needed) the foreign-disjoint second
+    // chance over the collected list instead of re-walking the signature
+    struct _tn_collect coll = { 0 };
+    decomposed = sig_tns_foreach(_typename_collect_for_verdict, sig, &coll);
+    if (decomposed < 0)
+        decomposed = jl_foreach_top_typename_for(_typename_collect_for_verdict, sig, 1, &coll);
+    if (coll.n > TN_COLLECT_MAX)
+        decomposed = 0; // overflow: treat as undecomposable (dirty)
+    if (decomposed) {
+        for (size_t i = 0; i < coll.n && clean; i++)
+            _typename_check_contributor(coll.tns[i], 1, &clean);
+        if (!clean) {
+            // second chance: the closure does not cover all contributors
+            // to these typenames, but if no foreign contributor method
+            // intersects this signature, its match set is still provably
+            // unchanged relative to the precompile worker (deletions
+            // poison; an exact replacement's new method carries the
+            // replaced signature, so it covers the removal too)
             struct _foreign_disjoint fenv = { sig, 1 };
-            int fdec = sig_tns_foreach(_typename_check_foreign_disjoint, sig, &fenv);
-            if (fdec < 0)
-                fdec = jl_foreach_top_typename_for(_typename_check_foreign_disjoint, sig, 1, &fenv);
-            if (fdec && fenv.ok) {
+            for (size_t i = 0; i < coll.n && fenv.ok; i++)
+                _typename_check_foreign_disjoint(coll.tns[i], 1, &fenv);
+            if (fenv.ok) {
                 clean = 1;
             }
         }
