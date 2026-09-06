@@ -37,12 +37,7 @@ $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
-$(SRCCACHE)/curl-$(CURL_VER)/curl-async_thrdd.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
-	cd $(dir $@) && \
-		patch -p1 -f < $(SRCDIR)/patches/curl-async_thrdd.patch
-	echo 1 > $@
-
-$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/curl-async_thrdd.patch-applied
+$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 	echo 1 > $@
 
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
