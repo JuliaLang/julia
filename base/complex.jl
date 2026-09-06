@@ -56,6 +56,9 @@ widen(::Type{Complex{T}}) where {T} = Complex{widen(T)}
 float(::Type{Complex{T}}) where {T<:AbstractFloat} = Complex{T}
 float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
+# `Complex` does not exist yet where the other methods are defined, in range.jl.
+_lerp_fraction_type(::Type{Complex{T}}) where {T<:AbstractFloat} = _lerp_fraction_type(T)
+
 """
     real(z)
 
