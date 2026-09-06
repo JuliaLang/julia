@@ -1463,6 +1463,29 @@ end
             end
         end
     end
+
+    # Tasks completing on other threads while the waiter registers with them
+    # or runs its bookkeeping between two wakes: the multi-wait used to keep
+    # a partially registered entry across wakes and deadlock within a few
+    # iterations of this loop.
+    if threadpoolsize() > 1
+        @testset "concurrent completions" begin
+            for _ in 1:20_000
+                tasks = [Threads.@spawn nothing for _ in 1:3]
+                done, pending = waitall(tasks)
+                @test length(done) == 3 && isempty(pending)
+            end
+            for _ in 1:2_000
+                event = Threads.Event()
+                tasks = [Threads.@spawn(wait(event)), Threads.@spawn(nothing), Threads.@spawn(wait(event))]
+                done, pending = waitany(tasks)
+                @test tasks[2] in done
+                notify(event)
+                done, pending = waitall(tasks)
+                @test length(done) == 3 && isempty(pending)
+            end
+        end
+    end
 end
 
 @testset "Base.Experimental.task_metrics" begin
