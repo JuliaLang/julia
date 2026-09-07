@@ -1,6 +1,7 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC),verify' -S %s | FileCheck %s --check-prefix=FINAL
 
 @tag = external addrspace(10) global {}, align 16
 
@@ -212,6 +213,76 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
   ret ptr addrspace(10) null
 }
 
+; Vectorization may give tracked-pointer allocas a larger alignment than the
+; usual 16-byte GC frame alignment. Preserve it through both lowering passes.
+define void @overaligned_gc_alloca(<8 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_alloca
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 15)
+; CHECK: %roots = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; FINAL-LABEL: @overaligned_gc_alloca
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 17, align 64
+; FINAL: %roots = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %roots = alloca <8 x ptr addrspace(10)>, align 64
+; CHECK: store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+; FINAL: store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  %root4addr = getelementptr ptr addrspace(10), ptr %roots, i64 4
+; CHECK: %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+; FINAL: %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+  %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+  call void @boxed_simple(ptr addrspace(10) %root4, ptr addrspace(10) %root4)
+  ret void
+}
+
+
+; A callee's alignment requirement must remain true after moving the alloca.
+define void @overaligned_gc_call(<8 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_call
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 14)
+; CHECK: %roots = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; CHECK: call void @aligned_root_array(ptr align 64 %roots)
+; FINAL-LABEL: @overaligned_gc_call
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 16, align 64
+; FINAL: %roots = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+; FINAL: call void @aligned_root_array(ptr align 64 %roots)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %roots = alloca <8 x ptr addrspace(10)>, align 64
+  store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  call void @aligned_root_array(ptr align 64 %roots)
+  ret void
+}
+
+define void @aligned_root_array(ptr align 64 %roots) {
+  %values = load volatile <8 x ptr addrspace(10)>, ptr %roots, align 64
+  ret void
+}
+
+
+; Padding between moved allocas must be included in the frame's root count.
+define void @overaligned_gc_padding(<4 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_padding
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 18)
+; CHECK-DAG: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; CHECK-DAG: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 14)
+; FINAL-LABEL: @overaligned_gc_padding
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 20, align 64
+; FINAL-DAG: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+; FINAL-DAG: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 16
+; FINAL: store <4 x ptr addrspace(10)> %values, ptr %a, align 64
+; FINAL: store <4 x ptr addrspace(10)> %values, ptr %b, align 64
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %a = alloca <4 x ptr addrspace(10)>, align 64
+  %b = alloca <4 x ptr addrspace(10)>, align 64
+  store <4 x ptr addrspace(10)> %values, ptr %a, align 64
+  store <4 x ptr addrspace(10)> %values, ptr %b, align 64
+  call void @aligned_short_root_array(ptr align 64 %a)
+  call void @aligned_short_root_array(ptr align 64 %b)
+  ret void
+}
+
+
+declare void @aligned_short_root_array(ptr align 64)
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}

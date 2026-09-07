@@ -1996,6 +1996,24 @@ precompile_test_harness("Module tparams") do load_path
     end
 end
 
+# A module reached only through a type parameter must support immediate serialization.
+precompile_test_harness("Module immediate serialization") do load_path
+    write(joinpath(load_path, "ModuleImmediateInline.jl"),
+        """
+        module ModuleImmediateInline
+            const value = Val{Module(:Anon)}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleImmediateInline"))
+    (@eval (using ModuleImmediateInline))
+    invokelatest() do
+        m = typeof(ModuleImmediateInline.value).parameters[1]
+        @test m isa Module
+        @test nameof(m) === :Anon
+        @test ModuleImmediateInline.value === Val(m)
+    end
+end
+
 precompile_test_harness("PkgCacheInspector") do load_path
     # Test functionality needed by PkgCacheInspector.jl
     write(joinpath(load_path, "PCI.jl"),
