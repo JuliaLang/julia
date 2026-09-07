@@ -18,6 +18,12 @@ New language features
   `continue name` to continue a labeled loop ([#60481]).
 * `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
   field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+* A macro call written with space separated arguments directly inside bare round brackets — e.g.
+  `(@info "msg" x=1)` — may now continue its arguments on subsequent lines inside the brackets, so
+  each argument of a long macro call can be placed on its own line without switching to the comma
+  separated call syntax. This applies only when the macro call is the first item of the parens; a
+  line beginning with an operator, `for`, a closing token, or a blank line ends the arguments, so
+  existing parenthesized continuation-line idioms parse as before ([#60181]).
 * Primitive types with non-byte-multiple logical widths can now be defined ([#61359]).
 * Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
   that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`

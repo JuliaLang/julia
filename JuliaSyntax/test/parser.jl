@@ -29,7 +29,6 @@ end
 
 PARSE_ERROR = r"\(error"
 
-
 with_version(v::VersionNumber, (i,o)::Pair) = ((;v=v), i) => o
 
 # TODO:
@@ -56,6 +55,10 @@ tests = [
         """ "x" a ; "y" b """ =>
             """(toplevel-; (doc (string "x") a) (doc (string "y") b))"""
         "x y"  =>  "(wrapper x (error-t y))"
+        # Newline-continued macro arguments apply only in bare parens, not in
+        # string interpolation or call/signature brackets
+        with_version(v"1.14", "\"\$(@foo x\n y)\"" => "(string (parens (macrocall (macro_name foo) x) (error-t y)))")
+        with_version(v"1.14", "function f(@nospecialize x\n y) end" => "(function (call f (macrocall (macro_name nospecialize) x) (error-t y)) (block))")
     ],
     JuliaSyntax.parse_eq => [
         # parse_assignment
@@ -381,6 +384,7 @@ tests = [
         # parse_call_chain
         "f(a).g(b)" => "(call (. (call f a) g) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (macro_name x)))"
+
         # non-errors in space sensitive contexts
         "[f (x)]"    =>  "(hcat f (parens x))"
         "[f x]"      =>  "(hcat f x)"
@@ -399,35 +403,49 @@ tests = [
         "@+x y"        =>  "(macrocall (macro_name +) x y)"
         "A.@.x"        =>  "(macrocall (. A (macro_name .)) x)"
 
-        # newline macro calls: only apply when macrocall is the immediate content of ()
-        "(@foo x\n y)"                             => "(parens (macrocall (macro_name foo) x y))"
-        # When @foo is on the RHS of a binary op, it does not eat newline args;
-        # y becomes an unexpected token (error) since it has no comma before it.
-        "(1 + @foo x\n y)"                         => "(parens (call-i 1 + (macrocall (macro_name foo) x)) (error-t y))"
-        # For backwards compatibility (1 + @foo x\n + 2) must parse as (+ 1 (@foo x) 2)
-        "(1 + @foo x\n + 2)"                        => "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))"
-        "(1 +\n @foo x\n + 2)"                      => "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))"
-        "(@foo function bar()\n @baz \n x \n end)" => "(parens (macrocall (macro_name foo) (function (call bar) (block (macrocall (macro_name baz)) x))))"
-        "(@foo \n (@bar \n x))"                    => "(parens (macrocall (macro_name foo) (parens (macrocall (macro_name bar) x))))"
-        # Don't change parsing rules for [] and {} cases!
-        "[x, @foo y\n z]" => "(vect x (macrocall (macro_name foo) y) (error-t z))"
-        "{@foo x\n y}"    => "(bracescat (macrocall (macro_name foo) x) y)"
-        # Nested macros: newline args belong to outer macro, not inner
-        "(@foo @bar x\n y)"     => "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x) y))"
-        "(@foo @bar x y\n z)"   => "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x y) z))"
-        # Commas in call args with macro on previous line still parse correctly
-        "f(a, b, @bar 1\n, 2)"  => "(call f a b (macrocall (macro_name bar) 1) 2)"
-        # In function call brackets, @foo IS the direct child so it eats newline args
-        "f(@foo x\n y)"         => "(call f (macrocall (macro_name foo) x y))"
-        # When @foo is the direct content (LHS of nothing), it can eat unary across newline
-        "(@foo x\n + 2)"        => "(parens (macrocall (macro_name foo) x (call-pre + 2)))"
-        # All binary/logical/comparison/arrow operators block newline eating on their RHS
-        "(a || @foo x\n y)"     => "(parens (|| a (macrocall (macro_name foo) x)) (error-t y))"
-        "(a && @foo x\n y)"     => "(parens (&& a (macrocall (macro_name foo) x)) (error-t y))"
-        "(a == @foo x\n y)"     => "(parens (call-i a == (macrocall (macro_name foo) x)) (error-t y))"
-        "(a <: @foo x\n y)"     => "(parens (<: a (macrocall (macro_name foo) x)) (error-t y))"
-        "(a --> @foo x\n y)"    => "(parens (--> a (macrocall (macro_name foo) x)) (error-t y))"
-        "(a = @foo x\n y)"      => "(parens (= a (macrocall (macro_name foo) x)) (error-t y))"
+        # A macro call which is the first item directly inside bare round
+        # brackets (and nowhere else) may continue its space separated
+        # arguments over newlines in v1.14+; a line starting with an
+        # operator, `for`, a closing token or a blank line ends the
+        # arguments instead.
+        with_version(v"1.14", "(@foo x\n y)"       => "(parens (macrocall (macro_name foo) x y))")
+        with_version(v"1.14", "( @foo x\n y)"      => "(parens (macrocall (macro_name foo) x y))")
+        with_version(v"1.14", "(A.@foo x\n y)"     => "(parens (macrocall (. A (macro_name foo)) x y))")
+        with_version(v"1.14", "f(@foo x\n y)"      => "(call f (macrocall (macro_name foo) x) (error-t y))")
+        with_version(v"1.14", "(a, @foo x\n y)"    => "(tuple-p a (macrocall (macro_name foo) x) (error-t y))")
+        with_version(v"1.14", "f(x; @foo y\n z)"   => "(call f x (parameters (macrocall (macro_name foo) y)) (error-t z))")
+        with_version(v"1.14", "(@foo x\n y, z)"    => "(parens (macrocall (macro_name foo) x (tuple y z)))")
+        with_version(v"1.14", "(@foo x\n y; b)"    => "(block-p (macrocall (macro_name foo) x y) b)")
+        with_version(v"1.14", "(@foo function bar()\n @baz \n x \n end)" => "(parens (macrocall (macro_name foo) (function (call bar) (block (macrocall (macro_name baz)) x))))")
+        with_version(v"1.14", "(@foo \n (@bar \n x))" => "(parens (macrocall (macro_name foo) (parens (macrocall (macro_name bar) x))))")
+        with_version(v"1.14", "(@foo @bar x\n y)"   => "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x) y))")
+        with_version(v"1.14", "(@foo @bar x y\n z)" => "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x y) z))")
+        with_version(v"1.14", "f(a, b, @bar 1\n, 2)" => "(call f a b (macrocall (macro_name bar) 1) 2)")
+        with_version(v"1.14", "(@foo x\n + 2)"     => "(parens (call-i (macrocall (macro_name foo) x) + 2))")
+        with_version(v"1.14", "(@foo x\n |> sum)"  => "(parens (call-i (macrocall (macro_name foo) x) |> sum))")
+        with_version(v"1.14", "(1 + @foo x\n + 2)" => "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))")
+        with_version(v"1.14", "(1 +\n @foo x\n + 2)" => "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))")
+        with_version(v"1.14", "(1 + @foo x\n y)"   => "(parens (call-i 1 + (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(a || @foo x\n y)"  => "(parens (|| a (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(a && @foo x\n y)"  => "(parens (&& a (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(a == @foo x\n y)"  => "(parens (call-i a == (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(a <: @foo x\n y)"  => "(parens (<: a (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(a --> @foo x\n y)" => "(parens (--> a (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(a = @foo x\n y)"   => "(parens (= a (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(1 : @foo x\n y)"   => "(parens (call-i 1 : (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(a ^ @foo x\n y)"   => "(parens (call-i a ^ (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(2@foo x\n y)"      => "(parens (juxtapose 2 (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(- @foo x\n y)"     => "(parens (call-pre - (macrocall (macro_name foo) x)) (error-t y))")
+        with_version(v"1.14", "(x for i in @foo a\n b)" => "(parens (generator x (iteration (in i (macrocall (macro_name foo) a)))) (error-t b))")
+        with_version(v"1.14", "(@m x\nfor i in 1:2)" => "(parens (generator (macrocall (macro_name m) x) (iteration (in i (call-i 1 : 2)))))")
+        with_version(v"1.14", "(@m x\n\n y)"       => "(parens (macrocall (macro_name m) x) (error-t y))")
+        with_version(v"1.14", "(@doc x\n\ny)"      => "(parens (macrocall (macro_name doc) x) (error-t y))")
+        with_version(v"1.14", "(@foo x\n)"         => "(parens (macrocall (macro_name foo) x))")
+        with_version(v"1.14", "[x, @foo y\n z]"    => "(vect x (macrocall (macro_name foo) y) (error-t z))")
+        with_version(v"1.14", "{@foo x\n y}"       => "(bracescat (macrocall (macro_name foo) x) y)")
+        with_version(v"1.14", "[@foo x\n y]"       => "(vcat (macrocall (macro_name foo) x) y)")
+        with_version(v"1.14", "([@foo x\n y])"     => "(parens (vcat (macrocall (macro_name foo) x) y))")
+        "(@foo x\n y)" => "(parens (macrocall (macro_name foo) x) (error-t y))"
 
         # Macro names
         "@! x"  => "(macrocall (macro_name !) x)"

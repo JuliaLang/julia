@@ -21,19 +21,21 @@ struct ParseState
     whitespace_newline::Bool
     # Enable parsing `where` with high precedence
     where_enabled::Bool
-    # Treat newline like ordinary whitespace, but specifically for macro arguments
-    macro_whitespace_newline::Bool
+    # First byte of the content of the bare parens currently being parsed
+    # (0 otherwise). A macro call starting exactly at this byte treats
+    # newlines as argument whitespace.
+    paren_content_byte_index::UInt32
 end
 
 # Normal context
 function ParseState(stream::ParseStream)
-    ParseState(stream, true, false, false, false, false, true, false)
+    ParseState(stream, true, false, false, false, false, true, UInt32(0))
 end
 
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
                     space_sensitive=nothing, for_generator=nothing,
                     end_symbol=nothing, whitespace_newline=nothing,
-                    where_enabled=nothing, macro_whitespace_newline=false)
+                    where_enabled=nothing, paren_content_byte_index=nothing)
     ParseState(ps.stream,
         range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
         space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
@@ -41,7 +43,8 @@ function ParseState(ps::ParseState; range_colon_enabled=nothing,
         end_symbol === nothing ? ps.end_symbol : end_symbol,
         whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
         where_enabled === nothing ? ps.where_enabled : where_enabled,
-        macro_whitespace_newline)
+        paren_content_byte_index === nothing ?
+            ps.paren_content_byte_index : paren_content_byte_index)
 end
 
 # Functions to change parse state
@@ -53,15 +56,13 @@ function normal_context(ps::ParseState)
                where_enabled=true,
                for_generator=false,
                end_symbol=false,
-               whitespace_newline=false,
-               macro_whitespace_newline=false)
+               whitespace_newline=false)
 end
 
 function with_space_sensitive(ps::ParseState)
     ParseState(ps,
                space_sensitive=true,
-               whitespace_newline=false,
-               macro_whitespace_newline=ps.macro_whitespace_newline)
+               whitespace_newline=false)
 end
 
 # Convenient wrappers for ParseStream
@@ -374,7 +375,7 @@ function parse_LtoR(ps::ParseState, down, is_op)
         (is_op(tk) && !isassign) || break
         isdot && bump(ps, TRIVIA_FLAG) # TODO: NOTATION_FLAG
         bump(ps, remap_kind=K"Identifier")
-        down(ParseState(ps))
+        down(ps)
         emit(ps, mark, isdot ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
@@ -389,7 +390,7 @@ function parse_RtoL(ps::ParseState, down, is_op, self)
     isdot, isassign, tk = peek_dotted_op_token(ps)
     if is_op(tk) && !isassign
         bump_dotted(ps, isdot, tk, remap_kind=K"Identifier")
-        self(ParseState(ps))
+        self(ps)
         emit(ps, mark, isdot ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
@@ -619,7 +620,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         # [a~b]      ==>  (vect (call-i a ~ b))
         bump_dotted(ps, isdot, t, remap_kind=K"Identifier")
         bump_trivia(ps)
-        parse_assignment(ParseState(ps), down)
+        parse_assignment(ps, down)
         emit(ps, mark, isdot ? K"dotcall" : K"call", INFIX_FLAG)
     else
         # f() = 1  ==>  (function-= (call f) 1)
@@ -639,7 +640,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         bump_trivia(ps)
         # Syntax Edition TODO: We'd like to call `down` here when
         # is_short_form_func is true, to prevent `f() = 1 = 2` from parsing.
-        parse_assignment(ParseState(ps), down)
+        parse_assignment(ps, down)
         emit(ps, mark,
              is_short_form_func ? K"function" : (isdot ? dotted(k) : k),
              is_short_form_func ? SHORT_FORM_FUNCTION_FLAG : flags(t))
@@ -737,7 +738,7 @@ function parse_cond(ps::ParseState)
     else
         # A[x ? y : end] ==> (ref A (? x y end))
     end
-    parse_eq_star(ParseState(ps))
+    parse_eq_star(ps)
     emit(ps, mark, K"?")
 end
 
@@ -753,7 +754,7 @@ function parse_arrow(ps::ParseState)
         if kind(t) == K"-->" && !isdot
             # x --> y   ==>  (--> x y)           # The only syntactic arrow
             bump(ps, TRIVIA_FLAG)
-            parse_arrow(ParseState(ps))
+            parse_arrow(ps)
             emit(ps, mark, k, flags(t))
         else
             # x → y     ==>  (call-i x → y)
@@ -761,7 +762,7 @@ function parse_arrow(ps::ParseState)
             # x .--> y  ==>  (dotcall-i x --> y)
             # x -->₁ y  ==>  (call-i x -->₁ y)
             bump_dotted(ps, isdot, t, remap_kind=K"Identifier")
-            parse_arrow(ParseState(ps))
+            parse_arrow(ps)
             emit(ps, mark, isdot ? K"dotcall" : K"call", INFIX_FLAG)
         end
     end
@@ -789,7 +790,7 @@ function parse_lazy_cond(ps::ParseState, down, is_op, self)
     k = kind(t)
     if is_op(t)
         bump_dotted(ps, isdot, t, TRIVIA_FLAG)
-        self(ParseState(ps))
+        self(ps)
         emit(ps, mark, isdot ? dotted(k) : k, flags(t))
         if isdot
             min_supported_version(v"1.7", ps, mark, "dotted operators `.||` and `.&&`")
@@ -837,7 +838,7 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
         n_comparisons += 1
         op_dotted = isdot
         op_pos = bump_dotted(ps, isdot, t, emit_dot_node=true, remap_kind=K"Identifier")
-        parse_pipe_lt(ParseState(ps))
+        parse_pipe_lt(ps)
     end
     if n_comparisons == 1
         if is_type_operator(initial_tok, initial_dot)
@@ -1029,11 +1030,11 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
             break
         end
         bump_dotted(ps, isdot, t, remap_kind=K"Identifier")
-        down(ParseState(ps))
+        down(ps)
         if kind(t) in chain_ops && !isdot
             # a + b + c    ==>  (call-i a + b c)
             # a + b .+ c   ==>  (dotcall-i (call-i a + b) + c)
-            parse_chain(ParseState(ps), down, kind(t))
+            parse_chain(ps, down, kind(t))
         end
         # a +₁ b +₁ c  ==>  (call-i (call-i a +₁ b) +₁ c)
         # a .+ b .+ c  ==>  (dotcall-i (dotcall-i a + b) + c)
@@ -1057,7 +1058,7 @@ function parse_chain(ps::ParseState, down, op_kind)
             break
         end
         bump(ps, TRIVIA_FLAG)
-        down(ParseState(ps))
+        down(ps)
     end
 end
 
@@ -1127,7 +1128,7 @@ function parse_where_chain(ps0::ParseState, mark)
             # x where T     ==>  (where x T)
             # x where \n T  ==>  (where x T)
             # x where T<:S  ==>  (where x (<: T S))
-            parse_comparison(ParseState(ps))
+            parse_comparison(ps)
             emit(ps, mark, K"where")
         end
     end
@@ -1431,7 +1432,7 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
     while peek(ps) == K"::"
         # a::b::c   ==>   (::-i (::-i a b) c)
         bump(ps, TRIVIA_FLAG)
-        parse_where(ParseState(ps), parse_call)
+        parse_where(ps, parse_call)
         emit(ps, mark, K"::", INFIX_FLAG)
     end
     if peek(ps) == K"->"
@@ -1452,7 +1453,7 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
         end
         bump(ps, TRIVIA_FLAG)
         # -> is unusual: it binds tightly on the left and loosely on the right.
-        parse_eq_star(ParseState(ps))
+        parse_eq_star(ps)
         emit(ps, mark, K"->")
     end
 end
@@ -1582,7 +1583,13 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # Space separated macro arguments
                 # A.@foo a b    ==> (macrocall (. A (macro_name foo)) a b)
                 # @A.foo a b    ==> (macrocall (macro_name (. A foo)) a b)
-                n_args = parse_space_separated_exprs(ps)
+                #
+                # A macro call which is the immediate child of round brackets
+                # (its start byte was recorded by parse_brackets) may
+                # continue its arguments over newlines
+                # (@foo x\n y)  ==> (parens (macrocall (macro_name foo) x y))
+                n_args = parse_space_separated_exprs(
+                    ps, ps.paren_content_byte_index == mark.byte_index)
                 is_doc_macro = last_identifier_orig_kind == K"doc"
                 if is_doc_macro && n_args == 1
                     # Parse extended @doc args on next line
@@ -2850,7 +2857,7 @@ function parse_iteration_specs(ps::ParseState)
 end
 
 # flisp: parse-space-separated-exprs
-function parse_space_separated_exprs(ps::ParseState)
+function parse_space_separated_exprs(ps::ParseState, macro_eats_newlines::Bool=false)
     ps = with_space_sensitive(ps)
     n_sep = 0
     while true
@@ -2859,17 +2866,20 @@ function parse_space_separated_exprs(ps::ParseState)
             break
         end
         if k == K"NewlineWs"
-            if ps.macro_whitespace_newline
-                bump(ps, TRIVIA_FLAG)
-                continue
-            else
+            macro_eats_newlines || break
+            # Continue macro arguments over the newline only when the next
+            # line starts a new argument: stop at closing tokens and `for`
+            # (which belong to the surrounding brackets), at operators (which
+            # continue the surrounding expression), and at blank lines.
+            k2 = peek(ps, 2)
+            if is_closing_token(ps, k2) || k2 == K"for" || k2 == K"NewlineWs" ||
+                    is_operator(k2)
                 break
             end
+            bump(ps, TRIVIA_FLAG)
+            continue
         end
-        # Disable macro_whitespace_newline for sub-expressions so that only the
-        # outermost macro in a parenthesized context eats newline-separated args.
-        # E.g. in (@foo @bar x y\nz), z should be an arg of @foo not @bar.
-        parse_eq(ParseState(ps))
+        parse_eq(ps)
         n_sep += 1
     end
     return n_sep
@@ -3249,7 +3259,7 @@ function parse_paren(ps::ParseState, check_identifiers=true, has_unary_prefix=fa
         # Deal with all other cases of tuple or block syntax via the generic
         # parse_brackets
         initial_semi = peek(ps) == K";"
-        opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+        opts = parse_brackets(ps, K")", macro_newlines=true) do had_commas, had_splat, num_semis, num_subexprs
             is_tuple = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0)) ||
                        (peek(ps, 2) == K"->" && (peek_behind(ps).kind != K"where" && !has_unary_prefix))
@@ -3309,12 +3319,16 @@ end
 #
 # flisp: parts of parse-paren- and parse-arglist
 function parse_brackets(after_parse::F,
-                        ps::ParseState, closing_kind, generator_is_last=true) where {F}
+                        ps::ParseState, closing_kind, generator_is_last=true;
+                        macro_newlines::Bool=false) where {F}
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
-                    whitespace_newline=true,
-                    macro_whitespace_newline=closing_kind==K")")
+                    whitespace_newline=true)
+    # A macro call which is the first item of bare parens may continue its
+    # space separated arguments over newlines. Record the item's start byte
+    # so parse_call_chain can detect this case.
+    macro_newlines &= ps.stream.version >= (1, 14)
     params_positions = acquire_positions(ps.stream)
     num_subexprs = 0
     num_semis = 0
@@ -3342,7 +3356,8 @@ function parse_brackets(after_parse::F,
             break
         else
             mark = position(ps)
-            parse_eq_star(ps)
+            parse_eq_star(!(macro_newlines && num_subexprs == 0 && num_semis == 0) ? ps :
+                ParseState(ps, paren_content_byte_index=first(byte_range(peek_full_token(ps)))))
             trailing_comma = false
             num_subexprs += 1
             if num_subexprs == 1
