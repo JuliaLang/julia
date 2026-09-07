@@ -112,7 +112,8 @@ end
     x17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(0xffff_ffff))
     @test Core.Intrinsics.zext_int(UInt32, x17) === 0x0001_ffff
 
-    # Memory operations use the byte-rounded storage width.
+    # A whole primitive is loaded and stored at its full size: sizeof is 4 here,
+    # so one i32 access rather than several sub-word ones.
     load17(p::Ptr{TestUInt17}) = unsafe_load(p)
     store17(p::Ptr{TestUInt17}, x::TestUInt17) = unsafe_store!(p, x)
     load_boxed17(x::Any) = Core.Intrinsics.zext_int(UInt32, x::TestUInt17)
@@ -123,20 +124,20 @@ end
     if !isdefined(Main, :Revise)
         load_ir = sprint(io -> code_llvm(io, load17, Tuple{Ptr{TestUInt17}};
             debuginfo=:none, optimize=false))
-        @test occursin(r"\bload i24\b", load_ir)
-        @test occursin(r"\btrunc i24\b", load_ir)
+        @test occursin(r"\bload i32\b", load_ir)
+        @test occursin(r"\btrunc i32\b", load_ir)
         boxed_ir = sprint(io -> code_llvm(io, load_boxed17, Tuple{Any};
             debuginfo=:none, optimize=false))
-        @test occursin(r"\bload i24\b", boxed_ir)
-        @test occursin(r"\btrunc i24\b", boxed_ir)
+        @test occursin(r"\bload i32\b", boxed_ir)
+        @test occursin(r"\btrunc i32\b", boxed_ir)
         store_ir = sprint(io -> code_llvm(io, store17,
             Tuple{Ptr{TestUInt17}, TestUInt17}; debuginfo=:none, optimize=false))
-        @test occursin(r"\bzext i17\b.*\bto i24\b", store_ir)
-        @test occursin(r"\bstore i24\b", store_ir)
+        @test occursin(r"\bzext i17\b.*\bto i32\b", store_ir)
+        @test occursin(r"\bstore i32\b", store_ir)
         bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
             debuginfo=:none, optimize=false))
         @test occursin(r"\bload i24\b", bitcast_ir)
-        # Aggregate elements widen elementwise, not just bare primitives. On
+        # Aggregate elements are still reached at the byte-rounded width. On
         # 32-bit targets the tuple is returned through sret as a single memcpy
         # instead, which never materializes the elements.
         if Sys.WORD_SIZE == 64
@@ -193,6 +194,17 @@ end
         v = GC.@preserve dirty ccall(:jl_new_bits, Any, (Any, Ptr{Cvoid}), T, pointer(dirty))
         @test Core.Intrinsics.zext_int(UInt64, v::T) == mask
         @test v::T === Core.Intrinsics.trunc_int(T, typemax(UInt64))
+    end
+
+    # A primitive type is sized to its alignment, matching C23 `_BitInt(N)`.
+    for (nb, sz) in ((1, 1), (2, 1), (5, 1), (8, 1), (9, 2), (17, 4), (24, 4), (25, 4),
+                     (33, 8), (40, 8), (48, 8), (63, 8), (64, 8), (65, 16), (128, 16))
+        T = Core.eval(@__MODULE__, :(primitive type $(Symbol("TestSz", nb)) $nb end;
+                                     $(Symbol("TestSz", nb))))
+        @test Core.bitsizeof(T) == nb
+        @test sizeof(T) == sz
+        @test sizeof(T) == Base.aligned_sizeof(T)
+        @test Base.datatype_haspadding(T) == (nb != 8 * sz)
     end
 
     # A 1-bit primitive is not a Bool: boxing must keep its own type.

@@ -300,10 +300,11 @@ The number of bits gives the declared logical width of the primitive type, and t
 new type a name. A primitive type can optionally be declared to be a subtype of some supertype. If a
 supertype is omitted, then the type defaults to having `Any` as its immediate supertype. The
 declaration of [`Bool`](@ref) above therefore means that a boolean value has a logical width of eight
-bits, and has [`Integer`](@ref) as its immediate supertype. Primitive types continue to use
-byte-rounded storage, so `sizeof(T)` rounds their storage size up to a whole number of bytes even
-when their logical width is not a multiple of 8 bits. Use `Core.bitsizeof(T)` to query the declared
-logical width.
+bits, and has [`Integer`](@ref) as its immediate supertype. A primitive type is stored at its
+alignment, following C23's `_BitInt(N)`, so `sizeof(T)` is the allocation size and equals
+`Base.aligned_sizeof(T)`; any bits past the declared width are padding and take no part in
+comparison or hashing. Use `Core.bitsizeof(T)` to query the declared logical width — for
+`primitive type T 24 end`, `Core.bitsizeof(T)` is 24 while `sizeof(T)` is 4.
 
 Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
 expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays still
