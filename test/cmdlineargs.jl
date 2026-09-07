@@ -1675,6 +1675,58 @@ end
     end
 end
 
+@testset "--sysimage-prelink and --output-prelinked" begin
+    exename = `$(Base.julia_cmd())`
+    # The option takes yes or no and nothing else.
+    mktempdir() do dir
+        p = run(pipeline(ignorestatus(`$exename --sysimage-prelink=maybe -e 0`);
+                         stdout = devnull, stderr = "$(dir)/err"), wait = true)
+        @test p.exitcode != 0
+        @test occursin("invalid argument to --sysimage-prelink", read("$(dir)/err", String))
+    end
+    @test test_read_success(`$exename --sysimage-prelink=yes -E "Base.JLOptions().sysimage_prelink"`, Int) == 1
+    @test test_read_success(`$exename --sysimage-prelink=no -E "Base.JLOptions().sysimage_prelink"`, Int) == 0
+    # An image reserves the room only when it is asked to.
+    @test test_read_success(`$exename -E "Base.JLOptions().sysimage_prelink"`, Int) == 0
+    # An image written without the reservation cannot be pre-relocated, and the
+    # running image was written without it.
+    mktempdir() do dir
+        out = joinpath(dir, "prelinked")
+        p = run(pipeline(ignorestatus(`$exename --output-prelinked=$out -e 0`);
+                         stdout = devnull, stderr = "$(dir)/err"), wait = true)
+        @test p.exitcode == 1
+        @test occursin("reserved no room", read("$(dir)/err", String))
+        @test !isfile(out)
+    end
+    # An image asked to reserve the room is larger than the same image without,
+    # carries the record that says so, and both load.
+    magic = collect(reinterpret(UInt8, [0x50524c4e4b303031]))  # JL_PRELINK_MAGIC
+    carries_the_record(path) = open(path) do io
+        window = UInt8[]
+        while !eof(io)
+            append!(window, read(io, 1 << 20))
+            findfirst(magic, window) === nothing || return true
+            # Keep the last bytes, so that a record on a border is seen.
+            window = window[max(1, lastindex(window) - length(magic) + 2):end]
+        end
+        return false
+    end
+    mktempdir() do dir
+        for (name, prelink) in (("plain", "no"), ("room", "yes"))
+            @test "" == test_read_success(`$exename --sysimage-prelink=$prelink -t1,0 --output-o $(dir)/$(name).o.a -e 0`)
+        end
+        if isfile(joinpath(dir, "plain.o.a")) && isfile(joinpath(dir, "room.o.a"))
+            @test filesize(joinpath(dir, "room.o.a")) > filesize(joinpath(dir, "plain.o.a"))
+            @test !carries_the_record(joinpath(dir, "plain.o.a"))
+            @test carries_the_record(joinpath(dir, "room.o.a"))
+            for name in ("plain", "room")
+                Base.Linking.link_image(joinpath(dir, "$name.o.a"), joinpath(dir, "$name.so"))
+                @test readchomp(`$exename -t1,0 -J $(dir)/$(name).so -E "1 + 1"`) == "2"
+            end
+        end
+    end
+end
+
 @testset "the system image holds `nothing`, the booleans and the symbols" begin
     exename = `$(Base.julia_cmd())`
     # A system image holds these itself, so that every field which points at

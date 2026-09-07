@@ -103,6 +103,13 @@ Command-line option changes
   directory tree. For example, `@/src/Foo` tracks `/src/Foo/x.jl`, but not `/src/Foobar/x.jl`. Specifying the
   filesystem root as `@/` tracks every absolute path. `Base.is_file_tracked` now returns `false` when Julia was
   not started with either `@<path>` option ([#62514]).
+* `--sysimage-prelink={yes|no}` and `--output-prelinked <file>` build and write a pre-relocated system image.
+  A restore turns every relocation of the image into a pointer and writes almost every page of the image doing
+  so; when the image is linked into a program that does not move at every start, that work can be done once and
+  written into the program file. `--sysimage-prelink=yes` reserves room in the image being written for the
+  pointers a start must still write, and `--output-prelinked` restores the program's own image and writes the
+  program with the restored image to a file. A start of that file applies the short list and reads neither
+  relocation list. Writing the file is Linux only.
 
 Multi-threading changes
 -----------------------

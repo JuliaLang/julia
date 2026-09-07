@@ -29,6 +29,8 @@ EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC
 
 GCEXT_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/gcext" "CC=$(CC)"
 
+PRELINK_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/prelink" "CC=$(CC)"
+
 TEST_JULIA_OPTIONS := --check-bounds=yes --startup-file=no --depwarn=error
 TEST_SCRIPT_OPTIONS := --buildroot=$(call cygpath_w,$(BUILDROOT))
 
@@ -85,6 +87,10 @@ embedding:
 gcext:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(GCEXT_ARGS)
 
+.PHONY: prelink
+prelink:
+	@$(MAKE) -C $(SRCDIR)/$@ check $(PRELINK_ARGS)
+
 .PHONY: clangsa
 clangsa:
 	@$(MAKE) -C $(SRCDIR)/$@
@@ -93,4 +99,5 @@ clangsa:
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
+	@$(MAKE) -C prelink $@ $(PRELINK_ARGS)
 	@$(MAKE) -C llvmpasses $@
