@@ -1675,6 +1675,37 @@ end
     end
 end
 
+@testset "the system image holds `nothing`, the booleans and the symbols" begin
+    exename = `$(Base.julia_cmd())`
+    # A system image holds these itself, so that every field which points at
+    # one is final in the file. The start adopts them: a symbol interned at run
+    # time finds the image's, and every field of the root task that holds
+    # `nothing` holds the image's `nothing`. A stale one there breaks `wait`.
+    script = """
+        in_image(x) = ccall(:jl_object_in_image, UInt8, (Any,), x) == 1
+        function failures()
+            bad = String[]
+            in_image(nothing) || push!(bad, "nothing")
+            (in_image(true) && in_image(false)) || push!(bad, "the booleans")
+            in_image(:sin) || push!(bad, "a symbol of the image")
+            in_image(Symbol("si" * "n")) || push!(bad, "a symbol interned at run time")
+            nameof(sin) === Symbol("si" * "n") || push!(bad, "the identity of a symbol")
+            # The other way round, so that the question is a real one.
+            in_image(Symbol("zz", rand(UInt))) && push!(bad, "a symbol of neither")
+            for f in fieldnames(Task)
+                isdefined(current_task(), f) || continue
+                v = getfield(current_task(), f)
+                if v === nothing && !in_image(v)
+                    push!(bad, "the field \$f of the root task")
+                end
+            end
+            return join(bad, ", ")
+        end
+        print(failures())
+        """
+    @test readchomp(`$exename -e $script`) == ""
+end
+
 # Build and use a system image, exercising both split (--output-o together with
 # --output-ji, heap goes into the .ji) and non-split (--output-o only, heap goes
 # into the .so) layouts, with --compress-sysimage on and off in each.

@@ -587,6 +587,7 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     if (sysimage.kind != JL_IMAGE_KIND_NONE) {
         // Load the .ji or .so sysimage
         jl_restore_system_image(&parsed_image, sysimage);
+        jl_init_common_symbols();
     }
     else {
         // No sysimage provided, init a minimal environment
@@ -792,7 +793,10 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     jl_init_box_caches();
-    jl_init_common_symbols();
+    // The image's symbols become the symbol table, so the symbols the runtime
+    // holds by name are read after the restore; without an image, make them here.
+    if (sysimage.kind == JL_IMAGE_KIND_NONE)
+        jl_init_common_symbols();
 #pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
     _finish_jl_init_(sysimage, ptls, ct);
