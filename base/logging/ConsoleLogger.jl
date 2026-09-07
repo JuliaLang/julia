@@ -57,6 +57,7 @@ min_enabled_level(logger::ConsoleLogger) = logger.min_level
 showvalue(io, msg) = show(io, "text/plain", msg)
 function showvalue(io, e::Tuple{Exception,Any})
     ex,bt = e
+    bt = Base.scrub_repl_backtrace(bt)
     showerror(io, ex, bt; backtrace = bt!==nothing)
 end
 showvalue(io, ex::Exception) = showerror(io, ex)
