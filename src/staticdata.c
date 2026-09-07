@@ -396,26 +396,41 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 #define NBOX_C 1024
 
+// A package image references `nothing` and the small boxed integers by tag,
+// since they belong to the loading runtime; a trimmed image does too, to stay
+// small. A full system image holds them as objects.
+static int primordials_by_tag(jl_serializer_state *s) JL_NOTSAFEPOINT
+{
+    return s->incremental || jl_options.trim;
+}
+
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
         return 0;
 
-    if (v == NULL || jl_is_symbol(v) || v == jl_nothing) {
+    if (v == NULL || jl_is_symbol(v)) {
         return 0;
     }
-    else if (jl_typetagis(v, jl_int64_tag << 4)) {
+    // A package image names `nothing` and the small boxed integers with a tag,
+    // because they belong to the runtime that loads it. The system image is
+    // that runtime, so it holds them itself and every field that points at one
+    // is a pointer the loader does not have to write.
+    else if (primordials_by_tag(s) && v == jl_nothing) {
+        return 0;
+    }
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_int64_tag << 4)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
             return 0;
     }
-    else if (jl_typetagis(v, jl_int32_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_int32_tag << 4)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
             return 0;
     }
-    else if (jl_typetagis(v, jl_uint8_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_uint8_tag << 4)) {
         return 0;
     }
     else if (v == (jl_value_t*)s->ptls->root_task) {
@@ -1200,20 +1215,20 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
     else if (v == (jl_value_t*)s->ptls->root_task) {
         return (uintptr_t)TagRef << RELOC_TAG_OFFSET;
     }
-    else if (v == jl_nothing) {
+    else if (primordials_by_tag(s) && v == jl_nothing) {
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + 1;
     }
-    else if (jl_typetagis(v, jl_int64_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_int64_tag << 4)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
             return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i64 + 2;
     }
-    else if (jl_typetagis(v, jl_int32_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_int32_tag << 4)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
             return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i32 + 2 + NBOX_C;
     }
-    else if (jl_typetagis(v, jl_uint8_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_uint8_tag << 4)) {
         uint8_t u8 = *(uint8_t*)v;
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
@@ -4079,6 +4094,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     assert(!ios_eof(f));
     s.s = f;
     uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    // the `nothing` allocated by `julia_init`, replaced by the image's below
+    jl_value_t *init_nothing = jl_nothing;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -4167,6 +4184,20 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     // s.link_ids_gvars will be processed in `jl_update_all_gvars`
     // s.link_ids_external_fns will be processed in `jl_update_all_gvars`
     jl_update_all_gvars(&s, image, external_fns_begin); // gvars relocs
+
+    // `julia_init` allocated a `nothing` before the root task existed, and the
+    // image's `nothing` replaced it above. Point the root task's fields at the
+    // image's one. The walk is over the layout so it does not depend on the field
+    // list; no other thread exists yet, so plain stores are fine.
+    if (!s.incremental && init_nothing != jl_nothing) {
+        jl_value_t *root = (jl_value_t*)s.ptls->root_task;
+        const jl_datatype_layout_t *task_layout = jl_task_type->layout;
+        for (size_t i = 0; i < task_layout->npointers; i++) {
+            jl_value_t **slot = &((jl_value_t**)root)[jl_ptr_offset(jl_task_type, i)];
+            if (*slot == init_nothing)
+                jl_gc_write(root, *slot, jl_value_t, jl_nothing);
+        }
+    }
     if (s.incremental) {
         jl_read_arraylist(s.relocs, &s.uniquing_types);
         jl_read_arraylist(s.relocs, &s.uniquing_objs);
