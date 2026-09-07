@@ -112,6 +112,108 @@ end
     x17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(0xffff_ffff))
     @test Core.Intrinsics.zext_int(UInt32, x17) === 0x0001_ffff
 
+    # Memory operations use the byte-rounded storage width.
+    load17(p::Ptr{TestUInt17}) = unsafe_load(p)
+    store17(p::Ptr{TestUInt17}, x::TestUInt17) = unsafe_store!(p, x)
+    load_boxed17(x::Any) = Core.Intrinsics.zext_int(UInt32, x::TestUInt17)
+    bitcast17(x::Any) = Core.Intrinsics.bitcast(TestInt17, x::TestUInt17)
+    load_tuple17(x::Any) = x::Tuple{TestUInt17,TestUInt17}
+    # Under Revise these `code_llvm` queries can fail in InteractiveUtils'
+    # reflective inference path before reaching the odd-bit lowering.
+    if !isdefined(Main, :Revise)
+        load_ir = sprint(io -> code_llvm(io, load17, Tuple{Ptr{TestUInt17}};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", load_ir)
+        @test occursin(r"\btrunc i24\b", load_ir)
+        boxed_ir = sprint(io -> code_llvm(io, load_boxed17, Tuple{Any};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", boxed_ir)
+        @test occursin(r"\btrunc i24\b", boxed_ir)
+        store_ir = sprint(io -> code_llvm(io, store17,
+            Tuple{Ptr{TestUInt17}, TestUInt17}; debuginfo=:none, optimize=false))
+        @test occursin(r"\bzext i17\b.*\bto i24\b", store_ir)
+        @test occursin(r"\bstore i24\b", store_ir)
+        bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", bitcast_ir)
+        # Aggregate elements widen elementwise, not just bare primitives. On
+        # 32-bit targets the tuple is returned through sret as a single memcpy
+        # instead, which never materializes the elements.
+        if Sys.WORD_SIZE == 64
+            tuple_ir = sprint(io -> code_llvm(io, load_tuple17, Tuple{Any};
+                debuginfo=:none, optimize=false))
+            @test occursin(r"\bload \[2 x i24\]", tuple_ir)
+            @test occursin(r"\btrunc i24\b", tuple_ir)
+        end
+    end
+
+    # Round-trips through mutable fields, Memory, and field-modification
+    # builtins (the non-atomic typed_store paths in codegen).
+    mutable struct Mut17
+        x::TestUInt17
+    end
+    u17(x) = Core.Intrinsics.trunc_int(TestUInt17, UInt32(x))
+    let m = Mut17(u17(5))
+        setfield!(m, :x, u17(6))
+        @test getfield(m, :x) === u17(6)
+        @test swapfield!(m, :x, u17(7)) === u17(6)
+        @test getfield(m, :x) === u17(7)
+        let r = replacefield!(m, :x, u17(7), u17(8))
+            @test r.success && r.old === u17(7)
+        end
+        @test getfield(m, :x) === u17(8)
+        @test modifyfield!(m, :x, (a, b) -> b, u17(9)).second === u17(9)
+        @test getfield(m, :x) === u17(9)
+    end
+    let mem = Memory{TestUInt17}(undef, 3)
+        for i = 1:3
+            mem[i] = u17(0x1fff0 + i)
+        end
+        @test mem[1] === u17(0x1fff1) && mem[3] === u17(0x1fff3)
+    end
+    let t = (u17(1), u17(0x1ffff))
+        @test t[1] === u17(1) && t[2] === u17(0x1ffff)
+        @test Ref{Any}(t)[] === t
+    end
+
+    # Bits above the logical width belong to nobody: a load must drop them,
+    # even when the memory was written by something other than codegen.
+    let dirty = fill(0xff, 8)
+        GC.@preserve dirty begin
+            p = Ptr{TestUInt17}(pointer(dirty))
+            @test Core.Intrinsics.zext_int(UInt32, unsafe_load(p)) === 0x0001_ffff
+            @test unsafe_load(Ptr{Tuple{TestUInt17,TestUInt17}}(p)) ===
+                (u17(0x1ffff), u17(0x1ffff))
+        end
+    end
+    for (T, mask) in ((TestUInt5, 0x1f), (TestUInt17, 0x0001_ffff),
+                      (TestUInt24, 0x00ff_ffff), (TestUInt40, 0x0000_00ff_ffff_ffff),
+                      (TestUInt63, 0x7fff_ffff_ffff_ffff))
+        dirty = fill(0xff, sizeof(T))
+        v = GC.@preserve dirty ccall(:jl_new_bits, Any, (Any, Ptr{Cvoid}), T, pointer(dirty))
+        @test Core.Intrinsics.zext_int(UInt64, v::T) == mask
+        @test v::T === Core.Intrinsics.trunc_int(T, typemax(UInt64))
+    end
+
+    # A 1-bit primitive is not a Bool: boxing must keep its own type.
+    primitive type TestUInt1 1 end
+    box1(n::UInt8) = Ref{Any}(Core.Intrinsics.trunc_int(TestUInt1, n))[]
+    let one = Ref(0x01)[], zero = Ref(0x00)[]
+        @test box1(one) isa TestUInt1
+        @test box1(one) === Core.Intrinsics.trunc_int(TestUInt1, one)
+        @test box1(one) !== box1(zero)
+    end
+    # Bool keeps boxing to the `jl_true`/`jl_false` singletons, which `===` on
+    # Bool depends on (`jl_pointer_egal`); `===` alone compares by value here,
+    # so check the address. Both boxing paths: plain and via a union.
+    addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+    boxbool(b::Bool) = Ref{Any}(b)[]
+    boxboolunion(x::Union{Bool,Int}) = Ref{Any}(x)[]
+    let t = Ref(true)[], f = Ref(false)[]
+        @test addr(boxbool(t)) === addr(true) && addr(boxbool(f)) === addr(false)
+        @test addr(boxboolunion(t)) === addr(true) && addr(boxboolunion(f)) === addr(false)
+    end
+
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
 

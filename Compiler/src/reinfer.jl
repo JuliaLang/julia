@@ -390,16 +390,6 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
     end
 end
 
-# fast-path dispatch_status bit definitions (false indicates unknown)
-# true indicates this method would be returned as the result from `which` when invoking `method.sig` in the current latest world
-const METHOD_SIG_LATEST_WHICH = 0x1
-# true indicates this method would be returned as the only result from `methods` when calling `method_instance.specTypes` in the current latest world
-# it is equivalently tracked as `isempty(interferences)` on a `method`
-const METHOD_SIG_LATEST_ONLY = 0x2
-# true indicates this method is not strictly morespecific than any method it intersects
-# (equivalently, that this method is not in the interference set of any other method without also being in this methods interference set too).
-const METHOD_SIG_NO_LOSERS = 0x4
-
 function get_method_from_edge(@nospecialize t)
     if t isa Method
         return t
@@ -413,69 +403,13 @@ function get_method_from_edge(@nospecialize t)
     end
 end
 
-# The MethodInstance behind an edge, or `nothing` for a bare Method edge
-function get_mi_from_edge(@nospecialize t)
-    t isa Method && return nothing
-    t isa CodeInstance && return get_ci_mi(t)::MethodInstance
-    return t::MethodInstance
-end
-
-# The single expected match provably dominates the queried signature, so the result of
-# `ml_matches` is already known to be just this method (only valid when `fully_covers`)
-function expected_dominates_sig(meth::Method, mi::Union{Nothing,MethodInstance})
-    if mi !== nothing && !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
-        return true # the sole match for `mi.specTypes`
-    end
-    # an empty interference set is the Method-level equivalent of
-    # METHOD_SIG_LATEST_ONLY: the method beats everything it intersects
-    return isempty(meth.interferences)
-end
-
-# Iterate the methods of an expected-match run `expecteds[i:i+n-1]`, resolving each
-# edge (Method, MethodInstance or CodeInstance) to its Method.
-struct EachExpected
-    expecteds::Core.SimpleVector
-    i::Int
-    n::Int
-end
-eachexpected(expecteds::Core.SimpleVector, i::Int, n::Int) = EachExpected(expecteds, i, n)
-function Base.iterate(ee::EachExpected, j::Int=1)
-    j > ee.n && return nothing
-    return get_method_from_edge(ee.expecteds[ee.i+j-1]), j + 1
-end
-
-# Check if `m` is one of the expected methods of this run
-function method_in_expecteds(m::Method, expecteds::Core.SimpleVector, i::Int, n::Int)
-    for meth in eachexpected(expecteds, i, n)
-        if m === meth
-            return true
-        end
-    end
-    return false
-end
-
-# Iterate a method's `interferences` set. The set is an idset used append-only,
-# in method-definition order. Iteration therefore stops at the first
-# unassigned slot and, given a world cutoff, at the first entry defined in a
-# future world (which hides all later ones too).
-struct EachInterference
-    interferences::Memory{Any}
-    cutoff::UInt # typemax(UInt) means no world cutoff
-end
-eachinterference(m::Method, cutoff::UInt=typemax(UInt)) = EachInterference(m.interferences, cutoff)
-function Base.iterate(ei::EachInterference, k::Int=1)
-    interferences = ei.interferences
-    k > length(interferences) && return nothing
-    isassigned(interferences, k) || return nothing # no more entries
-    interference_method = interferences[k]::Method
-    ei.cutoff < interference_method.primary_world && return nothing # this and later entries are for a future world
-    return interference_method, k + 1
-end
-
 # Check if method2 is in method1's interferences set
 # Returns true if method2 is found (meaning !morespecific(method1, method2))
 function method_in_interferences(method2::Method, method1::Method)
-    for interference_method in eachinterference(method1)
+    interferences = method1.interferences
+    for k = 1:length(interferences)
+        isassigned(interferences, k) || break
+        interference_method = interferences[k]::Method
         if interference_method === method2
             return true
         end
@@ -484,152 +418,67 @@ function method_in_interferences(method2::Method, method1::Method)
 end
 
 # Check if method1 is more specific than method2 via the interference graph
-# equivalent to: morespecific(method1, method2) && typeintersect(method1.sig, method2.sig) !== Union{}
-function method_morespecific_recorded(method1::Method, method2::Method)
-    method1 === method2 && return false
-    return method_in_interferences(method1, method2) && !method_in_interferences(method2, method1)
-end
+function method_morespecific_via_interferences(method1::Method, method2::Method)
+    if method1 === method2
+        return false
+    end
 
-# The fast-path `dispatch_status` bit is set: `which` would return this method when
-# invoking `method.sig` in the current latest world. False indicates unknown, so callers
-# must treat a false result as conservatively as an actually deleted method.
-method_is_latest_which(m::Method) = !iszero(m.dispatch_status & METHOD_SIG_LATEST_WHICH)
+    # Check direct interferences first
+    if method_in_interferences(method2, method1)
+        return false
+    end
+    if method_in_interferences(method1, method2)
+        return true
+    end
+
+    visited = Method[]
+    push!(visited, method2)
+
+    workqueue = Method[method2]
+    while !isempty(workqueue)
+        current = pop!(workqueue)
+        interferences = current.interferences
+        for k = 1:length(interferences)
+            isassigned(interferences, k) || break
+            method3 = interferences[k]::Method
+
+            # Check if we're already visiting this interference method (cycle prevention and memoization)
+            method3 in visited && continue
+            push!(visited, method3)
+
+            if method_in_interferences(current, method3)
+                continue # only follow edges to morespecific methods in search of the morespecific target (skip ambiguities)
+            end
+
+            # Check direct interferences for this interference method
+            if method_in_interferences(method3, method1)
+                continue # return false for this path
+            end
+            if method_in_interferences(method1, method3)
+                return true # found method1 in the interference graph
+            end
+
+            push!(workqueue, method3)
+        end
+    end
+
+    # slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
+    return false
+end
 
 # Max interference-set size for which n==1 uses the interference fast path instead of
 # `ml_matches`: the scan probes every member with `typeintersect`, so above this size the
 # pruned `ml_matches` lookup is cheaper (~8 is the empirical crossover).
 const VERIFY_INTERF_CAP = 8
 
-# The unexpected `interference_method` (the new method), recorded in expected method
-# `meth`'s interference set, intersects the queried `sig` over the nonempty `ti`. Decide
-# whether the sort provably removes it: acceptance implies the full `ml_matches`
-# lookup would return exactly the expected methods `expecteds[i:i+n-1]` with no ambiguity
-# flag caused by the new method. Returns `false` conservative when a full lookup is
-# necessary to decide.
-#
-# Accepting stays conservative even though the caller only ever offers up the unexpected
-# methods recorded in the expected methods' own sets, because that scan witnesses every
-# visible change:
-#  - fully_covers means every method intersecting sig intersects some expected pointwise;
-#  - methods invisible to it (strictly less-specific than every expected they intersect,
-#    hence in no expected's set) always removed silently: the union of their intersecting
-#    expecteds covers them, and a failing blocker transfer would need a blocker that beats
-#    an expected cover -- which recording makes visible;
-#  - any cycle that could flag or change the result must thread an expected, entering through
-#    a visible interference method strictly morespecific than it -- an entry of that scan,
-#    which is either rejected by the conditions below or by `morespecific_cannot_cycle`,
-#    are provably not on any cycle.
-function newmethod_removed_silently(meth::Method, interference_method::Method, @nospecialize(ti), @nospecialize(sig),
-                                  expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
-    # the caller's scan supplies `interference_method ∈ meth`'s set, so this single probe
-    # decides `method_morespecific_recorded(interference_method, meth)`: found means the
-    # two are mutually ambiguous, absent means the new method strictly beats `meth`
-    if method_in_interferences(meth, interference_method)
-        expected_is_minmax(meth, interference_method, sig, expecteds, i, n) || return false
-    end
-    # Either way, the drop needs a certifying cover. This cheap search is the common
-    # bail, so it runs before the morespecific list scan (each probe of which is a linear set
-    # scan of its own).
-    has_empty_set_cover(interference_method, ti, expecteds, i, n) || return false
-    return morespecific_cannot_cycle(interference_method, world)
-end
-
-# The mutually ambiguous case of `newmethod_removed_silently`, where `meth` (the owner of
-# the interference set being scanned) is neither more nor less specific than the new method `interference_method`,
-# its ambiguity partner. This is the canonical `Type{Union{}}`-slurp recovery shape --
-# f(::Type{<:A}) and f(::Type{<:B}) overlap only at the corner the slurp resolves -- so it
-# must stay on the fast path. The fresh sort keeps the pair silent only through the minmax
-# exemption: the sort pre-marks the minmax match finalized and never visits it, so its
-# `check_fully_ambiguous` scan (which would flag any mutual partner still in the raw match
-# list, dropped or not) never runs. Certify set-locally that `meth` is that minmax:
-#  - `meth` must fully cover sig (a visited owner always flags the pair, since the partner
-#    intersects sig and so sits in the raw match list);
-#  - the partner must NOT fully cover sig: minmax discovery runs over the raw list before
-#    any drop, so a fully-covering mutual partner disqualifies `meth` there even though it
-#    is later removed;
-#  - `meth` must recorded-beat every other fully-covering expected (minmax is unique:
-#    recorded strict-beat is antisymmetric, and this check also rejects the owner of any
-#    second mutual pair);
-#  - a fully-covering new method that `meth` does not beat would steal minmax, but needs no
-#    check here: it is itself a visible entry of `meth`'s set, and its own certification
-#    fails -- as a mutual entry by the partner-covers-sig condition above, and as a strict
-#    morespecific choice because its empty-set cover would have to fully cover sig, and an expected with
-#    those properties would have dropped `meth` from the recorded result in the first place.
-# The drop of the partner and its blocker-transfer obligations are then certified by the
-# caller's two remaining conditions, exactly as for a strictly morespecific method: an empty-set
-# cover's transfers are all automatic (nothing is morespecific than it, and it patches any transfer
-# region inside its signature), and the morespecific scan of expected ensures the partner is not
-# tangled in a specificity cycle.
-function expected_is_minmax(meth::Method, interference_method::Method, @nospecialize(sig),
-                            expecteds::Core.SimpleVector, i::Int, n::Int)
-    sig <: meth.sig || return false                 # `meth` fully covers sig
-    sig <: interference_method.sig && return false  # its partner does not
-    for meth2 in eachexpected(expecteds, i, n)      # and `meth` beats every other full cover
-        meth2 === meth && continue
-        if sig <: meth2.sig && !method_morespecific_recorded(meth, meth2)
-            return false
-        end
-    end
-    return true
-end
-
-# Look for an expected method that covers the removed `interference_method` over their
-# intersection `ti` and provably certifies the removal as silent: only an expected with an
-# empty interference set qualifies, since such a method beats everything it intersects, so:
-#  - nothing beats or ties it, so it can never sit in a specificity cycle and always
-#    finalizes before the sort needs it as a cover;
-#  - every blocker transfer through it passes automatically;
-#  - being recorded in the set of every method it intersects, it patches any
-#    blocker-transfer region inside its signature for the other drops too.
-# The `Union{}` bottom-slurp methods are exactly this shape, keeping verification fast when
-# a later-added method intersects sig only at the `Type{Union{}}` corner they resolve. Any
-# other unexpected entry is left to the full lookup (the sort's dominance-transfer
-# protocol): anything weaker re-opens the cycle counterexamples, where a cover tangled in a
-# specificity cycle certifies a drop it must not.
-function has_empty_set_cover(interference_method::Method, @nospecialize(ti),
-                             expecteds::Core.SimpleVector, i::Int, n::Int)
-    for meth2 in eachexpected(expecteds, i, n)
-        # the emptiness test is the O(1) bail, and also makes the second half of
-        # `method_morespecific_recorded` a scan of the empty set
-        if isempty(meth2.interferences) &&
-            method_morespecific_recorded(meth2, interference_method) &&
-            ti <: meth2.sig
-            return true
-        end
-    end
-    return false
-end
-
-# Require every strictly morespecific method of the removed `interference_method` to have an empty
-# interference set itself: like the cover found by `has_empty_set_cover`, such a method
-# cannot continue a specificity cycle. This is the condition the last bullet above
-# `newmethod_removed_silently` relies on to keep an acceptance conservative.
-#
-# Without it, a cycle through invisible methods could encounter the less-specific expected behind
-# the caller's scan's back (dragging it into an SCC mid-sort, where it stops covering the
-# invisible members and they survive into the result): detecting that re-entry edge
-# directly would mean intersecting `interference_method`'s own set against sig -- the full
-# lookup's price.
-function morespecific_cannot_cycle(interference_method::Method, world::UInt)
-    for msp in eachinterference(interference_method, world)
-        # the iteration supplies `msp ∈ interference_method`'s set, which is the first
-        # half of `method_morespecific_recorded(msp, interference_method)`, so this only
-        # needs to now check the second half
-        if !isempty(msp.interferences) &&
-            !method_in_interferences(interference_method, msp)
-            # a strict morespecific method that could itself sit on a cycle
-            return false
-        end
-    end
-    return true
-end
-
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, matches::Vector{Any})
     # verify that these edges intersect with the same methods as before
     mi = nothing
     expected_deleted = false
-    for meth in eachexpected(expecteds, i, n)
-        if !method_is_latest_which(meth)
+    for j = 1:n
+        t = expecteds[i+j-1]
+        meth = get_method_from_edge(t)
+        if iszero(meth.dispatch_status & METHOD_SIG_LATEST_WHICH)
             expected_deleted = true
             break
         end
@@ -642,13 +491,28 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         if n == 1
             # first, fast-path a check if the expected method simply dominates its sig anyways
             # so the result of ml_matches is already simply known
-            let t = expecteds[i], meth = get_method_from_edge(t), minworld
-                mi = get_mi_from_edge(t) # also recorded for `jl_promote_mi_to_current` below
+            let t = expecteds[i], meth, minworld, maxworld
+                meth = get_method_from_edge(t)
+                if !(t isa Method)
+                    if t isa CodeInstance
+                        mi = get_ci_mi(t)::MethodInstance
+                    else
+                        mi = t::MethodInstance
+                    end
+                    # Fast path is legal when fully_covers=true
+                    if fully_covers && !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                        minworld = meth.primary_world
+                        @assert minworld ≤ world "expected method not present in verification world"
+                        maxworld = typemax(UInt)
+                        return minworld, maxworld
+                    end
+                end
                 # Fast path is legal when fully_covers=true
-                if fully_covers && expected_dominates_sig(meth, mi)
+                if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
                     minworld = meth.primary_world
                     @assert minworld ≤ world "expected method not present in verification world"
-                    return minworld, typemax(UInt)
+                    maxworld = typemax(UInt)
+                    return minworld, maxworld
                 end
             end
         end
@@ -668,32 +532,41 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         # If it didn't fail yet, then check that all interference methods are either expected, or not applicable.
         if interference_fast_path_success
             local interference_minworld::UInt = 1
-            for meth in eachexpected(expecteds, i, n)
+            for j = 1:n
+                meth = get_method_from_edge(expecteds[i+j-1])
                 if interference_minworld < meth.primary_world
                     interference_minworld = meth.primary_world
                 end
-                # manual `eachinterference(meth, world)`: the deleted-entry check
-                # below runs before the world cutoff, so a deleted future-world
-                # entry conservatively fails the fast path instead of being hidden
                 interferences = meth.interferences
                 for k = 1:length(interferences)
                     isassigned(interferences, k) || break # no more entries
                     interference_method = interferences[k]::Method
-                    if !method_is_latest_which(interference_method)
+                    if iszero(interference_method.dispatch_status & METHOD_SIG_LATEST_WHICH)
                         # detected a deleted interference_method, so need the full lookup to compute minworld
                         interference_fast_path_success = false
                         break
                     end
                     world < interference_method.primary_world && break # this and later entries are for a future world
-                    if !method_in_expecteds(interference_method, expecteds, i, n)
+                    local found_in_expecteds = false
+                    for j = 1:n
+                        if interference_method === get_method_from_edge(expecteds[i+j-1])
+                            found_in_expecteds = true
+                            break
+                        end
+                    end
+                    if !found_in_expecteds
                         ti = typeintersect(sig, interference_method.sig)
                         if !(ti === Union{})
-                            # An unexpected method intersecting sig can change more than the
-                            # match set: even when an expected method fully covers it (so the
-                            # sorted result below would compare equal), it can make `ml_matches`
-                            # flag an ambiguity -- a mutual pair or a specificity cycle with a
-                            # reported match -- which must invalidate below.
-                            if !newmethod_removed_silently(meth, interference_method, ti, sig, expecteds, i, n, world)
+                            # try looking for a different expected method that fully covers this interference_method anyways over their intersection
+                            for j = 1:n
+                                meth2 = get_method_from_edge(expecteds[i+j-1])
+                                if method_morespecific_via_interferences(meth2, interference_method) && ti <: meth2.sig
+                                    found_in_expecteds = true
+                                    break
+                                end
+                            end
+                            if !found_in_expecteds
+                                meth2 = get_method_from_edge(expecteds[i])
                                 interference_fast_path_success = false
                                 break
                             end
@@ -707,7 +580,8 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
             if interference_fast_path_success
                 # All interference sets are covered by expecteds, can return success
                 @assert interference_minworld ≤ world "expected method not present in verification world"
-                return interference_minworld, typemax(UInt)
+                maxworld = typemax(UInt)
+                return interference_minworld, maxworld
             end
         end
    end
@@ -721,15 +595,6 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         empty!(matches)
         maxworld[] = 0
     else
-        # A method added after this edge was recorded can be ambiguous with an expected
-        # match without changing this include_ambiguous=false result: the new method is
-        # removed when an expected match fully covers their overlap, yet dispatch in the
-        # contested region now throws a MethodError that inference never accounted for.
-        # Until edges record that inference itself saw an ambiguity
-        # (JuliaLang/julia#62322), any ambiguity over sig must invalidate.
-        if has_ambig[] != 0
-            maxworld[] = 0
-        end
         # setdiff!(result, expected)
         if length(result) ≠ n
             maxworld[] = 0
@@ -737,7 +602,15 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         ins = 0
         for k = 1:length(result)
             match = result[k]::Core.MethodMatch
-            if !method_in_expecteds(match.method, expecteds, i, n)
+            local found = false
+            for j = 1:n
+                t = expecteds[i+j-1]
+                if match.method == get_method_from_edge(t)
+                    found = true
+                    break
+                end
+            end
+            if !found
                 # intersection has a new method or a method was
                 # deleted--this is now probably no good, just invalidate
                 # everything about it now
@@ -760,11 +633,17 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     return minworld[], maxworld[]
 end
 
+# fast-path dispatch_status bit definitions (false indicates unknown)
+# true indicates this method would be returned as the result from `which` when invoking `method.sig` in the current latest world
+const METHOD_SIG_LATEST_WHICH = 0x1
+# true indicates this method would be returned as the only result from `methods` when calling `method.sig` in the current latest world
+const METHOD_SIG_LATEST_ONLY = 0x2
+
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any})
     @assert invokesig isa Type "corrupt edges list"
     local minworld::UInt, maxworld::UInt
     empty!(matches)
-    if invokesig === expected.sig && method_is_latest_which(expected)
+    if invokesig === expected.sig && !iszero(expected.dispatch_status & METHOD_SIG_LATEST_WHICH)
         # the invoke match is `expected` for `expected->sig`, unless `expected` is replaced
         minworld = expected.primary_world
         @assert minworld ≤ world "expected method not present in verification world"

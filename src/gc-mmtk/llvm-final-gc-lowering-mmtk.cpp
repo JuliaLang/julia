@@ -98,12 +98,19 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
                 builder.SetInsertPoint(fastpath);
                 builder.CreateStore(new_cursor, cursor_ptr);
 
-                // ptls->gc_tls.gc_num.allocd += osize;
+                // ptls->gc_tls_common.gc_num.allocd += osize;
                 auto pool_alloc_pos = ConstantInt::get(Type::getInt64Ty(target->getContext()), offsetof(jl_tls_states_t, gc_tls_common) + offsetof(jl_gc_tls_states_common_t, gc_num));
                 auto pool_alloc_tls = builder.CreateInBoundsGEP(Type::getInt8Ty(target->getContext()), ptls, pool_alloc_pos);
                 auto pool_allocd = builder.CreateAlignedLoad(Type::getInt64Ty(target->getContext()), pool_alloc_tls, Align(sizeof(void *)));
                 auto pool_allocd_total = builder.CreateAdd(pool_allocd, pool_osize);
                 builder.CreateStore(pool_allocd_total, pool_alloc_tls);
+
+                // ptls->gc_tls_common.gc_num.poolalloc++;
+                auto pool_count_pos = ConstantInt::get(Type::getInt64Ty(target->getContext()), offsetof(jl_tls_states_t, gc_tls_common) + offsetof(jl_gc_tls_states_common_t, gc_num) + offsetof(jl_thread_gc_num_common_t, poolalloc));
+                auto pool_count_tls = builder.CreateInBoundsGEP(Type::getInt8Ty(target->getContext()), ptls, pool_count_pos);
+                auto pool_count = builder.CreateAlignedLoad(Type::getInt64Ty(target->getContext()), pool_count_tls, Align(sizeof(void *)));
+                auto pool_count_total = builder.CreateAdd(pool_count, ConstantInt::get(Type::getInt64Ty(target->getContext()), 1));
+                builder.CreateStore(pool_count_total, pool_count_tls);
 
                 auto v_raw = builder.CreateNSWAdd(result, ConstantInt::get(Type::getInt64Ty(target->getContext()), sizeof(jl_taggedvalue_t)));
                 auto v_as_ptr = builder.CreateIntToPtr(v_raw, smallAllocFunc->getReturnType());

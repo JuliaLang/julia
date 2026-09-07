@@ -76,34 +76,11 @@ CG_LLVMLINK :=
 ifeq ($(JULIACODEGEN),LLVM)
 # Currently these files are used by both GCs. But we should make the list specific to stock, and MMTk should have its own implementation.
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
-# paths of the GC codegen sources relative to $(SRCDIR), for CODEGEN_SRCS_HASH
-GC_CODEGEN_SRCS_HASH := $(GC_CODEGEN_SRCS:%=%.cpp)
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
-GC_CODEGEN_SRCS_HASH += gc-mmtk/llvm-final-gc-lowering-mmtk.cpp
 else
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
-GC_CODEGEN_SRCS_HASH += llvm-final-gc-lowering-stock.cpp
 endif
-# Every file whose contents can change codegen output, used to invalidate the
-# objcache when codegen changes (see objcache.cpp).  The hash is computed per
-# file and does not follow #includes, so the sources that are #included into the
-# codegen translation units (the abi_*.cpp and the llvm-julia-passes.inc pass
-# list) and the codegen headers must be listed explicitly.
-CODEGEN_SRCS_HASH := codegen.cpp jitlayers.cpp aotcompile.cpp debuginfo.cpp disasm.cpp llvm-simdloop.cpp \
-	llvm-pass-helpers.cpp llvm-ptls.cpp llvm-propagate-addrspaces.cpp \
-	llvm-multiversioning.cpp llvm-alloc-opt.cpp llvm-alloc-helpers.cpp cgmemmgr.cpp llvm-remove-addrspaces.cpp \
-	llvm-remove-ni.cpp llvm-julia-licm.cpp llvm-demote-float16.cpp llvm-cpufeatures.cpp llvm-expand-atomic-modify.cpp \
-	llvm-cancellation-lowering.cpp \
-	pipeline.cpp llvm_api.cpp \
-	cgutils.cpp intrinsics.cpp ccall.cpp \
-	abi_llvm.cpp abi_arm.cpp abi_aarch64.cpp abi_riscv.cpp abi_ppc64le.cpp abi_win32.cpp abi_win64.cpp abi_x86_64.cpp abi_x86.cpp \
-	llvm-julia-passes.inc \
-	debug-registry.h debuginfo.h intrinsics.h jitlayers.h julia-task-dispatcher.h \
-	llvm-alloc-helpers.h llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-pass-helpers.h \
-	llvm-version.h passes.h \
-	julia.h julia_threads.h julia_internal.h julia_fasttls.h \
-	$(GC_CODEGEN_SRCS_HASH)
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
@@ -111,6 +88,11 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-cancellation-lowering \
 	pipeline llvm_api objcache \
 	$(GC_CODEGEN_SRCS)
+# translation units of $(CODEGEN_SRCS), except objcache, which includes the hash
+CODEGEN_SRCS_HASH := $(patsubst %,$(SRCDIR)/%.cpp,$(filter-out objcache llvm-final-gc-lowering-mmtk,$(CODEGEN_SRCS)))
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+CODEGEN_SRCS_HASH += $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp
+endif
 FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -361,8 +343,24 @@ ifeq ($(SHA256SUM),)
 SHA256SUM := shasum -a 256
 endif
 
-$(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH:%=$(SRCDIR)/%)
-	cat $^ | $(SHA256SUM) | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
+# Hash of the preprocessed codegen sources, used to invalidate the objcache when
+# codegen changes (see objcache.cpp).  Preprocessing follows #includes and
+# applies the build configuration, so anything that can change the code
+# libjulia-codegen emits (its sources, headers, the LLVM headers, -D flags such
+# as USE_TRACY, and sanitizers) changes the hash.  The release flags are used
+# for the debug library too, so both share cache entries; the debug-only
+# differences in emitted code (stack protector) are part of the module.
+# The preprocessor also writes the list of files it read to $@.d, so the hash is
+# regenerated when any of them changes.
+$(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH) $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@rm -f $@.i $@.d
+	@$(call PRINT_CC, for f in $(CODEGEN_SRCS_HASH); do \
+	    $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -E -P -MD -MP -MT $@ -MF $@.d.tmp $$f >> $@.i || exit 1; \
+	    cat $@.d.tmp >> $@.d; \
+	done)
+	@$(SHA256SUM) < $@.i | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
+	@rm -f $@.i $@.d.tmp
+-include $(BUILDDIR)/jl_codegen_hash.inc.d
 
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
@@ -651,7 +649,7 @@ libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
 # set the exports for the source files based on where they are getting linked
 $(OBJS) $(DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
-$(CODEGEN_OBJS) $(CODEGEN_DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
+$(CODEGEN_OBJS) $(CODEGEN_DOBJS) $(BUILDDIR)/jl_codegen_hash.inc: FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
 $(STATIC_OBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DJL_LIBRARY_STATIC
 # set the exports for the source files based on where they are getting linked
 $(addprefix clang-sa-,$(SRCS)) \
