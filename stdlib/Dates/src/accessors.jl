@@ -135,12 +135,12 @@ value(dt::TimeType) = dt.instant.periods.value
 value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
-days(dt::Timestamp) = fld(value(dt), NS_PER_DAY) + UNIXEPOCHDAYS
+days(dt::Timestamp{P}) where {P} = fld(value(dt), timestamp_ticks_per_day(P)) + UNIXEPOCHDAYS
 # time-of-day part of an instant; the unix epoch is midnight-aligned, so
 # fld/mod day arithmetic on Timestamp values works exactly as it does for the
 # Rata Die-anchored DateTime values
 msofday(dt::DateTime) = mod(value(dt), 86400000)
-nsofday(dt::Timestamp) = mod(value(dt), NS_PER_DAY)
+nsofday(dt::Timestamp{P}) where {P} = mod(value(dt), timestamp_ticks_per_day(P)) * timestamp_scale(P)
 year(dt::TimeType) = year(days(dt))
 quarter(dt::TimeType) = quarter(days(dt))
 month(dt::TimeType) = month(days(dt))
@@ -156,12 +156,15 @@ second(t::Time) = mod(fld(value(t), 1000000000), Int64(60))
 millisecond(t::Time) = mod(fld(value(t), Int64(1000000)), Int64(1000))
 microsecond(t::Time) = mod(fld(value(t), Int64(1000)), Int64(1000))
 nanosecond(t::Time) = mod(value(t), Int64(1000))
-hour(dt::Timestamp)   = mod(fld(value(dt), 3600000000000), Int64(24))
-minute(dt::Timestamp) = mod(fld(value(dt), 60000000000), Int64(60))
-second(dt::Timestamp) = mod(fld(value(dt), 1000000000), Int64(60))
-millisecond(dt::Timestamp) = mod(fld(value(dt), Int64(1000000)), Int64(1000))
-microsecond(dt::Timestamp) = mod(fld(value(dt), Int64(1000)), Int64(1000))
-nanosecond(dt::Timestamp) = mod(value(dt), Int64(1000))
+@inline timestamp_part(dt::Timestamp{P}, unit, modulus) where {P} =
+    unit < timestamp_scale(P) ? Int64(0) :
+    mod(fld(value(dt), unit ÷ timestamp_scale(P)), modulus)
+hour(dt::Timestamp) = timestamp_part(dt, 3600000000000, Int64(24))
+minute(dt::Timestamp) = timestamp_part(dt, 60000000000, Int64(60))
+second(dt::Timestamp) = timestamp_part(dt, Int64(1000000000), Int64(60))
+millisecond(dt::Timestamp) = timestamp_part(dt, Int64(1000000), Int64(1000))
+microsecond(dt::Timestamp) = timestamp_part(dt, Int64(1000), Int64(1000))
+nanosecond(dt::Timestamp) = timestamp_part(dt, Int64(1), Int64(1000))
 
 dayofmonth(dt::TimeType) = day(dt)
 

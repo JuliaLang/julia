@@ -250,8 +250,10 @@ function format(io, d::DatePart{'n'}, dt)
 end
 
 subsecond_nanoseconds(dt::DateTime) = 1000000 * millisecond(dt)
-subsecond_nanoseconds(dt::Union{Time,Timestamp}) =
+subsecond_nanoseconds(dt::Time) =
     1000000 * millisecond(dt) + 1000 * microsecond(dt) + nanosecond(dt)
+subsecond_nanoseconds(dt::Timestamp{P}) where {P} =
+    mod(value(dt), 1000000000 ÷ timestamp_scale(P)) * timestamp_scale(P)
 
 ### Delimiters
 
@@ -550,7 +552,7 @@ julia> Dates.format(Timestamp(2018, 8, 8, 12, 0, 43, 0, 0, 1), ISOTimestampForma
     `ISOTimestampFormat` requires Julia 1.14 or later.
 """
 const ISOTimestampFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.n")
-default_format(::Type{Timestamp}) = ISOTimestampFormat
+default_format(::Type{<:Timestamp}) = ISOTimestampFormat
 
 """
     Dates.ISODateFormat
@@ -744,8 +746,8 @@ julia> Timestamp("2020-01-01 00:00:00.001002003", "yyyy-mm-dd HH:MM:SS.n")
 2020-01-01T00:00:00.001002003
 ```
 """
-function Timestamp(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    return parse(Timestamp, dt, DateFormat(format, locale))
+function Timestamp{P}(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH) where {P}
+    return parse(Timestamp{P}, dt, DateFormat(format, locale))
 end
 
 """
@@ -761,7 +763,7 @@ repeatedly parsing similarly formatted date time strings with a pre-created
 !!! compat "Julia 1.14"
     `Timestamp` requires Julia 1.14 or later.
 """
-Timestamp(dt::AbstractString, df::DateFormat=ISOTimestampFormat) = parse(Timestamp, dt, df)
+Timestamp{P}(dt::AbstractString, df::DateFormat=ISOTimestampFormat) where {P} = parse(Timestamp{P}, dt, df)
 
 @generated function format(io::IO, dt::TimeType, fmt::DateFormat{<:Any,T}) where T
     N = fieldcount(T)
@@ -855,9 +857,12 @@ for date_type in (:Date, :DateTime, :Timestamp)
     @eval Base.show(io::IO, ::MIME"text/plain", dt::$date_type) = print(io, dt)
     # Parsable output (i.e. Date("2012-01-01"))
     @eval Base.show(io::IO, dt::$date_type) = print(io, typeof(dt), "(\"", dt, "\")")
-    # Parsable output will have type info displayed, thus it is implied
-    @eval Base.typeinfo_implicit(::Type{$date_type}) = true
 end
+
+# Parsable output includes the concrete type.
+Base.typeinfo_implicit(::Type{Date}) = true
+Base.typeinfo_implicit(::Type{DateTime}) = true
+Base.typeinfo_implicit(::Type{<:Timestamp}) = true
 
 # minimal Base.TOML support
 Base.TOML.Printer.printvalue(f::Function, io::IO, value::Date, sorted::Bool) =

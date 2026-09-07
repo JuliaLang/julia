@@ -134,7 +134,7 @@ end
     # promotion
     @test promote(dt, ts) isa Tuple{Timestamp, Timestamp}
     @test promote(Date(2026), Timestamp(2026)) isa Tuple{Timestamp, Timestamp}
-    @test vcat([dt], [ts]) isa Vector{Timestamp}
+    @test vcat([dt], [ts]) isa Vector{Timestamp{Nanosecond}}
 end
 
 @testset "Comparisons" begin
@@ -328,7 +328,7 @@ end
     # default ISO round trip
     @test string(ts) == "2026-08-31T13:45:30.123456789"
     @test Timestamp(string(ts)) == ts
-    @test sprint(show, ts) == "Dates.Timestamp(\"2026-08-31T13:45:30.123456789\")"
+    @test sprint(show, ts) == "Dates.Timestamp{Dates.Nanosecond}(\"2026-08-31T13:45:30.123456789\")"
     @test sprint(show, MIME("text/plain"), ts) == "2026-08-31T13:45:30.123456789"
     # trailing zeros are stripped, and stripped forms parse back
     @test string(Timestamp(2026, 8, 31)) == "2026-08-31T00:00:00"
@@ -382,11 +382,11 @@ end
 
 @testset "Data layout" begin
     ts = Timestamp(2026, 8, 31, 13, 45, 30, 123, 456, 789)
-    @test isbitstype(Timestamp)
-    @test sizeof(Timestamp) == 8
+    @test isbitstype(Timestamp{Nanosecond})
+    @test sizeof(Timestamp{Nanosecond}) == 8
     v = [ts, ts + Nanosecond(1)]
     @test reinterpret(Int64, v) == [Dates.value(ts), Dates.value(ts) + 1]
-    @test reinterpret(Timestamp, reinterpret(Int64, v)) == v
+    @test reinterpret(Timestamp{Nanosecond}, reinterpret(Int64, v)) == v
     @test hash(ts) == hash(Timestamp(Dates.UTN(Dates.value(ts))))
     @test hash(ts) != hash(ts + Nanosecond(1))
     d = Dict(ts => 1)
@@ -398,6 +398,175 @@ end
     @test mixed[Timestamp(2026, 8, 31)] == 1
     @test mixed[Timestamp(2026, 8, 31, 12)] == 2
     @test mixed[DateTime(2026, 8, 31)] == 1
+end
+
+# Exercise each resolution, including precision changes and the full Int64 range.
+@testset "Parameterized resolution" begin
+    units = (Second, Millisecond, Microsecond, Nanosecond)
+    scales = (1_000_000_000, 1_000_000, 1_000, 1)
+    for (P, scale) in zip(units, scales)
+        T = Timestamp{P}
+        x = T(2020, 2, 29, 12, 34, 56)
+        @test isbitstype(T)
+        @test sizeof(T) == 8
+        @test eps(T) === eps(x) === P(1)
+        @test zero(T) === zero(x) === P(0)
+        @test T(Hour(1)) === T(1970, 1, 1, 1)
+        @test T(Year(2020), Month(2), Day(29)) === T(2020, 2, 29)
+        @test T(Date(x), Time(x)) === x
+        @test T(DateTime(x)) === x
+        @test DateTime(x) === DateTime(2020, 2, 29, 12, 34, 56)
+        @test yearmonthday(x) == (2020, 2, 29)
+        @test (hour(x), minute(x), second(x)) == (12, 34, 56)
+        @test x + P(1) - x === P(1)
+        @test x + Day(1) === T(2020, 3, 1, 12, 34, 56)
+        @test x + Year(1) === T(2021, 2, 28, 12, 34, 56)
+        @test x + Month(1) === T(2020, 3, 29, 12, 34, 56)
+        @test x + Quarter(1) === T(2020, 5, 29, 12, 34, 56)
+        @test x + Hour(1) + Minute(30) === x + (Hour(1) + Minute(30))
+        @test floor(x, Minute) === T(2020, 2, 29, 12, 34)
+        @test ceil(x, Minute) === T(2020, 2, 29, 12, 35)
+        @test round(x, Minute) === T(2020, 2, 29, 12, 35)
+        @test floor(x, Day) === T(2020, 2, 29)
+        @test trunc(x, Month) === T(2020, 2)
+        @test firstdayofmonth(x) === T(2020, 2)
+        @test lastdayofmonth(x) === T(2020, 2, 29)
+        @test T(t -> second(t) == 2, 2020, 1, 1, 0, 0, 0) === T(2020, 1, 1, 0, 0, 2)
+        @test T(string(x)) === x
+        @test T("29/02/2020 12:34:56", "dd/mm/yyyy HH:MM:SS") === x
+        @test parse(T, string(x)) === x
+        @test tryparse(T, string(x)) === x
+        @test tryparse(T, "2020-02-30") === nothing
+        @test now(T) isa T
+        @test now(T, UTC) isa T
+        @test unix2timestamp(T, 0) === T(1970)
+        @test unix2timestamp(T, -1) === T(1969, 12, 31, 23, 59, 59)
+        @test timestamp2unix(T(1970, 1, 2)) == 86400.0
+        @test convert(T, P(-1)) === T(Dates.UTInstant(P(-1)))
+        @test convert(P, convert(T, P(-1))) === P(-1)
+        @test convert(T, T(1970)) === T(1970)
+        @test convert(Timestamp, typemax(T)) === typemax(T)
+        @test Timestamp(typemin(T)) === typemin(T)
+        @test Timestamp(typemax(T)) === typemax(T)
+        @test (@inferred Timestamp(x)) === x
+        @test Timestamp[typemax(T)][1] === typemax(T)
+        @test reinterpret(Int64, [T(1970), T(1970) + P(1)]) == [0, 1]
+        @test collect(x:P(1):(x + P(3))) == [x, x + P(1), x + P(2), x + P(3)]
+        @test collect((x + P(3)):-P(1):x) == [x + P(3), x + P(2), x + P(1), x]
+        @test length(x:Month(1):(x + Month(3))) == 4
+        @test x + P(2) in x:P(1):(x + P(3))
+        @test length((typemax(T) - P(3)):P(1):typemax(T)) == 4
+        @test_throws OverflowError length(T(1970):P(1):(T(1970) + P(typemax(Int64))))
+        @test length(T(1970):P(1):(T(1970) + P(typemax(Int64) - 1))) == typemax(Int64)
+        @test typemax(T) + P(1) === typemin(T)
+        @test typemin(T) - P(1) === typemax(T)
+        @test typemax(T) - typemin(T) === P(-1)
+        for raw in (typemin(Int64), typemin(Int64) + 1, -1, 0, 1, typemax(Int64) - 1, typemax(Int64))
+            t = T(Dates.UTInstant(P(raw)))
+            @test T(string(t)) === t
+            @test T(Date(t), Time(t)) === t
+            @test T(year(t), month(t), day(t), hour(t), minute(t), second(t),
+                    millisecond(t), microsecond(t), nanosecond(t)) === t
+            @test Int128(Dates.value(Date(t)) - Dates.value(Date(1970))) * 86400000000000 +
+                Dates.value(Time(t)) == Int128(raw) * scale
+        end
+        for Q in units
+            y = Timestamp{Q}(2020, 2, 29, 12, 34, 56)
+            @test x == y
+            @test isequal(x, y)
+            @test !isless(x, y)
+            @test hash(x) == hash(y)
+            @test Dict{Any,Int}(x => 1)[y] == 1
+            @test T(y) === x
+            @test x - y == P(0)
+        end
+        for p in (Hour(7), Minute(11), Second(17), Day(3), Month(2))
+            @test DateTime(floor(x, p)) == floor(DateTime(x), p)
+        end
+    end
+    @test Timestamp(2020) isa Timestamp{Nanosecond}
+    @test Timestamp{Second}(1) == DateTime(1)
+    @test Timestamp{Millisecond}(1) == DateTime(1)
+    @test Timestamp{Microsecond}(1) == DateTime(1)
+    @test_throws ArgumentError Timestamp{Nanosecond}(1)
+    @test_throws TypeError Timestamp{Day}
+    @test_throws TypeError Timestamp{TimePeriod}
+    for (coarse, fine) in ((Second, Millisecond), (Millisecond, Microsecond), (Microsecond, Nanosecond))
+        T, U = Timestamp{coarse}, Timestamp{fine}
+        finevalue = U(1970) + fine(1)
+        @test_throws InexactError T(finevalue)
+        @test_throws InexactError T(1970) + fine(1)
+        @test_throws ArgumentError T(string(finevalue))
+        @test tryparse(T, string(finevalue)) === nothing
+        @test T(floor(finevalue, coarse)) === T(1970)
+        @test T(ceil(finevalue, coarse)) === T(1970) + coarse(1)
+        @test_throws InexactError U(typemax(T))
+        @test_throws InexactError U(typemin(T))
+        @test typemax(T) > typemax(U)
+        @test typemin(T) < typemin(U)
+        @test promote_type(T, U) === U
+        @test promote_type(T, U) === promote_type(U, T)
+        @test promote(T(1970), finevalue) === (U(1970), finevalue)
+        @test length(T(1970):coarse(1):(T(1970) + coarse(Int64(2)^53 + 1))) == Int64(2)^53 + 2
+    end
+    @test promote_type(Timestamp{Second}, DateTime) === Timestamp{Millisecond}
+    @test_throws InexactError Timestamp{Second}(DateTime(1970, 1, 1, 0, 0, 0, 1))
+    @test_throws InexactError DateTime(typemax(Timestamp{Second}))
+    @test_throws InexactError DateTime(typemax(Timestamp{Millisecond}))
+    @test Timestamp{Second}(1970) + Day(200000) === Timestamp{Second}(Date(1970) + Day(200000))
+end
+
+# Large fixed periods wrap in timestamp ticks without overflowing through nanoseconds.
+@testset "Fixed-period arithmetic at each resolution" begin
+    for (P, scale) in zip((Second, Millisecond, Microsecond, Nanosecond), (10^9, 10^6, 10^3, 1))
+        x = Timestamp{P}(1970) + P(17)
+        for Q in (Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond)
+            for n in (typemin(Int64), -1000, 0, 1000, typemax(Int64))
+                p = Q(n)
+                ticks, remainder = divrem(big(n) * Dates.tons(oneunit(p)), scale)
+                if iszero(remainder)
+                    @test Dates.value(x + p) == mod(17 + ticks + big(2)^63, big(2)^64) - big(2)^63
+                    @test Dates.value(x - p) == mod(17 - ticks + big(2)^63, big(2)^64) - big(2)^63
+                else
+                    @test_throws InexactError x + p
+                    @test_throws InexactError x - p
+                end
+            end
+        end
+    end
+end
+
+# Rounding checks the selected result without wrapping an intermediate candidate.
+@testset "Rounding at storage limits" begin
+    for P in (Second, Millisecond, Microsecond, Nanosecond)
+        T = Timestamp{P}
+        lo, hi = typemin(T), typemax(T)
+        @test_throws InexactError floor(lo, Second(10))
+        @test_throws InexactError ceil(hi, Second(10))
+        @test lo < ceil(lo, Second(10)) < lo + Second(10)
+        @test hi - Second(10) < floor(hi, Second(10)) < hi
+        @test_throws InexactError Dates.floorceil(lo, Second(10))
+        @test_throws InexactError Dates.floorceil(hi, Second(10))
+        @test Dates.floorceil(lo, P(1)) === (lo, lo)
+        @test Dates.floorceil(hi, P(1)) === (hi, hi)
+        @test round(lo, P(1)) === lo
+        @test round(hi, P(1)) === hi
+        for Q in (Year, Quarter, Month, Week, Day)
+            @test_throws InexactError floor(lo, Q(typemax(Int64)))
+            @test_throws InexactError ceil(T(1970), Q(typemax(Int64)))
+        end
+        if P !== Nanosecond
+            for Q in (Year, Quarter, Month)
+                @test floor(T(1970), Q(typemax(Int64))) === T(0)
+                @test round(T(1970), Q(typemax(Int64))) === T(0)
+                @test ceil(lo, Q(typemax(Int64))) === T(0)
+            end
+        end
+        for Q in (Year, Quarter, Month, Week, Day, Hour, Minute, Second)
+            @test_throws DomainError floor(T(1970), Q(0))
+            @test_throws DomainError ceil(T(1970), Q(-1))
+        end
+    end
 end
 
 end

@@ -30,16 +30,23 @@ preserving its time-of-day part.
 Time(dt::AbstractDateTime) = convert(Time, dt)
 
 """
-    Timestamp(dt::TimeType)
+    Timestamp{P}(dt::TimeType)
 
-Convert a `Date` or `DateTime` to a `Timestamp`. Parts finer than the input's
-resolution are assumed to be zero. Throws an `ArgumentError` ([`InexactError`](@ref)
-for a `DateTime`) if the instant lies outside the representable `Timestamp` range.
+Convert a `Date`, `DateTime`, or `Timestamp` to `Timestamp{P}`. The instant must
+be exactly representable at resolution `P`. A precision loss or out-of-range
+`DateTime` or `Timestamp` throws an [`InexactError`](@ref); an out-of-range
+`Date` throws an `ArgumentError`.
 
 !!! compat "Julia 1.14"
     `Timestamp` requires Julia 1.14 or later.
 """
-Timestamp(dt::TimeType) = convert(Timestamp, dt)
+Timestamp{P}(dt::TimeType) where {P} = convert(Timestamp{P}, dt)
+Base.convert(::Type{Timestamp}, dt::Union{Date,DateTime}) = convert(Timestamp{Nanosecond}, dt)
+Base.convert(::Type{Timestamp}, dt::Timestamp) = dt
+Base.convert(::Type{Timestamp{P}}, dt::Timestamp{P}) where {P} = dt
+function Base.convert(::Type{Timestamp{P}}, dt::Timestamp{Q}) where {P,Q}
+    return Timestamp{P}(UTInstant(P(timestamp_ticks(P, Int128(value(dt)) * timestamp_scale(Q)))))
+end
 
 Base.convert(::Type{DateTime}, dt::Date) = DateTime(UTM(value(dt) * 86400000))
 Base.convert(::Type{Date}, dt::DateTime) = Date(UTD(days(dt)))
@@ -48,13 +55,13 @@ Base.convert(::Type{Time}, dt::DateTime) = Time(Nanosecond((value(dt) % 86400000
 # for instants outside the Timestamp range; Timestamp -> DateTime floors to the
 # millisecond (fld also rounds pre-1970 instants toward the past, matching
 # Date(::DateTime)).
-function Base.convert(::Type{Timestamp}, dt::DateTime)
-    UNIXEPOCH - typemax(Int64) ÷ 1000000 <= value(dt) <= UNIXEPOCH + typemax(Int64) ÷ 1000000 ||
-        throw(InexactError(:convert, Timestamp, dt))
-    return Timestamp(UTN((value(dt) - UNIXEPOCH) * 1000000))
+function Base.convert(::Type{Timestamp{P}}, dt::DateTime) where {P}
+    ticks = timestamp_ticks(P, (Int128(value(dt)) - UNIXEPOCH) * 1000000)
+    return Timestamp{P}(UTInstant(P(ticks)))
 end
-Base.convert(::Type{Timestamp}, dt::Date) = Timestamp(dt)
-Base.convert(::Type{DateTime}, dt::Timestamp) = DateTime(UTM(fld(value(dt), 1000000) + UNIXEPOCH))
+Base.convert(::Type{Timestamp{P}}, dt::Date) where {P} = Timestamp{P}(dt)
+Base.convert(::Type{DateTime}, dt::Timestamp{P}) where {P} =
+    DateTime(UTM(Int64(fld(Int128(value(dt)) * timestamp_scale(P), 1000000) + UNIXEPOCH)))
 Base.convert(::Type{Date}, dt::Timestamp) = Date(UTD(days(dt)))
 Base.convert(::Type{Time}, dt::Timestamp) = Time(Nanosecond(nsofday(dt)))
 
@@ -63,7 +70,12 @@ Base.convert(::Type{Millisecond},dt::DateTime) = Millisecond(value(dt))        #
 Base.convert(::Type{Date},x::Day)  = Date(Dates.UTInstant(x))  # Converts Rata Die days to a Date
 Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date to Rata Die days
 Base.convert(::Type{Timestamp},x::Nanosecond)  = Timestamp(UTInstant(x))       # Converts unix nanoseconds to a Timestamp
-Base.convert(::Type{Nanosecond},dt::Timestamp) = Nanosecond(value(dt))         # Converts Timestamp to unix nanoseconds
+# Convert the count since the Unix epoch, rather than a calendar component.
+Base.convert(::Type{P}, dt::Timestamp{Q}) where {P<:Union{Second,Millisecond,Microsecond,Nanosecond},Q} =
+    P(timestamp_ticks(P, Int128(value(dt)) * timestamp_scale(Q)))
+
+Base.convert(::Type{Timestamp{P}}, x::Q) where {P,Q<:Union{Second,Millisecond,Microsecond,Nanosecond}} =
+    Timestamp{P}(UTInstant(P(timestamp_ticks(P, Int128(value(x)) * timestamp_scale(Q)))))
 
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
@@ -97,9 +109,12 @@ datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH) / 1000.0
 
 """
     unix2timestamp(x)::Timestamp
+    unix2timestamp(Timestamp{P}, x)::Timestamp{P}
 
 Take the number of seconds since unix epoch `1970-01-01T00:00:00` (UTC) and
-convert to the corresponding `Timestamp`. Note that a [`Float64`](@ref) second
+convert to the corresponding `Timestamp`, optionally at resolution `P`.
+Fractional input is truncated toward zero to units of `P`.
+Note that a [`Float64`](@ref) second
 count near the present carries only about microsecond precision; construct a
 `Timestamp` from an integer nanosecond count
 (`convert(Timestamp, Nanosecond(ns))`) when full nanosecond precision is
@@ -108,11 +123,15 @@ required.
 !!! compat "Julia 1.14"
     This function requires Julia 1.14 or later.
 """
-unix2timestamp(x::Real) = Timestamp(UTN(trunc(Int64, Int64(1000000000) * x)))
-function unix2timestamp(x::Integer)
-    -(typemax(Int64) ÷ 1000000000) <= x <= typemax(Int64) ÷ 1000000000 ||
-        throw(InexactError(:unix2timestamp, Timestamp, x))
-    return Timestamp(UTN(Int64(x) * 1000000000))
+unix2timestamp(x::Real) = unix2timestamp(Timestamp{Nanosecond}, x)
+unix2timestamp(::Type{Timestamp}, x::Real) = unix2timestamp(Timestamp{Nanosecond}, x)
+unix2timestamp(::Type{Timestamp{P}}, x::Real) where {P} =
+    Timestamp{P}(UTInstant(P(trunc(Int64, (1000000000 ÷ timestamp_scale(P)) * x))))
+function unix2timestamp(::Type{Timestamp{P}}, x::Integer) where {P}
+    scale = 1000000000 ÷ timestamp_scale(P)
+    cld(typemin(Int64), scale) <= x <= fld(typemax(Int64), scale) ||
+        throw(InexactError(:unix2timestamp, Timestamp{P}, x))
+    return Timestamp{P}(UTInstant(P(Int64(x) * scale)))
 end
 
 """
@@ -121,12 +140,12 @@ end
 Take the given `Timestamp` and return the number of seconds since the unix
 epoch `1970-01-01T00:00:00` as a [`Float64`](@ref). Note that the returned
 value carries only about microsecond precision near the present;
-`Dates.value(dt)` is the exact count of nanoseconds since the unix epoch.
+`Dates.value(dt)` is the exact count in the timestamp's resolution since the unix epoch.
 
 !!! compat "Julia 1.14"
     This function requires Julia 1.14 or later.
 """
-timestamp2unix(dt::Timestamp) = value(dt) / 1.0e9
+timestamp2unix(dt::Timestamp{P}) where {P} = value(dt) / (1000000000 ÷ timestamp_scale(P))
 
 """
     now()::DateTime
@@ -178,32 +197,38 @@ end
 
 """
     now(::Type{Timestamp})::Timestamp
+    now(::Type{Timestamp{P}})::Timestamp{P}
 
 Return a `Timestamp` corresponding to the user's system time including the
-system timezone locale, at the full resolution of the system clock.
+system timezone locale. With a specified resolution `P`, fractional seconds
+are floored to that resolution. The default uses nanoseconds.
 
 !!! compat "Julia 1.14"
     This method requires Julia 1.14 or later.
 """
-function now(::Type{Timestamp})
+now(::Type{Timestamp}) = now(Timestamp{Nanosecond})
+function now(::Type{Timestamp{P}}) where {P}
     ts = unix_now_ns()
     tm = Libc.TmStruct(ts.sec)
-    return Timestamp(tm.year + 1900, tm.month + 1, tm.mday, tm.hour, tm.min, tm.sec,
-                     0, 0, Int64(ts.nsec))
+    return Timestamp{P}(tm.year + 1900, tm.month + 1, tm.mday, tm.hour, tm.min, tm.sec,
+                     0, 0, fld(Int64(ts.nsec), timestamp_scale(P)) * timestamp_scale(P))
 end
 
 """
     now(::Type{Timestamp}, ::Type{UTC})::Timestamp
+    now(::Type{Timestamp{P}}, ::Type{UTC})::Timestamp{P}
 
-Return a `Timestamp` corresponding to the user's system time as UTC/GMT, at the
-full resolution of the system clock.
+Return a `Timestamp` corresponding to the user's system time as UTC/GMT.
+With a specified resolution `P`, fractional seconds are floored to that
+resolution. The default uses nanoseconds.
 
 !!! compat "Julia 1.14"
     This method requires Julia 1.14 or later.
 """
-function now(::Type{Timestamp}, ::Type{UTC})
+now(::Type{Timestamp}, ::Type{UTC}) = now(Timestamp{Nanosecond}, UTC)
+function now(::Type{Timestamp{P}}, ::Type{UTC}) where {P}
     ts = unix_now_ns()
-    return Timestamp(UTN(ts.sec * 1000000000 + ts.nsec))
+    return Timestamp{P}(UTInstant(P(Int64(ts.sec * (1000000000 ÷ timestamp_scale(P)) + fld(ts.nsec, timestamp_scale(P))))))
 end
 
 """

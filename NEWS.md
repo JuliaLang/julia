@@ -242,15 +242,18 @@ Standard library changes
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
-* A new `Timestamp` type represents an instant with nanosecond precision as an `Int64` count of
-  nanoseconds since the unix epoch — the same representation as Apache Arrow's `timestamp[ns]` and
-  numpy's `datetime64[ns]` — covering the years 1677 through 2262. It supports accessors, period
+* A new `Timestamp{P}` type represents an instant as an `Int64` count since the Unix epoch,
+  with `Second`, `Millisecond`, `Microsecond`, or `Nanosecond` resolution. Plain `Timestamp(...)`
+  defaults to nanoseconds, covering the years 1677 through 2262; coarser resolutions have wider
+  ranges. Each concrete type is 8 bytes. Conversions between resolutions require exact
+  representation, and promotion selects the finer resolution. It supports accessors, period
   arithmetic, rounding, adjusters, ranges, parsing, and formatting. It compares directly with
   `Date` and `DateTime` and supports mixed arithmetic with in-range `DateTime` values ([#62994]).
 * `hash` is now consistent with `==` across `Date`, `DateTime`, and `Timestamp`, so equal instants of
   different types can be used interchangeably as dictionary keys ([#62994]).
 * A new `n` format code parses and formats fractional seconds with up to nanosecond precision
-  (`.5` is 500 milliseconds, `.123456789` is 123456789 nanoseconds). The default `Time` format now
+  (`.5` is 500 milliseconds, `.123456789` is 123456789 nanoseconds). This is a breaking
+  change for format strings using a literal `n`, which must now be escaped. The default `Time` format now
   uses it, so `Time` values with sub-millisecond parts round-trip through their printed form;
   relatedly, the nanosecond argument of the `Time` constructor may now carry a full fractional
   second (values up to 999999999) as long as the sub-second parts together stay below one second ([#62994]).
