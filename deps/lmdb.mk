@@ -10,7 +10,7 @@ $(eval $(call git-external,lmdb,LMDB,,,$(BUILDDIR)))
 LMDB_SRC_SUBDIR := libraries/liblmdb
 LMDB_BUILD_OPTS := CC="$(CC)" AR="$(AR)" prefix=$(abspath $(build_prefix))
 # -fPIC so the static archive can be linked into the libjulia-codegen shared library
-LMDB_BUILD_OPTS += XCFLAGS="$(CFLAGS) $(fPIC)"
+LMDB_BUILD_OPTS += CFLAGS="-pthread -O2 $(CFLAGS) $(fPIC)"
 # Select LMDB's robust lock backend, including SysV semaphores on Apple/BSD.
 LMDB_BUILD_OPTS += CPPFLAGS="-DMDB_USE_ROBUST=1"
 
