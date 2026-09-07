@@ -90,17 +90,70 @@ function Base.floor(t::Time, p::TimePeriod)
     return Time(Nanosecond(nanoseconds - mod(nanoseconds, value(Nanosecond(p)))))
 end
 
-Base.floor(dt::Timestamp, p::DatePeriod) = Timestamp(UTN(unixns(value(Base.floor(Date(dt), p)), 0)))
+# Keep rounding candidates wide; only the requested result must fit.
+function timestamp_rounding_value(dt::Timestamp{P}, ns, op::Symbol) where {P}
+    ticks, remainder = divrem(ns, timestamp_scale(P))
+    iszero(remainder) && typemin(Int64) <= ticks <= typemax(Int64) ||
+        throw(InexactError(op, Timestamp{P}, dt))
+    return Timestamp{P}(UTInstant(P(Int64(ticks))))
+end
 
-function Base.floor(dt::Timestamp, p::TimePeriod)
+# Ordinary calendar years use Int64 arithmetic. Large rounding intervals can
+# place a candidate outside even Date's range, so retain a wide fallback.
+@inline function timestamp_rounding_days(y, m)
+    if typemin(Int64) ÷ 366 + 1 <= y <= typemax(Int64) ÷ 366 - 1
+        return Int128(totaldays(Int64(y), Int64(m), 1))
+    end
+    return totaldays(Int128(y), m, 1)
+end
+
+@inline function timestamp_month_bounds(dt::Timestamp, months, step, upper::Bool)
+    lower = months - mod(months, step)
+    fy, fm = fldmod(lower, 12)
+    f = (timestamp_rounding_days(fy, fm + 1) - UNIXEPOCHDAYS) * NS_PER_DAY
+    upper || return f, f
+    x = Int128(value(dt)) * timestamp_scale(typeof(dt))
+    x == f && return f, f
+    cy, cm = fldmod(lower + step, 12)
+    c = (timestamp_rounding_days(cy, cm + 1) - UNIXEPOCHDAYS) * NS_PER_DAY
+    return f, c
+end
+
+@inline function timestamp_rounding_bounds(dt::Timestamp, p::Union{Year,Quarter,Month}, upper::Bool)
     value(p) < 1 && throw(DomainError(p))
-    # anchor at the rounding epoch 0000-01-01 so results agree with flooring
-    # the equivalent DateTime; that epoch is more than typemax(Int64)
-    # nanoseconds before 1970, hence the Int128 intermediate, and the result
-    # wraps back to Int64 like the rest of Timestamp arithmetic
-    epochns = Int128(UNIXEPOCHDAYS - DATEEPOCH) * NS_PER_DAY
-    nanoseconds = Int128(value(dt)) + epochns
-    return Timestamp(UTN((nanoseconds - mod(nanoseconds, value(Nanosecond(p))) - epochns) % Int64))
+    y, m = yearmonth(dt)
+    months = 12y + m - 1
+    step = Int128(value(p)) * (p isa Year ? 12 : p isa Quarter ? 3 : 1)
+    # Timestamp month counts have magnitude below 4e12. If step fits Int64,
+    # the adjacent multiples fit too; Year and Quarter can require a wider step.
+    if step <= typemax(Int64)
+        return timestamp_month_bounds(dt, months, Int64(step), upper)
+    end
+    return timestamp_month_bounds(dt, Int128(months), step, upper)
+end
+
+@inline function timestamp_rounding_bounds(dt::Timestamp, p::FixedPeriod, upper::Bool)
+    value(p) < 1 && throw(DomainError(p))
+    epoch = p isa Week ? WEEKEPOCH : DATEEPOCH
+    epochns = Int128(UNIXEPOCHDAYS - epoch) * NS_PER_DAY
+    x = Int128(value(dt)) * timestamp_scale(typeof(dt))
+    step = Int128(value(p)) * tons(oneunit(p))
+    f = x - mod(x + epochns, step)
+    return f, !upper || x == f ? f : f + step
+end
+
+Base.floor(dt::Timestamp, p::Period) =
+    timestamp_rounding_value(dt, first(timestamp_rounding_bounds(dt, p, false)), :floor)
+Base.ceil(dt::Timestamp, p::Period) =
+    timestamp_rounding_value(dt, last(timestamp_rounding_bounds(dt, p, true)), :ceil)
+function floorceil(dt::Timestamp, p::Period)
+    f, c = timestamp_rounding_bounds(dt, p, true)
+    return timestamp_rounding_value(dt, f, :floor), timestamp_rounding_value(dt, c, :ceil)
+end
+function Base.round(dt::Timestamp, p::Period, ::RoundingMode{:NearestTiesUp})
+    f, c = timestamp_rounding_bounds(dt, p, true)
+    x = Int128(value(dt)) * timestamp_scale(typeof(dt))
+    return timestamp_rounding_value(dt, x - f < c - x ? f : c, :round)
 end
 
 """

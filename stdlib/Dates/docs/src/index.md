@@ -5,8 +5,8 @@ DocTestSetup = :(using Dates)
 ```
 
 The `Dates` module provides three types for working with dates: [`Date`](@ref),
-[`DateTime`](@ref), and [`Timestamp`](@ref). They provide day, millisecond, and
-nanosecond precision, respectively. All three are subtypes of the abstract
+[`DateTime`](@ref), and [`Timestamp`](@ref). They provide day precision, millisecond precision, and
+a choice of second, millisecond, microsecond, or nanosecond precision, respectively. All three are subtypes of the abstract
 [`TimeType`](@ref).
 The motivation for distinct types is simple: some operations are much simpler, both in terms of
 code and mental reasoning, when the complexities of greater precision don't have to be dealt with.
@@ -30,15 +30,38 @@ The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is
 `0001-01-01`, and year `-0001` (yes, negative one for the year) is 2 BC/BCE, year `-0002` is 3
 BC/BCE, etc.
 
-For instants finer than a millisecond, the [`Timestamp`](@ref) type provides nanosecond
-precision. Its value is a count of nanoseconds since
-the unix epoch `1970-01-01T00:00:00`, the same representation used by nanosecond timestamps
-in Apache Arrow, numpy, and pandas — which bounds its representable range to the years 1677
-through 2262. It supports integer and period construction, accessors, arithmetic,
-rounding, adjusters, ranges, parsing, and formatting. It compares directly with
-[`DateTime`](@ref) and supports mixed arithmetic when the `DateTime` value is in
-range. Use [`DateTime`](@ref) for instants outside the [`Timestamp`](@ref) range
-or when sub-millisecond precision is not needed.
+The [`Timestamp`](@ref) family stores an `Int64` count from the Unix epoch
+`1970-01-01T00:00:00`. Choose `Timestamp{Second}`, `Timestamp{Millisecond}`,
+`Timestamp{Microsecond}`, or `Timestamp{Nanosecond}`. Plain `Timestamp(...)`
+constructs a nanosecond timestamp; `Timestamp(ts::Timestamp)` preserves its resolution.
+Each resolution supports
+construction, accessors, arithmetic, rounding, adjusters, ranges, parsing, and formatting.
+
+| Resolution | Approximate range around 1970 |
+|:-----------|:------------------------------|
+| `Second` | ±292 billion years |
+| `Millisecond` | ±292 million years |
+| `Microsecond` | ±292 thousand years |
+| `Nanosecond` | 1677–2262 |
+
+`Timestamp{Millisecond}` offers the same resolution as `DateTime`, with a Unix
+epoch and a wider supported range. `DateTime` keeps its existing representation
+and API. Use `DateTime` for existing civil-time APIs and `Timestamp{P}` for Unix
+timestamps with an explicit resolution. Use concrete array elements and struct
+fields, such as `Vector{Timestamp{Microsecond}}` and `::Timestamp{Microsecond}`,
+for compact storage; the bare `Timestamp` type is not concrete. Nanosecond value buffers from Arrow or NumPy have the same
+physical layout as `Timestamp{Nanosecond}`; null, sentinel, and timezone handling
+still require care.
+
+Conversions between timestamp resolutions require exact representation. For example,
+`Timestamp{Second}(Timestamp("2020-01-01T00:00:00.5"))` throws an `InexactError`.
+Use `Timestamp{Second}(floor(ts, Second))` to discard fractional seconds explicitly.
+Rounding throws an `InexactError` if the requested result is outside the type's range
+or is not representable at its resolution.
+Period arithmetic preserves the timestamp resolution and rejects a duration that
+cannot be represented at that resolution, whereas `DateTime` rounds finer durations
+to milliseconds. Mixed timestamp arithmetic promotes
+to the finer resolution and requires both inputs to fit its range.
 
 [^1]:
     The notion of the UT second is actually quite fundamental. There are basically two different notions
@@ -191,8 +214,8 @@ Finding the length of time between two [`Date`](@ref) or [`DateTime`](@ref) is s
 given their underlying representation as `UTInstant{Day}` and `UTInstant{Millisecond}`, respectively.
 The difference between [`Date`](@ref) is returned in the number of [`Day`](@ref), [`DateTime`](@ref)
 in the number of [`Millisecond`](@ref), and [`Timestamp`](@ref) in the number of
-[`Nanosecond`](@ref) — including differences between a [`Timestamp`](@ref) and a
-[`DateTime`](@ref), which promote to [`Timestamp`](@ref). Similarly, comparing [`TimeType`](@ref)
+units of its resolution `P`. Mixed timestamp differences use the finer resolution;
+`DateTime` participates with millisecond resolution. Similarly, comparing [`TimeType`](@ref)
 is a simple matter of comparing the underlying machine instants (which in turn compares the
 internal [`Int64`](@ref) values).
 
@@ -754,18 +777,18 @@ Dates.Time(::Function, ::Any...)
 Dates.Time(::Dates.AbstractDateTime)
 Dates.Time(::AbstractString, ::AbstractString)
 Dates.Time(::AbstractString, ::Dates.DateFormat)
-Dates.Timestamp(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
-Dates.Timestamp(::Dates.Period)
+Dates.Timestamp{P}(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64) where {P}
+Dates.Timestamp{P}(::Dates.Period) where {P}
 Dates.Timestamp(::Function, ::Any...)
-Dates.Timestamp(::Dates.Date, ::Dates.Time)
-Dates.Timestamp(::Dates.TimeType)
-Dates.Timestamp(::AbstractString, ::AbstractString)
-Dates.Timestamp(::AbstractString, ::Dates.DateFormat)
+Dates.Timestamp{P}(::Dates.Date, ::Dates.Time) where {P}
+Dates.Timestamp{P}(::Dates.TimeType) where {P}
+Dates.Timestamp{P}(::AbstractString, ::AbstractString) where {P}
+Dates.Timestamp{P}(::AbstractString, ::Dates.DateFormat) where {P}
 Dates.now()
 Dates.now(::Type{Dates.UTC})
 Dates.now(::Type{Dates.Timestamp})
 Dates.now(::Type{Dates.Timestamp}, ::Type{Dates.UTC})
-Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, Type{Timestamp}, TimeType})
+Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, Type{<:Timestamp}, TimeType})
 ```
 
 #### Accessor Functions

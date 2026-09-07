@@ -368,26 +368,26 @@ julia> Timestamp(ts -> nanosecond(ts) == 4, 2010, 10, 20, 10, 0, 0, 0, 0; step =
 """
 Timestamp(::Function, args...)
 
-function Timestamp(func::Function, y, m=1; step::Period=Day(1), limit::Int=10000)
-    return adjust(func, Timestamp(y, m); step, limit)
+function Timestamp{P}(func::Function, y, m=1; step::Period=Day(1), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m); step, limit)
 end
-function Timestamp(func::Function, y, m, d; step::Period=Hour(1), limit::Int=10000)
-    return adjust(func, Timestamp(y, m, d); step, limit)
+function Timestamp{P}(func::Function, y, m, d; step::Period=Hour(1), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d); step, limit)
 end
-function Timestamp(func::Function, y, m, d, h; step::Period=Minute(1), limit::Int=10000)
-    return adjust(func, Timestamp(y, m, d, h); step, limit)
+function Timestamp{P}(func::Function, y, m, d, h; step::Period=Minute(1), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h); step, limit)
 end
-function Timestamp(func::Function, y, m, d, h, mi; step::Period=Second(1), limit::Int=10000)
-    return adjust(func, Timestamp(y, m, d, h, mi); step, limit)
+function Timestamp{P}(func::Function, y, m, d, h, mi; step::Period=Second(1), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h, mi); step, limit)
 end
-function Timestamp(func::Function, y, m, d, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)
-    return adjust(func, Timestamp(y, m, d, h, mi, s); step, limit)
+function Timestamp{P}(func::Function, y, m, d, h, mi, s; step::Period=max(Millisecond(1), eps(Timestamp{P})), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h, mi, s); step, limit)
 end
-function Timestamp(func::Function, y, m, d, h, mi, s, ms; step::Period=Microsecond(1), limit::Int=10000)
-    return adjust(func, Timestamp(y, m, d, h, mi, s, ms); step, limit)
+function Timestamp{P}(func::Function, y, m, d, h, mi, s, ms; step::Period=max(Microsecond(1), eps(Timestamp{P})), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h, mi, s, ms); step, limit)
 end
-function Timestamp(func::Function, y, m, d, h, mi, s, ms, us; step::Period=Nanosecond(1), limit::Int=10000)
-    return adjust(func, Timestamp(y, m, d, h, mi, s, ms, us); step, limit)
+function Timestamp{P}(func::Function, y, m, d, h, mi, s, ms, us; step::Period=max(Nanosecond(1), eps(Timestamp{P})), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h, mi, s, ms, us); step, limit)
 end
 
 """

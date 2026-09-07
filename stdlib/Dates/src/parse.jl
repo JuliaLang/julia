@@ -108,6 +108,9 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
     end
 end
 
+conversion_translations(::Type{T}) where {T<:TimeType} = CONVERSION_TRANSLATIONS[T]
+conversion_translations(::Type{<:Timestamp}) = CONVERSION_TRANSLATIONS[Timestamp]
+
 """
     tryparsenext_internal(::Type{<:TimeType}, str, pos, len, df::DateFormat, raise=false)
 
@@ -129,7 +132,7 @@ If successful, returns a 2-element tuple `(values, pos)`:
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
     value_names = Symbol[genvar(t) for t in tokens]
 
-    output_tokens = CONVERSION_TRANSLATIONS[T]
+    output_tokens = conversion_translations(T)
     output_names = Symbol[genvar(t) for t in output_tokens]
     output_defaults = Any[CONVERSION_DEFAULTS[t] for t in output_tokens]
 
