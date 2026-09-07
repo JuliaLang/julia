@@ -360,6 +360,12 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const struct _jl_value_t *own
 STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const struct _jl_value_t *owner, _Atomic(void*) ** dest_pp,
                                           struct _jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
                                           size_t* n) JL_NOTSAFEPOINT;
+// Like jl_gc_wb_genericmemory_copy_ptr, but for copying elements of a Memory
+// of tagged union words (an element references an object exactly when its
+// word is nonzero with bit 0 clear). Does not perform the copy.
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_tagged(const struct _jl_value_t *owner,
+                                          struct _jl_genericmemory_t *src,
+                                          char* src_p, size_t n) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }
 #endif

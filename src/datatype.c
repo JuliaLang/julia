@@ -150,11 +150,14 @@ static uint32_t _hash_layout_djb2(uintptr_t _layout, void *unused) JL_NOTSAFEPOI
     const char *pointers = jl_dt_layout_ptrs(layout);
     assert(pointers);
     size_t pointers_size = layout->first_ptr < 0 ? 0 : (layout->npointers * jl_fielddesc_ptr_size(layout->flags.fielddesc_type));
+    const char *tagged = jl_dt_layout_taggedptrs(layout);
+    size_t tagged_size = layout->ntaggedptrs * jl_fielddesc_ptr_size(layout->flags.fielddesc_type);
 
     uint_t hash = 5381;
     hash = _hash_djb2(hash, (char *)layout, own_size);
     hash = _hash_djb2(hash, fields, fields_size);
     hash = _hash_djb2(hash, pointers, pointers_size);
+    hash = _hash_djb2(hash, tagged, tagged_size);
     return hash;
 }
 
@@ -175,6 +178,11 @@ static int layout_eq(void *_l1, void *_l2, void *unused) JL_NOTSAFEPOINT
     size_t pointers_size = l1->first_ptr < 0 ? 0 : (l1->npointers * jl_fielddesc_ptr_size(l1->flags.fielddesc_type));
     if (memcmp(p1, p2, pointers_size))
         return 0;
+    const char *t1 = jl_dt_layout_taggedptrs(l1);
+    const char *t2 = jl_dt_layout_taggedptrs(l2);
+    size_t tagged_size = l1->ntaggedptrs * jl_fielddesc_ptr_size(l1->flags.fielddesc_type);
+    if (memcmp(t1, t2, tagged_size))
+        return 0;
     return 1;
 }
 
@@ -190,13 +198,15 @@ static int layoutcache_initialized = 0;
 static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
                                            uint32_t nfields,
                                            uint32_t npointers,
+                                           uint32_t ntaggedptrs,
                                            uint32_t alignment,
                                            int haspadding,
                                            int isbitsegal,
                                            int arrayelem,
                                            uint8_t unused_bits,
                                            jl_fielddesc32_t desc[],
-                                           uint32_t pointers[]) JL_NOTSAFEPOINT
+                                           uint32_t pointers[],
+                                           uint32_t taggedptrs[]) JL_NOTSAFEPOINT
 {
     assert(alignment); // should have been verified by caller
 
@@ -213,6 +223,8 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     }
     if (npointers > 0 && pointers[npointers - 1] > max_offset)
         max_offset = pointers[npointers - 1];
+    if (ntaggedptrs > 0 && taggedptrs[ntaggedptrs - 1] > max_offset)
+        max_offset = taggedptrs[ntaggedptrs - 1];
     jl_fielddesc8_t maxdesc8 = { 0, max_size, max_offset };
     jl_fielddesc16_t maxdesc16 = { 0, max_size, max_offset };
     jl_fielddesc32_t maxdesc32 = { 0, max_size, max_offset };
@@ -230,7 +242,8 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     // allocate a new descriptor, on the stack if possible.
     size_t fields_size = nfields * jl_fielddesc_size(fielddesc_type);
     size_t pointers_size = first_ptr < 0 ? 0 : (npointers * jl_fielddesc_ptr_size(fielddesc_type));
-    size_t flddesc_sz = sizeof(jl_datatype_layout_t) + fields_size + pointers_size;
+    size_t tagged_size = ntaggedptrs * jl_fielddesc_ptr_size(fielddesc_type);
+    size_t flddesc_sz = sizeof(jl_datatype_layout_t) + fields_size + pointers_size + tagged_size;
     int should_malloc = flddesc_sz >= jl_page_size;
     jl_datatype_layout_t *mallocmem = (jl_datatype_layout_t *)(should_malloc ? malloc(flddesc_sz) : NULL);
     jl_datatype_layout_t *allocamem = (jl_datatype_layout_t *)(should_malloc ? NULL : alloca(flddesc_sz));
@@ -247,9 +260,10 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     flddesc->flags.arrayelem_isatomic = (arrayelem & 4) != 0;
     flddesc->flags.arrayelem_islocked = (arrayelem & 8) != 0;
     flddesc->flags.unused_bits = unused_bits;
-    flddesc->flags.padding = 0;
+    flddesc->flags.arrayelem_istagged = (arrayelem & 16) != 0;
     flddesc->npointers = npointers;
     flddesc->first_ptr = first_ptr;
+    flddesc->ntaggedptrs = ntaggedptrs;
 
     // fill out the fields of the new descriptor
     jl_fielddesc8_t *desc8 = (jl_fielddesc8_t *)jl_dt_layout_fields(flddesc);
@@ -285,6 +299,22 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
             }
             else {
                 ptrs32[i] = pointers[i];
+            }
+        }
+    }
+    if (ntaggedptrs > 0) {
+        uint8_t *tagged8 = (uint8_t *)jl_dt_layout_taggedptrs(flddesc);
+        uint16_t *tagged16 = (uint16_t *)jl_dt_layout_taggedptrs(flddesc);
+        uint32_t *tagged32 = (uint32_t *)jl_dt_layout_taggedptrs(flddesc);
+        for (size_t i = 0; i < ntaggedptrs; i++) {
+            if (fielddesc_type == JL_FIELDDESC_8) {
+                tagged8[i] = taggedptrs[i];
+            }
+            else if (fielddesc_type == JL_FIELDDESC_16) {
+                tagged16[i] = taggedptrs[i];
+            }
+            else {
+                tagged32[i] = taggedptrs[i];
             }
         }
     }
@@ -384,7 +414,9 @@ int jl_struct_try_layout(jl_datatype_t *dt)
 int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
 {
     if (ty->name->mayinlinealloc && jl_struct_try_layout(ty)) {
-        if (ty->layout->npointers > 0) {
+        // tagged union words hold conditional references, so they constrain
+        // inlining exactly like unconditional pointers do
+        if (ty->layout->npointers > 0 || ty->layout->ntaggedptrs > 0) {
             if (pointerfree)
                 return 0;
             if (ty->name->n_uninitialized != 0)
@@ -442,6 +474,117 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
 {
     size_t fsz = 0, al = 0;
     return jl_islayout_inline(eltype, &fsz, &al);
+}
+
+// Tagged union layout: on 64-bit platforms, a union mixing reference-only
+// members with 1..4 small primitive ("immediate") members is stored as a
+// single 64-bit word:
+//
+//     word == 0                  #undef
+//     word != 0, bit 0 == 0      untagged jl_value_t* (member from heap type tag)
+//     bit 0 == 1                 immediate; the i-th immediate member (0-based,
+//                                in union component order) has tag 2*i + 1 and
+//                                word == (zext(value) << k) | tag
+//
+// with k = 1 for one immediate member, 2 for two, 3 for three or four. Tags
+// are odd so that bit 0 alone answers pointer-vs-immediate without knowing the
+// union type; k is only needed to decode a payload. Heap pointers have their
+// low 3 bits clear, which bounds k by 3. The encoding is documented ABI, see
+// doc/src/devdocs/taggedunions.md.
+
+// eligible as an immediate member (nbits bound vs. k is checked by the caller)
+STATIC_INLINE int tagged_union_isimmediate(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    return jl_is_datatype(t) && ((jl_datatype_t*)t)->isprimitivetype &&
+           jl_datatype_nbits((jl_datatype_t*)t) <= 63;
+}
+
+// tag width k of a union already known (from layout metadata) to be tagged;
+// unlike jl_uniontype_istagged this never computes layouts (no safepoints)
+unsigned jl_tagged_union_kbits(jl_value_t *u) JL_NOTSAFEPOINT
+{
+    unsigned n = jl_count_union_components(u);
+    unsigned nimm = 0;
+    for (unsigned i = 0; i < n; i++) {
+        if (tagged_union_isimmediate(jl_nth_union_component(u, i)))
+            nimm++;
+    }
+    assert(nimm > 0 && nimm <= 4);
+    return jl_tagged_union_shift(nimm);
+}
+
+// If `u` gets the tagged layout, return 1 and report the immediate member
+// count and the tag width k; return 0 for every other type (all-or-nothing:
+// a union that exceeds the tag budget falls back to the boxed layout).
+// May compute member layouts; at access time, prefer the layout metadata
+// (jl_field_istagged / arrayelem_istagged), which is the source of truth.
+JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsigned *shift) JL_CANSAFEPOINT
+{
+#if !defined(_P64) || !JL_TAGGED_UNION_LAYOUT
+    return 0;
+#else
+    if (!jl_is_uniontype(u))
+        return 0;
+    unsigned n = jl_count_union_components(u);
+    unsigned nimm = 0, nptr = 0;
+    for (unsigned i = 0; i < n; i++) {
+        jl_value_t *t = jl_nth_union_component(u, i);
+        if (tagged_union_isimmediate(t))
+            nimm++;
+        else
+            nptr++;
+    }
+    if (nimm == 0 || nimm > 4 || nptr == 0)
+        return 0;
+    // a union that is storable inline (e.g. mixing bits members with ghost
+    // singletons like Nothing) keeps the selector-byte layout
+    size_t fsz = 0, al = 0;
+    if (jl_islayout_inline(u, &fsz, &al))
+        return 0;
+    unsigned k = jl_tagged_union_shift(nimm);
+    for (unsigned i = 0; i < n; i++) {
+        jl_value_t *t = jl_nth_union_component(u, i);
+        if (tagged_union_isimmediate(t) && jl_datatype_nbits((jl_datatype_t*)t) > 64 - k)
+            return 0;
+    }
+    if (nimmediate)
+        *nimmediate = nimm;
+    if (shift)
+        *shift = k;
+    return 1;
+#endif
+}
+
+// the i-th (0-based) immediate member of a tagged union, i.e. the member
+// whose values are encoded with tag 2*i + 1
+jl_datatype_t *jl_nth_tagged_member(jl_value_t *u, unsigned i) JL_NOTSAFEPOINT
+{
+    unsigned n = jl_count_union_components(u);
+    for (unsigned j = 0; j < n; j++) {
+        jl_value_t *t = jl_nth_union_component(u, j);
+        if (tagged_union_isimmediate(t) && i-- == 0)
+            return (jl_datatype_t*)t;
+    }
+    return NULL;
+}
+
+// immediate member index of exactly `t` in tagged union `u` (0 if `t` is a
+// reference-stored member)
+int jl_tagged_member_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT
+{
+    if (!tagged_union_isimmediate((jl_value_t*)t))
+        return 0;
+    unsigned n = jl_count_union_components(u), imm = 0;
+    for (unsigned j = 0; j < n; j++) {
+        jl_value_t *c = jl_nth_union_component(u, j);
+        if (c == (jl_value_t*)t) {
+            *idx = imm;
+            return 1;
+        }
+        if (tagged_union_isimmediate(c))
+            imm++;
+    }
+    return 0;
 }
 
 // whether instances of this type can use pointer comparison for `===`
@@ -533,7 +676,7 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     }
     if (!jl_is_type(eltype)) {
         // this is expected to have a layout, but since it is not constructable, we don't care too much what it is
-        static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), {0}};
+        static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, 0, sizeof(void*), {0}};
         st->layout = &opaque_ptr_layout;
         st->has_concrete_subtype = 0;
         return;
@@ -542,6 +685,7 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     size_t elsz = 0, al = 1;
     int isunboxed = jl_islayout_inline(eltype, &elsz, &al) && (kind != (jl_value_t*)jl_atomic_sym || jl_is_datatype(eltype));
     int isunion = isunboxed && jl_is_uniontype(eltype);
+    int istagged = !isunboxed && jl_uniontype_istagged(eltype, NULL, NULL);
     int haspadding = 1; // we may want to eventually actually compute this more precisely
     int isbitsegal = 0;
     int nfields = 0; // aka jl_is_layout_opaque
@@ -549,6 +693,9 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     int zi;
     uint32_t first_ptr = -1;
     uint32_t *pointers = &first_ptr;
+    uint32_t ntaggedptrs = 0;
+    uint32_t tagged_zero = 0;
+    uint32_t *taggedptrs = &tagged_zero;
     int needlock = 0;
 
     const jl_datatype_layout_t *el_layout = NULL;
@@ -582,6 +729,18 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
                     }
                 }
             }
+            if (el_layout->ntaggedptrs > 0) {
+                ntaggedptrs = el_layout->ntaggedptrs;
+                if (el_layout->flags.fielddesc_type == JL_FIELDDESC_32 && !needlock) {
+                    taggedptrs = (uint32_t*)jl_dt_layout_taggedptrs(el_layout);
+                }
+                else {
+                    taggedptrs = (uint32_t*)alloca(ntaggedptrs * sizeof(uint32_t));
+                    for (uint32_t j = 0; j < ntaggedptrs; j++) {
+                        taggedptrs[j] = jl_tagged_offset((jl_datatype_t*)eltype, j);
+                    }
+                }
+            }
         }
         if (needlock) {
             assert(al <= JL_SMALL_BYTE_ALIGNMENT);
@@ -594,14 +753,24 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
             haspadding = 1;
             zi = 1;
             // Adjust pointer offsets to account for the lock at the beginning
+            uint32_t lock_offset_words = lock_offset / sizeof(void*);
             if (first_ptr != -1) {
-                uint32_t lock_offset_words = lock_offset / sizeof(void*);
                 first_ptr += lock_offset_words;
                 for (int j = 0; j < npointers; j++) {
                     pointers[j] += lock_offset_words;
                 }
             }
+            for (uint32_t j = 0; j < ntaggedptrs; j++) {
+                taggedptrs[j] += lock_offset_words;
+            }
         }
+    }
+    else if (istagged) {
+        // one tagged union word per element
+        elsz = sizeof(void*);
+        al = elsz;
+        zi = 1;
+        ntaggedptrs = 1; // taggedptrs[0] == 0
     }
     else {
         elsz = sizeof(void*);
@@ -609,9 +778,9 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
         zi = 1;
     }
 
-    // arrayelem is a bitfield: 1=isboxed, 2=isunion, 4=isatomic, 8=islocked
+    // arrayelem is a bitfield: 1=isboxed, 2=isunion, 4=isatomic, 8=islocked, 16=istagged
     int arrayelem = 0;
-    if (!isunboxed)
+    if (!isunboxed && !istagged)
         arrayelem |= 1;  // arrayelem_isboxed
     if (isunion)
         arrayelem |= 2;  // arrayelem_isunion
@@ -620,8 +789,10 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
         if (needlock)
             arrayelem |= 8;  // arrayelem_islocked
     }
+    if (istagged)
+        arrayelem |= 16;  // arrayelem_istagged
     assert(!st->layout);
-    st->layout = jl_get_layout(elsz, nfields, npointers, al, haspadding, isbitsegal, arrayelem, 0, NULL, pointers);
+    st->layout = jl_get_layout(elsz, nfields, npointers, ntaggedptrs, al, haspadding, isbitsegal, arrayelem, 0, NULL, pointers, taggedptrs);
     st->zeroinit = zi;
     //st->has_concrete_subtype = 1;
     //st->isbitstype = 0;
@@ -681,17 +852,17 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // if we have no fields, we can trivially skip the rest
         if (st == jl_symbol_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
-            static const jl_datatype_layout_t opaque_byte_layout = {0, 0, 1, -1, 1, { .isbitsegal=1 }};
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 0, 1, -1, 0, 1, { .isbitsegal=1 }};
             st->layout = &opaque_byte_layout;
             return;
         }
         else if (st == jl_simplevector_type || st == jl_module_type) {
-            static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), { .isbitsegal=1 }};
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, 0, sizeof(void*), { .isbitsegal=1 }};
             st->layout = &opaque_ptr_layout;
             return;
         }
         else {
-            static const jl_datatype_layout_t singleton_layout = {0, 0, 0, -1, 1, { .isbitsegal=1 }};
+            static const jl_datatype_layout_t singleton_layout = {0, 0, 0, -1, 0, 1, { .isbitsegal=1 }};
             st->layout = &singleton_layout;
         }
     }
@@ -748,6 +919,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         int homogeneous = 1;
         int needlock = 0;
         uint32_t npointers = 0;
+        uint32_t ntagged = 0;
         jl_value_t *firstty = jl_field_type(st, 0);
         for (i = 0; i < nfields; i++) {
             jl_value_t *fld = jl_field_type(st, i);
@@ -795,7 +967,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     if (!zeroinit)
                         zeroinit = ((jl_datatype_t*)layout_fld)->zeroinit;
                     npointers += fld_npointers;
+                    ntagged += ((jl_datatype_t*)layout_fld)->layout->ntaggedptrs;
                 }
+            }
+            else if (jl_uniontype_istagged(fld, NULL, NULL)) {
+                // stored as a single tagged word; #undef is the zero word
+                fsz = sizeof(void*);
+                al = fsz;
+                desc[i].isptr = 0;
+                zeroinit = 1;
+                ntagged++;
+                // TODO: bits-comparable when every reference member is pointer-egal
+                isbitsegal = 0;
             }
             else {
                 fsz = sizeof(void*);
@@ -853,7 +1036,12 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             pointers = (uint32_t*)malloc_s(npointers * sizeof(uint32_t));
         else
             pointers = (uint32_t*)alloca(npointers * sizeof(uint32_t));
-        size_t ptr_i = 0;
+        uint32_t *taggedptrs;
+        if (should_malloc && ntagged)
+            taggedptrs = (uint32_t*)malloc_s(ntagged * sizeof(uint32_t));
+        else
+            taggedptrs = (uint32_t*)alloca(ntagged * sizeof(uint32_t));
+        size_t ptr_i = 0, tag_i = 0;
         for (i = 0; i < nfields; i++) {
             jl_value_t *fld = jl_field_type(st, i);
             jl_value_t *layout_fld = normalize_typeofbottom_layout_alias(fld);
@@ -861,18 +1049,28 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (desc[i].isptr)
                 pointers[ptr_i++] = offset;
             else if (jl_is_datatype(layout_fld)) {
-                int j, npointers = ((jl_datatype_t*)layout_fld)->layout->npointers;
-                for (j = 0; j < npointers; j++) {
+                const jl_datatype_layout_t *fld_layout = ((jl_datatype_t*)layout_fld)->layout;
+                uint32_t j;
+                for (j = 0; j < fld_layout->npointers; j++) {
                     pointers[ptr_i++] = offset + jl_ptr_offset((jl_datatype_t*)layout_fld, j);
                 }
+                for (j = 0; j < fld_layout->ntaggedptrs; j++) {
+                    taggedptrs[tag_i++] = offset + jl_tagged_offset((jl_datatype_t*)layout_fld, j);
+                }
+            }
+            else if (jl_uniontype_istagged(fld, NULL, NULL)) {
+                taggedptrs[tag_i++] = offset;
             }
         }
         assert(ptr_i == npointers);
-        st->layout = jl_get_layout(sz, nfields, npointers, alignm, haspadding, isbitsegal, 0, 0, desc, pointers);
+        assert(tag_i == ntagged);
+        st->layout = jl_get_layout(sz, nfields, npointers, ntagged, alignm, haspadding, isbitsegal, 0, 0, desc, pointers, taggedptrs);
         if (should_malloc) {
             free(desc);
             if (npointers)
                 free(pointers);
+            if (ntagged)
+                free(taggedptrs);
         }
         st->zeroinit = zeroinit;
     }
@@ -1045,7 +1243,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     // allocation size, leaving up to `alignm - 1` bytes of trailing padding.
     uint32_t size = LLT_ALIGN(nbytes, alignm);
     uint8_t unused_bits = (uint8_t)(size * 8 - nbits);
-    bt->layout = jl_get_layout(size, 0, 0, alignm, unused_bits != 0, 1, 0, unused_bits, NULL, NULL);
+    bt->layout = jl_get_layout(size, 0, 0, 0, alignm, unused_bits != 0, 1, 0, unused_bits, NULL, NULL, NULL);
     bt->instance = NULL;
     return bt;
 }
@@ -1067,15 +1265,16 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->nfields = 0;
     layout->alignment = sizeof(void *);
     layout->npointers = haspointers;
+    layout->ntaggedptrs = 0;
     layout->flags.haspadding = 1;
     layout->flags.isbitsegal = 0;
     layout->flags.fielddesc_type = JL_FIELDDESC_FOREIGN;
     layout->flags.unused_bits = 0;
-    layout->flags.padding = 0;
     layout->flags.arrayelem_isboxed = 0;
     layout->flags.arrayelem_isunion = 0;
     layout->flags.arrayelem_isatomic = 0;
     layout->flags.arrayelem_islocked = 0;
+    layout->flags.arrayelem_istagged = 0;
     jl_fielddescdyn_t * desc =
       (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
     desc->markfunc = markfunc;
@@ -1878,6 +2077,11 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     jl_value_t *ty = jl_field_type_concrete(st, i);
     int isatomic = jl_field_isatomic(st, i);
     if (jl_is_uniontype(ty)) {
+        if (jl_field_istagged(st, i)) {
+            _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)v + offs);
+            uintptr_t w = isatomic ? jl_atomic_load(slot) : jl_atomic_load_relaxed(slot);
+            return jl_tagged_word_decode(ty, w); // NULL means #undef, checked by callers
+        }
         assert(!isatomic);
         size_t fsz = jl_field_size(st, i);
         uint8_t sel = ((uint8_t*)v)[offs + fsz - 1];
@@ -1928,7 +2132,9 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
 {
     size_t offs = jl_field_offset(st, i);
     if (rhs == NULL) { // TODO: this should be invalid, but it happens frequently in ircode.c
-        assert(jl_field_isptr(st, i) && *(jl_value_t**)((char*)v + offs) == NULL);
+        // for a pointer or tagged union field, #undef is (already) the zero word
+        assert(*(jl_value_t**)((char*)v + offs) == NULL);
+        assert(jl_field_isptr(st, i) || jl_field_istagged(st, i));
         return;
     }
     if (jl_field_isptr(st, i)) {
@@ -1940,6 +2146,17 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         jl_value_t *rty = jl_typeof(rhs);
         int hasptr;
         int isunion = jl_is_uniontype(ty);
+        if (isunion && jl_field_istagged(st, i)) {
+            uintptr_t w = jl_tagged_word_encode(ty, rhs);
+            if (jl_tagged_word_isptr(w))
+                jl_gc_wb(v, (jl_value_t*)w);
+            _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)v + offs);
+            if (isatomic)
+                jl_atomic_store(slot, w);
+            else
+                jl_atomic_store_release(slot, w);
+            return;
+        }
         if (isunion) {
             assert(!isatomic);
             size_t fsz = jl_field_size(st, i);
@@ -1953,7 +2170,8 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
             hasptr = 0;
         }
         else {
-            hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
+            hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
+                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
         }
         size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
         assert(!isatomic || jl_typeis(rhs, ty));
@@ -1985,7 +2203,8 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
         hasptr = 0;
     }
     else {
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
+                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
     }
     size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
     int needlock = (isatomic && fsz > MAX_ATOMIC_SIZE);
@@ -2029,6 +2248,103 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
     return r;
 }
 
+// store `rhs` into the tagged union slot at `offset` inside `parent`,
+// without any mutability or type checking (used by codegen for both
+// `new` initialization and setfield!)
+JL_DLLEXPORT void jl_store_tagged_union_word(jl_value_t *parent, size_t offset, jl_value_t *u, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT
+{
+    uintptr_t w = jl_tagged_word_encode(u, rhs);
+    if (jl_tagged_word_isptr(w))
+        jl_gc_wb(parent, (jl_value_t*)w);
+    _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)parent + offset);
+    if (isatomic)
+        jl_atomic_store(slot, w);
+    else
+        jl_atomic_store_release(slot, w);
+}
+
+// tagged union slots are a single word, so their swap/modify/replace/setonce
+// are word-CAS loops over the encoded representation
+jl_value_t *swap_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic)
+{
+    uintptr_t w = jl_tagged_word_encode(ty, rhs);
+    if (jl_tagged_word_isptr(w))
+        jl_gc_wb(parent, (jl_value_t*)w);
+    uintptr_t r = isatomic ? jl_atomic_exchange(p, w) : jl_atomic_exchange_release(p, w);
+    jl_value_t *rv = jl_tagged_word_decode(ty, r);
+    if (__unlikely(rv == NULL))
+        jl_throw(jl_undefref_exception);
+    return rv;
+}
+
+jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic)
+{
+    uintptr_t r = isatomic ? jl_atomic_load(p) : jl_atomic_load_relaxed(p);
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2);
+    while (1) {
+        jl_value_t *rv = jl_tagged_word_decode(ty, r);
+        if (__unlikely(rv == NULL))
+            jl_throw(jl_undefref_exception);
+        args[0] = rv;
+        args[1] = rhs;
+        jl_value_t *y = jl_apply_generic(op, args, 2);
+        args[1] = y;
+        if (!jl_isa(y, ty))
+            jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
+        uintptr_t w = jl_tagged_word_encode(ty, y);
+        if (jl_tagged_word_isptr(w))
+            jl_gc_wb(parent, (jl_value_t*)w);
+        if (isatomic ? jl_atomic_cmpswap(p, &r, w) : jl_atomic_cmpswap_release(p, &r, w))
+            break;
+        jl_gc_safepoint();
+    }
+    // args[0] == old (decoded), args[1] == y (new)
+    jl_datatype_t *rettyp = jl_apply_modify_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    args[0] = jl_new_struct(rettyp, args[0], args[1]);
+    JL_GC_POP();
+    return args[0];
+}
+
+jl_value_t *replace_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic)
+{
+    jl_datatype_t *rettyp = jl_apply_cmpswap_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    uintptr_t wexp = jl_tagged_word_encode(ty, expected);
+    uintptr_t wnew = jl_tagged_word_encode(ty, rhs);
+    if (jl_tagged_word_isptr(wnew))
+        jl_gc_wb(parent, (jl_value_t*)wnew);
+    uintptr_t r = wexp;
+    int success;
+    while (1) {
+        success = isatomic ? jl_atomic_cmpswap(p, &r, wnew) : jl_atomic_cmpswap_release(p, &r, wnew);
+        if (__unlikely(r == 0))
+            jl_throw(jl_undefref_exception);
+        if (success)
+            break;
+        // immediates are canonical, so distinct words are egal only when both
+        // are references whose contents compare egal (e.g. two Strings)
+        if (!(jl_tagged_word_isptr(r) && jl_tagged_word_isptr(wexp) &&
+              jl_egal((jl_value_t*)r, expected)))
+            break;
+    }
+    jl_value_t *rold = jl_tagged_word_decode(ty, r);
+    JL_GC_PUSH1(&rold);
+    rold = jl_new_struct(rettyp, rold, success ? jl_true : jl_false);
+    JL_GC_POP();
+    return rold;
+}
+
+int setonce_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic)
+{
+    uintptr_t w = jl_tagged_word_encode(ty, rhs);
+    if (jl_tagged_word_isptr(w))
+        jl_gc_wb(parent, (jl_value_t*)w);
+    uintptr_t r = 0;
+    return isatomic ? jl_atomic_cmpswap(p, &r, w) : jl_atomic_cmpswap_release(p, &r, w);
+}
+
 jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic)
 {
     jl_value_t *ty = jl_field_type_concrete(st, i);
@@ -2046,6 +2362,9 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
         if (__unlikely(r == NULL))
             jl_throw(jl_undefref_exception);
         return r;
+    }
+    else if (jl_is_uniontype(ty) && jl_field_istagged(st, i)) {
+        return swap_tagged(ty, (_Atomic(uintptr_t)*)p, v, rhs, isatomic);
     }
     else {
         uint8_t *psel = jl_is_uniontype(ty) ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
@@ -2098,7 +2417,8 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
         hasptr = 0;
     }
     else {
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
+                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
     }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2);
@@ -2190,6 +2510,9 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
     if (jl_field_isptr(st, i)) {
         return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, NULL, NULL, NULL);
     }
+    else if (jl_is_uniontype(ty) && jl_field_istagged(st, i)) {
+        return modify_tagged(ty, (_Atomic(uintptr_t)*)p, v, op, rhs, isatomic);
+    }
     else {
         uint8_t *psel = jl_is_uniontype(ty) ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
         return modify_bits(ty, p, psel, v, op, rhs, isatomic ? isatomic_object : isatomic_none);
@@ -2237,7 +2560,8 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
     }
     else {
         rty = layout_ty;
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
+                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
         assert(jl_typeis(rhs, ty));
     }
     int success;
@@ -2303,6 +2627,9 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
     if (jl_field_isptr(st, i)) {
         return replace_value(ty, (_Atomic(jl_value_t*)*)p, v, expected, rhs, isatomic, NULL, NULL);
     }
+    else if (jl_is_uniontype(ty) && jl_field_istagged(st, i)) {
+        return replace_tagged(ty, (_Atomic(uintptr_t)*)p, v, expected, rhs, isatomic);
+    }
     else {
         size_t fsz = jl_field_size(st, i);
         int isunion = jl_is_uniontype(ty);
@@ -2350,8 +2677,11 @@ int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rh
     }
     else {
         int isunion = jl_is_uniontype(ty);
-        if (isunion)
+        if (isunion) {
+            if (jl_field_istagged(st, i))
+                return setonce_tagged(ty, (_Atomic(uintptr_t)*)p, v, rhs, isatomic);
             return 0;
+        }
         jl_value_t *layout_ty = normalize_typeofbottom_layout_alias(ty);
         int hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
         if (!hasptr)
@@ -2369,6 +2699,8 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT
     _Atomic(jl_value_t*) *fld = (_Atomic(jl_value_t*)*)((char*)v + offs);
     if (!jl_field_isptr(st, i)) {
         jl_datatype_t *ft = (jl_datatype_t*)normalize_typeofbottom_layout_alias(jl_field_type_concrete(st, i));
+        if (jl_is_uniontype((jl_value_t*)ft) && jl_field_istagged(st, i))
+            return jl_atomic_load_relaxed((_Atomic(uintptr_t)*)fld) != 0 ? 1 : 0;
         if (!jl_is_datatype(ft) || ft->layout->first_ptr < 0)
             return 2; // isbits are always defined
         fld += ft->layout->first_ptr;
@@ -2399,8 +2731,15 @@ static jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
     const jl_datatype_layout_t *ly = dt->layout;
     uint32_t npointers = ly->npointers;
-    if (i >= npointers)
+    if (i >= npointers) {
+        // tagged union words are enumerated after the unconditional pointers;
+        // a slot currently holding an immediate (or #undef) reads as NULL
+        if (i < (size_t)npointers + ly->ntaggedptrs) {
+            uintptr_t w = ((uintptr_t*)v)[jl_tagged_offset(dt, i - npointers)];
+            return jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL;
+        }
         jl_bounds_error_int(v, i);
+    }
     if (ly->flags.fielddesc_type == JL_FIELDDESC_FOREIGN) {
         // Foreign types can report that they contain pointers for GC purposes,
         // but they do not expose an inline pointer-offset table to enumerate.

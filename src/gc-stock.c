@@ -1693,33 +1693,41 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatyp
 {
     const jl_datatype_layout_t *ly = dt->layout;
     uint32_t npointers = ly->npointers;
-    //if (npointers == 0) // this was checked by the caller
-    //    return;
-    jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
-    if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-        // this pointer was young, move the barrier back now
-        jl_gc_wb_back(parent);
-        return;
-    }
     assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
-    const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
-    const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
-    const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
-    for (size_t i = 1; i < npointers; i++) {
-        uint32_t fld;
-        if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
-            fld = ptrs8[i];
-        }
-        else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
-            fld = ptrs16[i];
-        }
-        else {
-            assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
-            fld = ptrs32[i];
-        }
-        jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
+    if (npointers > 0) {
+        jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
         if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
             // this pointer was young, move the barrier back now
+            jl_gc_wb_back(parent);
+            return;
+        }
+        const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
+        const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
+        const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
+        for (size_t i = 1; i < npointers; i++) {
+            uint32_t fld;
+            if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
+                fld = ptrs8[i];
+            }
+            else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
+                fld = ptrs16[i];
+            }
+            else {
+                assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
+                fld = ptrs32[i];
+            }
+            jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
+            if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
+                // this pointer was young, move the barrier back now
+                jl_gc_wb_back(parent);
+                return;
+            }
+        }
+    }
+    for (size_t i = 0; i < ly->ntaggedptrs; i++) {
+        uintptr_t w = ((uintptr_t*)ptr)[jl_tagged_offset(dt, i)];
+        if (jl_tagged_word_isptr(w) && (jl_astaggedvalue((jl_value_t*)w)->bits.gc & 1) == 0) {
+            // this reference was young, move the barrier back now
             jl_gc_wb_back(parent);
             return;
         }
@@ -1991,6 +1999,27 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
     return new_obj;
 }
 
+// Push the conditionally-referenced tagged union words of one object;
+// returns the updated nptr
+STATIC_INLINE uintptr_t gc_mark_tagged_slots(jl_ptls_t ptls, char *parent, jl_datatype_t *vt,
+                                             uintptr_t nptr) JL_NOTSAFEPOINT
+{
+    jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
+    const jl_datatype_layout_t *layout = vt->layout;
+    for (uint32_t i = 0; i < layout->ntaggedptrs; i++) {
+        jl_value_t **slot = &((jl_value_t**)parent)[jl_tagged_offset(vt, i)];
+        uintptr_t w = *(uintptr_t*)slot;
+        if (jl_tagged_word_isptr(w)) {
+            jl_value_t *new_obj = (jl_value_t*)w;
+            verify_parent2("object", parent, slot, "taggedfield(%d)", (int)i);
+            gc_assert_parent_validity((jl_value_t *)parent, new_obj);
+            gc_try_claim_and_push(mq, new_obj, &nptr);
+            gc_heap_snapshot_record_object_edge((jl_value_t*)parent, slot);
+        }
+    }
+    return nptr;
+}
+
 // Mark object array
 STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
                       jl_value_t **obj_end, uint32_t step, uintptr_t nptr) JL_NOTSAFEPOINT
@@ -2056,6 +2085,105 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
     else {
         gc_mark_push_remset(ptls, obj_parent, nptr);
     }
+}
+
+// Mark an array of tagged union words: an element is a reference exactly when
+// its word is nonzero with bit 0 clear; immediates and #undef are skipped
+STATIC_INLINE void gc_mark_taggedarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
+                      jl_value_t **obj_end, uintptr_t nptr) JL_NOTSAFEPOINT
+{
+    jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
+    jl_value_t *new_obj;
+    if ((nptr & 0x2) == 0x2) {
+        // pre-scan this object: most of this object should be old, so look for
+        // the first young object before starting this chunk
+        for (; obj_begin < obj_end; obj_begin++) {
+            uintptr_t w = *(uintptr_t*)obj_begin;
+            if (jl_tagged_word_isptr(w)) {
+                jl_value_t **slot = obj_begin;
+                new_obj = (jl_value_t*)w;
+                verify_parent2("tagged array", obj_parent, obj_begin, "elem(%d)",
+                               gc_slot_to_arrayidx(obj_parent, obj_begin));
+                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                if (!gc_old(o->header))
+                    nptr |= 1;
+                if (!gc_marked(o->header))
+                    break;
+                gc_heap_snapshot_record_array_edge(obj_parent, slot);
+            }
+        }
+    }
+    size_t too_big = (obj_end - obj_begin) / GC_CHUNK_BATCH_SIZE > 1; // use this order of operations to avoid idiv
+    jl_value_t **scan_end = obj_end;
+    int pushed_chunk = 0;
+    if (too_big) {
+        scan_end = obj_begin + GC_CHUNK_BATCH_SIZE;
+        // see gc_mark_objarray for the reasoning behind the nptr conditions
+        if ((nptr & 0x2) != 0x2 || (nptr & 0x3) == 0x3) {
+            jl_gc_chunk_t c = {GC_taggedary_chunk, obj_parent, scan_end, obj_end, NULL, NULL, 1, nptr};
+            gc_chunkqueue_push(mq, &c);
+            pushed_chunk = 1;
+        }
+    }
+    for (; obj_begin < scan_end; obj_begin++) {
+        uintptr_t w = *(uintptr_t*)obj_begin;
+        if (jl_tagged_word_isptr(w)) {
+            jl_value_t **slot = obj_begin;
+            new_obj = (jl_value_t*)w;
+            verify_parent2("tagged array", obj_parent, obj_begin, "elem(%d)",
+                           gc_slot_to_arrayidx(obj_parent, obj_begin));
+            gc_assert_parent_validity(obj_parent, new_obj);
+            gc_try_claim_and_push(mq, new_obj, &nptr);
+            gc_heap_snapshot_record_array_edge(obj_parent, slot);
+        }
+    }
+    if (too_big) {
+        if (!pushed_chunk) {
+            jl_gc_chunk_t c = {GC_taggedary_chunk, obj_parent, scan_end, obj_end, NULL, NULL, 1, nptr};
+            gc_chunkqueue_push(mq, &c);
+        }
+    }
+    else {
+        gc_mark_push_remset(ptls, obj_parent, nptr);
+    }
+}
+
+// Mark inline-struct memory whose element layout contains tagged union words
+// (and possibly regular pointer slots). Not chunked: assumed rare and small
+// compared to plain pointer layouts.
+STATIC_INLINE void gc_mark_memory_tagged(jl_ptls_t ptls, jl_value_t *parent, jl_value_t **begin,
+                      jl_value_t **end, jl_datatype_t *mtype, size_t elsize, uintptr_t nptr) JL_NOTSAFEPOINT
+{
+    jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
+    const jl_datatype_layout_t *layout = mtype->layout;
+    uint32_t npointers = layout->first_ptr >= 0 ? layout->npointers : 0;
+    uint32_t ntagged = layout->ntaggedptrs;
+    for (; begin < end; begin += elsize) {
+        for (uint32_t j = 0; j < npointers; j++) {
+            jl_value_t **slot = &begin[jl_ptr_offset(mtype, j)];
+            jl_value_t *new_obj = *slot;
+            if (new_obj != NULL) {
+                verify_parent2("array", parent, slot, "elem(%d)",
+                               gc_slot_to_arrayidx(parent, begin));
+                gc_assert_parent_validity(parent, new_obj);
+                gc_try_claim_and_push(mq, new_obj, &nptr);
+                gc_heap_snapshot_record_array_edge(parent, slot);
+            }
+        }
+        for (uint32_t j = 0; j < ntagged; j++) {
+            jl_value_t **slot = &begin[jl_tagged_offset(mtype, j)];
+            uintptr_t w = *(uintptr_t*)slot;
+            if (jl_tagged_word_isptr(w)) {
+                jl_value_t *new_obj = (jl_value_t*)w;
+                verify_parent2("array", parent, slot, "elem(%d)",
+                               gc_slot_to_arrayidx(parent, begin));
+                gc_assert_parent_validity(parent, new_obj);
+                gc_try_claim_and_push(mq, new_obj, &nptr);
+                gc_heap_snapshot_record_array_edge(parent, slot);
+            }
+        }
+    }
+    gc_mark_push_remset(ptls, parent, nptr);
 }
 
 // Mark array with 8bit field descriptors
@@ -2416,6 +2544,14 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
             gc_mark_finlist_(mq, fl_parent, fl_begin, fl_end);
             break;
         }
+        case GC_taggedary_chunk: {
+            jl_value_t *obj_parent = c->parent;
+            jl_value_t **obj_begin = c->begin;
+            jl_value_t **obj_end = c->end;
+            uintptr_t nptr = c->nptr;
+            gc_mark_taggedarray(ptls, obj_parent, obj_begin, obj_end, nptr);
+            break;
+        }
         default: {
             // `empty-chunk` should be checked by caller
             jl_safe_printf("GC internal error: unknown chunk type\n");
@@ -2684,6 +2820,24 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 uintptr_t nptr = (m->length << 2) | (bits & GC_OLD);
                 gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
             }
+            else if (layout->flags.arrayelem_istagged) {
+                // one tagged union word per element
+                size_t l = m->length;
+                jl_value_t **objary_begin = (jl_value_t**)m->ptr;
+                jl_value_t **objary_end = objary_begin + l;
+                uintptr_t nptr = (l << 2) | (bits & GC_OLD);
+                gc_mark_taggedarray(ptls, new_obj, objary_begin, objary_end, nptr);
+            }
+            else if (layout->ntaggedptrs > 0) {
+                // inline struct elements containing tagged union words
+                size_t l = m->length;
+                unsigned elsize = layout->size / sizeof(jl_value_t*);
+                uint32_t nrefs = (layout->first_ptr >= 0 ? layout->npointers : 0) + layout->ntaggedptrs;
+                jl_value_t **objary_begin = (jl_value_t**)m->ptr;
+                jl_value_t **objary_end = objary_begin + l * elsize;
+                uintptr_t nptr = ((l * nrefs) << 2) | (bits & GC_OLD);
+                gc_mark_memory_tagged(ptls, new_obj, objary_begin, objary_end, vt, elsize, nptr);
+            }
             else if (layout->first_ptr >= 0) {
                 const jl_datatype_layout_t *layout = vt->layout;
                 unsigned npointers = layout->npointers;
@@ -2725,11 +2879,20 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             return;
         const jl_datatype_layout_t *layout = vt->layout;
         uint32_t npointers = layout->npointers;
-        if (npointers == 0)
+        uint32_t ntaggedptrs = layout->ntaggedptrs;
+        if (npointers == 0 && ntaggedptrs == 0)
             return;
-        uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
+        uintptr_t nptr = ((npointers + ntaggedptrs) << 2 | (bits & GC_OLD));
         assert((layout->nfields > 0 || layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN) &&
                "opaque types should have been handled specially");
+        if (ntaggedptrs > 0) {
+            assert(layout->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
+            nptr = gc_mark_tagged_slots(ptls, (char *)new_obj, vt, nptr);
+            if (npointers == 0) {
+                gc_mark_push_remset(ptls, new_obj, nptr);
+                return;
+            }
+        }
         if (layout->flags.fielddesc_type == JL_FIELDDESC_8) {
             char *obj8_parent = (char *)new_obj;
             uint8_t *obj8_begin = (uint8_t *)jl_dt_layout_ptrs(layout);

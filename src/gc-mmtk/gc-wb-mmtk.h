@@ -92,6 +92,12 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_g
     mmtk_gc_wb_fast(owner, (void*)0);
 }
 
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_tagged(const jl_value_t *owner, jl_genericmemory_t *src,
+                                          char* src_p, size_t n) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(owner, (void*)0);
+}
+
 
 #ifdef __cplusplus
 }
