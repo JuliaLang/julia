@@ -13,6 +13,8 @@ declare token @llvm.julia.gc_preserve_begin(...)
 
 declare void @llvm.julia.gc_preserve_end(token)
 
+declare void @use({} addrspace(10)*)
+
 ; COM: check basic preserve hoist/sink functionality
 ; CHECK-LABEL: @hoist_sink_preserves
 define void @hoist_sink_preserves({} addrspace(10)* %obj, i1 %ret) {
@@ -196,6 +198,10 @@ inner.preheader:
 inner:
 ; CHECK-NOT: call token (...) @llvm.julia.gc_preserve_begin
   %preserve_token = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %obj)
+; CHECK-NEXT: call void @use(ptr addrspace(10) %obj)
+; CHECK-NEXT: call void @use(ptr addrspace(10) %obj1)
+  call void @use({} addrspace(10)* %obj)
+  call void @use({} addrspace(10)* %obj1)
 ; CHECK-NOT: call void @llvm.julia.gc_preserve_end
   call void @llvm.julia.gc_preserve_end(token %preserve_token)
   call void @llvm.julia.gc_preserve_end(token %global_token)
