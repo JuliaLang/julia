@@ -88,7 +88,7 @@ Rounds away from zero.
 # Examples
 ```jldoctest
 julia> BigFloat("1.0000000000000001", 5, RoundFromZero)
-1.06
+big"1.06e0"
 ```
 """
 const RoundFromZero = RoundingMode{:FromZero}()
@@ -394,11 +394,11 @@ Float16(6.55e4)
     julia> x = 1.15
     1.15
 
-    julia> big(1.15)
-    1.149999999999999911182158029987476766109466552734375
-
     julia> x < 115//100
     true
+
+    julia> big(x)
+    big"1.149999999999999911182158029987476766109466552734375"
 
     julia> round(x, digits=1)
     1.2

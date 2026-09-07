@@ -3108,6 +3108,7 @@ end
                 @assert x isa T
                 @test string(x) == sx
                 @test sprint(show, x, context=:compact => true) == sx
+                @test sprint(show, x, context=:typeinfo => T) == sx
                 @test sprint(print, x) == sx
             end
         end

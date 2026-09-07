@@ -29,8 +29,8 @@ end
     @test sprint(show, complex(true, true)) == "Complex(true,true)"
     @test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
 
-    @test sprint(show, prevfloat(BigFloat(-1, precision=32))im) == "-0.0 - 1.0000000005im"
-    @test sprint(show, prevfloat(BigFloat(-1, precision=512))im) == "-0.0 - 1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000015im"
+    @test sprint(show, prevfloat(BigFloat(-1, precision=32))im) == "-big\"0.0\" - big\"1.0000000005\"*im"
+    @test sprint(show, prevfloat(BigFloat(-1, precision=512))im) == "-big\"0.0\" - big\"1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000015\"*im"
 
     @test sprint(show, prevfloat(BigFloat(-1, precision=32))im, context=:compact => true) == "-0.0-1.0im"
     @test sprint(show, prevfloat(BigFloat(-1, precision=512))im, context=:compact => true) == "-0.0-1.0im"

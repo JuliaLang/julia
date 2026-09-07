@@ -650,7 +650,7 @@ See also [`cbrt`](@ref), [`fourthroot`](@ref), [`hypot`](@ref).
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> sqrt(big(81))
-9.0
+big"9.0"
 
 julia> sqrt(big(-81))
 ERROR: DomainError with -81.0:
@@ -660,7 +660,7 @@ Stacktrace:
 [...]
 
 julia> sqrt(big(complex(-81)))
-0.0 + 9.0im
+big"0.0" + big"9.0"*im
 
 julia> sqrt(-81 - 0.0im)  # -0.0im is below the branch cut
 0.0 - 9.0im
