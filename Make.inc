@@ -1315,6 +1315,42 @@ else
 LIBLMDB := $(build_libdir)/liblmdb.a
 endif
 
+# framehop-backed unwinder (opt-in via USE_FRAMEHOP=1). When enabled on a supported
+# (os, arch), this defines JL_ENABLE_FRAMEHOP (so stackwalk.c routes the backtrace cursor
+# to framehop) and links the libframehopunwind built by deps/framehopunwind.mk. libunwind
+# stays linked (task.c context switching + proc-info still use it). The arch is further
+# gated by the JL_USE_FRAMEHOP predicate in julia_internal.h (x86_64/aarch64 only).
+# DO NOT MERGE: default USE_FRAMEHOP to 1 on supported platforms so every CI
+# pipeline exercises the framehop unwinder. Unsupported combinations keep 0 so
+# they don't trip the $(error) gates below; musl is skipped because
+# LibFramehopUnwind_jll has no *-linux-musl artifact yet.
+ifneq ($(filter $(OS),Linux FreeBSD Darwin),)
+ifneq ($(filter $(ARCH),x86_64 aarch64),)
+ifeq ($(DISABLE_LIBUNWIND), 0)
+ifeq (,$(findstring musl,$(shell $(CC) -dumpmachine 2>/dev/null)))
+ifneq ($(OS)-$(ARCH),FreeBSD-aarch64)
+USE_FRAMEHOP ?= 1
+endif
+endif
+endif
+endif
+endif
+USE_FRAMEHOP ?= 0
+FRAMEHOPUNWIND :=
+ifeq ($(USE_FRAMEHOP), 1)
+ifneq ($(DISABLE_LIBUNWIND), 0)
+$(error USE_FRAMEHOP=1 requires libunwind (framehop replaces only the backtrace cursor; task.c context switching still uses libunwind) — unset DISABLE_LIBUNWIND)
+endif
+ifeq ($(findstring $(OS),Linux FreeBSD Darwin),)
+$(error USE_FRAMEHOP=1 is not supported on OS=$(OS) (supported: Linux, FreeBSD, Darwin))
+endif
+ifeq ($(filter $(ARCH),x86_64 aarch64),)
+$(error USE_FRAMEHOP=1 is not supported on ARCH=$(ARCH) (supported: x86_64, aarch64))
+endif
+FRAMEHOPUNWIND := -lframehopunwind
+JCPPFLAGS += -DJL_ENABLE_FRAMEHOP
+endif
+
 ifeq ($(origin LLVM_CONFIG), undefined)
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG := llvm-config$(EXE)
@@ -1507,7 +1543,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT FRAMEHOPUNWIND
 
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
@@ -1523,6 +1559,15 @@ endif
 endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
+
+FRAMEHOPUNWIND_BB_TRIPLETS := aarch64-apple-darwin aarch64-linux-gnu \
+	x86_64-apple-darwin x86_64-linux-gnu x86_64-unknown-freebsd
+FRAMEHOPUNWIND_BB_TRIPLET ?= $(BB_TRIPLET)
+ifeq ($(USE_FRAMEHOP)$(USE_BINARYBUILDER_FRAMEHOPUNWIND),11)
+ifeq ($(filter $(FRAMEHOPUNWIND_BB_TRIPLET),$(FRAMEHOPUNWIND_BB_TRIPLETS)),)
+$(error USE_BINARYBUILDER_FRAMEHOPUNWIND=1 is not supported for $(FRAMEHOPUNWIND_BB_TRIPLET); use USE_BINARYBUILDER_FRAMEHOPUNWIND=0 to build framehopunwind from source)
+endif
+endif
 
 # Set the CSL default here too because it affects top-level source flags in
 # addition to dependency installation rules in deps/csl.mk.
