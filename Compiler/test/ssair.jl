@@ -819,6 +819,34 @@ let src = code_typed1(undef_phinode55388, (Bool, Bool, Bool, Bool))
         return any(i -> !isassigned(stmt.values, i), eachindex(stmt.edges))
     end
 end
+@test_throws UndefVarError undef_phinode55388(true, true, true, false)
+@test undef_phinode55388(false, false, false, false) === nothing
+
+# ... and the same for a slot whose definitions live inside an exception region,
+# which reaches the `PhiCNode`/`UpsilonNode` path instead (#55388).
+@noinline maythrow55388(x) = x === nothing ? throw(ArgumentError("nothing")) : x
+function undef_phicnode55388(nextstate, loopcond, valuecond)
+    nextstate && @goto state3
+    while loopcond
+        local ct
+        try
+            ct = maythrow55388(valuecond ? [] : nothing)
+        catch
+            ct = nothing
+        end
+        @label state3
+        Base.donotdelete(ct)
+    end
+    nothing
+end
+let src = code_typed1(undef_phicnode55388, (Bool, Bool, Bool))
+    @test any(src.code) do stmt
+        isa(stmt, PhiNode) || return false
+        return any(i -> !isassigned(stmt.values, i), eachindex(stmt.edges))
+    end
+end
+@test_throws UndefVarError undef_phicnode55388(true, true, true)
+@test undef_phicnode55388(false, false, false) === nothing
 
 global global_error_switch::Bool = true
 function gen_must_throw_phinode_edge(world::UInt, source, _)

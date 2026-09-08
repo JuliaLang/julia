@@ -3,15 +3,13 @@
 mutable struct SlotInfo
     defs::Vector{Int}
     uses::Vector{Int}
-    any_newvar::Bool
 end
-SlotInfo() = SlotInfo(Int[], Int[], false)
+SlotInfo() = SlotInfo(Int[], Int[])
 
 function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
     # NewvarNodes count as defs for the purpose
     # of liveness analysis (i.e. they kill use chains)
     if isa(stmt, NewvarNode)
-        result[slot_id(stmt.slot)].any_newvar = true
         push!(result[slot_id(stmt.slot)].defs, idx)
         return
     elseif isexpr(stmt, :(=))
@@ -578,7 +576,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
         # TODO: Restore this optimization
-        if false # length(slot.defs) == 1 && slot.any_newvar
+        if false # length(slot.defs) == 1
             if slot.defs[] == 0
                 typ = sv.slottypes[idx]
                 ssaval = Argument(idx)
@@ -694,11 +692,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for (idx, slot) in Iterators.enumerate(phi_slots[item])
             (; ssaval, node, undef_ssaval, undef_node) = new_phi_nodes[item][idx]
             (incoming_val, incoming_def) = incoming_vals[slot]
-            if incoming_val === SSAValue(-1)
-                # Optimistically omit this path.
-                # Liveness analysis would probably have prevented us from inserting this phi node
-                continue
-            end
             push!(node.edges, pred)
             if incoming_val === UNDEF_TOKEN
                 resize!(node.values, length(node.values)+1)
@@ -724,7 +717,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         has_pinode = fill(false, length(sv.slottypes))
         for slot in live_slots[item]
             (ival, idef) = incoming_vals[slot]
-            (ival === SSAValue(-1)) && continue
             (ival === UNDEF_TOKEN) && continue
 
             bbstate = sv.bb_states[item]
@@ -779,14 +771,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                     if isa(arg1, SlotNumber)
                         id = slot_id(arg1)
                         val = stmt.args[2]
-                        typ = typ_for_val(val, ci, ir, idx, sv.slottypes)
                         # Having UNDEF_TOKEN appear on the RHS is possible if we're on a dead branch.
                         # Do something reasonable here, by marking the LHS as undef as well.
                         if val !== UNDEF_TOKEN
                             thisdef = true
+                            typ = typ_for_val(val, ci, ir, idx, sv.slottypes)
                             thisval = make_ssa!(ci, code, idx, typ)
                         else
                             code[idx] = nothing
+                            typ = Union{}
                             thisval = UNDEF_TOKEN
                             thisdef = false
                         end
@@ -801,10 +794,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                                 new_phic_nodes[leave_block])
                             if cidx !== nothing
                                 node = thisdef ? UpsilonNode(thisval) : UpsilonNode()
-                                if incoming_vals[id] === UNDEF_TOKEN
-                                    node = UpsilonNode()
-                                    typ = Union{}
-                                end
                                 insert = new_phic_nodes[leave_block][cidx].insert
                                 push!(insert.node.values,
                                       NewSSAValue(insert_node!(ir, idx, NewInstruction(node, typ), true).id - length(ir.stmts)))
