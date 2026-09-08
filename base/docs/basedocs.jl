@@ -221,6 +221,12 @@ The number after the name indicates how many bits of storage the type requires. 
 only sizes that are multiples of 8 bits are supported.
 The [`Bool`](@ref) declaration shows how a primitive type can be optionally
 declared to be a subtype of some supertype.
+
+The size may instead name one of the type parameters, giving each instantiation its own width:
+
+```julia
+primitive type BitInt{N} <: Signed N end
+```
 """
 kw"primitive type"
 
