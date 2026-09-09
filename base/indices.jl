@@ -433,6 +433,11 @@ function getindex(S::IdentityUnitRange, i::AbstractUnitRange{Bool})
     @boundscheck checkbounds(S, i)
     range(first(i) ? first(S) : last(S), length = last(i))
 end
+function getindex(S::IdentityUnitRange, i::Slice)
+    @inline
+    @boundscheck checkbounds(S, i)
+    return IdentityUnitRange(i.indices)
+end
 function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
     @inline
     @boundscheck checkbounds(S, i)
