@@ -688,6 +688,8 @@ end
 # are exact as a consequence.
 const INV_PI_HI = 0.3183098861837907            # (1/π).hi
 const INV_PI_LO = -1.9678676675182486e-17       # (1/π).lo
+const TWO_INV_PI_HI = 2.0*INV_PI_HI
+const TWO_INV_PI_LO = 2.0*INV_PI_LO
 const ATANPI_1_O_2_HI = 0.14758361765043326     # (atan(0.5)/π).hi
 const ATANPI_1_O_2_LO = 1.1095511164473943e-17  # (atan(0.5)/π).lo
 const ATANPI_3_O_2_HI = 0.3128329581890012      # (atan(1.5)/π).hi
@@ -727,16 +729,16 @@ Compute `acos(1-2x)/π = 2asin(√x)/π` on x∈(0; 1/4] as an unevaluated sum `
 @inline function acospi_kernel(x::Float64)
     # asin above approximates asin(s) = s + s*arc_tRt(s²) on s∈[0; 1/2]. Taking
     # s = √x = shi + slo makes s² exactly x, so
-    #     w ≡ acos(1-2x) = 2asin(√x) = 2*(shi + slo + shi*arc_tRt(x))
-    # dropping slo*arc_tRt(x), which stays under 2^-57 of w. Fast2Sum then
-    # renormalizes whi + wlo to w + werr for the scaling by the double-double 1/π.
+    #     v ≡ asin(√x) = shi + slo + shi*arc_tRt(x)
+    # dropping slo*arc_tRt(x), which stays under 2^-57 of v. Fast2Sum then
+    # renormalizes shi + vlo to v + verr, and the factor 2 of acos(1-2x) is
+    # included in the double-double 2/π.
     shi, slo = two_sqrt(x)
-    whi = 2.0*shi
-    wlo = 2.0*muladd(shi, arc_tRt(x), slo)
-    w = whi + wlo
-    werr = (whi - w) + wlo
-    hi, lo = two_mul(w, INV_PI_HI)
-    return hi, muladd(werr, INV_PI_HI, muladd(w, INV_PI_LO, lo))
+    vlo = muladd(shi, arc_tRt(x), slo)
+    v = shi + vlo
+    verr = (shi - v) + vlo
+    hi, lo = two_mul(v, TWO_INV_PI_HI)
+    return hi, muladd(verr, TWO_INV_PI_HI, muladd(v, TWO_INV_PI_LO, lo))
 end
 
 """
@@ -813,7 +815,7 @@ function acospi(x::Float64)
         acos_domain_error(x)
     elseif absx < 0.5
         # acos(x)/π = 1/2 - (x/π)*(1 + x²R(x²))
-        # this collapses to 1/2 for tiny |x|, so a guard only costs time
+        # tiny |x| collapses this to 1/2
         hi, lo = two_mul(x, INV_PI_HI)
         a = muladd(hi, arc_tRt(x*x), muladd(x, INV_PI_LO, lo))
         r = 0.5 - hi
