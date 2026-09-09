@@ -75,6 +75,34 @@ static logdata_counter_t *allocLine(logdata_vec_t *vec, int line) JL_NOTSAFEPOIN
 
 static logdata_t coverageData;
 
+// The JIT registers (runtime slot, module counter) pairs after linking. Module
+// counters are folded into the per-line runtime slots before writing a report.
+// JIT code is not unloaded, so the counter addresses remain valid.
+static arraylist_t registered_counters;
+
+// Fold the registered per-module counters into the canonical slots.
+// The caller must hold coverage_lock.
+static void fold_registered_counters(void) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < registered_counters.len; i += 2) {
+        logdata_counter_t *slot = (logdata_counter_t*)registered_counters.items[i];
+        logdata_counter_t *counter = (logdata_counter_t*)registered_counters.items[i + 1];
+        uint64_t value = jl_atomic_load_relaxed(counter);
+        if (value == 0)
+            continue;
+        if (jl_options.code_coverage_mode == JL_COVERAGE_MODE_HIT) {
+            // Folding is idempotent, so the module counter need not be reset.
+            jl_atomic_store_relaxed(slot, 2);
+        }
+        else {
+            // Reset the delta after folding it. Concurrent updates can make
+            // count mode approximate.
+            jl_atomic_store_relaxed(counter, 0);
+            jl_atomic_store_relaxed(slot, jl_atomic_load_relaxed(slot) + value);
+        }
+    }
+}
+
 static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
 {
     if (!filename || filename[0] == '\0') return 1;
@@ -135,6 +163,14 @@ JL_DLLEXPORT logdata_counter_t *jl_coverage_data_pointer(const char *filename, i
     logdata_counter_t *ret = allocLine(logdata_get_or_create(&coverageData, filename), line);
     uv_mutex_unlock(&coverage_lock);
     return ret;
+}
+
+JL_DLLEXPORT void jl_coverage_register_counter(logdata_counter_t *slot, logdata_counter_t *counter)
+{
+    uv_mutex_lock(&coverage_lock);
+    arraylist_push(&registered_counters, slot);
+    arraylist_push(&registered_counters, counter);
+    uv_mutex_unlock(&coverage_lock);
 }
 
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT
@@ -203,6 +239,10 @@ JL_DLLEXPORT void jl_clear_malloc_data(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_clear_coverage_data(void) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&coverage_lock);
+    for (size_t i = 0; i < registered_counters.len; i += 2) {
+        logdata_counter_t *counter = (logdata_counter_t*)registered_counters.items[i + 1];
+        jl_atomic_store_relaxed(counter, 0);
+    }
     clear_log_data(&coverageData);
     uv_mutex_unlock(&coverage_lock);
 }
@@ -311,6 +351,7 @@ static void write_lcov_data(logdata_t *logData, const char *outfile) JL_NOTSAFEP
 JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
     uv_mutex_lock(&coverage_lock);
+    fold_registered_counters();
     if (output) {
         size_t len = strlen(output);
         if (len >= 5 && strcmp(output + len - 5, ".info") == 0) {
@@ -341,4 +382,5 @@ void jl_init_coverage(void)
     uv_mutex_init(&coverage_lock);
     strhash_new(&coverageData, 0);
     strhash_new(&mallocData, 0);
+    arraylist_new(&registered_counters, 0);
 }

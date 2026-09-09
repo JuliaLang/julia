@@ -350,6 +350,7 @@ struct jl_tbaacache_t {
     MDNode *tbaa_arraybuf = nullptr;       // Data in an array of POD
     MDNode *tbaa_arrayselbyte = nullptr;   // a selector byte in a isbits Union jl_genericmemory_t
     MDNode *tbaa_const = nullptr;      // Memory that is immutable by the time LLVM can see it
+    MDNode *tbaa_coverage = nullptr;   // Coverage and malloc-log counters; disjoint from all user-visible memory
     bool initialized = false;
 
     jl_tbaacache_t() = default;
@@ -403,6 +404,7 @@ struct jl_tbaacache_t {
         tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_memory_scalar).first;
         tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_memory_scalar).first;
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
+        tbaa_coverage = tbaa_make_child(mbuilder, "jtbaa_coverage").first;
     }
 };
 }  // anonymous namespace
@@ -418,6 +420,7 @@ struct jl_noaliascache_t {
         MDNode *stack = nullptr;          // Stack slot
         MDNode *data = nullptr;           // Any user data that `pointerset/ref` are allowed to alias
         MDNode *constant = nullptr;       // Memory that is immutable by the time LLVM can see it
+        MDNode *coverage = nullptr;       // Coverage and malloc-log counters
 
         jl_regions_t() = default;
 
@@ -429,6 +432,7 @@ struct jl_noaliascache_t {
             this->stack = mbuilder.createAliasScope("jnoalias_stack", domain);
             this->data = mbuilder.createAliasScope("jnoalias_data", domain);
             this->constant = mbuilder.createAliasScope("jnoalias_const", domain);
+            this->coverage = mbuilder.createAliasScope("jnoalias_coverage", domain);
         }
     } regions;
 
@@ -1697,7 +1701,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
 //    '!tbaa' metadata from the jl_tbaacache_t tree.
 namespace {
 struct jl_aliasinfo_t {
-    enum class Region { unknown, gcframe, stack, data, constant }; // See jl_regions_t
+    enum class Region { unknown, gcframe, stack, data, constant, coverage }; // See jl_regions_t
 
     MDNode *tbaa = nullptr;          // '!tbaa': Struct-path TBAA. TBAA graph forms a tree (indexed by offset).
                                      //          Two pointers do not alias if they are not transitive parents
@@ -1788,6 +1792,8 @@ struct jl_aliascache_t {
     jl_aliasinfo_t memoryown;     // The owner in a foreign jl_genericmemory_t
     // Region::constant
     jl_aliasinfo_t constant;      // Memory that is immutable by the time LLVM can see it
+    // Region::coverage
+    jl_aliasinfo_t coverage;      // Coverage and malloc-log counters
 
     bool initialized = false;
     void initialize(jl_codectx_t &ctx);
@@ -2198,23 +2204,26 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
         case Region::constant:
             alias_scope = regions.constant;
             break;
+        case Region::coverage:
+            alias_scope = regions.coverage;
+            break;
     }
 
-    MDNode *all_scopes[4] = { regions.gcframe, regions.stack, regions.data, regions.constant };
+    MDNode *all_scopes[] = { regions.gcframe, regions.stack, regions.data, regions.constant,
+                             regions.coverage };
     if (alias_scope) {
         // The matching region is added to !alias.scope
         // All other regions are added to !noalias
 
-        int i = 0;
-        Metadata *scopes[1] = { alias_scope };
-        Metadata *noaliases[3];
-        for (auto const &scope: all_scopes) {
+        SmallVector<Metadata *, 4> noaliases;
+        for (MDNode *scope : all_scopes) {
             if (scope == alias_scope) continue;
-            noaliases[i++] = scope;
+            noaliases.push_back(scope);
         }
 
+        Metadata *scopes[1] = { alias_scope };
         this->scope = MDNode::get(ctx.builder.getContext(), ArrayRef<Metadata*>(scopes));
-        this->noalias = MDNode::get(ctx.builder.getContext(), ArrayRef<Metadata*>(noaliases));
+        this->noalias = MDNode::get(ctx.builder.getContext(), noaliases);
     }
 }
 
@@ -2264,6 +2273,7 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     memorylen = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_memorylen);
     memoryown = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_memoryown);
     constant = jl_aliasinfo_t(ctx, Region::constant, tbaa.tbaa_const);
+    coverage = jl_aliasinfo_t(ctx, Region::coverage, tbaa.tbaa_coverage);
 }
 
 // Alias info for the inline data of an `sret` return buffer. Both the caller
@@ -3322,25 +3332,28 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
 
 // Logging for code coverage and memory allocation
 
-static void visitLine(jl_codectx_t &ctx, _Atomic(uint64_t) *ptr, Value *addend, const char *name, bool hit_only)
+static void visitLine(jl_codectx_t &ctx, Value *pv, Value *addend, const char *name, bool hit_only)
 {
-    Value *pv = ConstantExpr::getIntToPtr(
-        ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
-        getPointerTy(ctx.builder.getContext()));
     // Separate accesses avoid the atomic RMW overhead reported in #62424.
-    // Count mode remains approximate when threads update the same line.
+    // Unordered accesses can be promoted out of loops, while the counters'
+    // own alias region and TBAA tag keep them from blocking optimizations of
+    // program memory.
+    jl_aliasinfo_t ai = ctx.alias().coverage;
     if (hit_only) {
         // Racing stores are harmless because hit mode records only zero or one.
         StoreInst *s = ctx.builder.CreateAlignedStore(
-            ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 2), pv, Align(8));
+            ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), pv, Align(8));
         s->setOrdering(AtomicOrdering::Unordered);
+        ai.decorateInst(s);
         return;
     }
     LoadInst *v = ctx.builder.CreateAlignedLoad(getInt64Ty(ctx.builder.getContext()), pv, Align(8), name);
     v->setOrdering(AtomicOrdering::Unordered);
+    ai.decorateInst(v);
     Value *sum = ctx.builder.CreateAdd(v, addend);
     StoreInst *s = ctx.builder.CreateAlignedStore(sum, pv, Align(8));
     s->setOrdering(AtomicOrdering::Unordered);
+    ai.decorateInst(s);
 }
 
 // Code coverage
@@ -3352,13 +3365,26 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     bool hit_only = jl_options.code_coverage_mode == JL_COVERAGE_MODE_HIT;
-    _Atomic(uint64_t) *ptr = jl_coverage_data_pointer(filename.data(), line);
+    // Allocating the runtime slot marks the line as instrumented, even if the
+    // generated module is never linked or run.
+    _Atomic(uint64_t) *slot = jl_coverage_data_pointer(filename.data(), line);
     if (hit_only) {
         // One store per block is enough to mark the line as reached.
-        if (!ctx.coverage_seen.insert({ctx.builder.GetInsertBlock(), ptr}).second)
+        if (!ctx.coverage_seen.insert({ctx.builder.GetInsertBlock(), slot}).second)
             return;
     }
-    visitLine(ctx, ptr, ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt", hit_only);
+    // Unlike an absolute runtime address, a module-local global is both
+    // visible to alias analysis and stable across processes. The linker
+    // metadata maps its final address back to `slot`.
+    GlobalVariable *&counter = ctx.emission_context.coverage_counters[slot];
+    if (!counter) {
+        Type *T_i64 = getInt64Ty(ctx.builder.getContext());
+        counter = new GlobalVariable(ctx.emission_context.get_module(), T_i64, false,
+                                     GlobalVariable::InternalLinkage, ConstantInt::get(T_i64, 0),
+                                     ctx.emission_context.make_name("jl_covctr"));
+        counter->setAlignment(Align(8));
+    }
+    visitLine(ctx, counter, ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt", hit_only);
 }
 
 // Memory allocation log (malloc_log)
@@ -3372,7 +3398,11 @@ static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Val
     Value *addend = sync
         ? ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync})
         : ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
-    visitLine(ctx, jl_malloc_data_pointer(filename.data(), line), addend, "bytecnt", false);
+    // Allocation tracking retains its existing process-local counters.
+    Value *pv = ConstantExpr::getIntToPtr(
+        ConstantInt::get(ctx.types().T_size, (uintptr_t)jl_malloc_data_pointer(filename.data(), line)),
+        getPointerTy(ctx.builder.getContext()));
+    visitLine(ctx, pv, addend, "bytecnt", false);
 }
 
 // --- constant determination ---
