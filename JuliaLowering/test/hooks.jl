@@ -82,14 +82,18 @@
 
     @testset "(AI) `include_string` with `mapexpr`" begin
         seen = Any[]
-        out = JL.include_string(ex -> (push!(seen, ex); ex), Module(:MapexprSeen),
+        local test_mod = Module(:MapexprSeen)
+        out = JL.include_string(ex -> (push!(seen, ex); ex), test_mod,
                                 "aa = 1\n\nbb = aa + 1\nbb*10", "none")
-        @test seen == [Meta.parse("aa = 1"), Meta.parse("bb = aa + 1"), Meta.parse("bb*10")]
+        @test seen == [Meta.parse("aa = 1"; mod=test_mod),
+                       Meta.parse("bb = aa + 1"; mod=test_mod),
+                       Meta.parse("bb*10"; mod=test_mod)]
         @test out === 20
 
+        local test_mod = Module(:MapexprCmp)
         function mapexpr_sees(code)
             seen = Any[]
-            JL.include_string(ex -> (push!(seen, ex); nothing), Module(:MapexprCmp),
+            JL.include_string(ex -> (push!(seen, ex); nothing), test_mod,
                               code, "none")
             only(seen)
         end
@@ -97,12 +101,13 @@
                      "@inline h(a) = a", "\"doc\" k(a) = a", "using Base.Threads",
                      "const cc = 1", "a.b = 2", "x[1] = 2", "if p; q; else; r; end",
                      "macro mmm(); end")
-            @test mapexpr_sees(code) == Meta.parse(code)
+            @test mapexpr_sees(code) == Meta.parse(code; mod=test_mod)
         end
 
         # Three vs four arg module form (may later be deprecated, but macros
         # shouldn't get confused by this while it's here)
-        @test mapexpr_sees("module MMM; end") == Meta.parse("module MMM; end")
+        @test mapexpr_sees("module MMM; end") ==
+            Meta.parse("module MMM; end"; mod=test_mod)
 
         out = JL.include_string(ex -> Expr(:module, true, :Renamed, ex.args[end]),
                                 Module(:MapexprModule), "module Orig; yy = 1; end", "none")
