@@ -1662,7 +1662,6 @@ endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
-OSLIBS += -framework CoreFoundation
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
