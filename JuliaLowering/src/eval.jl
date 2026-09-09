@@ -851,11 +851,14 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
     # TODO: fix this hack.  The normal way of getting the parser for this module
     # only gives us Expr.  We probably want the parser to always create
     # SyntaxTree, then convert it to Expr if the version is too low.
+    #
+    # Modules without a declared syntax version are parsed by `Core._parse`,
+    # which defaults to the running Julia's syntax version; mirror that here.
     version = if isnothing(version) && isdefined(mod, Symbol("#_internal_julia_parse"))
         vp = getglobal(mod, Symbol("#_internal_julia_parse"))
-        vp isa Base.VersionedParse ? vp.ver : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+        vp isa Base.VersionedParse ? vp.ver : JuliaSyntax.SYNTAX_VERSION
     else
-        version isa VersionNumber ? version : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+        version isa VersionNumber ? version : JuliaSyntax.SYNTAX_VERSION
     end
     st = parseall(SyntaxTree, code; filename, version, ignore_warnings=true)
     @jl_assert kind(st) === K"toplevel" st
