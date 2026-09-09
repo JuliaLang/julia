@@ -124,14 +124,14 @@ generation for any function which has not previously been called).
 For convenience, there are macro versions of the above functions which take standard function
 calls and expand argument types automatically:
 
-```julia-repl
+```jldoctest; setup = :(using InteractiveUtils)
 julia> @code_llvm +(1,1)
-;  @ int.jl:87 within `+`
-; Function Attrs: sspstrong uwtable
-define i64 @"julia_+_476"(i64 signext %0, i64 signext %1) #0 {
+; Function Signature: +(Int64, Int64)
+;  @ essentials.jl:1257 within `+`
+define i64 @"julia_+_0"(i64 signext %"x::Int64", i64 signext %"y::Int64") local_unnamed_addr #0 {
 top:
-  %2 = add i64 %1, %0
-  ret i64 %2
+  %0 = add i64 %"y::Int64", %"x::Int64"
+  ret i64 %0
 }
 ```
 
