@@ -57,9 +57,9 @@ The symbols on the side of each call argument and SSA statements represent the f
 - `X` (red): this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
 - `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref Base.Compiler.EscapeAnalysis.EscapeInfo), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
 - `′`: this value has additional object field / array element information in its `AliasInfo` property
-- `↓`: this value may become reachable from GC-managed memory (`has_heap_observed(result.state[x])` holds)
+- `↓`: this value may become reachable from GC-managed memory (`has_address_observed(result.state[x])` holds)
 - `†`: this value may be registered with a finalizer (`has_finalizer_escape(result.state[x])` holds);
-  shown in place of `↓`, since `FinalizerEscape` implies `HeapObserved`
+  shown in place of `↓`, since `FinalizerEscape` implies `AddressObserved`
 
 Escape information of each call argument and SSA value can be inspected programmatically as like:
 ```@repl EAUtils
@@ -79,21 +79,21 @@ which is composed of the following properties:
 - `x.ReturnEscape::BitSet`: records SSA statements where `x` can escape to the caller via return
 - `x.ThrownEscape::BitSet`: records SSA statements where `x` can be thrown as exception
   (used for the [exception handling](@ref EA-Exception-Handling) described below)
-- `x.HeapObserved::Bool`: indicates `x` may become reachable from GC-managed memory,
+- `x.AddressObserved::Bool`: indicates `x` may become reachable from GC-managed memory,
   i.e. it may be stored into a field of another (possibly heap-allocated) object,
   or registered in the finalizer list.
   Note that this property tracks reachability from GC-traced memory rather than escape in
   the traditional sense: a value can be stored into an object that never escapes the frame
-  and still have `HeapObserved` set, since the GC would trace it through that object if it
+  and still have `AddressObserved` set, since the GC would trace it through that object if it
   remains heap-allocated.
   It does not track GC rooting performed by codegen (GC frame slots at safepoints,
   `GC.@preserve`, `:foreigncall` roots), which is an artifact of the calling convention
   rather than of the analyzed program.
 - `x.FinalizerEscape::Bool`: indicates `x` may be registered with a finalizer via
   `Core.finalizer`, either as the finalized object or as the callback.
-  This is a refinement of `HeapObserved` (`FinalizerEscape` implies `HeapObserved`) that is
+  This is a refinement of `AddressObserved` (`FinalizerEscape` implies `AddressObserved`) that is
   separated out because it has strictly stronger lifetime semantics than the other
-  `HeapObserved` sources: the finalizer list outlives the current frame, and the callback
+  `AddressObserved` sources: the finalizer list outlives the current frame, and the callback
   is eventually invoked on the object at an arbitrary later point.
 - `x.AliasInfo`: maintains all possible values that can be aliased to fields or array elements of `x`
   (used for the [alias analysis](@ref EA-Alias-Analysis) described below)

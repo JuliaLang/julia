@@ -131,8 +131,8 @@ function get_name_color(x::EscapeInfo, symbol::Bool = false)
     if name !== nothing && !isa(x.AliasInfo, Bool)
         name = string(name, "′")
     end
-    if name !== nothing && EA.has_heap_observed(x) && !EA.has_all_escape(x)
-        # `†` implies `↓` (`FinalizerEscape` implies `HeapObserved`), so show only one
+    if name !== nothing && EA.has_address_observed(x) && !EA.has_all_escape(x)
+        # `†` implies `↓` (`FinalizerEscape` implies `AddressObserved`), so show only one
         name = string(name, EA.has_finalizer_escape(x) ? "†" : "↓")
     end
     return name, color
@@ -162,8 +162,8 @@ function get_sym_color(x::ArgEscapeInfo)
         if !iszero(escape_bits & EA.ARG_THROWN_ESCAPE)
             color = :yellow
         end
-        if !iszero(escape_bits & EA.ARG_HEAP_OBSERVED)
-            # `†` implies `↓` (`ARG_FINALIZER_ESCAPE` implies `ARG_HEAP_OBSERVED`), so show only one
+        if !iszero(escape_bits & EA.ARG_ADDRESS_OBSERVED)
+            # `†` implies `↓` (`ARG_FINALIZER_ESCAPE` implies `ARG_ADDRESS_OBSERVED`), so show only one
             sym = string(sym, !iszero(escape_bits & EA.ARG_FINALIZER_ESCAPE) ? "†" : "↓")
         end
     end
