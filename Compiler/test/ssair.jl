@@ -258,6 +258,26 @@ let code = Any[
     @test Compiler.verify_ir(ir) === nothing
 end
 
+# Preserve must-throw terminal blocks, both nonfinal and final, when compaction restores dominance order.
+for throwidx in (2, 4)
+    ir = make_ircode(
+        Any[
+            GotoIfNot(false, 3),
+            ReturnNode(nothing),
+            GotoIfNot(Argument(2), 2),
+            ReturnNode(nothing),
+        ];
+        slottypes = Any[typeof(identity), Bool],
+        ssavaluetypes = Any[Any, Any, Any, Any],
+    )
+    ir.stmts[throwidx][:stmt] = Expr(:call, GlobalRef(Base, :error), "boom")
+    ir.stmts[throwidx][:type] = Union{}
+    @test Compiler.verify_ir(ir) === nothing
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+    @test length(ir.stmts) == 4
+end
+
 # Make sure dead blocks that are removed are not still referenced in live phi nodes
 let code = Any[
         # Block 1
