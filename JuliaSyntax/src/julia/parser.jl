@@ -42,7 +42,7 @@ function ParseState(ps::ParseState; range_colon_enabled=nothing,
         end_symbol === nothing ? ps.end_symbol : end_symbol,
         whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
         where_enabled === nothing ? ps.where_enabled : where_enabled,
-        paren_content_byte_index === nothing ? 
+        paren_content_byte_index === nothing ?
             ps.paren_content_byte_index : paren_content_byte_index)
 end
 
