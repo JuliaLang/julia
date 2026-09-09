@@ -103,19 +103,23 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
 // and neither need a snapshot barrier: marking can only have begun at a safepoint, so no
 // field of `parent` can appear in a live snapshot.
 //
-// A reference-counting plan does need it, and this was found by measurement rather than
-// by argument. Both of the above are recovery arguments -- the omitted store is made good
-// later, when the young parent is scanned. Counts are not derived by scanning: they come
-// from barriers and root scans only, so a store that no barrier observed leaves its
-// referent's count one short, and the referent is freed while `parent` still points at it.
-#ifdef MMTK_FIELD_BARRIER
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT
-{
-    mmtk_gc_wb_fast(parent, ptr);
-}
-#else
+// A reference-counting plan need not remember it either. The recovery argument that serves
+// the other two -- the omitted store is made good later, when the young parent is scanned --
+// holds for counts as well, because LXR derives a nursery object's outgoing counts by
+// scanning it at promotion (`ProcessIncs::promote` -> `scan_nursery_object` ->
+// `count_promoted_field`). Promotion only happens in a pause and a pause only happens at a
+// safepoint, so a parent younger than the last safepoint cannot yet have been promoted: the
+// values its fields hold at promotion time are the ones that get counted, whatever this
+// barrier did or did not observe beforehand. The decrement side balances for the same
+// reason -- no increment was ever issued from this parent for the reference being
+// overwritten, so none is owed.
+//
+// Being a no-op is also what keeps LXR's slot-less barrier away from half-built objects.
+// This entry has no slot to offer, so under a field-granularity plan it would fall back to
+// snapshotting the whole parent, and callers fire it *before* the store, on an object whose
+// remaining fields are still uninitialized (`jl_new_globalref` is the clearest case). That
+// walk reads every field and treats what it finds as a reference to decrement.
 STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
-#endif
 
 #ifdef MMTK_SNAPSHOT_BARRIER
 // Being in a remset means the parent will be *rescanned*, which recovers references

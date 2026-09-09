@@ -60,7 +60,15 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
     const LOCAL_MARK_BIT_SPEC: VMLocalMarkBitSpec = MARKING_METADATA_SPEC;
     const LOCAL_LOS_MARK_NURSERY_SPEC: VMLocalLOSMarkNurserySpec = LOS_METADATA_SPEC;
     const UNIFIED_OBJECT_REFERENCE_ADDRESS: bool = false;
-    const OBJECT_REF_OFFSET_LOWER_BOUND: isize = 0;
+    // The smallest `ref - object_start` over *every* space, since `ref_to_object_start` is what
+    // MMTk measures the offset against:
+    //   * ordinary small object: one Julia header word          -> 8
+    //   * buffer (`JULIA_BUFF_TAG`): two header words           -> 16
+    //   * large object space: `ref_to_object_start` subtracts a -> 48
+    //     `bigval_t` header
+    // so the offset is always at least 8. Declaring 0 is also sound (it is a bound, not the
+    // exact offset), just looser than it needs to be.
+    const OBJECT_REF_OFFSET_LOWER_BOUND: isize = 8;
 
     #[cfg(feature = "object_pinning")]
     const LOCAL_PINNING_BIT_SPEC: VMLocalPinningBitSpec = LOCAL_PINNING_METADATA_BITS_SPEC;

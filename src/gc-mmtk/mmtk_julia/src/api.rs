@@ -162,6 +162,20 @@ pub extern "C" fn mmtk_gc_init(
         // If the assertion failed, check MMTK_MIN_ALIGNMENT in julia.h
         assert_eq!(<JuliaVM as mmtk::vm::VMBinding>::MIN_ALIGNMENT, 4);
     }
+
+    // The offset bound is a compile-time constant, but the header size it is derived from is
+    // handed over from C at boot. Check the two against each other, because getting this wrong
+    // is silent.
+    {
+        use crate::object_model::VMObjectModel;
+        use mmtk::vm::ObjectModel;
+        let header = unsafe { crate::JULIA_HEADER_SIZE } as isize;
+        assert_eq!(
+            <VMObjectModel as ObjectModel<JuliaVM>>::OBJECT_REF_OFFSET_LOWER_BOUND,
+            header,
+            "OBJECT_REF_OFFSET_LOWER_BOUND must be one Julia header (get_object_start_ref)"
+        );
+    }
 }
 
 #[no_mangle]

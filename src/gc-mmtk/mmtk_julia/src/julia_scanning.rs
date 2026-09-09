@@ -187,18 +187,32 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             #[cfg(not(feature = "concurrent_marking"))]
             mmtk_scan_gcstack(ta, closure);
 
-            let layout = (*jl_task_type).layout;
-            debug_assert!((*layout).fielddesc_type_custom() == 0);
-            debug_assert!((*layout).nfields > 0);
-            let npointers = (*layout).npointers;
-            let mut obj8_begin = mmtk_jl_dt_layout_ptrs(layout);
-            let obj8_end = obj8_begin.shift::<u8>(npointers as isize);
+            // A task can be reached before `jl_task_type` exists. `jl_init_root_task`
+            // allocates the root task and stamps its type tag (`jl_set_typetagof`) while the
+            // type globals are still null -- they are only populated later in `ijl_init_` --
+            // so anything that scans the root task in that window has no layout to walk from.
+            // Nothing reaches it during a GC that early, but a write barrier can: LXR's
+            // slot-less barrier snapshots the whole parent, and `jl_init_root_task` calls
+            // `jl_gc_wb_fresh(ct, ...)` partway through filling the task in.
+            //
+            // Skipping the walk loses nothing. The task is memset to zero on allocation, and
+            // every reference field it is given afterwards is stored through a barrier of its
+            // own, so no edge goes unreported. The stack scan above needs no such guard: it
+            // already null-checks `gcstack` and `excstack`, both of which are zero here.
+            if !jl_task_type.is_null() {
+                let layout = (*jl_task_type).layout;
+                debug_assert!((*layout).fielddesc_type_custom() == 0);
+                debug_assert!((*layout).nfields > 0);
+                let npointers = (*layout).npointers;
+                let mut obj8_begin = mmtk_jl_dt_layout_ptrs(layout);
+                let obj8_end = obj8_begin.shift::<u8>(npointers as isize);
 
-            while obj8_begin < obj8_end {
-                let obj8_begin_loaded = obj8_begin.load::<u8>();
-                let slot = obj.shift::<Address>(obj8_begin_loaded as isize);
-                process_slot(closure, slot);
-                obj8_begin = obj8_begin.shift::<u8>(1);
+                while obj8_begin < obj8_end {
+                    let obj8_begin_loaded = obj8_begin.load::<u8>();
+                    let slot = obj.shift::<Address>(obj8_begin_loaded as isize);
+                    process_slot(closure, slot);
+                    obj8_begin = obj8_begin.shift::<u8>(1);
+                }
             }
         } else if vtag_usize == ((jl_small_typeof_tags_jl_cancel_source_tag as usize) << 4) {
             // Variable-sized cancellation token source: `nparents` {parent,
