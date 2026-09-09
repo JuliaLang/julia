@@ -603,11 +603,11 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
-# A self-contained static runtime: the runtime objects plus the support
-# libraries that libjulia-internal.so links in statically. Consumers still need
-# the sysimage object (which supplies jl_image_unpack, jl_small_typeof, ...) and
-# the external libraries (libunwind, LLVMSupport, zstd, ...).
-STATIC_LIBS := $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING)
+# The static archive also contains the members of the support archives below, so
+# that consumers only need to add the sysimage object (jl_image_unpack,
+# jl_small_typeof, ...) and the external libraries (libunwind, LLVMSupport,
+# zstd, ...). System libraries given as `-l` flags are left to the consumer.
+STATIC_LIBS := $(filter %.a,$(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
 $(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(STATIC_LIBS)
 	@rm -rf $@
 ifeq ($(OS),Darwin)
