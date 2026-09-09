@@ -514,8 +514,11 @@ $(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj $(BUILDDIR)/interprete
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/julia-task-dispatcher.h $(SRCDIR)/objcache.h
 $(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj $(BUILDDIR)/jltypes.static.o: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/static_exports.static.o: $(SRCDIR)/jl_exported_data_defs.inc $(SRCDIR)/jl_exported_data.inc $(SRCDIR)/jl_exported_funcs.inc
+ifneq ($(OS),WINNT)
+STATIC_TRAMPOLINE_ASFLAGS := -Wa$(COMMA)--noexecstack
+endif
 $(BUILDDIR)/static_trampolines.o: $(JULIAHOME)/cli/trampolines/trampolines_$(ARCH).S $(JULIAHOME)/cli/trampolines/common.h $(SRCDIR)/jl_exported_funcs.inc | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) -DJL_LIBRARY_STATIC -Wa$(COMMA)--noexecstack -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) -DJL_LIBRARY_STATIC $(STATIC_TRAMPOLINE_ASFLAGS) -c $< -o $@)
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvm-codegen-shared.h $(BUILDDIR)/julia_version.h
 $(BUILDDIR)/llvm-alloc-helpers.o $(BUILDDIR)/llvm-alloc-helpers.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
 $(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h

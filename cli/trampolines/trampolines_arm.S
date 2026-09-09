@@ -4,7 +4,7 @@
 #include "../../src/jl_exported_funcs.inc"
 
 #define XX(name) \
-GLOBAL(CNAME(name)); \
+.global CNAME(name); \
 .cfi_startproc; \
 CNAME(name)##:; \
     ldr ip, CONCAT(.L,CNAMEADDR(name)); \

@@ -4,7 +4,7 @@
 #include "../../src/jl_exported_funcs.inc"
 
 #define XX(name) \
-GLOBAL(CNAME(name)) SEP \
+.global CNAME(name) SEP \
 CNAME(name)##: SEP \
 .cfi_startproc SEP \
 .p2align    2 SEP \

@@ -5,7 +5,7 @@
 
 #define XX(name) \
 DEBUGINFO(name); \
-GLOBAL(CNAME(name)); \
+.global CNAME(name); \
 CNAME(name)##:; \
 .cfi_startproc; \
 SEH_START1(name); \

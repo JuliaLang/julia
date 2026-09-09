@@ -37,13 +37,15 @@ JL_HIDDEN const void **const jl_static_exported_data_ptrs[] = {
 // binary defines it (aotcompile.cpp), and export_jl_small_typeof fills it in.
 
 // The public `jl_*` function names are provided by the loader's trampolines
-// (cli/trampolines/*.S, compiled into the archive as weak symbols), each of
-// which jumps through its `jl_<name>_addr` slot. The loader fills the slots with
-// dlsym at load time; here they are bound at link time to the runtime's `ijl_`
-// implementations (jl_internal_funcs.inc). The `__asm__` label references the
-// `ijl_` symbol directly: not every exported function is declared in a header
-// visible here, and spelling `ijl_<name>` in C would clash with the prototypes
-// julia.h does declare.
+// (cli/trampolines/*.S, compiled into the archive), each of which jumps through
+// its `jl_<name>_addr` slot. The loader fills the slots with dlsym at load time;
+// here they are bound at link time to the runtime's `ijl_` implementations
+// (jl_internal_funcs.inc). The runtime must not define any of these public names
+// itself in the static build (see `jl_egal` in builtins.c), since PE-COFF weak
+// symbols are not usable across object files with GNU ld. The `__asm__` label
+// references the `ijl_` symbol directly: not every exported function is
+// declared in a header visible here, and spelling `ijl_<name>` in C would clash
+// with the prototypes julia.h does declare.
 #if defined(_OS_DARWIN_) || (defined(_OS_WINDOWS_) && defined(_CPU_X86_))
 #define JL_TRAMPOLINE_TARGET(name) "_i" name // C ABI symbols have an underscore prefix
 #else

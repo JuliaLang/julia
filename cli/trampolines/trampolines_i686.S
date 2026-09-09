@@ -33,7 +33,7 @@ julia__x86.get_pc_thunk.ax:
 
 #define XX(name) \
 DEBUGINFO(CNAME(name)); \
-GLOBAL(CNAME(name)); \
+.global CNAME(name); \
 .cfi_startproc; \
 CNAME(name)##:; \
     CET_START(); \

@@ -76,7 +76,13 @@ typedef intptr_t ssize_t;
 #  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) JL_VISIBILITY_DEFAULT
 # endif
 #define JL_HIDDEN
-#define JL_DLLIMPORT   __declspec(dllimport) JL_VISIBILITY_DEFAULT
+# ifdef JL_LIBRARY_STATIC
+// the runtime, codegen and the public symbols normally defined by libjulia are
+// all linked into one image (see static_exports.c): no import indirection
+#  define JL_DLLIMPORT JL_VISIBILITY_DEFAULT
+# else
+#  define JL_DLLIMPORT __declspec(dllimport) JL_VISIBILITY_DEFAULT
+# endif
 #else
 #define STDCALL
 #define JL_DLLIMPORT __attribute__ ((visibility("default")))

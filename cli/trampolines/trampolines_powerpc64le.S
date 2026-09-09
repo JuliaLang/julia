@@ -10,7 +10,7 @@
 // See 64-Bit ELF V2 ABI Specification: Power Architecture v1.4
 
 #define XX(name) \
-GLOBAL(CNAME(name)); \
+.global CNAME(name); \
 .type CNAME(name)##, @function; \
 .cfi_startproc; \
 CNAME(name)##: ; \

@@ -6,7 +6,7 @@
 #define SEP ;
 
 #define XX(name) \
-GLOBAL(CNAME(name)) SEP \
+.global CNAME(name) SEP \
 .cfi_startproc SEP \
 .p2align    2 SEP \
  CNAME(name)##: SEP \
