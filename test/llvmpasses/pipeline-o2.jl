@@ -82,9 +82,52 @@ end
 # ALL-LABEL: @"julia_copy_complex!
 # ALL: vector.body
 # UNOPT-LABEL: @"julia_copy_complex!
-# UNOPT: [[COPY:%.*]] = load [2 x double]
-# UNOPT: store [2 x double] [[COPY]], ptr addrspace(13)
+# UNOPT: [[COMPLEX0:%.*copyload.*]] = load i64
+# UNOPT: [[COMPLEX1:%.*copyload.*]] = load i64
+# UNOPT: store i64 [[COMPLEX0]], ptr addrspace(13)
+# UNOPT: store i64 [[COMPLEX1]], ptr addrspace(13)
 function copy_complex!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_bytes!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_bytes!
+# UNOPT: [[BYTES:%.*copyload.*]] = load i64
+# UNOPT: store i64 [[BYTES]], ptr addrspace(13)
+function copy_bytes!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_three_bytes!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_three_bytes!
+# UNOPT: [[BYTES0:%.*copyload.*]] = load i8
+# UNOPT: [[BYTES1:%.*copyload.*]] = load i8
+# UNOPT: [[BYTES2:%.*copyload.*]] = load i8
+# UNOPT: store i8 [[BYTES0]], ptr addrspace(13)
+# UNOPT: store i8 [[BYTES1]], ptr addrspace(13)
+# UNOPT: store i8 [[BYTES2]], ptr addrspace(13)
+function copy_three_bytes!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_float3!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_float3!
+# UNOPT: [[FLOAT0:%.*copyload.*]] = load i32
+# UNOPT: [[FLOAT1:%.*copyload.*]] = load i32
+# UNOPT: [[FLOAT2:%.*copyload.*]] = load i32
+# UNOPT: store i32 [[FLOAT0]], ptr addrspace(13)
+# UNOPT: store i32 [[FLOAT1]], ptr addrspace(13)
+# UNOPT: store i32 [[FLOAT2]], ptr addrspace(13)
+function copy_float3!(dest, src)
     @inbounds @simd for i in eachindex(dest, src)
         dest[i] = src[i]
     end
@@ -188,6 +231,9 @@ emit(multiiterate_read, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write, Vector{Int64}, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write!, Vector{Int64}, Vector{Int64})
 emit(copy_complex!, Vector{ComplexF64}, Vector{ComplexF64})
+emit(copy_bytes!, Vector{NTuple{8, UInt8}}, Vector{NTuple{8, UInt8}})
+emit(copy_three_bytes!, Vector{NTuple{3, UInt8}}, Vector{NTuple{3, UInt8}})
+emit(copy_float3!, Vector{NTuple{3, Float32}}, Vector{NTuple{3, Float32}})
 emit(copy_padded!, Vector{PaddedCopy}, Vector{PaddedCopy})
 emit(copy_large!, Vector{LargeCopy}, Vector{LargeCopy})
 
