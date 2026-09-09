@@ -300,6 +300,21 @@ JL_DLLEXPORT void jl_clear_coverage_data(void) JL_NOTSAFEPOINT
     uv_mutex_unlock(&coverage_lock);
 }
 
+// Julia filenames use UTF-8, whereas Windows fopen uses the active code page.
+static FILE *coverage_fopen(const char *filename, const char *mode) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    const wchar_t *wfilename = ios_utf8_to_wchar(filename);
+    const wchar_t *wmode = ios_utf8_to_wchar(mode);
+    FILE *file = _wfopen(wfilename, wmode);
+    free((void*)wfilename);
+    free((void*)wmode);
+    return file;
+#else
+    return fopen(filename, mode);
+#endif
+}
+
 // Base source locations in system images are relative to the installed base
 // directory. Resolve them only when applying a path filter to a report.
 static int coverage_file_is_selected(logdata_t *logData, const char *filename) JL_NOTSAFEPOINT
@@ -339,13 +354,13 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
         else
             snprintf(fullpath, sizeof(fullpath), "%s", filename);
 
-        FILE *inf = fopen(fullpath, "r");
+        FILE *inf = coverage_fopen(fullpath, "r");
         if (!inf)
             continue;
 
         char outpath[4096];
         snprintf(outpath, sizeof(outpath), "%s%s", fullpath, extension);
-        FILE *outf = fopen(outpath, "wb");
+        FILE *outf = coverage_fopen(outpath, "wb");
         if (outf) {
             int l = 1;
             unsigned block = 0;
@@ -381,7 +396,7 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
 
 static void write_lcov_data(logdata_t *logData, const char *outfile) JL_NOTSAFEPOINT
 {
-    FILE *outf = fopen(outfile, "ab");
+    FILE *outf = coverage_fopen(outfile, "ab");
     if (!outf) return;
     size_t sz = logData->size;
     void **tab = logData->table;

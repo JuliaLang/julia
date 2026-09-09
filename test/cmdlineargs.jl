@@ -711,6 +711,23 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
         end
 
+        # Source and report filenames must support Unicode on Windows as well.
+        let unicode_dir = mkdir(joinpath(dir, "coverage λ space"))
+            srcfile = joinpath(unicode_dir, "source λ.jl")
+            cp(inputfile, srcfile)
+            outfile = joinpath(unicode_dir, "coverage λ.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=user $srcfile`)
+            @test occursin("SF:$(realpath(srcfile))", read(outfile, String))
+            run(`$cov_exename --code-coverage=user $srcfile`)
+            covfiles = filter(endswith(".cov"), readdir(unicode_dir; join=true))
+            @test length(covfiles) == 1
+            @test occursin("code_coverage_test", read(only(covfiles), String))
+            run(`$cov_exename --track-allocation=user $srcfile`)
+            memfiles = filter(endswith(".mem"), readdir(unicode_dir; join=true))
+            @test length(memfiles) == 1
+            @test occursin("code_coverage_test", read(only(memfiles), String))
+        end
+
         # constructs that have regressed before; see testhelpers/coverage_constructs.jl
         let constructs = realpath(joinpath(helperdir, "coverage_constructs.jl"))
             outfile = joinpath(dir, "constructs.info")
