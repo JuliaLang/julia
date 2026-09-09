@@ -479,11 +479,6 @@ atan_q(w::Float32) = w*@horner(w, -1.9999158382f-01, -1.0648017377f-01)
     atan_p(x², x⁴), atan_q(x⁴)
 end
 
-# Callers below build `i` as a sum of three Bools plus one, so it is always in `1:4`.
-# LLVM drops the bounds check either way, so the assertion only serves to keep the
-# callers `nothrow`.
-@assume_effects :nothrow @inline atan_select(t::NTuple{4}, i::Int) = t[i]
-
 function atan(x::T) where T<:Union{Float32, Float64}
     # Method
     #   1. Reduce x to positive by atan(x) = -atan(-x).
@@ -517,10 +512,12 @@ function atan(x::T) where T<:Union{Float32, Float64}
     # degenerating to -1/|x|. Every coefficient is exact, so this agrees with the
     # nested form bit for bit, and the three comparisons need no branch between them.
     i = (absx >= T(11/16)) + (absx >= T(19/16)) + (absx >= T(39/16)) + 1
-    a = atan_select((T(2.0), T(1.0), T(2.0), T(0.0)), i)
-    b = atan_select((T(1.0), T(1.0), T(3.0), T(1.0)), i)
-    hi = atan_select((ATAN_1_O_2_HI(T), ATAN_2_O_2_HI(T), ATAN_3_O_2_HI(T), ATAN_INF_HI(T)), i)
-    lo = atan_select((ATAN_1_O_2_LO(T), ATAN_2_O_2_LO(T), ATAN_3_O_2_LO(T), ATAN_INF_LO(T)), i)
+    @assume_effects :nothrow begin # needed because of #63076
+        a = (T(2.0), T(1.0), T(2.0), T(0.0))[i]
+        b = (T(1.0), T(1.0), T(3.0), T(1.0))[i]
+        hi = (ATAN_1_O_2_HI(T), ATAN_2_O_2_HI(T), ATAN_3_O_2_HI(T), ATAN_INF_HI(T))[i]
+        lo = (ATAN_1_O_2_LO(T), ATAN_2_O_2_LO(T), ATAN_3_O_2_LO(T), ATAN_INF_LO(T))[i]
+    end
     x = muladd(a, absx, -b)/muladd(b, absx, a)
     # end of argument reduction
     p, q = atan_pq(x)
@@ -871,10 +868,12 @@ function atanpi(x::Float64)
     end
     # xr = (a*|x| - b)/(a + b*|x|) covers all four centers; see atan above.
     i = (absx >= 11/16) + (absx >= 19/16) + (absx >= 39/16) + 1
-    a = atan_select((2.0, 1.0, 2.0, 0.0), i)
-    b = atan_select((1.0, 1.0, 3.0, 1.0), i)
-    zhi = atan_select((ATANPI_1_O_2_HI, 0.25, ATANPI_3_O_2_HI, 0.5), i)
-    zlo = atan_select((ATANPI_1_O_2_LO, 0.0, ATANPI_3_O_2_LO, 0.0), i)
+    @assume_effects :nothrow begin # needed because of #63076
+        a = (2.0, 1.0, 2.0, 0.0)[i]
+        b = (1.0, 1.0, 3.0, 1.0)[i]
+        zhi = (ATANPI_1_O_2_HI, 0.25, ATANPI_3_O_2_HI, 0.5)[i]
+        zlo = (ATANPI_1_O_2_LO, 0.0, ATANPI_3_O_2_LO, 0.0)[i]
+    end
     xr = muladd(a, absx, -b)/muladd(b, absx, a)
     # end of argument reduction
     p, q = atan_pq(xr)
