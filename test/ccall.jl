@@ -1349,6 +1349,220 @@ elseif Sys.ARCH !== :i686 && Sys.ARCH !== :arm # TODO
 
 end
 
+# The wider C prototype exposes RISC-V's XLEN extension. Keep these calls out of
+# line so constant materialization cannot hide incorrect lowering.
+@noinline reg_probe32(x::UInt32) = ccall((:test_reg_32, libccalltest), Int64, (UInt32,), x)
+@noinline reg_probe32(x::Char) = ccall((:test_reg_32, libccalltest), Int64, (Char,), x)
+@noinline function reg_probe32_va(x::UInt32)
+    ccall((:test_reg_32_va, libccalltest), Int64, (Cint, UInt32...), Cint(0), x)
+end
+@noinline cfun_ret_u32(x::Int64) = 0xdeadbeef % UInt32
+if Sys.ARCH === :riscv64
+    @test reg_probe32(0x80000000) === Int64(-2147483648)
+    @test reg_probe32(0xdeadbeef) === Int64(reinterpret(Int32, 0xdeadbeef))
+    @test reg_probe32(0x7fffffff) === Int64(2147483647)
+    @test reg_probe32('\U10000') === Int64(reinterpret(Int32, reinterpret(UInt32, '\U10000')))
+    @test reg_probe32_va(0x80000000) === Int64(-2147483648)
+    @test ccall(@cfunction(cfun_ret_u32, UInt32, (Int64,)), Int64, (Int64,), 0) ===
+          Int64(reinterpret(Int32, 0xdeadbeef))
+end
+
+# Exercise caller and callee classification at affected register boundaries.
+# Trailing sentinels also check register accounting.
+struct ABI_S_f; x::Float32; end
+struct ABI_S_d; x::Float64; end
+struct ABI_N_d; s::ABI_S_d; end
+struct ABI_T1d; v::NTuple{1,Float64}; end
+struct ABI_S_ff; a::Float32; b::Float32; end
+struct ABI_S_fd; a::Float32; b::Float64; end
+struct ABI_T2f; v::NTuple{2,Float32}; end
+struct ABI_S_fi; a::Float32; b::Int32; end
+struct ABI_S_if; a::Int32; b::Float32; end
+struct ABI_S_di; a::Float64; b::Int64; end
+struct ABI_M_fi; s::ABI_S_f; i::Int32; end
+struct ABI_S_l; x::Int64; end
+struct ABI_S_ve; x::VecElement{Int64}; end
+struct ABI_M_dl; d::Float64; s::ABI_S_l; end
+struct ABI_S_fp; a::Float32; b::Ptr{Cvoid}; end
+struct ABI_S_dV1; d::Float64; v::VecReg{1,Float64}; end
+struct ABI_S_dV2i; d::Float64; v::V2xI32; end
+struct ABI_S_V1f; v::VecReg{1,Float32}; end
+struct ABI_A16; x::Int128; end
+struct ABI_S_h; x::Float16; end
+struct ABI_S_hh; a::Float16; b::Float16; end
+struct ABI_S_hd; a::Float16; b::Float64; end
+struct ABI_S_hi; a::Float16; b::Int32; end
+struct ABI_S_bf; x::Core.BFloat16; end
+struct ABI_S_bfbf; a::Core.BFloat16; b::Core.BFloat16; end
+struct ABI_S_bfd; a::Core.BFloat16; b::Float64; end
+struct ABI_S_bfi; a::Core.BFloat16; b::Int32; end
+struct ABI_SU; x::Float64; y::Union{Int32,Float32}; end
+struct ABI_SA; x::Float64; y::Any; end
+# Must match `abi_probe_t`.
+struct ABIProbe
+    i::NTuple{8,Int64}
+    d::NTuple{8,Float64}
+    s1::Int64
+    s2::Float64
+    buf::NTuple{32,UInt8}
+end
+if Sys.ARCH === :riscv64 || (Sys.ARCH === :x86_64 && Sys.islinux()) || Sys.ARCH === :aarch64
+    abi_probe_ptr() = cglobal((:abi_probe, libccalltest), ABIProbe)
+    abi_probe() = unsafe_load(abi_probe_ptr())
+    abi_buf_ptr(::Type{T}) where {T} = Ptr{T}(abi_probe_ptr() + fieldoffset(ABIProbe, 5))
+    abi_val(::Type{T}, s) where {T<:Base.BitInteger} = hash(s) % T
+    abi_val(::Type{T}, s) where {T<:Union{Int128,UInt128}} =
+        (T(hash(s) % UInt64) << 64) | T(hash(s + 1) % UInt64)
+    abi_val(::Type{T}, s) where {T<:Union{Float16,Float32,Float64}} = T(s) + T(0.25) - T(50)
+    abi_val(::Type{Core.BFloat16}, s) = Core.Intrinsics.bitcast(Core.BFloat16, UInt16(0x4000 + s))
+    abi_val(::Type{Ptr{Cvoid}}, s) = Ptr{Cvoid}(hash(s) % UInt)
+    function abi_val(::Type{T}, s) where {T}
+        vals = ntuple(i -> abi_val(fieldtype(T, i), 7s + i), fieldcount(T))
+        return T <: Tuple ? convert(T, vals) : T(vals...)
+    end
+
+    # Julia type, C suffix, named positions, variadic type, variadic GPR counts.
+    abi_types = Any[
+        (Float32, :Float32, ((0, 0), (0, 8)), nothing, ()),
+        (Float64, :Float64, ((0, 0), (0, 8)), nothing, ()),
+        (Ptr{Cvoid}, :Ptr, ((0, 0),), nothing, ()),
+        (ABI_S_f, :S_f, ((0, 0), (0, 8)), ABI_S_f, (0,)),
+        (ABI_S_d, :S_d, ((0, 0),), nothing, ()),
+        (ABI_N_d, :N_d, ((0, 0),), nothing, ()),
+        (ABI_T1d, :T1d, ((0, 0),), nothing, ()),
+        (ABI_S_ff, :S_ff, ((0, 0), (0, 7), (0, 8)), ABI_S_ff, (0,)),
+        (ABI_S_fd, :S_fd, ((0, 0), (0, 7), (0, 8)), nothing, ()),
+        (ABI_T2f, :T2f, ((0, 0),), nothing, ()),
+        (ABI_S_fi, :S_fi, ((0, 0), (7, 7), (8, 7), (7, 8)), ABI_S_fi, (0,)),
+        (ABI_S_if, :S_if, ((0, 0),), nothing, ()),
+        (ABI_S_di, :S_di, ((0, 0),), nothing, ()),
+        (ABI_M_fi, :M_fi, ((0, 0),), nothing, ()),
+        # A non-tuple VecElement wrapper is a scalar aggregate, not a vector.
+        (ABI_S_ve, :S_l, ((0, 0),), nothing, ()),
+        (ABI_M_dl, :M_dl, ((0, 0),), nothing, ()),
+        (ABI_S_fp, :S_fp, ((0, 0),), nothing, ()),
+        (V2xF64, :V2d, ((0, 0),), nothing, ()),
+        (V2xF32, :V2f, ((0, 0),), nothing, ()),
+        (V2xI32, :V2i, ((0, 0),), nothing, ()),
+        # A one-element 8-byte vector is an AArch64 short vector.
+        (VecReg{1,Int64}, :V1l, ((0, 0),), nothing, ()),
+        (ABI_S_dV2i, :S_dV2i, ((0, 0),), nothing, ()),
+        # GCC and Clang disagree on one-element floating-point vectors.
+        (VecReg{1,Float64}, :V1d, ((0, 0),), nothing, ()),
+        (VecReg{1,Float32}, :V1f, ((0, 0),), nothing, ()),
+        (ABI_S_dV1, :S_dV1, ((0, 0),), nothing, ()),
+        # Sub-8-byte vectors are not AArch64 short vectors.
+        (ABI_S_V1f, :S_V1f, ((0, 0),), nothing, ()),
+        # Exercise register exhaustion and aligned variadic pairs.
+        (Int128, :Int128, ((0, 0), (5, 0), (7, 0), (8, 0)), Int128, (0, 4, 5, 7)),
+        (ABI_A16, :A16, ((0, 0), (5, 0), (7, 0), (8, 0)), ABI_A16, (0, 4, 5, 7)),
+    ]
+    if unsafe_load(cglobal((:abi_probe_float16, libccalltest), Cint)) != 0
+        # Reuse the bit-copying `_Float16` probes for `BFloat16`.
+        push!(abi_types,
+              (Float16, :Float16, ((0, 0), (0, 8)), Float16, (0,)),
+              (ABI_S_h, :S_h, ((0, 0),), nothing, ()),
+              (ABI_S_hh, :S_hh, ((0, 0), (0, 7), (0, 8)), nothing, ()),
+              (ABI_S_hd, :S_hd, ((0, 0), (0, 7), (0, 8)), nothing, ()),
+              (ABI_S_hi, :S_hi, ((0, 0), (7, 7), (8, 7), (7, 8)), nothing, ()),
+              (Core.BFloat16, :Float16, ((0, 0), (0, 8)), Core.BFloat16, (0,)),
+              (ABI_S_bf, :S_h, ((0, 0),), nothing, ()),
+              (ABI_S_bfbf, :S_hh, ((0, 0), (0, 7), (0, 8)), nothing, ()),
+              (ABI_S_bfd, :S_hd, ((0, 0), (0, 7), (0, 8)), nothing, ()),
+              (ABI_S_bfi, :S_hi, ((0, 0), (7, 7), (8, 7), (7, 8)), nothing, ()))
+    end
+
+    const abi_cb_got = Ref{Any}(nothing)
+    const abi_cb_ret = Ref{Any}(nothing)
+    abi_clang = unsafe_load(cglobal((:abi_probe_clang, libccalltest), Cint)) != 0
+    # Compiler-specific vector conventions that Julia cannot match simultaneously.
+    abi_skip = Any[]
+    if Sys.ARCH === :x86_64 && abi_clang
+        # Julia follows GCC for these vectors.
+        push!(abi_skip, VecReg{1,Float64}, VecReg{1,Float32}, ABI_S_V1f)
+    elseif Sys.ARCH === :aarch64
+        # Bare sub-8-byte vectors differ; test the shared wrapper ABI instead.
+        push!(abi_skip, VecReg{1,Float32})
+    end
+    for (T, cname, positions, vaT, va_leads) in abi_types, (g, f) in positions
+        leadtypes = (fill(Int64, g)..., fill(Float64, f)...)
+        leads = (Int64[abi_val(Int64, 100 + k) for k in 0:g-1]..., Float64[abi_val(Float64, 200 + k) for k in 0:f-1]...)
+        cleads = (Int64[1000 + k for k in 0:g-1]..., Float64[0.5 + k for k in 0:f-1]...)
+        leadparams = [:($(Symbol(:l, k))::$(leadtypes[k])) for k in 1:g+f]
+        leadsyms = [Symbol(:l, k) for k in 1:g+f]
+        local x, s1, s2 = abi_val(T, 1), abi_val(Int64, 2), abi_val(Float64, 3)
+        T in abi_skip && continue
+        suffix = "$(cname)_$(g)_$(f)"
+        probe_arg = Symbol("abi_probe_arg_", suffix)
+        probe_ret = Symbol("abi_probe_ret_", suffix)
+        cbarg = Symbol("abi_probe_cbarg_", suffix)
+        cbret = Symbol("abi_probe_cbret_", suffix)
+
+        # Julia caller: argument.
+        @eval @noinline $probe_arg(x::$T, s1::Int64, s2::Float64) =
+            ccall(($(QuoteNode(Symbol("test_abi_arg_", suffix))), libccalltest), Cvoid,
+                  ($(leadtypes...), $T, Int64, Float64), $(leads...), x, s1, s2)
+        @eval $probe_arg($x, $s1, $s2)
+        got = abi_probe()
+        @test unsafe_load(abi_buf_ptr(T)) === x
+        @test (got.s1, got.s2) === (s1, s2)
+        @test got.i[1:g] == leads[1:g] && got.d[1:f] == leads[g+1:end]
+
+        # Julia caller: return.
+        unsafe_store!(abi_buf_ptr(T), x)
+        @eval @noinline $probe_ret(s1::Int64) =
+            ccall(($(QuoteNode(Symbol("test_abi_ret_", suffix))), libccalltest), $T,
+                  ($(leadtypes...), Int64), $(leads...), s1)
+        @test (@eval $probe_ret($s1)) === x
+        got = abi_probe()
+        @test got.s1 === s1
+        @test got.i[1:g] == leads[1:g] && got.d[1:f] == leads[g+1:end]
+
+        # Julia callee: argument.
+        unsafe_store!(abi_buf_ptr(T), x)
+        @eval $cbarg($(leadparams...), x::$T, s1::Int64, s2::Float64) =
+            (abi_cb_got[] = (($(leadsyms...),), x, s1, s2); nothing)
+        @eval ccall(($(QuoteNode(Symbol("test_abi_cbarg_", suffix))), libccalltest), Cvoid, (Ptr{Cvoid},),
+                    @cfunction($cbarg, Cvoid, ($(leadtypes...), $T, Int64, Float64)))
+        @test abi_cb_got[] === (cleads, x, Int64(-77), 3.25)
+
+        # Julia callee: return.
+        abi_cb_ret[] = x
+        @eval $cbret($(leadparams...), s1::Int64) = (abi_cb_got[] = (($(leadsyms...),), s1); abi_cb_ret[]::$T)
+        @eval ccall(($(QuoteNode(Symbol("test_abi_cbret_", suffix))), libccalltest), Cvoid, (Ptr{Cvoid},),
+                    @cfunction($cbret, $T, ($(leadtypes...), Int64)))
+        @test unsafe_load(abi_buf_ptr(T)) === x
+        @test abi_cb_got[] === (cleads, Int64(-77))
+    end
+
+    # Inline unions and boxed fields are not flattened.
+    let su = ABI_SU(abi_val(Float64, 7), Int32(-123456)), sa = ABI_SA(abi_val(Float64, 8), abi_cb_got)
+        @test ccall((:test_abi_union, libccalltest), Float64, (ABI_SU,), su) === su.x
+        @test unsafe_load(abi_buf_ptr(Float64)) === su.x
+        @test ccall((:test_abi_boxed, libccalltest), Float64, (ABI_SA,), sa) === sa.x
+        @test abi_probe().s1 === Int64(pointer_from_objref(sa.y))
+    end
+
+    # Exercise variadic classification and aligned register pairs.
+    # Old GCC miscompiles `va_arg(ap, __int128)` from the register save area.
+    abi_va_i128_regs = unsafe_load(cglobal((:abi_probe_va_i128_regs, libccalltest), Cint)) != 0
+    for (T, cname, positions, vaT, va_leads) in abi_types, g in va_leads
+        vaT === nothing && continue
+        vaT <: Union{Int128,ABI_A16} && g == 0 && !abi_va_i128_regs && continue
+        leads = Int64[abi_val(Int64, 100 + k) for k in 0:g-1]
+        local x, s1, s2 = abi_val(T, 4), abi_val(Int64, 5), abi_val(Float64, 6)
+        probe_va = Symbol("abi_probe_va_", cname, "_", g)
+        @eval @noinline $probe_va(x::$T, s1::Int64, s2::Float64) =
+            @ccall libccalltest.$(Symbol("test_abi_va_", cname, "_", g))(0::Cint; $([:($l::Int64) for l in leads]...),
+                                                                         x::$T, s1::Int64, s2::Float64)::Cvoid
+        @eval $probe_va($x, $s1, $s2)
+        got = abi_probe()
+        @test unsafe_load(abi_buf_ptr(vaT)) === (vaT === T ? x : vaT(x))
+        @test (got.s1, got.s2) === (s1, s2)
+        @test collect(got.i[1:g]) == leads
+    end
+end
+
 # Special calling convention for `Array`
 function f17204(a)
     b = similar(a)

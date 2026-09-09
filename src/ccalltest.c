@@ -980,5 +980,183 @@ DLLEXPORT void cancelspin_handler(void *state, uint8_t sev) {
     cell[0] = 1;
 }
 
+// Use a wider prototype to observe the caller's XLEN extension.
+DLLEXPORT int64_t test_reg_32(int64_t x) {
+    return x;
+}
+
+DLLEXPORT int64_t test_reg_32_va(int n, ...) {
+    va_list ap;
+    va_start(ap, n);
+    int64_t x = va_arg(ap, int64_t);
+    va_end(ap);
+    return x;
+}
+
+// Exercise ABI classification at register boundaries; sentinels detect miscounts.
+typedef struct {
+    int64_t i[8];
+    double d[8];
+    int64_t s1;
+    double s2;
+    char buf[32];
+} abi_probe_t;
+DLLEXPORT abi_probe_t abi_probe;
+// GCC and Clang disagree on one-element floating-point vectors on x86-64.
+#ifdef __clang__
+DLLEXPORT int abi_probe_clang = 1;
+#else
+DLLEXPORT int abi_probe_clang = 0;
+#endif
+// GCC before 8.4 and 9.3 loads a variadic `__int128` from the register save
+// area with an aligned 16-byte load, which faults when the value starts at an
+// odd register slot (e.g. `rsi:rdx`).
+#if defined(_CPU_X86_64_) && !defined(_OS_WINDOWS_) && defined(__GNUC__) && !defined(__clang__) && \
+    (__GNUC__ < 8 || (__GNUC__ == 8 && __GNUC_MINOR__ < 4) || \
+     (__GNUC__ == 9 && __GNUC_MINOR__ < 3))
+DLLEXPORT int abi_probe_va_i128_regs = 0;
+#else
+DLLEXPORT int abi_probe_va_i128_regs = 1;
+#endif
+
+#define ABI_P0I
+#define ABI_P0D
+#define ABI_A0I
+#define ABI_A0D
+#define ABI_S0I
+#define ABI_S0D
+#define ABI_P5I int64_t i0, int64_t i1, int64_t i2, int64_t i3, int64_t i4,
+#define ABI_P7I ABI_P5I int64_t i5, int64_t i6,
+#define ABI_P8I ABI_P7I int64_t i7,
+#define ABI_P7D double d0, double d1, double d2, double d3, double d4, double d5, double d6,
+#define ABI_P8D ABI_P7D double d7,
+// Values used by the C caller.
+#define ABI_A5I 1000, 1001, 1002, 1003, 1004,
+#define ABI_A7I ABI_A5I 1005, 1006,
+#define ABI_A8I ABI_A7I 1007,
+#define ABI_A7D 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5,
+#define ABI_A8D ABI_A7D 7.5,
+#define ABI_S5I abi_probe.i[0] = i0; abi_probe.i[1] = i1; abi_probe.i[2] = i2; abi_probe.i[3] = i3; \
+                abi_probe.i[4] = i4;
+#define ABI_S7I ABI_S5I abi_probe.i[5] = i5; abi_probe.i[6] = i6;
+#define ABI_S8I ABI_S7I abi_probe.i[7] = i7;
+#define ABI_S7D abi_probe.d[0] = d0; abi_probe.d[1] = d1; abi_probe.d[2] = d2; abi_probe.d[3] = d3; \
+                abi_probe.d[4] = d4; abi_probe.d[5] = d5; abi_probe.d[6] = d6;
+#define ABI_S8D ABI_S7D abi_probe.d[7] = d7;
+
+#define ABI_PROBE(name, T, G, F) \
+    DLLEXPORT void test_abi_arg_##name##_##G##_##F(ABI_P##G##I ABI_P##F##D T x, int64_t s1, double s2) { \
+        ABI_S##G##I ABI_S##F##D \
+        memcpy(abi_probe.buf, &x, sizeof(x)); abi_probe.s1 = s1; abi_probe.s2 = s2; } \
+    DLLEXPORT T test_abi_ret_##name##_##G##_##F(ABI_P##G##I ABI_P##F##D int64_t s1) { \
+        ABI_S##G##I ABI_S##F##D abi_probe.s1 = s1; \
+        T r; memcpy(&r, abi_probe.buf, sizeof(r)); return r; } \
+    DLLEXPORT void test_abi_cbarg_##name##_##G##_##F(void (*cb)(ABI_P##G##I ABI_P##F##D T, int64_t, double)) { \
+        T x; memcpy(&x, abi_probe.buf, sizeof(x)); cb(ABI_A##G##I ABI_A##F##D x, -77, 3.25); } \
+    DLLEXPORT void test_abi_cbret_##name##_##G##_##F(T (*cb)(ABI_P##G##I ABI_P##F##D int64_t)) { \
+        T r = cb(ABI_A##G##I ABI_A##F##D -77); memcpy(abi_probe.buf, &r, sizeof(r)); }
+// Vary the leading arguments to exercise register-pair alignment and spills.
+#define ABI_VA(name, T, G) \
+    DLLEXPORT void test_abi_va_##name##_##G(int n, ...) { \
+        va_list ap; va_start(ap, n); \
+        for (int k = 0; k < G; k++) abi_probe.i[k] = va_arg(ap, int64_t); \
+        T x = va_arg(ap, T); memcpy(abi_probe.buf, &x, sizeof(x)); \
+        abi_probe.s1 = va_arg(ap, int64_t); abi_probe.s2 = va_arg(ap, double); va_end(ap); }
+#define ABI_BASIC(name, T) ABI_PROBE(name, T, 0, 0)
+#define ABI_FP1(name, T) ABI_BASIC(name, T) ABI_PROBE(name, T, 0, 8)
+#define ABI_FP2(name, T) \
+    ABI_BASIC(name, T) ABI_PROBE(name, T, 0, 7) ABI_PROBE(name, T, 0, 8)
+#define ABI_MIXED(name, T) \
+    ABI_BASIC(name, T) ABI_PROBE(name, T, 7, 7) \
+    ABI_PROBE(name, T, 8, 7) ABI_PROBE(name, T, 7, 8)
+#define ABI_I128(name, T) \
+    ABI_BASIC(name, T) ABI_PROBE(name, T, 5, 0) \
+    ABI_PROBE(name, T, 7, 0) ABI_PROBE(name, T, 8, 0)
+#define ABI_VA_BASIC(name, T) ABI_VA(name, T, 0)
+#define ABI_VA_I128(name, T) \
+    ABI_VA_BASIC(name, T) ABI_VA(name, T, 4) ABI_VA(name, T, 5) ABI_VA(name, T, 7)
+
+#ifdef _P64
+typedef struct { float x; } abi_S_f;
+typedef struct { double x; } abi_S_d;
+typedef struct { abi_S_d s; } abi_N_d;
+typedef struct { double v[1]; } abi_T1d;
+typedef struct { float a; float b; } abi_S_ff;
+typedef struct { float a; double b; } abi_S_fd;
+typedef struct { float v[2]; } abi_T2f;
+typedef struct { float a; int32_t b; } abi_S_fi;
+typedef struct { int32_t a; float b; } abi_S_if;
+typedef struct { double a; int64_t b; } abi_S_di;
+typedef struct { abi_S_f s; int32_t i; } abi_M_fi;
+typedef struct { int64_t x; } abi_S_l;
+typedef struct { double d; abi_S_l s; } abi_M_dl;
+typedef struct { float a; void *b; } abi_S_fp;
+typedef double abi_V1d __attribute__((vector_size(8)));
+typedef float abi_V2f __attribute__((vector_size(8)));
+typedef int32_t abi_V2i __attribute__((vector_size(8)));
+typedef int64_t abi_V1l __attribute__((vector_size(8)));
+typedef float abi_V1f __attribute__((vector_size(4)));
+typedef double abi_V2d __attribute__((vector_size(16)));
+typedef struct { double d; abi_V1d v; } abi_S_dV1;
+typedef struct { double d; abi_V2i v; } abi_S_dV2i;
+typedef struct { abi_V1f v; } abi_S_V1f;
+typedef struct { __int128 x; } abi_A16;
+ABI_FP1(Float32, float)
+ABI_FP1(Float64, double)
+ABI_I128(Int128, __int128)
+ABI_BASIC(Ptr, void*)
+ABI_FP1(S_f, abi_S_f)
+ABI_BASIC(S_d, abi_S_d)
+ABI_BASIC(N_d, abi_N_d)
+ABI_BASIC(T1d, abi_T1d)
+ABI_FP2(S_ff, abi_S_ff)
+ABI_FP2(S_fd, abi_S_fd)
+ABI_BASIC(T2f, abi_T2f)
+ABI_MIXED(S_fi, abi_S_fi)
+ABI_BASIC(S_if, abi_S_if)
+ABI_BASIC(S_di, abi_S_di)
+ABI_BASIC(M_fi, abi_M_fi)
+ABI_BASIC(S_l, abi_S_l)
+ABI_BASIC(M_dl, abi_M_dl)
+ABI_BASIC(S_fp, abi_S_fp)
+ABI_BASIC(V1d, abi_V1d)
+ABI_BASIC(V2f, abi_V2f)
+ABI_BASIC(V2i, abi_V2i)
+ABI_BASIC(V1l, abi_V1l)
+ABI_BASIC(V1f, abi_V1f)
+ABI_BASIC(V2d, abi_V2d)
+ABI_BASIC(S_dV1, abi_S_dV1)
+ABI_BASIC(S_dV2i, abi_S_dV2i)
+ABI_BASIC(S_V1f, abi_S_V1f)
+ABI_I128(A16, abi_A16)
+ABI_VA_I128(Int128, __int128)
+ABI_VA_BASIC(S_f, abi_S_f)
+ABI_VA_BASIC(S_ff, abi_S_ff)
+ABI_VA_BASIC(S_fi, abi_S_fi)
+ABI_VA_I128(A16, abi_A16)
+// Unions and pointer fields use the integer convention.
+typedef struct { double x; int32_t y; uint8_t sel; } abi_SU;
+typedef struct { double x; void *y; } abi_SA;
+DLLEXPORT double test_abi_union(abi_SU s) { memcpy(abi_probe.buf, &s, sizeof(s)); return s.x; }
+DLLEXPORT double test_abi_boxed(abi_SA s) { abi_probe.s1 = (int64_t)(uintptr_t)s.y; return s.x; }
+#endif
+// These bit-copying probes are also used for `BFloat16`.
+#if defined(__FLT16_MANT_DIG__)
+DLLEXPORT int abi_probe_float16 = 1;
+typedef struct { _Float16 x; } abi_S_h;
+typedef struct { _Float16 a; _Float16 b; } abi_S_hh;
+typedef struct { _Float16 a; double b; } abi_S_hd;
+typedef struct { _Float16 a; int32_t b; } abi_S_hi;
+ABI_FP1(Float16, _Float16)
+ABI_BASIC(S_h, abi_S_h)
+ABI_FP2(S_hh, abi_S_hh)
+ABI_FP2(S_hd, abi_S_hd)
+ABI_MIXED(S_hi, abi_S_hi)
+// `_Float16` is not promoted through `...`.
+ABI_VA_BASIC(Float16, _Float16)
+#else
+DLLEXPORT int abi_probe_float16 = 0;
+#endif
+
 // global variable for cglobal testing
 DLLEXPORT const int global_var = 1;
