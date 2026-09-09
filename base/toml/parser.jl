@@ -35,7 +35,7 @@ const TOMLDict  = Dict{String, Any}
 # TODO: Formatting choices (e.g. which tables print inline, indentation) could
 # be retained for full round-tripping the same way as comments: captured into a
 # sibling side-channel keyed by these item paths and passed back to `print`.
-const CommentPath = Tuple{Vararg{String}}
+const CommentPath = Vector{String}
 
 # Text excludes `#`; `nothing` means no inline comment and `""` a bare `#`.
 mutable struct CommentBlock
@@ -547,7 +547,7 @@ function flush_pending_comments!(l::Parser)
     isempty(l.pending_comments) && return
     comments = l.comments
     if comments !== nothing && !l.in_array_table
-        floating = get!(() -> String[], comments.floating, Tuple(l.active_table_path))
+        floating = get!(() -> String[], comments.floating, copy(l.active_table_path))
         append!(floating, l.pending_comments)
     end
     empty!(l.pending_comments)
@@ -700,7 +700,7 @@ function parse_table(l)
             empty!(l.pending_comments)
             l.last_item_path = nothing
         else
-            path = Tuple(table_key)
+            path = copy(table_key)
             attach_pending_comments!(l, path)
             l.last_item_path = path
         end
@@ -733,7 +733,7 @@ function parse_array_table(l)::Union{Nothing, ParserError}
     if l.comments !== nothing
         # Only the first header has an unambiguous path.
         if first_element && !path_traverses_array(l, @view(table_key[1:end-1]))
-            attach_pending_comments!(l, Tuple(table_key))
+            attach_pending_comments!(l, copy(table_key))
         else
             empty!(l.pending_comments)
         end
@@ -750,7 +750,7 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     # `key` aliases `dotted_keys`, which parsing an inline table may overwrite.
     capture_comments = l.comments !== nothing && !(d in l.inline_tables)
     entry_path = (capture_comments && !l.in_array_table) ?
-        (l.active_table_path..., key...) : nothing
+        vcat(l.active_table_path, key) : nothing
     skip_ws(l)
     if !accept(l, '=')
         return ParserError(ErrExpectedEqualAfterKey)

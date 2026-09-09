@@ -410,7 +410,10 @@ function g_dict_hash_alloc()
 end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
-@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.3
+# Take the minimum of several runs so that a one-time allocation inside the
+# measured call (e.g. lazy compilation of a call target) does not skew the ratio
+min_dict_hash_alloc(f) = minimum(@allocated(f()) for _ in 1:3)
+@test abs(min_dict_hash_alloc(f_dict_hash_alloc) / min_dict_hash_alloc(g_dict_hash_alloc) - 1) < 0.3
 
 # returning an argument shouldn't alloc a new box
 @noinline f33829(x) = (global called33829 = true; x)

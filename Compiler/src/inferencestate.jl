@@ -756,22 +756,35 @@ reachable with `invoke` and is consistent with the covariant occurrence rule.
 matched at least one argument (it is not propagated into nested positions,
 where an empty tuple can always occur); it is an assumption the caller must
 justify (see `Test.detect_unbound_args`).
+
+`inhabited_params` assumes that no invariant type parameter position of the
+matching arguments is filled with `Union{}`, so that an occurrence of an inner
+variable there always pins it to an inhabited type (see `pin_grade`), and the
+descent through an inner variable's upper bound is also taken for
+`MATCH_INHABITED` positions: a `Type{<:T}` slot then pins `T` even though the
+call `f(Union{})` would not.
 """
-function constrains_var(var::TypeVar, @nospecialize(t), match::Int, nonempty_vararg::Bool=false)
+function constrains_var(var::TypeVar, @nospecialize(t), match::Int, nonempty_vararg::Bool=false,
+                        inhabited_params::Bool=false)
     if t === var
         # equality pins unconditionally; a lower-bound contribution pins only
         # when nothing else can union into the least solution
         return match === MATCH_EGAL || var.lb === Union{}
     end
     while t isa UnionAll
-        # only a concrete `typeof` argument can carry the pin through an inner
-        # variable's range; the cheap occurs-check gates the `pin_grade` body
-        # traversal just for performance since constrains_var would be false
-        if match === MATCH_TYPEOF && t.var.lb === Union{} && has_typevar(t.var.ub, var)
-            pin = pin_grade(t.var, t.body, nonempty_vararg)
-            if pin == PIN_TYPEOF && constrains_var(var, t.var.ub, MATCH_TYPEOF)
+        # only a concrete `typeof` argument (or any inhabited type, under
+        # `inhabited_params`) can carry the pin through an inner variable's
+        # range; the cheap occurs-check gates the `pin_grade` body traversal
+        # just for performance since constrains_var would be false
+        if (match === MATCH_TYPEOF || (match === MATCH_INHABITED && inhabited_params)) &&
+                t.var.lb === Union{} && has_typevar(t.var.ub, var)
+            pin = pin_grade(t.var, t.body, nonempty_vararg, inhabited_params)
+            # an inhabited (possibly abstract) type filling this position can
+            # pin the inner variable at most as inhabited
+            match === MATCH_INHABITED && (pin = min(pin, PIN_INHABITED))
+            if pin == PIN_TYPEOF && constrains_var(var, t.var.ub, MATCH_TYPEOF, false, inhabited_params)
                 return true
-            elseif pin == PIN_INHABITED && constrains_var(var, t.var.ub, MATCH_INHABITED)
+            elseif pin == PIN_INHABITED && constrains_var(var, t.var.ub, MATCH_INHABITED, false, inhabited_params)
                 return true
             end
         end
@@ -789,28 +802,28 @@ function constrains_var(var::TypeVar, @nospecialize(t), match::Int, nonempty_var
         # only as `var = Union{}` (issue #58427), which we deliberately still
         # report — so in both cases require every arm to pin `var`, accepting
         # the false positive for arms every match must expose (issue #59023)
-        return constrains_var(var, t.a, match) &&
-               constrains_var(var, t.b, match)
+        return constrains_var(var, t.a, match, false, inhabited_params) &&
+               constrains_var(var, t.b, match, false, inhabited_params)
     end
     if isTypeEq(t) # TypeEgal cannot constrain (or contain) a parameter
-        return constrains_var(var, type_parameter(t), MATCH_EGAL)
+        return constrains_var(var, type_parameter(t), MATCH_EGAL, false, inhabited_params)
     end
     t isa DataType || return false
     if t.name === Tuple.name
         for p in t.parameters
             if p isa Core.TypeofVararg
                 # the argument count pins `N` exactly (including zero)
-                isdefined(p, :N) && constrains_var(var, p.N, match) && return true
+                isdefined(p, :N) && constrains_var(var, p.N, match, false, inhabited_params) && return true
                 if match === MATCH_TYPEOF && nonempty_vararg && isdefined(p, :T)
-                    constrains_var(var, p.T, MATCH_TYPEOF) && return true
+                    constrains_var(var, p.T, MATCH_TYPEOF, false, inhabited_params) && return true
                 end
             else
-                constrains_var(var, p, match) && return true
+                constrains_var(var, p, match, false, inhabited_params) && return true
             end
         end
     else
         for p in t.parameters
-            constrains_var(var, p, MATCH_EGAL) && return true
+            constrains_var(var, p, MATCH_EGAL, false, inhabited_params) && return true
         end
     end
     return false
@@ -830,11 +843,14 @@ end
 #  * `PIN_NONE`: neither is guaranteed; `v` may be `Union{}` (e.g. `Type{v}`
 #    positions matched by the argument `Union{}`, or invariant parameters
 #    without such a field), leaving its bounds unconstraining.
+# With `inhabited_params`, any invariant parameter occurrence of `v` (at any
+# depth, in any constructor) is assumed to be filled with an inhabited type,
+# so it grades `PIN_INHABITED` without the field requirement.
 const PIN_NONE = 0
 const PIN_INHABITED = 1
 const PIN_TYPEOF = 2
 
-function pin_grade(v::TypeVar, @nospecialize(t), nonempty_vararg::Bool=false)
+function pin_grade(v::TypeVar, @nospecialize(t), nonempty_vararg::Bool=false, inhabited_params::Bool=false)
     # Implementation note: a covariant occurrence of `v` reports `PIN_TYPEOF`
     # (concrete typeof value) computed in isolation. Strictly this over-reports
     # when `v` also occurs elsewhere. We don't take the minimum (that would
@@ -855,7 +871,7 @@ function pin_grade(v::TypeVar, @nospecialize(t), nonempty_vararg::Bool=false)
             # concrete `t.var` (`PIN_TYPEOF`) makes `v` concrete, an
             # inhabited-but-abstract one (`PIN_INHABITED`) makes `v` inhabited
             # (mirroring the two-grade handling in `constrains_var`)
-            g = pin_grade(t.var, t.body, nonempty_vararg)
+            g = pin_grade(t.var, t.body, nonempty_vararg, inhabited_params)
             g == PIN_TYPEOF && return PIN_TYPEOF
             grade = max(grade, g)
         end
@@ -867,18 +883,24 @@ function pin_grade(v::TypeVar, @nospecialize(t), nonempty_vararg::Bool=false)
     if t isa Union
         # a where-clause position (`grade`) pins on its own; the union itself
         # pins only if every arm does
-        return max(grade, min(pin_grade(v, t.a), pin_grade(v, t.b)))
+        return max(grade, min(pin_grade(v, t.a, false, inhabited_params),
+                              pin_grade(v, t.b, false, inhabited_params)))
+    end
+    if isTypeEq(t)
+        # a `Type{X}` position is filled by a type, `Union{}` included
+        inhabited_params || return grade
+        return max(grade, min(PIN_INHABITED, pin_grade(v, type_parameter(t), false, inhabited_params)))
     end
     t isa DataType || return grade
-    isabstracttype(t) && return grade
+    isabstracttype(t) && !inhabited_params && return grade
     if t.name === Tuple.name
         for p in t.parameters
             if p isa Core.TypeofVararg
                 if nonempty_vararg && isdefined(p, :T)
-                    grade = max(grade, pin_grade(v, p.T))
+                    grade = max(grade, pin_grade(v, p.T, false, inhabited_params))
                 end
             else
-                grade = max(grade, pin_grade(v, p))
+                grade = max(grade, pin_grade(v, p, false, inhabited_params))
             end
             grade == PIN_TYPEOF && break
         end
@@ -886,8 +908,15 @@ function pin_grade(v::TypeVar, @nospecialize(t), nonempty_vararg::Bool=false)
     end
     for i in 1:length(t.parameters)
         p = t.parameters[i]
-        if p === v && some_field_requires_inhabited_param(t, i)
-            return max(grade, PIN_INHABITED)
+        if p === v
+            if inhabited_params || some_field_requires_inhabited_param(t, i)
+                return max(grade, PIN_INHABITED)
+            end
+        elseif inhabited_params
+            # a nested invariant position is filled by a type, so it pins at
+            # most as inhabited even where `v` occurs covariantly inside
+            g = min(PIN_INHABITED, pin_grade(v, p, false, inhabited_params))
+            g == PIN_INHABITED && return max(grade, g)
         end
     end
     return grade

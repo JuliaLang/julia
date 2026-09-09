@@ -437,7 +437,7 @@ end
 
 @testset "internal keyword body bindings" begin
     bindings = resolve_and_get_bindings(Module(), :(f(; x=1) = x))
-    kw_body_bindings = filter(b -> startswith(b.name, "#kw_body#"), bindings)
+    kw_body_bindings = filter(b -> contains(b.name, "#kw_body#"), bindings)
     @test !isempty(kw_body_bindings)
     @test all(b -> b.is_internal, kw_body_bindings)
 end
@@ -592,6 +592,11 @@ end
     @test isdefined(test_mod, :f_nonlocal_2)
     # An unescaped const should not error coming from an old-style macro
     @test JuliaLowering.include_string(test_mod, "macro_mod.@m const c_local_1 = 1") == 1
+    # it should be unhygienic module-wise
+    @test !isdefined(test_mod.macro_mod, :c_local_1)
+    # flisp mangles it, we make a local
+    @test !isdefined(test_mod, :c_local_1)
+
     # The const may be escaped into test_mod
     JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_2 = 1")
     @test isdefined(test_mod, :c_nonlocal_2)

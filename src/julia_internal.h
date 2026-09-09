@@ -1034,6 +1034,8 @@ typedef struct {
     htable_t group;   // the in-flight group's datatypes
 } jl_deferred_typecache_t;
 void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_datatype_super(jl_datatype_t *dt) JL_CANSAFEPOINT;
 jl_value_t *jl_apply_type_deferred(jl_value_t *tc, jl_value_t **params, size_t n, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
 int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT;
 int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT;
@@ -1355,7 +1357,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_
 void jl_init_serializer(void) JL_CANSAFEPOINT;
 void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_init_options(void);
+JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
 void jl_set_base_ctx(char *__stk);
 
@@ -1422,6 +1424,7 @@ extern pthread_mutex_t in_signal_lock;
 #endif
 
 void jl_set_gc_and_wait(jl_task_t *ct) JL_CANSAFEPOINT;
+void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
@@ -1469,7 +1472,7 @@ JL_DLLEXPORT void jl_force_trace_dispatch_disable(void);
 JL_DLLEXPORT void jl_tag_newly_inferred_enable(void);
 JL_DLLEXPORT void jl_tag_newly_inferred_disable(void);
 
-uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
@@ -2172,6 +2175,7 @@ JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) 
 JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
+JL_DLLEXPORT NOINLINE int failed_to_unwind_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT;
 
 // Values a compiled cancellation reset point's setjmp returns when a

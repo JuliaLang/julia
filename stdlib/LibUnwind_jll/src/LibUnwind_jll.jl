@@ -33,6 +33,9 @@ function eager_mode()
 end
 is_available() = @static(Sys.islinux() || Sys.isfreebsd()) ? true : false
 
+# JLLWrappers path compatibility accessor
+get_libunwind_path() = libunwind_path
+
 function __init__()
     global libunwind_path = string(libunwind.path)
     global artifact_dir = dirname(Sys.BINDIR)

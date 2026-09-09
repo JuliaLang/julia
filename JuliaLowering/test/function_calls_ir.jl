@@ -269,7 +269,7 @@ x .= y
 2   TestMod.y
 3   (call top.broadcasted top.identity %₂)
 4   (call top.materialize! %₁ %₃)
-5   (return %₄)
+5   (return %₁)
 
 ########################################
 # Fused in-place broadcast update
@@ -281,7 +281,7 @@ x .= y .+ z
 4   TestMod.z
 5   (call top.broadcasted %₂ %₃ %₄)
 6   (call top.materialize! %₁ %₅)
-7   (return %₆)
+7   (return %₁)
 
 ########################################
 # In-place broadcast update with property assignment on left hand side
@@ -292,7 +292,7 @@ x.prop .= y
 3   TestMod.y
 4   (call top.broadcasted top.identity %₃)
 5   (call top.materialize! %₂ %₄)
-6   (return %₅)
+6   (return %₂)
 
 ########################################
 # In-place broadcast update with ref on left hand side
@@ -305,7 +305,7 @@ x[i,end] .= y
 5   TestMod.y
 6   (call top.broadcasted top.identity %₅)
 7   (call top.materialize! %₄ %₆)
-8   (return %₇)
+8   (return %₄)
 
 ########################################
 # <: as a function call

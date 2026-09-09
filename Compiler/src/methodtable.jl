@@ -42,7 +42,9 @@ end
 struct MethodMatchKey
     sig # ::Type
     limit::Int
-    MethodMatchKey(@nospecialize(sig), limit::Int) = new(sig, limit)
+    include_ambiguous::Bool
+    MethodMatchKey(@nospecialize(sig), limit::Int, include_ambiguous::Bool) =
+        new(sig, limit, include_ambiguous)
 end
 
 """
@@ -58,20 +60,23 @@ end
 CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{MethodMatchKey, Union{Nothing,MethodLookupResult}}(), table)
 
 """
-    findall(sig::Type, view::MethodTableView; limit::Int=-1) ->
+    findall(sig::Type, view::MethodTableView;
+            limit::Int=-1, include_ambiguous::Bool=false) ->
         matches::MethodLookupResult or nothing
 
-Find all methods in the given method table `view` that are applicable to the given signature `sig`.
-If no applicable methods are found, an empty result is returned.
-If the number of applicable methods exceeded the specified `limit`, `nothing` is returned.
-Note that the default setting `limit=-1` does not limit the number of applicable methods.
-`overlayed` indicates if any of the matching methods comes from an overlayed method table.
+Find all methods in `view` that are applicable to `sig`. If no applicable methods
+are found, an empty result is returned. If the number of applicable methods exceeds
+`limit`, `nothing` is returned. The default `limit=-1` does not limit the number of
+applicable methods. `include_ambiguous=true` retains fully ambiguous matches that are
+normally filtered out of the result.
 """
-findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=-1) =
-    _findall(sig, nothing, table.world, limit)
+findall(@nospecialize(sig::Type), table::InternalMethodTable;
+        limit::Int=-1, include_ambiguous::Bool=false) =
+    _findall(sig, nothing, table.world, limit, include_ambiguous)
 
-function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=-1)
-    result = _findall(sig, table.mt, table.world, limit)
+function findall(@nospecialize(sig::Type), table::OverlayMethodTable;
+                 limit::Int=-1, include_ambiguous::Bool=false)
+    result = _findall(sig, table.mt, table.world, limit, include_ambiguous)
     result === nothing && return nothing
     nr = length(result)
     if nr ≥ 1 && result[nr].fully_covers
@@ -79,7 +84,7 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
         return result
     end
     # fall back to the internal method table
-    fallback_result = _findall(sig, nothing, table.world, limit)
+    fallback_result = _findall(sig, nothing, table.world, limit, include_ambiguous)
     fallback_result === nothing && return nothing
     # merge the fallback match results with the internal method table,
     # filtering out base methods that are fully covered by overlay methods
@@ -98,25 +103,27 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
         result.ambig | fallback_result.ambig)
 end
 
-function _findall(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, world::UInt, limit::Int)
+function _findall(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, world::UInt,
+                  limit::Int, include_ambiguous::Bool)
     _min_val = RefValue{UInt}(typemin(UInt))
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
-    ms = _methods_by_ftype(sig, mt, limit, world, false, _min_val, _max_val, _ambig)
+    ms = _methods_by_ftype(sig, mt, limit, world, include_ambiguous, _min_val, _max_val, _ambig)
     isa(ms, Vector) || return nothing
     return MethodLookupResult(ms, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
-function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=-1)
+function findall(@nospecialize(sig::Type), table::CachedMethodTable;
+                 limit::Int=-1, include_ambiguous::Bool=false)
     if isconcretetype(sig)
         # as for concrete types, we cache result at on the next level
-        return findall(sig, table.table; limit)
+        return findall(sig, table.table; limit, include_ambiguous)
     end
-    key = MethodMatchKey(sig, limit)
+    key = MethodMatchKey(sig, limit, include_ambiguous)
     if haskey(table.cache, key)
         return table.cache[key]
     else
-        return table.cache[key] = findall(sig, table.table; limit)
+        return table.cache[key] = findall(sig, table.table; limit, include_ambiguous)
     end
 end
 

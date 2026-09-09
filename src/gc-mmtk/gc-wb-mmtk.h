@@ -12,6 +12,7 @@ extern "C" {
 #endif
 
 extern void mmtk_object_reference_write_pre(void* mutator, const void* parent, const void* ptr);
+extern void mmtk_gc_wb_finalizer_queue(void* mutator, void* queue);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
 extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 
@@ -38,6 +39,13 @@ STATIC_INLINE void mmtk_gc_wb_full(const void *parent, const void *ptr) JL_NOTSA
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     mmtk_object_reference_write_pre(&ptls->gc_tls.mmtk_mutator, parent, ptr);
+}
+
+STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_gc_wb_finalizer_queue(&ptls->gc_tls.mmtk_mutator, (void*)queue);
 }
 
 // Inlined fastpath

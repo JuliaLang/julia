@@ -405,7 +405,13 @@ let e = Event(true), started1 = Event(true), started2 = Event(true), done = Even
 end
 
 
-let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`,
+# Wrap the include in the testset rather than the file body (see threads_exec.jl).
+let program = """
+        using Test
+        @testset "threads_exec.jl with JULIA_NUM_THREADS == \$(ENV["JULIA_NUM_THREADS"])" begin
+            include("threads_exec.jl")
+        end""",
+    cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -e $program`,
     cmd2 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -e 'print(Threads.threadpoolsize(:default), ",", Threads.threadpoolsize(:interactive))'`
     for (test_nthreads, test_nthreadsi) in (
             (1, 0),

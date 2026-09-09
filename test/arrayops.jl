@@ -2910,6 +2910,17 @@ end
     @test size(a) ==  size(b) == (9,8,7,6,5,4,3,2,1)
     @test all(x -> x isa U, a)
     @test all(x -> x isa U, b)
+    # dims as a single tuple (issue introduced by #57692)
+    a = Array{Union{T, U}}(U(), (10,))
+    b = Vector{Union{T, U}}(U(), (10,))
+    @test size(a) == size(b) == (10,)
+    @test all(x -> x isa U, a)
+    @test all(x -> x isa U, b)
+    a = Array{Union{T, U}}(U(), (2, 3))
+    b = Matrix{Union{T, U}}(U(), (2, 3))
+    @test size(a) == size(b) == (2, 3)
+    @test all(x -> x isa U, a)
+    @test all(x -> x isa U, b)
 end
 
 @testset "diff" begin

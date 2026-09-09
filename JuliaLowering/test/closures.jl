@@ -724,7 +724,7 @@ end
 let (inner, result) = test_mod.f_kwbody_box()
     @test result == 1
     # The kw body closure should be captured directly, not through a Box
-    kw_body_field = only(filter(f -> startswith(string(f), "#kw_body#"), fieldnames(typeof(inner))))
+    kw_body_field = only(filter(f -> contains(string(f), "#kw_body#"), fieldnames(typeof(inner))))
     @test !(getfield(inner, kw_body_field) isa Core.Box)
 end
 
@@ -1268,7 +1268,7 @@ end
     """) == (1,2)
 
     # Inner methods in control flow are known to be buggy/discouraged
-    @test_warn r"Method definition f_if_redefines_inner\(\).*overwritten" @test JuliaLowering.include_string(test_mod, """
+    @test_warn r"Method definition inner\(\).*overwritten" @test JuliaLowering.include_string(test_mod, """
     begin
         function f_if_redefines_inner(cond)
             function inner(); 1; end
@@ -1281,7 +1281,7 @@ end
     end
     """) == (2,2)
 
-    @test_warn r"Method definition f_let_redefines_inner\(\).*overwritten" @test JuliaLowering.include_string(test_mod, """
+    @test_warn r"Method definition inner\(\).*overwritten" @test JuliaLowering.include_string(test_mod, """
     begin
         function f_let_redefines_inner()
             local a,b

@@ -343,6 +343,8 @@ module UnboundDetect
     unbound9(x::Ref{Vector{<:T}}) where {T} = T                # f(Ref{Vector}(...))
     unbound10(x::Type{<:T}, y::Type{<:S}) where {T, S} = T     # f(Union{}, Int): S is never read, but T is
     unbound13(x::Type{<:T}) where {T} = @isdefined(T) ? T : 0
+    unbound16(x::Type{<:Ref{<:Vector{T}}}) where {T} = T       # f(Ref{Union{}})
+    unbound17(x::Vector{Ref{S}}) where {T, S<:T} = T           # f(Vector{Ref{Union{}}}())
     unused1(x::Type{<:T}) where {T} = 0
     unused2(x::Type{<:T}) where {T} = @isdefined(T)
     # every matching call pins the parameter
@@ -422,7 +424,11 @@ module UnboundDetect
         x::T
     end
 end
-let unbound = Set{Method}(detect_unbound_args(UnboundDetect))
+let unbound = Set{Method}(detect_unbound_args(UnboundDetect; ambiguous_bottom=true)),
+    unbound_nobottom = Set{Method}(detect_unbound_args(UnboundDetect))
+    # parameters left unbound only by calls with `Union{}` type parameters
+    bottom_only = (:unbound1, :unbound2, :unbound7, :unbound10, :unbound11, :unbound13,
+                   :unbound16, :unbound17, :notshadowed2, :notshadowed4, :nofieldpins)
     tested = 0
     for name in names(UnboundDetect; all=true)
         startswith(String(name), '#') && continue
@@ -435,22 +441,41 @@ let unbound = Set{Method}(detect_unbound_args(UnboundDetect))
                       startswith(String(name), "notshadowed") ||
                       name === :nofieldpins
         @test (m in unbound) == should_flag context=name
+        @test (m in unbound_nobottom) == (should_flag && name ∉ bottom_only) context=name
         tested += 1
     end
-    @test tested == 37
+    @test tested == 39
     let ms = filter(m -> m.sig isa UnionAll, collect(methods(UnboundDetect.Foo54893)))
         @test only(ms) in unbound
+        @test only(ms) in unbound_nobottom
     end
 end
 
 # Test that Core and Base are free of UndefVarErrors
 @testset "detect_unbound_args in Base and Core" begin
     let need_to_handle_undef_sparam =
-            Set{Method}(detect_unbound_args(Core; recursive=true))
+            Set{Method}(detect_unbound_args(Core; recursive=true, ambiguous_bottom=true))
         @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
+        # the parameters left unbound by non-`Union{}` calls (see the reviewed list below)
+        expected_undef_sparam = Any[
+            Tuple{typeof(Base._totuple), Type{Tuple{Vararg{E}}}, Any, Vararg{Any}} where E,
+            Tuple{typeof(Base._eltype_ntuple), Type{<:Tuple{Vararg{E}}}} where E,
+            Tuple{typeof(Base.reduce_empty_iter), Any, Tuple{Vararg{T}}, Base.HasEltype} where T,
+            Tuple{typeof(float), AbstractArray{Union{Missing, T}}} where T,
+            Tuple{typeof(Base._cat), Any, Vararg{AbstractArray{T}}} where T,
+        ]
+        for sig in expected_undef_sparam
+            m = which(sig)
+            @test m in need_to_handle_undef_sparam context=sig
+            delete!(need_to_handle_undef_sparam, m)
+        end
+        @test isempty(need_to_handle_undef_sparam)
+    end
+    let need_to_handle_undef_sparam =
+            Set{Method}(detect_unbound_args(Base; recursive=true, ambiguous_bottom=true, allowed_undefineds))
         # reviewed and expected
         expected_undef_sparam = Any[
             Tuple{typeof(Base._totuple), Type{Tuple{Vararg{E}}}, Any, Vararg{Any}} where E,

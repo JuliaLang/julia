@@ -3738,4 +3738,116 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
     end
 end
 
+precompile_test_harness("pkgimage type cache dedup") do dir
+    # Check deduplication when a type precedes its supertype in the image.
+    # The unused IFD binding preserves that order.
+    write(joinpath(dir, "DedupColors.jl"),
+          """
+          module DedupColors
+              export CAbstractGray, CGray
+              abstract type CAbstractGray{T} end
+              struct CGray{T} <: CAbstractGray{T}
+                  val::T
+              end
+              Base.adjoint(c::CAbstractGray) = c
+          end
+          """)
+    write(joinpath(dir, "DedupTrigger.jl"),
+          """
+          module DedupTrigger
+              using DedupColors
+
+              const IFD = Dict{UInt16, Any}
+
+              function readdata!(target::AbstractArray)
+                  fill!(reinterpret(UInt8, view(target, 1:length(target))), 0x00)
+              end
+
+              function load()
+                  ifd = IFD()
+                  ifd[0x0106] = UInt16(1)
+                  type = Int(ifd[0x0106]) == 2 ? Ref : CGray
+                  pixeltype = type{UInt8}
+                  cache = Array{pixeltype}(undef, 2, 2)
+                  readdata!(cache)
+                  Matrix(cache')
+              end
+
+              load()
+          end
+          """)
+    Base.compilecache(Base.PkgId("DedupColors"))
+    Base.compilecache(Base.PkgId("DedupTrigger"))
+    @eval using DedupColors
+    M = invokelatest() do
+        Memory{DedupColors.CGray{UInt8}}
+    end
+    @eval using DedupTrigger
+    invokelatest() do
+        CGrayU8 = DedupColors.CGray{UInt8}
+        for T in (Memory{CGrayU8}, DenseVector{CGrayU8})
+            tn = T.name
+            n = 0
+            for t in tn.cache
+                if t isa DataType && t.name === tn &&
+                        length(t.parameters) == length(T.parameters) &&
+                        all(i -> t.parameters[i] === T.parameters[i], eachindex(T.parameters))
+                    n += 1
+                end
+            end
+            @test n == 1
+        end
+        @test M === Memory{DedupColors.CGray{UInt8}}
+    end
+end
+
+# Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
+# the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
+# precompile in a child whose stderr is a pty and look for the color escapes in its output.
+if !Sys.iswindows() # child-on-fake-pty tests are skipped on Windows (see misc.jl)
+    @testset "precompile output to a TTY is colored" begin
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        mkdepottempdir() do depot
+            pkg_path = joinpath(depot, "dev", "ColorTTY")
+            mkpath(joinpath(pkg_path, "src"))
+            write(joinpath(pkg_path, "src", "ColorTTY.jl"), "module ColorTTY end\n")
+            write(joinpath(pkg_path, "Project.toml"),
+                """
+                name = "ColorTTY"
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            write(joinpath(pkg_path, "Manifest.toml"),
+                """
+                julia_version = "$(VERSION.major).$(VERSION.minor).0"
+                manifest_format = "2.0"
+
+                [[deps.ColorTTY]]
+                path = "."
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            # `stderr` is passed through untouched so the driver has to wrap the raw TTY itself
+            cmd = addenv(`$(Base.julia_cmd()) --color=yes --startup-file=no --project=$pkg_path -e 'Base.Precompilation.precompilepkgs(["ColorTTY"]; fancyprint=false)'`,
+                         "JULIA_DEPOT_PATH" => depot)
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, devnull, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            output = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(output, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            out = String(take!(output))
+            @test success(p)
+            @test occursin("ColorTTY", out)
+            @test occursin("\e[32m", out) # the green ✓ of the precompiled package
+        end
+    end
+end
+
 finish_precompile_test!()

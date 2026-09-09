@@ -26,6 +26,11 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
     }
 }
 
+STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue JL_UNUSED) JL_NOTSAFEPOINT
+{
+    // this is a deletion, so no barrier is required for this GC
+}
+
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     // ptr is an immutable object

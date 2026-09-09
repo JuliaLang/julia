@@ -258,6 +258,18 @@ void jl_safepoint_end_gc(void)
     uv_cond_broadcast(&safepoint_cond_end);
 }
 
+// `jl_gc_safe_enter` for a thread that is no longer a mutator with a valid current task
+void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_NO_SAFEPOINT_ANALYSIS
+{
+    // instead of loading from the safepoint page (whose trap handler requires
+    // a valid current task), perform the collector handshake directly
+    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_SAFE);
+    uv_mutex_lock(&safepoint_lock);
+    uv_cond_broadcast(&safepoint_cond_begin);
+    uv_mutex_unlock(&safepoint_lock);
+    jl_safepoint_wait_gc(NULL);
+}
+
 void jl_set_gc_and_wait(jl_task_t *ct)
 {
     // reading own gc state doesn't need atomic ops since no one else

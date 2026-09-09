@@ -1586,6 +1586,10 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       State = addFrameRoot(State, CurrentDepth, Region, C);
       // Now for the value
       SVal Value = State->getSVal(Region);
+      if (Value.isUndef()) {
+        report_error(C, "Pushing an uninitialized value to the GC root stack");
+        return true;
+      }
       SymbolRef Sym = Value.getAsSymbol();
       if (!Sym)
         continue;
