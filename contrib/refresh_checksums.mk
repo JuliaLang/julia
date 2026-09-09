@@ -26,7 +26,7 @@ NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
 BB_PROJECTS=openssl libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib zstd libsuitesparse openlibm blastrampoline libtracyclient mmtk_julia compilerrt
 BB_GCC_EXPANDED_PROJECTS=openblas csl
-BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools lld
+BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools lld llvmdialects
 # These are non-BB source-only deps
 NON_BB_PROJECTS=patchelf mozillacert lapack libwhich utf8proc ittapi cpufeatures lmdb
 
@@ -79,10 +79,12 @@ $(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(ev
 $(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,clang,$(triplet)-$(cxxstring_abi),assert))))
 $(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,lld,$(triplet)-$(cxxstring_abi),assert))))
 $(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,llvm-tools,$(triplet)-$(cxxstring_abi),assert))))
+$(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,llvmdialects,$(triplet)-$(cxxstring_abi),assert))))
 $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvm,$(triplet),assert)))
 $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,clang,$(triplet),assert)))
 $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,lld,$(triplet),assert)))
 $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvm-tools,$(triplet),assert)))
+$(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvmdialects,$(triplet),assert)))
 
 # External stdlibs
 checksum-stdlibs:
@@ -121,6 +123,13 @@ checksum-llvm.*unwind: checksum-llvmunwind
 	@# nothing to do but disable the prefix rule
 pack-checksum-llvmunwind: | pack-checksum-llvm.*unwind # override general rule below
 	cd "$(JULIAHOME)/deps/checksums" && mv 'llvm.*unwind' llvmunwind
+# llvm_dialects_jll tarballs are named llvm_dialects.*, the source tarball
+# llvmdialects-*; pack both into llvmdialects before llvm sweeps them up
+pack-checksum-llvm: | pack-checksum-llvmdialects
+checksum-llvm.*dialects: checksum-llvmdialects
+	@# nothing to do but disable the prefix rule
+pack-checksum-llvmdialects: | pack-checksum-llvm.*dialects # override general rule below
+	cd "$(JULIAHOME)/deps/checksums" && mv 'llvm.*dialects' llvmdialects
 
 clean-%: FORCE
 	rm -f "$(JULIAHOME)/deps/checksums"/'$*'

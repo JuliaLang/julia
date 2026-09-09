@@ -101,8 +101,8 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 DEP_LIBS += llvm
 endif
 
-# llvm-dialects is always built from source, against either the in-tree
-# or the system LLVM
+# llvm-dialects is needed however LLVM is provided: from llvm_dialects_jll
+# alongside the LLVM JLL, or built from source against the in-tree or system LLVM
 DEP_LIBS += llvmdialects
 
 ifeq ($(USE_SYSTEM_LLD), 0)

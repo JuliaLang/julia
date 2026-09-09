@@ -1,5 +1,8 @@
 ## LLVMDialects
 include $(SRCDIR)/llvm-options.mk
+include $(SRCDIR)/llvm-ver.make
+
+ifneq ($(USE_BINARYBUILDER_LLVMDIALECTS), 1)
 
 LLVMDIALECTS_GIT_URL := https://github.com/JuliaLang/llvm-dialects.git
 LLVMDIALECTS_TAR_URL = https://api.github.com/repos/JuliaLang/llvm-dialects/tarball/$1
@@ -80,3 +83,35 @@ configure-llvmdialects: $(LLVMDIALECTS_BUILDDIR_withtype)/build-configured
 compile-llvmdialects: $(LLVMDIALECTS_BUILDDIR_withtype)/build-compiled
 fastcheck-llvmdialects: #none
 check-llvmdialects: #none
+
+else # USE_BINARYBUILDER_LLVMDIALECTS
+
+# llvm_dialects_jll is built against a specific LLVM JLL, and its
+# llvm-dialects-tblgen is linked against that LLVM dylib, so the platform
+# tags must select the same LLVM (version and assertions) that we install.
+ifeq ($(LLVM_ASSERTIONS), 1)
+LLVMDIALECTS_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+else
+LLVMDIALECTS_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
+endif
+
+$(eval $(call bb-install,llvmdialects,LLVMDIALECTS,false,true))
+
+# The JLL ships llvm-dialects-tblgen in bin/, next to julia. Move it to the
+# build tools directory, where the source build installs it and where
+# src/Makefile and doc/make.jl look for it.
+$(build_depsbindir)/llvm-dialects-tblgen$(EXE): $(build_prefix)/manifest/llvmdialects
+	mkdir -p $(build_depsbindir)
+	mv $(build_bindir)/llvm-dialects-tblgen$(EXE) $@
+	touch $@
+install-llvmdialects: $(build_depsbindir)/llvm-dialects-tblgen$(EXE)
+
+# The moved tool is no longer where the tarball listing says it is, so the
+# stock bb-uninstaller would leave it behind.
+define llvmdialects-bb-uninstaller
+$(call bb-uninstaller,$1,$2,$3)
+	-rm -f $$(build_depsbindir)/llvm-dialects-tblgen$$(EXE)
+endef
+UNINSTALL_llvmdialects := $(LLVMDIALECTS_JLL_BASENAME:.tar.gz=) llvmdialects-bb-uninstaller
+
+endif # USE_BINARYBUILDER_LLVMDIALECTS

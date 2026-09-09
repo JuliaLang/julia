@@ -1530,6 +1530,11 @@ endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
+# llvm-dialects is compiled against LLVM's headers and its tblgen tool links the
+# LLVM dylib, so by default it comes from the same place (BinaryBuilder or a
+# source build) as LLVM itself.
+USE_BINARYBUILDER_LLVMDIALECTS ?= $(USE_BINARYBUILDER_LLVM)
+
 # Set the CSL default here too because it affects top-level source flags in
 # addition to dependency installation rules in deps/csl.mk.
 ifeq ($(USE_BINARYBUILDER),0)
