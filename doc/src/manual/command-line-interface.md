@@ -207,7 +207,7 @@ The following is a complete list of command-line switches available when launchi
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee\|user*}`            |Always follow `ieee` floating point semantics or respect `@fastmath` declarations|
 |`--polly={yes*\|no}`                   |Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)|
-|`--code-coverage[={none*\|user\|all}]` |Record coverage for source lines (omitting setting is equivalent to `user`)|
+|`--code-coverage[={none*\|user\|all}]` |Record coverage for source lines (omitting setting is equivalent to `user`). Full coverage of Base itself requires a system image built with coverage counters (`JULIA_COVERAGE_IMAGES=1`).|
 |`--code-coverage=@<path>`              |Record coverage only for files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
 |`--code-coverage-mode={hit*\|count}`   |Record whether each line ran (`hit`, the default) or its execution count (`count`, which may be approximate when code runs on multiple threads)|

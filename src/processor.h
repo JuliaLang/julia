@@ -55,6 +55,7 @@ struct _jl_image_t {
     void **jl_small_typeof;
     uint32_t heap_checksum;
     bool_t is_split;
+    const void *coverage; // jl_image_coverage_t *, if built with coverage counters
 };
 
 // The header for each image

@@ -212,12 +212,15 @@ Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)
 
 .TP
 --code-coverage[={none*|user|all}]
-Record coverage for source lines (omitting setting is equivalent to `user`)
+Record coverage for source lines (omitting setting is equivalent to `user`). Full coverage of
+Base itself requires a system image built with coverage counters (`JULIA_COVERAGE_IMAGES=1`).
 
 .TP
 --code-coverage=@<path>
 Record coverage for source lines in a file or files under a given directory. A `@` must
 be placed before the path to indicate this option. A `@` with no path will track the current directory.
+The path filters reports; newly compiled and interpreted code is instrumented as for `user`.
+Compatible instrumented images can also contribute Base and Core counters under the path.
 
 .TP
 --code-coverage=tracefile.info
