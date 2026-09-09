@@ -3715,7 +3715,7 @@ function _keepat!(a::AbstractVector, inds)
 end
 
 function _keepat!(a::AbstractVector, m::AbstractVector{Bool})
-    length(m) == length(a) || throw(BoundsError(a, (LogicalIndex(m),)))
+    length(m) == length(a) || throw(BoundsError(a, m))
     j = firstindex(a)
     for i in eachindex(a, m)
         @inbounds begin
