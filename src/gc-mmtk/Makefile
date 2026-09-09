@@ -92,7 +92,17 @@ MMTK_JULIA_RUST_DEPS := \
 # $(MMTK_INSTALLED_LIB) still re-copied the stale library, giving it a fresh timestamp. So a
 # rebuild appeared to succeed, the installed library looked newer than the edited source, and
 # every measurement taken afterwards silently described the old code.
+# Read the checkout from the `path` dependency itself rather than assuming a fixed location:
+# the path is relative to mmtk_julia/, and pointing it at a sibling checkout (e.g.
+# ../../../../../mmtk-core-lxr-julia) left MMTK_CORE_DIR naming a directory that does not
+# exist, so the guard below was false and mmtk-core's sources went untracked again -- the exact
+# silent-stale-build this block exists to prevent.
+MMTK_CORE_PATH_DEP := $(shell sed -n 's|^[[:space:]]*mmtk[[:space:]]*=[[:space:]]*{[[:space:]]*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*|\1|p' $(MMTK_JULIA_DIR)/Cargo.toml)
+ifneq ($(MMTK_CORE_PATH_DEP),)
+MMTK_CORE_DIR := $(abspath $(MMTK_JULIA_DIR)/$(MMTK_CORE_PATH_DEP))
+else
 MMTK_CORE_DIR := $(MMTK_DIR)/mmtk-core
+endif
 ifneq ($(wildcard $(MMTK_CORE_DIR)/Cargo.toml),)
 MMTK_JULIA_RUST_DEPS += \
 	$(MMTK_CORE_DIR)/Cargo.toml \
