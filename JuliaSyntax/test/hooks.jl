@@ -132,6 +132,60 @@ end
         JuliaSyntax.enable_in_core!(false)
     end
 
+    @testset "enable_in_core! syntax_version" begin
+        wrapping_add = Expr(:call, Symbol("+%"), :a, :b)
+        ParseErrorT = JuliaSyntax._has_v1_10_hooks ? Meta.ParseError : JuliaSyntax.ParseError
+        # Restore whatever parser was installed before rather than relying on
+        # `enable_in_core!(false)`, which would leave flisp installed for the
+        # remainder of the test process when running against `Base.JuliaSyntax`.
+        saved_parser = Core._parse
+        try
+            # The default is the running Julia's major.minor version
+            JuliaSyntax.enable_in_core!()
+            if VERSION >= v"1.14.0-DEV"
+                @test Meta.parse("a +% b") == wrapping_add
+            else
+                @test_throws ParseErrorT Meta.parse("a +% b")
+            end
+
+            # Explicit default for unversioned parsing
+            JuliaSyntax.enable_in_core!(syntax_version=v"1.13")
+            @test_throws ParseErrorT Meta.parse("a +% b")
+            JuliaSyntax.enable_in_core!(syntax_version=v"1.14")
+            @test Meta.parse("a +% b") == wrapping_add
+            # Prerelease and patch information is ignored
+            JuliaSyntax.enable_in_core!(syntax_version=v"1.13.2-DEV.5")
+            @test_throws ParseErrorT Meta.parse("a +% b")
+            # activate! forwards the keyword
+            JuliaSyntax.activate!(syntax_version=v"1.14")
+            @test Meta.parse("a +% b") == wrapping_add
+
+            # A version passed by the caller wins over the hook's default
+            JuliaSyntax.enable_in_core!(syntax_version=v"1.13")
+            @test Core._parse("a +% b", "none", 1, 0, :statement; syntax_version=v"1.14") ==
+                Core.svec(wrapping_add, 6)
+            @test Meta.isexpr(Core._parse("a +% b", "none", 1, 0, :statement)[1], :error)
+
+            # A module's declared syntax version wins over the hook's default
+            if isdefined(Base, :set_syntax_version)
+                m13 = @eval(module SyntaxVersionHookTest13 end)
+                Base.set_syntax_version(m13, v"1.13")
+                m14 = @eval(module SyntaxVersionHookTest14 end)
+                Base.set_syntax_version(m14, v"1.14")
+                # `invokelatest`: the module parser bindings were declared in
+                # this world, so `Meta.parse` must look them up in a newer one.
+                JuliaSyntax.enable_in_core!(syntax_version=v"1.14")
+                @test_throws Meta.ParseError invokelatest(Meta.parse, "a +% b"; mod=m13)
+                @test_throws LoadError include_string(m13, "a +% b")
+                JuliaSyntax.enable_in_core!(syntax_version=v"1.13")
+                @test invokelatest(Meta.parse, "a +% b"; mod=m14) == wrapping_add
+                @test include_string(m14, "a = 1; b = 2; a +% b") == 3
+            end
+        finally
+            JuliaSyntax._set_core_parse_hook(saved_parser)
+        end
+    end
+
     @testset "Expr(:incomplete)" begin
         for (str, tag) in [
                 "\""           => :string

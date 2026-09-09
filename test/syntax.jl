@@ -3771,7 +3771,16 @@ end
 end
 
 @testset "public keyword" begin
-    p(str) = Base.remove_linenums!(Meta.parse(str))
+    function p(str)
+        ex = Base.remove_linenums!(Meta.parse(str))
+        # Unversioned parsing uses the running Julia's syntax version, which
+        # records that version as the first argument of `Expr(:module)`. These
+        # tests are about `public`, so drop it.
+        if Meta.isexpr(ex, :module) && ex.args[1] isa VersionNumber
+            popfirst!(ex.args)
+        end
+        ex
+    end
     # tests ported from JuliaSyntax.jl
     @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
     @test p("public A, B") == Expr(:public, :A, :B)

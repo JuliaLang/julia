@@ -2159,6 +2159,61 @@ module M58272_to end
        @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == v"1.13"
     end
     include_world_age()
+
+    # `VersionedParse` must dispatch through whatever parser is installed as
+    # `Core._parse`, passing the module's syntax version along.
+    let saved_parser = Core._parse
+        m13 = @eval(module VersionedParseDispatch13 end)
+        Base.set_syntax_version(m13, v"1.13")
+        m14 = @eval(module VersionedParseDispatch14 end)
+        Base.set_syntax_version(m14, v"1.14")
+        # `invokelatest` below: the module parser bindings were declared in
+        # this world, so `Meta.parse` must look them up in a newer one.
+        seen = Ref{Any}(:unset)
+        function recording_parser(code, filename, lineno, offset, options; syntax_version=nothing)
+            seen[] = syntax_version
+            if syntax_version === nothing
+                return saved_parser(code, filename, lineno, offset, options)
+            else
+                return saved_parser(code, filename, lineno, offset, options; syntax_version)
+            end
+        end
+        # The recording parser forwards the keyword, so it needs a parser that
+        # accepts it (i.e. not flisp, as under JULIA_USE_FLISP_PARSER).
+        if parentmodule(saved_parser) === Base.JuliaSyntax
+            Core._setparser!(recording_parser)
+            try
+                @test include_string(m13, "1 + 1") == 2
+                @test seen[] == v"1.13"
+                seen[] = :unset
+                @test invokelatest(Meta.parse, "1 + 1"; mod=m14) == :(1 + 1)
+                @test seen[] == v"1.14"
+                seen[] = :unset
+                # C entry point (`jl_parse`), which passes the code as an svec
+                @test Core.include(m13, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == v"1.13"
+                @test seen[] == v"1.13"
+                seen[] = :unset
+                # Unversioned parsing passes no version
+                @test Meta.parse("1 + 1") == :(1 + 1)
+                @test seen[] === nothing
+            finally
+                Core._setparser!(saved_parser)
+            end
+        end
+        # The flisp parser accepts no keyword arguments; versioned modules keep
+        # working (via the vendored JuliaSyntax) when it is installed as Core._parse.
+        Core._setparser!(Base.fl_parse)
+        try
+            @test invokelatest(Meta.parse, "a +% b"; mod=m14) == Expr(:call, Symbol("+%"), :a, :b)
+            @test_throws Meta.ParseError invokelatest(Meta.parse, "a +% b"; mod=m13)
+        finally
+            Core._setparser!(saved_parser)
+        end
+    end
+    # Unversioned parsing uses the running Julia's syntax version by default
+    if parentmodule(Core._parse) === Base.JuliaSyntax  # not under JULIA_USE_FLISP_PARSER
+        @test Meta.parse("a +% b") == Expr(:call, Symbol("+%"), :a, :b)
+    end
 end
 
 @testset "require_stdlib with isolated depot" begin

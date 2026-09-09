@@ -163,7 +163,12 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol; syntax_version = v"1.13")
+# Syntax version of the running Julia. The parser only distinguishes
+# (major, minor) - see `ParseStream`
+const SYNTAX_VERSION = VersionNumber(VERSION.major, VERSION.minor)
+
+function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol;
+                          syntax_version = SYNTAX_VERSION)
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -306,6 +311,35 @@ function core_parser_hook(code, filename, offset, options)
     core_parser_hook(code, filename, 1, offset, options)
 end
 
+"""
+    CoreParserHook(default_syntax_version::VersionNumber)
+
+The callable which [`enable_in_core!`](@ref) installs as `Core._parse`
+(wrapped by `fix_world_age`). It forwards to [`core_parser_hook`](@ref), using
+`default_syntax_version` for callers which don't pass `syntax_version`
+explicitly. Such "unversioned" callers are those which reach the parser via
+`Core._parse` directly rather than via a module's `#_internal_julia_parse`
+binding - for example `Meta.parse(str)` without a `mod` argument.
+
+Versioned callers - `Base.VersionedParse`, installed for modules with a
+declared syntax version - pass `syntax_version=...` which takes precedence
+over the default.
+"""
+struct CoreParserHook
+    default_syntax_version::VersionNumber
+end
+
+function (hook::CoreParserHook)(code, filename::String, lineno::Int, offset::Int, options::Symbol;
+                                syntax_version = hook.default_syntax_version)
+    core_parser_hook(code, filename, lineno, offset, options; syntax_version=syntax_version)
+end
+
+# Signature used by the runtime prior to JuliaLang/julia#43876 (no `lineno`)
+function (hook::CoreParserHook)(code, filename, offset, options;
+                                syntax_version = hook.default_syntax_version)
+    core_parser_hook(code, filename, 1, offset, options; syntax_version=syntax_version)
+end
+
 if _has_v1_10_hooks
     Base.incomplete_tag(e::JuliaSyntax.ParseError) = e.incomplete_tag
 else
@@ -318,24 +352,32 @@ end
 _default_system_parser = _has_v1_6_hooks ? Core._parse : nothing
 
 # hook into InteractiveUtils.@activate
-activate!(enable=true) = enable_in_core!(enable)
+activate!(enable=true; kws...) = enable_in_core!(enable; kws...)
 
 """
-    enable_in_core!([enable=true; freeze_world_age=true, debug_filename=nothing])
+    enable_in_core!([enable=true; freeze_world_age=true, debug_filename=nothing,
+                     syntax_version=VersionNumber(VERSION.major, VERSION.minor)])
 
 Connect the JuliaSyntax parser to the Julia runtime so that it replaces the
-flisp parser for all parsing work. That is, JuliaSyntax will be used for
-`include()`, `Meta.parse()`, the REPL, etc. To reset to the reference parser,
-use `enable_in_core!(false)`.
+currently active parser for all parsing work. That is, JuliaSyntax will be
+used for `include()`, `Meta.parse()`, the REPL, etc. To reset to the
+reference parser, use `enable_in_core!(false)`.
 
 Keyword arguments:
 * `freeze_world_age` - Use a fixed world age for the parser to prevent
   recompilation of the parser due to any user-defined methods (default `true`).
 * `debug_filename` - File name of parser debug log (defaults to `nothing` or
   the value of `ENV["JULIA_SYNTAX_DEBUG_FILE"]`).
+* `syntax_version` - Julia syntax version used for code which is not
+  associated with a module that declares a syntax version. Defaults to the
+  major.minor version of the running Julia session. Modules with a declared
+  syntax version (via `syntax.julia_version` or `compat.julia` in Project.toml,
+  or `Base.Experimental.@set_syntax_version`) ask the parser for that version
+  explicitly and are not affected by this setting.
 """
 function enable_in_core!(enable=true; freeze_world_age = true,
-        debug_filename   = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing))
+        debug_filename   = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing),
+        syntax_version::VersionNumber = SYNTAX_VERSION)
     if !_has_v1_6_hooks
         error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
     end
@@ -347,7 +389,7 @@ function enable_in_core!(enable=true; freeze_world_age = true,
     end
     if enable
         world_age = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
-        _set_core_parse_hook(fix_world_age(core_parser_hook, world_age))
+        _set_core_parse_hook(fix_world_age(CoreParserHook(syntax_version), world_age))
     else
         @assert !isnothing(_default_system_parser)
         _set_core_parse_hook(_default_system_parser)

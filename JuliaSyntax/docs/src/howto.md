@@ -13,6 +13,12 @@ using JuliaSyntax
 JuliaSyntax.enable_in_core!()
 ```
 
+Code which is not associated with a module that declares a syntax version (for
+example `Meta.parse(str)` without a `mod` argument) is parsed using the running
+Julia's syntax version. Use `JuliaSyntax.enable_in_core!(; syntax_version=...)`
+to choose a different default. Modules with a declared syntax version are always
+parsed at their declared version.
+
 This works well in Julia 1.9 but in Julia 1.8 will cause some startup latency.
 To reduce that you can create a custom system image by running the code in
 `./sysimage/compile.jl` as a Julia script (or directly using the shell, on

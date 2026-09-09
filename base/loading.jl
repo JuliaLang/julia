@@ -990,14 +990,32 @@ struct VersionedParse
     ver::VersionNumber
 end
 
+# Parse `code` with the parser currently installed as `Core._parse`, asking it
+# for syntax version `vp.ver`. The parser is looked up at call time so that a
+# parser activated after this module was created (e.g. a development copy of
+# JuliaSyntax loaded as a package and enabled with `enable_in_core!()`) is used
+# for versioned modules (`Main`, packages) as well as for unversioned parsing.
 function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    if !isdefined(Base, :JuliaSyntax)
-        if vp.ver === VERSION
-            return Core._parse
+    parser = Core._parse
+    if parser === nothing || parser === fl_parse
+        # The builtin flisp parser (in use during bootstrap, or when
+        # JULIA_USE_FLISP_PARSER is set) has no notion of syntax versions and
+        # accepts no keyword arguments. Prefer the vendored JuliaSyntax when it
+        # is available; otherwise flisp can only parse the running version's
+        # syntax.
+        if isdefined(Base, :JuliaSyntax)
+            return JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options;
+                                                syntax_version=vp.ver)
+        elseif vp.ver.major == VERSION.major && vp.ver.minor == VERSION.minor
+            return fl_parse(code, filename, lineno, offset, options)
         end
         error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
     end
-    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
+    # `invokelatest`: the parser may have been installed in a newer world than
+    # the caller's (e.g. `Meta.parse` or `include_string` after activating a
+    # parser at runtime). The C entry point `jl_parse` already runs the parser
+    # in the latest world.
+    return invokelatest(parser, code, filename, lineno, offset, options; syntax_version=vp.ver)
 end
 
 function parser_for_active_project()
