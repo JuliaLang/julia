@@ -238,7 +238,7 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
             if isa(uncompressed, CodeInfo)
                 # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
                 codegen[ci] = uncompressed
-                if bootstrapping_compiler && !(ci.inferred isa MaybeCompressed)
+                if bootstrapping_compiler
                     # This is necessary to get decent bootstrapping performance
                     # when compiling the compiler to inject everything eagerly
                     # where codegen can start finding and using it right away
