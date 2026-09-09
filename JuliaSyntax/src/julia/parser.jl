@@ -22,8 +22,7 @@ struct ParseState
     # Enable parsing `where` with high precedence
     where_enabled::Bool
     # First byte of the content of the bare parens currently being parsed
-    # (0 otherwise). A macro call starting exactly at this byte treats
-    # newlines as argument whitespace.
+    # (0 otherwise).
     paren_content_byte_index::UInt32
 end
 
@@ -43,7 +42,7 @@ function ParseState(ps::ParseState; range_colon_enabled=nothing,
         end_symbol === nothing ? ps.end_symbol : end_symbol,
         whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
         where_enabled === nothing ? ps.where_enabled : where_enabled,
-        paren_content_byte_index === nothing ?
+        paren_content_byte_index === nothing ? 
             ps.paren_content_byte_index : paren_content_byte_index)
 end
 
@@ -1584,10 +1583,11 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # A.@foo a b    ==> (macrocall (. A (macro_name foo)) a b)
                 # @A.foo a b    ==> (macrocall (macro_name (. A foo)) a b)
                 #
-                # A macro call which is the immediate child of round brackets
-                # (its start byte was recorded by parse_brackets) may
-                # continue its arguments over newlines
-                # (@foo x\n y)  ==> (parens (macrocall (macro_name foo) x y))
+                # 1.14: A macro call which is the immediate child of parens
+                # can span multiple lines
+                # (@foo x\n y)     ==> (parens (macrocall (macro_name foo) x y))
+                # (@m @n x y \n z) ==> (parens (macrocall m (macrocall n x y) z))
+                # (x, @m a \n b)   ==> (tuple-p x (macrocall m a) (error-t b))
                 n_args = parse_space_separated_exprs(
                     ps, ps.paren_content_byte_index == mark.byte_index)
                 is_doc_macro = last_identifier_orig_kind == K"doc"
@@ -2864,19 +2864,13 @@ function parse_space_separated_exprs(ps::ParseState, macro_eats_newlines::Bool=f
         k = peek(ps)
         if is_closing_token(ps, k) || (ps.for_generator && k == K"for")
             break
-        end
-        if k == K"NewlineWs"
-            macro_eats_newlines || break
-            # Continue macro arguments over the newline only when the next
-            # line starts a new argument: stop at closing tokens and `for`
-            # (which belong to the surrounding brackets), at operators (which
-            # continue the surrounding expression), and at blank lines.
-            k2 = peek(ps, 2)
-            if is_closing_token(ps, k2) || k2 == K"for" || k2 == K"NewlineWs" ||
-                    is_operator(k2)
+        elseif k == K"NewlineWs"
+            k2 = peek(ps, skip_newlines=true)
+            if !macro_eats_newlines || is_closing_token(ps, k2) || k2 == K"for" ||
+                    (is_operator(k2) && k2 != K"'")
                 break
             end
-            bump(ps, TRIVIA_FLAG)
+            bump_trivia(ps)
             continue
         end
         parse_eq(ps)
@@ -3259,7 +3253,7 @@ function parse_paren(ps::ParseState, check_identifiers=true, has_unary_prefix=fa
         # Deal with all other cases of tuple or block syntax via the generic
         # parse_brackets
         initial_semi = peek(ps) == K";"
-        opts = parse_brackets(ps, K")", macro_newlines=true) do had_commas, had_splat, num_semis, num_subexprs
+        opts = parse_brackets(ps, K")", bare_parens=true) do had_commas, had_splat, num_semis, num_subexprs
             is_tuple = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0)) ||
                        (peek(ps, 2) == K"->" && (peek_behind(ps).kind != K"where" && !has_unary_prefix))
@@ -3320,15 +3314,11 @@ end
 # flisp: parts of parse-paren- and parse-arglist
 function parse_brackets(after_parse::F,
                         ps::ParseState, closing_kind, generator_is_last=true;
-                        macro_newlines::Bool=false) where {F}
+                        bare_parens::Bool=false) where {F}
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
                     whitespace_newline=true)
-    # A macro call which is the first item of bare parens may continue its
-    # space separated arguments over newlines. Record the item's start byte
-    # so parse_call_chain can detect this case.
-    macro_newlines &= ps.stream.version >= (1, 14)
     params_positions = acquire_positions(ps.stream)
     num_subexprs = 0
     num_semis = 0
@@ -3356,7 +3346,7 @@ function parse_brackets(after_parse::F,
             break
         else
             mark = position(ps)
-            parse_eq_star(!(macro_newlines && num_subexprs == 0 && num_semis == 0) ? ps :
+            parse_eq_star(!(bare_parens && num_subexprs == 0 && num_semis == 0 && ps.stream.version >= (1, 14)) ? ps :
                 ParseState(ps, paren_content_byte_index=first(byte_range(peek_full_token(ps)))))
             trailing_comma = false
             num_subexprs += 1
