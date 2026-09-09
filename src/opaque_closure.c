@@ -216,6 +216,9 @@ int jl_tupletype_length_compat(jl_value_t *v, size_t nargs)
 
 JL_CALLABLE(jl_f_opaque_closure_call) JL_CANSAFEPOINT
 {
+    // opaque closures capture their own world and may carry native code the
+    // mode's traps cannot see (v1 restriction)
+    jl_check_rc("opaque_closure");
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)F;
     jl_value_t *argt = jl_tparam0(jl_typeof(oc));
     if (!jl_tupletype_length_compat(argt, nargs))

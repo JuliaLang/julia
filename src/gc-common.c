@@ -321,6 +321,14 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
     int last_errno = errno;
+    // Finalizers may fire at allocation safepoints inside RCJulia mode; they
+    // are semantically outside the restricted computation (which cannot
+    // observe their effects, since it cannot read mutable memory), so
+    // suspend the mode while they run rather than trapping unrelated code.
+    uint16_t last_rc = ct->rcjulia;
+    jl_rc_frame_t *last_rc_frames = ct->rc_frames;
+    ct->rcjulia = 0;
+    ct->rc_frames = NULL;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
@@ -332,6 +340,8 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     ct->ptls->in_finalizer = was_in_finalizer;
     arraylist_free(&copied_list);
 
+    ct->rcjulia = last_rc;
+    ct->rc_frames = last_rc_frames;
     memcpy(&ct->rngState[0], &save_rngState[0], sizeof(save_rngState));
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);

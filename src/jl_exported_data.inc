@@ -29,6 +29,7 @@
     XX(bool_type, jl_datatype_t*) \
     XX(bottom_type, jl_value_t*) \
     XX(boundserror_type, jl_datatype_t*) \
+    XX(capabilityerror_type, jl_datatype_t*) \
     XX(builtin_type, jl_datatype_t*) \
     XX(cancel_source_type, jl_datatype_t*) \
     XX(char_type, jl_datatype_t*) \

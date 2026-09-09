@@ -454,6 +454,8 @@ Core.ReadOnlyMemoryError
 Core.OverflowError
 Base.ProcessFailedException
 Base.TaskFailedException
+Core.CapabilityError
+Core._rcjulia_call
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError

@@ -18,6 +18,7 @@ extern "C" {
     XX(_import, "_import") \
     XX(_new_cancel_source,"_new_cancel_source") \
     XX(_primitivetype,"_primitivetype") \
+    XX(_rcjulia_call,"_rcjulia_call") \
     XX(_setsuper,"_setsuper!") \
     XX(_structtype,"_structtype") \
     XX(_svec_len,"_svec_len") \

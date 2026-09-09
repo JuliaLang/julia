@@ -1064,6 +1064,40 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t w
     return jl_atomic_load_relaxed(&b->value);
 }
 
+// RCJulia mode: classify binding (m.s) at `world`.
+// Returns 1 if the binding is a defined constant there (sets *val), 0 if it is
+// undefined (guard, failed import, or a valueless `const`/`global` declaration
+// with no value slot to read), and -1 if reading it would observe mutable
+// state (an assignable global). Constants are read without the backdated-const
+// admonition: printing would be a side effect, and the value itself is fixed
+// within the (frozen) world.
+JL_DLLEXPORT int jl_rc_binding_constant(jl_module_t *m, jl_sym_t *s, size_t world, jl_value_t **val)
+{
+    jl_binding_t *b = jl_get_module_binding(m, s, 1);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+    jl_walk_binding_inplace(&b, &bpart, world);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_defined_constant(kind)) {
+        *val = bpart->restriction;
+        return 1;
+    }
+    *val = NULL;
+    if (jl_bkind_is_some_guard(kind) || kind == PARTITION_KIND_UNDEF_CONST)
+        return 0;
+    return -1;
+}
+
+JL_DLLEXPORT jl_value_t *jl_rc_globalref_value(jl_module_t *m, jl_sym_t *s, size_t world)
+{
+    jl_value_t *v = NULL;
+    int kind = jl_rc_binding_constant(m, s, world, &v);
+    if (kind < 0)
+        jl_capability_error("getglobal");
+    if (kind == 0)
+        jl_undefined_var_error(s, (jl_value_t*)m);
+    return v;
+}
+
 // Read a binding's value at `world`, warning if it is deprecated (unless reached through an
 // explicit import, which `jl_walk_binding_inplace_depwarn` suppresses).
 static jl_value_t *jl_get_binding_value_depwarn_(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT

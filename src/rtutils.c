@@ -186,6 +186,14 @@ JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_atomic_error(char *str
     jl_throw(jl_new_struct(jl_atomicerror_type, msg));
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_capability_error(const char *op)
+{
+    // The exception is constructed from the operation name alone so that the
+    // trap is a deterministic function of the operation attempted, keeping
+    // even violating programs `:consistent`.
+    jl_throw(jl_new_struct(jl_capabilityerror_type, (jl_value_t*)jl_symbol(op)));
+}
+
 
 JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
@@ -271,6 +279,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
     eh->bound_cancel_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
     eh->bound_cancel_default = ct->bound_cancel_default;
     eh->cancel_handler_ctx = jl_atomic_load_relaxed(&ct->cancel_handler_ctx);
+    eh->rc_frames = ct->rc_frames;
     eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     eh->locks_len = ct->ptls->locks.len;
     eh->defer_signal = ct->ptls->defer_signal;
@@ -306,6 +315,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh) JL_NO_SAF
     jl_gc_wb_current_task(ct, eh->bound_cancel_token);
     jl_atomic_store_release(&ct->reset_ctx, eh->reset_ctx);
     jl_atomic_store_release(&ct->cancel_handler_ctx, eh->cancel_handler_ctx);
+    ct->rc_frames = eh->rc_frames;
     jl_gc_wb_current_task(ct, eh->scope);
     ct->scope = eh->scope;
     small_arraylist_t *locks = &ptls->locks;
@@ -354,6 +364,7 @@ JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
     jl_gc_wb_current_task(ct, eh->bound_cancel_token);
     jl_atomic_store_release(&ct->reset_ctx, eh->reset_ctx);
     jl_atomic_store_release(&ct->cancel_handler_ctx, eh->cancel_handler_ctx);
+    ct->rc_frames = eh->rc_frames;
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
 }
 

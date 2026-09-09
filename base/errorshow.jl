@@ -170,6 +170,8 @@ showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
 showerror(io::IO, ex::DimensionMismatch) = print(io, "DimensionMismatch: ", ex.msg)
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
+showerror(io::IO, ex::CapabilityError) =
+    print(io, "CapabilityError: `", ex.op, "` is not available in RCJulia (restricted-capability evaluation)")
 
 showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument `$(ex.var)` not assigned")

@@ -947,6 +947,49 @@ JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t
 void JL_NORETURN jl_method_error(jl_value_t *F, jl_value_t **args, size_t na, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...) JL_CANSAFEPOINT;
 
+// RCJulia — restricted-capability evaluation mode (`Core._rcjulia_call`) ----
+
+// An interpreter frame executing under RCJulia mode. Nodes live on the
+// interpreter's C stack, chained through `jl_task_t->rc_frames`; the chain
+// implements the well-founded recursion check and the physical depth
+// backstop. `f`/`args` point into the calling frame's rooted argument
+// buffer, which outlives this frame; `method` is NULL for non-method frames.
+typedef struct _jl_rc_frame_t {
+    jl_method_t *method;
+    jl_value_t *f;
+    jl_value_t **args;
+    uint32_t nargs;
+    uint32_t depth;
+    struct _jl_rc_frame_t *prev;
+} jl_rc_frame_t;
+
+// Physical stack backstop for RCJulia frames. Termination is guaranteed by
+// the well-founded recursion order (see interpreter.c), but well-founded
+// chains can still be astronomically long, and a machine StackOverflowError
+// is not `:consistent` — so a fixed, platform-independent frame cap must
+// fire deterministically first.
+#define JL_RC_MAX_DEPTH 1000
+
+JL_DLLEXPORT void JL_NORETURN jl_capability_error(const char *op) JL_CANSAFEPOINT;
+// Trap executed by builtins and runtime intrinsics whose semantics require a
+// capability RCJulia mode withholds. The trap is deterministic (a function
+// of the operation alone), which is what keeps even violating programs
+// `:consistent`.
+STATIC_INLINE void jl_check_rc(const char *op) JL_CANSAFEPOINT
+{
+    if (__unlikely(jl_current_task->rcjulia))
+        jl_capability_error(op);
+}
+JL_DLLEXPORT jl_value_t *jl_rc_apply(jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
+// classify binding (m.s) at `world` for RCJulia mode:
+// returns 1 if it is a defined constant (sets *val), 0 if it is undefined
+// (guard or valueless `const`/`global` declaration), -1 if it is a mutable
+// global (or otherwise not legal to read under the mode)
+JL_DLLEXPORT int jl_rc_binding_constant(jl_module_t *m, jl_sym_t *s, size_t world, jl_value_t **val) JL_CANSAFEPOINT;
+// read global (m.s) at `world` under RCJulia mode, throwing
+// CapabilityError for mutable globals and UndefVarError for undefined ones
+JL_DLLEXPORT jl_value_t *jl_rc_globalref_value(jl_module_t *m, jl_sym_t *s, size_t world) JL_CANSAFEPOINT;
+
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t) JL_CANSAFEPOINT;
 
 #define JL_CALLABLE(name)                                               \
@@ -1796,10 +1839,10 @@ STATIC_INLINE int is_valid_intrinsic_elptr(jl_value_t *ety)
 }
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i);
-JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order, jl_value_t *syncscope);
+JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order, jl_value_t *syncscope) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order);
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *x, jl_value_t *expected, jl_value_t *success_order, jl_value_t *failure_order) JL_CANSAFEPOINT;
@@ -1885,7 +1928,7 @@ JL_DLLEXPORT jl_value_t *jl_abs_float(jl_value_t *a) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 
-JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
+JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary) JL_CANSAFEPOINT;

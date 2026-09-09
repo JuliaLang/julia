@@ -18,6 +18,13 @@ New language features
   `continue name` to continue a labeled loop ([#60481]).
 * `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
   field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+* A new internal *RCJulia* (restricted-capability Julia) evaluation mode
+  (`Core._rcjulia_call(world, f, args...)`) executes a call with the world age frozen and every
+  primitive operation requiring a withheld capability trapped (throwing the new `CapabilityError`):
+  no mutable-memory reads or writes, no I/O, no world mutation, and only structurally terminating
+  control flow — loops are rejected and recursion must decrease in a built-in well-founded order.
+  Any call that completes under the mode is `:foldable` by construction, making its result safe to
+  constant-fold and cache across sessions without relying on effects proofs.
 * Primitive types with non-byte-multiple logical widths can now be defined ([#61359]).
 * Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
   that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
