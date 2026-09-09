@@ -241,3 +241,10 @@ Note that options of the form `--option[=...]` can **not** be specified as `--op
     In Julia 1.0, the default `--project=@.` option did not search up from the root
     directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
     does.
+
+For `--code-coverage=@<path>`, the path filters the report. Package images carry
+instrumentation independently of the selected path, and newly compiled or
+interpreted code is instrumented as for `--code-coverage=user`. Compatible
+instrumented system images can also contribute Base and Core coverage under the
+path; an ordinary system image does not supply those counters. See
+[Coverage instrumentation](@ref) for building instrumented system images.

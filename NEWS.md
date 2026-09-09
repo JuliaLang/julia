@@ -104,6 +104,10 @@ Compiler/Runtime improvements
 * Coverage runs can reuse instrumented package images across processes. The counter mode is part of
   the cache identity; `user`, `all`, and `@path` select the same image variants and filter the counters
   reported. Count images can also serve hit requests ([#62724]).
+* `--code-coverage=all` no longer invalidates system-image code at startup. To collect coverage from
+  that code, build Julia with `JULIA_COVERAGE_IMAGES=1`, which instruments the system image and bundled
+  package images in hit mode. `@path` instruments newly compiled and interpreted code like `user`,
+  while also reporting compatible image counters under the selected path ([#62724]).
 
 Command-line option changes
 ---------------------------
