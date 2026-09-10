@@ -48,8 +48,6 @@ LLVM_ENABLE_RUNTIMES :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang
 LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
-else ifeq ($(OS),Darwin)
-LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
 endif
 ifeq ($(USE_POLLY), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);polly
@@ -316,6 +314,40 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
+ifeq ($(OS),Darwin)
+ifneq ($(BUILD_LLVM_CLANG), 1)
+# The LLVM runtimes build of compiler-rt requires clang, so build the builtins
+# standalone with the host compiler instead. Only the host architecture is built:
+# building several arm64 variants in parallel races on the generated outline atomics.
+LLVM_COMPILERRT_BUILDDIR := $(LLVM_BUILDDIR)/build_compiler-rt
+ifeq ($(ARCH),aarch64)
+LLVM_COMPILERRT_ARCH := arm64
+else
+LLVM_COMPILERRT_ARCH := $(ARCH)
+endif
+
+$(LLVM_COMPILERRT_BUILDDIR)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
+	mkdir -p $(dir $@)
+	cd $(dir $@) && \
+		$(CMAKE) $(SRCCACHE)/$(LLVM_SRC_DIR)/compiler-rt/lib/builtins $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) \
+			-DCMAKE_BUILD_TYPE=Release -DCOMPILER_RT_STANDALONE_BUILD=ON \
+			-DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN) \
+			-DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF \
+			-DCOMPILER_RT_ENABLE_TVOS=OFF -DCOMPILER_RT_ENABLE_XROS=OFF \
+			-DDARWIN_osx_BUILTIN_ARCHS=$(LLVM_COMPILERRT_ARCH)
+	echo 1 > $@
+
+$(LLVM_COMPILERRT_BUILDDIR)/build-compiled: $(LLVM_COMPILERRT_BUILDDIR)/build-configured
+	cd $(dir $@) && \
+		$(if $(filter $(CMAKE_GENERATOR),make), \
+		  $(MAKE), \
+		  $(CMAKE) --build .)
+	echo 1 > $@
+
+$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_COMPILERRT_BUILDDIR)/build-compiled
+endif
+endif
+
 LLVM_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir)/lit && \
 	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.py $2$$(build_depsbindir)/lit/ && \
@@ -329,7 +361,11 @@ ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
 # compiler-rt is required for linking sysimages on Darwin
+ifeq ($(BUILD_LLVM_CLANG), 1)
 LLVM_INSTALL += && install -m 0644 $2$$(build_prefix)/lib/clang/$$(LLVM_VER_MAJ)/lib/darwin/libclang_rt.osx.a $2$$(build_libdir)/libclang_rt.osx.a
+else
+LLVM_INSTALL += && install -m 0644 $$(abspath $$(LLVM_COMPILERRT_BUILDDIR))/lib/darwin/libclang_rt.osx.a $2$$(build_libdir)/libclang_rt.osx.a
+endif
 endif
 ifeq ($(BUILD_LLD), 1)
 LLVM_INSTALL += && cp $2$$(build_bindir)/lld$$(EXE) $2$$(build_depsbindir)
