@@ -2226,3 +2226,36 @@ end
 end
 
 @test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
+
+@testset "rm of open and briefly locked files" begin
+    # A file that is open can be removed. On Windows this needs the file to be
+    # opened with FILE_SHARE_DELETE, which is what ios_file() now requests.
+    dir = mktempdir()
+    p = joinpath(dir, "open_file")
+    io = open(p, "w")
+    write(io, "hello")
+    flush(io)
+    @test rm(p) === nothing
+    @test !ispath(p)
+    seekstart(io)
+    @test read(io, String) == "hello" # the open stream keeps the data
+    close(io)
+
+    @static if Sys.iswindows()
+        # A file that another handle locks for a short time is waited for
+        # instead of being reported as an error.
+        q = joinpath(dir, "locked_file")
+        write(q, "x")
+        handle = ccall(:CreateFileW, stdcall, Ptr{Cvoid},
+                       (Cwstring, Cuint, Cuint, Ptr{Cvoid}, Cuint, Cuint, Ptr{Cvoid}),
+                       q, 0x80000000,                     # GENERIC_READ
+                       0x00000001 | 0x00000002,           # share read and write, but not delete
+                       C_NULL, 3, 0x80, C_NULL)           # OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL
+        @test handle != reinterpret(Ptr{Cvoid}, -1)
+        release = @async (sleep(0.2); ccall(:CloseHandle, stdcall, Int32, (Ptr{Cvoid},), handle))
+        @test rm(q) === nothing
+        wait(release)
+        @test !ispath(q)
+    end
+    rm(dir; recursive=true, force=true)
+end
