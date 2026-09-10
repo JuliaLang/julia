@@ -467,7 +467,7 @@ int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 }
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.gregs[REG_ERR]);
 }
@@ -478,7 +478,7 @@ struct linux_aarch64_ctx_header {
 };
 const uint32_t linux_esr_magic = 0x45535201;
 
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     struct linux_aarch64_ctx_header *extra =
         (struct linux_aarch64_ctx_header *)ctx->uc_mcontext.__reserved;
@@ -492,7 +492,7 @@ int is_write_fault(void *context) {
     return 0;
 }
 #elif defined(_OS_FREEBSD_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
@@ -500,17 +500,68 @@ int is_write_fault(void *context) {
 // FreeBSD seems not to expose a means of accessing ESR via `ucontext_t` on AArch64.
 // TODO: Is there an alternative approach that can be taken? ESR may become accessible
 // in a future release though.
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     return 0;
 }
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     struct sigcontext *ctx = (struct sigcontext *)context;
     return exc_reg_is_write_fault(ctx->sc_err);
 }
+#elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
+// The riscv64 `mcontext_t` only carries the integer and floating-point register
+// files; the trap cause (`scause`) and faulting address (`stval`) are not exposed
+// to user space. Instead, classify the instruction that faulted: a write fault can
+// only come from a store, a store-conditional, an atomic memory operation, or a
+// cache-block zero. Loads, reservations and instruction fetches are not writes.
+int is_write_fault(void *context, void *addr) {
+    ucontext_t *ctx = (ucontext_t*)context;
+    const uint16_t *pc = (const uint16_t*)ctx->uc_mcontext.__gregs[REG_PC];
+    // An instruction-fetch fault can point at either halfword. Do not read an
+    // inaccessible PC or interpret non-executable memory as a store instruction.
+    if ((uintptr_t)addr - (uintptr_t)pc < 4)
+        return 0;
+    // Instructions are only guaranteed to be 2-byte aligned when the compressed
+    // extension is in use, so fetch the encoding as halfwords.
+    uint16_t lo = pc[0];
+    if ((lo & 0x3) != 0x3) {
+        // 16-bit compressed encoding: quadrant in bits [1:0], funct3 in bits [15:13].
+        // The store forms are C.FSD/C.SW/C.SD (quadrant 0) and their
+        // stack-pointer-relative counterparts C.FSDSP/C.SWSP/C.SDSP (quadrant 2),
+        // all of which have funct3 >= 5. Zcb adds C.SB/C.SH in quadrant 0 under
+        // funct3 == 4, distinguished from C.LBU/C.LH/C.LHU by bit 11.
+        unsigned quadrant = lo & 0x3;
+        unsigned funct3 = (lo >> 13) & 0x7;
+        if (quadrant == 0x1)
+            return 0;
+        if (funct3 >= 5)
+            return 1;
+        return quadrant == 0x0 && funct3 == 4 && (lo & 0x0800) != 0;
+    }
+    if ((lo & 0x1f) == 0x1f)
+        return 0; // 48-bit or longer encoding; none defined that store
+    uint32_t insn = lo | ((uint32_t)pc[1] << 16);
+    unsigned opcode = insn & 0x7f;
+    switch (opcode) {
+    case 0x23: // STORE: SB/SH/SW/SD
+    case 0x27: // STORE-FP: FSH/FSW/FSD, and the vector stores
+        return 1;
+    case 0x2f: { // AMO: LR is a load, SC and every AMO* write
+        unsigned funct5 = insn >> 27;
+        return funct5 != 0x02; // LR.W/LR.D
+    }
+    case 0x0f: { // MISC-MEM: only CBO.ZERO (funct3 == 2, imm == 4) writes
+        unsigned funct3 = (insn >> 12) & 0x7;
+        unsigned imm = insn >> 20;
+        return funct3 == 2 && imm == 4;
+    }
+    default:
+        return 0;
+    }
+}
 #else
 #pragma message("Implement this query for consistent PROT_NONE handling")
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     return 0;
 }
 #endif
@@ -535,7 +586,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         sigdie_handler(sig, info, context);
         return;
     }
-    if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
+    if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context, info->si_addr)) {
         jl_set_gc_and_wait(ct);
         // (vestigial thread-0 gate from the old sigint force-throw, which
         // is now delivered through the cancellation system instead - see
@@ -566,7 +617,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         jl_safe_printf("ERROR: Signal stack overflow, exit\n");
         jl_raise(sig);
     }
-    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
+    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context, info->si_addr)) {  // writing to read-only memory (e.g., mmap)
         jl_throw_in_ctx(ct, jl_readonlymemory_exception, sig, context);
     }
     else {

@@ -691,3 +691,42 @@ rm(file)
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Mmap))
 end
+
+if Sys.islinux() && Sys.ARCH === :riscv64
+    @testset "instruction-fetch faults are not writes" begin
+        # The fault decoder must not interpret non-executable bytes as a store,
+        # including an instruction whose second halfword is on an inaccessible page.
+        for mode in ("noexec", "inaccessible", "straddling")
+            script = """
+                using Mmap
+                ccall(:setrlimit, Cint, (Cint, Ref{NTuple{2, Culong}}), 4, (0, 0))
+                data = mmap(Vector{UInt8}, 2 * Mmap.PAGESIZE)
+                GC.@preserve data begin
+                    p = pointer(data)
+                    if $(repr(mode)) == "straddling"
+                        p += Mmap.PAGESIZE - 2
+                    end
+                    unsafe_store!(Ptr{UInt16}(p), 0x3023) # sd zero, 0(a0)
+                    unsafe_store!(Ptr{UInt16}(p + 2), 0x0005)
+                    if $(repr(mode)) == "inaccessible"
+                        @assert ccall(:mprotect, Cint, (Ptr{Cvoid}, Csize_t, Cint),
+                                      pointer(data), Mmap.PAGESIZE, 0) == 0
+                    elseif $(repr(mode)) == "straddling"
+                        @assert ccall(:mprotect, Cint, (Ptr{Cvoid}, Csize_t, Cint),
+                                      pointer(data), Mmap.PAGESIZE, 5) == 0
+                        @assert ccall(:mprotect, Cint, (Ptr{Cvoid}, Csize_t, Cint),
+                                      pointer(data) + Mmap.PAGESIZE, Mmap.PAGESIZE, 0) == 0
+                    end
+                    try
+                        ccall(p, Cvoid, ())
+                    catch
+                        exit(42)
+                    end
+                end
+                """
+            p = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e $script`),
+                             stdout=devnull, stderr=devnull))
+            @test Base.process_signaled(p) && p.termsignal == 11 # SIGSEGV on Linux
+        end
+    end
+end
