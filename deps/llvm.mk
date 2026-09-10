@@ -221,6 +221,12 @@ endif
 
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
+ifeq ($(OS),Darwin)
+# Build-tree tools such as tblgen link against the bundled zlib and zstd, whose
+# install names are `@rpath/...`, so they need a build rpath to find them.
+# CMake replaces it with the install rpath on install.
+LLVM_CMAKE += -DCMAKE_BUILD_RPATH="$(build_shlibdir)"
+endif
 
 # change the SONAME of Julia's private LLVM
 # i.e. libLLVM-14jl.so
