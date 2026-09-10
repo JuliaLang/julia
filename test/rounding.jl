@@ -4,6 +4,7 @@
 using Base.MathConstants
 
 using Test
+using Random
 
 @testset "Float64 checks" begin
     # a + b returns a number exactly between prevfloat(1.) and 1., so its
@@ -297,6 +298,120 @@ end
     @test ceil(-123.456, digits=1) ≈ -123.4
     @test floor(123.456, digits=1) ≈ 123.4
     @test floor(-123.456, digits=1) ≈ -123.5
+end
+@testset "rounding to digits is exact w.r.t. the value of x" begin
+    modes = (RoundDown, RoundUp, RoundToZero, RoundFromZero,
+             RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+    # `round(x * base^d, r) / base^d` on the exact value of `x`, rounded once at the end
+    function refround(x::T, r::RoundingMode, d::Integer, base::Integer=10) where {T<:AbstractFloat}
+        setprecision(BigFloat, 4 * max(precision(x), 53) + 4 * abs(d) + 64) do
+            s = big(base)^abs(d)
+            y = d >= 0 ? round(big(x) * s, r) / s : round(big(x) / s, r) * s
+            return T <: BigFloat ? BigFloat(y; precision=precision(x)) : T(y)
+        end
+    end
+
+    # the rounded product used to land exactly on a rounding boundary
+    let x = float(2^53 - 4)
+        for f in (floor, ceil, trunc, round)
+            @test f(x; digits=1) === x
+        end
+    end
+    @test floor(2.52379309758e8; digits=3) === 2.52379309757e8
+    @test ceil(4.312747009431438e17; digits=-2) === nextfloat(4.312747009431438e17)
+    @test floor(0.29; digits=2) === 0.28
+    @test round(1.15; digits=1) === 1.1
+    @test round(2.675; digits=2) === 2.67
+    @test round(0.5; digits=0) === 0.0
+    @test round(1.5; digits=0) === 2.0
+    @test round(Float32(1.15); digits=1) === 1.1f0            # also below 1.15
+    @test round(1.25; digits=1) === 1.2                        # exact ties are still ties
+    @test round(1.25, RoundNearestTiesAway; digits=1) === 1.3
+    @test round(-1.25, RoundNearestTiesUp; digits=1) === -1.2
+    # signed zeros
+    @test round(-0.0; digits=2) === -0.0
+    @test round(-0.1; digits=0) === -0.0
+    @test ceil(-0.4; digits=0) === -0.0
+    @test trunc(-1e-320; digits=-5) === -0.0
+    @test floor(-1e-320; digits=-5) === -1e5
+
+    # the primitives: `hi + lo == round(x * y, r)` exactly, even when not representable
+    hilo(t::Base.TwicePrecision) = (t.hi, t.lo)
+    let x = 2.0^53 - 4, y = 10.0
+        for r in modes
+            n, m = hilo(Base._mul_round(x, y, r))
+            @test isinteger(n) && isinteger(m)
+            @test big(n) + big(m) == round(big(x) * big(y), r)
+        end
+        @test hilo(Base._mul_round(1.15, 10.0, RoundNearest)) == (11.0, 0.0)
+        for r in modes, y in (100.0, -100.0)
+            n, m = hilo(Base._div_round(4.312747009431438e17, y, r))
+            @test big(n) + big(m) == round(big(4.312747009431438e17) / y, r)
+            n, m = hilo(Base._div_round(2.0^60 + 2.0^8, y / 10, r))
+            @test big(n) + big(m) == round((big(2)^60 + 2^8) / (y / 10), r)
+        end
+        # `_mul_round` is exact at any magnitude; `_div_round` up to |x/y| < maxintfloat^2/4,
+        # and within its documented bound beyond that
+        rng = Random.MersenneTwister(0xf00d)
+        for _ in 1:20, r in modes
+            x = ldexp(rand(rng) + 1, rand(rng, 100:900)) * rand(rng, (-1.0, 1.0)); y = (rand(rng) + 1) * rand(rng, (-1.0, 1.0))
+            n, m = hilo(Base._mul_round(x, y, r))
+            @test big(n) + big(m) == round(big(x) * big(y), r)
+            x = ldexp(rand(rng) + 1, rand(rng, 60:80)) * rand(rng, (-1.0, 1.0)); y = ldexp(rand(rng) + 1, -20) * rand(rng, (-1.0, 1.0))
+            @test abs(x / y) < 2.0^104
+            n, m = hilo(Base._div_round(x, y, r))
+            @test big(n) + big(m) == round(big(x) / big(y), r)
+            x = ldexp(rand(rng) + 1, rand(rng, 120:200)) * rand(rng, (-1.0, 1.0))
+            n, m = hilo(Base._div_round(x, y, r))
+            @test abs(big(n) + big(m) - round(big(x) / big(y), r)) <= big(eps(m)) / 2 + 1
+        end
+        for r in modes
+            @test Base._mul_round(1e200, 1e200, r) === Base.TwicePrecision(Inf, 0.0)
+            @test isnan(Base._mul_round(NaN, 1.0, r).hi)
+            @test Base._div_round(1.0, 0.0, r) === Base.TwicePrecision(Inf, 0.0)
+            @test Base._div_round(-1.0, Inf, r) === Base.TwicePrecision(-0.0, 0.0)
+        end
+    end
+
+    # sweep against the exact reference, including magnitudes where the scaled value is
+    # not representable, and where the result is x itself
+    rng = Random.MersenneTwister(0xc0ffee)
+    for (T, exps, ds) in ((Float64, -20:70, -4:4), (Float32, -20:40, -3:3), (Float16, -8:15, -2:2),
+                          (Float64, 1000:1023, 0:3), (Float64, -1074:-1040, -2:2),
+                          (Float64, -50:20, 15:22), (Float64, 40:120, -22:-15)),
+        _ in 1:150
+        x = T(ldexp(rand(rng) + 1, rand(rng, exps))) * rand(rng, (-one(T), one(T)))
+        for d in ds
+            @test floor(x; digits=d) <= x <= ceil(x; digits=d)
+            @test abs(trunc(x; digits=d)) <= abs(x)
+            for r in modes
+                @test round(x, r; digits=d) === refround(x, r, d)
+            end
+        end
+    end
+    for base in (2, 3, 16), _ in 1:50
+        x = ldexp(rand(rng) + 1, rand(rng, -10:60)) * rand(rng, (-1.0, 1.0))
+        for d in -3:6, r in modes
+            @test round(x, r; digits=d, base=base) === refround(x, r, d, base)
+        end
+    end
+
+    # BigFloat
+    setprecision(BigFloat, 256) do
+        x = big(2)^300 - big(2)^248
+        for f in (floor, ceil, trunc, round)
+            @test f(x; digits=1) == x
+        end
+        for _ in 1:30
+            x = ldexp(1 + big(rand(rng)) + big(rand(rng)) * big(2)^-53 + big(rand(rng)) * big(2)^-106 + big(rand(rng)) * big(2)^-159,
+                      rand(rng, -20:300)) * rand(rng, (-1, 1))
+            for d in (-3, -1, 0, 1, 3, 20, 60), r in modes
+                y = round(x, r; digits=d)
+                @test y == refround(x, r, d)
+                @test signbit(y) == signbit(refround(x, r, d))
+            end
+        end
+    end
 end
 @testset "rounding with too much (or too few) precision" begin
     for x in (12345.6789, 0, -12345.6789)

@@ -74,13 +74,113 @@ function round(x::Real, r::RoundingMode=RoundNearest;
     end
 end
 
+# Rounding to digits scales x, rounds to an integer, and scales back. The scaling
+# step itself rounds, and if it lands exactly on a rounding boundary (an integer, or
+# a half-integer for the nearest modes) the mode can't tell which side the exact
+# value was on. floor(x) could end up above x. So `_mul_round` and `_div_round`
+# recover the scaling error with an fma and round the exact product or quotient.
+# The rounded integer may not be representable, hence the `TwicePrecision`.
+
+# round(s + δ, r) for an infinitesimal δ with the sign of σ (δ == 0 iff σ == 0).
+# Branch-free: the sign of σ is unpredictable. Needs eps(s) <= 1 so the step of
+# one is representable, and σ to have the sign of s when s is a signed zero;
+# callers pass |s| < maxintfloat/2 or |s| <= 4, and σ is the error of s itself.
+function _round_sticky(s, σ, ::RoundingMode{:Down})
+    f = floor(s)
+    return ifelse((f == s) & (σ < 0), f - one(f), f)
+end
+function _round_sticky(s, σ, ::RoundingMode{:Up})
+    c = ceil(s)
+    return ifelse((c == s) & (σ > 0), copysign(c + one(c), c), c)
+end
+function _round_sticky(s, σ, ::RoundingMode{:ToZero})
+    t = trunc(s)
+    return ifelse((t == s) & !iszero(σ) & (signbit(σ) != signbit(s)), copysign(t + copysign(one(t), σ), s), t)
+end
+function _round_sticky(s, σ, ::RoundingMode{:FromZero})
+    t = round(s, RoundFromZero)
+    return ifelse((t == s) & !iszero(σ) & (signbit(σ) == signbit(s)), t + copysign(one(t), σ), t)
+end
+function _round_sticky(s, σ, r::Union{RoundingMode{:Nearest}, RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp}})
+    half = oftype(s, 0.5)
+    tie = (abs(s - trunc(s)) == half) & !iszero(σ)
+    return ifelse(tie, copysign(s + copysign(half, σ), s), round(s, r))
+end
+
+# parity of an integer-valued float, without converting to an Integer
+_iseven_integral(s) = s == 2 * trunc(s / 2)
+
+# round(s + err + δ, r) - s for an integer-valued s, |err| < |s|, and an infinitesimal
+# δ with the sign of σ. The result is an integer, but s plus it may not be representable.
+function _round_offset(s, err, σ, r::RoundingMode)
+    # Only the fractional part of err and the sign and parity of s + trunc(err) matter,
+    # so swap the big integer for a small one with the same sign and parity.
+    ei = trunc(err)
+    ef = err - ei                              # exact
+    b = copysign(oftype(s, _iseven_integral(s) == _iseven_integral(ei) ? 2 : 3), s)
+    t = b + ef
+    e = (b - t) + ef                           # exact: b + ef == t + e
+    return ei + (_round_sticky(t, iszero(e) ? σ : e, r) - b)
+end
+
+# round(x * y, r) applied to the exact product. Exact unless x * y underflows,
+# which loses the sign of err; here y is an integer, so it never does.
+@inline function _mul_round(x, y, r::RoundingMode)
+    xy, err = two_mul(x, y)          # x * y == xy + err
+    isfinite(xy) || return TwicePrecision(xy, zero(xy))
+    if abs(xy) < maxintfloat(xy) / 2
+        return TwicePrecision(_round_sticky(xy, err, r), zero(xy))
+    end
+    return TwicePrecision(xy, _round_offset(xy, err, zero(err), r))
+end
+
+# round(x / y, r) applied to the exact quotient. Exact for |x / y| < maxintfloat^2 / 4;
+# past that the rounded quotient generally doesn't fit in a TwicePrecision, and the
+# result is the closest one to x / y instead (within eps(lo) / 2 + 1 of the rounded quotient).
+@inline function _div_round(x, y, r::RoundingMode)
+    q = x / y
+    (isfinite(q) && isfinite(y)) || return TwicePrecision(round(q, r), zero(q))
+    rem = fma(-q, y, x)              # x == q * y + rem
+    if abs(q) < maxintfloat(q) / 2
+        return TwicePrecision(_round_sticky(q, flipsign(rem, y), r), zero(q))
+    end
+    # q is an integer and |rem / y| <= eps(q) / 2
+    δ = rem / y
+    if abs(δ) >= maxintfloat(q) / 2
+        return TwicePrecision(q, δ)  # δ is already an integer
+    end
+    ρ = fma(-δ, y, rem)              # rem == δ * y + ρ
+    return TwicePrecision(q, _round_offset(q, δ, flipsign(ρ, y), r))
+end
+
+# (v.hi + v.lo) / y as a float, for v from `_mul_round`. When v.lo != 0 this rounds
+# twice. With an integer numerator and y = 10^d the exact quotient is at least
+# ulp/(2*5^d) from any midpoint, which is beyond the error in c for d <= 21; for
+# d == 22 the margin is gone on paper but no counterexample has been found.
+@inline function _tp_div(v::TwicePrecision, y)
+    hi = v.hi / y
+    iszero(v.lo) && return hi
+    rq = fma(-hi, y, v.hi)           # exact: v.hi == hi * y + rq
+    c = (rq + v.lo) / y
+    return hi + c
+end
+
+# (v.hi + v.lo) * y as a float, for v from `_div_round`. Correctly rounded when
+# pe + v.lo * y is exact: both are multiples of 2^d for y = 10^d, and with |v.lo| <= 2
+# (the fast path in `_round_step` keeps |v.hi| < 2^55) the sum fits for d <= 21.
+@inline function _tp_mul(v::TwicePrecision, y)
+    iszero(v.lo) && return v.hi * y
+    p, pe = two_mul(v.hi, y)         # exact: v.hi * y == p + pe
+    return p + (pe + v.lo * y)
+end
+
 # round x to multiples of 1/invstep
 function _round_invstep(x, invstep, r::RoundingMode)
-    y = round(x * invstep, r) / invstep
-    if !isfinite(y)
-        return x
-    end
-    return y
+    # If 1/invstep is less than a quarter of the spacing of floats around x, the
+    # rounded value is within a quarter ulp of x and converts back to x, so skip the
+    # work. This also covers x * invstep overflowing.
+    eps(x) * abs(invstep) >= 4 && return x
+    return _tp_div(_mul_round(x, invstep, r), invstep)
 end
 
 # round x to multiples of 1/(invstepsqrt^2)
@@ -95,8 +195,13 @@ end
 
 # round x to multiples of step
 function _round_step(x, step, r::RoundingMode)
-    # TODO: use div with rounding mode
-    y = round(x / step, r) * step
+    if isfinite(step)
+        # step is less than a quarter of the spacing of floats around x: the result is x
+        eps(x) >= 4 * abs(step) && return x
+        y = _tp_mul(_div_round(x, step, r), step)
+    else
+        y = round(x / step, r) * step
+    end
     if !isfinite(y)
         if x > 0
             return (r == RoundUp ? oftype(x, Inf) : zero(x))

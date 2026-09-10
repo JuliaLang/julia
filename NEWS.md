@@ -186,6 +186,12 @@ New library features
 Standard library changes
 ------------------------
 
+* `round`, `floor`, `ceil` and `trunc` with `digits` or `sigdigits` now apply the rounding mode to
+  the exact value of their argument whenever `base^digits` is representable. Previously the result
+  could land on the wrong side of the argument, e.g. `floor(2.0^53 - 4; digits=1)` returned
+  `2.0^53 - 3`, and the rounded intermediate product could break ties the wrong way:
+  `round(1.15, digits=1)` returned `1.2` although the `Float64` `1.15` is less than `115//100`;
+  it now returns `1.1`.
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 
