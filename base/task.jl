@@ -1631,7 +1631,7 @@ function wait()
     record_running_time!(ct)
     # let GC run
     GC.safepoint()
-    # check for libuv events, but not on a completed task 
+    # check for libuv events, but not on a completed task (#63048)
     ct_done = istaskdone(ct)
     ct_done || process_events()
 
