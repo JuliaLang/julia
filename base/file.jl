@@ -258,6 +258,32 @@ end
 # i.e. loaded DLLs on Windows, are listed in the directory below
 delayed_delete_ref() = joinpath(tempdir(), "julia_delayed_deletes_ref")
 
+# Another process (an antivirus scanner, for example) can hold a file open for a
+# short time. On Windows this makes the file busy, and an operation on it fails
+# with UV_EBUSY. Wait and try again before we report a failure.
+#
+# This policy belongs here and not in libuv, which rejected it in libuv#2098:
+# the number of attempts and the length of the delay are decisions for the
+# application, and Julia can wait without blocking an operating system thread.
+const FS_RETRY_MAX_ATTEMPTS = 8
+const FS_RETRY_INITIAL_DELAY = 0.01 # seconds
+const FS_RETRY_MAX_DELAY = 0.32     # seconds
+
+"Run `f` again while it returns `UV_EBUSY`. `f` returns an error code."
+function retry_ebusy(f)
+    delay = FS_RETRY_INITIAL_DELAY
+    for attempt = 1:FS_RETRY_MAX_ATTEMPTS
+        code = f()
+        if code >= 0 || code != UV_EBUSY || attempt == FS_RETRY_MAX_ATTEMPTS
+            return code
+        end
+        # Each wait is longer than the wait before it. The random part stops
+        # processes and threads from trying again at the same moment.
+        sleep(delay * (1 + (Libc.rand() % 100) / 100))
+        delay = min(2delay, FS_RETRY_MAX_DELAY)
+    end
+end
+
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
 
@@ -312,8 +338,11 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
         end
         req = Libc.malloc(_sizeof_uv_fs)
         try
-            ret = ccall(:uv_fs_rmdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), C_NULL, req, path, C_NULL)
-            uv_fs_req_cleanup(req)
+            ret = retry_ebusy() do
+                r = ccall(:uv_fs_rmdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), C_NULL, req, path, C_NULL)
+                uv_fs_req_cleanup(req)
+                r
+            end
             if ret < 0 && !(force && ret == Base.UV_ENOENT)
                 uv_error("rm($(repr(path)))", ret)
             end
@@ -1264,7 +1293,7 @@ function _walkdir(chnl, path, topdown, follow_symlinks, onerror)
 end
 
 function unlink(p::AbstractString)
-    err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
+    err = retry_ebusy(() -> ccall(:jl_fs_unlink, Int32, (Cstring,), p))
     err < 0 && uv_error("unlink($(repr(p)))", err)
     nothing
 end
@@ -1296,7 +1325,7 @@ See also: [`mv`](@ref).
     This method was made public in Julia 1.12.
 """
 function rename(oldpath::AbstractString, newpath::AbstractString)
-    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), oldpath, newpath)
+    err = retry_ebusy(() -> ccall(:jl_fs_rename, Int32, (Cstring, Cstring), oldpath, newpath))
     if err < 0
         uv_error("rename($(repr(oldpath)), $(repr(newpath)))", err)
     end
