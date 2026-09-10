@@ -270,7 +270,7 @@ function retry_ebusy(f)
     delay = FS_RETRY_INITIAL_DELAY
     for attempt = 1:FS_RETRY_MAX_ATTEMPTS
         code = f()
-        if code >= 0 || code != UV_EBUSY || attempt == FS_RETRY_MAX_ATTEMPTS
+        if code >= 0 || code != Base.UV_EBUSY || attempt == FS_RETRY_MAX_ATTEMPTS
             return code
         end
         # Longer each time, with jitter.
