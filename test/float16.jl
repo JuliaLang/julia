@@ -81,6 +81,19 @@ end
     @test unsafe_trunc(Int128, Float16(3)) === Int128(3)
     # `unsafe_trunc` of `NaN` can be any value, see #56582
     @test unsafe_trunc(Int16, NaN16) isa Int16 # #18771
+    # Nonfinite inputs must throw even when the integer bounds overflow Float16.
+    for T in (Int32, Int64, Int128, UInt32, UInt64, UInt128), x in (-Inf16, Inf16, NaN16)
+        @test_throws InexactError trunc(T, x)
+        @test_throws InexactError round(T, x, RoundToZero)
+        @test_throws InexactError T(x)
+    end
+    for T in (Int32, Int64, Int128)
+        @test trunc(T, -floatmax(Float16)) === -T(65504)
+        @test T(-floatmax(Float16)) === -T(65504)
+    end
+    for T in (Int32, Int64, Int128, UInt32, UInt64, UInt128)
+        @test trunc(T, floatmax(Float16)) === T(65504)
+    end
 end
 @testset "fma and muladd" begin
     @test fma(Float16(0.1),Float16(0.9),Float16(0.5)) ≈ fma(0.1,0.9,0.5)
