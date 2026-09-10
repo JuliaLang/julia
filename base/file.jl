@@ -259,12 +259,8 @@ end
 delayed_delete_ref() = joinpath(tempdir(), "julia_delayed_deletes_ref")
 
 # Another process (an antivirus scanner, for example) can hold a file open for a
-# short time. On Windows this makes the file busy, and an operation on it fails
-# with UV_EBUSY. Wait and try again before we report a failure.
-#
-# This policy belongs here and not in libuv, which rejected it in libuv#2098:
-# the number of attempts and the length of the delay are decisions for the
-# application, and Julia can wait without blocking an operating system thread.
+# short time, which makes it busy on Windows. Retry policy belongs here and not
+# in libuv, which removed its own retry in libuv#2098.
 const FS_RETRY_MAX_ATTEMPTS = 8
 const FS_RETRY_INITIAL_DELAY = 0.01 # seconds
 const FS_RETRY_MAX_DELAY = 0.32     # seconds
@@ -277,8 +273,7 @@ function retry_ebusy(f)
         if code >= 0 || code != UV_EBUSY || attempt == FS_RETRY_MAX_ATTEMPTS
             return code
         end
-        # Each wait is longer than the wait before it. The random part stops
-        # processes and threads from trying again at the same moment.
+        # Longer each time, with jitter.
         sleep(delay * (1 + (Libc.rand() % 100) / 100))
         delay = min(2delay, FS_RETRY_MAX_DELAY)
     end

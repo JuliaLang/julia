@@ -947,8 +947,7 @@ static int open_cloexec(const char *path, int flags, mode_t mode)
 #endif
 
 #if defined(_OS_WINDOWS_)
-// Translate a Win32 error into the corresponding errno value, as the CRT does
-// for its own file operations.
+// Translate a Win32 error into the corresponding errno value.
 static void ios_set_errno_win32(DWORD error)
 {
     switch (error) {
@@ -995,18 +994,8 @@ static void ios_set_errno_win32(DWORD error)
     }
 }
 
-// Open a file with FILE_SHARE_DELETE, so that other processes, and Julia
-// itself, can rename or delete the file while it stays open.
-//
-// The CRT functions (_wopen and its relatives) share read and write access
-// only. A file that they open stays locked against rename and delete for as
-// long as it is open, which makes rm() and mv() fail with UV_EBUSY in cases
-// that work on other platforms. This function makes the same Win32 call that
-// the CRT makes, with a wider sharing mode.
-//
-// The mode argument of _wopen has no equivalent here. The CRT creates a file
-// that is writable, and CreateFileW creates a file without the read-only
-// attribute by default, so the result is the same.
+// Open a file with FILE_SHARE_DELETE. The CRT shares read and write access
+// only, which locks a file against rename and delete while it is open.
 static int ios_wopen_share_delete(const wchar_t *pathw, int flags)
 {
     DWORD access, disposition;
@@ -1039,8 +1028,7 @@ static int ios_wopen_share_delete(const wchar_t *pathw, int flags)
     else
         disposition = OPEN_EXISTING;
 
-    // A null security-attributes pointer gives the same non-inheritable
-    // handle that O_NOINHERIT requests from the CRT.
+    // NULL security attributes match O_NOINHERIT.
     file = CreateFileW(pathw, access,
                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                        NULL, disposition, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -1051,7 +1039,7 @@ static int ios_wopen_share_delete(const wchar_t *pathw, int flags)
 
     fd = _open_osfhandle((intptr_t)file, O_BINARY | (flags & O_APPEND));
     if (fd == -1) {
-        CloseHandle(file); // _open_osfhandle did not take ownership of the handle
+        CloseHandle(file); // _open_osfhandle did not take ownership
         errno = EMFILE;
     }
     return fd;

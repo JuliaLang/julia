@@ -2228,8 +2228,7 @@ end
 @test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
 
 @testset "rm of open and briefly locked files" begin
-    # A file that is open can be removed. On Windows this needs the file to be
-    # opened with FILE_SHARE_DELETE, which is what ios_file() now requests.
+    # An open file can be removed.
     dir = mktempdir()
     p = joinpath(dir, "open_file")
     io = open(p, "w")
@@ -2242,8 +2241,7 @@ end
     close(io)
 
     @static if Sys.iswindows()
-        # A file that another handle locks for a short time is waited for
-        # instead of being reported as an error.
+        # A brief lock by another handle is waited for.
         q = joinpath(dir, "locked_file")
         write(q, "x")
         handle = ccall(:CreateFileW, stdcall, Ptr{Cvoid},
