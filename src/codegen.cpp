@@ -334,12 +334,15 @@ struct jl_tbaacache_t {
     MDNode *tbaa_gcframe = nullptr;      // GC frame
     // LLVM should have enough info for alias analysis of non-gcframe stack slot
     MDNode *tbaa_stack = nullptr;        // Untyped stack slot which aren't julia data
-    MDNode *tbaa_memoryselbyte = nullptr;// A selector byte in an isbits Union jl_genericmemory_t
+    // Root-level rather than under `jtbaa_data`: these bytes sit at an offset from
+    // `pointer(m)` that is not inbounds of it, so `pointerref`/`pointerset` may not
+    // reach them, and nothing else in codegen names them.
+    MDNode *tbaa_memoryselbyte = nullptr; // A selector byte in an isbits Union jl_genericmemory_t
     MDNode *tbaa_data = nullptr;         // Any user data that `pointerset/ref` are allowed to alias
-    // Whether the data may be mutated, and by whom, is a property of the memory it
-    // lives in, so it is described by the region ('!alias.scope'), not by this tree.
-    // What this level sorts is what kind of thing is stored: an ordinary field of a
-    // user-defined layout, or one of the object headers the runtime manages.
+    // This level sorts what kind of thing is stored: an ordinary field of a
+    // user-defined layout, or one of the object headers the runtime manages. Whether
+    // it may be mutated, and by whom, is a property of the memory it lives in, and is
+    // described by the region instead (see `jl_regions_t`).
     MDNode *tbaa_value = nullptr;          // jl_value_t of statically unknown type; parent of the tags below
     MDNode *tbaa_field = nullptr;              // an ordinary field of a user-defined layout
     MDNode *tbaa_ptrmemorybuf = nullptr;       // a boxed element slot of a jl_genericmemory_t buffer
@@ -380,23 +383,15 @@ struct jl_tbaacache_t {
         MDNode *tbaa_value_scalar;
         std::tie(tbaa_value, tbaa_value_scalar) =
             tbaa_make_child(mbuilder, "jtbaa_value", tbaa_data_scalar);
-        // `jtbaa_field` and the header tags are siblings, so an access to an ordinary
-        // field never aliases a header: only an `Array`/`GenericMemory`/`DataType`
-        // gets a header tag, and `best_aliasinfo` never gives one of those the field
-        // tag. They must all stay *under* jtbaa_value, though: such an object is also
-        // reachable through a type-erased pointer, which is tagged jtbaa_value, and a
-        // disjoint subtree would make that load NoAlias against the stores that
-        // initialize the header (#62696).
+        // These siblings partition what a `jl_value_t` may store, so an ordinary field
+        // never aliases a header, a boxed buffer slot or a binding: `best_aliasinfo`
+        // gives each object exactly one of these tags, and a `GenericMemory`'s element
+        // kind is fixed per allocation. They must all stay *under* `jtbaa_value`: the
+        // same object is also reachable through a type-erased pointer, which is tagged
+        // `jtbaa_value`, and a disjoint subtree would make that load NoAlias with the
+        // stores that initialize it (#62696).
         tbaa_field = tbaa_make_child(mbuilder, "jtbaa_field", tbaa_value_scalar).first;
-        // A boxed element slot of a `GenericMemory` buffer stores a reference, not
-        // field data; the element kind is fixed per allocation, so a boxed buffer
-        // never holds inline data and the tag can be a sibling of `jtbaa_field`.
         tbaa_ptrmemorybuf = tbaa_make_child(mbuilder, "jtbaa_ptrmemorybuf", tbaa_value_scalar).first;
-        // A `jl_binding_t` is an ordinary mutable `jl_value_t` (`Core.Binding`), also
-        // reachable through `getfield` and type-erased pointers, so like the header
-        // tags its node must stay under `jtbaa_value` (#62696-class) while the sibling
-        // position keeps it disjoint from an ordinary field. `best_aliasinfo` gives a
-        // `Core.Binding` this tag.
         tbaa_binding = tbaa_make_child(mbuilder, "jtbaa_binding", tbaa_value_scalar).first;
         tbaa_datatype = tbaa_make_child(mbuilder, "jtbaa_datatype", tbaa_value_scalar).first;
         MDNode *tbaa_array_scalar;
@@ -422,24 +417,23 @@ struct jl_noaliascache_t {
 
     // memory regions domain
     //
-    // A region is only worth a scope here if it says something '!tbaa' cannot.
-    // Constant memory has none: its `jtbaa_const` access tag already makes
-    // `TypeBasedAAResult::pointsToConstantMemory` report that no store or call may
-    // modify it -- stronger than a scope, since it holds against instructions that
-    // carry no metadata at all -- and `jl_aliasinfo_t::isConstant` reads the tag
-    // back. A private copy of an immutable value has none either: it is `immutdata`
-    // like any other copy, and its privacy is visible from its `alloca` address.
-    // The untyped stack slot is separated by its root-level `jtbaa_stack` tag alone.
+    // A region is worth a scope here only if it says something '!tbaa' cannot, so
+    // some memory has none. Constant memory: its `jtbaa_const` access tag already
+    // makes `TypeBasedAAResult::pointsToConstantMemory` report that no store or call
+    // may modify it -- stronger than a scope, since it also binds instructions that
+    // carry no metadata at all -- and `jl_aliasinfo_t::isConstant` reads it back.
+    // The untyped stack slot: its root-level `jtbaa_stack` tag separates it on its
+    // own. A private copy of an immutable value: it is `immutdata` like any other
+    // copy, and its privacy is visible from its `alloca` address.
     //
     // Rooting invariant (relied upon by `isLoadFromRootedRegion` in
-    // llvm-codegen-shared.h): an access whose scope set in this domain is contained
-    // in {jnoalias_immutdata, jnoalias_mutconstdata} refers to memory whose base
-    // object cannot stop referencing any tracked pointer stored there while the base
-    // is live. A codegen-private value buffer satisfies this vacuously: it never
-    // keeps a pointer alive itself -- pointers that must stay rooted travel in a
-    // separate roots buffer (`gcframe`), the one representation that can serve as a
-    // gc frame, and a copy written back into a value buffer is a second view of
-    // what the roots buffer already holds.
+    // llvm-codegen-shared.h): if an access's scope set in this domain is contained in
+    // {jnoalias_immutdata, jnoalias_mutconstdata}, the base object cannot stop
+    // referencing a tracked pointer stored there while the base is live. A
+    // codegen-private value buffer satisfies this vacuously: pointers that must stay
+    // rooted travel in a separate roots buffer (`gcframe`), the one representation
+    // that can serve as a gc frame, so a copy written back into a value buffer is a
+    // second view of what that roots buffer already holds, and never a root itself.
     struct jl_regions_t {
         MDNode *gcframe = nullptr;        // GC frame
         MDNode *mutdata = nullptr;        // The assignable fields of a mutable jl_value_t
@@ -1717,28 +1711,25 @@ static void union_alloca_type(jl_uniontype_t *ut,
 
 // Alias Analysis Info (analogous to llvm::AAMDNodes)
 //
-// This combines the two orthogonal pieces of alias information codegen tracks
-// for a memory location:
-//  - the memory region it lives in (gcframe / mutable object fields / immutable
-//    object payload / memory buffer), expressed as '!alias.scope' + '!noalias'
-//    metadata derived from jl_noaliascache_t::jl_regions_t, and
-//  - the layout/type of the data stored there, expressed as struct-path
-//    '!tbaa' metadata from the jl_tbaacache_t tree.
+// This combines the two orthogonal pieces of alias information codegen tracks for a
+// memory location:
+//  - *where* it lives: the memory region (gcframe / mutable object fields /
+//    immutable object payload / memory buffer), emitted as '!alias.scope' plus
+//    '!noalias' from jl_noaliascache_t::jl_regions_t, and
+//  - *what* is stored there: the layout, emitted as struct-path '!tbaa' from the
+//    jl_tbaacache_t tree.
 //
-// Memory that is constant for this compilation unit, and the untyped stack slot,
-// have no region of their own: their layout tags already claim everything a scope
-// could (see `jl_regions_t`), and `isConstant` identifies constant memory by its tag.
+// Some memory has no region at all, its tag being the stronger claim; `jl_regions_t`
+// lists which and why.
 namespace {
 struct jl_aliasinfo_t {
     // The set of memory regions an access may touch: each region in the set is one
     // '!alias.scope' scope (see jl_regions_t), and every region outside it goes in
-    // '!noalias'. The empty set (`unknown`) claims nothing.
-    //
-    // The region also decides whether late-gc-lowering may root a loaded pointer
-    // through the load's base instead of giving it a gc-frame slot of its own (see
-    // `isLoadFromRootedRegion`), so a private buffer that holds tracked pointers
-    // must never be classified `immutdata` -- see the invariant at
-    // `jl_regions_t`.
+    // '!noalias'. The empty set (`unknown`) claims nothing. The set also decides
+    // whether late-gc-lowering may root a loaded pointer through the load's base
+    // instead of giving it a gc-frame slot of its own (`isLoadFromRootedRegion`), so
+    // a buffer that holds tracked pointers must never be classified `immutdata` --
+    // see the rooting invariant at `jl_regions_t`.
     enum class Region : uint8_t {
         unknown   = 0,
         // GC-frame is leaked globally after final-gc-lowering pass.
@@ -1747,23 +1738,25 @@ struct jl_aliasinfo_t {
         // `Array`'s header: the memory a generic `setfield!` writes.
         mutdata   = 1 << 1,
         // The `const` fields of a mutable jl_value_t, including the `GenericMemory`
-        // header and `DataType`'s fields. A `setfield!` can never reach these, and
-        // what they hold stays reachable through the object for as long as it is
-        // live, which is what lets late-gc-lowering root through them.
+        // header and `DataType`'s fields. A `setfield!` can never reach these, so
+        // what they hold stays reachable for as long as the object is live -- which
+        // is what lets late-gc-lowering root through them.
         mutconstdata = 1 << 2,
         // The contents of an immutable jl_value_t, wherever they live: on the heap, in
         // a memory buffer, or in a codegen-private write-once copy on the stack. All
-        // three are the same immutable value, and the copy is not separately writable,
-        // so there is nothing for a region to tell them apart by.
+        // three are the same immutable value and none is separately writable, so a
+        // region has nothing to tell them apart by.
         immutdata = 1 << 3,
-        // The element data of a jl_genericmemory_t, containing mutable storage for immutdata.
+        // The element data of a jl_genericmemory_t: writable storage for values that
+        // are themselves immutable, so unlike `immutdata` an element may be
+        // overwritten while a reference loaded from it is still live.
         memorybuf = 1 << 4,
-        // The fields of a mutable jl_value_t, without knowing which of them. The two
-        // halves above are disjoint rather than nested, so an access that may reach
-        // either has to say so here and claim both: a whole-object alias info, or a
-        // `getfield` with a dynamic index. Nesting them instead would put `mutdata`
-        // in every `const`-field access and defeat the rooting test, which needs a
-        // named `const` field to be distinguishable from a merge with an assignable one.
+        // The fields of a mutable jl_value_t, without knowing which of them: a
+        // whole-object alias info, or a `getfield` with a dynamic index. The two
+        // halves above are disjoint rather than nested, so such an access has to
+        // claim both. Nesting them instead would put `mutdata` in every `const`-field
+        // access and defeat the rooting test, which needs a named `const` field to be
+        // distinguishable from a merge with an assignable one.
         mutfields = mutdata | mutconstdata,
         // The fields of a jl_value_t: an access through a value of statically unknown
         // type may be any of these.
@@ -2283,10 +2276,10 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
 }
 
 jl_aliasinfo_t jl_aliasinfo_t::merge(const jl_aliasinfo_t &other) const {
-    // Nothing may store to constant memory, and it lives in no region, so an access
-    // that also touches it is never the subject of an aliasing query whose answer it
-    // could change: keep the other side's claim in full, instead of climbing to their
-    // (much coarser) common parent tag and unioning in a scope it does not need.
+    // Constant memory is never stored to, and lives in no region, so an access that
+    // also touches it can never be the subject of an aliasing query whose answer it
+    // changes: keep the other side's claim whole, instead of climbing to the (much
+    // coarser) common parent tag.
     if (this->isConstant() || other.isConstant()) {
         jl_aliasinfo_t result = this->isConstant() ? other : *this;
         result.tbaa_struct = nullptr;
@@ -2313,25 +2306,23 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     using Region = jl_aliasinfo_t::Region;
     gcframe = jl_aliasinfo_t(ctx, Region::gcframe, tbaa.tbaa_gcframe);
     // No region: `jtbaa_stack` is a root-level sibling of `jtbaa_data`, so the tag
-    // already separates this slot from every julia value.
+    // already separates this slot from every julia value (see `jl_regions_t`).
     stack = jl_aliasinfo_t(ctx, Region::unknown, tbaa.tbaa_stack);
     data = jl_aliasinfo_t(ctx, Region::anydata, tbaa.tbaa_data);
     binding = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_binding);
     value = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_value);
-    // Whether a value's fields may be mutated is a statement about the memory it
-    // lives in, so it is carried by the region alone: the layout tag is the same
-    // `jtbaa_field` either way, which is what lets a value keep its tag when it is
-    // copied between the heap, a memory buffer and the stack.
-    // A whole-object alias info has to claim both halves: it is what a `getfield`
-    // with a dynamic index uses, and what tags the selector byte of an inline union
-    // field, either of which may land on a `const` field. `best_field_aliasinfo`
-    // narrows it once the field is known.
+    // Mutable or not, the layout tag is the same `jtbaa_field` and only the region
+    // differs, which is what lets a value keep its tag when it is copied between the
+    // heap, a memory buffer and the stack. A whole-object alias info claims both
+    // halves of `mutfields`: it is what a `getfield` with a dynamic index uses, and
+    // what tags the selector byte of an inline union field, either of which may land
+    // on a `const` field. `best_field_aliasinfo` narrows it once the field is known.
     mutab = jl_aliasinfo_t(ctx, Region::mutfields, tbaa.tbaa_field);
     immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_field);
     // `Array`, `GenericMemory` and `DataType` are all mutable heap objects, so what
-    // separates their headers from an ordinary `setfield!` is the layout tag. The
-    // region additionally records which of their fields are assignable: `array.jl`
-    // really does `setfield!(a, :ref/:size, ...)` after publication, while a
+    // separates their headers from an ordinary `setfield!` is the layout tag; the
+    // region only records which of their fields are assignable. `array.jl` really
+    // does `setfield!(a, :ref/:size, ...)` after publication, while a
     // `GenericMemory`'s header fields and a `DataType`'s are const.
     datatype = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_datatype);
     array = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_array);
@@ -2344,8 +2335,7 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     memorybuf = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_field);
     ptrmemorybuf = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_ptrmemorybuf);
     memoryselbyte = jl_aliasinfo_t(ctx, Region::memorybuf, tbaa.tbaa_memoryselbyte);
-    // No region: an immutable access tag is a stronger claim than any scope could
-    // make, since it also holds against instructions that carry no metadata.
+    // No region: an immutable access tag is the stronger claim (see `jl_regions_t`).
     constant = jl_aliasinfo_t(ctx, Region::unknown, tbaa.tbaa_const);
 }
 
@@ -2362,15 +2352,15 @@ static jl_aliasinfo_t sret_aliasinfo(jl_codectx_t &ctx, jl_value_t *jlretty, boo
     if (!jl_is_concrete_type(jlretty))
         return union_slot_aliasinfo(ctx, jlretty);
     // Otherwise the buffer holds no tracked pointers (those travel in the separate
-    // return_roots buffer), so it is just another copy of the return value: same
-    // layout tag, same `immutdata` region as the value has anywhere else.
+    // return_roots buffer), so it is just another copy of the return value: the same
+    // layout tag and `immutdata` region the value has anywhere else.
     return best_aliasinfo(ctx, jlretty).withRegion(ctx, jl_aliasinfo_t::Region::immutdata);
 }
 
-// Alias info for a private, write-once copy of data described by `src_ai`. The copy
-// keeps the source's layout tag and claims `immutdata`: it is a copy of an immutable
-// value, and nothing writes it after it is built. Being private is a property of the
-// address -- an `alloca` LLVM can already reason about -- not of the region.
+// Alias info for a private, write-once copy of the data described by `src_ai`. The
+// copy keeps the source's layout tag and claims `immutdata`, like the value it copies:
+// being private is a property of the address -- an `alloca` LLVM can already reason
+// about -- not of the region.
 static jl_aliasinfo_t private_copy_aliasinfo(jl_codectx_t &ctx, const jl_aliasinfo_t &src_ai, jl_value_t *typ)
 {
     return (src_ai && !src_ai.isConstant() ? src_ai : best_aliasinfo(ctx, typ))
@@ -2403,17 +2393,14 @@ static jl_aliasinfo_t best_aliasinfo(jl_codectx_t &ctx, jl_value_t *jt)
     return jl_is_mutable(jt) ? alias.mutab : alias.immut;
 }
 
-// Alias info for the contents of a union slot that codegen materialized (a phi, a local
-// variable of union type, or an `sret` return buffer). Such a slot is addressed by a
-// `select` of a private buffer and a box, but its contents are only ever
-// dereferenced for the union's inline members, which are immutable by construction.
-//
-// The slot is `Region::immutdata` for both arms, which the rooting invariant at
-// `jl_regions_t` permits because the buffer cannot hold tracked pointers by
-// construction (a pointer in the payload would be a root only conditionally on the
-// tindex, which the GC pass could not track anyway).
-// This could be strengthened by examining each element of `typ` to build a more
-// precise tag for the union-tagged accesses.
+// Alias info for the contents of a union slot that codegen materialized (a phi, a
+// local variable of union type, or an `sret` return buffer). Such a slot is addressed
+// by a `select` of a private buffer and a box, but is only ever dereferenced for the
+// union's inline members, which are immutable by construction -- so `immutdata` is
+// accurate for both arms. The rooting invariant at `jl_regions_t` permits it because
+// the buffer cannot hold tracked pointers: a pointer in the payload would be a root
+// only conditionally on the tindex, which the GC pass could not track anyway.
+// TODO: examine each element of `typ` to build a more precise tag.
 static jl_aliasinfo_t union_slot_aliasinfo(jl_codectx_t &ctx, jl_value_t *typ)
 {
     (void)typ;
@@ -2421,13 +2408,12 @@ static jl_aliasinfo_t union_slot_aliasinfo(jl_codectx_t &ctx, jl_value_t *typ)
 }
 
 // Alias info for the element data of a `jl_genericmemory_t` with this layout.
-// `Region::memorybuf` carries the claim that this is neither the memory header nor
-// any other object's fields, and (per the invariant at `jl_regions_t`) that an
+// `Region::memorybuf` claims that this is neither the memory header nor any other
+// object's fields, and -- being outside the rooted set at `jl_regions_t` -- that an
 // element may be overwritten while a reference loaded from it is still live. That
-// leaves the `!tbaa` tag free to describe the elements: inline data keeps its
-// layout tag (`jtbaa_field`) when copied into or out of the buffer, while a boxed
-// slot holds a reference, not field data, and gets the sibling `jtbaa_ptrmemorybuf`
-// (sound because the element kind is fixed per allocation).
+// leaves the `!tbaa` tag free to describe the elements: inline data keeps its layout
+// tag (`jtbaa_field`) when copied into or out of the buffer, while a boxed slot holds
+// a reference rather than field data and gets `jtbaa_ptrmemorybuf`.
 static jl_aliasinfo_t memorybuf_aliasinfo(jl_codectx_t &ctx, const jl_datatype_layout_t *layout)
 {
     if (layout->flags.arrayelem_isboxed)
@@ -2722,8 +2708,8 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
     Value *loc;
     v = zext_struct(ctx, v);
     Align align(julia_alignment(typ));
-    // This write-once copy is the same immutable value as its source, so it keeps the
-    // type's layout tag and its `immutdata` region.
+    // A write-once copy of the value, so it keeps the type's layout tag and the
+    // `immutdata` region the value has anywhere else.
     jl_aliasinfo_t ai = best_aliasinfo(ctx, typ)
         .withRegion(ctx, jl_aliasinfo_t::Region::immutdata);
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
@@ -2768,8 +2754,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
             }
         }
         // The pointers written back here are a second view of the ones the separate
-        // roots buffer holds, which is what keeps them alive; this buffer is never
-        // itself a root (see the invariant at `jl_regions_t`).
+        // roots buffer holds; this buffer is never itself a root (`jl_regions_t`).
         jl_aliasinfo_t slot_ai = private_copy_aliasinfo(ctx, v.aliasinfo, v.typ);
         recombine_value(ctx, v, loc, slot_ai, align, false);
         return mark_julia_slot(loc, v.typ, v.TIndex, slot_ai);
@@ -9819,8 +9804,8 @@ static jl_llvm_functions_t
             theArg = mark_julia_type(ctx, Arg, isboxed, argType);
             // The caller roots an immutable argument for the whole call and nothing
             // may write its payload while we hold it, so the callee may read it as
-            // constant memory. Only for an ordinary immutable layout: the header
-            // tags describe mutable objects the runtime writes.
+            // constant memory. Only an ordinary immutable layout qualifies: the
+            // header tags describe mutable objects the runtime writes.
             if (theArg.aliasinfo.tbaa == ctx.tbaa().tbaa_field &&
                 theArg.aliasinfo.region == jl_aliasinfo_t::Region::immutdata)
                 theArg.aliasinfo = ctx.alias().constant;

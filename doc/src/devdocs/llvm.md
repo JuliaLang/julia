@@ -58,8 +58,7 @@ standard pairings precomputed in `jl_aliascache_t`.
 The two axes answer different questions, and the split is load-bearing. Whether memory
 may be written, and by whom, belongs to the region: the same value keeps its layout tag
 as it is copied between a heap object and a memory buffer, which are written very
-differently.
-`llvm-late-gc-lowering.cpp` relies on this, and roots a loaded pointer through the
+differently. `llvm-late-gc-lowering.cpp` relies on this, and roots a loaded pointer through the
 object it was loaded from only when the *region* says that object cannot drop the
 reference (`isLoadFromRootedRegion`) -- which is why a `const` field of a mutable
 object is a region of its own. What is stored belongs to the tag: under
@@ -67,9 +66,9 @@ object is a region of its own. What is stored belongs to the tag: under
 sibling tags for the object headers the runtime manages (`jtbaa_array`,
 `jtbaa_memory`, `jtbaa_datatype`), so a `setfield!` never aliases an array's length.
 
-A distinction only earns a region if a tag cannot carry it, and if the region has to
-be *worth* the extra `!noalias` operand it adds to every other access. Two things do
-not qualify. Memory that is already constant when this compilation unit runs is
+A distinction only earns a region if a tag cannot carry it, and if it is *worth* the
+extra `!noalias` operand every other access then has to carry. Two things do not
+qualify. Memory that is already constant when this compilation unit runs is
 described purely by the immutable `jtbaa_const` tag and `!invariant.load`: that claim
 is stronger than a scope, because it also holds against instructions carrying no
 metadata at all, and it does not have to be unioned into the scope set of a `memcpy`

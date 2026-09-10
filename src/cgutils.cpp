@@ -492,9 +492,9 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
 // (rather than unordered) loads and stores are permitted
 static bool ai_is_private(const jl_aliasinfo_t &ai)
 {
-    // constant memory is never written at all, and the gc frame is only written by
-    // its owning thread. An explicit whitelist: a region added later must opt in
-    // here to permit non-atomic access to its memory.
+    // constant memory is never written at all, and the gc frame is written only by
+    // its owning thread. This is a whitelist: a region added later must opt in here
+    // before its memory may be accessed non-atomically.
     using Region = jl_aliasinfo_t::Region;
     return ai.isConstant() || ai.region == Region::gcframe;
 }
@@ -1266,9 +1266,9 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
         return;
     ++EmittedMemcpys;
 
-    // the memcpy intrinsic does not allow specifying different alias tags for the
-    // load part (src_ai) and the store part (dst_ai), so the tag may claim only
-    // what both sides can; see `jl_aliasinfo_t::merge` for how the claims combine.
+    // the memcpy intrinsic has no way to give the load part (src_ai) and the store
+    // part (dst_ai) different alias info, so one claim must cover both; see
+    // `jl_aliasinfo_t::merge`.
     auto merged_ai = dst_ai.merge(src_ai);
 #if JL_LLVM_VERSION < 210000
     ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
@@ -3498,14 +3498,17 @@ static jl_aliasinfo_t best_field_aliasinfo(jl_codectx_t &ctx, const jl_cgval_t &
         if (idx == 1)
             return ctx.alias().arraysize;
     }
+    // A `const` field of an object that is already a constant global: nothing in this
+    // compilation unit stores to it, so it is described by the immutable `jtbaa_const`
+    // tag alone. That the tag does not alias the containing struct's is fine for the
+    // same reason -- there is no store here for a reader to be reordered against.
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
-        return ctx.alias().constant; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containing struct's tbaa
-                                     //Does the fact that this is marked as constant make this fine?
-    // Narrow a whole-object `mutfields` claim to the half this field is in (see the
-    // `Region` docs for what each half grants). Both the `new` that initializes the
-    // field and every later read come through here, so the two sides stay consistent;
-    // an access that cannot name a single field (a dynamic `getfield`, an inline
-    // union's selector byte) keeps the whole-object info and goes on aliasing both.
+        return ctx.alias().constant;
+    // Narrow a whole-object `mutfields` claim to the half this field is in. Both the
+    // `new` that initializes the field and every later read come through here, so the
+    // two sides stay consistent; an access that cannot name a single field (a dynamic
+    // `getfield`, an inline union's selector byte) keeps the whole-object claim and
+    // goes on aliasing both halves.
     if (ai.region == jl_aliasinfo_t::Region::mutfields)
         return ai.withRegion(ctx, jl_field_isconst(jt, idx)
                 ? jl_aliasinfo_t::Region::mutconstdata : jl_aliasinfo_t::Region::mutdata);
@@ -4575,9 +4578,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             Instruction *promotion_point = nullptr;
             ssize_t promotion_ssa = -1;
             Value *strct;
-            // This private buffer is a write-once copy of an immutable, and claims
-            // the same `immutdata` the value has anywhere else -- which is also what
-            // lets `boxed` later promote the alloca into a heap box in place.
+            // A write-once copy of an immutable, claiming the same `immutdata` the
+            // value has anywhere else -- which is also what lets `boxed` later
+            // promote this alloca into a heap box in place.
             const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty);
             assert(strct_ai.region == jl_aliasinfo_t::Region::immutdata);
             SmallVector<Value*,0> inline_roots;

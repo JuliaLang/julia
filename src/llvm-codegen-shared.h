@@ -182,33 +182,31 @@ static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*>
     return false;
 }
 
-// The name of the '!alias.scope' domain describing which of codegen's memory
-// regions an access may touch (`jl_regions_t` in codegen.cpp). Scopes in any
-// other domain (`@aliasscope`/ivdep, loop versioning, ...) describe something
-// else entirely and say nothing about residence.
+// The '!alias.scope' domain naming which of codegen's memory regions an access may
+// touch (`jl_regions_t` in codegen.cpp). Scopes in any other domain (`@aliasscope`,
+// loop versioning, ...) describe something else and say nothing about residence.
 #define JL_REGION_DOMAIN_NAME "jnoalias"
 
 // The regions in that domain whose base object cannot stop referencing a tracked
 // pointer stored in them while the base is live: the payload of an immutable heap
-// object, and a `const` field of a mutable one. Constant memory needs no region --
-// its loads carry '!invariant.load', which `isLoadFromRootedRegion` accepts directly.
+// object, and a `const` field of a mutable one. Constant memory has no region -- its
+// loads carry '!invariant.load', which `isLoadFromRootedRegion` accepts directly.
 static inline bool isRootedRegionName(llvm::StringRef name)
 {
     return name == "jnoalias_immutdata" || name == "jnoalias_mutconstdata";
 }
 
-// Whether the object rooting the address `LI` loads from also roots the loaded
-// value -- so that late-gc-lowering may refine the loaded pointer to the load's
-// pointer operand instead of giving it a gc-frame slot of its own.
+// Whether the object rooting the address `LI` loads from also roots the loaded value
+// -- so that late-gc-lowering may refine the loaded pointer to the load's pointer
+// operand instead of giving it a gc-frame slot of its own.
 //
-// This is a question about *residence*, not about content: it is answered by the
-// memory region ('!alias.scope'), not by the layout description ('!tbaa'), since
-// the same layout tag legitimately appears on stack copies and on the mutable
-// element data of a `GenericMemory`. An access qualifies if its region scopes are
-// nonempty and all rooted -- a merged access that may reside in an unrooted
-// region is vetoed by that region's presence. Missing metadata means no
-// information, hence no refinement, which is the fail-safe direction (an extra
-// gc-frame slot, never a missing root).
+// This asks about *residence*, not content, so it is answered by the memory region
+// ('!alias.scope') and not by the layout ('!tbaa'): the same layout tag legitimately
+// appears on a stack copy and on the mutable element data of a `GenericMemory`. A
+// load qualifies if its scopes in the region domain are nonempty and all rooted, so
+// a merged access that may reside in an unrooted region is vetoed by that region's
+// presence. Missing metadata means no information and hence no refinement -- the
+// fail-safe direction, costing an extra gc-frame slot but never a missing root.
 static inline bool isLoadFromRootedRegion(llvm::LoadInst *LI)
 {
     using namespace llvm;
