@@ -1631,9 +1631,7 @@ function wait()
     record_running_time!(ct)
     # let GC run
     GC.safepoint()
-    # check for libuv events, but not for a task that is already done: it never
-    # returns from this `wait()`, so the poll would only delay the switch to the
-    # next task. 1.12 got this for free by polling after the switch (#63048).
+    # check for libuv events, but not on a completed task 
     ct_done = istaskdone(ct)
     ct_done || process_events()
 
