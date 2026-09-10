@@ -248,8 +248,7 @@ CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 STATIC_OBJS := $(SRCS:%=$(BUILDDIR)/%.static.o)
-# The loader's trampolines provide the public `jl_*` function names; in the
-# static build their `*_addr` slots are bound at link time (see static_exports.c)
+# the loader's trampolines provide the public `jl_*` names (see static_exports.c)
 ifneq (,$(wildcard $(JULIAHOME)/cli/trampolines/trampolines_$(ARCH).S))
 STATIC_OBJS += $(BUILDDIR)/static_trampolines.o
 endif
@@ -606,10 +605,9 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
-# The static archive also contains the members of the support archives below, so
-# that consumers only need to add the sysimage object (jl_image_unpack,
-# jl_small_typeof, ...) and the external libraries (libunwind, LLVMSupport,
-# zstd, ...). System libraries given as `-l` flags are left to the consumer.
+# Fold in the support archives, so consumers only add the sysimage object and
+# the external libraries (libunwind, LLVMSupport, zstd, ...); `-l` system
+# libraries are left to the consumer.
 STATIC_LIBS := $(filter %.a,$(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
 $(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(STATIC_LIBS)
 	@rm -rf $@

@@ -77,8 +77,7 @@ typedef intptr_t ssize_t;
 # endif
 #define JL_HIDDEN
 # ifdef JL_LIBRARY_STATIC
-// the runtime, codegen and the public symbols normally defined by libjulia are
-// all linked into one image (see static_exports.c): no import indirection
+// static build: everything is linked into one image, no import indirection
 #  define JL_DLLIMPORT JL_VISIBILITY_DEFAULT
 # else
 #  define JL_DLLIMPORT __declspec(dllimport) JL_VISIBILITY_DEFAULT

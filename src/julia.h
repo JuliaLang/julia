@@ -2406,10 +2406,9 @@ JL_DLLEXPORT void jl_init(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
                                           const char *image_path) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_init_with_image_handle(void *handle) JL_CANSAFEPOINT_ENTER;
-// Initialize Julia from a statically linked runtime + system image (only
-// available when libjulia-internal is built as a static library). Programs
-// linking the static runtime on Windows must define JL_LIBRARY_STATIC before
-// including this header, so that the declarations do not use dllimport.
+// Initialize Julia from a statically linked runtime + system image (static
+// libjulia-internal only). On Windows, define JL_LIBRARY_STATIC before
+// including this header so the declarations are not dllimport.
 JL_DLLEXPORT void jl_init_static(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_initialized(void) JL_NOTSAFEPOINT;
