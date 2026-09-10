@@ -1798,12 +1798,7 @@ end
     # ephemeral TCP port assignment keeps landing inside them (#38711)
     udp = Sockets.UDPSocket()
     Sockets.bind(udp, Sockets.localhost, 0) || error("could not bind a UDP test port")
-    # recover the assigned port; the Sockets getsockname only covers TCP
-    sockaddr = zeros(UInt8, 128) # aliases sockaddr_storage
-    len = Ref{Cint}(length(sockaddr))
-    Base.uv_error("getsockname", ccall(:uv_udp_getsockname, Cint,
-        (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Cint}), udp.handle, sockaddr, len))
-    port = (UInt16(sockaddr[3]) << 8) | UInt16(sockaddr[4]) # sin_port, network order
+    port = Sockets.getsockname(udp)[2]
     src = CancellationTokenSource()
     t = @async Sockets.recvfrom(udp; cancel=CancellationToken(src))
     @test timedwait(() -> is_parked(t), 10.0) == :ok
