@@ -11,6 +11,9 @@ LMDB_SRC_SUBDIR := libraries/liblmdb
 LMDB_BUILD_OPTS := CC="$(CC)" AR="$(AR)" prefix=$(abspath $(build_prefix))
 # -fPIC so the static archive can be linked into the libjulia-codegen shared library
 LMDB_BUILD_OPTS += XCFLAGS="$(CFLAGS) $(fPIC)"
+# we pass our flags to LMDB via XCFLAGS, but this only works as long as
+# nothing overrides CFLAGS; so restore the default LMDB CFLAGS here
+# (this is important for libjulia_jll)
 LMDB_BUILD_OPTS += CFLAGS='$$(THREADS) $$(OPT) $$(W) $$(XCFLAGS)'
 # Select LMDB's robust lock backend, including SysV semaphores on Apple/BSD.
 LMDB_BUILD_OPTS += CPPFLAGS="-DMDB_USE_ROBUST=1"
