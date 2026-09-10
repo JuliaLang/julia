@@ -206,6 +206,18 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
+    # Avoid swapping during a full suite on small machines. Explicitly requested
+    # tests still run; measured x86-64 peaks are about 13 GiB and 9 GiB respectively.
+    memory_hungry = Dict("compileall" => 16, "jit" => 12) # minimum total memory, in GiB
+    total_gib = Sys.total_memory() / 2^30
+    too_hungry = filter(t -> t in tests && !(t in choices) && total_gib < memory_hungry[t],
+                        sort!(collect(keys(memory_hungry))))
+    if !isempty(too_hungry)
+        @warn "Skipping tests [" * join(too_hungry, ", ") * "] because the host has only " *
+              "$(round(total_gib; digits=1)) GiB of memory (pass them by name to run them anyway)"
+        filter!(!in(too_hungry), tests)
+    end
+
     if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
         @warn "Running under valgrind: Skipping rounding tests"
         filter!(x -> x != "rounding", tests)
