@@ -20,10 +20,10 @@ struct GC_Num
     # Number of `realloc` calls (never reset by the runtime)
     realloc::Int64
     # Number of pool allocation calls (never reset by the runtime)
-    # NOTE: Julia's stock GC uses an internal (pool) allocator for objects up to 2032 bytes.
-    # Larger objects are allocated through `malloc/calloc`.
+    # NOTE: Julia's stock GC uses an internal (pool) allocator for objects up to 10232 bytes.
+    # Larger objects are allocated through the big-object allocator.
     poolalloc::Int64
-    # Number of allocations for "big objects" (non-array objects larger than 2032 bytes)
+    # Number of allocations for "big objects" (non-array objects larger than 10232 bytes)
     # (never reset by the runtime)
     bigalloc::Int64
     # Number of `free` calls (never reset by the runtime)

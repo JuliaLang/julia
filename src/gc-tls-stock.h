@@ -51,8 +51,14 @@ typedef struct {
     _Atomic(struct _jl_gc_pagemeta_t *) bottom;
 } jl_gc_page_stack_t;
 
+// Big size classes (2 KiB - 256 KiB), 4 per power of two.
+// Must be kept in sync with `src/gc-stock.h`
+#define JL_GC_N_BIG_CLASSES 29
+
 typedef struct {
     jl_thread_heap_t heap;
+    // current allocation page for each big size class
+    struct _jl_gc_bigpagemeta_t *big_pages[JL_GC_N_BIG_CLASSES];
     jl_gc_page_stack_t page_metadata_allocd;
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;

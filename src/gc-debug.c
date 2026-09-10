@@ -320,7 +320,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
             assert(page_metadata(next)->osize == osize);
             freelist_zerod = 0;
         }
-        else if (pg->fl_begin_offset != (uint16_t)-1) {
+        else if (pg->fl_begin_offset != (uint32_t)-1) {
             // part of free list exists on this page
             next = page_pfl_beg(pg);
             freelist_zerod = 0;
