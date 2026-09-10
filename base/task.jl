@@ -1631,8 +1631,11 @@ function wait()
     record_running_time!(ct)
     # let GC run
     GC.safepoint()
-    # check for libuv events
-    process_events()
+    # check for libuv events, but not for a task that is already done: it never
+    # returns from this `wait()`, so the poll would only delay the switch to the
+    # next task. 1.12 got this for free by polling after the switch (#63048).
+    ct_done = istaskdone(ct)
+    ct_done || process_events()
 
     # get the next task to run
     W = workqueue_for(Threads.threadid())
@@ -1645,7 +1648,7 @@ function wait()
         # is delivered to a task that can observe it, rather than swallowed by
         # the internal scheduler task (#58689).
         sched_task = get_sched_task()
-        if ct !== sched_task && istaskdone(ct)
+        if ct !== sched_task && ct_done
             istaskdone(sched_task) && (sched_task = @task wait())
             return yieldto(sched_task)
         end
