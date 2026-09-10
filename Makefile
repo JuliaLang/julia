@@ -439,7 +439,7 @@ ifneq ($(OS),Darwin)
 	$(INSTALL_M) $(build_libdir)/crtn.o $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_libdir)/crtbeginS.o $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_libdir)/crtendS.o $(DESTDIR)$(private_libdir)/
-ifeq ($(OS),Linux)
+ifeq ($(LIBC),glibc)
 	$(INSTALL_M) $(build_libdir)/libc_nonshared.a $(DESTDIR)$(private_libdir)/
 endif
 endif
