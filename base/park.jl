@@ -362,16 +362,22 @@ wait_dequeue!(x::SourceWait, w::WaitEntry, why::UInt8) = nothing
 # argument in the cache contract above).
 struct WatcherWait
     src::CancellationTokenSource
+    # The lowest severity that fires this watcher (inclusive; normalized to
+    # at least SAFE). Non-throwing teardown waits re-park with the
+    # acknowledged severity's successor, so only an escalation wakes them.
+    floor::UInt8
 end
+WatcherWait(src::CancellationTokenSource) = WatcherWait(src, CANCEL_REQUEST_SAFE.request)
 
 acquire_wait_entry!(ct::Task, ws::Tuple{WatcherWait}) = WaitEntry1(ct)
 acquire_wait_entry!(ct::Task, ws::Tuple{WatcherWait, SourceWait}) = WaitEntry2(ct)
 
 wait_enqueue!(x::WatcherWait, w::WaitEntry, first::Bool) =
-    _source_wait_enqueue!(x.src, w, WAIT_AUX_WATCHER_BIT | UInt64(CANCEL_REQUEST_SAFE.request))
+    _source_wait_enqueue!(x.src, w,
+        WAIT_AUX_WATCHER_BIT | UInt64(max(x.floor, CANCEL_REQUEST_SAFE.request)))
 
 wait_recheck(x::WatcherWait, w::WaitEntry) =
-    (@atomic :sequentially_consistent x.src.state) != 0x00
+    (@atomic :sequentially_consistent x.src.state) >= max(x.floor, CANCEL_REQUEST_SAFE.request)
 
 wait_dequeue!(x::WatcherWait, w::WaitEntry, why::UInt8) = nothing
 

@@ -36,6 +36,16 @@ extern void mmtk_destroy_mutator(MMTk_Mutator mutator);
 extern void* mmtk_alloc(MMTk_Mutator mutator, size_t size,
     size_t align, size_t offset, int allocator);
 
+// Mirrors `mmtk::util::alloc::AllocationOptions` (which is #[repr(C)]).
+typedef struct {
+    bool allow_overcommit;
+    bool at_safepoint;
+    bool allow_oom_call;
+} MMTk_AllocationOptions;
+
+extern void* mmtk_alloc_with_options(MMTk_Mutator mutator, size_t size,
+    size_t align, size_t offset, int allocator, MMTk_AllocationOptions options);
+
 extern void* mmtk_alloc_large(MMTk_Mutator mutator, size_t size,
     size_t align, size_t offset, int allocator);
 
@@ -103,7 +113,6 @@ extern void mmtk_run_finalizers(bool at_exit);
 extern void mmtk_gc_poll(void *tls);
 extern void mmtk_julia_copy_stack_check(int copy_stack);
 extern void* mmtk_get_possibly_forwarded(void* object);
-extern void mmtk_block_thread_for_gc(void);
 extern void mmtk_set_concurrent_marking_enabled(bool enabled);
 extern void* mmtk_new_mutator_iterator(void);
 extern void* mmtk_get_next_mutator_tls(void*);

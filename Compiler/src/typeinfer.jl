@@ -238,7 +238,7 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
             if isa(uncompressed, CodeInfo)
                 # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
                 codegen[ci] = uncompressed
-                if bootstrapping_compiler && !(ci.inferred isa MaybeCompressed)
+                if bootstrapping_compiler
                     # This is necessary to get decent bootstrapping performance
                     # when compiling the compiler to inject everything eagerly
                     # where codegen can start finding and using it right away
@@ -1602,6 +1602,11 @@ function ci_has_invoke(code::CodeInstance)
     return (@atomic :monotonic code.invoke) !== C_NULL
 end
 
+const CI_FLAGS_FROM_IMAGE = 0b0100
+function ci_from_image(code::CodeInstance)
+    return (@atomic :monotonic code.flags) & CI_FLAGS_FROM_IMAGE != 0
+end
+
 function ci_meets_requirement(interp::AbstractInterpreter, code::CodeInstance, source_mode::UInt8)
     source_mode == SOURCE_MODE_NOT_REQUIRED && return true
     source_mode == SOURCE_MODE_ABI && return ci_has_abi(interp, code)
@@ -1891,14 +1896,20 @@ end
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
-                         enqueue_unprepared_invokes::Bool = false)
+                         enqueue_unprepared_invokes::Bool = false,
+                         external_linkage::Bool = false)
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
+            # If this CodeInstance is already compiled in the image, and we can
+            # link to it, we should do that instead of compiling it again.  With
+            # invoke_modify, we need to compile it regardless.
             if edge isa CodeInstance && has_valid_abi_sparams(get_ci_mi(edge)) &&
+                    (isexpr(stmt, :invoke_modify) ||
+                     !(external_linkage && ci_from_image(edge) && ci_has_invoke(edge))) &&
                     (enqueue_unprepared_invokes ||
                      ci_has_invoke(edge) || ci_has_source(workqueue.interp, edge) ||
                      !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), get_ci_mi(edge), edge)))
@@ -1966,6 +1977,35 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
     end
 end
 
+"""
+    jit_cache_root!(cache, ci::CodeInstance)
+
+Establish a GC root for `ci` that is adequate for handing it to the JIT.
+
+The JIT retains raw, non-GC-visible pointers to every CodeInstance it emits code
+for (in its symbol table and in the debuginfo address map used for backtraces
+and profiling), for the lifetime of the process. Every CodeInstance passed to
+`jl_add_codeinsts_to_jit` must therefore remain GC-reachable permanently.
+[`add_codeinsts_to_jit!`](@ref) calls this function for each CodeInstance it is
+about to emit that is not already rooted through the native `mi.cache` chain
+(which guarantees the required lifetime on its own); the executable cache that
+holds the CodeInstance is responsible for guaranteeing an equivalent lifetime.
+
+The generic fallback conservatively promotes the CodeInstance to a global root,
+which matches the lifetime of the code emitted for it (JIT code is never
+freed). A custom cache whose entries are process-rooted by other means may
+override this with a no-op.
+"""
+function jit_cache_root!(cache, ci::CodeInstance)
+    ccall(:jl_as_global_root, Any, (Any, Cint), ci, 1)
+    return nothing
+end
+# Entries in the native `mi.cache` chain are already rooted for the lifetime of
+# the process through their MethodInstance.
+jit_cache_root!(::InternalCodeCache, ::CodeInstance) = nothing
+jit_cache_root!(cache::OverlayCodeCache, ci::CodeInstance) =
+    jit_cache_root!(cache.globalcache, ci)
+
 function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UInt8)
     source_mode == SOURCE_MODE_ABI || return ci
     ci isa CodeInstance && !ci_has_invoke(ci) || return ci
@@ -2010,13 +2050,17 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
             cached = find_equivalent_cached_ci(
                 workqueue.interp, callee, valid_worlds)
             if cached === nothing
-                # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
+                # make sure callee is cached, as required by jl_add_codeinsts_to_jit
                 code_cache(workqueue.interp)[mi] = callee
             else
                 # use an existing CI from the cache, if there is available one that is compatible
                 callee === ci && (ci = cached)
                 callee = cached
             end
+            # `callee` is about to be emitted while absent from the native
+            # `mi.cache` chain; the executable cache it lives in must root it
+            # for the lifetime of the process (see `jit_cache_root!`).
+            jit_cache_root!(code_cache(workqueue.interp), callee)
         end
         push!(codeinsts, callee)
         push!(srcs, src)
@@ -2042,6 +2086,7 @@ end
 function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
     enqueue_unprepared_invokes::Bool = false,
+    external_linkage::Bool,
 )
     interp = workqueue.interp
     world = get_inference_world(interp)
@@ -2101,7 +2146,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             if src isa CodeInfo
                 sptypes = sptypes_from_meth_instance(mi)
                 collectinvokes!(workqueue, src, sptypes; invokelatest_queue,
-                                enqueue_unprepared_invokes)
+                                enqueue_unprepared_invokes, external_linkage)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
                     cached = find_equivalent_cached_ci(
@@ -2127,7 +2172,7 @@ const TRIM_NO = 0x0
 const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8, external_linkage::Bool)
     # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
     # back to `nothing` at serialization time (see `src/staticdata.c`).
     cache_owner = trim_mode == TRIM_NO ? nothing : :trim
@@ -2147,14 +2192,14 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         )
 
         append!(workqueue, methods)
-        compile!(codeinfos, workqueue; invokelatest_queue,
+        compile!(codeinfos, workqueue; invokelatest_queue, external_linkage,
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
-        compile!(codeinfos, invokelatest_queue; invokelatest_queue,
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue, external_linkage,
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 

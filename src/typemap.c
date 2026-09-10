@@ -83,7 +83,7 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
-        if (invariant || !dt->name->abstract || dt->name == jl_type_typename)
+        if (invariant || !dt->name->abstract)
             return 1;
         return 0;
     }
@@ -422,7 +422,7 @@ int jl_typemap_visitor(jl_typemap_t *cache, jl_typemap_visitor_fptr fptr, void *
 {
     if (jl_typeof(cache) == (jl_value_t*)jl_typemap_level_type) {
         jl_typemap_level_t *node = (jl_typemap_level_t*)cache;
-        jl_genericmemory_t *a;
+        jl_genericmemory_t *a = NULL;
         JL_GC_PUSH1(&a);
         a = jl_atomic_load_relaxed(&node->targ);
         if (a != (jl_genericmemory_t*)jl_an_empty_memory_any)
@@ -455,37 +455,39 @@ exit:
     }
 }
 
-static unsigned jl_supertype_height(jl_datatype_t *dt) JL_NOTSAFEPOINT
+static unsigned jl_supertype_height(jl_datatype_t *dt) JL_CANSAFEPOINT
 {
     unsigned height = 1;
-    while (dt != jl_any_type) {
+    while (dt != NULL && dt != jl_any_type) {
         height++;
-        dt = dt->super;
+        dt = jl_datatype_compute_super(dt);
     }
     return height;
 }
 
 // return true if a and b might intersect in the type domain (over just their type-names)
-static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigned ha) JL_NOTSAFEPOINT
+static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigned ha) JL_CANSAFEPOINT
 {
     if (a == jl_any_type)
         return 1;
     jl_datatype_t *b = (jl_datatype_t*)jl_unwrap_unionall(bname->wrapper);
     unsigned hb = 1;
-    while (b != jl_any_type) {
+    while (b != NULL && b != jl_any_type) {
         if (a->name == b->name)
             return 1;
         hb++;
-        b = b->super;
+        b = jl_datatype_compute_super(b);
     }
     while (ha > hb) {
-        a = a->super;
+        a = jl_datatype_compute_super(a);
         ha--;
+        if (a == NULL)
+            return 1; // definition in progress: conservatively may intersect
     }
     return a->name == bname;
 }
 
-static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam) JL_NOTSAFEPOINT
+static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam) JL_CANSAFEPOINT
 {
     if (a == (jl_value_t*)jl_any_type)
         return 1;
@@ -857,7 +859,9 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         }
                         if (super == jl_any_type)
                             break;
-                        super = super->super;
+                        super = jl_datatype_compute_super(super);
+                        if (super == NULL)
+                            break; // definition in progress
                     }
                 }
                 else {
@@ -880,7 +884,9 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         }
                         if (super == jl_any_type)
                             break;
-                        super = super->super;
+                        super = jl_datatype_compute_super(super);
+                        if (super == NULL)
+                            break; // definition in progress
                     }
                 }
                 else {
@@ -1098,7 +1104,9 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                         }
                         if (super == jl_any_type || !subtype)
                             break;
-                        super = super->super;
+                        super = jl_datatype_compute_super(super);
+                        if (super == NULL)
+                            break; // definition in progress
                     }
                 }
                 else {
@@ -1138,7 +1146,9 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                             }
                             if (super == jl_any_type || !subtype)
                                 break;
-                            super = super->super;
+                            super = jl_datatype_compute_super(super);
+                            if (super == NULL)
+                                break; // definition in progress
                         }
                     }
                 }
@@ -1295,7 +1305,9 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
                     if (ml) return ml;
                     if (a1 == (jl_value_t*)jl_any_type)
                         break;
-                    a1 = (jl_value_t*)((jl_datatype_t*)a1)->super;
+                    a1 = (jl_value_t*)jl_datatype_compute_super((jl_datatype_t*)a1);
+                    if (a1 == NULL)
+                        break; // definition in progress
                 }
             }
             else {
@@ -1326,7 +1338,9 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
                 if (ml) return ml;
                 if (ty == (jl_value_t*)jl_any_type)
                     break;
-                ty = (jl_value_t*)((jl_datatype_t*)ty)->super;
+                ty = (jl_value_t*)jl_datatype_compute_super((jl_datatype_t*)ty);
+                if (ty == NULL)
+                    break; // definition in progress
             }
         }
     }

@@ -121,7 +121,7 @@ namespace jl_intrinsics {
     // passed as an argument.
     extern const IntrinsicDescription GCAllocBytes;
 
-    // `julia.new_gc_frame`: an intrinsic that creates a new GC frame.
+    // `julia.new_gc_frame`: creates a GC frame, honoring any return alignment attribute.
     extern const IntrinsicDescription newGCFrame;
 
     // `julia.push_gc_frame`: an intrinsic that pushes a GC frame.

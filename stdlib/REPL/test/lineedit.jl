@@ -20,6 +20,49 @@ function new_state()
     LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
 end
 
+# History search initializes prompt modes added after MIState creation (#61584).
+module HistorySearchDynamicMode
+
+using Test
+using REPL
+import REPL.LineEdit
+import ..FakeTerminals: FakeTerminal
+
+struct MockHistoryFile end
+
+mutable struct MockHistoryProvider <: LineEdit.HistoryProvider
+    history::MockHistoryFile
+    last_buffer::IOBuffer
+    last_mode::Union{Nothing,LineEdit.Prompt}
+    mode_mapping::Dict{Symbol,LineEdit.Prompt}
+end
+
+REPL.histsearch(::MockHistoryFile, args...) = (mode = :pkg, text = "status")
+
+@testset "history search initializes dynamic modes" begin
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    main_mode = LineEdit.Prompt("julia> ")
+    dummy_pkg_mode = LineEdit.Prompt("pkg> ")
+    history = MockHistoryProvider(MockHistoryFile(), IOBuffer(), nothing,
+                                  Dict(:julia => main_mode, :pkg => dummy_pkg_mode))
+    main_mode.hist = dummy_pkg_mode.hist = history
+    interface = LineEdit.ModalInterface(LineEdit.TextInterface[main_mode, dummy_pkg_mode])
+    mistate = LineEdit.init_state(term, interface)
+    mistate.terminal_properties.da1 = Int[]
+
+    pkg_mode = LineEdit.Prompt("(project) pkg> ")
+    pkg_mode.hist = history
+    history.mode_mapping[:pkg] = pkg_mode
+    push!(interface.modes, pkg_mode)
+    @test !haskey(mistate.mode_state, pkg_mode)
+
+    LineEdit.history_search(mistate)
+    @test mistate.current_mode === pkg_mode
+    @test String(take!(copy(LineEdit.buffer(mistate)))) == "status"
+end
+
+end # module HistorySearchDynamicMode
+
 charseek(buf, i) = seek(buf, nextind(content(buf), 0, i+1)-1)
 charpos(buf, pos=position(buf)) = length(content(buf), 1, pos)
 

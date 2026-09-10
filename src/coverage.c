@@ -62,7 +62,7 @@ static uint64_t *allocLine(logdata_vec_t *vec, int line) JL_NOTSAFEPOINT
         logdata_vec_resize(vec, block + 1);
     jl_assume(vec->blocks != NULL);
     if (vec->blocks[block] == NULL) {
-        vec->blocks[block] = (logdata_block *)calloc(1, sizeof(logdata_block));
+        vec->blocks[block] = (logdata_block *)calloc_s(sizeof(logdata_block));
     }
     logdata_block *data = vec->blocks[block];
     if ((*data)[line] == 0)
@@ -81,6 +81,41 @@ static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
     if (strcmp(filename, "no file") == 0) return 1;
     if (strcmp(filename, "<missing>") == 0) return 1;
     return 0;
+}
+
+JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
+{
+    const char *tracked = jl_options.tracked_path;
+    if (tracked == NULL || path == NULL)
+        return 0;
+    size_t tlen = strlen(tracked);
+    if (tlen == 0)
+        return 1; // no path given: everything is tracked
+    while (tlen > 0 && (tracked[tlen - 1] == '/' || tracked[tlen - 1] == PATHSEPSTRING[0]))
+        tlen--;
+    if (tlen == 0)
+        return jl_isabspath(path); // the filesystem root: every absolute path
+    if (strncmp(path, tracked, tlen) != 0)
+        return 0;
+    char next = path[tlen];
+    return next == '\0' || next == '/' || next == PATHSEPSTRING[0];
+}
+
+JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT
+{
+    if (codegen_imaging_mode() || jl_generating_output() || is_skip_filename(filename))
+        return 0;
+    switch (jl_options.code_coverage) {
+    case JL_LOG_ALL:
+        return 1;
+    case JL_LOG_USER:
+        return m != NULL && jl_base_module != NULL && jl_core_module != NULL &&
+               !jl_is_submodule(m, jl_base_module) && !jl_is_submodule(m, jl_core_module);
+    case JL_LOG_PATH:
+        return jl_path_is_tracked(filename);
+    default:
+        return 0;
+    }
 }
 
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line)
@@ -191,14 +226,10 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
         snprintf(outpath, sizeof(outpath), "%s%s", fullpath, extension);
         FILE *outf = fopen(outpath, "wb");
         if (outf) {
-            char line[1024];
             int l = 1;
             unsigned block = 0;
-            int ret = 0;
-            while (ret != EOF && (ret = fscanf(inf, "%1023[^\n]", line)) != EOF) {
-                // Skip n non-newline chars and a single trailing newline
-                if ((ret = fscanf(inf, "%*[^\n]")) != EOF)
-                    ret = fscanf(inf, "%*1[\n]");
+            int c = getc(inf);
+            while (c != EOF) {
                 logdata_block *data = NULL;
                 if (block < values->len) {
                     data = values->blocks[block];
@@ -212,8 +243,14 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
                     fprintf(outf, "        -");
                 else
                     fprintf(outf, "%9" PRIu64, value - 1);
-                fprintf(outf, " %s\n", line);
-                line[0] = 0;
+                putc(' ', outf);
+                while (c != EOF && c != '\n') {
+                    putc(c, outf);
+                    c = getc(inf);
+                }
+                putc('\n', outf);
+                if (c == '\n')
+                    c = getc(inf);
             }
             fclose(outf);
         }

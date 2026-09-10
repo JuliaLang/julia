@@ -143,12 +143,15 @@ Intended to be called using `do` block syntax as follows:
         ...
     end
 
-This is not needed on worker threads (`Threads.threadid() != 1`) since the
-`InterruptException` will only be delivered to the master thread.
 External functions that do not call julia code or julia runtime
 automatically disable sigint during their execution.
 """
 function disable_sigint(f::Function)
+    depwarn("`disable_sigint` no longer defers Ctrl-C: SIGINT is delivered as a " *
+            "cancellation of the current ^C scope and observed at cancellation " *
+            "points regardless of the sigatomic region this establishes. Shield " *
+            "a region from cancellation by scoping " *
+            "`Base.CANCEL_TOKEN => nothing` over it instead.", :disable_sigint)
     sigatomic_begin()
     res = f()
     # Exception unwind sigatomic automatically
@@ -174,11 +177,13 @@ end
     exit_on_sigint(on::Bool)
 
 Set `exit_on_sigint` flag of the julia runtime.  If `false`, Ctrl-C
-(SIGINT) is capturable as [`InterruptException`](@ref) in `try` block.
+(SIGINT) cancels the current ^C episode's cancellation scope and is
+observed at cancellation points as a [`Base.CancellationRequest`](@ref),
+which is capturable in a `try` block.
 This is the default behavior in REPL, any code run via `-e` and `-E`
 and in Julia script run with `-i` option.
 
-If `true`, `InterruptException` is not thrown by Ctrl-C.  Running code
+If `true`, Ctrl-C terminates the process directly.  Running code
 upon such event requires [`atexit`](@ref).  This is the default
 behavior in Julia script run without `-i` option.
 

@@ -42,8 +42,6 @@ typedef struct _jl_ast_context_t {
     struct _jl_ast_context_t *next; // invasive list pointer for getting free contexts
 } jl_ast_context_t;
 
-static jl_ast_context_t jl_ast_main_ctx;
-
 #ifdef __clang_gcanalyzer__
 extern jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
@@ -62,7 +60,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
 #ifdef __clang_gcanalyzer__
 // this definition causes bugs in the new gc-analyzer (because it tracks e->args instead of e)
 #undef jl_exprargset
-extern void jl_exprargset(jl_array_t *a, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
+extern void jl_exprargset(jl_expr_t *ex, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
 #endif
 
 static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
@@ -135,9 +133,13 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
 static int jl_is_number(jl_value_t *v)
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-    for (; t->super != t; t = t->super)
-        if (t == jl_number_type)
+    // only the typename lineage matters here, so walk the wrapper supertypes,
+    // which are set at definition and never deferred
+    while (t != NULL && t != jl_any_type) {
+        if (t->name == jl_number_type->name)
             return 1;
+        t = ((jl_datatype_t*)jl_unwrap_unionall(t->name->wrapper))->super;
+    }
     return 0;
 }
 
@@ -193,6 +195,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ctx) JL_NOTSAFEPOINT
 // There should be no GC allocation while holding this lock
 static uv_mutex_t flisp_lock;
 static jl_ast_context_t *jl_ast_ctx_freed = NULL;
+static int flisp_lock_ready = 0;
 
 static jl_ast_context_t *jl_ast_ctx_enter(jl_module_t *m) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
@@ -229,13 +232,14 @@ static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 }
 
 
+// Only the lock; `jl_ast_ctx_enter` builds a context on first use, so a
+// program that never lowers an expression never loads the flisp image.
 void jl_init_flisp(void)
 {
-    if (jl_ast_ctx_freed)
+    if (flisp_lock_ready)
         return;
+    flisp_lock_ready = 1;
     uv_mutex_init(&flisp_lock);
-    jl_init_ast_ctx(&jl_ast_main_ctx);
-    jl_ast_ctx_leave_(&jl_ast_main_ctx);
 }
 
 void jl_init_common_symbols(void)
@@ -1137,24 +1141,24 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, &lineinfo, world, throw_load_error);
         if (!need_esc_node(result))
             return result;
-        jl_value_t *wrap = NULL;
+        jl_expr_t *wrap = NULL;
         JL_GC_PUSH4(&result, &wrap, &newctx.m, &lineinfo);
         // copy and wrap the result in `(hygienic-scope ,result ,newctx)
         if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
             result = jl_exprarg(result, 0);
         else
-            wrap = (jl_value_t*)jl_exprn(jl_hygienicscope_sym, 3);
+            wrap = jl_exprn(jl_hygienicscope_sym, 3);
         result = jl_copy_ast(result);
         if (!onelevel)
             result = jl_expand_macros(result, inmodule, wrap ? &newctx : macroctx, onelevel, world, throw_load_error);
         if (wrap && need_esc_node(result)) {
             jl_exprargset(wrap, 0, result);
-            jl_exprargset(wrap, 1, newctx.m);
+            jl_exprargset(wrap, 1, (jl_value_t*)newctx.m);
             jl_exprargset(wrap, 2, lineinfo);
             if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
                 result = jl_exprarg(result, 0);
             else
-                result = wrap;
+                result = (jl_value_t*)wrap;
         }
         JL_GC_POP();
         return result;
@@ -1273,7 +1277,7 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     args[1] = expr;
     args[2] = (jl_value_t*)inmodule;
     args[3] = jl_cstr_to_string(filename);
-    args[4] = jl_box_ulong(line);
+    args[4] = jl_box_long(line);
     args[5] = jl_box_ulong(world);
     args[6] = warn ? jl_true : jl_false;
     jl_task_t *ct = jl_current_task;

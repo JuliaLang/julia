@@ -83,7 +83,22 @@ julia> supertype(Vector)
 DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
-supertype(T::DataType) = (@_total_meta; T.super)
+function supertype(T::DataType)
+    @_foldable_meta
+    # force the computation of a deferred supertype (an instantiation of a
+    # self-referential definition materializes its supertype graph lazily,
+    # one level per demand, see issue #61347); idempotent, so still foldable.
+    # The subsequent plain field read keeps `getfield`'s inference precision.
+    ccall(:jl_datatype_compute_super, Ptr{Cvoid}, (Any,), T)
+    return getfield(T, :super)
+end
+function getproperty(T::DataType, s::Symbol)
+    @inline
+    # fill the deferred supertype cache on access, so raw `.super` reads keep
+    # working for instantiations of self-referential definitions (#61347)
+    s === :super && return supertype(T)
+    return getfield(T, s)
+end
 supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
@@ -1365,6 +1380,36 @@ struct Splat{F} <: Function
 end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
+
+"""
+    unsplat(f)
+
+Given a function `f` that takes a single tuple argument, return a new function
+that takes any number of arguments and bundles them into a tuple to pass to the
+original function.
+
+That is, the return value is *effectively* equivalent to `(args...) -> f(args)`, except that
+it may use a more specialized function type (such as `f ∘ tuple` via [`∘`](@ref) and [`tuple`](@ref))
+for improved clarity or efficiency, rather than creating a new anonymous function.
+
+`unsplat` is the inverse of [`splat`](@ref): `unsplat(splat(f)) === f` and `splat(unsplat(f)) === f`.
+This operation is also sometimes referred to as "slurp".
+
+# Examples
+```jldoctest
+julia> unsplat(sum)(1, 2, 3)
+6
+
+julia> unsplat(splat(+)) === +
+true
+```
+
+!!! compat "Julia 1.14"
+    `unsplat` requires at least Julia 1.14.
+"""
+unsplat(f) = f ∘ tuple
+unsplat(s::Splat) = s.f
+splat(f::ComposedFunction{<:Any,typeof(tuple)}) = f.outer
 
 """
     tap(f)

@@ -537,9 +537,7 @@ int jl_isabspath(const char *in) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
 {
-    const char* path_ = jl_symbol_name(path);
-    int tpath_len = strlen(jl_options.tracked_path);
-    return (strlen(path_) >= tpath_len) && (strncmp(path_, jl_options.tracked_path, tpath_len) == 0);
+    return jl_path_is_tracked(jl_symbol_name(path));
 }
 
 static void jl_set_io_wait(int v)

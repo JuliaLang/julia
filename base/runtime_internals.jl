@@ -221,8 +221,9 @@ macro __FUNCTION__()
     Expr(:thisfunction)
 end
 
-# TODO: this is vaguely broken because it only works for explicit calls to
-# `Base.deprecate`, not the @deprecated macro:
+# Reflects binding-partition deprecation (as set by `Base.deprecate` / `Base.@deprecate_binding`),
+# including a binding reached through an implicit `using`, transparently through reexports.
+# `@deprecate` deprecates a method rather than the binding, so it is intentionally not reported here.
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 
 function binding_module(m::Module, s::Symbol)
@@ -232,7 +233,6 @@ function binding_module(m::Module, s::Symbol)
 end
 
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
-const _TYPE_NAME = TypeEq.name
 
 function _fieldnames(@nospecialize t)
     if t.name === _NAMEDTUPLE_NAME
@@ -263,9 +263,10 @@ const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
 const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
+const PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100
 
 const PARTITION_MASK_KIND         = 0x0f
-const PARTITION_MASK_FLAG         = 0xf0
+const PARTITION_MASK_FLAG         = 0x1f0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
 
@@ -1628,7 +1629,7 @@ get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 """
     tls_world_age()
 
-Return the world the [current_task()](@ref) is executing within.
+Return the world the [`current_task`](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 

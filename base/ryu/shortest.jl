@@ -229,6 +229,9 @@ function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
                        plus=false, space=false, hash=true,
                        precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
                        typed=false, compact=false) where {T}
+    pos = Int(pos)
+    precision = Int(precision)
+    precision >= -1 || throw(ArgumentError("precision must be at least -1"))
     @assert 0 < pos <= length(buf) "invalid pos"
     # special cases
     if x == 0
@@ -381,7 +384,7 @@ function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
             buf_cconv = Base.cconvert(Ptr{UInt8}, buf)
             GC.@preserve buf_cconv begin
                 ptr = Base.unsafe_convert(Ptr{UInt8}, buf_cconv)
-                memmove(ptr + pos + pointoff, ptr + pos + pointoff - 1, (olength - pointoff + 1)%Csize_t)
+                memmove(ptr + pos + pointoff, ptr + pos + pointoff - 1, (olength - pointoff)%Csize_t)
             end
             @inbounds buf[pos + pointoff] = decchar
             pos += olength + 1

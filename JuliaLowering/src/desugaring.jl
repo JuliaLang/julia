@@ -723,7 +723,7 @@ function expand_dotcall(ctx, ex)
     k = kind(ex)
     if k == K"dotcall"
         @jl_assert numchildren(ex) >= 1 ex
-        farg = ex[1]
+        farg = setmeta(ex[1], :is_called, true)
         args = SyntaxList()
         append!(args, ex[2:end])
         kws = remove_kw_args!(ctx, args)
@@ -756,9 +756,8 @@ function expand_fuse_broadcast(ctx, ex)
         lhs = ex[1]
         kl = kind(lhs)
         rhs = expand_dotcall(ctx, ex[2])
-        @ast ctx ex [K"call"
-            "materialize!"::K"top"
-            if kl == K"ref"
+        @ast ctx ex [K"block"
+            dest := if kl == K"ref"
                 sctx = with_stmts(ctx)
                 (arr, idxs) = expand_ref_components(sctx, lhs)
                 [K"block"
@@ -777,7 +776,7 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 lhs
             end
-            if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && syntax_name(rhs[1]) == "broadcasted")
+            bc := if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && syntax_name(rhs[1]) == "broadcasted")
                 # Ensure the rhs of .= is always wrapped in a call to `broadcasted()`
                 [K"call"(rhs)
                     "broadcasted"::K"top"
@@ -787,6 +786,8 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 rhs
             end
+            [K"call" "materialize!"::K"top" dest bc]
+            dest
         ]
     else
         @ast ctx ex [K"call"
@@ -2438,7 +2439,7 @@ end
 # desugarable AST to macro AST.  Fortunately there are only two places (meta
 # nkw, and destructuring arg assignments) we do this, so handle them manually.
 function prepend_function_body(ctx, body, ex)
-    @stm body begin
+    out = @stm body begin
         [K"_generated_body" [K"syntaxquote" gen] nongen] -> begin
             ex_est = @stm ex begin
                 [K"meta" [K"Symbol"] n] ->
@@ -2453,6 +2454,20 @@ function prepend_function_body(ctx, body, ex)
         end
         _ -> @ast ctx body [K"block" ex body]
     end
+    mm = getmeta(body, :method_metas, nothing)
+    isnothing(mm) || setmeta!(out, :method_metas, mm)
+    out
+end
+
+# Prepend method metadata and retain it through recursive wrapper generation.
+function prepend_method_metas(ctx, src, body, method_metas)
+    isnothing(method_metas) && return body
+    out = @stm body begin
+        [K"block" stmts...] ->
+            @ast ctx src [K"block" [K"meta" method_metas...] stmts...]
+        _ -> @ast ctx src [K"block" [K"meta" method_metas...] body]
+    end
+    setmeta(out, :method_metas, method_metas)
 end
 
 # Produce all `method` exprs for the given `argl`
@@ -2513,7 +2528,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @jl_assert kind(body) === K"_generated_body" && numchildren(body) == 2 body
     gen_name = let mangled = reserve_module_binding_i(
         ctx.layer.mod,
-        string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator#"))
+        string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator"))
         new_global_binding(ctx, src, mangled, ctx.layer.mod)
     end
 
@@ -2598,6 +2613,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
     req = pos_req_args(argl)
     passed = copy(req)
+    prop_metas = getmeta(body, :method_metas, nothing)
     methods = SyntaxList()
     for i in eachindex(opt)
         @jl_assert i == length(passed)-length(req)+1 src
@@ -2614,6 +2630,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             @ast ctx src [K"block"
                 [K"call" mapindex(passed, 1)... opt_defaults[i]]]
         end
+        wrapper_body = prepend_method_metas(ctx, src, wrapper_body, prop_metas)
         # this function and method_def_expr need sp bounds because of this
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
@@ -2694,11 +2711,12 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     (kw_decls, kw_names, kw_syms, kw_defaults, restkw) = expand_kw_args(ctx, kws)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
     pos_sparams = used_typevars(pargl, sparams)
+    prop_metas = getmeta(body, :method_metas, nothing)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),
-        mangled = reserve_module_binding_i(
+        mangled = reserve_module_binding_simple(
             ctx.layer.mod,
-            string(startswith(n, '#') ? "" : "#kw_body#", n, "#"))
+            string("#", n, "#kw_body"))
         # probably not desirable, but fixes eval-into-closed-module
         m1_sc = escape_layer(mtable.context::SyntaxContext, true)
         @mknode(newsym(ctx, mtable, mangled);
@@ -2727,9 +2745,10 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             scope_nest(ctx, make_assigns(ctx, kw_names, kw_defaults),
                 @ast ctx src [K"call" m1_name kw_names... rkw forward_pargl...])
         end
+        nokw_body = prepend_method_metas(
+            ctx, src, @ast(ctx, src, [K"block" [K"return" body2]]), prop_metas)
         method_def_expr(
-            ctx, src, mtable, pos_sparams, pargl,
-            @ast(ctx, src, [K"block" [K"return" body2]]))
+            ctx, src, mtable, pos_sparams, pargl, nokw_body)
     end
     # (3) Core.kwcall(arg2::NamedTuple, pargl...) methods (one per optarg).
     # - for each kwarg:
@@ -2807,6 +2826,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             scope_nest(ctx, kw_assigns,
                        @ast ctx src [K"block" handle_excess final_call])
         end
+        kwcall_body = prepend_method_metas(ctx, src, kwcall_body, prop_metas)
         # Core.kwcall method has its own first argument.  Ensure closure
         # conversion knows not to put the closure there.
         let arg1_name = setmeta!(
@@ -3818,15 +3838,10 @@ function expand_typegroup_def(ctx, ex)
 
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block, then do the expand and replace
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        mapsyntax(x->@ast(ctx, x, [K"global" x]), struct_names)...
+        [K"scope_block" [K"hard_scope"] [K"block" stmts...]]
         fdef_stmts...
     ]
 
@@ -3966,15 +3981,10 @@ function expand_struct_def(ctx, ex, docs)
     end
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
+        [K"global" struct_name]
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        [K"scope_block" [K"hard_scope"] stmts...]
         fdef_stmts...
     ]
 
@@ -4060,7 +4070,7 @@ end
 
 function _unplaceholder(st)
     k = kind(st)
-    k === K"Placeholder" ? @mknode(st; kind=K"Identifier") :
+    k === K"Placeholder" || k === K"Symbol" ? @mknode(st; kind=K"Identifier") :
         k === K"Identifier" ? st : @jl_assert false st
 end
 
@@ -4325,7 +4335,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"tuple" as...] -> (nothing, as, @ast(ctx, sig, "Any"::K"core"))
         end
         if isnothing(name)
-            name = newsym(ctx, sig, "#anon#")
+            @static if VERSION < v"1.14.0-DEV.3063"
+                name = newsym(ctx, sig, "#anon#")
+            else
+                name = newsym(ctx, sig, string(module_next_counter(ctx.layer.mod)))
+            end
             @ast ctx ex [K"block" [K"local" name] expand_function_def(
                 ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett)]
         else
@@ -4335,7 +4349,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"->"
         sig, wheres = flatten_wheres(ex[1])
         @jl_assert kind(sig) === K"tuple" ex
-        name = newsym(ctx, sig, "#->#")
+        @static if VERSION < v"1.14.0-DEV.3063"
+            name = newsym(ctx, sig, "#->#")
+        else
+            name = newsym(ctx, sig, string(module_next_counter(ctx.layer.mod)))
+        end
         rett = @ast(ctx, sig, "Any"::K"core")
         @ast ctx ex [K"block" [K"local" name] expand_function_def(
             ctx, ex, SyntaxList(name, children(sig)...), wheres, ex[2], rett)]

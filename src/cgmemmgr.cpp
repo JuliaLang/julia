@@ -555,20 +555,22 @@ protected:
 public:
     ROAllocator() JL_NOTSAFEPOINT = default;
     virtual ~ROAllocator() JL_NOTSAFEPOINT {}
+    // Copy the content of `allocations` from their write address to their
+    // runtime address, if the two differ. Unlike `finalize`, this only touches
+    // memory that belongs to the given allocations, so it is safe to call while
+    // other allocations are still writing to the shared blocks.
+    virtual void flush(ArrayRef<Allocation> allocations) JL_NOTSAFEPOINT
+    {
+    }
+    // Apply the page protections for every block used since the last call.
+    // This may only be called when no allocation is in flight anymore, since
+    // in-flight allocations may still be writing to those blocks.
     virtual void finalize() JL_NOTSAFEPOINT
     {
-        // Note: on some aarch64 platforms, like Apple CPUs, we need read
-        // permission in order to invalidate instruction cache lines.  We are
-        // not guaranteed to have read permission on the wr_addr when using
-        // DualMapAllocator.
-        for (auto &alloc : allocations)
-            sys::Memory::InvalidateInstructionCache(alloc.rt_addr, alloc.sz);
         completed.clear();
-        allocations.clear();
     }
-    // Allocations that have not been finalized yet.
-    SmallVector<Allocation, 16> allocations;
-    Allocation alloc(size_t size, size_t align) JL_NOTSAFEPOINT
+    Allocation alloc(size_t size, size_t align,
+                     SmallVectorImpl<Allocation> &allocations) JL_NOTSAFEPOINT
     {
         size_t min_size = (size_t)-1;
         int min_id = 0;
@@ -744,6 +746,14 @@ public:
         assert(get_self_mem_fd() != -1);
     }
     virtual ~SelfMemAllocator() JL_NOTSAFEPOINT override = default;
+    void flush(ArrayRef<Allocation> allocations) override JL_NOTSAFEPOINT
+    {
+        for (auto &alloc : allocations) {
+            if (alloc.rt_addr == alloc.wr_addr)
+                continue;
+            write_self_mem(alloc.rt_addr, alloc.wr_addr, alloc.sz);
+        }
+    }
     void finalize() override JL_NOTSAFEPOINT
     {
         for (auto &block : this->blocks) {
@@ -752,11 +762,6 @@ public:
         for (auto &block : this->completed) {
             finalize_block(block, true);
             block.reset(nullptr, 0);
-        }
-        for (auto &alloc : this->allocations) {
-            if (alloc.rt_addr == alloc.wr_addr)
-                continue;
-            write_self_mem(alloc.rt_addr, alloc.wr_addr, alloc.sz);
         }
         // clear all the temp buffers except the first one
         // (we expect only one)
@@ -795,15 +800,38 @@ get_preferred_allocators() JL_NOTSAFEPOINT
     return {};
 }
 
+// The ROAllocator blocks are shared between all of the allocations that are in
+// flight at the same time, and their page protections can only be applied once
+// none of them is writing to those blocks anymore. `InFlight` counts the
+// allocations that have been handed out but not completed yet, so that the last
+// one to complete applies the protections for the whole batch.
+//
+// A finalization callback must therefore be deferred to the end of the batch if
+// (and only if) the memory it describes is not usable before those protections
+// have been applied, which is the case for executable memory (it is mapped RW
+// while it is being written to). Read-only memory is already at its runtime
+// address once the allocation is flushed, so those callbacks run immediately.
+// That distinction matters: LLVM's ELFDebugObjectPlugin allocates the debug
+// object separately from the LinkGraph it belongs to and then blocks the linker
+// thread inside a post-fixup pass until that (read-only) allocation has been
+// finalized. Deferring it to the end of the batch would deadlock against the
+// LinkGraph's own allocation, which is not finalized until the linker thread
+// gets to run again.
 class JLJITLinkMemoryManager : public jitlink::JITLinkMemoryManager {
     using OnFinalizedFunction =
         jitlink::JITLinkMemoryManager::InFlightAlloc::OnFinalizedFunction;
+
+    // A finalization callback along with the allocations it covers.
+    struct PendingFinalize {
+        OnFinalizedFunction OnFinalized;
+        SmallVector<Allocation, 4> Allocs;
+    };
 
     std::mutex Mutex;
     RWAllocator RWAlloc;
     std::unique_ptr<ROAllocator> ROAlloc;
     std::unique_ptr<ROAllocator> ExeAlloc;
-    SmallVector<OnFinalizedFunction> FinalizedCallbacks;
+    SmallVector<PendingFinalize> FinalizedCallbacks;
     uint32_t InFlight{0};
 
 public:
@@ -838,24 +866,72 @@ protected:
     {
     }
 
-    void finalize(OnFinalizedFunction OnFinalized)
+    // Must be called with `Mutex` held. Applies the page protections for the
+    // whole batch and collects the callbacks that were waiting for them.
+    void completeBatch(SmallVectorImpl<PendingFinalize> &Ready) JL_NOTSAFEPOINT
     {
-        SmallVector<OnFinalizedFunction> Callbacks;
+        assert(InFlight > 0);
+        if (--InFlight > 0)
+            return;
+        ROAlloc->finalize();
+        ExeAlloc->finalize();
+        for (auto &CB : FinalizedCallbacks)
+            Ready.push_back(std::move(CB));
+        FinalizedCallbacks.clear();
+    }
+
+    static void runCallbacks(SmallVectorImpl<PendingFinalize> &Ready)
+    {
+        for (auto &CB : Ready) {
+            // Note: on some aarch64 platforms, like Apple CPUs, we need read
+            // permission in order to invalidate instruction cache lines.  We are
+            // not guaranteed to have read permission on the wr_addr when using
+            // DualMapAllocator.
+            for (auto &alloc : CB.Allocs)
+                sys::Memory::InvalidateInstructionCache(alloc.rt_addr, alloc.sz);
+            std::move(CB.OnFinalized)(FinalizedAlloc{});
+        }
+    }
+
+    void finalize(SmallVector<Allocation, 4> ROAllocs,
+                  SmallVector<Allocation, 4> ExeAllocs,
+                  OnFinalizedFunction OnFinalized)
+    {
+        SmallVector<PendingFinalize> Ready;
         {
             std::unique_lock Lock{Mutex};
-            FinalizedCallbacks.push_back(std::move(OnFinalized));
+            // Move this allocation's content to its runtime address. This does
+            // not touch any memory owned by the other in-flight allocations.
+            ROAlloc->flush(ROAllocs);
+            ExeAlloc->flush(ExeAllocs);
 
-            assert(InFlight > 0);
-            if (--InFlight > 0)
-                return;
+            // Executable memory is only usable once the page protections have
+            // been applied, so those callbacks have to wait for the end of the
+            // batch. See the comment on this class for why everything else must
+            // not wait.
+            bool Deferred = !ExeAllocs.empty();
+            ROAllocs.append(ExeAllocs.begin(), ExeAllocs.end());
+            PendingFinalize P{std::move(OnFinalized), std::move(ROAllocs)};
+            if (Deferred)
+                FinalizedCallbacks.push_back(std::move(P));
+            else
+                Ready.push_back(std::move(P));
 
-            ROAlloc->finalize();
-            ExeAlloc->finalize();
-            Callbacks = std::move(FinalizedCallbacks);
+            completeBatch(Ready);
         }
 
-        for (auto &CB : Callbacks)
-            std::move(CB)(FinalizedAlloc{});
+        runCallbacks(Ready);
+    }
+
+    void abandon()
+    {
+        SmallVector<PendingFinalize> Ready;
+        {
+            std::unique_lock Lock{Mutex};
+            completeBatch(Ready);
+        }
+
+        runCallbacks(Ready);
     }
 };
 
@@ -863,20 +939,46 @@ class JLJITLinkMemoryManager::InFlightAlloc
   : public jitlink::JITLinkMemoryManager::InFlightAlloc {
     JLJITLinkMemoryManager &MM;
     jitlink::LinkGraph &G;
+    SmallVector<Allocation, 4> ROAllocs;
+    SmallVector<Allocation, 4> ExeAllocs;
+    bool Completed{false};
 
 public:
-    InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G) JL_NOTSAFEPOINT
-        : MM(MM), G(G) {}
+    InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G,
+                  SmallVector<Allocation, 4> ROAllocs,
+                  SmallVector<Allocation, 4> ExeAllocs) JL_NOTSAFEPOINT
+        : MM(MM), G(G), ROAllocs(std::move(ROAllocs)),
+          ExeAllocs(std::move(ExeAllocs)) {}
+
+    // LLVM does not guarantee that every InFlightAlloc is either finalized or
+    // abandoned: ELFDebugObjectPlugin simply drops the allocation it made for
+    // an object whose sections did not survive linking. Release the batch
+    // reservation here too, otherwise the batch would never complete.
+    ~InFlightAlloc() override
+    {
+        if (!Completed)
+            MM.abandon();
+    }
 
     void abandon(OnAbandonedFunction OnAbandoned) override
     {
+        assert(!Completed);
+        Completed = true;
+        MM.abandon();
+        // handing an `Error` to a `unique_function` looks like a double free
+        // to the static analyzer (see JL_SA_BROKEN_PARAM_DTORS)
+#ifndef JL_SA_BROKEN_PARAM_DTORS
         OnAbandoned(Error::success());
+#endif
     }
 
     void finalize(OnFinalizedFunction OnFinalized) override
     {
+        assert(!Completed);
+        Completed = true;
         auto *GP = &G;
-        MM.finalize([GP, OnFinalized =
+        MM.finalize(std::move(ROAllocs), std::move(ExeAllocs),
+                    [GP, OnFinalized =
                              std::move(OnFinalized)](Expected<FinalizedAlloc> FA) mutable {
             if (!FA)
                 return OnFinalized(FA.takeError());
@@ -905,6 +1007,8 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
                                       OnAllocatedFunction OnAllocated)
 {
     jitlink::BasicLayout BL{G};
+    SmallVector<Allocation, 4> ROAllocs;
+    SmallVector<Allocation, 4> ExeAllocs;
 
     {
         std::unique_lock Lock{Mutex};
@@ -920,9 +1024,9 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
             if (Prot == (MemProt::Read | MemProt::Write))
                 Alloc = RWAlloc.alloc(Size, Alignment);
             else if (Prot == MemProt::Read)
-                Alloc = ROAlloc->alloc(Size, Alignment);
+                Alloc = ROAlloc->alloc(Size, Alignment, ROAllocs);
             else if (Prot == (MemProt::Read | MemProt::Exec))
-                Alloc = ExeAlloc->alloc(Size, Alignment);
+                Alloc = ExeAlloc->alloc(Size, Alignment, ExeAllocs);
             else
                 abort();
 
@@ -936,7 +1040,8 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
         ++InFlight;
     }
 
-    OnAllocated(std::make_unique<InFlightAlloc>(*this, G));
+    OnAllocated(std::make_unique<InFlightAlloc>(*this, G, std::move(ROAllocs),
+                                                std::move(ExeAllocs)));
 }
 }
 

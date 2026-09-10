@@ -58,8 +58,13 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         // waiting for `t` to be resolved, then will be determined later as
         // soon as possible afterwards).
         while (super != NULL && super != jl_any_type) {
-            if (ptrhash_has(news, (void*)super))
-                return 1;
+            void *entry = ptrhash_get(news, (void*)super);
+            if (entry != HT_NOTFOUND) {
+                if (entry != (void*)super)
+                    return 1;
+                // A self-mapping marks an unresolved forward reference.
+                break;
+            }
             if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
                break; // the rest must all be non-new
             // otherwise super might be something that was not cached even though a later supertype might be
@@ -713,7 +718,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 14;
+static const int JI_FORMAT_VERSION = 15;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
@@ -731,6 +736,8 @@ static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
     ios_write(s, JL_BUILD_UNAME, strlen(JL_BUILD_UNAME)+1);
     ios_write(s, JL_BUILD_ARCH, strlen(JL_BUILD_ARCH)+1);
     ios_write(s, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING)+1);
+    const char *gc_abi = jl_gc_image_abi();
+    ios_write(s, gc_abi, strlen(gc_abi)+1);
     write_uint32(s, flags);
     if (flags & JI_FLAG_PKGIMAGE) {
         const char *branch = jl_git_branch(), *commit = jl_git_commit();
@@ -1034,7 +1041,8 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *chec
           read_uint8(s) == sizeof(void*) &&
           readstr_verify(s, JL_BUILD_UNAME, 1) &&
           readstr_verify(s, JL_BUILD_ARCH, 1) &&
-          readstr_verify(s, JULIA_VERSION_STRING, 1)))
+          readstr_verify(s, JULIA_VERSION_STRING, 1) &&
+          readstr_verify(s, jl_gc_image_abi(), 1)))
         return -1;
 
     *flags = read_uint32(s);

@@ -36,8 +36,8 @@ Vector() = Vector{Any}(undef, 0)
 
 # Array constructors for nothing and missing
 # type and dimensionality specified
-Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d)), nothing)
-Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d)), missing)
+Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), nothing)
+Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), missing)
 # type but not dimensionality specified
-Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(undef, convert(Tuple{Vararg{Int}}, d)), nothing)
-Array{T}(::Missing, d...) where {T} = fill!(Array{T}(undef, convert(Tuple{Vararg{Int}}, d)), missing)
+Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(undef, d...), nothing)
+Array{T}(::Missing, d...) where {T} = fill!(Array{T}(undef, d...), missing)

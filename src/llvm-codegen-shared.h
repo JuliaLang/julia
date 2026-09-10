@@ -164,6 +164,41 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
     return inst;
 }
 
+// Whether the tag `TBAA`, or any of its ancestors up to the `jtbaa` root, has a
+// name in `strset`.
+static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*> const strset)
+{
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = llvm::cast<llvm::MDNode>(TBAA->getOperand(1).get());
+        auto str = llvm::cast<llvm::MDString>(TBAA->getOperand(0))->getString();
+        for (auto str2 : strset) {
+            if (str == str2) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Check if this is a load from an immutable value. The easiest way to do so is
+// to look at the AA metadata and see if it derives from jtbaa_immut.
+static inline bool isLoadFromImmut(llvm::LoadInst *LI)
+{
+    if (LI->getMetadata(llvm::LLVMContext::MD_invariant_load))
+        return true;
+    llvm::MDNode *TBAA = LI->getMetadata(llvm::LLVMContext::MD_tbaa);
+    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"}))
+        return true;
+    return false;
+}
+
+static inline bool isConstGV(llvm::GlobalVariable *gv)
+{
+    return gv->isConstant() || gv->getMetadata("julia.constgv");
+}
+
 // Get PTLS through current task.
 static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Value *pgcstack)
 {

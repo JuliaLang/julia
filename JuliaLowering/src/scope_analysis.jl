@@ -279,11 +279,7 @@ function _find_scope_decls!(ctx, scope, ex)
         k1 = kind(ex[1])
         _record_layer!(ctx, ex[1])
         sc = ex[1].context::SyntaxContext
-        if k === K"constdecl" && is_flisp_compat(ex[1]) &&
-            is_top_scope(scope) && sc.layer !== ctx.layer
-            # hack: flisp declares a mangled global in expansion; we must not error
-            explicit_declare_in_scope!(ctx, scope, ex[1], :global)
-        elseif k1 === K"BindingId"
+        if k1 === K"BindingId"
             b = get_binding(ctx, ex[1])
             get!(scope.binding_assignments, b.id, ex[1])
         elseif k1 === K"Identifier"
@@ -429,6 +425,9 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         # Propagate this to the binding so the slot gets the nospecialize flag.
         if getmeta(ex, :nospecialize, false) && b.kind === :argument
             b.is_nospecialize = true
+        end
+        if getmeta(ex, :is_called, false)
+            b.is_called = true
         end
         newleaf(ex, K"BindingId", b.id)
     elseif k === K"BindingId"

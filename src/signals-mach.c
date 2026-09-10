@@ -309,17 +309,6 @@ static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_va
     }
 }
 
-static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
-{
-    host_thread_state_t state;
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
-    jl_throw_in_state(ptls2, &state, exception);
-    ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state", ret);
-}
-
 // Trampoline that runs on the faulting thread after being hijacked by the
 // Mach exception handler for a safepoint hit. This uses the same codepath
 // as the Unix signal handler (jl_set_gc_and_wait), so the faulting thread
@@ -332,15 +321,9 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     if (ct == NULL)
         return; // thread is dead, just resume
     jl_set_gc_and_wait(ct);
-    if (jl_atomic_load_relaxed(&ct->tid) != 0)
-        return;
-    if (ptls->defer_signal || ct->eh == NULL) {
-        jl_safepoint_defer_sigint();
-    }
-    else if (jl_safepoint_consume_sigint()) {
-        jl_clear_force_sigint();
-        jl_throw(jl_interrupt_exception);
-    }
+    // (The sigint force-throw that lived here is gone: SIGINT is delivered
+    // through the cancellation system - see jl_sigint_request_cancellation -
+    // and nothing arms the sigint page anymore.)
 }
 
 #if defined(_CPU_AARCH64_)
@@ -623,7 +606,7 @@ void jl_thread_resume(int tid)
 }
 
 // Serializes every path that suspends a thread and rewrites its context
-// (jl_send_cancellation_signal on any thread, and jl_try_deliver_sigint) for
+// (jl_send_cancellation_signal on any thread, and jl_send_abandon_signal) for
 // its complete suspend/rewrite/resume sequence: two rewriters working from
 // the same suspended snapshot would install conflicting continuations and
 // task chains. (The profiler does not need it: it only reads contexts, and
@@ -707,8 +690,8 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // Re-check now that the thread cannot run: the current task may have
     // switched before the freeze. Delivery is gated on an actual
     // cancellation of the task's bound token source, kept coherent with the
-    // published regions by the exception-handler and finalizer save/restore
-    // discipline.
+    // published regions: exception handlers restore the pair together, and
+    // finalizers only run with the region unpublished.
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     bound = ct2 == NULL ? NULL :
         jl_atomic_load_relaxed(&ct2->bound_cancel_token);
@@ -782,43 +765,6 @@ resume:
     pthread_mutex_unlock(&ctx_rewrite_lock);
 }
 
-
-// Throw jl_interrupt_exception if the master thread is in a signal async region
-// or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void)
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
-
-    // Hold the rewrite lock across the complete suspend/rewrite/resume
-    // sequence (see its definition above).
-    pthread_mutex_lock(&ctx_rewrite_lock);
-    kern_return_t ret = thread_suspend(thread);
-    HANDLE_MACH_ERROR("thread_suspend", ret);
-
-    // This aborts `sleep` and other syscalls.
-    ret = thread_abort(thread);
-    HANDLE_MACH_ERROR("thread_abort", ret);
-
-    jl_safepoint_enable_sigint();
-    int force = jl_check_force_sigint();
-    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    int can_throw = ct2 != NULL && ct2->eh != NULL;
-    if (can_throw && (force || (!ptls2->defer_signal && ptls2->io_wait))) {
-        jl_safepoint_consume_sigint();
-        if (force)
-            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-        jl_clear_force_sigint();
-        jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
-    }
-    else {
-        jl_wake_libuv();
-    }
-
-    ret = thread_resume(thread);
-    HANDLE_MACH_ERROR("thread_resume", ret);
-    pthread_mutex_unlock(&ctx_rewrite_lock);
-}
 
 // Switch the target thread's current (already committed) task to
 // ptls->abandon_to (see jl_abandon_task_request): suspend the thread, validate the
@@ -1047,6 +993,7 @@ void jl_profile_thread_mach(int tid)
             *  and during stack unwinding we only ever read memory, but never write it.
             */
 
+        size_t bt_size_start = profile_bt_size_cur;
         forceDwarf = 0;
         unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
 
@@ -1065,6 +1012,11 @@ void jl_profile_thread_mach(int tid)
 #else
         profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL);
 #endif
+        if (profile_bt_size_cur == bt_size_start) {
+            // unwinding produced no frames: record a marker so the sample is not silently dropped
+            profile_bt_size_cur += failed_to_unwind_fun((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                    profile_bt_size_max - profile_bt_size_cur - 1, 0);
+        }
         jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
 
         // store threadid but add 1 as 0 is preserved to indicate end of block
@@ -1182,7 +1134,7 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 // This implementation comes from dotnet, but is similarly dependent on undocumented behavior of the OS.
 // Copyright (c) .NET Foundation and Contributors
 // MIT LICENSE
-JL_DLLEXPORT void jl_membarrier(void) {
+JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT {
     uintptr_t sp;
     uintptr_t registerValues[128];
     kern_return_t machret;

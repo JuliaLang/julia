@@ -80,6 +80,7 @@ $(eval $(call copy_csl,$(call versioned_libname,libgfortran,5)))
 $(eval $(call copy_csl,$(call versioned_libname,libquadmath,0)))
 $(eval $(call copy_csl,$(call versioned_libname,libstdc++,6)))
 $(eval $(call copy_csl,$(call versioned_libname,libatomic,1)))
+$(eval $(call copy_csl,libatomic.$(SHLIB_EXT)))
 $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
 # Configurable either a static or dynamic library depending on the system

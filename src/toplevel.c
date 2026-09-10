@@ -326,7 +326,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 }
                 check_safe_newbinding(gm, gs);
                 if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
-                    bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
+                    bpart->kind = new_kind | jl_carried_binding_flags(bpart);
                     jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
                     continue;
                 } else {
@@ -629,6 +629,11 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             // Not thread safe. For debugging and last resort error messages (jl_fprint_critical_error) only.
             jl_atomic_store_relaxed(&jl_filename, *toplevel_filename);
             jl_atomic_store_relaxed(&jl_lineno, *toplevel_lineno);
+            // Top-level thunks carry no line information.
+            if (jl_options.code_coverage != JL_LOG_NONE && *toplevel_lineno > 0 &&
+                    jl_coverage_enabled_for(m, *toplevel_filename))
+                jl_coverage_visit_line(*toplevel_filename, strlen(*toplevel_filename),
+                                       *toplevel_lineno);
             return jl_nothing;
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);

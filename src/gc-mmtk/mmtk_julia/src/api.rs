@@ -11,6 +11,7 @@ use libc::c_char;
 use log::*;
 use mmtk::memory_manager;
 use mmtk::scheduler::GCWorker;
+use mmtk::util::alloc::AllocationOptions;
 use mmtk::util::api_util::NullableObjectReference;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference, OpaquePointer};
@@ -130,7 +131,7 @@ pub extern "C" fn mmtk_gc_init(
         // The field unlog table is laid out after the log bit table, so it has its own
         // base. Codegen loads this to key the field-granularity write barrier.
         MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS =
-            crate::object_model::FIELD_UNLOGGING_SIDE_METADATA_SPEC
+            crate::object_model::FIELD_LOGGING_SIDE_METADATA_SPEC
                 .as_spec()
                 .extract_side_spec()
                 .get_starting_address();
@@ -257,6 +258,37 @@ pub extern "C" fn mmtk_alloc(
         size
     );
     memory_manager::alloc::<JuliaVM>(unsafe { &mut *mutator }, size, align, offset, semantics)
+}
+
+/// Like [`mmtk_alloc`], but allows the caller to change the default allocation behavior.
+///
+/// This is used for allocation sites that cannot block for a GC, such as Julia's permanent
+/// (immortal) allocation, which is annotated `JL_NOTSAFEPOINT`.
+#[no_mangle]
+pub extern "C" fn mmtk_alloc_with_options(
+    mutator: *mut Mutator<JuliaVM>,
+    size: usize,
+    align: usize,
+    offset: usize,
+    semantics: AllocationSemantics,
+    options: AllocationOptions,
+) -> Address {
+    debug_assert!(
+        mmtk::util::conversions::raw_is_aligned(
+            size,
+            <JuliaVM as mmtk::vm::VMBinding>::MIN_ALIGNMENT
+        ),
+        "Alloc size {} is not aligned to min alignment",
+        size
+    );
+    memory_manager::alloc_with_options::<JuliaVM>(
+        unsafe { &mut *mutator },
+        size,
+        align,
+        offset,
+        semantics,
+        options,
+    )
 }
 
 #[no_mangle]
@@ -595,6 +627,14 @@ pub extern "C" fn mmtk_object_reference_write_post(
 /// Slow path for an object-granularity barrier. The zero slot is deliberate: the plans
 /// that use this barrier (StickyImmix's remembered set, ConcurrentImmix's SATB
 /// snapshot) ignore the slot, and only the field-granularity path below needs one.
+#[no_mangle]
+pub extern "C" fn mmtk_gc_wb_finalizer_queue(
+    mutator: &'static mut Mutator<JuliaVM>,
+    queue: *const libc::c_void,
+) {
+    crate::julia_finalizer::wb_finalizer_queue(mutator, queue);
+}
+
 #[no_mangle]
 pub extern "C" fn mmtk_object_reference_write_slow(
     mutator: &'static mut Mutator<JuliaVM>,

@@ -877,7 +877,7 @@ static void jl_dump_asm_internal(
     const char *features = target.cpu_features;
 
     std::string err;
-    const Target *TheTarget = TargetRegistry::lookupTarget(TheTriple.str(), err);
+    const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, err);
 
     // Set up required helpers and streamer
     SourceMgr SrcMgr;
@@ -885,15 +885,21 @@ static void jl_dump_asm_internal(
     MCTargetOptions Options;
     Options.AsmVerbose = true;
     Options.MCUseDwarfDirectory = MCTargetOptions::EnableDwarfDirectory;
+#if JL_LLVM_VERSION >= 220000
+    const Triple &TripleArg = TheTriple;
+#else
+    // LLVM < 22 only has the (deprecated in 22) string-taking overloads of these
+    std::string TripleArg = TheTriple.str();
+#endif
     std::unique_ptr<MCAsmInfo> MAI(
-        TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str(), Options));
+        TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleArg), TripleArg, Options));
     assert(MAI && "Unable to create target asm info!");
 
-    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
+    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleArg));
     assert(MRI && "Unable to create target register info!");
 
     std::unique_ptr<llvm::MCSubtargetInfo> STI(
-      TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
+      TheTarget->createMCSubtargetInfo(TripleArg, cpu, features));
     assert(STI && "Unable to create subtarget info!");
 
     MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get(), &SrcMgr);

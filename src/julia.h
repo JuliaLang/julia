@@ -251,7 +251,7 @@ JL_EXTENSION typedef struct {
 JL_EXTENSION typedef struct {
     JL_DATA_TYPE
     jl_genericmemoryref_t ref;
-    size_t dimsize[]; // length for 1-D, otherwise length is mem->length
+    size_t dimsize[]; // dimension sizes; mem may hold more than prod(dimsize) elements
 } jl_array_t;
 
 
@@ -861,7 +861,7 @@ enum jl_partition_kind {
 };
 
 static const uint8_t PARTITION_MASK_KIND = 0x0f;
-static const uint8_t PARTITION_MASK_FLAG = 0xf0;
+static const uint16_t PARTITION_MASK_FLAG = 0x1f0;
 
 //// These are flags that get anded into the above
 //
@@ -878,6 +878,11 @@ static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 // _IMPLICITLY_EXPORTED: This binding partition is implicitly exported via @reexport. Unlike _EXPORTED,
 // this flag is set during implicit resolution and can be removed if the resolution changes.
 static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
+// _IMPLICITLY_DEPRECATED: The _DEPRECATED/_DEPWARN flags on this partition were set by
+// implicit resolution from the imported binding, rather than set explicitly on this binding.
+// Like _IMPLICITLY_EXPORTED, it is recomputed on re-resolution, and it does not survive
+// replacement of the partition by a definition or an explicit import.
+static const uint16_t PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100;
 
 #if defined(_COMPILER_MICROSOFT_)
 #define JL_ALIGNED_ATTR(alignment) \
@@ -1071,60 +1076,64 @@ typedef struct {
 
 // constants and type objects -------------------------------------------------
 
+/*
+ * Some very hot code is sensitive to the ordering of the smalltags
+ * here. Notably, the GC mark phase uses a range query
+ * (jl_gc_generic_tags_first/jl_gc_generic_tags_last) to quickly recognize
+ * smalltags that require no special handling.  The kinds (typeofbottom through
+ * datatype) are also important to keep contiguous.
+ */
 #define JL_SMALL_TYPEOF(XX) \
-    /* kinds */ \
     XX(typeofbottom) \
-    XX(datatype) \
-    XX(unionall) \
-    XX(uniontype) \
-    /* type parameter objects */ \
-    XX(vararg) \
-    XX(tvar) \
+    /* tags for objects with generic GC marking */ \
+      /* kinds (also includes typeofbottom) */ \
+        XX(unionall) \
+        XX(uniontype) \
+        XX(typeeq) \
+        XX(typeegal) \
+        XX(datatype) \
+      XX(tvar) \
+      XX(vararg) \
+      XX(gotoifnot) \
+      XX(returnnode) \
+      XX(enternode) \
+      XX(pinode) \
+      XX(phinode) \
+      XX(phicnode) \
+      XX(upsilonnode) \
+      XX(globalref) \
+      XX(quotenode) \
     XX(symbol) \
-    XX(module) \
     /* special GC objects */ \
-    XX(simplevector) \
-    XX(string) \
-    XX(task) \
+      XX(module) \
+      XX(simplevector) \
+      XX(string) \
+      XX(task) \
+      XX(cancel_source) \
+      XX(wait_entry) \
     /* bits types with special allocators */ \
-    XX(bool) \
-    XX(nothing) \
-    XX(char) \
-    /*XX(float16)*/ \
-    /*XX(float32)*/ \
-    /*XX(float64)*/ \
-    /*XX(bfloat16)*/ \
-    XX(int16) \
-    XX(int32) \
-    XX(int64) \
-    XX(int8) \
-    XX(uint16) \
-    XX(uint32) \
-    XX(uint64) \
-    XX(uint8) \
-    XX(addrspacecore) \
-    XX(intrinsic) \
-    /* AST objects */ \
+      XX(bool) \
+      XX(nothing) \
+      XX(char) \
+      /*XX(float16)*/ \
+      /*XX(float32)*/ \
+      /*XX(float64)*/ \
+      /*XX(bfloat16)*/ \
+      XX(int16) \
+      XX(int32) \
+      XX(int64) \
+      XX(int8) \
+      XX(uint16) \
+      XX(uint32) \
+      XX(uint64) \
+      XX(uint8) \
+      XX(addrspacecore) \
+      XX(intrinsic) \
     XX(argument) \
     /* XX(newvarnode) */ \
     XX(slotnumber) \
     XX(ssavalue) \
-    XX(gotoifnot) \
-    XX(returnnode) \
-    XX(enternode) \
-    XX(pinode) \
-    XX(phinode) \
-    XX(phicnode) \
-    XX(upsilonnode) \
-    XX(globalref) \
     XX(gotonode) \
-    XX(quotenode) \
-    XX(typeeq) \
-    XX(typeegal) \
-    XX(cancel_source) \
-    XX(wait_entry) \
-    /* Add new tags here to keep existing builds ABI stable - we don't guarantee ABI \
-       stability, but it'll help PkgEval to not break it unnecessarily */ \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,
@@ -1132,6 +1141,8 @@ enum jl_small_typeof_tags {
     JL_SMALL_TYPEOF(XX)
 #undef XX
     jl_tags_count,
+    jl_gc_generic_tags_first = jl_unionall_tag,
+    jl_gc_generic_tags_last = jl_quotenode_tag,
     jl_bitstags_first = jl_char_tag, // n.b. bool is not considered a bitstype, since it can be compared by pointer
     jl_max_tags = 64
 };
@@ -1356,7 +1367,19 @@ STATIC_INLINE jl_value_t *jl_svecset(
 #define jl_array_nrows(a) (((jl_array_t*)(a))->dimsize[0])
 #define jl_array_ndims(a) (*(size_t*)jl_tparam1(jl_typetagof(a)))
 #define jl_array_maxsize(a) (((jl_array_t*)(a))->ref.mem->length)
-#define jl_array_len(a)   (jl_array_ndims(a) == 1 ? jl_array_nrows(a) : jl_array_maxsize(a))
+STATIC_INLINE size_t jl_array_len(void *a) JL_NOTSAFEPOINT
+{
+    size_t ndims = jl_array_ndims(a);
+    if (ndims == 1)
+        return jl_array_nrows(a);
+    // an N-d array may be backed by a Memory with excess capacity (e.g. from
+    // `reshape` of a `sizehint!`ed vector), so the length must be computed
+    // from the dimensions rather than read from the Memory
+    size_t len = 1;
+    for (size_t i = 0; i < ndims; i++)
+        len *= jl_array_dim(a, i);
+    return len;
+}
 
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
@@ -1803,10 +1826,7 @@ STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 STATIC_INLINE int jl_is_kindtag(uintptr_t t) JL_NOTSAFEPOINT
 {
     t >>= 4;
-    return (t==(uintptr_t)jl_uniontype_tag || t==(uintptr_t)jl_datatype_tag ||
-            t==(uintptr_t)jl_unionall_tag || t==(uintptr_t)jl_typeeq_tag ||
-            t==(uintptr_t)jl_typeegal_tag ||
-            t==(uintptr_t)jl_typeofbottom_tag);
+    return t - jl_typeofbottom_tag <= jl_datatype_tag - jl_typeofbottom_tag;
 }
 
 STATIC_INLINE int jl_is_type(jl_value_t *v) JL_NOTSAFEPOINT
@@ -2353,10 +2373,12 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOT
     }
 
 // initialization functions
+
+// How jl_resolve_sysimg_location interprets a non-absolute jl_options.image_file
 typedef enum {
-    JL_IMAGE_CWD = 0,
-    JL_IMAGE_JULIA_HOME = 1,
-    JL_IMAGE_IN_MEMORY = 2
+    JL_IMAGE_CWD = 0,        // leave the path as-is (resolved against the current directory)
+    JL_IMAGE_JULIA_HOME = 1, // resolve the path relative to julia_bindir
+    JL_IMAGE_IN_MEMORY = 2   // the image is already loaded; the path is informational only
 } JL_IMAGE_SEARCH;
 
 typedef enum {
@@ -2558,6 +2580,9 @@ struct _jl_handler_t {
     struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
+    // Saved `bound_cancel_default` flag, restored with `bound_cancel_token`
+    // (the pair is only coherent together; see julia_threads.h).
+    uint8_t bound_cancel_default;
 };
 
 #define JL_TASK_STATE_RUNNABLE  0

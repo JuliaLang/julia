@@ -314,17 +314,30 @@ end
 # `s` must therefore pass `s + 0x01` (exclusive staging), so a re-cancel at
 # the acknowledged severity leaves it parked and only an escalation wakes
 # it; see e.g. _uv_write_cancelled_finish.
+#
+# `cancel_value` makes a cancellation of the governing token complete the
+# wait as an ordinary (value-mode) wake returning the `CancellationRequest`
+# instead of throwing it - callers that must keep working through a
+# cancellation (structured teardown) check the return value rather than
+# catching. Value-mode returns follow the normal wake contract (the
+# caller's lock is held), and the registration rides the walk's watcher
+# delivery, so no exception is constructed anywhere on the path.
 function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
-              min_severity::UInt8=0x00)
+              min_severity::UInt8=0x00, cancel_value::Bool=false)
     ct = current_task()
     assert_havelock(c)
     src = cancel_source(tok)
-    # Entry check: throw before enqueueing anything (skipped for teardown
-    # waits that re-park after acknowledging a severity). Like every throw
-    # out of this internal layer, the waiting frame's own lock level is
-    # released first - callers use the `locked && unlock` idiom; the
+    # Entry check (skipped for throwing teardown re-parks; a value-mode
+    # wait checks against its floor). For the throwing flavor, like every
+    # throw out of this internal layer, the waiting frame's own lock level
+    # is released first - callers use the `locked && unlock` idiom; the
     # public kwarg method restores the lock-held contract.
-    if src !== nothing && min_severity == 0x00 && iscancelled(src)
+    if src !== nothing && cancel_value
+        st = @atomic :acquire src.state
+        if st >= max(min_severity, 0x01)
+            return CancellationRequest(st)
+        end
+    elseif src !== nothing && min_severity == 0x00 && iscancelled(src)
         unlock(c.lock)
         checkcancel(src)
         error("cancelled source did not throw")
@@ -332,6 +345,12 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     if src === nothing
         ws = (c,)
         w = _cached_wait_entry(ct)
+    elseif cancel_value
+        # Watcher-mode registration: fresh single-use entry (the cache
+        # contract in base/park.jl - a cache slot may only carry ordinary
+        # cancellable-park registrations).
+        ws = (c, WatcherWait(src, max(min_severity, 0x01)))
+        w = WaitEntry2(ct)
     else
         ws = (c, SourceWait(src, min_severity))
         w = _cancel_wait_entry(ct, src, min_severity)
@@ -354,9 +373,14 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     end
     if !parked
         # the source refused at the registration recheck (the only
-        # fireable waitable here): withdraw under the still-held lock,
-        # release this frame's level, and deliver like the entry check
+        # fireable waitable here): withdraw under the still-held lock and
+        # deliver like the entry check (value mode returns lock-held)
         withdraw!(ws, w, WAKE_FIRED)
+        if cancel_value
+            st = @atomic :acquire src.state
+            st >= max(min_severity, 0x01) || error("park fired without a cancelled source")
+            return CancellationRequest(st)
+        end
         unlock(c.lock)
         checkcancel(src)
         error("park fired without a cancelled source")

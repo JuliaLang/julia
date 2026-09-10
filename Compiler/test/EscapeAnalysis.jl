@@ -682,6 +682,13 @@ end
             end
         end
         @test has_all_escape(result.state[Argument(2)])
+        result = @eval M begin
+            $code_escapes((String,)) do s
+                $(M.___xxx___.Rx)[] = s
+                nothing
+            end
+        end
+        @test has_all_escape(result.state[Argument(2)])
     end
 
     # field escape

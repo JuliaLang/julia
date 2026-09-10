@@ -1326,8 +1326,11 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     if isa(obj, SSAValue) || isa(obj, Argument)
         objinfo = estate[obj]
     else
-        # unanalyzable object (e.g. obj::GlobalRef): escape field value conservatively
-        add_escape_change!(astate, val, ⊤)
+        # unanalyzable object (e.g. obj::GlobalRef):
+        # escape field value conservatively. Force the change so it applies even to an
+        # identity-free value (e.g. a `String` stored into a global): the value genuinely
+        # escapes to global scope, matching the aliasing path taken when `obj` is an SSA value.
+        add_escape_change!(astate, val, ⊤, #=force=#true)
         @goto add_thrown_escapes
     end
     AliasInfo = objinfo.AliasInfo

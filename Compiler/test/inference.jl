@@ -7653,7 +7653,7 @@ function tt57873(a::Vector{String}, pref)
     end
     return ret
 end
-let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO)[1]
+let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO, false)[1]
     @test !isempty(code)
     ## If we were to run trim here, we should fail with:
     #    Verifier error #1: unresolved invoke from statement tt57873(::Vector{String}, ::Tuple{String, String})::Vector{String}
@@ -7824,6 +7824,15 @@ end == Type{<:Real}
 @test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},Real},)) do oc
     Compiler.return_type(oc, Tuple{String})
 end == Type{Union{}}
+
+# `return_type_tfunc` should bail out (rather than crash inference) when the queried
+# signature has no function type to model
+@test Base.infer_return_type() do
+    Compiler.return_type(Tuple{Vararg{Any}})
+end == Type
+@test Base.infer_return_type() do
+    Compiler.return_type(Tuple)
+end == Type
 
 @test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
 task_returner() = Task(() -> "hello")

@@ -34,6 +34,41 @@ end
 @MethodTable OVERLAY_MT
 Compiler.method_table(interp::MTOverlayInterp) = Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OVERLAY_MT)
 
+# `include_ambiguous` preserves ambiguous matches across method-table views and cache modes.
+ambiguous_lookup(x::Integer, y) = 1
+ambiguous_lookup(x, y::Integer) = 2
+ambiguous_overlay(x, y) = 0
+@overlay OVERLAY_MT ambiguous_overlay(x::Integer, y) = 1
+@overlay OVERLAY_MT ambiguous_overlay(x, y::Integer) = 2
+
+@testset "ambiguous method lookup" begin
+    world = Base.get_world_counter()
+    sig = Tuple{typeof(ambiguous_lookup),Integer,Integer}
+    internal = Compiler.InternalMethodTable(world)
+    filtered = Compiler.findall(sig, internal)
+    inclusive = Compiler.findall(sig, internal; include_ambiguous=true)
+    @test filtered !== nothing
+    @test Compiler.length(filtered) == 0
+    @test inclusive !== nothing
+    @test inclusive.ambig
+    @test Compiler.length(inclusive) == 2
+    @test Set(match.method for match in inclusive) == Set(methods(ambiguous_lookup))
+
+    cached = Compiler.CachedMethodTable(internal)
+    @test Compiler.length(Compiler.findall(sig, cached)) == 0
+    @test Compiler.length(Compiler.findall(sig, cached; include_ambiguous=true)) == 2
+    @test length(cached.cache) == 2
+
+    overlay_sig = Tuple{typeof(ambiguous_overlay),Integer,Integer}
+    overlay = Compiler.OverlayMethodTable(world, OVERLAY_MT)
+    overlay_matches = Compiler.findall(overlay_sig, overlay; include_ambiguous=true)
+    @test overlay_matches !== nothing
+    @test overlay_matches.ambig
+    @test Compiler.length(overlay_matches) == 2
+    base_method = only(methods(ambiguous_overlay))
+    @test all(match -> match.method !== base_method, overlay_matches)
+end
+
 function Compiler.add_remark!(interp::MTOverlayInterp, ::Compiler.InferenceState, remark)
     if interp.meta !== nothing
         # Core.println(remark)
@@ -613,6 +648,10 @@ let interp = SourceModeWinnerInterp()
         interp, mi, Compiler.SOURCE_MODE_ABI) === inadequate
     @test Compiler.ci_has_invoke(inadequate)
     @test iszero(@ccall jl_mi_cache_has_ci(mi::Any, ci::Any)::Cint)
+    # `inadequate` lives in the native `mi.cache` chain (an `InternalCodeCache`
+    # with a custom owner), which already roots it for the process lifetime, so
+    # the JIT handoff must not have leaked a redundant global root for it.
+    @test (@ccall jl_as_global_root(inadequate::Any, 0::Cint)::Ptr{Cvoid}) == C_NULL
 end
 
 # A source-inadequate winner with a different return ABI cannot suppress normal
@@ -655,6 +694,10 @@ let interp = SourceModeEphemeralInterp()
         interp, mi, Compiler.SOURCE_MODE_ABI) === winner
     @test Compiler.code_cache(interp)[mi] === winner
     @test Compiler.ci_has_invoke(winner)
+    # The JIT retains raw pointers to the emitted `winner` for the lifetime of
+    # the process, and this ephemeral cache dies with `interp`, so the JIT
+    # handoff must have promoted `winner` to a global root (`jit_cache_root!`).
+    @test (@ccall jl_as_global_root(winner::Any, 0::Cint)::Ptr{Cvoid}) != C_NULL
     empty!(source_mode_ephemeral_codegen)
 end
 

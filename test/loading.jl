@@ -1678,6 +1678,17 @@ end
 end
 
 @testset "relocatable upgrades #51989" begin
+    function loading_test_success(cmd)
+        mktemp() do _, output
+            ok = success(pipeline(cmd; stdout=output, stderr=output))
+            if !ok
+                seekstart(output)
+                write(stderr, read(output))
+            end
+            return ok
+        end
+    end
+
     mkdepottempdir() do depot
         # realpath is needed because Pkg is used for one of the precompile paths below, and Pkg calls realpath on the
         # project path so the cache file slug will be different if the tempdir is given as a symlink
@@ -1712,10 +1723,10 @@ end
             """)
 
         # In our depot, `precompile` this `Foo` package.
-        @test success(pipeline(addenv(
+        @test loading_test_success(addenv(
             `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'Base.Precompilation.precompilepkgs(["Foo51989"]); exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
-        ); stdout, stderr))
+        ))
 
         # Get the size of the generated `.ji` file so that we can ensure that it gets altered
         foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
@@ -1733,10 +1744,10 @@ end
         end
 
         # Try to load `Foo`; this should trigger recompilation, not an error!
-        @test success(pipeline(addenv(
+        @test loading_test_success(addenv(
             `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'using Foo51989; exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
-        ); stdout, stderr))
+        ))
 
         # Ensure that there is still only one `.ji` file (it got replaced
         # and the file size changed).
@@ -1771,6 +1782,8 @@ end
     mkdepottempdir() do depot
         cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
         cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        # Do not let an outer tracefile redirect .cov output.
+        cov_exename = Base.julia_cmd()[1]
         function rm_cov_files()
             for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
                 rm(cov_file)
@@ -1785,7 +1798,7 @@ end
         cd(cov_test_dir) do
             # In our depot, precompile CovTest.jl with coverage on
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
@@ -1794,7 +1807,7 @@ end
 
             # same again but call foo(), which is in the pkgimage, and should generate coverage
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test cov_exists()
@@ -1802,7 +1815,7 @@ end
 
             # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test cov_exists()

@@ -51,31 +51,47 @@ macro aliasscope(body)
 end
 
 
-function sync_end(c::Channel{Any})
+function sync_end(c::Channel{Any}, src::Union{Nothing, Base.CancellationTokenSource}=nothing)
     if !isready(c)
         # there must be at least one item to begin with
         close(c)
         return
     end
     nremaining::Int = 0
-    while true
-        event = take!(c)
-        if event === :__completion__
-            nremaining -= 1
-            if nremaining == 0
-                break
-            end
-        else
-            nremaining += 1
-            schedule(Task(()->begin
-                try
-                    wait(event)
-                    put!(c, :__completion__)
-                catch e
-                    close(c, e)
+    try
+        while true
+            event = take!(c)
+            if event === :__completion__
+                nremaining -= 1
+                if nremaining == 0
+                    break
                 end
-            end))
+            else
+                nremaining += 1
+                # The watcher must survive cancellation of the enclosing
+                # scope to deliver the completion (the `cancel` keyword is
+                # part of the waitable interface).
+                schedule(Task(()->begin
+                    try
+                        wait(event; cancel = nothing)
+                        put!(c, :__completion__; cancel = nothing)
+                    catch e
+                        close(c, e)
+                    end
+                end))
+            end
         end
+    catch e
+        # Per this macro's contract the exception (a child failure delivered
+        # via `close(c, e)`, or a cancellation of this block's scope) is
+        # rethrown immediately - we do not wait for the children to finish
+        # dying, but we cancel the block's own source so that all children
+        # observe the cancellation through the token tree.
+        if src !== nothing
+            e isa Base.CancellationRequest ? Base.cancel!(src, e) : Base.cancel!(src)
+        end
+        close(c, e isa Exception ? e : ErrorException("sync_end interrupted"))
+        rethrow()
     end
     close(c)
     nothing
@@ -87,8 +103,9 @@ end
 Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
 `Distributed.@spawnat` and `Distributed.@distributed`
 are complete, or at least one of them has errored. The first exception is immediately
-rethrown. It is the responsibility of the user to cancel any still-running operations
-during error handling.
+rethrown; the block's cancellation scope is cancelled at the same time, so
+still-running operations spawned within observe the failure through their
+cancellation points rather than running unsupervised (they are not awaited).
 
 !!! Note
     This is different to [`@sync`](@ref) in that errors from wrapped tasks are thrown immediately,
@@ -99,10 +116,18 @@ during error handling.
 """
 macro sync(block)
     var = esc(sync_varname)
+    # like Base.@sync, the block runs in a new dynamic scope carrying the
+    # token of a fresh cancellation source; on the fail-fast path (and on
+    # cancellation from outside) the source is cancelled, reaching all
+    # children through the token tree without awaiting them
+    scoped_block = Expr(:tryfinally, esc(block), nothing,
+        :(Base.Scope(Core.current_scope()::Union{Nothing, Base.Scope},
+                     Base.CANCEL_TOKEN => Base.CancellationToken(var"#sync_src#"))))
     quote
-        let $var = Channel(Inf)
-            v = $(esc(block))
-            sync_end($var)
+        let var"#sync_src#" = Base.CancellationTokenSource(Base.default_cancel_token()),
+            $var = Channel(Inf)
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
             v
         end
     end
@@ -338,11 +363,13 @@ include("opaque_closure.jl")
 
 """
     Base.Experimental.@overlay mt def
+    Base.Experimental.@overlay mt begin defs... end
 
 Define a method and add it to the method table `mt` instead of to the global method table.
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
-method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)). The block form
+overlays every definition in the block; definitions may carry docstrings and other macros.
 
 !!! note
     Please be aware that when defining overlay methods using `@overlay`, it is not necessary
@@ -367,8 +394,18 @@ method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
 """
 macro overlay(mt, def)
     inner = Base.unwrap_macrocalls(def)
-    is_function_def(inner) || error("@overlay requires a function definition")
-    overlay_def!(mt, inner)
+    if isexpr(inner, :block)
+        # `@overlay mt begin ... end`: overlay every definition in the block
+        for arg in inner.args
+            isa(arg, LineNumberNode) && continue
+            innerarg = Base.unwrap_macrocalls(arg)
+            is_function_def(innerarg) || error("@overlay requires a function definition")
+            overlay_def!(mt, innerarg)
+        end
+    else
+        is_function_def(inner) || error("@overlay requires a function definition")
+        overlay_def!(mt, inner)
+    end
     return esc(def)
 end
 

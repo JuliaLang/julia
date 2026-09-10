@@ -405,7 +405,11 @@ end
 # just wait for a task to be done, no error propagation
 _wait(t::Task; cancel::CancelTokenArg=DEFAULT_CANCEL) =
     _wait(t, resolve_cancel_token(cancel))
-function _wait(t::Task, tok::MaybeToken; min_severity::UInt8=0x00)
+# With `cancel_value`, a cancellation of the governing token (at or above
+# `min_severity`) is returned as the `CancellationRequest` instead of being
+# thrown; `nothing` means the task completed.
+function _wait(t::Task, tok::MaybeToken; min_severity::UInt8=0x00,
+               cancel_value::Bool=false)
     t === current_task() && throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
@@ -414,8 +418,12 @@ function _wait(t::Task, tok::MaybeToken; min_severity::UInt8=0x00)
         try
             while !istaskdone(t)
                 locked = false
-                wait(donenotify, tok; min_severity=min_severity)
+                r = wait(donenotify, tok; min_severity=min_severity,
+                         cancel_value=cancel_value)
                 locked = true
+                if cancel_value && r isa CancellationRequest
+                    return r
+                end
             end
         finally
             locked && unlock(donenotify)
@@ -765,12 +773,20 @@ function showerror(io::IO, ex::ScheduledAfterSyncException)
     print(io, " registered after the end of a `@sync` block")
 end
 
-function sync_end(c::Channel{Any})
+function sync_end(c::Channel{Any}, src::Union{Nothing, CancellationTokenSource}=nothing)
     local c_ex
+    tok = src === nothing ? nothing : CancellationToken(src)
     while isready(c)
         r = take!(c)
         if isa(r, Task)
-            _wait(r)
+            cancelled = _wait(r, tok; cancel_value=tok !== nothing)
+            if cancelled isa CancellationRequest
+                # Our own scope (or an ancestor) was cancelled. The children
+                # run under the same scope's token, so the tree walk already
+                # cancelled them all; await their teardown per severity.
+                return sync_cancel!(c, r, cancelled, tok,
+                                    @isdefined(c_ex) ? c_ex : CompositeException())
+            end
             if istaskfailed(r)
                 if !@isdefined(c_ex)
                     c_ex = CompositeException()
@@ -818,6 +834,57 @@ end
 
 const sync_varname = gensym(:sync)
 
+# Teardown of a `@sync` block whose own scope was cancelled: the scope's
+# token subtree (covering every child) is already cancelled; await the
+# children's unwind per the severity policy. Our own acknowledgement of the
+# request lets these teardown waits park; they are only re-woken by a
+# severity escalation (`min_severity`).
+@noinline function sync_cancel!(c::Channel{Any}, t::Task, cr::CancellationRequest,
+                                tok::CancellationToken, c_ex::CompositeException)
+    waitees = Any[t]
+    while isready(c)
+        push!(waitees, take!(c))
+    end
+    close(c)
+    sev = severity(cr)
+    for r in waitees
+        if isa(r, Task)
+            while sev < CANCEL_REQUEST_ABANDON_ALL.request
+                # Tasks are internal: their cancellation is awaited (for
+                # ABANDON_ALL they were frozen; there is nothing to wait
+                # for). A severity escalation completes the teardown wait
+                # (value-mode; only severities above the acknowledged one
+                # are admitted) - adopt the stronger request and keep
+                # awaiting internal tasks per its policy rather than
+                # unwinding out of the `@sync` while children are still
+                # running.
+                r2 = _wait(r, tok; min_severity=sev + 0x01, cancel_value=true)
+                r2 isa CancellationRequest || break
+                cr = r2
+                sev = severity(r2)
+            end
+            if istaskfailed(r)
+                push!(c_ex, TaskFailedException(r))
+            end
+        else
+            # Non-task waitees are external - the ABANDON_* severities cease
+            # waiting for external resources.
+            sev == CANCEL_REQUEST_SAFE.request || continue
+            try
+                wait(r)
+            catch e
+                push!(c_ex, e)
+            end
+        end
+    end
+    # Reporting the composite outcome constitutes delivery of the request;
+    # include the request itself if no child failure already records it.
+    if isempty(c_ex)
+        throw(cr)
+    end
+    throw(c_ex)
+end
+
 """
     @sync
 
@@ -841,10 +908,21 @@ Thread-id 1, task 2
 """
 macro sync(block)
     var = esc(sync_varname)
+    # The block runs in a new dynamic scope carrying the token of a fresh
+    # cancellation source linked under the enclosing scope's token, so that
+    # cancellation of the enclosing scope reaches every (transitively
+    # spawned) child through the token tree. This expands the equivalent of
+    # `@with CANCEL_TOKEN => token ...` manually: the ScopedValues macro API
+    # is not loaded yet when Base code containing `@sync` is compiled during
+    # bootstrap.
+    scoped_block = Expr(:tryfinally, esc(block), nothing,
+        :(Scope(Core.current_scope()::Union{Nothing, Scope},
+                CANCEL_TOKEN => CancellationToken(var"#sync_src#"))))
     quote
-        let $var = Channel(Inf)
-            v = $(esc(block))
-            sync_end($var)
+        let var"#sync_src#" = CancellationTokenSource(default_cancel_token()),
+            $var = Channel(Inf)
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
             v
         end
     end
@@ -1451,8 +1529,13 @@ function wait_forever()
             end
         catch e
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
-                # A Ctrl-C/SIGINT was delivered to this internal scheduler task while
+                # An InterruptException landed on this internal scheduler task while
                 # the thread was idle (it parked here after running a completed task).
+                # N.B.: SIGINT no longer force-throws InterruptException on any
+                # platform (it cancels the ^C episode source instead), so this
+                # branch is reachable only via an explicit user/library throw
+                # (`throwto`, `schedule(..., error=...)`) into a scheduler
+                # task; kept as defense in depth.
                 # Forward it to a task that can observe it: the REPL backend if it is
                 # evaluating user code; nothing at an idle REPL prompt (drop it); the
                 # root task otherwise, e.g. a non-interactive script blocked in wait
@@ -1558,9 +1641,9 @@ function wait()
         # No tasks to run. If the current task is done, switch to the scheduler task
         # to run the thread sleep logic, so that this task's stack can be freed
         # promptly (#57544). Otherwise run the thread sleep logic in the context of
-        # the current task, so that an asynchronous InterruptException (Ctrl-C) is
-        # delivered to a task that can observe it, rather than swallowed by the
-        # internal scheduler task (#58689).
+        # the current task, so that an asynchronously thrown InterruptException
+        # is delivered to a task that can observe it, rather than swallowed by
+        # the internal scheduler task (#58689).
         sched_task = get_sched_task()
         if ct !== sched_task && istaskdone(ct)
             istaskdone(sched_task) && (sched_task = @task wait())

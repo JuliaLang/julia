@@ -53,7 +53,7 @@ Julia stores age information for its generational GC in the object header: the l
 
 Generational collection is implemented through sticky bits: objects are only pushed to the mark-stack, and therefore traced, if their mark-bits have not been set. When objects reach the oldest generation, their mark-bits aren't reset during a quick sweep, so these objects aren't traced during a subsequent mark phase. A full sweep, however, resets the mark-bits of all objects, so all of them are traced in a subsequent collection.
 
-When the mutator is running, a write barrier intercepts field writes and pushes an object’s address into a per-thread remembered set if the reference crosses generations. Objects in this remembered set are then traced during the next mark phase.
+When the mutator is running, a write barrier intercepts field writes and pushes an object’s address into a per-thread remembered set if the reference crosses generations. Objects in this remembered set are then traced during the next mark phase. The barrier is issued *before* the store, so that a collector needing the displaced reference can still read it; see [Updating fields of GC-managed objects](@ref).
 
 ## Sweeping
 

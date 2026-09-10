@@ -1137,9 +1137,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->last_started_running_at, 0);
     jl_atomic_store_relaxed(&t->running_time_ns, 0);
     jl_atomic_store_relaxed(&t->finished_at, 0);
-    jl_timing_task_init(t);
     jl_atomic_store_relaxed(&t->preempt_request, 0);
     jl_atomic_store_relaxed(&t->bound_cancel_token, jl_nothing);
+    t->bound_cancel_default = 0;
     jl_atomic_store_relaxed(&t->reset_ctx, NULL);
     jl_atomic_store_relaxed(&t->cancel_handler_ctx, NULL);
 
@@ -1153,6 +1153,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
 #ifdef _COMPILER_ASAN_ENABLED_
     t->ctx.asan_fake_stack = NULL;
 #endif
+    // Last, since it can allocate (and thus run GC): `t` must be fully
+    // initialized before this call.
+    jl_timing_task_init(t);
     return t;
 }
 
@@ -1616,6 +1619,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     }
     jl_atomic_store_relaxed(&ct->preempt_request, 0);
     jl_atomic_store_relaxed(&ct->bound_cancel_token, jl_nothing);
+    ct->bound_cancel_default = 0;
     jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
     jl_atomic_store_relaxed(&ct->cancel_handler_ctx, NULL);
     ptls->abandon_to = NULL;
@@ -2060,6 +2064,9 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
 JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots)
 {
     jl_task_t *ct = jl_current_task;
+    // the `task` field is declared `Union{Nothing, Task}` (see `jl_init_types`), which
+    // this store bypasses.
+    assert(task == jl_nothing || jl_is_task(task));
     // `nslots` must fit the uint32_t field *and* keep the allocation-size
     // arithmetic below from wrapping (on 32-bit, SIZE_MAX overflows long
     // before UINT32_MAX slots do).

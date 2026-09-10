@@ -488,7 +488,61 @@ end
 #
 #   (pop_exception tok) - pop exception stack back to state of associated enter
 #
-# See the devdocs for further discussion.
+# When an `enter` is encountered, the runtime pushes a new handler onto the
+# `Task`'s exception handler stack which will jump to `catch_label` when an
+# exception occurs.
+#
+# There are two ways that the exception-related task state can be restored
+#
+# 1. By encountering a `leave` which will restore the handler state with `tok`.
+# 2. By throwing an exception. In this case the runtime will pop one handler
+#    automatically and jump to the catch label with the new exception pushed
+#    onto the exception stack. On this path the exception stack state must be
+#    restored back to the associated `enter` by encountering `pop_exception`.
+#
+# Note that the handler and exception stack represent two distinct types of
+# exception-related state restoration which need to happen. Note also that the
+# "handler state restoration" actually includes several pieces of runtime state
+# including GC flags - see `jl_eh_restore_state` in the runtime for that.
+# #### Lowering finally code paths
+#
+# When lowering `finally` blocks we want to emit the user's finally code once
+# but multiple code paths may traverse the finally block. For example, consider
+# the code
+#
+# ```julia
+# function foo(x)
+#     while true
+#         try
+#             if x == 1
+#                 return f(x)
+#             elseif x == 2
+#                 g(x)
+#                 continue
+#             else
+#                 break
+#             end
+#         finally
+#             h()
+#         end
+#     end
+# end
+# ```
+#
+# In this situation there's four distinct code paths through the finally block:
+# 1. `return f(x)` needs to call `val = f(x)`, leave the `try` block, run `h()` then
+#    return `val`.
+# 2. `continue` needs to call `h()` then jump to the start of the while loop
+# 3. `break` needs to call `h()` then jump to the exit of the while loop
+# 4. If an exception occurs in `f(x)` or `g(x)`, we need to call `h()` before
+#    falling back into the while loop.
+#
+# To deal with these we create a `finally_tag` variable to dynamically track
+# which action to take after the finally block exits. Before jumping to the
+# block we set this variable to a unique integer tag identifying the incoming
+# code path. At the exit of the user's code (`h()` in this case) we perform the
+# jump appropriate to the `break`, `continue` or `return` as necessary based on
+# the tag.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
          [K"trycatchelse" t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)

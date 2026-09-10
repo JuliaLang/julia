@@ -246,6 +246,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         end
     else
         macro_loc = _macrocall_expr_location(st)
+        macro_lnn = macro_loc isa MacroSource ? macro_loc.lno : macro_loc
         macro_args = Any[macro_loc, base_layer(ctx.syntax_context).mod]
         for arg in raw_args
             @jl_assert kind(arg) !== K"VERSION" arg # handled in EST conversion
@@ -262,9 +263,10 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
                 # rather than any old-style macro methods which might exist
                 exc = MethodError(macfunc, (mctx, raw_args...,), ctx.world)
             end
-            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", :all, exc))
+            rethrow(LoadError(
+                string(macro_lnn.file), macro_lnn.line,
+                MacroExpansionError(mctx, st, "Error expanding macro", :all, exc)))
         end
-        macro_lnn = macro_loc isa MacroSource ? macro_loc.lno : macro_loc
         st_out = expr_to_est(st_out, macro_lnn)
     end
     # Module scope for the returned AST is the module where this particular

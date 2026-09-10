@@ -304,6 +304,10 @@ elseif head === :call && length(x.args) >= 1 && isexpr(x.args[1], :(::))
         # for documenting (x::y)(args...), extract the name from y
         # otherwise, for documenting `x::y`, it will be extracted from x
         astname((x.args[1]::Expr).args[end], ismacro)
+    elseif head === :overlay
+        # for documenting `Base.Experimental.@overlay mt f(args...)`, the callee is
+        # `Expr(:overlay, mt, f)`: extract the name from f
+        astname(x.args[end], ismacro)
     else
         n = if isexpr(x, :module)
             isa(x.args[1], Bool) ? 2 : 3

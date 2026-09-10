@@ -46,18 +46,19 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
         uintptr_t val = (i & 1) ? r->end : r->start;
         assert(val % 4 == 0 && "Range boundary not 4-byte aligned!");
         // Encode each boundary so that the strictly-less-than predecessor search
-        // in _eyt_obj_idx answers half-open [start, end) containment queries
-        // correctly, including for abutting ranges. All boundaries are 4-byte
-        // aligned (asserted above), so the low two bits are free; we offset a
-        // start boundary by +2 and an end boundary by +1:
+        // in _eyt_obj_idx answers (start, end] containment queries (see
+        // _eyt_addr_query for the convention), including for abutting ranges.
+        // All boundaries are 4-byte aligned (asserted above), so the low two
+        // bits are free; we offset a start boundary by +2 and an end boundary
+        // by +1:
         //   start(s) -> s + 2   (s % 4 == 0, so this is even; low bit 0)
         //   end(e)   -> e + 1   (odd; low bit 1)
         // This gives three useful properties:
         // 1. A start and an end never encode to the same value, so all boundaries
         //    are distinct (required to build the Eytzinger tree).
-        // 2. When a range ends exactly where the next one starts (abutting), the
-        //    start boundary (e + 2) sorts *after* the coincident end boundary
-        //    (e + 1), so a lookup at that address lands in the later range.
+        // 2. When a range ends exactly where the next one starts (abutting),
+        //    the shared address resolves to the *earlier* range — where a
+        //    trailing zero-size singleton's value pointer lands.
         // 3. The low bit distinguishes starts (even, in-range) from ends (odd,
         //    out-of-range), which eyt_tree_is_in_range tests directly.
         // We assume there are no 0-size ranges, which is safe since nothing could

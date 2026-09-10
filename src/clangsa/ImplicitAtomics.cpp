@@ -5,7 +5,9 @@
 #include "clang-tidy/ClangTidy.h"
 #include "clang-tidy/ClangTidyCheck.h"
 #include "clang-tidy/ClangTidyModule.h"
+#if LLVM_VERSION_MAJOR < 22
 #include "clang-tidy/ClangTidyModuleRegistry.h"
+#endif
 
 using namespace clang;
 using namespace clang::tidy;

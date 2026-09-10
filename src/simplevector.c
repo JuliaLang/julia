@@ -80,8 +80,11 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
 {
     jl_task_t *ct = jl_current_task;
     if (n == 0) return jl_emptysvec;
-    jl_svec_t *jv = (jl_svec_t*)jl_gc_alloc(ct->ptls, (n + 1) * sizeof(void*),
-                                            jl_simplevector_type);
+    size_t allocsz;
+    if (__builtin_add_overflow(n, (size_t)1, &allocsz) ||
+        __builtin_mul_overflow(allocsz, sizeof(void *), &allocsz))
+        jl_throw(jl_memory_exception);
+    jl_svec_t *jv = (jl_svec_t*)jl_gc_alloc(ct->ptls, allocsz, jl_simplevector_type);
     jl_set_typetagof(jv, jl_simplevector_tag, 0);
     jl_svec_set_len_unsafe(jv, n);
     return jv;

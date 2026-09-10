@@ -888,6 +888,7 @@ export
     ntuple,
     splat,
     tap,
+    unsplat,
 
 # I/O and events
     close,
@@ -1115,6 +1116,7 @@ export
     @gensym,
     @eval,
     @deprecate,
+    @deprecate_binding,
 
     # performance annotations
     @boundscheck,

@@ -686,6 +686,7 @@ function repeat(c::AbstractChar, r::Integer)
     r == 0 && return ""
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
+    r > typemax(UInt) ÷ UInt(n) && throw(OutOfMemoryError())
     s = _string_n(n*r)
     p = pointer(s)
     GC.@preserve s if n == 1

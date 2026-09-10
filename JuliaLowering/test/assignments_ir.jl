@@ -263,7 +263,7 @@ end
 4   TestMod.y
 5   (call top.broadcasted %₃ %₂ %₄)
 6   (call top.materialize! %₂ %₅)
-7   (return %₆)
+7   (return %₂)
 
 ########################################
 # Broadcasted updating assignment with general left hand side permitted
@@ -275,7 +275,7 @@ f() .+= y
 4   TestMod.y
 5   (call top.broadcasted %₃ %₂ %₄)
 6   (call top.materialize! %₂ %₅)
-7   (return %₆)
+7   (return %₂)
 
 ########################################
 # Updating assignment with basic ref as left hand side

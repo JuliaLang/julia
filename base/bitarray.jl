@@ -26,13 +26,12 @@ mutable struct BitArray{N} <: AbstractArray{Bool, N}
     len::Int
     dims::NTuple{N,Int}
     function BitArray{N}(::UndefInitializer, dims::Vararg{Int,N}) where N
-        n = 1
         i = 1
         for d in dims
             d >= 0 || throw(ArgumentError("dimension size must be ≥ 0, got $d for dimension $i"))
-            n *= d
             i += 1
         end
+        n = Core.checked_dims(dims...)
         nc = num_bit_chunks(n)
         chunks = Vector{UInt64}(undef, nc)
         nc > 0 && (chunks[end] = UInt64(0))
@@ -116,7 +115,7 @@ const _msk64 = ~UInt64(0)
 @inline _blsr(x)= x & (x-1) #zeros the last set bit. Has native instruction on many archs. needed in multidimensional.jl
 @inline _msk_end(l::Int) = _msk64 >>> _mod64(-l)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
-num_bit_chunks(n::Int) = _div64(n+63)
+num_bit_chunks(n::Int) = _div64(n) + !iszero(_mod64(n))
 
 @inline get_chunks_id(i::Int) = _div64(i-1)+1, _mod64(i-1)
 
@@ -457,8 +456,8 @@ function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, so
     n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
-    soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
-    doffs+n-1 > length(dest) && throw(BoundsError(dest, length(dest)+1))
+    n > length(src) - soffs + 1 && throw(BoundsError(src, length(src)+1))
+    n > length(dest) - doffs + 1 && throw(BoundsError(dest, length(dest)+1))
     return unsafe_copyto!(dest, doffs, src, soffs, n)
 end
 
@@ -473,11 +472,12 @@ function reshape(B::BitArray{N}, dims::NTuple{N,Int}) where N
 end
 reshape(B::BitArray, dims::Tuple{Vararg{Int}}) = _bitreshape(B, dims)
 function _bitreshape(B::BitArray, dims::NTuple{N,Int}) where N
-    prod(dims) == length(B) ||
+    len = Core.checked_dims(dims...)
+    len == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $(length(B))"))
     Br = BitArray{N}(undef, ntuple(i->0,Val(N))...)
     Br.chunks = B.chunks
-    Br.len = prod(dims)
+    Br.len = len
     N != 1 && (Br.dims = dims)
     return Br
 end
@@ -756,14 +756,15 @@ function append!(B::BitVector, items::BitVector)
     n0 = length(B)
     n1 = length(items)
     n1 == 0 && return B
+    n = checked_add(n0, n1)
     Bc = B.chunks
     k0 = length(Bc)
-    k1 = num_bit_chunks(n0 + n1)
+    k1 = num_bit_chunks(n)
     if k1 > k0
         _growend!(Bc, k1 - k0)
         Bc[end] = UInt64(0)
     end
-    B.len += n1
+    B.len = n
     copy_chunks!(Bc, n0+1, items.chunks, 1, n1)
     return B
 end
@@ -775,14 +776,15 @@ function prepend!(B::BitVector, items::BitVector)
     n0 = length(B)
     n1 = length(items)
     n1 == 0 && return B
+    n = checked_add(n0, n1)
     Bc = B.chunks
     k0 = length(Bc)
-    k1 = num_bit_chunks(n0 + n1)
+    k1 = num_bit_chunks(n)
     if k1 > k0
         _growend!(Bc, k1 - k0)
         Bc[end] = UInt64(0)
     end
-    B.len += n1
+    B.len = n
     copy_chunks!(Bc, 1 + n1, Bc, 1, n0)
     copy_chunks!(Bc, 1, items.chunks, 1, n1)
     return B

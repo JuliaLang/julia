@@ -307,6 +307,103 @@ end
                                           CANCEL_TOKEN => CancellationToken(qchild))
 end
 
+@testset "scoped-default token cache" begin
+    # The per-task cache (Task.bound_cancel_default over bound_cancel_token)
+    # must be invisible: default_cancel_token() always resolves to what the
+    # CANCEL_TOKEN scoped lookup would return under the current scope.
+    src = CancellationTokenSource()
+    tok = CancellationToken(src)
+
+    # the ambient default outside our scopes (the test harness may itself
+    # run under a governing token, e.g. the ^C episode source)
+    ambient = Base.default_cancel_token()
+
+    # warm lookups agree with the scope, and the cache invariant holds
+    with(CANCEL_TOKEN => tok) do
+        t1 = Base.default_cancel_token()
+        t2 = Base.default_cancel_token()
+        @test t1 === tok && t2 === tok
+        ct = current_task()
+        @test getfield(ct, :bound_cancel_default) === 0x01
+        @test (@atomic :monotonic ct.bound_cancel_token) === src
+    end
+    # after the scope exits, the ambient default is back
+    @test Base.default_cancel_token() === ambient
+
+    # a cancellation point that publishes a *different* explicit source must
+    # not leave the cache claiming it as the scoped default
+    other = CancellationTokenSource()
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok      # warm the cache
+        Base.@cancel_check CancellationToken(other)    # rebind to `other`
+        @test Base.default_cancel_token() === tok      # still the scoped one
+        Base.@cancel_check nothing                     # explicit clear
+        @test Base.default_cancel_token() === tok
+    end
+
+    # the same-source cancellation point keeps a warm cache intact
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        Base.@cancel_check
+        @test getfield(current_task(), :bound_cancel_default) === 0x01
+        @test Base.default_cancel_token() === tok
+    end
+
+    # scope changes that do not touch CANCEL_TOKEN still resolve correctly
+    sv = ScopedValue(0)
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        with(sv => 1) do
+            @test Base.default_cancel_token() === tok
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # nesting and shielding, with warm caches at every level
+    inner = CancellationTokenSource()
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        with(CANCEL_TOKEN => CancellationToken(inner)) do
+            @test Base.default_cancel_token() === CancellationToken(inner)
+        end
+        @test Base.default_cancel_token() === tok
+        with(CANCEL_TOKEN => nothing) do
+            @test Base.default_cancel_token() === nothing
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # an exceptional unwind out of an inner scope restores the outer default
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        try
+            with(CANCEL_TOKEN => CancellationToken(inner)) do
+                @test Base.default_cancel_token() === CancellationToken(inner)
+                error("unwind")
+            end
+        catch err
+            @test err == ErrorException("unwind")
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # a task spawned under the scope resolves its inherited default
+    with(CANCEL_TOKEN => tok) do
+        t = Threads.@spawn Base.default_cancel_token()
+        @test fetch(t) === tok
+    end
+
+    # a warm cache still observes cancellation promptly (the cache holds the
+    # source; its state is what the check reads)
+    psrc = CancellationTokenSource()
+    with(CANCEL_TOKEN => CancellationToken(psrc)) do
+        @test Base.default_cancel_token() === CancellationToken(psrc)
+        Base.@cancel_check
+        cancel!(psrc)
+        @test_throws CancellationRequest Base.@cancel_check
+    end
+end
+
 @testset "cooperative cancellation of running tasks" begin
     # a @cancel_check polling loop is stopped cross-thread by cancel!
     started = Threads.Atomic{Bool}(false)
@@ -1112,13 +1209,14 @@ end
     @lock cond notify(cond) # still functional (no waiters)
 
     # Task blocked in wait(::Base.Process); the process itself keeps running
-    p = run(sleep_cmd(1000); wait=false)
+    p = open(`$(Base.julia_cmd()) --startup-file=no -e "read(stdin)"`, "w")
     t, src = cancellable(() -> wait(p))
     spin()
     cancel!(src)
     expect_cancelled(t)
     @test process_running(p)
-    kill(p); wait(p)
+    close(p); wait(p)
+    @test success(p)
 
     # Task blocked in waitany; the awaited tasks live in different scopes and
     # remain unaffected by the waiter's cancellation
@@ -1838,8 +1936,7 @@ end
     # it through the annotated MPZ entry points - either their own
     # cancellation point, an asynchronous reset landing inside audited
     # libgmp compute (the reset region stays published across the annotated
-    # call), or the deferring allocation hooks chaining into the reset on
-    # exit.
+    # call), or the allocation hooks republishing the region on exit.
     function bigmul_loop(nbits)
         b = big(3)^(nbits ÷ 2)
         m = big(10)^(nbits ÷ 8)
@@ -1859,10 +1956,10 @@ end
         @test string(big(2)^128) == "340282366920938463463374607431768211456"
 
         # Allocation-churn storm: small, allocation-dominated BigInt work
-        # hammered by cancellation. Deliveries frequently land inside the
-        # deferring jl_gmp_counted_* hooks (the handler region), exercising
-        # the defer-and-chain path; correctness is "no crash, no corruption,
-        # clean arithmetic afterwards".
+        # hammered by cancellation. Deliveries frequently race the
+        # jl_gmp_counted_* hooks, exercising their unpublish/republish path;
+        # correctness is "no crash, no corruption, clean arithmetic
+        # afterwards".
         deadline = time() + 8
         rounds = 0
         while time() < deadline
@@ -2020,4 +2117,566 @@ end
         gemm!(c2, a, b)
         @test c2 ≈ [sum(a[i, l] * b[l, j] for l in 1:16) for i in 1:16, j in 1:16]
     end
+end
+
+## Structured cancellation of @sync / Threads.@threads scopes
+
+
+@testset "structured cancellation of @sync" begin
+    t, src = cancellable() do
+        @sync begin
+            @async sleep(1000)
+            @async sleep(1000)
+        end
+    end
+    spin()
+    cancel!(src)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CompositeException
+    @test length(t.result.exceptions) == 2
+end
+
+@testset "escalation during @sync teardown keeps awaiting internal tasks" begin
+    # A SAFE cancellation parks the @sync teardown on a child that has no
+    # cancellation points; an ABANDON_EXTERNAL escalation must re-arm that
+    # wait - internal tasks are still awaited at ABANDON_EXTERNAL - rather
+    # than unwind the @sync while the child is still running.
+    stop = Ref(false)
+    started = Base.Event()
+    t, src = cancellable() do
+        @sync begin
+            @async begin
+                notify(started)
+                while !stop[]
+                    yield() # no cancellation points: ignores SAFE/ABANDON_EXTERNAL
+                end
+            end
+        end
+    end
+    wait(started)
+    cancel!(src)
+    spin(20)
+    @test !istaskdone(t)
+    cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    spin(20)
+    @test !istaskdone(t)
+    stop[] = true
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test istaskfailed(t)
+    req = t.result
+    @test req isa CancellationRequest
+    @test req.request == CANCEL_REQUEST_ABANDON_EXTERNAL.request
+end
+
+@testset "unfriendly cancellation of Experimental.@sync" begin
+    # ABANDON_EXTERNAL propagates through the token tree to the children.
+    t1 = Ref{Task}(); t2 = Ref{Task}()
+    t, src = cancellable() do
+        Base.Experimental.@sync begin
+            t1[] = @async sleep(1000)
+            t2[] = @async sleep(1000)
+        end
+    end
+    spin()
+    cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test_throws TaskFailedException wait(t)
+    @test timedwait(() -> istaskdone(t1[]) && istaskdone(t2[]), 10.0) == :ok
+    @test istaskfailed(t1[]) && istaskfailed(t2[])
+end
+
+@testset "structured cancellation of Experimental.@sync" begin
+    t1 = Ref{Task}(); t2 = Ref{Task}()
+    t, src = cancellable() do
+        Base.Experimental.@sync begin
+            t1[] = @async sleep(1000)
+            t2[] = @async sleep(1000)
+        end
+    end
+    spin()
+    cancel!(src)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CancellationRequest
+    # cancellation propagated to the children
+    @test timedwait(() -> istaskdone(t1[]) && istaskdone(t2[]), 10.0) == :ok
+    @test istaskfailed(t1[]) && istaskfailed(t2[])
+end
+
+## ^C handling
+
+# A deep compute kernel for the ^C subprocess scenarios.
+const collatz_code = quote
+    collatz(n) = (n & 1) == 1 ? (3n + 1) : (n ÷ 2)
+    function find_collatz_counterexample()
+        i = 1
+        while true
+            j = i
+            while true
+                Base.@cancel_check
+                j = collatz(j)
+                j == 1 && break
+                j == i && error("$j is a collatz counterexample")
+            end
+            i += 1
+        end
+    end
+end
+eval(collatz_code)
+
+@testset "unfriendly cancellation modes" begin
+    # The delivered request carries its severity.
+    seen = Ref{Any}(nothing)
+    t, src = cancellable() do
+        try
+            sleep(1000)
+        catch e
+            seen[] = e
+            rethrow()
+        end
+    end
+    spin()
+    cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test seen[] === CANCEL_REQUEST_ABANDON_EXTERNAL
+
+    # SAFE deliveries carry SAFE severity.
+    seen2 = Ref{Any}(nothing)
+    t2, src2 = cancellable() do
+        try
+            sleep(1000)
+        catch e
+            seen2[] = e
+            rethrow()
+        end
+    end
+    spin()
+    cancel!(src2)
+    @test timedwait(() -> istaskdone(t2), 10.0) == :ok
+    @test seen2[] === CANCEL_REQUEST_SAFE
+
+
+    # ABANDON_EXTERNAL interrupts a blocked stream write without waiting for
+    # the write's cancellation to complete.
+    p = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    try
+        big = zeros(UInt8, 200_000_000)
+        tw, srcw = cancellable(() -> write(p, big))
+        spin()
+        cancel!(srcw, CANCEL_REQUEST_ABANDON_EXTERNAL)
+        @test timedwait(() -> istaskdone(tw), 10.0) == :ok
+        @test istaskfailed(tw)
+        @test tw.result === CANCEL_REQUEST_ABANDON_EXTERNAL
+    finally
+        close(p)
+    end
+end
+
+@testset "^C episode severity classification" begin
+    src = CancellationTokenSource()
+    @test Base.sigint_active_severity(src) === nothing
+    @test cancel!(src)
+    @test Base.sigint_active_severity(src) === CANCEL_REQUEST_SAFE
+    @test cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test Base.sigint_active_severity(src) === CANCEL_REQUEST_ABANDON_EXTERNAL
+    @test cancel!(src, CANCEL_REQUEST_ABANDON_ALL)
+    @test Base.sigint_active_severity(src) === CANCEL_REQUEST_ABANDON_ALL
+    # severities never de-escalate
+    @test !cancel!(src, CANCEL_REQUEST_SAFE)
+    @test Base.sigint_active_severity(src) === CANCEL_REQUEST_ABANDON_ALL
+end
+
+
+Sys.isunix() && @testset "^C" begin
+    # Children run the bare executable with default flags, NOT julia_cmd():
+    # inherited suite flags (e.g. --check-bounds=yes) invalidate the
+    # sysimage's native code, and these scenarios assert interactive ^C
+    # semantics, not the flag matrix.
+    exe = joinpath(Sys.BINDIR, Base.julia_exename())
+    function run_with_sigint(code::String, delays;
+                             open_stdin::Bool=false, threads::Int=0)
+        # A readiness marker printed from user code proves the runtime is up
+        # (signal handling armed, the script started) before any SIGINT is
+        # sent - on a loaded machine startup alone can outlast the first delay
+        # and an early SIGINT kills the child with no output at all.
+        code = "println(\"CHILD-READY\")\n" * code
+        out = Pipe()
+        cmd = threads > 0 ?
+            `$exe --startup-file=no --threads=$threads -e $code` :
+            `$exe --startup-file=no -e $code`
+        inpipe = open_stdin ? Pipe() : devnull
+        p = run(pipeline(cmd, stdin=inpipe, stdout=out, stderr=out), wait=false)
+        close(out.in)
+        open_stdin && close(inpipe.out)
+        readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
+        reader = @async read(out, String)
+        killer = @async begin
+            for d in delays
+                sleep(d)
+                process_running(p) && kill(p, Base.SIGINT)
+            end
+        end
+        wait(p)
+        open_stdin && close(inpipe.in)
+        wait(killer)
+        return fetch(reader), p
+    end
+
+    # Catching ^C in a script: continuing requires re-arming a fresh ^C
+    # epoch (the script's cancelled scope stays cancelled otherwise)
+    output, p = run_with_sigint("""
+        try
+            sleep(100)
+            println("FAIL: not cancelled")
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                println("caught: ", typeof(e))
+                println("continued")
+                sleep(0.1) # cancellable operations work again
+            end
+        end
+    """, [1.0])
+    @test occursin("caught: Base.CancellationRequest", output)
+    @test occursin("continued", output)
+    @test p.exitcode == 0
+
+    # Uncaught ^C produces a proper error report
+    output, p = run_with_sigint("sleep(100)", [1.0])
+    @test occursin("CancellationRequest: Safe Cancellation (CANCEL_REQUEST_SAFE)", output)
+    @test p.exitcode == 1
+
+    # ^C propagates through @sync, cancelling compute-bound and sleeping tasks
+    output, p = run_with_sigint("""
+        $(string(collatz_code))
+        try
+            @sync begin
+                @async sleep(10000)
+                @async find_collatz_counterexample()
+            end
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                println(typeof(e))
+            end
+        end
+        """, [1.5])
+    @test occursin("CompositeException", output)
+    @test p.exitcode == 0
+
+    # ^C with a stray @async task pending is catchable and the script exits
+    # cleanly - historically a "fatal: error thrown and no exception handler
+    # available" (issues #29369, #45055)
+    output, p = run_with_sigint("""
+        @async println("Hello!")
+        try
+            println("Hit ctrl-c!")
+            sleep(10)
+        catch err
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                showerror(stdout, err); println()
+                println("done")
+            end
+        end
+    """, [1.0])
+    @test occursin("Hello!", output)
+    @test occursin("CancellationRequest", output)
+    @test occursin("done", output)
+    @test !occursin("fatal", output)
+    @test p.exitcode == 0
+
+    # ^C during a blocked read from stdin reports and exits - historically a
+    # fatal unhandled InterruptException on the second press (issue #43451)
+    output, p = run_with_sigint("read(stdin)", [1.0]; open_stdin=true)
+    @test occursin("CancellationRequest", output)
+    @test !occursin("fatal", output)
+    @test p.exitcode == 1
+
+    # A rapid second press while the first cancellation is still unwinding
+    # or reporting must not crash the process (issue #50045). The second
+    # press may cancel the error-report epoch itself, in which case the
+    # fallback note appears instead of the report.
+    output, p = run_with_sigint("sleep(100)", [1.0, 0.1])
+    @test occursin("CancellationRequest", output) ||
+        occursin("displaying the error report failed", output)
+    @test !occursin("fatal", output)
+    @test p.exitcode == 1
+
+    # ^C stops a swarm of print-flooding tasks and the script continues
+    # (issue #47839)
+    output, p = run_with_sigint("""
+        ts = [@async (while true; println("hi"); end) for _ in 1:20]
+        try
+            sleep(100)
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                for t in ts
+                    try; wait(t); catch; end
+                end
+                println("ALL-STOPPED")
+            end
+        end
+    """, [1.5])
+    @test occursin("ALL-STOPPED", output)
+    @test !occursin("fatal", output)
+    @test p.exitcode == 0
+
+    # ^C on a Threads.@threads loop raises a catchable CompositeException
+    # instead of killing the process (issue #56462)
+    output, p = run_with_sigint("""
+        try
+            Threads.@threads for i in 1:8
+                sleep(100)
+            end
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                println("caught: ", typeof(e))
+                println("session-alive")
+            end
+        end
+    """, [1.5]; threads=4)
+    @test occursin("caught: CompositeException", output)
+    @test occursin("session-alive", output)
+    @test !occursin("fatal", output)
+    @test !occursin("attempt to switch to exited task", output)
+    @test p.exitcode == 0
+
+    # A watcher task on the ^C episode token is the supported shape for a
+    # user-defined interrupt handler (superseding the design of #49541): the
+    # ^C completes - rather than unwinds - its wait, and its reaction runs
+    # under its own shielded scope
+    output, p = run_with_sigint("""
+        tok = Base.CANCEL_TOKEN[]
+        w = Threads.@spawn Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+            req = wait(tok)
+            println("HANDLER-RAN ", typeof(req))
+        end
+        try
+            sleep(100)
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                wait(w)
+                println("DONE")
+            end
+        end
+    """, [1.0])
+    @test occursin("HANDLER-RAN Base.CancellationRequest", output)
+    @test occursin("DONE", output)
+    @test p.exitcode == 0
+end
+
+
+# Real console-^C coverage on Windows: CTRL_C_EVENT can only target process
+# group 0 ("every process on this console"), so the scenario gets a console
+# of its own - a detached host (no console) allocates a fresh one, spawns
+# the victim into it, ignores ^C itself (only AFTER the spawn: the ignore
+# flag is inherited), and generates the real event. Pipes are handle-based
+# and work independently of consoles.
+Sys.iswindows() && @testset "^C via the Windows console" begin
+    host_script = raw"""
+        victim_code = ARGS[1]  # already carries the CHILD-READY marker
+        delays = parse.(Float64, split(ARGS[2], ","))
+        # Detach from any inherited (possibly hidden - libuv spawns piped
+        # children with CREATE_NO_WINDOW) console before allocating the
+        # scenario's own.
+        ccall(:FreeConsole, stdcall, Int32, ())
+        @assert ccall(:AllocConsole, stdcall, Int32, ()) != 0
+        # detach()'s CREATE_NEW_PROCESS_GROUP set this process's inherited
+        # Ctrl-C-ignore flag; clear it BEFORE spawning the victim (the flag
+        # is inherited).
+        @assert ccall(:SetConsoleCtrlHandler, stdcall, Int32, (Ptr{Cvoid}, Int32), C_NULL, 0) != 0
+        out = Pipe()
+        exe = joinpath(Sys.BINDIR, Base.julia_exename())
+        cmd = `$exe --startup-file=no -e $victim_code`
+        p = run(pipeline(cmd, stdin=devnull, stdout=out, stderr=out), wait=false)
+        close(out.in)
+        reader = @async read(out, String)
+        readuntil(out, "CHILD-READY\n")
+        # Ignore ^C in the host - only now, so the victim did not inherit
+        # the ignore flag.
+        @assert ccall(:SetConsoleCtrlHandler, stdcall, Int32, (Ptr{Cvoid}, Int32), C_NULL, 1) != 0
+        for d in delays
+            sleep(d)
+            if Base.process_running(p)
+                # CTRL_C_EVENT (0) to group 0: everyone on our fresh console
+                @assert ccall(:GenerateConsoleCtrlEvent, stdcall, Int32, (UInt32, UInt32), 0x00000000, 0x00000000) != 0
+            end
+        end
+        wait(p)
+        print(stdout, fetch(reader))
+        # last line: the victim's exit code, for the outer test to parse
+        print(stdout, "\nVICTIM-EXIT=", p.exitcode)
+        """
+    function run_with_console_ctrl_c(code::String, delays)
+        # the readiness marker proves the victim's runtime is up before the
+        # first event is generated (see the unix testset)
+        code = "println(\"CHILD-READY\")\n" * code
+        # bare executable for the host (and, transitively, the victim):
+        # suite flags would put both in recompile-everything mode
+        exe = joinpath(Sys.BINDIR, Base.julia_exename())
+        cmd = `$exe --startup-file=no -e $host_script $code $(join(delays, ","))`
+        out = Pipe()
+        p = run(pipeline(detach(cmd), stdin=devnull, stdout=out, stderr=out), wait=false)
+        close(out.in)
+        output = read(out, String)
+        wait(p)
+        m = match(r"VICTIM-EXIT=(-?\d+)\s*$", output)
+        @test m !== nothing
+        return output, m === nothing ? -1 : parse(Int, m.captures[1])
+    end
+
+    # a real console ^C is delivered as a cancellation and is catchable;
+    # re-arming a fresh episode lets the script continue
+    output, exitcode = run_with_console_ctrl_c("""
+        try
+            sleep(100)
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                println("caught: ", typeof(e))
+                println("continued")
+            end
+        end
+    """, [1.0])
+    @test occursin("caught: Base.CancellationRequest", output)
+    @test occursin("continued", output)
+    @test exitcode == 0
+
+    # an uncaught console ^C produces the standard error report and exit code
+    output, exitcode = run_with_console_ctrl_c("sleep(100)", [1.0])
+    @test occursin("CancellationRequest", output)
+    @test !occursin("fatal", output)
+    @test exitcode == 1
+end
+
+Sys.isunix() && @testset "^C in the REPL (pty)" begin
+    isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+    pts, ptm = Main.FakePTYs.open_fake_pty()
+
+    # Interactive julia on the pty; drive it like a user pressing ^C.
+    env = copy(ENV)
+    env["TERM"] = "dumb"
+    env["JULIA_HISTORY"] = tempname()
+    # bare executable: see the "^C" testset's note on inherited suite flags
+    exe = joinpath(Sys.BINDIR, Base.julia_exename())
+    p = run(detach(setenv(`$exe -i -q --startup-file=no --color=no`, env)),
+            pts, pts, pts; wait=false)
+    ccall(:close, Cint, (Cint,), pts) # only the child owns the pts now
+
+    transcript_lock = ReentrantLock()
+    transcript = UInt8[]
+    reader = @async try
+        while true
+            chunk = readavailable(ptm)
+            isempty(chunk) && break
+            @lock transcript_lock append!(transcript, chunk)
+        end
+    catch # pty closes when the child exits
+    end
+    cursor = Ref(1)
+    snapshot() = @lock transcript_lock String(copy(transcript))
+    # generous default: the first error display JIT-compiles the whole
+    # stacktrace-printing path, which can take a long time on slow hosts
+    function expect(needle::String; timeout::Real=120.0)
+        status = timedwait(timeout; pollint=0.05) do
+            idx = findnext(needle, snapshot(), cursor[])
+            idx === nothing && return false
+            cursor[] = last(idx) + 1
+            return true
+        end
+        if status !== :ok
+            if process_running(p)
+                # collect diagnostics into the CI log: SIGQUIT makes the
+                # session dump all task backtraces onto the pty and exit
+                kill(p, 3) # SIGQUIT
+                timedwait(() -> istaskdone(reader), 20.0) # pty EOF: dump drained
+            end
+            @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+        end
+        @test status == :ok
+    end
+    sendline(s) = write(ptm, s * "\n")
+
+    expect("julia> ")
+
+    # a SIGINT at an idle prompt (^C or an external `kill -INT`) must
+    # not disturb the session (issue #42072)
+    kill(p, Base.SIGINT)
+    sleep(0.5)
+    sendline("20 + 21")
+    expect("41")
+    expect("julia> ")
+
+    # ^C interrupts a sleeping REPL evaluation and reports it
+    sendline("println(\"EVAL-1\"); sleep(1000)")
+    expect("EVAL-1") # the evaluation is running (robust under load)
+    sleep(0.5)       # ... and parked in sleep(1000)
+    kill(p, Base.SIGINT)
+    expect("CancellationRequest")
+    expect("julia> ")
+
+    # the REPL evaluates normally afterwards
+    sendline("6 * 7")
+    expect("42")
+    expect("julia> ")
+
+    # a background task from an earlier evaluation belongs to an earlier
+    # ^C epoch: interrupting the current evaluation leaves it running
+    # (issue #25790)
+    sendline("global bgc = Ref(0); global bg = @async while true; sleep(0.01); bgc[] += 1; end; println(\"BG-UP\")")
+    expect("BG-UP")
+    expect("julia> ")
+    sendline("println(\"EVAL-4\"); sleep(1000)")
+    expect("EVAL-4")
+    sleep(0.5)
+    kill(p, Base.SIGINT)
+    expect("CancellationRequest")
+    expect("julia> ")
+    sendline("print(\"bg-done=\", istaskdone(bg)); c0 = bgc[]; sleep(0.3); println(\"; bg-alive=\", bgc[] > c0)")
+    expect("bg-done=false; bg-alive=true")
+    expect("julia> ")
+
+    # ^C during an in-evaluation terminal read recovers the prompt
+    # (the class of issue #58105's "Install package?" prompt)
+    sendline("println(\"EVAL-5\"); readline()")
+    expect("EVAL-5")
+    sleep(0.5)
+    kill(p, Base.SIGINT)
+    expect("CancellationRequest")
+    expect("julia> ")
+
+    # ^C while parked in a server accept recovers, leaving the server
+    # usable (the class of issue #58689)
+    sendline("using Sockets; global srv = listen(Sockets.localhost, 0); println(\"LISTENING\"); accept(srv)")
+    expect("LISTENING")
+    sleep(0.5)
+    kill(p, Base.SIGINT)
+    expect("CancellationRequest")
+    expect("julia> ")
+    sendline("println(\"srv-open=\", isopen(srv)); close(srv)")
+    expect("srv-open=true")
+    expect("julia> ")
+
+    # cancelling a BigInt computation never yanks control out of libgmp in
+    # an unsafe spot the way the old asynchronous InterruptException
+    # delivery could (corrupting the heap - issue #56545): the loop is
+    # deliberately checkless, so delivery lands on an MPZ entry point's own
+    # cancellation point, inside audited libgmp compute (unwound via the
+    # published reset region), or when an allocation hook republishes the
+    # region on exit - and BigInt arithmetic in the session works correctly
+    # afterwards
+    sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
+    expect("EVAL-6")
+    sleep(0.5)
+    kill(p, Base.SIGINT)
+    expect("CancellationRequest")
+    expect("julia> ")
+    sendline("println(string(factorial(big(30))))")
+    expect("265252859812191058636308480000000")
+    expect("julia> ")
+
+    sendline("exit()")
+    # Never let success(p) hang the suite on a wedged session.
+    if timedwait(() -> process_exited(p), 60.0) !== :ok
+        kill(p, Base.SIGKILL)
+    end
+    @test success(p)
+    close(ptm)
+    wait(reader)
 end

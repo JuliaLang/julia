@@ -223,8 +223,8 @@ function empty!(h::Dict{K,V}) where V where K
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     for i in 1:sz
-        _unsetindex!(h.keys, i)
-        _unsetindex!(h.vals, i)
+        unsetindex!(h.keys, i)
+        unsetindex!(h.vals, i)
     end
     h.ndel = 0
     h.count = 0
@@ -627,8 +627,8 @@ function _delete!(h::Dict{K,V}, index) where {K,V}
     @inbounds begin
     slots = h.slots
     sz = length(slots)
-    _unsetindex!(h.keys, index)
-    _unsetindex!(h.vals, index)
+    unsetindex!(h.keys, index)
+    unsetindex!(h.vals, index)
     # if the next slot is empty we don't need a tombstone
     # and can remove all tombstones that were required by the element we just deleted
     ndel = 1
@@ -905,7 +905,11 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
         dict::PersistentDict{K, V}, key, val) where {K, V} = @inline _keyvalueset(dict, key, val)
     @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
         dict::PersistentDict{K, V}, key::K, val::V) where {K, V} = @inline _keyvalueset(dict, key, val)
-    global function _keyvalueset(dict::PersistentDict{K, V}, key, val) where {K, V}
+    # `@nospecialize(val)`: scoped-value scope construction stores `Any`-typed
+    # values; a val-specializing MethodInstance turns every such insert into a
+    # runtime dispatch — unresolvable under static compilation (`juliac
+    # --trim`). The key stays specialized: `HashState(key)` needs its concrete type.
+    global function _keyvalueset(dict::PersistentDict{K, V}, key, @nospecialize(val)) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
         found, present, trie, i, bi, top, hs = HAMT.path(trie, h, #=persistent=#true)

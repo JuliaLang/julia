@@ -376,6 +376,14 @@ end
     @test_skip Returns(illtype) == Returns{DataType}(illtype)
 end
 
+@testset "unsplat" begin
+    @test unsplat(sum)(1, 2, 3) == 6
+    @test unsplat(splat(+))(1, 2, 3) == 6
+
+    @test unsplat(splat(+)) === +
+    @test splat(unsplat(sum)) === sum
+end
+
 @testset "tap" begin
     buf = IOBuffer()
     @test (123 |> tap(Base.Fix1(print, buf))) == 123

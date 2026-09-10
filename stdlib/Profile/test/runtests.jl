@@ -3,6 +3,18 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+function with_output_on_failure(f)
+    mktemp() do _, child_stderr
+        try
+            return f(child_stderr)
+        catch
+            seekstart(child_stderr)
+            write(stderr, read(child_stderr))
+            rethrow()
+        end
+    end
+end
+
 @test isempty(Test.detect_closure_boxes(Profile))
 
 @test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
@@ -17,13 +29,30 @@ let iobuf = IOBuffer()
     end
 end
 
+# Burn CPU time in Julia code rather than in `time_ns`. Most of a tight `time_ns` loop is
+# spent inside the kernel's vDSO `clock_gettime`, and on some kernels (e.g. Ubuntu's arm64
+# builds) libunwind cannot unwind out of that function. Samples taken there then carry no
+# Julia frames at all, and if every sample lands there the printing tests below see an
+# empty profile. The iteration count is hidden from inference so the call cannot be
+# constant-folded, and the result is kept alive with `donotdelete` so the loop cannot
+# be optimized away.
+@noinline function spin(n)
+    s = zero(UInt)
+    for i in 1:n
+        s = s ⊻ (UInt(i) + (s << 1))
+    end
+    return s
+end
+
 @noinline function busywait(t, n_tries)
     iter = 0
     init_data = Profile.len_data()
     while iter < n_tries && Profile.len_data() == init_data
         iter += 1
         tend = time_ns() + 1e9 * t
-        while time_ns() < tend end
+        while time_ns() < tend
+            Base.donotdelete(spin(Base.compilerbarrier(:const, 100_000)))
+        end
     end
 end
 
@@ -496,7 +525,10 @@ end
                     fname = cd(tmpdir) do
                         chmod(tmpdir, 0o555)
                         try
-                            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+                            cmd = `$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`
+                            with_output_on_failure() do child_stderr
+                                read(pipeline(cmd; stderr=child_stderr), String)
+                            end
                         finally
                             chmod(tmpdir, 0o777)
                         end

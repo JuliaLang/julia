@@ -330,8 +330,17 @@ mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims::D=:, init=_InitialValue())
 mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kw...) =
     reduce(op, map(f, A, B...); kw...)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
-    mapfoldl_impl(f, op, nt, A)
+function _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon)
+    # equivalent to `mapfoldl_impl(f, op, nt, A)` this logic is expanded here
+    # to work around limitations in inference's recursion heuristic
+    y = iterate(A)
+    y === nothing && return nt
+    v = op(nt, f(y[1]))
+    for x in Iterators.rest(A, y[2])
+        v = op(v, f(x))
+    end
+    return v
+end
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)
@@ -341,6 +350,12 @@ _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+
+_mapreduce_dim(f, op, nt, R::ReshapedArray, ::Colon) =
+    _mapreduce_dim(f, op, nt, parent(R), :)
+
+_mapreduce_dim(f, op, i::_InitialValue, R::ReshapedArray, ::Colon) =
+    _mapreduce_dim(f, op, i, parent(R), :)
 
 """
     reduce(f, A::AbstractArray; dims=:, [init])
@@ -984,6 +999,8 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
         # Underlying implementations using dispatch
         ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
         ($_fname)(f, a, ::Colon; kw...) = mapreduce($mapf, $op, a; kw...)
+
+        ($_fname)(R::ReshapedArray, ::Colon) = ($fname)(parent(R))
     end
 end
 

@@ -8,6 +8,18 @@ const JULIA_CPU_TARGET = get(ENV, "JULIA_CPU_TARGET", Base.unsafe_string(Base.JL
 const debug = get(ENV, "JULIA_BUILD_MODE", "release") == "debug" ? "-debug" : ""
 const JL_sysimage = joinpath(dirname(unsafe_string(Base.JLOptions().image_file)), "sys-JL$(debug).$(Libdl.dlext)")
 
+function run_quietly(cmd)
+    mktemp() do _, output
+        ok = success(pipeline(cmd; stdout=output, stderr=output))
+        if !ok
+            seekstart(output)
+            write(stderr, read(output))
+            error("command failed: $cmd")
+        end
+    end
+    return nothing
+end
+
 function compile_JL_sysimage(output_filepath)
     sysimage = unsafe_string(Base.JLOptions().image_file)
     output_sysimage = abspath(output_filepath)
@@ -25,11 +37,10 @@ function compile_JL_sysimage(output_filepath)
         "JULIA_DEPOT_PATH" => ":",
         "JULIA_NUM_THREADS" => "1",
     )
-    println("Compiling incremental sysimage with JuliaLowering...")
-    success(run(cmd))
+    run_quietly(cmd)
 
     cmd = Base.Linking.link_image_cmd(output_object, output_sysimage)
-    success(run(cmd))
+    run_quietly(cmd)
 
     return nothing
 end
@@ -37,7 +48,7 @@ end
 # ensure JL-inclusive sysimage is built / available
 if "BUILDROOT" in keys(ENV)
     # Running via Makefile, use sysimage.mk with its built-in caching / file tracking
-    run(`$(ENV["MAKE"]) -C $(ENV["BUILDROOT"]) -f sysimage.mk sysimg-JL-$(ENV["JULIA_BUILD_MODE"])`)
+    run_quietly(`$(ENV["MAKE"]) -C $(ENV["BUILDROOT"]) -f sysimage.mk sysimg-JL-$(ENV["JULIA_BUILD_MODE"])`)
 else
     # Standalone test run (CI), compile every time
     compile_JL_sysimage(JL_sysimage)
@@ -62,7 +73,7 @@ mktempdir() do tmp_depot
         `$(JULIA_EXECUTABLE) --startup-file=no --project=$env_dir -e $setupproject_command`,
         ; inherit = true
     )
-    success(run(cmd))
+    run_quietly(cmd)
 
     # now actually perform the precompilation
     cmd = addenv(
@@ -74,5 +85,5 @@ mktempdir() do tmp_depot
         "JULIA_DEPOT_PATH" => tmp_depot,
         ; inherit = true
     )
-    success(run(cmd))
+    run_quietly(cmd)
 end
