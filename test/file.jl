@@ -2227,7 +2227,7 @@ end
 
 @test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
 
-@testset "rm of open and briefly locked files" begin
+@testset "open and briefly locked files" begin
     # An open file can be removed.
     dir = mktempdir()
     p = joinpath(dir, "open_file")
@@ -2239,6 +2239,21 @@ end
     seekstart(io)
     @test read(io, String) == "hello" # the open stream keeps the data
     close(io)
+
+    # An open file can be renamed, and the stream stays usable under the new
+    # name (#29658).
+    src = joinpath(dir, "rename_src")
+    dst = joinpath(dir, "rename_dst")
+    io = open(src, "w")
+    write(io, "hello")
+    flush(io)
+    @test mv(src, dst) == dst
+    @test !ispath(src)
+    seekstart(io)
+    @test read(io, String) == "hello"
+    write(io, " again")
+    close(io)
+    @test read(dst, String) == "hello again"
 
     @static if Sys.iswindows()
         # A brief lock by another handle is waited for.
