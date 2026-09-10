@@ -97,6 +97,7 @@ function highlight_native(s, arch)
 end
 highlight_x86(s) = highlight_native(s, :x86)
 highlight_arm(s) = highlight_native(s, :arm)
+highlight_riscv(s) = highlight_native(s, :riscv)
 
 function esc_code(s)
     io = IOBuffer()
@@ -500,3 +501,73 @@ end
         highlight_arm("\tb.first\tL123") == "\t$(I)b.first$(XI)\t$(L)L123$(XL)"
     end
 end
+
+@testset "RISC-V ASM" begin
+    @testset "comment" begin
+        @test highlight_riscv("\t# comment ; // ") == "\t$(C)# comment ; // $(XC)\n"
+    end
+    @testset "label" begin
+        @test highlight_riscv("L45:") == "$(L)L45:$(XL)\n"
+        @test highlight_riscv(".LBB0_3:") == "$(L).LBB0_3:$(XL)\n"
+    end
+    @testset "directive" begin
+        @test highlight_riscv("\t.text") == "\t$(D).text$(XD)\n"
+    end
+
+    @testset "0-operand" begin
+        @test highlight_riscv("\tret") == "\t$(I)ret$(XI)\n"
+        @test highlight_riscv("\tecall") == "\t$(I)ecall$(XI)\n"
+    end
+    @testset "1-operand" begin
+        @test highlight_riscv("\tj\tL40") == "\t$(I)j$(XI)\t$(L)L40$(XL)\n"
+
+        @test highlight_riscv("\tjalr\ta2") == "\t$(I)jalr$(XI)\t$(V)a2$(XV)\n"
+
+        @test highlight_riscv("\tcall\tjulia_h_0") == "\t$(I)call$(XI)\t$(L)julia_h_0$(XL)\n"
+    end
+    @testset "2-operand" begin
+        @test highlight_riscv("\tbeqz\ta1, .LBB0_6") ==
+            "\t$(I)beqz$(XI)\t$(V)a1$(XV)$COM $(L).LBB0_6$(XL)\n"
+
+        @test highlight_riscv("\tld\ta0, 16(a0)") ==
+            "\t$(I)ld$(XI)\t$(V)a0$(XV)$COM $(N)16$(XN)$P$(V)a0$(XV)$XP\n"
+
+        @test highlight_riscv("\tsd\tra, 8(sp)\t\t# 8-byte Folded Spill") ==
+            "\t$(I)sd$(XI)\t$(V)ra$(XV)$COM $(N)8$(XN)$P$(V)sp$(XV)$XP" *
+            "\t\t$(C)# 8-byte Folded Spill$(XC)\n"
+
+        @test highlight_riscv("\tfmv.d.x\tfa5, zero") ==
+            "\t$(I)fmv.d.x$(XI)\t$(V)fa5$(XV)$COM $(V)zero$(XV)\n"
+
+        @test highlight_riscv("\tfence\trw, w") ==
+            "\t$(I)fence$(XI)\t$(K)rw$(XK)$COM $(K)w$(XK)\n"
+
+        @test highlight_riscv("\tauipc\ta1, %pcrel_hi(.LCPI0_0)") ==
+            "\t$(I)auipc$(XI)\t$(V)a1$(XV)$COM $(K)%pcrel_hi$(XK)$P$(L).LCPI0_0$(XL)$XP\n"
+
+        @test highlight_riscv("\tld\ta1, %pcrel_lo(.Lpcrel_hi1)(a1)") ==
+            "\t$(I)ld$(XI)\t$(V)a1$(XV)$COM $(K)%pcrel_lo$(XK)$P$(L).Lpcrel_hi1$(XL)$XP" *
+            "$P$(V)a1$(XV)$XP\n"
+    end
+    @testset "3-operand" begin
+        @test highlight_riscv("\taddi\tsp, sp, -16") ==
+            "\t$(I)addi$(XI)\t$(V)sp$(XV)$COM $(V)sp$(XV)$COM $(N)-16$(XN)\n"
+
+        @test highlight_riscv("\tfadd.d\tfa5, fa3, fa5") ==
+            "\t$(I)fadd.d$(XI)\t$(V)fa5$(XV)$COM $(V)fa3$(XV)$COM $(V)fa5$(XV)\n"
+
+        @test highlight_riscv("\tfcvt.w.d\ta0, fa0, rtz") ==
+            "\t$(I)fcvt.w.d$(XI)\t$(V)a0$(XV)$COM $(V)fa0$(XV)$COM $(K)rtz$(XK)\n"
+
+        @test highlight_riscv("\tamoswap.d.aqrl\ta0, a1, (a0)") ==
+            "\t$(I)amoswap.d.aqrl$(XI)\t$(V)a0$(XV)$COM $(V)a1$(XV)$COM $P$(V)a0$(XV)$XP\n"
+
+        @test highlight_riscv("\tbne\ta0, a1, L70") ==
+            "\t$(I)bne$(XI)\t$(V)a0$(XV)$COM $(V)a1$(XV)$COM $(L)L70$(XL)\n"
+    end
+end
+
+@test highlight_riscv("\tbset\ta0, a1, a2") ==
+    "\t$(I)bset$(XI)\t$(V)a0$(XV)$COM $(V)a1$(XV)$COM $(V)a2$(XV)\n"
+@test highlight_riscv("\tc.bnez\ta0, target") ==
+    "\t$(I)c.bnez$(XI)\t$(V)a0$(XV)$COM $(L)target$(XL)\n"
