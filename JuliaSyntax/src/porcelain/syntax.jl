@@ -177,8 +177,8 @@ function SyntaxContext(mod::Module, version::VersionNumber)
 end
 
 # TODO: switch from bool-based `expr_compat_mode` to `version`
-const JL_NEW_SYNTAX_VERSION = v"1.14"
-const JL_OLD_SYNTAX_VERSION = v"1.13"
+const JL_NEW_SYNTAX_VERSION = v"1.15"
+const JL_OLD_SYNTAX_VERSION = v"1.14"
 
 is_base_layer(sc::SyntaxContext) = sc.layer.escaped === nothing
 
@@ -205,7 +205,12 @@ function syntax_module(st::SyntaxTree)
     syntax_module(st.context::SyntaxContext)
 end
 
-is_flisp_compat(sc::SyntaxContext) = sc.version < JL_NEW_SYNTAX_VERSION
+syntax_lowering_version(st::SyntaxTree) = st.context isa SyntaxContext ?
+    st.context.version : VERSION
+syntax_lowering_version(@nospecialize(st)) = JL_OLD_SYNTAX_VERSION
+
+is_flisp_compat(sc::SyntaxContext) =
+    Base.thisminor(sc.version) < Base.thisminor(JL_NEW_SYNTAX_VERSION)
 is_flisp_compat(st::SyntaxTree) = is_flisp_compat(st.context)
 
 # Unconditional; tramples existing scope, and includes quoted forms.  Only

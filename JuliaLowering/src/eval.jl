@@ -146,13 +146,20 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
+    elseif k === K"thunk" && numchildren(ex) == 1
+        return Core.svec(:thunk, Expr(:thunk, ex[1].value))
+    elseif (k === K"error" || k === K"incomplete") && numchildren(ex) == 1
+        err = ex[1].value
+        throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
+        # TODO: code coverage should visit
+        # `source_location(LineNumberNode, ex)::LineNumberNode`
          ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
-        thunk = to_lowered_expr(ex5)
-        return Core.svec(:thunk, thunk)
+        out = to_lowered_expr(ex5)
+        return Core.svec((out isa Core.CodeInfo ? :value : :thunk), out)
     end
 end
 
@@ -766,23 +773,24 @@ function _foreignsymbol_expr(ex)
     end
 end
 
-#-------------------------------------------------------------------------------
-# Our version of eval - should be upstreamed though?
 @fzone "JL: eval" function eval(mod::Module, @nospecialize(ex);
                                 soft_scope::Union{Nothing,Bool}=nothing,
-                                expr_compat_mode::Bool=false)
-    # Run the `eval` driver in the lowering world. Any internal operations
-    # are required to `invokelatest` before executing any code that dispatches
-    # on user code / types.
-    ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
-    return invoke_in_lowering_world(_lower_and_eval, mod, ex, ver, soft_scope)
+                                expr_compat_mode::Union{Nothing,Bool}=nothing)
+    if expr_compat_mode isa Bool
+        st = ex isa SyntaxTree ? ex : expr_to_est(ex)
+        ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
+        if !(st.context isa SyntaxContext)
+            ex = fill_context(st, SyntaxContext(mod, ver))
+        end
+    end
+    return invoke_in_lowering_world(_lower_and_eval, mod, ex, soft_scope)
 end
 
 # `ex` may be a `SyntaxTree` or an `Expr` (or `Expr` tree leaves of any type).
-function _lower_and_eval(mod::Module, @nospecialize(ex), ver::VersionNumber,
+function _lower_and_eval(mod::Module, @nospecialize(ex),
                          soft_scope::Union{Nothing,Bool})
     st = ex isa SyntaxTree ? ex : expr_to_est(ex)
-    iter = lower_init(st, ver)
+    iter = lower_init(st, syntax_lowering_version(ex))
     return _eval(mod, iter; soft_scope)
 end
 
@@ -803,9 +811,15 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
         elseif type == :end_module
             @ccall jl_end_new_module(modules[end]::Module)::Cvoid
             result = pop!(modules)
-        else
-            @assert type == :thunk
-            result = Base.invokelatest(Core.eval, modules[end], thunk[2])
+        elseif type == :thunk
+            code = thunk[2]
+            if !(Meta.isexpr(code, :thunk, 1) && code.args[1] isa Core.CodeInfo)
+                throw(ErrorException("syntax: expected (thunk x::CodeInfo)"))
+            end
+            result = @ccall jl_eval_thunk(
+                modules[end]::Any, code.args[1]::Any, #=fast=#1::Cint)::Any
+        elseif type == :value
+            result = thunk[2]
         end
     end
     @assert length(modules) === 1
