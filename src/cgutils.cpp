@@ -1385,7 +1385,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         if (off < shrunken_size) {
             // store an undef pointer here, to make sure nobody looks at this
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(
-                ctx.builder.getIntN(sizeof(void*) * 8, (uint64_t)-1),
+                ctx.builder.getInt(APInt::getAllOnes(sizeof(void*) * 8)),
                 emit_ptrgep(ctx, dst, ptr),
                 Align(sizeof(void*)),
                 isVolatileStore));
@@ -1436,7 +1436,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         if (off < shrunken_size) {
             // store an undef pointer here, to make sure nobody looks at this
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(
-                ctx.builder.getIntN(sizeof(void*) * 8, (uint64_t)-1),
+                ctx.builder.getInt(APInt::getAllOnes(sizeof(void*) * 8)),
                 emit_ptrgep(ctx, dst, ptr),
                 Align(sizeof(void*)),
                 isVolatileStore));
@@ -1589,7 +1589,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
     if (p.isboxed)
         return emit_typeof(ctx, p.V, maybenull, justtag, notag(p.typ));
     if (p.TIndex) {
-        Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+        Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
         bool allunboxed = is_uniontype_allunboxed(p.typ);
         Type *expr_type = justtag ? ctx.types().T_size : ctx.types().T_pjlvalue;
         Value *datatype_or_p = Constant::getNullValue(PointerType::getUnqual(expr_type->getContext()));
@@ -1692,7 +1692,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
 {
     if (p.TIndex) {
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
-        Value *size = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1);
+        Value *size = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1, true);
         unsigned counter = 0;
         bool allunboxed = for_each_uniontype_small(
                 [&](unsigned idx, jl_datatype_t *jt) {
@@ -1722,7 +1722,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         }
 #ifndef NDEBUG
         // try to catch codegen errors early, before it uses this to memcpy over the entire stack
-        CreateConditionalAbort(ctx.builder, ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1)));
+        CreateConditionalAbort(ctx.builder, ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1, true)));
 #endif
         return size;
     }
@@ -2086,7 +2086,7 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
         unsigned tindex = get_box_tindex(dt, arg.typ);
         if (tindex > 0) {
             // optimize more when we know that this is a split union-type where tindex = 0 is invalid
-            Value *xtindex = ctx.builder.CreateAnd(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+            Value *xtindex = ctx.builder.CreateAnd(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
             auto isa = ctx.builder.CreateICmpEQ(xtindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex));
             setName(ctx.emission_context, isa, "exactly_isa");
             return isa;
@@ -2692,7 +2692,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         }
     }
     auto store_union = [&](const jl_cgval_t &val, const jl_cgval_t &val_union) JL_CANSAFEPOINT {
-        Value *tindex = ctx.builder.CreateAnd(val_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+        Value *tindex = ctx.builder.CreateAnd(val_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
         Value *stindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
         ai_tindex.decorateInst(ctx.builder.CreateAlignedStore(stindex, ptindex, Align(1)));
         if (!val.isghost)
@@ -4675,7 +4675,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, fval_info, jtype, false);
                     if (rhs_union.typ == jl_bottom_type)
                         return jl_cgval_t();
-                    Value *tindex = ctx.builder.CreateAnd(rhs_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+                    Value *tindex = ctx.builder.CreateAnd(rhs_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
                     Value *stindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
                     size_t fsz = 0, al = 0;
                     bool isptr = !jl_islayout_inline(jtype, &fsz, &al);

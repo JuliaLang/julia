@@ -1209,7 +1209,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                 else {
                                     uint64_t intval;
                                     memset(&intval, val, 8);
-                                    Constant *val = ConstantInt::get(pass.DL->getIntPtrType(builder.getContext(), pass.T_prjlvalue->getAddressSpace()), intval);
+                                    Constant *val = ConstantInt::get(pass.DL->getIntPtrType(builder.getContext(), pass.T_prjlvalue->getAddressSpace()), intval, /*IsSigned=*/false, /*ImplicitTrunc=*/true);
                                     val = ConstantExpr::getIntToPtr(val, JuliaType::get_pjlvalue_ty(builder.getContext()));
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }
