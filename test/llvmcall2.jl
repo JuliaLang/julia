@@ -135,3 +135,58 @@ f_nt4b(x, y) = ccall("llvm.sadd.with.overflow", llvmcall, Pair{NT4B, NT4B}, (NT4
 f_nt4i(x, y) = ccall("llvm.sadd.with.overflow", llvmcall, Pair{NT4I, NT4B}, (NT4I, NT4I), x, y)
 @test f_nt4b((false, true, false, true), (false, false, true, true)) === (NT4B((false, true, true, false)) => NT4B((false, false, false, true)))
 @test f_nt4i((typemin(Int), 0, typemax(Int), typemax(Int)), (-1, typemax(Int),-1, 1)) === (NT4I((typemax(Int), typemax(Int), typemax(Int)-1, typemin(Int))) => NT4B((true, false, false, true)))
+
+# Test the Julia LLVM dialect C API (see src/JuliaDialect.td)
+@testset "Julia dialect C API" begin
+
+    ctx = ccall((:LLVMContextCreate, libLLVM_jll.libLLVM), Ptr{Cvoid}, ())
+    dc = ccall(:JLDialectsAttachContext, Ptr{Cvoid}, (Ptr{Cvoid},), ctx)
+    @test dc != C_NULL
+
+    mod = ccall((:LLVMModuleCreateWithNameInContext, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Cstring, Ptr{Cvoid}), "dialect_test", ctx)
+    # the size-type query below is defined by the module datalayout
+    ccall((:LLVMSetDataLayout, libLLVM_jll.libLLVM), Cvoid, (Ptr{Cvoid}, Cstring), mod, "e-p:$(8*sizeof(Int)):$(8*sizeof(Int))")
+    voidty = ccall((:LLVMVoidTypeInContext, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid},), ctx)
+    fnty = ccall((:LLVMFunctionType, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Cuint, Cint), voidty, C_NULL, 0, 0)
+    fn = ccall((:LLVMAddFunction, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid}, Cstring, Ptr{Cvoid}), mod, "f", fnty)
+    bb = ccall((:LLVMAppendBasicBlockInContext, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring), ctx, fn, "top")
+    builder = ccall((:LLVMCreateBuilderInContext, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid},), ctx)
+    ccall((:LLVMPositionBuilderAtEnd, libLLVM_jll.libLLVM), Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), builder, bb)
+
+    pgc = ccall(:JLBuildGetPGCStack, Ptr{Cvoid}, (Ptr{Cvoid},), builder)
+    @test pgc != C_NULL
+    i32 = ccall((:LLVMInt32TypeInContext, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid},), ctx)
+    two = ccall((:LLVMConstInt, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid}, Culonglong, Cint), i32, 2, 0)
+    frame = ccall(:JLBuildNewGCFrame, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), builder, two)
+    @test frame != C_NULL
+    ccall(:JLBuildPushGCFrame, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), builder, frame, two)
+    zero32 = ccall((:LLVMConstInt, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid}, Culonglong, Cint), i32, 0, 0)
+    slot = ccall(:JLBuildGetGCFrameSlot, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), builder, frame, zero32)
+    @test slot != C_NULL
+    ccall(:JLBuildPopGCFrame, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), builder, frame)
+    ccall((:LLVMBuildRetVoid, libLLVM_jll.libLLVM), Ptr{Cvoid}, (Ptr{Cvoid},), builder)
+
+    # 0 = success, matching the LLVMVerifyModule convention; captured
+    # diagnostics must be empty for a well-formed module
+    msgref = Ref{Ptr{Cchar}}(C_NULL)
+    @test ccall(:JLDialectsVerifyModule, Cint, (Ptr{Cvoid}, Ptr{Ptr{Cchar}}), mod, msgref) == 0
+    @test isempty(unsafe_string(msgref[]))
+    ccall((:LLVMDisposeMessage, libLLVM_jll.libLLVM), Cvoid, (Ptr{Cchar},), msgref[])
+    @test ccall(:JLDialectsVerifyModule, Cint, (Ptr{Cvoid}, Ptr{Ptr{Cchar}}), mod, C_NULL) == 0
+
+    sizety = ccall(:JLDialectsGCAllocBytesSizeType, Ptr{Cvoid}, (Ptr{Cvoid},), mod)
+    sizety_str = ccall((:LLVMPrintTypeToString, libLLVM_jll.libLLVM), Cstring, (Ptr{Cvoid},), sizety)
+    @test unsafe_string(sizety_str) == "i$(8*sizeof(Int))"
+
+    irp = ccall((:LLVMPrintModuleToString, libLLVM_jll.libLLVM), Cstring, (Ptr{Cvoid},), mod)
+    ir = unsafe_string(irp)
+    ccall((:LLVMDisposeMessage, libLLVM_jll.libLLVM), Cvoid, (Cstring,), irp)
+    @test occursin("call ptr @julia.get_pgcstack()", ir)
+    @test occursin("call ptr @julia.new_gc_frame(i32 2)", ir)
+    @test occursin("declare noalias nonnull ptr @julia.new_gc_frame(i32)", ir)
+
+    ccall((:LLVMDisposeBuilder, libLLVM_jll.libLLVM), Cvoid, (Ptr{Cvoid},), builder)
+    ccall((:LLVMDisposeModule, libLLVM_jll.libLLVM), Cvoid, (Ptr{Cvoid},), mod)
+    ccall(:JLDialectsDisposeContext, Cvoid, (Ptr{Cvoid},), dc)
+    ccall((:LLVMContextDispose, libLLVM_jll.libLLVM), Cvoid, (Ptr{Cvoid},), ctx)
+end
