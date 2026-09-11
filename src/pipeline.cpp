@@ -13,7 +13,6 @@
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
-#include <llvm/Analysis/GlobalsModRef.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
@@ -408,10 +407,6 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
           }
           MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
       }
-      if (getSpeedupLevel(O) >= 2) {
-          MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
-      }
-      // MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
       if (options.dump_native) {
           MPM.addPass(StripDeadPrototypesPass());
           JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
@@ -435,7 +430,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
             FPM.addPass(InstCombinePass());
         }
         invokePeepholeEPCallbacks(FPM, PB, O);
-        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM), /*UseMemorySSA = */true));
+        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
       }
       MPM.addPass(GlobalOptPass());
       MPM.addPass(GlobalDCEPass());
@@ -569,7 +564,6 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(LoopUnrollPass(LoopUnrollOptions(getSpeedupLevel(O), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
         FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
         FPM.addPass(InstSimplifyPass());
-        FPM.addPass(AfterVectorizationMarkerPass());
     }
     FPM.addPass(AfterVectorizationMarkerPass());
 }
