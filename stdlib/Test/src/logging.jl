@@ -374,50 +374,19 @@ macro test_deprecated(exs...)
     # Parse arguments: [pattern] expression [broken=...] [skip=...]
     length(exs) >= 1 || throw(ArgumentError("""`@test_deprecated` expects at least one argument.
                                Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
-    pattern = r"deprecated"i
-    expression = nothing
-    kws = Any[]
+    # Only `broken=`/`skip=` are keywords; any other argument, whatever its
+    # syntax, is positional so that e.g. `begin ... end` or `x = f()` is the
+    # expression to run.
+    is_kw(e) = e isa Expr && e.head === :(=) && e.args[1] in (:broken, :skip)
+    kws = Any[e for e in exs if is_kw(e)]
+    positional = Any[e for e in exs if !is_kw(e)]
 
-    # Helper to check if an expression is a string macro (like r"..." or s"...")
-    is_string_macro(e) = e isa Expr && e.head === :macrocall &&
-                         length(e.args) >= 1 && e.args[1] isa Symbol &&
-                         endswith(String(e.args[1]), "_str")
-
-    for (i, e) in enumerate(exs)
-        if e isa Expr && e.head === :(=)
-            if e.args[1] in (:broken, :skip)
-                push!(kws, e)
-            else
-                # This is the expression (like `f(x=1)`)
-                expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
+    length(positional) >= 1 || throw(ArgumentError("""`@test_deprecated` needs an expression to run.
                                Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
-                expression = e
-            end
-        elseif e isa Expr && e.head === :call
-            # This is the expression (function call)
-            expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
+    length(positional) <= 2 || throw(ArgumentError("""`@test_deprecated` expects at most one expression.
                                Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
-            expression = e
-        elseif e isa Expr && e.head === :macrocall && !is_string_macro(e)
-            # This is the expression (macro call, but not a string macro like r"...")
-            expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
-            expression = e
-        elseif i == 1 && (e isa Union{Regex, String, Symbol} || is_string_macro(e) ||
-                         (e isa Expr && e.head ∉ (:call, :macrocall)))
-            # First non-keyword argument that's a Regex, String, Symbol (variable), string macro,
-            # or non-call expression is the pattern
-            pattern = e
-        else
-            # Assume it's the expression
-            expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
-            expression = e
-        end
-    end
-
-    expression === nothing && throw(ArgumentError("""`@test_deprecated` needs an expression to run.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+    pattern = length(positional) == 1 ? r"deprecated"i : positional[1]
+    expression = positional[end]
 
     broken, skip, _ = extract_broken_skip_kws(kws, "@test_deprecated")
 
