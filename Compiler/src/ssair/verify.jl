@@ -67,10 +67,8 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
     elseif isa(op, GlobalRef)
         if op.mod !== Core && op.mod !== Base
-            (valid_worlds, alldef) = scan_leaf_partitions(nothing, op, WorldWithRange(min_world(ir.valid_worlds), ir.valid_worlds)) do _, _, bpart
-                is_defined_const_binding(binding_kind(bpart))
-            end
-            if !alldef || max_world(valid_worlds) < max_world(ir.valid_worlds) || min_world(valid_worlds) > min_world(ir.valid_worlds)
+            (valid_worlds, (_, bpart)) = binding_access_range(op, WorldWithRange(min_world(ir.valid_worlds), ir.valid_worlds), false)
+            if !is_defined_const_binding(binding_kind(bpart)) || max_world(valid_worlds) < max_world(ir.valid_worlds) || min_world(valid_worlds) > min_world(ir.valid_worlds)
                 @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
                 raise_error()
             end

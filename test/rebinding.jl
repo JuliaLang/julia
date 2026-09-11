@@ -525,6 +525,28 @@ module Invalidate61745_indirect
     @test caller() == "changed!"
 end
 
+# Test that redirecting a binding to a different typed-global partition with an
+# identical declared type still invalidates code that froze the old partition.
+module RedirectTypedGlobal
+    using Test
+    module M1
+        export x
+        global x::Int = 1
+    end
+    module M2
+        global x::Int = 2
+    end
+    using .M1
+    getx() = x
+    @test getx() === 1
+    # override the implicit `using` resolution (leaf M1.x) with an explicit
+    # import whose leaf (M2.x) is a different binding of the same type
+    import .M2: x
+    invokelatest() do
+        @test getx() === 2
+    end
+end
+
 # Test @reexport
 module ReexportTests
     using Test
@@ -582,4 +604,28 @@ module ReexportTests
         using ..Reexporter3
     end
     @test User3.same_name == 42
+end
+
+# A deprecated declared global and a deprecated guard have the same read result (an
+# untyped runtime read with `effect_free` false), but a store to the former is `nothrow`
+# while a store to the latter throws. Deleting the binding must still invalidate code that
+# stores to it: `binding_access_key` carries the binding identity for `DECLARED`.
+module DeprecatedDeclaredDelete
+    global depdecl
+    Base.deprecate(@__MODULE__, :depdecl, 1)
+    # n.b. `global depdecl = v` in a method would upgrade the declaration to a typed
+    # global, which already carries its identity in the key.
+    store_depdecl(v) = (setglobal!(@__MODULE__, :depdecl, v); nothing)
+end
+let m = DeprecatedDeclaredDelete
+    @test Base.binding_kind(m, :depdecl) == Base.PARTITION_KIND_DECLARED
+    @test Base.infer_effects(m.store_depdecl, (Int,)).nothrow
+    @test precompile(m.store_depdecl, (Int,))
+    ci = only(Base.specializations(only(methods(m.store_depdecl)))).cache
+    @test ci.max_world == typemax(UInt)
+    Base.delete_binding(m, :depdecl)
+    @test Base.binding_kind(Base.lookup_binding_partition(Base.get_world_counter(), GlobalRef(m, :depdecl))) ==
+        Base.PARTITION_KIND_GUARD
+    @test ci.max_world != typemax(UInt)
+    @test !Base.invokelatest(Base.infer_effects, m.store_depdecl, (Int,)).nothrow
 end
