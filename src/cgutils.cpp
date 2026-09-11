@@ -492,9 +492,6 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
 // (rather than unordered) loads and stores are permitted
 static bool ai_is_private(const jl_aliasinfo_t &ai)
 {
-    // constant memory is never written at all, and the gc frame is written only by
-    // its owning thread. This is a whitelist: a region added later must opt in here
-    // before its memory may be accessed non-atomically.
     using Region = jl_aliasinfo_t::Region;
     return ai.isConstant() || ai.region == Region::gcframe;
 }
@@ -1466,7 +1463,7 @@ static std::tuple<Value*, jl_gc_roots_t, jl_aliasinfo_t> split_value(jl_codectx_
             return "split::" + std::string(jl_symbol_name(typ->name->name));
         });
         // The alloca contains no pointers (those were split into roots), so this
-        // write-once copy takes the layout tag of what it holds, as the no-copy
+        // write-once copy takes the access tag of what it holds, as the no-copy
         // paths above already do.
         jl_aliasinfo_t dst_ai = private_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
         split_value_into(ctx, x, x_alignment, alloca, align_dst, dst_ai, false);
@@ -3504,11 +3501,7 @@ static jl_aliasinfo_t best_field_aliasinfo(jl_codectx_t &ctx, const jl_cgval_t &
     // same reason -- there is no store here for a reader to be reordered against.
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
         return ctx.alias().constant;
-    // Narrow a whole-object `mutfields` claim to the half this field is in. Both the
-    // `new` that initializes the field and every later read come through here, so the
-    // two sides stay consistent; an access that cannot name a single field (a dynamic
-    // `getfield`, an inline union's selector byte) keeps the whole-object claim and
-    // goes on aliasing both halves.
+    // Specify if this specific field is const or not, which helps with later refinements (especially gc-root-lowering).
     if (ai.region == jl_aliasinfo_t::Region::mutfields)
         return ai.withRegion(ctx, jl_field_isconst(jt, idx)
                 ? jl_aliasinfo_t::Region::mutconstdata : jl_aliasinfo_t::Region::mutdata);
@@ -4578,9 +4571,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             Instruction *promotion_point = nullptr;
             ssize_t promotion_ssa = -1;
             Value *strct;
-            // A write-once copy of an immutable, claiming the same `immutdata` the
-            // value has anywhere else -- which is also what lets `boxed` later
-            // promote this alloca into a heap box in place.
+            // This stack object is a write-once copy of an immutable holding no
+            // pointers (those are split into inline_roots), and must be eligible for promotion later.
             const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty);
             assert(strct_ai.region == jl_aliasinfo_t::Region::immutdata);
             SmallVector<Value*,0> inline_roots;
