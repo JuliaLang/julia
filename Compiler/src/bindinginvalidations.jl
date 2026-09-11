@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using ..Compiler: _uncompressed_ir, specializations, get_ci_mi, convert, unsafe_load, cglobal, generating_output, has_image_globalref,
+using ..Compiler: _uncompressed_ir, specializations, get_ci_mi, convert, generating_output, has_image_globalref,
     PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
     BINDING_FLAG_ANY_IMPLICIT_EDGES, binding_kind, partition_restriction, is_some_imported,
     is_some_binding_imported, is_some_implicit, SizeUnknown, maybe_add_binding_backedge!, walk_binding_partition, binding_access_key, userefs,
@@ -161,13 +161,12 @@ end
 invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt) =
     invalidate_code_for_globalref!(convert(Core.Binding, gr), invalidated_bpart, new_bpart, new_max_world)
 
-function binding_was_invalidated(b::Core.Binding)
-    # At least one partition is required for invalidation
-    !isdefined(b, :partitions) && return false
-    b.partitions.min_world > unsafe_load(cglobal(:jl_require_world, UInt))
-end
-
-function scan_new_method!(method::Method, image_backedges_only::Bool)
+# Reconstruct, for a method whose source this process has not scanned yet, the invalidation
+# that a binding change would have triggered had this code been present when it happened.
+# Not every access records an edge (one inference left on the runtime path does not), so this
+# source scan is what covers them, and it must ask the same question the edge check asks:
+# `binding_changed_since_require_world`, not just "was this binding repartitioned".
+function scan_new_method!(method::Method, world::UInt, image_backedges_only::Bool)
     isdefined(method, :source) || return
     isa(method.source, MaybeCompressed) || return
     if image_backedges_only && !has_image_globalref(method)
@@ -177,7 +176,7 @@ function scan_new_method!(method::Method, image_backedges_only::Bool)
     mod = method.module
     foreachgr(src) do gr::GlobalRef
         b = convert(Core.Binding, gr)
-        if binding_was_invalidated(b)
+        if binding_changed_since_require_world(b, world)
             # TODO: We could turn this into an additional if condition. For now, use it as a reasonably cheap
             # additional consistency check
             @assert !image_backedges_only
@@ -188,14 +187,14 @@ function scan_new_method!(method::Method, image_backedges_only::Bool)
     @atomic method.did_scan_source |= 0x1
 end
 
-function scan_new_methods!(internal_methods::Vector{Any}, image_backedges_only::Bool)
+function scan_new_methods!(internal_methods::Vector{Any}, world::UInt, image_backedges_only::Bool)
     if image_backedges_only && generating_output(true)
         # Replacing image bindings is forbidden during incremental precompilation - skip backedge insertion
         return
     end
     for method in internal_methods
         if isa(method, Method)
-           scan_new_method!(method, image_backedges_only)
+            scan_new_method!(method, world, image_backedges_only)
         end
     end
 end

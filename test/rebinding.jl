@@ -348,6 +348,66 @@ let test_code =
     @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
 end
 
+# Test the binding-partition machinery across the precompile boundary: cached code
+# whose resolved global reads froze a binding partition must revalidate at load across
+# a flag-only (`export`) partition flip, and must be invalidated when its binding is
+# redirected to a different but identically-typed global partition.
+let test_code =
+    """
+    using Test
+    include("precompile_utils.jl")
+
+    precompile_test_harness("rebinding partition precompile") do load_path
+        write(joinpath(load_path, "RedirectTargets3.jl"),
+              "module RedirectTargets3
+                 module M1
+                   export x
+                   global x::Int = 1
+                 end
+                 module M2
+                   global x::Int = 2
+                 end
+                 global g::Int = 0
+               end")
+        Base.compilecache(Base.PkgId("RedirectTargets3"))
+        write(joinpath(load_path, "RedirectUser3.jl"),
+              "module RedirectUser3
+                 using RedirectTargets3
+                 using RedirectTargets3.M1
+                 getx() = x
+                 getg() = RedirectTargets3.g
+                 precompile(getx, ())
+                 precompile(getg, ())
+               end")
+        Base.compilecache(Base.PkgId("RedirectUser3"))
+        @eval using RedirectTargets3
+        # A flag-only (`export`) partition flip on `g` before the dependent image loads:
+        # revalidation must span it, keeping the cached `getg` valid from before the flip.
+        exported_min = invokelatest() do
+            Core.eval(RedirectTargets3, :(export g))
+            b = convert(Core.Binding, GlobalRef(RedirectTargets3, :g))
+            Base.lookup_binding_partition(Base.get_world_counter(), b).min_world
+        end
+        @eval using RedirectUser3
+        invokelatest() do
+            @test RedirectUser3.getg() === 0
+            ci = Base.method_instance(RedirectUser3.getg, ()).cache
+            @test ci.min_world < exported_min
+            # Redirect the implicit `using` resolution (leaf M1.x) to the identically
+            # typed M2.x: the image-loaded `getx` froze M1.x's partition and must invalidate.
+            @test RedirectUser3.getx() === 1
+            Core.eval(RedirectUser3, :(import RedirectTargets3.M2: x))
+            invokelatest() do
+                @test RedirectUser3.getx() === 2
+            end
+        end
+    end
+
+    finish_precompile_test!()
+    """
+    @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
+end
+
 # Image Globalref smoke test
 module ImageGlobalRefFlag
     using Test
