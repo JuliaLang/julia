@@ -529,7 +529,7 @@ $(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj $(BUILDDIR)/toplevel.static.
 $(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj $(BUILDDIR)/ircode.static.o: $(SRCDIR)/serialize.h $(SRCDIR)/common_symbols1.inc $(SRCDIR)/common_symbols2.inc
 $(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(addprefix $(SRCDIR)/,passes.h jitlayers.h llvm-julia-passes.inc)
 $(BUILDDIR)/llvm_api.o $(BUILDDIR)/llvm_api.dbg.obj: $(SRCDIR)/llvm-julia-passes.inc
-$(BUILDDIR)/objcache.o $(BUILDDIR)/objcache.dbg.obj: $(SRCDIR)/objcache.h $(BUILDDIR)/jl_codegen_hash.inc
+$(BUILDDIR)/objcache.o $(BUILDDIR)/objcache.dbg.obj: $(SRCDIR)/objcache.h $(SRCDIR)/jitlayers.h $(BUILDDIR)/jl_codegen_hash.inc
 
 $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj threading.static.o gc-common.o gc-common.dbg.obj gc-common.static.o gc-stock.o gc-stock.dbg.obj gc-stock.static.o init.o init.dbg.obj init.static.o task.o task.dbg.obj task.static.o): $(addprefix $(SRCDIR)/,threading.h)
 $(addprefix $(BUILDDIR)/,APInt.o APInt.dbg.obj APInt.static.o runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o): $(SRCDIR)/APInt-C.h

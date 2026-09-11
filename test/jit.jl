@@ -202,4 +202,35 @@ end
     end
 end
 
+# The default database belongs to one target; an explicit path is used verbatim.
+@testset "object-cache per-target directory" begin
+    mktempdir() do depot
+        script = "print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0)"
+        cmd = addenv(
+            `$(Base.julia_cmd()) --startup-file=no -e $script`,
+            "JULIA_DEPOT_PATH" => depot,
+            "JULIA_OBJCACHE" => "1",
+            "JULIA_OBJCACHE_PATH" => nothing,
+        )
+        enabled = read(cmd, String)
+        @test enabled in ("true", "false")
+        if enabled == "false"
+            @test_skip false
+        else
+            cachedir = joinpath(depot, "cache", "v$(VERSION.major).$(VERSION.minor)", "objcache-lmdb1")
+            entries = readdir(cachedir)
+            @test length(entries) == 1
+            targetdir = joinpath(cachedir, only(entries))
+            @test isfile(joinpath(targetdir, "data.mdb"))
+            @test isfile(joinpath(targetdir, "lock.mdb"))
+            @test !isfile(joinpath(cachedir, "data.mdb"))
+
+            explicit = joinpath(depot, "explicit")
+            @test read(addenv(cmd, "JULIA_OBJCACHE_PATH" => explicit), String) == "true"
+            @test isfile(joinpath(explicit, "data.mdb"))
+            @test isfile(joinpath(explicit, "lock.mdb"))
+        end
+    end
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough
