@@ -2703,24 +2703,74 @@ end
 # Test --compiled-modules=strict in precompilepkgs
 @testset "compiled-modules=strict with dependencies" begin
     mkdepottempdir() do depot
-        # Create three packages: one that fails to precompile, one that loads it, one that doesn't
+        # Create three packages: one that fails to precompile, one that loads it, one that doesn't,
+        # plus a package that triggers an extension of the failing one and a non-project package
+        # between the failing one and the one that loads it
         project_path = joinpath(depot, "testenv")
         mkpath(project_path)
 
         # Create FailPkg - a package that can't be precompiled
         fail_pkg_path = joinpath(depot, "dev", "FailPkg")
         mkpath(joinpath(fail_pkg_path, "src"))
+        mkpath(joinpath(fail_pkg_path, "ext"))
         write(joinpath(fail_pkg_path, "Project.toml"),
               """
               name = "FailPkg"
               uuid = "10000000-0000-0000-0000-000000000001"
               version = "0.1.0"
+
+              [weakdeps]
+              TriggerPkg = "40000000-0000-0000-0000-000000000004"
+
+              [extensions]
+              FailPkgTriggerExt = "TriggerPkg"
               """)
         write(joinpath(fail_pkg_path, "src", "FailPkg.jl"),
               """
               module FailPkg
               print("Now FailPkg is running.\n")
               error("expected fail")
+              end
+              """)
+        write(joinpath(fail_pkg_path, "ext", "FailPkgTriggerExt.jl"),
+              """
+              module FailPkgTriggerExt
+              print("Now FailPkgTriggerExt is running.\n")
+              end
+              """)
+
+        # Create TriggerPkg - has no dependencies, triggers FailPkg's extension
+        trigger_pkg_path = joinpath(depot, "dev", "TriggerPkg")
+        mkpath(joinpath(trigger_pkg_path, "src"))
+        write(joinpath(trigger_pkg_path, "Project.toml"),
+              """
+              name = "TriggerPkg"
+              uuid = "40000000-0000-0000-0000-000000000004"
+              version = "0.1.0"
+              """)
+        write(joinpath(trigger_pkg_path, "src", "TriggerPkg.jl"),
+              """
+              module TriggerPkg
+              print("Now TriggerPkg is running.\n")
+              end
+              """)
+
+        # Create MidPkg - not a project dep, depends on FailPkg but doesn't load it
+        mid_pkg_path = joinpath(depot, "dev", "MidPkg")
+        mkpath(joinpath(mid_pkg_path, "src"))
+        write(joinpath(mid_pkg_path, "Project.toml"),
+              """
+              name = "MidPkg"
+              uuid = "50000000-0000-0000-0000-000000000005"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(mid_pkg_path, "src", "MidPkg.jl"),
+              """
+              module MidPkg
+              print("Now MidPkg is running.\n")
               end
               """)
 
@@ -2735,6 +2785,7 @@ end
 
               [deps]
               FailPkg = "10000000-0000-0000-0000-000000000001"
+              MidPkg = "50000000-0000-0000-0000-000000000005"
               """)
         write(joinpath(loads_pkg_path, "src", "LoadsFailPkg.jl"),
               """
@@ -2771,6 +2822,7 @@ end
               [deps]
               LoadsFailPkg = "20000000-0000-0000-0000-000000000002"
               DependsOnly = "30000000-0000-0000-0000-000000000003"
+              TriggerPkg = "40000000-0000-0000-0000-000000000004"
               """)
         write(joinpath(project_path, "Manifest.toml"),
               """
@@ -2787,7 +2839,7 @@ end
               version = "0.1.0"
 
               [[LoadsFailPkg]]
-              deps = ["FailPkg"]
+              deps = ["FailPkg", "MidPkg"]
               uuid = "20000000-0000-0000-0000-000000000002"
               version = "0.1.0"
 
@@ -2798,43 +2850,102 @@ end
               version = "0.1.0"
 
               [[deps.FailPkg]]
+              weakdeps = ["TriggerPkg"]
               path = "../dev/FailPkg/"
               uuid = "10000000-0000-0000-0000-000000000001"
               version = "0.1.0"
 
+                  [deps.FailPkg.extensions]
+                  FailPkgTriggerExt = "TriggerPkg"
+
               [[deps.LoadsFailPkg]]
-              deps = ["FailPkg"]
+              deps = ["FailPkg", "MidPkg"]
               path = "../dev/LoadsFailPkg/"
               uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.MidPkg]]
+              deps = ["FailPkg"]
+              path = "../dev/MidPkg/"
+              uuid = "50000000-0000-0000-0000-000000000005"
+              version = "0.1.0"
+
+              [[deps.TriggerPkg]]
+              path = "../dev/TriggerPkg/"
+              uuid = "40000000-0000-0000-0000-000000000004"
               version = "0.1.0"
               """)
 
         # Call precompilepkgs with output redirected to a file
+        Skipped_output = joinpath(depot, "Skipped_output.txt")
         LoadsFailPkg_output = joinpath(depot, "LoadsFailPkg_output.txt")
+        NoskipExt_output = joinpath(depot, "NoskipExt_output.txt")
         DependsOnly_output = joinpath(depot, "DependsOnly_output.txt")
+        Fresh_output = joinpath(depot, "Fresh_output.txt")
+        Forced_output = joinpath(depot, "Forced_output.txt")
         original_depot_path = copy(Base.DEPOT_PATH)
         old_proj = Base.active_project()
         try
             push!(empty!(DEPOT_PATH), depot)
             Base.set_active_project(project_path)
-            precompile_capture(file, pkg) = open(file, "w") do io
+            precompile_capture(file, pkgs; kwargs...) = open(file, "w") do io
                 try
-                    r = Base.Precompilation.precompilepkgs([pkg]; io, fancyprint=true)
-                    @test r isa Vector{String}
-                    r
+                    Base.Precompilation.precompilepkgs(pkgs isa String ? [pkgs] : pkgs; io, fancyprint=true, kwargs...)
                 catch ex
                     ex isa Base.Precompilation.PkgPrecompileError || rethrow()
                     ex
                 end
             end
-            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg")
+            # By default a package whose dependency failed is skipped, not attempted. Only skipped
+            # project deps are named: MidPkg is implied by LoadsFailPkg, and FailPkg's extension
+            # is skipped too but not reported, as its parent failing implies it.
+            skipped = precompile_capture(Skipped_output, ["LoadsFailPkg", "TriggerPkg"])
+            @test skipped isa Base.Precompilation.PkgPrecompileError
+            @test occursin("2 packages were skipped because a dependency failed to precompile, including LoadsFailPkg\n", skipped.msg)
+            @test occursin("skip_dependents=false", skipped.msg)
+            @test !occursin("MidPkg", skipped.msg)
+            @test !occursin("FailPkgTriggerExt", skipped.msg)
+            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg"; skip_dependents=false)
             @test loadsfailpkg isa Base.Precompilation.PkgPrecompileError
-            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly")
-            @test length(dependsonly) == 1
+            @test !occursin("skipped", loadsfailpkg.msg)
+            # the extension is never attempted, even when dependents are
+            noskipext = precompile_capture(NoskipExt_output, ["LoadsFailPkg", "TriggerPkg"]; skip_dependents=false)
+            @test noskipext isa Base.Precompilation.PkgPrecompileError
+            @test !occursin("skipped", noskipext.msg)
+            @test !occursin("FailPkgTriggerExt", noskipext.msg)
+            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly"; skip_dependents=false)
+            @test dependsonly isa Vector{String} && length(dependsonly) == 1
+            # A fresh cache is reused unless `force` is passed
+            fresh = precompile_capture(Fresh_output, "DependsOnly"; skip_dependents=false)
+            @test fresh isa Vector{String} && fresh == dependsonly
+            forced = precompile_capture(Forced_output, "DependsOnly"; skip_dependents=false, force=true)
+            @test forced isa Vector{String} && length(forced) == 1
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
         end
+
+        output = read(Skipped_output, String)
+        # LoadsFailPkg is skipped once FailPkg fails, so it never runs
+        @test count("✗ FailPkg", output) > 0
+        @test count("✗ LoadsFailPkg", output) > 0
+        @test count("skipped, FailPkg failed to precompile", output) > 0
+        @test count("2 skipped because a dependency failed to precompile", output) == 1
+        @test count("Now FailPkg is running.", output) == 1
+        @test count("Now LoadsFailPkg is running.", output) == 0
+        @test count("Now TriggerPkg is running.", output) == 1
+        # MidPkg is not a project dep, so it is skipped without a line of its own
+        @test count("Now MidPkg is running.", output) == 0
+        @test count("MidPkg", output) == 0
+        # the extension of FailPkg is neither attempted nor listed
+        @test count("Now FailPkgTriggerExt is running.", output) == 0
+        @test count("FailPkgTriggerExt", output) == 0
+
+        output = read(NoskipExt_output, String)
+        @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("Now MidPkg is running.", output) == 0 # already precompiled by the run above
+        @test count("Now FailPkgTriggerExt is running.", output) == 0
+        @test count("FailPkgTriggerExt", output) == 0
 
         output = read(LoadsFailPkg_output, String)
         # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
@@ -2844,6 +2955,7 @@ end
         @test count("✗ LoadsFailPkg", output) > 0
         @test count("Now FailPkg is running.", output) == 1
         @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("Now MidPkg is running.", output) == 1
         @test count("DependsOnly precompiling.", output) == 0
 
         # DependsOnly should succeed because it doesn't actually load FailPkg
@@ -2854,6 +2966,14 @@ end
         @test count("Precompiling DependsOnly finished.", output) == 1
         @test count("Now FailPkg is running.", output) == 0
         @test count("Now DependsOnly is running.", output) == 1
+
+        # nothing to do: the fresh cache is reused, so no package runs and no summary is printed
+        output = read(Fresh_output, String)
+        @test count("Now DependsOnly is running.", output) == 0
+        @test count("successfully precompiled", output) == 0
+        output = read(Forced_output, String)
+        @test count("Now DependsOnly is running.", output) == 1
+        @test count("1 dependency successfully precompiled", output) == 1
     end
 end
 
