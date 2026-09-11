@@ -286,6 +286,26 @@ end
 no_error_logging(f::Function) =
     Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
 
+# Keep a file in place while the handle is open, so that a removal attempt fails.
+# An ordinary open() shares delete, so on Windows the file has to be opened
+# without FILE_SHARE_DELETE. On other systems the chmod of the parent directory
+# in the test does the work.
+if Sys.iswindows()
+    function hold_undeletable(path::AbstractString)
+        handle = ccall(:CreateFileW, stdcall, Ptr{Cvoid},
+                       (Cwstring, Cuint, Cuint, Ptr{Cvoid}, Cuint, Cuint, Ptr{Cvoid}),
+                       path, 0x80000000,                # GENERIC_READ
+                       0x00000001 | 0x00000002,          # share read and write, but not delete
+                       C_NULL, 3, 0x80, C_NULL)          # OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL
+        handle == reinterpret(Ptr{Cvoid}, -1) && error("could not hold $(repr(path))")
+        return handle
+    end
+    release_undeletable(handle) = ccall(:CloseHandle, stdcall, Int32, (Ptr{Cvoid},), handle)
+else
+    hold_undeletable(path::AbstractString) = open(path)
+    release_undeletable(io) = close(io)
+end
+
 @testset "hof mktemp/dir when cleanup is prevented" begin
     d = mktempdir()
     with_temp_cleanup(3) do
@@ -306,14 +326,14 @@ no_error_logging(f::Function) =
         no_error_logging() do
             mktemp(d) do path, _
                 @test isfile(path)
-                f = open(path) # make undeletable on Windows
+                f = hold_undeletable(path) # make undeletable on Windows
                 chmod(d, 0o400) # make undeletable on UNIX
                 t = path
             end
         end
         # Make deleteable again
         chmod(d, 0o700)
-        close(f)
+        release_undeletable(f)
         if Libc.geteuid() == 0
             # Root can delete anything
             @test !isfile(t)
@@ -337,14 +357,16 @@ no_error_logging(f::Function) =
             mktempdir(d) do path
                 @test isdir(path)
                 # make undeletable on Windows:
-                f = open(joinpath(path, "file.txt"), "w+")
+                file = joinpath(path, "file.txt")
+                write(file, "")
+                f = hold_undeletable(file)
                 chmod(d, 0o400) # make undeletable on UNIX
                 t = path
             end
         end
         # Make deleteable again
         chmod(d, 0o700)
-        close(f)
+        release_undeletable(f)
         if Libc.geteuid() == 0
             # Root can delete anything
             @test !isdir(t)
