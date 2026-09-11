@@ -6,6 +6,7 @@
 #include <llvm/Support/SHA1.h>
 
 #include "jl_codegen_hash.inc"
+#include "jitlayers.h"
 #include "julia.h"
 #include "julia_internal.h"
 
@@ -103,9 +104,11 @@ static std::optional<std::string> getCachePath() JL_CANSAFEPOINT
 
     // LMDB 1.0 cannot open data files created by LMDB 0.9, so use a
     // different directory than the LMDB 0.9 based versions of this code.
+    // LMDB's data and lock layouts depend on the target ABI (including word
+    // size and libc mutex layout). Separate targets that share a depot.
     return (llvm::Twine(jl_string_ptr(DepotStr)) + "/cache/v" +
             llvm::Twine(JULIA_VERSION_MAJOR) + "." + llvm::Twine(JULIA_VERSION_MINOR) +
-            "/objcache-lmdb1")
+            "/objcache-lmdb1/" + jl_ExecutionEngine->getTargetTriple().str())
         .str();
 }
 
