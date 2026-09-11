@@ -36,6 +36,18 @@ STATIC_INLINE int is_some_partition(jl_binding_partition_t *p) JL_NOTSAFEPOINT
     return p != NULL && jl_is_binding_partition((jl_value_t*)p);
 }
 
+// Recover the `jl_binding_t` that owns `bpart` by walking the chain to its end:
+// the last (oldest) partition's `next` is a backreference to the owning binding.
+JL_DLLEXPORT jl_binding_t *jl_binding_partition_owner(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_binding_partition_t *next = jl_atomic_load_relaxed(&bpart->next);
+    while (is_some_partition(next)) {
+        bpart = next;
+        next = jl_atomic_load_relaxed(&bpart->next);
+    }
+    return (jl_binding_t*)next;
+}
+
 struct implicit_search_gap {
     _Atomic(jl_binding_partition_t *) *insert;
     jl_binding_partition_t *replace;
@@ -467,9 +479,9 @@ static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t *
     jl_binding_partition_t *bpart = *pbpart;
     while (1) {
         enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
+        if (!jl_bkind_is_some_binding_import(kind))
             break;
-        }
+        assert(jl_is_binding(bpart->restriction));
         *bnd = (jl_binding_t*)bpart->restriction;
         bpart = jl_get_binding_partition(*bnd, world);
     }
@@ -973,7 +985,7 @@ JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module
         jl_binding_deprecation_warning(b);
     }
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED) {
+    if (!jl_bkind_is_some_global(kind)) {
         if (jl_bkind_is_some_guard(kind)) {
             jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
                         "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
@@ -2058,9 +2070,10 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr) JL_CANSAFEPOINT
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
+    assert(b);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-    return b && jl_bkind_is_real_constant(jl_binding_kind(bpart));
+    return jl_bkind_is_real_constant(jl_binding_kind(bpart));
 }
 
 // set the deprecated flag for a binding:
@@ -2173,7 +2186,7 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    assert(kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_GLOBAL);
+    assert(jl_bkind_is_some_global(kind));
     jl_value_t *old_ty = kind == PARTITION_KIND_DECLARED ? (jl_value_t*)jl_any_type : bpart->restriction;
     JL_GC_PROMISE_ROOTED(old_ty);
     if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty && !jl_isa(rhs, old_ty)) {
