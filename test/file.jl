@@ -1127,8 +1127,8 @@ end
             open(f1) do handle1
                 open(f2) do handle2
                     if Sys.iswindows()
-                        # currently this doesn't work on windows
-                        @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
+                        # the open destination still prevents the rename
+                        @test Base.UV_EACCES == rename_errorcodes(f1, f2)
                     else
                         Base.rename(f1, f2)
                         @test !ispath(f1)
@@ -1146,14 +1146,9 @@ end
             write(f2, b"olddata")
             write(f1, b"newdata")
             open(f1) do handle1
-                if Sys.iswindows()
-                    # currently this doesn't work on windows
-                    @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
-                else
-                    Base.rename(f1, f2)
-                    @test !ispath(f1)
-                    @test read(f2) == b"newdata"
-                end
+                Base.rename(f1, f2)
+                @test !ispath(f1)
+                @test read(f2) == b"newdata"
                 # rename doesn't break already opened files
                 @test read(handle1) == b"newdata"
             end
