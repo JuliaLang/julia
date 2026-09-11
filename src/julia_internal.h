@@ -1185,8 +1185,23 @@ STATIC_INLINE int jl_bkind_is_some_explicit_import(enum jl_partition_kind kind) 
     return kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
 }
 
+// Whether the partition's restriction is another `jl_binding_t` that an access must still
+// walk to. Its negation is a leaf partition: one whose restriction is the binding's own value or declared type,
+// so an access needs no further resolution.
+// Equivalently, this is `jl_bkind_is_some_import(kind) && !jl_bkind_is_some_constant(kind)`.
+STATIC_INLINE int jl_bkind_is_some_binding_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_IMPLICIT_GLOBAL || jl_bkind_is_some_explicit_import(kind);
+}
+
 STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
     return kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_GUARD;
+}
+
+// Whether the partition is a global variable: one accessed through the binding's own value
+// slot (typed for PARTITION_KIND_GLOBAL, `Any` for a weakly-declared one). Every other kind
+// has its value stored on the partition itself (a constant, a guard) or by another binding (an import).
+STATIC_INLINE int jl_bkind_is_some_global(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_DECLARED;
 }
 
 STATIC_INLINE int jl_bkind_is_some_implicit(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
@@ -1214,6 +1229,7 @@ size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *previous_part, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_binding_t *jl_binding_partition_owner(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 
 struct restriction_kind_pair {
     jl_binding_t *binding_if_global;

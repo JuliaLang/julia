@@ -3450,14 +3450,11 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     print(io, " - ")
     kind = binding_kind(partition)
     if kind == PARTITION_KIND_BACKDATED_CONST
-        print(io, "backdated constant binding to ")
-        print(io, partition_restriction(partition))
+        print(io, "backdated constant binding")
     elseif kind == PARTITION_KIND_CONST
-        print(io, "constant binding to ")
-        print(io, partition_restriction(partition))
+        print(io, "constant binding")
     elseif kind == PARTITION_KIND_CONST_IMPORT
-        print(io, "constant binding (declared with `import`) to ")
-        print(io, partition_restriction(partition))
+        print(io, "constant binding (declared with `import`)")
     elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")
     elseif kind == PARTITION_KIND_GUARD
@@ -3470,8 +3467,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "implicit `using` resolved to global ")
         print(io, partition_restriction(partition).globalref)
     elseif kind == PARTITION_KIND_IMPLICIT_CONST
-        print(io, "implicit `using` resolved to constant ")
-        print(io, partition_restriction(partition))
+        print(io, "implicit `using` resolved to constant")
     elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
         print(io, partition_restriction(partition).globalref)
@@ -3485,17 +3481,15 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     end
 end
 
+function show(io::IO, partition::Core.BindingPartition)
+    print(io, "BindingPartition(for ", partition_owner(partition).globalref, ": ")
+    print_partition(io, partition)
+    print(io, ")")
+end
+
 function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
     print(io, "BindingPartition ")
-    # The chain terminates in a backreference to the owning binding, so follow
-    # `next` until we reach it to report which binding this partition belongs to.
-    owner = @atomic partition.next
-    while owner isa Core.BindingPartition
-        owner = @atomic owner.next
-    end
-    if owner isa Core.Binding
-        print(io, "for ", owner.globalref, "\n   ")
-    end
+    print(io, "for ", partition_owner(partition).globalref, "\n   ")
     print_partition(io, partition)
 end
 
