@@ -362,9 +362,7 @@
     XX(jl_operator_precedence) \
     XX(jl_parse) \
     XX(jl_parse_all) \
-    XX(jl_parse_input_line) \
     XX(jl_parse_opts) \
-    XX(jl_parse_string) \
     XX(jl_pathname_for_handle) \
     XX(jl_pathname_for_symbol) \
     XX(jl_pchar_to_array) \
