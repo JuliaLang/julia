@@ -1139,14 +1139,25 @@ static void jl_dump_asm_internal(
                         // attempt to symbolicate any immediate operands
                         const MCInstrDesc &opinfo = MCII->get(Inst.getOpcode());
                         for (unsigned Op = 0; Op < opinfo.NumOperands; Op++) {
-                            const MCOperand &OpI = Inst.getOperand(Op);
+                            MCOperand &OpI = Inst.getOperand(Op);
                             if (OpI.isImm()) {
                                 int64_t imm = OpI.getImm();
-                                if (opinfo.operands()[Op].OperandType == MCOI::OPERAND_PCREL)
+                                bool pcrel = opinfo.operands()[Op].OperandType == MCOI::OPERAND_PCREL;
+                                if (pcrel)
                                     imm += Fptr + Index;
                                 const char *name = DisInfo.lookupSymbolName(imm);
-                                if (name)
+                                if (!name)
+                                    continue;
+                                if (pcrel && TheTriple.isRISCV()) {
+                                    // Some disassemblers (RISC-V) do not run the symbolizer
+                                    // on branch targets, leaving the raw displacement here.
+                                    // Print the label we emit for that address instead.
+                                    OpI = MCOperand::createExpr(MCSymbolRefExpr::create(
+                                                Ctx.getOrCreateSymbol(name), Ctx));
+                                }
+                                else {
                                     Streamer->AddComment(name);
+                                }
                             }
                         }
                     }
