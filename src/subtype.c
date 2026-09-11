@@ -4358,6 +4358,20 @@ static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
     return ret;
 }
 
+static int subtype_in_env_nonexistential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT;
+
+static int try_subtype_in_env_nonexistential(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
+{
+    if (try_subtype_by_bounds(a, b, e))
+        return 1;
+    jl_savedenv_t se;
+    save_env(e, &se, 0); // Set root=0 as this is a nonexistential subtype check (no bounds change in env)
+    int ret = subtype_in_env_nonexistential(a, b, e);
+    restore_env(e, &se, 0);
+    free_env(&se);
+    return ret;
+}
+
 static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     if (in_union(val, (jl_value_t*)v))
@@ -4383,6 +4397,28 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
     while (v != NULL) {
         rs[n++] = v->existential;
         v->existential = 1;
+        v = v->prev;
+    }
+    int issub = subtype_in_env(x, y, e);
+    n = 0; v = e->vars;
+    while (v != NULL) {
+        v->existential = rs[n++];
+        v = v->prev;
+    }
+    return issub;
+}
+
+// subtype, treating all vars as nonexistential
+static int subtype_in_env_nonexistential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    if (x == jl_bottom_type || y == (jl_value_t*)jl_any_type || obviously_in_union(y, x))
+        return 1;
+    int8_t *rs = (int8_t*)alloca(current_env_length(e));
+    jl_varbinding_t *v = e->vars;
+    int n = 0;
+    while (v != NULL) {
+        rs[n++] = v->existential;
+        v->existential = 0;
         v = v->prev;
     }
     int issub = subtype_in_env(x, y, e);
@@ -4480,9 +4516,11 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
                 ub = a;
             }
             else {
-                e->triangular++;
+                int old_triangular = e->triangular;
+                // Memorize the side we meet the triangular intersection on.
+                e->triangular = R + 1;
                 ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
-                e->triangular--;
+                e->triangular = old_triangular;
             }
             jl_savedenv_t se;
             save_env(e, &se, 1);
@@ -4514,7 +4552,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
     if (ub == jl_bottom_type)
         return jl_bottom_type;
-    if (e->triangular && param == PARAM_COVARIANT) {
+    if (e->triangular && ((e->triangular - 1) != R)) {
         if (check_unsat_bound(ub, b, e))
             return jl_bottom_type;
         set_bound(&bb->ub, ub, b, e);
@@ -4546,7 +4584,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     else if (bb->constraintkind == 0) {
         JL_GC_PUSH1(&ub);
-        if (!jl_is_typevar(a) && try_subtype_in_env(bb->ub, a, e)) {
+        if (!jl_is_typevar(a) && try_subtype_in_env_nonexistential(bb->ub, a, e)) {
             JL_GC_POP();
             return (jl_value_t*)b;
         }
@@ -5886,7 +5924,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
             assert(e->Loffset == 0);
             record_var_occurrence(xx, e, param);
             record_var_occurrence(yy, e, param);
-            if (xx && yy && xx->concrete && !yy->concrete) {
+            if (xx && yy && ((xx->concrete && !yy->concrete) || (xx->lb == xx->ub && xx->lb == y))) {
                 return intersect_var((jl_tvar_t*)x, y, e, R, param);
             }
             return intersect_var((jl_tvar_t*)y, x, e, !R, param);
