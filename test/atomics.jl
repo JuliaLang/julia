@@ -785,6 +785,21 @@ test_globalonce(UndefComplex{Any})
 test_globalonce(UndefComplex{UndefComplex{Any}})
 test_globalonce(Int)
 
+# An untyped `global x` declaration leaves no restriction on the binding partition, so its
+# declared type is `Any`. The read-modify-write builtins must read that as `Any` to form the result type.
+module DeclaredGlobal
+    global declared_rmw
+end
+let M = DeclaredGlobal
+    @test Core.get_binding_type(M, :declared_rmw) === Any
+    @test_throws UndefVarError modifyglobal!(M, :declared_rmw, +, 1)
+    @test setglobalonce!(M, :declared_rmw, 1) === true
+    @test modifyglobal!(M, :declared_rmw, +, 1) === Pair{Any,Any}(1, 2)
+    @test swapglobal!(M, :declared_rmw, "x") === 2
+    @test replaceglobal!(M, :declared_rmw, "x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
+
 # test macroexpansions
 global x::Int
 let a = @__MODULE__
