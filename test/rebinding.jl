@@ -550,6 +550,16 @@ module Invalidate59272
     @test Bar(1) == Foo.Bar(1)
 end
 
+# A primordial constant is immutable except for flag-only changes.
+let w1const = convert(Core.Binding, GlobalRef(Core, :donotdelete))
+    @assert Base.binding_kind(Base.lookup_binding_partition(UInt(1), w1const)) == Base.PARTITION_KIND_CONST
+    @test_throws "builtin constant" Core.eval(Core, :(const donotdelete = 42))
+    @test_throws "builtin constant" Base.delete_binding(Core, :donotdelete)
+    @test @invokelatest(Core.donotdelete) isa Core.Builtin # binding intact
+    @test_throws "builtin constant" Core.eval(Core.Intrinsics, :(const add_int = 42))
+    @test @invokelatest(Core.Intrinsics.add_int) isa Core.IntrinsicFunction # binding intact
+end
+
 # Test that two const-prop'd pseudo `CodeInstance`s for the same `MethodInstance`
 # carrying *different* binding edges are both kept on the caller's edge list, so
 # that redefining either binding properly invalidates the caller (#61745).
