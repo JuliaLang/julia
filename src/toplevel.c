@@ -293,6 +293,15 @@ static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x
 // Declare (or re-declare) a global binding. If `newval` is non-NULL (the `x::T = v`
 // form), it is stored before the new partition is published, so the new type is never
 // observable with a stale value or with the binding undefined.
+//
+// If `newval` is NULL (a bare `global x::T` declaration), the existing value is retained
+// when it still conforms to the new type, and an error is raised otherwise. That
+// compatibility check is performed after the old partitions' re-type guards are
+// flagged and the in-flight store commits they gate are drained (see
+// jl_retype_flag_partitions), but before a replacement partition is installed. Thus a
+// store validated against a superseded declared type can neither invalidate the answer
+// nor land after the new declared type is published, and a failed declaration leaves
+// no future partition that could be published by a later world-counter increment.
 void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong, jl_value_t *newval) {
     // create uninitialized mutable binding for "global x" decl sometimes or probably
     jl_module_t *gm;
@@ -350,14 +359,40 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         jl_value_t *old_ty = bpart->restriction;
         JL_GC_PROMISE_ROOTED(old_ty);
         if (!jl_types_equal(set_type, old_ty)) {
-            jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
-                    jl_symbol_name(gm->name), jl_symbol_name(gs));
+            // Replacing a typed global by a typed global of a different type (#62154).
+            check_safe_newbinding(gm, gs);
+            update_partition = 1;
         }
     }
 
+    if (strong && update_partition) {
+        // Flag the old partitions before validating a retained value and before
+        // installing the replacement. Reads whose restriction the requested type
+        // does not conform to must verify, and stores whose validated restriction is
+        // not accepted by the requested type must divert to the locked path. Draining
+        // the latter's commit windows makes the retained-value check stable.
+        jl_retype_flag_partitions(b, global_type, global_type);
+        if (newval == NULL && global_type != (jl_value_t*)jl_any_type) {
+            jl_value_t *oldval = jl_atomic_load_relaxed(&b->value);
+            if (oldval != NULL && !jl_isa(oldval, global_type)) {
+                // No partition has been changed yet. The old partitions retain their
+                // conservative guard flags, but a later world bump cannot publish the
+                // rejected declaration.
+                jl_errorf("cannot change the type of global %s.%s: it currently holds a value that is not an "
+                          "instance of the new type. Assign a conforming value (e.g. `%s = ...`) or otherwise "
+                          "reset the binding before re-declaring its type.",
+                          jl_symbol_name(gm->name), jl_symbol_name(gs), jl_symbol_name(gs));
+            }
+        }
+    }
+
+    // Install the new semantic partition only after every operation that can reject
+    // the declaration has succeeded. A fresh partition starts with clear re-type
+    // flags, so code compiled against the new declared type runs unguarded.
     if (update_partition) {
         if (update_in_place) {
             bpart->kind = new_kind | jl_carried_binding_flags(bpart);
+            jl_atomic_store_relaxed(&bpart->retype_flags, 0);
             jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
         }
         else {
