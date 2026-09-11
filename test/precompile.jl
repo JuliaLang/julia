@@ -2809,31 +2809,51 @@ end
               """)
 
         # Call precompilepkgs with output redirected to a file
+        Skipped_output = joinpath(depot, "Skipped_output.txt")
         LoadsFailPkg_output = joinpath(depot, "LoadsFailPkg_output.txt")
         DependsOnly_output = joinpath(depot, "DependsOnly_output.txt")
+        Fresh_output = joinpath(depot, "Fresh_output.txt")
+        Forced_output = joinpath(depot, "Forced_output.txt")
         original_depot_path = copy(Base.DEPOT_PATH)
         old_proj = Base.active_project()
         try
             push!(empty!(DEPOT_PATH), depot)
             Base.set_active_project(project_path)
-            precompile_capture(file, pkg) = open(file, "w") do io
+            precompile_capture(file, pkg; kwargs...) = open(file, "w") do io
                 try
-                    r = Base.Precompilation.precompilepkgs([pkg]; io, fancyprint=true)
-                    @test r isa Vector{String}
-                    r
+                    Base.Precompilation.precompilepkgs([pkg]; io, fancyprint=true, kwargs...)
                 catch ex
                     ex isa Base.Precompilation.PkgPrecompileError || rethrow()
                     ex
                 end
             end
-            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg")
+            # By default a package whose dependency failed is skipped, not attempted
+            skipped = precompile_capture(Skipped_output, "LoadsFailPkg")
+            @test skipped isa Base.Precompilation.PkgPrecompileError
+            @test occursin("skipped because a dependency failed to precompile: LoadsFailPkg", skipped.msg)
+            @test occursin("skip_dependents=false", skipped.msg)
+            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg"; skip_dependents=false)
             @test loadsfailpkg isa Base.Precompilation.PkgPrecompileError
-            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly")
-            @test length(dependsonly) == 1
+            @test !occursin("skipped", loadsfailpkg.msg)
+            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly"; skip_dependents=false)
+            @test dependsonly isa Vector{String} && length(dependsonly) == 1
+            # A fresh cache is reused unless `force` is passed
+            fresh = precompile_capture(Fresh_output, "DependsOnly"; skip_dependents=false)
+            @test fresh isa Vector{String} && fresh == dependsonly
+            forced = precompile_capture(Forced_output, "DependsOnly"; skip_dependents=false, force=true)
+            @test forced isa Vector{String} && length(forced) == 1
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
         end
+
+        output = read(Skipped_output, String)
+        # LoadsFailPkg is skipped once FailPkg fails, so it never runs
+        @test count("✗ FailPkg", output) > 0
+        @test count("✗ LoadsFailPkg", output) > 0
+        @test count("skipped, FailPkg failed to precompile", output) > 0
+        @test count("Now FailPkg is running.", output) == 1
+        @test count("Now LoadsFailPkg is running.", output) == 0
 
         output = read(LoadsFailPkg_output, String)
         # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
@@ -2853,6 +2873,14 @@ end
         @test count("Precompiling DependsOnly finished.", output) == 1
         @test count("Now FailPkg is running.", output) == 0
         @test count("Now DependsOnly is running.", output) == 1
+
+        # nothing to do: the fresh cache is reused, so no package runs and no summary is printed
+        output = read(Fresh_output, String)
+        @test count("Now DependsOnly is running.", output) == 0
+        @test count("successfully precompiled", output) == 0
+        output = read(Forced_output, String)
+        @test count("Now DependsOnly is running.", output) == 1
+        @test count("1 dependency successfully precompiled", output) == 1
     end
 end
 

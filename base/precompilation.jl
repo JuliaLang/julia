@@ -134,6 +134,7 @@ end
     JOB_RECOMPILED   # successfully compiled
     JOB_SOFT_ERROR   # compilecache returned an Exception (may work after restart)
     JOB_FAILED       # hard compile error
+    JOB_DEP_FAILED   # not attempted because a dependency failed to precompile
 end
 
 mutable struct PrecompileJob
@@ -155,6 +156,7 @@ is_started(j::PrecompileJob)    = j.status == JOB_STARTED
 is_recompiled(j::PrecompileJob) = j.status == JOB_RECOMPILED
 is_soft_error(j::PrecompileJob) = j.status == JOB_SOFT_ERROR
 is_failed(j::PrecompileJob)     = j.status == JOB_FAILED
+is_dep_failed(j::PrecompileJob) = j.status == JOB_DEP_FAILED
 has_pid(j::PrecompileJob)       = j.pid > 0
 had_pid(j::PrecompileJob)       = j.had_pid
 is_locked(j::PrecompileJob)     = !isempty(j.lock_holder)
@@ -164,6 +166,8 @@ mark_started!(j::PrecompileJob, t::Float64=time()) = (j.status = JOB_STARTED; j.
 mark_recompiled!(j::PrecompileJob) = (j.status = JOB_RECOMPILED)
 mark_soft_error!(j::PrecompileJob) = (j.status = JOB_SOFT_ERROR)
 mark_failed!(j::PrecompileJob, msg::String) = (j.status = JOB_FAILED; j.error_msg = msg)
+# `root` names the package whose failure caused the skip
+mark_dep_failed!(j::PrecompileJob, root::String) = (j.status = JOB_DEP_FAILED; j.error_msg = root)
 set_pid!(j::PrecompileJob, pid::Int32) = (j.pid = pid; j.had_pid = true)
 clear_pid!(j::PrecompileJob) = (j.pid = Int32(0))
 
@@ -187,6 +191,9 @@ struct PrecompileRequest
     manifest::Bool
     ignore_loaded::Bool
     detachable::Bool
+    skip_dependents::Bool
+    force::Bool
+    force_stdlibs::Bool
     result::Channel{Any}
 end
 
@@ -204,6 +211,9 @@ Base.@kwdef mutable struct PrecompileSession
     internal_call::Bool
     strict::Bool
     _from_loading::Bool
+    skip_dependents::Bool
+    force::Bool
+    force_stdlibs::Bool
     time_start::UInt64
     print_lock::ReentrantLock
     parallel_limiter::WorkerLimiter
@@ -1138,6 +1148,17 @@ precompiles only the given packages and their dependencies (unless
   [`Base.Precompilation.monitor_background_precompile`](@ref). Pkg.jl passes
   `detachable=true` in interactive sessions.
 
+- `skip_dependents::Bool`: When `true` (default), packages that depend on a package
+  which failed to precompile are not attempted, since loading the failed dependency
+  would fail again. Set to `false` to attempt them anyway, for example when a package
+  only loads that dependency on some platforms.
+
+- `force::Bool`: When `true` (not default), recompiles packages whose cache files are
+  already fresh. Standard libraries are left alone unless `force_stdlibs=true`.
+
+- `force_stdlibs::Bool`: When `true` (not default), `force` also recompiles standard
+  libraries that are not part of the system image.
+
 # Keyboard Controls
 
 When running interactively in a TTY, the following keys are available during
@@ -1189,15 +1210,20 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         fancyprint::Bool = can_fancyprint(io) && !timing && !verbose,
                         manifest::Bool=false,
                         ignore_loaded::Bool=true,
-                        detachable::Bool=false)
+                        detachable::Bool=false,
+                        skip_dependents::Bool=true,
+                        force::Bool=false,
+                        force_stdlibs::Bool=false)
     # verbose timing mode requires timing to be enabled (per-package breakdown
     # is only shown alongside timing lines in non-fancy mode)
     verbose && (timing = true)
-    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable
+    force_stdlibs && (force = true)
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable skip_dependents force force_stdlibs
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, verbose, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
-                   unstable_iocontext(io), fancyprint, manifest, ignore_loaded, detachable)
+                   unstable_iocontext(io), fancyprint, manifest, ignore_loaded, detachable,
+                   skip_dependents, force, force_stdlibs)
 end
 
 ## Background lifecycle
@@ -1589,7 +1615,10 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                                        fancyprint::Bool,
                                        manifest::Bool,
                                        ignore_loaded::Bool,
-                                       detachable::Bool)
+                                       detachable::Bool,
+                                       skip_dependents::Bool,
+                                       force::Bool,
+                                       force_stdlibs::Bool)
     # Stop any existing background precompilation
     @lock BG begin
         if BG.task !== nothing && !istaskdone(BG.task)
@@ -1633,7 +1662,8 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
         BG.task = Threads.@spawn :samepool begin
             try
                 ret = do_precompile(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
-                                    configs, io, fancyprint, manifest, ignore_loaded, detachable, wc)
+                                    configs, io, fancyprint, manifest, ignore_loaded, detachable,
+                                    skip_dependents, force, force_stdlibs, wc)
 
                 @lock BG begin
                     BG.return_value = ret
@@ -1696,7 +1726,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          fancyprint′::Bool,
                          manifest::Bool,
                          ignore_loaded::Bool,
-                         detachable::Bool)
+                         detachable::Bool,
+                         skip_dependents::Bool,
+                         force::Bool,
+                         force_stdlibs::Bool)
     # Try to inject into a running background task, else launch a new one, under
     # launch_lock so concurrent callers cannot spawn competing background tasks.
     local req = nothing
@@ -1707,7 +1740,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
                 req = PrecompileRequest(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
                                         configs, io, fancyprint′, manifest, ignore_loaded, detachable,
-                                        Channel{Any}(1))
+                                        skip_dependents, force, force_stdlibs, Channel{Any}(1))
                 try
                     # Enable verbose before enqueueing, and only ever turn it on so a
                     # non-verbose merge doesn't disable an already-verbose run.
@@ -1724,7 +1757,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
         if !did_inject
             launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, verbose, _from_loading,
-                                         configs, io, fancyprint′, manifest, ignore_loaded, detachable)
+                                         configs, io, fancyprint′, manifest, ignore_loaded, detachable,
+                                         skip_dependents, force, force_stdlibs)
         end
         did_inject
     end
@@ -1999,6 +2033,9 @@ function spawn_print_loop!(s::PrecompileSession)
                                 string(color_string("  ? ", Base.warn_color(), s.hascolor), name)
                             elseif is_failed(job)
                                 string(color_string("  ✗ ", Base.error_color(), s.hascolor), name)
+                            elseif is_dep_failed(job)
+                                string(color_string("  ✗ ", Base.error_color(), s.hascolor), name,
+                                       color_string(" (skipped, $(job.error_msg) failed to precompile)", :light_black, s.hascolor))
                             elseif is_recompiled(job)
                                 !loaded && s.interrupted_or_done && continue
                                 loaded || Base.errormonitor(Threads.@spawn :samepool begin
@@ -2150,6 +2187,22 @@ function precompile_pkgs_maybe_cachefile_lock(f, s::PrecompileSession, pkg_confi
     return cachefile
 end
 
+# Standard libraries ship precompiled with julia, so `force` leaves them alone
+# unless `force_stdlibs` is set.
+is_stdlib_source(spec::Base.PkgLoadSpec) = startswith(spec.path, Sys.STDLIB)
+
+# Name of the package whose failure means `deps` cannot be loaded: the first
+# dependency that failed, or the root cause recorded on one that was itself skipped.
+function failed_dependency(s::PrecompileSession, deps::Vector{PkgId}, config::Config)
+    for dep in deps
+        job = @lock s.print_lock get(s.jobs, (dep, config), nothing)
+        job === nothing && continue
+        is_failed(job) && return full_name(s.ext_to_parent, dep)
+        is_dep_failed(job) && return job.error_msg
+    end
+    return nothing
+end
+
 function spawn_precompile_tasks!(s::PrecompileSession;
         direct_deps, was_processed, configs, circular_deps,
         requested_pkgids, pkg_names, requested_pkgs, from_loading)
@@ -2195,10 +2248,11 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     end
                 end
                 circular = pkg in circular_deps
+                forced = s.force && !circular && (s.force_stdlibs || !is_stdlib_source(sourcespec))
                 freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
-                is_stale = freshpath === nothing
-                if is_stale && !circular && Base.CACHE_FETCH_HOOK[] !== nothing
+                is_stale = forced || freshpath === nothing
+                if is_stale && !forced && !circular && Base.CACHE_FETCH_HOOK[] !== nothing
                     # a cache-fetch hook gets one chance to materialize a
                     # cachefile before we schedule a local compile; this runs
                     # after the dep waits above, so dependency cachefiles are
@@ -2215,9 +2269,25 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     @lock s.cache_lock push!(freshpaths, freshpath)
                 end
                 if !circular && is_stale
-                    Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s))
                     is_serial_dep = pkg in s.serial_deps
                     is_project_dep = pkg in s.project_deps
+                    root = s.skip_dependents ? failed_dependency(s, deps, config) : nothing
+                    if root !== nothing
+                        # loading `root` would fail again, so do not spend a worker on it
+                        name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
+                        @lock s.print_lock begin
+                            if !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring
+                                printpkgstyle(s.logio, :Precompiling, s.target)
+                            end
+                            push!(s.pkg_queue, pkg_config)
+                            mark_dep_failed!(job, root)
+                            !s.fancyprint && BG.monitoring && println(s.logio, " "^12,
+                                color_string("  ✗ ", Base.error_color(), s.hascolor), name,
+                                color_string(" (skipped, $root failed to precompile)", :light_black, s.hascolor))
+                        end
+                        return
+                    end
+                    Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s))
 
                     std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
                     t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, job, std_pipe,
@@ -2270,7 +2340,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 local cachepaths = Base.find_all_in_cache_path(pkg)
                                 local freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
-                                local is_stale = freshpath === nothing
+                                local is_stale = forced || freshpath === nothing
                                 if !is_stale
                                     @lock s.cache_lock push!(freshpaths, freshpath)
                                     return nothing
@@ -2501,14 +2571,14 @@ function report_precompile_results!(s::PrecompileSession)
 
     requested_errs = false
     for ((dep, _), job) in s.jobs
-        if is_failed(job) && dep in s.requested_pkgids
+        if (is_failed(job) || is_dep_failed(job)) && dep in s.requested_pkgids
             requested_errs = true
             break
         end
     end
     if !s.strict && !requested_errs && !s.interrupted && !s.canceled
         for (_, job) in s.jobs
-            is_failed(job) && clear_failure!(job)
+            (is_failed(job) || is_dep_failed(job)) && clear_failure!(job)
         end
     end
     if s.canceled && !(@lock BG BG.info_requested)
@@ -2524,6 +2594,7 @@ function report_precompile_results!(s::PrecompileSession)
         end
     end
     n_failed = count(j -> is_failed(j), values(s.jobs))
+    n_dep_failed = count(j -> is_dep_failed(j), values(s.jobs))
     if ndeps > 0 || n_failed > 0
         if !quick_exit
             logstr = sprint(context=s.logio) do iostr
@@ -2539,9 +2610,10 @@ function report_precompile_results!(s::PrecompileSession)
                 end
                 plural = length(s.configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
                 print(iostr, "  $(ndeps) $(plural) successfully precompiled in $(seconds_elapsed) seconds")
-                if s.n_already_precomp > 0 || !isempty(s.circular_deps)
+                if s.n_already_precomp > 0 || !isempty(s.circular_deps) || n_dep_failed > 0
                     s.n_already_precomp > 0 && (print(iostr, ". $(s.n_already_precomp) already precompiled"))
                     !isempty(s.circular_deps) && (print(iostr, ". $(length(s.circular_deps)) skipped due to circular dependency"))
+                    n_dep_failed > 0 && (print(iostr, ". $(n_dep_failed) skipped because a dependency failed to precompile"))
                     print(iostr, ".")
                 end
                 if s.n_loaded > 0
@@ -2675,6 +2747,12 @@ function report_precompile_results!(s::PrecompileSession)
             join(err_str, config[1], " ")
             print(err_str, "\n", job.error_msg)
         end
+        if n_dep_failed > 0
+            skipped = sort!(String[full_name(s.ext_to_parent, dep) for ((dep, _), job) in s.jobs if is_dep_failed(job)])
+            print(err_str, "\n\n", n_dep_failed, n_dep_failed == 1 ? " package was" : " packages were",
+                  " skipped because a dependency failed to precompile: ", join(skipped, ", "),
+                  "\nTo attempt them anyway, pass `skip_dependents=false` (`pkg> precompile --noskip`).")
+        end
         pluraled = n_failed == 1 ? "" : "s"
         err_msg = "The following $n_failed package$(pluraled) failed to precompile:$(String(take!(err_str)))\n"
         if s.internal_call
@@ -2702,6 +2780,9 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
                         manifest::Bool,
                         ignore_loaded::Bool,
                         detachable::Bool,
+                        skip_dependents::Bool,
+                        force::Bool,
+                        force_stdlibs::Bool,
                         work_channel::Channel{PrecompileRequest})
     requested_pkgs = copy(pkgs)
     pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
@@ -2808,6 +2889,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     s = PrecompileSession(;
         configs, io, logio, logcalls, fancyprint, hascolor,
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
+        skip_dependents, force, force_stdlibs,
         time_start, print_lock,
         parallel_limiter=WorkerLimiter(Base.Semaphore(num_tasks), precompile_jobserver !== :none), num_tasks,
         start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids, requested_all,
