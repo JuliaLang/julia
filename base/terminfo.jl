@@ -49,14 +49,11 @@ A parsed terminfo paired with capability information.
 # Fields
 
 - `names::Vector{String}`: The names this terminal is known by.
-- `flags::Int`: The number of flags specified.
-- `numbers::BitVector`: A mask indicating which of `TERM_NUMBERS` have been
-  specified.
-- `strings::BitVector`: A mask indicating which of `TERM_STRINGS` have been
-  specified.
-- `extensions::Vector{Symbol}`: A list of extended capability variable names.
-- `capabilities::Dict{Symbol, Union{Bool, Int, String}}`: The capability values
-  themselves.
+- `flags::Dict{Symbol, Bool}`: A mapping of flag capability names to their values.
+- `numbers::Dict{Symbol, Int}`: A mapping of number capability names to their values.
+- `strings::Dict{Symbol, String}`: A mapping of string capability names to their values.
+- `extensions::Union{Nothing, Set{Symbol}}`: The set of extended capability names, or `nothing` if there are no extensions.
+- `aliases::Dict{Symbol, Symbol}`: A mapping of alias names to their corresponding capability names in any of the above categories.
 
 See also: `TermInfoRaw` and `TermCapability`.
 """

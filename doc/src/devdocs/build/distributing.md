@@ -25,7 +25,7 @@ pregenerate the `base/version_git.jl` file with:
 
     make -C base version_git.jl.phony
 
-Julia has lots of build dependencies where we use patched versions that has not
+Julia has lots of build dependencies where we use patched versions that have not
 yet been included by the popular package managers. These dependencies will usually
 be automatically downloaded when you build, but if you want to be able to build
 Julia on a computer without internet access you should create a full-source-dist
@@ -238,22 +238,10 @@ merged.
 
 ## Building test binaries
 
-After the backport PR has been merged into the `release-x.y` branch, update your local
-clone of Julia, then get the SHA of the branch using
-
-```
-git rev-parse origin/release-x.y
-```
-
-Keep that handy, as it's what you'll enter in the "Revision" field in the buildbot UI.
-
-For now, all you need are binaries for Linux x86-64, since this is what's used for
-running PackageEvaluator.
-Go to https://buildog.julialang.org, submit a job for `nuke_linux64`, then queue up a
-job for `package_linux64`, providing the SHA as the revision.
-When the packaging job completes, it will upload the binary to the `julialang2` bucket
-on AWS.
-Retrieve the URL, as it will be used for PackageEvaluator.
+There is no manual step here anymore: every push to the backports PR (and to the
+`release-x.y` branch) is built and tested by the `julia-ci` Buildkite pipeline for
+all supported platforms, and the binaries are downloadable from the build's
+artifacts.
 
 ## Checking for package breakages
 
@@ -262,110 +250,21 @@ that are doing some seriously questionable hacks using Base internals that are
 not intended to be user-facing.
 (In those cases, maybe have a word with the package author.)
 
-Checking whether changes made in the forthcoming new version will break packages can
-be accomplished using [PackageEvaluator](https://github.com/JuliaCI/PackageEvaluator.jl),
-often called "PkgEval" for short.
-PkgEval is what populates the status badges on GitHub repos and on pkg.julialang.org.
-It typically runs on one of the non-benchmarking nodes of Nanosoldier and uses Vagrant
-to perform its duties in separate, parallel VirtualBox virtual machines.
-
-### Setting up PackageEvaluator
-
-Clone PackageEvaluator and create a branch called `backport-x.y.z`, and check it out.
-Note that the required changes are a little hacky and confusing, and hopefully that will
-be addressed in a future version of PackageEvaluator.
-The changes to make will be modeled off of
-[this commit](https://github.com/JuliaCI/PackageEvaluator.jl/commit/5ba6a3b000e7a3793391d16f695c8704b91d6016).
-
-The setup script takes its first argument as the version of Julia to run and the second
-as the range of package names (AK for packages named A-K, LZ for L-Z).
-The basic idea is that we're going to tweak that a bit to run only two versions of Julia,
-the current x.y release and our backport version, each with three ranges of packages.
-
-In the linked diff, we're saying that if the second argument is LZ, use the binaries
-built from our backport branch, otherwise (AK) use the release binaries.
-Then we're using the first argument to run a section of the package list: A-F for input
-0.4, G-N for 0.5, and O-Z for 0.6.
-
-### Running PackageEvaluator
-
-To run PkgEval, find a hefty enough machine (such as Nanosoldier node 1), then run
+Whether the forthcoming release breaks packages is checked with
+[PkgEval](https://github.com/JuliaCI/PkgEval.jl), driven by
+[Nanosoldier](https://github.com/JuliaCI/Nanosoldier.jl): comment on the backports
+PR with something like
 
 ```
-git clone https://github.com/JuliaCI/PackageEvaluator.jl.git
-cd PackageEvaluator.jl/scripts
-git checkout backport-x.y.z
-./runvagrant.sh
+@nanosoldier `runtests(ALL, vs = ":release-x.y")`
 ```
 
-This produces some folders in the scripts/ directory.
-The folder names and their contents are decoded below:
-
-| Folder name | Julia version | Package range |
-| :---------: | :-----------: | :-----------: |
-| 0.4AK       | Release       | A-F           |
-| 0.4LZ       | Backport      | A-F           |
-| 0.5AK       | Release       | G-N           |
-| 0.5LZ       | Backport      | G-N           |
-| 0.6AK       | Release       | O-Z           |
-| 0.6LZ       | Backport      | O-Z           |
-
-### Investigating results
-
-Once that's done, you can use `./summary.sh` from that same directory to produce
-a summary report of the findings.
-We'll do so for each of the folders to aggregate overall results by version.
-
-```
-./summary.sh 0.4AK/*.json > summary_release.txt
-./summary.sh 0.5AK/*.json >> summary_release.txt
-./summary.sh 0.6AK/*.json >> summary_release.txt
-./summary.sh 0.4LZ/*.json > summary_backport.txt
-./summary.sh 0.5LZ/*.json >> summary_backport.txt
-./summary.sh 0.6LZ/*.json >> summary_backport.txt
-```
-
-Now we have two files, `summary_release.txt` and `summary_backport.txt`, containing
-the PackageEvaluator test results (pass/fail) for each package for the two versions.
-
-To make these easier to ingest into a Julia, we'll convert them into CSV files then
-use the DataFrames package to process the results.
-To convert to CSV, copy each .txt file to a corresponding .csv file, then enter Vim
-and execute `ggVGI"<esc>` then `:%s/\.json /",/g`.
-(You don't have to use Vim; this just is one way to do it.)
-Now process the results with Julia code similar to the following.
-
-```julia
-using DataFrames
-
-release = readtable("summary_release.csv", header=false, names=[:package, :release])
-backport = readtable("summary_backport.csv", header=false, names=[:package, :backport])
-
-results = join(release, backport, on=:package, kind=:outer)
-
-for result in eachrow(results)
-    a = result[:release]
-    b = result[:backport]
-    if (isna(a) && !isna(b)) || (isna(b) && !isna(a))
-        color = :yellow
-    elseif a != b && occursin("pass", b)
-        color = :green
-    elseif a != b
-        color = :red
-    else
-        continue
-    end
-    printstyled(result[:package], ": Release ", a, " -> Backport ", b, "\n", color=color)
-end
-```
-
-This will write color-coded lines to `stdout`.
-All lines in red must be investigated as they signify potential breakages caused by the
-backport version.
-Lines in yellow should be looked into since it means a package ran on one version but
-not on the other for some reason.
-If you find that your backported branch is causing breakages, use `git bisect` to
-identify the problematic commits, `git revert` those commits, and repeat the process.
+to test every registered package against the backports branch, compared to the
+current release branch.
+Nanosoldier replies with a report of newly failing packages; investigate those
+(locally or by reading their test logs) and distinguish real regressions caused by
+the backports from pre-existing failures and flaky tests.
+If a backported commit turns out to cause breakage, drop or fix it and rerun.
 
 ## Merging backports into the release branch
 
@@ -406,171 +305,97 @@ and add `-pre` back to the end.
 This denotes that the branch state reflects a prerelease version of the next point
 release in the x.y series.
 
-Follow the remaining directions in the Makefile.
+Pushing the tag is what sets the release machinery in motion; see
+[Publishing the release](#publishing-the-release) below.
 
-## Signing binaries
+## Publishing the release
 
-Some of these steps will require secure passwords.
-To obtain the appropriate passwords, contact Elliot Saba (staticfloat) or Alex Arslan
-(ararslan).
-Note that code signing for each platform must be performed on that platform (e.g. Windows
-signing must be done on Windows, etc.).
+Building, signing, and uploading release artifacts is fully automated in CI; no
+binaries are built or signed on anyone's machine, and no signing key material
+exists outside of a cloud KMS. The authoritative runbook, including recovery
+procedures, lives in `ops/README.md` of
+[JuliaCI/julia-buildkite](https://github.com/JuliaCI/julia-buildkite); in outline:
 
-### Linux
+1. Pushing the `vx.y.z` tag triggers a `julia-ci` Buildkite build, which builds
+   binaries for every platform, runs the tests, and additionally builds the
+   light and full source tarballs (with the bundled HTML documentation).
+2. When the tests pass, `julia-ci` automatically triggers the trusted
+   `julia-publish` pipeline, which signs everything (GPG for the Linux/FreeBSD
+   and source tarballs, notarization for macOS, Authenticode for Windows),
+   publishes version-named artifacts to the `julialangnightlies` bucket, and
+   deploys the documentation.
+3. The release manager then starts a `julia-promote` build (New Build with
+   branch = `vx.y.z`), which copies everything into the release bucket layout
+   served at `julialang-s3.julialang.org` — including the source tarballs under
+   `bin/src/x.y/` — repoints the `julia-x.y-latest-*` files, generates and
+   uploads the `bin/checksums/julia-x.y.z.{sha256,md5}` files, and purges the
+   CDN cache.
+4. Dispatch the CI workflow of
+   [VersionsJSONUtil.jl](https://github.com/JuliaLang/VersionsJSONUtil.jl) to
+   regenerate `versions.json`, then the "Update Version DB" workflow of
+   [juliaup](https://github.com/JuliaLang/juliaup) (its upload jobs need manual
+   approval) so `juliaup` picks up the release.
+5. Create the GitHub release with the CI-signed source tarballs attached by
+   running `contrib/github_source_release.sh x.y.z` — it downloads them from the
+   release bucket, verifies the signatures and layout, and shows what it would
+   do; rerun with `--execute` to create the (pre)release and upload.
+6. Update [the website](https://github.com/JuliaLang/www.julialang.org): bump
+   the version in `config.md` and regenerate the old releases page with
+   `downloads/oldreleases.jl`. Finally, announce the release on Discourse.
 
-Code signing must be done manually on Linux, but it's quite simple.
-First obtain the file `julia.key` from the CodeSigning folder in the `juliasecure` AWS
-bucket.
-Add this to your GnuPG keyring using
+
+## Verifying signatures
+
+Signing is performed automatically by the buildbots. The commands below verify
+that the published binaries are correctly signed; run each on the relevant
+platform.
+
+### GPG (Linux, FreeBSD, and source tarballs)
+
+Each tarball ships with a detached `.asc` signature. Import the Julia release
+signing public key (published at <https://julialang.org/assets/juliareleases.asc>)
+and verify:
 
 ```
-gpg --import julia.key
+gpg --verify julia-x.y.z-linux-x86_64.tar.gz.asc julia-x.y.z-linux-x86_64.tar.gz
 ```
 
-This will require entering a password that you must obtain from Elliot or Alex.
-Next, set the trust level for the key to maximum.
-Start by entering a `gpg` session:
-
-```
-gpg --edit-key julia
-```
-
-At the prompt, type `trust`, then when asked for a trust level, provide the maximum
-available (likely 5).
-Exit GnuPG.
-
-Now, for each of the Linux tarballs that were built on the buildbots, enter
-
-```
-gpg -u julia --armor --detach-sig julia-x.y.z-linux-<arch>.tar.gz
-```
-
-This will produce a corresponding .asc file for each tarball.
-And that's it!
+A "Good signature" line means the tarball is authentic and intact.
 
 ### macOS
 
-Code signing should happen automatically on the macOS buildbots.
-However, it's important to verify that it was successful.
-On a system or virtual machine running macOS, download the .dmg file that was built on
-the buildbots.
-For the sake of example, say that the .dmg file is called `julia-x.y.z-osx.dmg`.
-Run
+The `.dmg` is signed and carries a stapled notarization ticket. Verify the disk
+image itself -- run these against the `.dmg` file, not the mounted volume (see
+the note below):
 
 ```
-mkdir ./jlmnt
-hdiutil mount -readonly -mountpoint ./jlmnt julia-x.y.z-osx.dmg
-codesign -v jlmnt/Julia-x.y.app
+xcrun stapler validate julia-x.y.z-macos-x86_64.dmg
+spctl --assess --type open --context context:primary-signature --verbose \
+    julia-x.y.z-macos-x86_64.dmg
 ```
 
-Be sure to note the name of the mounted disk listed when mounting!
-For the sake of example, we'll assume this is `disk3`.
-If the code signing verification exited successfully, there will be no output from the
-`codesign` step.
-If it was indeed successful, you can detach the .dmg now:
+`stapler` should report that the validate action worked, and `spctl` should
+report `accepted` with `source=Notarized Developer ID`.
+
+To check the app bundle, first copy it out of the mounted image to a writable
+location (for example, drag it to `/Applications`), then assess it:
 
 ```
-hdiutil eject /dev/disk3
-rm -rf ./jlmnt
+spctl --assess --type install --verbose /Applications/Julia-x.y.app
 ```
 
-If you get a message like
+This should likewise report `accepted` with `source=Notarized Developer ID`.
 
-> Julia-x.y.app: code object is not signed at all
-
-then you'll need to sign manually.
-
-To sign manually, first retrieve the OS X certificates from the CodeSigning folder
-in the `juliasecure` bucket on AWS.
-Add the .p12 file to your keychain using Keychain.app.
-Ask Elliot Saba (staticfloat) or Alex Arslan (ararslan) for the password for the key.
-Now run
-
-```
-hdiutil convert julia-x.y.z-osx.dmg -format UDRW -o julia-x.y.z-osx_writable.dmg
-mkdir ./jlmnt
-hdiutil mount -mountpoint julia-x.y.z-osx_writable.dmg
-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep jlmnt/Julia-x.y.app
-```
-
-This may fail with a message like
-
-> Julia-x.y.app: resource fork, Finder information, or similar detritus not allowed
-
-If that's the case, you'll need to remove extraneous attributes:
-
-```
-xattr -cr jlmnt/Julia-x.y.app
-```
-
-Then retry code signing.
-If that produces no errors, retry verification.
-If all is now well, unmount the writable .dmg and convert it back to read-only:
-
-```
-hdiutil eject /dev/disk3
-rm -rf ./jlmnt
-hdiutil convert julia-x.y.z-osx_writable.dmg -format UDZO -o julia-x.y.z-osx_fixed.dmg
-```
-
-Verify that the resulting .dmg is in fact fixed by double clicking it.
-If everything looks good, eject it then drop the `_fixed` suffix from the name.
-And that's it!
+!!! note
+    Run these checks against the `.dmg` file or a copied-out app bundle, never
+    against the app inside the mounted disk image. The image mounts read-only,
+    and `codesign --verify` errors out on it with "internal error in Code
+    Signing subsystem".
 
 ### Windows
 
-Signing must be performed manually on Windows.
-First obtain the Windows 10 SDK, which contains the necessary signing utilities, from
-the Microsoft website.
-We need the `SignTool` utility which should have been installed somewhere like
-`C:\Program Files (x86)\Windows Kits\10\App Certification Kit`.
-Grab the Windows certificate files from CodeSigning on `juliasecure` and put them
-in the same directory as the executables.
-Open a Windows CMD window, `cd` to where all the files are, and run
+Check the Authenticode signature on the installer:
 
 ```
-set PATH=%PATH%;C:\Program Files (x86)\Windows Kits\10\App Certification Kit;
-signtool sign /f julia-windows-code-sign_2017.p12 /p "PASSWORD" ^
-   /t http://timestamp.verisign.com/scripts/timstamp.dll ^
-   /v julia-x.y.z-win32.exe
+signtool verify /pa julia-x.y.z-win64.exe
 ```
-
-Note that `^` is a line continuation character in Windows CMD and `PASSWORD` is a
-placeholder for the password for this certificate.
-As usual, contact Elliot or Alex for passwords.
-If there are no errors, we're all good!
-
-## Uploading binaries
-
-Now that everything is signed, we need to upload the binaries to AWS.
-You can use a program like Cyberduck or the `aws` command line utility.
-The binaries should go in the `julialang2` bucket in the appropriate folders.
-For example, Linux x86-64 goes in `julialang2/bin/linux/x.y`.
-Be sure to delete the current `julia-x.y-latest-linux-<arch>.tar.gz` file and replace
-it with a duplicate of `julia-x.y.z-linux-<arch>.tar.gz`.
-
-We also need to upload the checksums for everything we've built, including the source
-tarballs and all release binaries.
-This is simple:
-
-```
-shasum -a 256 julia-x.y.z* | grep -v -e sha256 -e md5 -e asc > julia-x.y.z.sha256
-md5sum julia-x.y.z* | grep -v -e sha256 -e md5 -e asc > julia-x.y.z.md5
-```
-
-Note that if you're running those commands on macOS, you'll get very slightly different
-output, which can be reformatted by looking at an existing file.
-Mac users will also need to use `md5 -r` instead of `md5sum`.
-Upload the .md5 and .sha256 files to `julialang2/bin/checksums` on AWS.
-
-Ensure that the permissions on AWS for all uploaded files are set to "Everyone: READ."
-
-For each file we've uploaded, we need to purge the Fastly cache so that the links on
-the website point to the updated files.
-As an example:
-
-```
-curl -X PURGE https://julialang-s3.julialang.org/bin/checksums/julia-x.y.z.sha256
-```
-
-Sometimes this isn't necessary but it's good to do anyway.

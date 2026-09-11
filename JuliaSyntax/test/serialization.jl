@@ -14,8 +14,8 @@ end
     y = hash(JuliaSyntax.parsestmt(T, "f(x) = x + 2"))::UInt
     z = hash(JuliaSyntax.parsestmt(T, "f(x) = 2 + x"))::UInt
     @test x == y # Correctness
-    @test x != z # Collision
-    @test y != z # Collision
+    @test x != z # No collision
+    @test y != z # No collision
 end
 
 @testset "Serialization $T" for T in [Expr, SyntaxNode, JuliaSyntax.GreenNode]

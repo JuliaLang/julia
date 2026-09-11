@@ -951,41 +951,85 @@ end
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
     length(output) >= 21 || println(output) # for better errors when this fails
-    @test startswith(lstrip(output[3]), "┌ ")
-    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test startswith(lstrip(output[3]), "┌┌ ")
+    @test lstrip(lstrip(output[3])[7:end])[1:3] == "[1]"
     @test occursin("f28442b", output[3])
-    @test startswith(lstrip(output[5]), "├ ")
-    @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
+    @test startswith(lstrip(output[5]), "├├ ")
+    @test lstrip(lstrip(output[5])[7:end])[1:3] == "[2]"
     @test occursin("g28442b", output[5])
 
     is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
     if is_windows_32_bit
         # Assuming tests are broken on 32-bit Windows as above, no need to repeat loose tests here.
     else
-        @test startswith(lstrip(output[8]), "┌┌ ")
+        @test occursin("repeated 10 times", output[7])
+
+        @test startswith(lstrip(output[8]), "├┌ ")
         @test occursin("h28442b", output[8])
+        @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
         @test startswith(lstrip(output[10]), "├├ ")
         @test occursin("g28442b", output[10])
-
-        @test startswith(lstrip(output[13]), "├┌ ")
-        @test occursin("f28442b", output[13])
-        @test startswith(lstrip(output[15]), "├├ ")
-        @test occursin("g28442b", output[15])
-
-        @test occursin("f28442b", output[19])
-
-        @test occursin("repeated 10 times", output[7])
-        @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
         @test lstrip(lstrip(output[10])[7:end])[1:4] == "[22]"
         @test occursin("repeated 10 times", output[12])
-        @test lstrip(lstrip(output[13])[7:end])[1:4] == "[41]"
-        @test lstrip(lstrip(output[15])[7:end])[1:4] == "[42]"
-        @test occursin("repeated 10 times", output[17])
-        @test occursin("repeated 2 times", output[18])
+
+        # The outer cycle closes here, having stood for two turns of the two above
+        @test occursin("repeated 2 times", output[13])
+
+        @test startswith(lstrip(output[14]), "┌ ")
+        @test occursin("f28442b", output[14])
+        @test lstrip(lstrip(output[14])[4:end])[1:4] == "[81]"
+        @test startswith(lstrip(output[16]), "├ ")
+        @test occursin("g28442b", output[16])
+        @test lstrip(lstrip(output[16])[4:end])[1:4] == "[82]"
+        @test occursin("repeated 10 times", output[18])
+
+        @test occursin("f28442b", output[19])
         @test lstrip(output[19])[1:5] == "[101]"
         @test lstrip(output[21])[1:5] == "[102]"
     end
 end
+
+@testset "Long stacktrace printing - cycle longer than two frames" begin
+    f59999(c) = g59999(c + 1)
+    g59999(c) = h59999(c + 1)
+    h59999(c) = c > 10000 ? (return backtrace()) : f59999(c + 1)
+    bt = f59999(1)
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    output = split(String(take!(io)), '\n')
+    length(output) >= 9 || println(output) # for better errors when this fails
+
+    # The bracket opens on the first frame of the repeating unit, not part way round it
+    @test lstrip(output[3])[1] == '┌'
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test occursin("h59999", output[3])
+    @test lstrip(output[5])[1] == '├'
+    @test occursin("g59999", output[5])
+    @test lstrip(output[7])[1] == '├'
+    @test occursin("f59999", output[7])
+    @test occursin(r"repeated \d+ times", output[9])
+end
+
+@testset "Long stacktrace printing - cycle ending near the end of the trace" begin
+    #= Built by hand so the number of frames after the cycle is exact: thirteen turns of a
+    four-frame unit, then one frame. The bracket has to be closed within the trace. =#
+    frame59999(name) = Base.StackTraces.StackFrame(Symbol(name), Symbol("demo.jl"), 1)
+    trace = Any[[(frame59999("u$u"), 1) for _ ∈ 1:13 for u ∈ 1:4]...,
+                (frame59999("tail"), 1)]
+    @test length(trace) > Base.BIG_STACKTRACE_SIZE
+
+    io = IOBuffer()
+    Base.show_backtrace(io, trace)
+    output = split(String(take!(io)), '\n')
+
+    @test lstrip(output[3])[1] == '┌'
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test occursin("u1", output[3])
+    # The cycle is closed, and what follows it is numbered past all of its repetitions
+    @test any(l -> occursin("repeated 13 times", l), output)
+    @test any(l -> occursin("[53] tail", l), output)
+end
+
 
 @testset "Line number correction" begin
     getbt() = backtrace()
@@ -1265,6 +1309,46 @@ let bt = try
     @test !occursin(" _include(", bt_str)
 end
 
+# Test that the code loading machinery is collapsed to the frame that entered it
+@testset "loading frames" begin
+    frame(func, file, line=1) = Base.StackTraces.StackFrame(Symbol(func), Symbol(file), line)
+    process(funcfiles) = Base.process_backtrace(Base.StackFrame[frame(f, fi) for (f, fi) in funcfiles])
+    funcs(trace) = [String(f.func) for (f, n) in trace]
+
+    # `using Foo` where the package cannot be found
+    @test funcs(process([("macro expansion", "loading.jl"), ("macro expansion", "lock.jl"),
+                         ("__require", "loading.jl"), ("require", "loading.jl"),
+                         ("eval_import_path", "module.jl"), ("_eval_using", "module.jl"),
+                         ("top-level scope", "none")])) == ["require", "top-level scope"]
+
+    # user code that errors while the package is being loaded must be kept
+    @test funcs(process([("inner", "BadPkg.jl"), ("top-level scope", "BadPkg.jl"),
+                         ("include", "Base.jl"), ("__require_prelocked", "loading.jl"),
+                         ("_require_prelocked", "loading.jl"), ("require", "loading.jl"),
+                         ("_eval_using", "module.jl"), ("top-level scope", "none")])) ==
+          ["inner", "top-level scope", "require", "top-level scope"]
+
+    # precompilation worker processes have no `require` frame, and the long
+    # `include_package_for_output` signature is not what we want to show
+    @test funcs(process([("inner", "BadPkg.jl"), ("top-level scope", "BadPkg.jl"),
+                         ("include", "Base.jl"), ("include_package_for_output", "loading.jl"),
+                         ("top-level scope", "stdin")])) ==
+          ["inner", "top-level scope", "include", "top-level scope"]
+
+    # runs without a loading entry point are left alone
+    @test funcs(process([("f", "user.jl"), ("invoke_in_world", "essentials.jl"),
+                         ("g", "user.jl")])) == ["f", "invoke_in_world", "g"]
+    @test funcs(process([("f", "user.jl"), ("include", "Base.jl"),
+                         ("top-level scope", "script.jl")])) ==
+          ["f", "include", "top-level scope"]
+
+    # opt out
+    withenv("JULIA_STACKTRACE_FULL_LOADING" => "true") do
+        @test length(process([("macro expansion", "loading.jl"), ("__require", "loading.jl"),
+                              ("require", "loading.jl"), ("top-level scope", "none")])) == 4
+    end
+end
+
 # Test backtrace printing
 module B
     module C
@@ -1298,6 +1382,28 @@ let err = nothing
     end
 end
 
+# expands inline, without the `do`-block forms of `mktemp`/`redirect_stderr`: a
+# StackOverflowError is only reliably catchable from the interpreted top-level
+# `@testset` body, not from within a compiled closure
+macro capture_stack_overflow(ex)
+    return quote
+        local path, warning_output = mktemp()
+        local prev_stderr = stderr
+        redirect_stderr(warning_output)
+        local bt = try
+            $(esc(ex))
+        catch
+            catch_backtrace()
+        finally
+            redirect_stderr(prev_stderr)
+            close(warning_output)
+        end
+        local warning = read(path, String)
+        rm(path)
+        bt, warning
+    end
+end
+
 # issue #37587
 # TODO: enable on more platforms
 if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
@@ -1306,20 +1412,14 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
     pair_repeater_b() = pair_repeater_a()
 
     @testset "repeated stack frames" begin
-        let bt = try
-                single_repeater()
-            catch
-                catch_backtrace()
-            end
+        let (bt, warning) = @capture_stack_overflow(single_repeater())
+            @test occursin("Warning: detected a stack overflow", warning)
             bt_str = sprint(Base.show_backtrace, bt)
             @test occursin(r"repeated \d+ times", bt_str)
         end
 
-        let bt = try
-                pair_repeater_a()
-            catch
-                catch_backtrace()
-            end
+        let (bt, warning) = @capture_stack_overflow(pair_repeater_a())
+            @test occursin("Warning: detected a stack overflow", warning)
             bt_str = sprint(Base.show_backtrace, bt)
             @test occursin(r"repeated \d+ times", bt_str)
         end

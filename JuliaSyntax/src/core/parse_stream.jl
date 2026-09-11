@@ -376,7 +376,8 @@ function _buffer_lookahead_tokens(lexer, lookahead)
         was_whitespace = is_whitespace(k)
         had_whitespace |= was_whitespace
         f = EMPTY_FLAGS
-        if k == K"Operator" && raw.op_precedence != Tokenize.PREC_NONE
+        if (k == K"Operator" || raw.op_precedence == Tokenize.PREC_COMPOUND_ASSIGN) &&
+                raw.op_precedence != Tokenize.PREC_NONE
             # Store operator precedence in numeric flags
             f |= set_numeric_flags(Int(raw.op_precedence))
         end
@@ -595,7 +596,7 @@ function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
 end
 
 """
-        first_child_position(stream::ParseStream, pos::ParseStreamPosition)
+        last_child_position(stream::ParseStream, pos::ParseStreamPosition)
 
     Find the last non-trivia child of this node (in the GreenTree/RedTree sense) and
     return its position (i.e. the position as if that child had been the last thing parsed).

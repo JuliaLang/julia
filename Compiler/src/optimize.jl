@@ -39,6 +39,9 @@ const IR_FLAG_NOUB        = one(UInt32) << 10
 #const IR_FLAG_CONSISTENTOVERLAY = one(UInt32) << 12
 # This statement is :nortcall
 const IR_FLAG_NORTCALL = one(UInt32) << 13
+# This statement is proven :reset_safe
+const IR_FLAG_RESET_SAFE = one(UInt32) << 14
+# Reserved: one(UInt32) << 15 used for RSIIMO below
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
@@ -50,15 +53,21 @@ const IR_FLAG_UNUSED      = one(UInt32) << 17
 const IR_FLAG_EFIIMO      = one(UInt32) << 18
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 19
+# This statement is :reset_safe == RESET_SAFE_IF_INACCESSIBLEMEMONLY
+const IR_FLAG_RSIIMO      = one(UInt32) << 20
 
 const NUM_IR_FLAGS = 3 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
     IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW |
-    IR_FLAG_TERMINATES | IR_FLAG_NOUB | IR_FLAG_NORTCALL
+    IR_FLAG_TERMINATES | IR_FLAG_NOUB | IR_FLAG_NORTCALL | IR_FLAG_RESET_SAFE
 
 const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
 
+# N.B.: RSIIMO is deliberately not included: `has_flag` requires all bits, and
+# nothing consumes an escape-analysis outcome for reset-safety yet. When such
+# a consumer exists, it needs its own (RSIIMO | INACCESSIBLEMEM_OR_ARGMEM)
+# qualification, not membership in this conjunction.
 const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
 has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
@@ -66,7 +75,7 @@ has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 function iscallstmt(@nospecialize stmt)
     stmt isa Expr || return false
     head = stmt.head
-    return head === :call || head === :invoke || head === :foreigncall
+    return head === :call || head === :invoke || head === :foreigncall || head === :foreignglobal
 end
 
 function flags_for_effects(effects::Effects)
@@ -78,6 +87,20 @@ function flags_for_effects(effects::Effects)
         flags |= IR_FLAG_EFFECT_FREE
     elseif is_effect_free_if_inaccessiblememonly(effects)
         flags |= IR_FLAG_EFIIMO
+    end
+    # N.B.: Inference does not yet model `reset_safe` separately from
+    # `effect_free`, so until it does, only statements that are additionally
+    # proven effect-free may be treated as reset-safe (execution can safely
+    # be reset across them, since they have no externally visible effects).
+    # This flag describes the statement's IPO contract only: machinery the
+    # runtime inserts implicitly to execute it (allocation, write barriers,
+    # runtime library calls), whose frames must never be abandoned
+    # asynchronously, is handled separately by eagerly dropping the published
+    # reset context around it (see llvm-cancellation-lowering.cpp).
+    if is_reset_safe(effects) && is_effect_free(effects)
+        flags |= IR_FLAG_RESET_SAFE
+    elseif is_reset_safe_if_inaccessiblememonly(effects) && is_effect_free_if_inaccessiblememonly(effects)
+        flags |= IR_FLAG_RSIIMO
     end
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
@@ -393,7 +416,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return (false, false, false)
-            if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
+            if f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
             end
@@ -420,6 +443,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             terminates = is_terminates(effects)
             removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
+        elseif head === :foreignglobal
+            return (false, false, false)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
@@ -460,7 +485,7 @@ function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), 
     end
     if !iscallstmt(stmt)
         # There is a bit of a subtle point here, which is that some non-call
-        # statements (e.g. PiNode) can be UB:, however, we consider it
+        # statements (e.g. PiNode) can be UB, however, we consider it
         # illegal to introduce such statements that actually cause UB (for any
         # input). Ideally that'd be handled at insertion time (TODO), but for
         # the time being just do that here.
@@ -819,7 +844,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     stmt = inst[:stmt]
     if !needs_ea_validation
         if !isterminator(stmt) && stmt !== nothing
-            # ignore control flow node – they are not removable on their own and thus not
+            # ignore control flow nodes – they are not removable on their own and thus do not
             # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
             # the whole method invocation
             sv.all_effect_free &= has_flag(flag, IR_FLAG_EFFECT_FREE)
@@ -1066,7 +1091,7 @@ function run_passes_ipo_safe(
 
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
-    @pass "CC: CONVERT"   ir = convert_to_ircode(ci, sv)
+    @pass "CC: CONVERT"   ir = convert_to_ircode!(ci, sv)
     @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "CC: COMPACT_1" ir = compact!(ir)
@@ -1136,10 +1161,10 @@ function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
         edge === prev[2] || return true # change to this edge
         linetable = di.linetable
         # check for change to line number here
-        if linetable === nothing || line == 0
+        if !(linetable isa DebugInfo) || line == 0
             line == prevline || return true
         else
-            changed_lineinfo(linetable::DebugInfo, Int(line), Int(prevline)) && return true
+            changed_lineinfo(linetable, Int(line), Int(prevline)) && return true
         end
         # check for change to edge here
         edge == 0 && return false # no edge here
@@ -1149,10 +1174,11 @@ function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
     end
 end
 
-function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
+function convert_to_ircode!(ci::CodeInfo, sv::OptimizationState)
     # Update control-flow to reflect any unreachable branches.
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    ci.code = code = copy_exprargs(ci.code)
+    # ci is always a fresh private copy so we can reuse it here.
+    code = ci.code
     di = DebugInfoStream(sv.linfo, ci.debuginfo, length(code))
     codelocs = di.codelocs
     ssaflags = ci.ssaflags
@@ -1385,8 +1411,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
                     cost = T_IFUNC_COST[iidx]
-                    if cost == 0 || nargs < 3 ||
-                       (f === Intrinsics.cglobal || f === Intrinsics.llvmcall) # these hold malformed IR, so argextype will crash on them
+                    if cost == 0 || nargs < 3 || f === Intrinsics.llvmcall
+                        # holds malformed IR, so argextype will crash on it
                         return cost
                     end
                     aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
@@ -1451,6 +1477,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
         end
         return 20
+    elseif head === :foreignglobal
+        return 1
     elseif head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
@@ -1584,17 +1612,16 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
         elseif isa(el, EnterNode)
             tgt = el.catch_dest
-            if tgt != 0
-                was_deleted = labelchangemap[tgt] == typemin(Int)
-                if was_deleted
-                    @assert !isdefined(el, :scope)
-                    body[i] = nothing
+            if tgt != 0 && labelchangemap[tgt] == typemin(Int)
+                @assert !isdefined(el, :scope)
+                body[i] = nothing  # the enclosing catch block was deleted
+            else
+                # renumber the catch destination (tgt == 0 stays frame-less) and the scope operand
+                newdest = tgt == 0 ? 0 : tgt + labelchangemap[tgt]
+                if isdefined(el, :scope) && isa(el.scope, SSAValue)
+                    body[i] = EnterNode(newdest, SSAValue(el.scope.id + ssachangemap[el.scope.id]))
                 else
-                    if isdefined(el, :scope) && isa(el.scope, SSAValue)
-                        body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
-                    else
-                        body[i] = EnterNode(el, tgt + labelchangemap[tgt])
-                    end
+                    body[i] = EnterNode(el, newdest)
                 end
             end
         elseif isa(el, Expr)

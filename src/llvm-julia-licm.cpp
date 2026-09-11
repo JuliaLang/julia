@@ -33,7 +33,7 @@ STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
 
 /*
  * Julia LICM pass.
- * This takes care of some julia intrinsics that is safe to move around/out of loops but
+ * This takes care of some julia intrinsics that are safe to move around/out of loops but
  * can't be handled by LLVM's LICM. These intrinsics can be moved outside of
  * loop context as well but it is inside a loop where they matter the most.
  */
@@ -165,19 +165,24 @@ struct JuliaLICM : public JuliaPassContext {
         auto SE = GetSE();
         MemorySSAUpdater MSSAU(MSSA);
 
-        // Lazy initialization of exit blocks insertion points.
-        bool exit_pts_init = false;
-        SmallVector<Instruction*, 8> _exit_pts;
-        auto get_exit_pts = [&] () -> MutableArrayRef<Instruction*> {
-            if (!exit_pts_init) {
-                exit_pts_init = true;
-                SmallVector<BasicBlock*, 8> exit_bbs;
+        // Lazily collect exit blocks; insertion points depend on the begin's loop.
+        bool exit_bbs_init = false;
+        SmallVector<BasicBlock*, 8> exit_bbs;
+        auto get_exit_pts = [&] (Loop *begin_loop) {
+            if (!exit_bbs_init) {
+                exit_bbs_init = true;
                 L->getUniqueExitBlocks(exit_bbs);
-                for (BasicBlock *bb: exit_bbs) {
-                    _exit_pts.push_back(&*bb->getFirstInsertionPt());
-                }
             }
-            return _exit_pts;
+            SmallVector<Instruction*, 8> exit_pts;
+            for (BasicBlock *bb: exit_bbs) {
+                // Keep the token inside its defining loop: LCSSA cannot insert
+                // token PHIs, so later loop cloning can otherwise break dominance.
+                // Omitting an end conservatively extends the preserve region.
+                if (begin_loop && !begin_loop->contains(bb))
+                    continue;
+                exit_pts.push_back(&*bb->getFirstInsertionPt());
+            }
+            return exit_pts;
         };
 
         bool changed = false;
@@ -226,7 +231,7 @@ struct JuliaLICM : public JuliaPassContext {
                     if (!DT->properlyDominates(begin->getParent(), header))
                         continue;
                     changed = true;
-                    auto exit_pts = get_exit_pts();
+                    auto exit_pts = get_exit_pts(LI->getLoopFor(begin->getParent()));
                     if (exit_pts.empty()) {
                         ++ErasedPreserveEnd;
                         eraseInstruction(*call, MSSAU);
@@ -234,7 +239,6 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                     ++SunkPreserveEnd;
                     moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE, MemorySSA::Beginning);
-                    exit_pts[0] = call;
                     LLVM_DEBUG(dbgs() << "Sunk gc_preserve_end: " << *call << "\n");
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Sunk", call)
@@ -247,7 +251,6 @@ struct JuliaLICM : public JuliaPassContext {
 #else
                         auto CI = CallInst::Create(call, {}, exit_pts[i]);
 #endif
-                        exit_pts[i] = CI;
                         createNewInstruction(CI, call, MSSAU);
                         LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");
                         REMARK([&](){
@@ -257,6 +260,10 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                 }
                 else if (callee == write_barrier_func) {
+                    // A SATB (ConcurrentImmix) barrier must fire every iteration to
+                    // snapshot each overwritten value, so it can't be hoisted. Other
+                    // plans only mark the parent dirty, where hoisting is safe.
+#ifndef MMTK_PLAN_CONCURRENTIMMIX
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!makeLoopInvariant(L, call->getArgOperand(i),
@@ -278,6 +285,7 @@ struct JuliaLICM : public JuliaPassContext {
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting write barrier " << ore::NV("GC Write Barrier", call);
                     });
+#endif
                 }
                 else if (callee == alloc_obj_func) {
                     bool valid = true;

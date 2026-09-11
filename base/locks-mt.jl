@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import .Base: unsafe_convert, lock, trylock, unlock, islocked, wait, notify, AbstractLock
+import .Base: lock, trylock, unlock, islocked, AbstractLock
 
 export SpinLock
 public PaddedSpinLock
@@ -42,7 +42,6 @@ See also [`PaddedSpinLock`](@ref).
 See the documentation for [`AbstractSpinLock`](@ref) regarding correct usage.
 """
 mutable struct SpinLock <: AbstractSpinLock
-    # we make this much larger than necessary to minimize false-sharing
     @atomic owned::Int
     SpinLock() = new(0)
 end

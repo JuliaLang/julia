@@ -148,6 +148,11 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessors
+get_libgfortran_path() = libgfortran_path
+get_libstdcxx_path() = libstdcxx_path
+get_libgomp_path() = libgomp_path
+
 function __init__()
     global libatomic_path = string(libatomic.path)
     global libgcc_s_path = string(libgcc_s.path)

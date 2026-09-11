@@ -82,8 +82,8 @@ already work:
 The following defines the usage of terminal-based `emacs`:
 
     define_editor(
-        r"\\bemacs\\b.*\\s(-nw|--no-window-system)\\b", wait=true) do cmd, path, line
-        `\$cmd +\$line \$path`
+        r"\\bemacs\\b.*\\s(-nw|--no-window-system)\\b", wait=true) do cmd, path, line, column
+        `\$cmd +\$line:\$column \$path`
     end
 
 !!! compat "Julia 1.4"
@@ -216,6 +216,15 @@ function editor()
     return Cmd([editor])
 end
 
+function find_source(path::AbstractString)
+    path isa String || (path = convert(String, path))
+    if endswith(path, ".jl")
+        p = find_source_file(path)
+        p !== nothing && return p
+    end
+    return path
+end
+
 """
     edit(path::AbstractString, line::Integer=0, column::Integer=0)
 
@@ -228,12 +237,8 @@ by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
 See also [`InteractiveUtils.define_editor`](@ref).
 """
-function edit(path::AbstractString, line::Integer=0, column::Integer=0)
-    path isa String || (path = convert(String, path))
-    if endswith(path, ".jl")
-        p = find_source_file(path)
-        p !== nothing && (path = p)
-    end
+function edit(path::AbstractString, line::Integer=1, column::Integer=1)
+    path = find_source(path)
     cmd = editor()
     for callback in EDITOR_CALLBACKS
         if !applicable(callback, cmd, path, line, column)
@@ -246,43 +251,11 @@ function edit(path::AbstractString, line::Integer=0, column::Integer=0)
     error("no editor found")
 end
 
-"""
-    edit(function, [types])
-    edit(module)
-
-Edit the definition of a function, optionally specifying a tuple of types to indicate which
-method to edit. For modules, open the main source file. The module needs to be loaded with
-`using` or `import` first.
-
-!!! compat "Julia 1.1"
-    `edit` on modules requires at least Julia 1.1.
-
-To ensure that the file can be opened at the given line, you may need to call
-`InteractiveUtils.define_editor` first.
-"""
-function edit(@nospecialize f)
-    ms = methods(f).ms
-    length(ms) == 1 && edit(functionloc(ms[1])...)
-    length(ms) > 1 && return ms
-    length(ms) == 0 && functionloc(f) # throws
-    nothing
-end
-edit(m::Method) = edit(functionloc(m)...)
-edit(@nospecialize(f), idx::Integer) = edit(methods(f).ms[idx])
-edit(f, t) = (@nospecialize; edit(functionloc(f, t)...))
-edit(@nospecialize argtypes::Union{Tuple, Type{<:Tuple}}) = edit(functionloc(argtypes)...)
-edit(file::Nothing, line::Integer) = error("could not find source file for function")
-function edit(m::Module)
-    path = pathof(m)
-    path === nothing && error("could not find source file for module: $m")
-    edit(path)
-end
-edit(m::Module, n::Symbol) = edit(varloc(m, n)...)
-
 # terminal pager
 
 if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
+        file = find_source(file)
         pager = shell_split(get(ENV, "PAGER", "more"))
         if pager[1] == "more"
             g = ""
@@ -295,6 +268,7 @@ if Sys.iswindows()
     end
 else
     function less(file::AbstractString, line::Integer)
+        file = find_source(file)
         pager = shell_split(get(ENV, "PAGER", "less"))
         run(`$pager +$(line)g $file`)
         nothing
@@ -309,16 +283,69 @@ the `julia` prompt when you quit the pager.
 """
 less(file::AbstractString) = less(file, 1)
 
-"""
-    less(function, [types])
+# methods shared by edit and less
 
-Show the definition of a function using the default pager, optionally specifying a tuple of
-types to indicate which method to see.
 """
-less(f)                    = less(functionloc(f)...)
-less(f, @nospecialize t)   = less(functionloc(f,t)...)
-less(file, line::Integer)  = error("could not find source file for function")
-less(m::Module, n::Symbol) = less(varloc(m, n)...)
+    edit(f, [types])
+
+Edit the definition of a function, optionally specifying a tuple of types to indicate which
+method to edit.
+
+    edit(::Method)
+
+Edit the definition of a method by specifying a method object.
+
+    edit(f, n::Integer)
+
+Edit the nth method in `methods(f)`.
+
+    edit(argtypes::Union{Tuple, Type{<:Tuple}})
+
+Edit a method specified as a tuple of types or Tuple type.
+
+    edit(::Module)
+
+Edit the main source file of a module. The module must be loaded with `using` or `import` first.
+
+    edit(::Module, ::Symbol)
+
+Edit the definition of a documented global variable or type.
+
+!!! compat "Julia 1.1"
+    `edit` on modules requires at least Julia 1.1.
+
+To ensure that the file can be opened at the given line, you may need to call
+`InteractiveUtils.define_editor` first.
+"""
+function edit end
+
+"""
+    less(arguments...)
+
+Show a definition using the default pager. Accepted arguments are the same as for [`edit`](@ref).
+"""
+function less end
+
+let _editless = Union{typeof(edit), typeof(less)}
+    function (el::_editless)(@nospecialize f)
+        ms = methods(f).ms
+        length(ms) == 1 && el(functionloc(ms[1])...)
+        length(ms) > 1 && return ms
+        length(ms) == 0 && functionloc(f) # throws
+        nothing
+    end
+    (el::_editless)(m::Method) = el(functionloc(m)...)
+    (el::_editless)(@nospecialize(f), idx::Integer) = el(methods(f).ms[idx])
+    (el::_editless)(f, t) = (@nospecialize; el(functionloc(f, t)...))
+    (el::_editless)(@nospecialize argtypes::Union{Tuple, Type{<:Tuple}}) = el(functionloc(argtypes)...)
+    (el::_editless)(file::Nothing, line::Integer) = error("could not find source file for function")
+    function (el::_editless)(m::Module)
+        path = pathof(m)
+        path === nothing && error("could not find source file for module: $m")
+        el(path)
+    end
+    (el::_editless)(m::Module, n::Symbol) = el(varloc(m, n)...)
+end
 
 # find where a (documented) global is defined using the doc system
 function varloc(mod::Module, name::Symbol)
@@ -334,7 +361,8 @@ function varloc(mod::Module, name::Symbol)
             if docstr isa Base.Docs.DocStr
                 mm = docstr.data
                 if haskey(mm, :path) && haskey(mm, :linenumber)
-                    return (mm[:path], mm[:linenumber])
+                    p = mm[:path]
+                    return (something(find_source_file(p), p), mm[:linenumber])
                 end
             end
         end

@@ -21,24 +21,29 @@ struct ParseState
     whitespace_newline::Bool
     # Enable parsing `where` with high precedence
     where_enabled::Bool
+    # First byte of the content of the bare parens currently being parsed
+    # (0 otherwise).
+    paren_content_byte_index::UInt32
 end
 
 # Normal context
 function ParseState(stream::ParseStream)
-    ParseState(stream, true, false, false, false, false, true)
+    ParseState(stream, true, false, false, false, false, true, UInt32(0))
 end
 
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
                     space_sensitive=nothing, for_generator=nothing,
                     end_symbol=nothing, whitespace_newline=nothing,
-                    where_enabled=nothing)
+                    where_enabled=nothing, paren_content_byte_index=nothing)
     ParseState(ps.stream,
         range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
         space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
         for_generator === nothing ? ps.for_generator : for_generator,
         end_symbol === nothing ? ps.end_symbol : end_symbol,
         whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
-        where_enabled === nothing ? ps.where_enabled : where_enabled)
+        where_enabled === nothing ? ps.where_enabled : where_enabled,
+        paren_content_byte_index === nothing ?
+            ps.paren_content_byte_index : paren_content_byte_index)
 end
 
 # Functions to change parse state
@@ -198,6 +203,12 @@ function min_supported_version(min_ver, ps, mark, message)
     end
 end
 
+function min_supported_wrapping_arithmetic_op(ps, mark, t)
+    if kind(t) in KSet"+% -% *%"
+        min_supported_version(v"1.14", ps, mark, "wrapping arithmetic operators `+%`, `-%`, and `*%`")
+    end
+end
+
 # flisp: disallow-space
 function bump_disallowed_space(ps)
     if preceding_whitespace(peek_token(ps))
@@ -297,13 +308,13 @@ end
 function is_unary_op(t, isdot)
     k = kind(t)
     (k in KSet"<: >:" && !isdot) ||
-    k in KSet"+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓" # dotop allowed
+    k in KSet"+ +% - -% ! ~ ¬ √ ∛ ∜ ⋆ ± ∓" # dotop allowed
 end
 
 # Operators that are both unary and binary
 function is_both_unary_and_binary(t, isdot)
     k = kind(t)
-    k in KSet"+ - ⋆ ± ∓" || (k in KSet"$ & ~" && !isdot)
+    k in KSet"+ +% - -% ⋆ ± ∓" || (k in KSet"$ & ~" && !isdot)
 end
 
 function is_string_macro_suffix(k)
@@ -988,14 +999,14 @@ end
 #
 # flisp: parse-expr
 function parse_expr(ps::ParseState)
-    parse_with_chains(ps, parse_term, is_prec_plus, KSet"+ ++")
+    parse_with_chains(ps, parse_term, is_prec_plus, KSet"+ +% ++")
 end
 
 # a * b * c  ==>  (call-i a * b c)
 #
 # flisp: parse-term
 function parse_term(ps::ParseState)
-    parse_with_chains(ps, parse_rational, is_prec_times, KSet"*")
+    parse_with_chains(ps, parse_rational, is_prec_times, KSet"* *%")
 end
 
 # Parse left to right, combining any of `chain_ops` into one call
@@ -1133,7 +1144,7 @@ function parse_where(ps::ParseState, down)
     end
 end
 
-# Juxtaposition. Kinda ugh but soo useful for units and Field identities like `im`
+# Juxtaposition. Kinda ugh but so useful for units and field identities like `im`
 #
 # flisp: parse-juxtapose
 function parse_juxtapose(ps::ParseState)
@@ -1571,7 +1582,14 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # Space separated macro arguments
                 # A.@foo a b    ==> (macrocall (. A (macro_name foo)) a b)
                 # @A.foo a b    ==> (macrocall (macro_name (. A foo)) a b)
-                n_args = parse_space_separated_exprs(ps)
+                #
+                # 1.14: A macro call which is the immediate child of parens
+                # can span multiple lines
+                # (@foo x\n y)     ==> (parens (macrocall (macro_name foo) x y))
+                # (@m @n x y \n z) ==> (parens (macrocall m (macrocall n x y) z))
+                # (x, @m a \n b)   ==> (tuple-p x (macrocall m a) (error-t b))
+                n_args = parse_space_separated_exprs(
+                    ps, ps.paren_content_byte_index == mark.byte_index)
                 is_doc_macro = last_identifier_orig_kind == K"doc"
                 if is_doc_macro && n_args == 1
                     # Parse extended @doc args on next line
@@ -2839,14 +2857,21 @@ function parse_iteration_specs(ps::ParseState)
 end
 
 # flisp: parse-space-separated-exprs
-function parse_space_separated_exprs(ps::ParseState)
+function parse_space_separated_exprs(ps::ParseState, macro_eats_newlines::Bool=false)
     ps = with_space_sensitive(ps)
     n_sep = 0
     while true
         k = peek(ps)
-        if is_closing_token(ps, k) || k == K"NewlineWs" ||
-                (ps.for_generator && k == K"for")
+        if is_closing_token(ps, k) || (ps.for_generator && k == K"for")
             break
+        elseif k == K"NewlineWs"
+            k2 = peek(ps, skip_newlines=true)
+            if !macro_eats_newlines || is_closing_token(ps, k2) || k2 == K"for" ||
+                    (is_operator(k2) && k2 != K"'")
+                break
+            end
+            bump_trivia(ps)
+            continue
         end
         parse_eq(ps)
         n_sep += 1
@@ -3228,7 +3253,7 @@ function parse_paren(ps::ParseState, check_identifiers=true, has_unary_prefix=fa
         # Deal with all other cases of tuple or block syntax via the generic
         # parse_brackets
         initial_semi = peek(ps) == K";"
-        opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+        opts = parse_brackets(ps, K")", bare_parens=true) do had_commas, had_splat, num_semis, num_subexprs
             is_tuple = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0)) ||
                        (peek(ps, 2) == K"->" && (peek_behind(ps).kind != K"where" && !has_unary_prefix))
@@ -3288,7 +3313,8 @@ end
 #
 # flisp: parts of parse-paren- and parse-arglist
 function parse_brackets(after_parse::F,
-                        ps::ParseState, closing_kind, generator_is_last=true) where {F}
+                        ps::ParseState, closing_kind, generator_is_last=true;
+                        bare_parens::Bool=false) where {F}
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
@@ -3320,7 +3346,8 @@ function parse_brackets(after_parse::F,
             break
         else
             mark = position(ps)
-            parse_eq_star(ps)
+            parse_eq_star(!(bare_parens && num_subexprs == 0 && num_semis == 0 && ps.stream.version >= (1, 14)) ? ps :
+                ParseState(ps, paren_content_byte_index=first(byte_range(peek_full_token(ps)))))
             trailing_comma = false
             num_subexprs += 1
             if num_subexprs == 1

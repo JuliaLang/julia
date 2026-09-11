@@ -174,7 +174,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
 
     ki[2] = UInt64(0)
 
-    # Zigurrat tables for the exponential distribution
+    # Ziggurat tables for the exponential distribution
     x1 = ziggurat_exp_r
     web[256] = x1/emantissa
     feb[256] = exp(-x1)

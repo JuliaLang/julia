@@ -2,7 +2,7 @@
 
 # Internal changes mechanism.
 # Instructions for Julia Core Developers:
-# 1. When making a breaking change that is known to be depnedet upon by an
+# 1. When making a breaking change that is known to be depended upon by an
 #    important and closely coupled package, decide on a unique `change_name`
 #    for your PR and add it to the list below. In general, it is better to
 #    err on the side of caution and assign a `change_name` even if it is not
@@ -17,7 +17,7 @@
 # 2. Upon tagging an -alpha version
 #    a. On master, set __next_removal_version to v"1.(x+1)-alpha"
 #    b. On the release branch, set __next_removal_version to v"1.x" (no -alpha)
-# 3. Upong tagging a release candidate, clear the list of internal changes and
+# 3. Upon tagging a release candidate, clear the list of internal changes and
 #    set __next_removal_version to `nothing`.
 const __next_removal_version = v"1.12-alpha"
 const __internal_changes_list = (
@@ -29,6 +29,7 @@ const __internal_changes_list = (
     :printcodeinfocalls,
     :syntacticccall, #59165
     :svectvar, #61645
+    :syntacticcglobal, #61709
     # Add new change names above this line
 )
 
@@ -192,6 +193,7 @@ macro deprecate(old, new, export_old=true)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
         callexpr = old.head === :call ? old : old.args[1]
+        maybe_export = nothing
         if callexpr.head === :call
             fnexpr = callexpr.args[1]
             if fnexpr isa Expr && fnexpr.head === :curly
@@ -203,8 +205,6 @@ macro deprecate(old, new, export_old=true)
                 else
                     cannot_export_nonsymbol()
                 end
-            else
-                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")
@@ -318,6 +318,31 @@ end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
+"""
+    @deprecate_binding old new [export_old=true] [dep_message] [constant=true]
+
+Deprecate the binding `old`, making it an alias for `new` and printing a deprecation warning
+on access to `old` (when `julia` is run with `--depwarn=yes`). This is for deprecating a
+renamed or relocated global/constant, whereas [`@deprecate`](@ref) is for deprecating methods.
+
+`old` must be a symbol and `new` the replacement it forwards to. By default `old` is defined
+as a `const`; pass `false` for `constant` to define it as a non-constant global instead.
+
+To prevent `old` from being exported, set `export_old` to `false`. A custom `dep_message`
+string (printed after "<module>.old is deprecated") may be given.
+
+See also [`@deprecate`](@ref) and [`Base.depwarn`](@ref).
+
+# Examples
+```jldoctest
+julia> const dep_new = 42;
+
+julia> Base.@deprecate_binding dep_old dep_new false;
+
+julia> dep_old
+42
+```
+"""
 macro deprecate_binding(old, new, export_old=true, dep_message=:nothing, constant=true)
     dep_message === :nothing && (dep_message = ", use $new instead.")
     return Expr(:toplevel,
@@ -576,6 +601,13 @@ to_power_type(x) = oftype(x*x, x)
 
 # BEGIN 1.14 deprecations
 
+# These operators are new in 1.14, but these fallback methods are added for
+# compatibility while packages adjust to defining both operators, to allow
+# Base and other packages to start using these.
+*%(a::T, b::T) where {T} = *(a, b)
++%(a::T, b::T) where {T} = +(a, b)
+-%(a::T, b::T) where {T} = -(a, b)
+
 # Revise calls this
 function explicit_manifest_entry_path(args...)
     spec = explicit_manifest_entry_load_spec(args...)
@@ -589,7 +621,7 @@ end
 #    but it completely breaks inference of these generated functions and some of them are important.
 # 3. Never print a warning in generated functions (but do throw the error if --depwarn=error).
 #
-# We choose option 3. It's not ideal, because users that never use --depawarn=error will never see the warning,
+# We choose option 3. It's not ideal, because users that never use --depwarn=error will never see the warning,
 # but it's the least bad tradeoff among the lot.
 function depwarn_if_not_pure(args...)
     opts = JLOptions()
@@ -603,7 +635,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -613,7 +645,7 @@ end
 
 @noinline function typename(x::TypeEq)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::TypeEq)
@@ -629,6 +661,86 @@ end
 @noinline function isabstracttype(x::TypeEq)
     depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
     return true
+end
+
+@noinline function getproperty(x::Core.TypeEgal, s::Symbol)
+    if s === :parameters
+        depwarn_if_not_pure("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        return Core.svec(type_parameter(x))
+    elseif s === :name
+        depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
+        return Core.AnyType.name
+    elseif s === :hash
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
+    end
+    return getfield(x, s)
+end
+
+@noinline function typename(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
+    return Core.AnyType.name
+end
+
+@noinline function nameof(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `nameof` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :nameof)
+    return :Type
+end
+
+@noinline function parentmodule(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `parentmodule` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :parentmodule)
+    return Core
+end
+
+@noinline function isabstracttype(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
+    return true
+end
+
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: AbstractString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    @inbounds raw_substring(s, i + 1, j)
+end
+
+# This method is slightly different because it returns a SubString{SubString},
+# therefore it requires an explicit SubString{T}(ss) call at the end.
+# We discourage creating substrings of substrings, but the deprecated method
+# allowed it.
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: SubString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    ss = @inbounds raw_substring(s, i + 1, j)
+    SubString{T}(ss)
+end
+
+@deprecate _unsetindex!(A) Base.unsetindex!(A) false
+@deprecate _unsetindex!(A, i) Base.unsetindex!(A, i) false
+
+# `a[] = v` on a `Threads.Atomic` (the `setindex!` form) is a footgun: read-modify-write
+# expressions such as `a[] += 1` look atomic but expand to a separate non-atomic load and
+# store. Steer users to the explicit `@atomic` form. This is written by hand rather than
+# with `@deprecate` so the message can name the hazard and avoid the macro-expansion
+# artifact `@deprecate` would embed in the suggested replacement.
+# ## This is not yet enabled (deprecated) due to the need to transition a couple stdlibs to this form (or another equivalent form).
+function setindex!(x::Threads.Atomic, v)
+    # depwarn(lazy"`a[] = v` on a `Threads.Atomic` is deprecated because read-modify-write uses like `a[] += 1` are not atomic; use `@atomic a[] = v` (or `@atomic a[] += 1`, `Threads.atomic_add!`, ...) instead.", :setindex!)
+    return @atomic x[] = v
+end
+
+# The `*_domain_error` helpers were replaced by `Math.throw_finite_domainerror` in #62842,
+# but some packages call them directly. Not deprecated, just kept for compatibility.
+@eval Math begin
+    @noinline sin_domain_error(x) = throw_finite_domainerror(:sin, x)
+    @noinline cos_domain_error(x) = throw_finite_domainerror(:cos, x)
+    @noinline sincos_domain_error(x) = throw_finite_domainerror(:sincos, x)
+    @noinline tan_domain_error(x) = throw_finite_domainerror(:tan, x)
 end
 
 # END 1.14 deprecations

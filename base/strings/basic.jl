@@ -320,7 +320,7 @@ end
     ==(a::AbstractString, b::AbstractString)::Bool
 
 Test whether two strings are equal character by character (technically, Unicode
-code point by code point). Should either string be a [`AnnotatedString`](@ref) the
+code point by code point). Should either string be an [`AnnotatedString`](@ref) the
 string properties must match too.
 
 # Examples
@@ -627,7 +627,7 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
     return 0 ≤ r < 0x80
 end
 
-#The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
+#The chunking algorithm makes the last two chunks overlap in order to keep the size fixed
 @inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
     n=first
     while n <= last - chunk_size
@@ -794,6 +794,8 @@ elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 checkbounds(::Type{Bool}, s::CodeUnits, i::Integer) = checkbounds(Bool, s.s, i)
+
+dataids(s::CodeUnits) = dataids(s.s)
 
 
 write(io::IO, s::CodeUnits) = write(io, s.s)

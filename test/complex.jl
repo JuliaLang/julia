@@ -500,7 +500,7 @@ end
 @testset "cosh and cos" begin
     # cosh: has properties
     #  cosh(conj(z)) = conj(cosh(z))
-    #  coshh(-z) = cosh(z)
+    #  cosh(-z) = cosh(z)
 
     # cos
     #  cos(z) = cosh(iz)

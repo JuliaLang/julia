@@ -1,14 +1,16 @@
 module MacroMethods
+    using ..JuliaLowering
     macro some_macro()
-        quote
+        JuliaLowering.@legacy_quote_to_syntax quote
             some_global
         end
     end
 
     module ExtraMacroMethods
         using ..MacroMethods
+        using ..JuliaLowering
         macro MacroMethods.some_macro(ex)
-            quote
+            JuliaLowering.@legacy_quote_to_syntax quote
                 some_global
             end
         end
@@ -35,23 +37,24 @@ end
 ########################################
 # Simple macro
 macro add_one(ex)
-    quote
+    JuliaLowering.@legacy_quote_to_syntax quote
         $ex + 1
     end
 end
 #---------------------
-1   (method TestMod.@add_one)
+1   (call core.define_method TestMod :@add_one)
 2   latestworld
 3   TestMod.@add_one
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
 6   (call core.svec)
-7   SourceLocation::1:7
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.@add_one %₈
+9   (call core.define_method TestMod TestMod.@add_one %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
-    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ ex) 1))) %₁)
+    2   (call JuliaLowering.interpolate_syntax (syntaxinert (block (call + (syntaxunquote ex) 1))) %₁)
     3   (return %₂)
 10  latestworld
 11  TestMod.@add_one
@@ -63,15 +66,16 @@ macro foo(ex)
     ctx = __context__
 end
 #---------------------
-1   (method TestMod.@foo)
+1   (call core.define_method TestMod :@foo)
 2   latestworld
 3   TestMod.@foo
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
 6   (call core.svec)
-7   SourceLocation::1:7
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.@foo %₈
+9   (call core.define_method TestMod TestMod.@foo %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read,single_assign)]
     1   slot₂/__context__
     2   (= slot₄/ctx %₁)
@@ -203,15 +207,16 @@ function foo(a)
     @nospecialize
 end
 #---------------------
-1   (method TestMod.foo)
+1   (call core.define_method TestMod :foo)
 2   latestworld
 3   TestMod.foo
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.foo %₈
+9   (call core.define_method TestMod TestMod.foo %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/a(nospecialize,!read)]
     1   (meta :nospecialize)
     2   (return core.nothing)
@@ -226,15 +231,16 @@ function foo(a, b)
     a + b
 end
 #---------------------
-1   (method TestMod.foo)
+1   (call core.define_method TestMod :foo)
 2   latestworld
 3   TestMod.foo
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.foo %₈
+9   (call core.define_method TestMod TestMod.foo %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/a(nospecialize) slot₃/b]
     1   (meta :nospecialize slot₂/a)
     2   TestMod.+
@@ -251,15 +257,16 @@ function foo(x, y, z)
     x + y + z
 end
 #---------------------
-1   (method TestMod.foo)
+1   (call core.define_method TestMod :foo)
 2   latestworld
 3   TestMod.foo
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.foo %₈
+9   (call core.define_method TestMod TestMod.foo %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(nospecialize) slot₃/y slot₄/z(nospecialize)]
     1   (meta :nospecialize slot₂/x slot₄/z)
     2   TestMod.+

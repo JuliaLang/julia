@@ -175,11 +175,11 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
-    let compile = if opts.compile_enabled == 0
+    let compile = if opts.compile_enabled == JL_OPTIONS_COMPILE_OFF
                       "no"
-                  elseif opts.compile_enabled == 2
+                  elseif opts.compile_enabled == JL_OPTIONS_COMPILE_ALL
                       "all"
-                  elseif opts.compile_enabled == 3
+                  elseif opts.compile_enabled == JL_OPTIONS_COMPILE_MIN
                       "min"
                   else
                       "" # default = "yes"

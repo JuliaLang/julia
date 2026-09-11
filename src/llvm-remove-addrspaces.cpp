@@ -26,6 +26,7 @@ using AddrspaceRemapFunction = std::function<unsigned(unsigned)>;
 // Helpers
 //
 
+namespace {
 class AddrspaceRemoveTypeRemapper : public ValueMapTypeRemapper {
     AddrspaceRemapFunction ASRemapper;
 
@@ -106,8 +107,10 @@ public:
 private:
     DenseMap<Type *, Type *> MappedTypes;
 };
+}  // anonymous namespace
 
 
+namespace {
 class AddrspaceRemoveValueMaterializer : public ValueMaterializer {
     ValueToValueMapTy &VM;
     RemapFlags Flags;
@@ -177,8 +180,9 @@ private:
         return MapValue(V, VM, Flags, TypeMapper, this);
     }
 };
+}  // anonymous namespace
 
-bool RemoveNoopAddrSpaceCasts(Function *F)
+static bool RemoveNoopAddrSpaceCasts(Function *F)
 {
     bool Changed = false;
 
@@ -220,12 +224,12 @@ static void copyComdat(GlobalObject *Dst, const GlobalObject *Src)
 // Actual pass
 //
 
-unsigned removeAllAddrspaces(unsigned AS)
+static unsigned removeAllAddrspaces(unsigned AS)
 {
     return AddressSpace::Generic;
 }
 
-bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
+static bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 {
     ValueToValueMapTy VMap;
     AddrspaceRemoveTypeRemapper TypeRemapper(ASRemapper);
@@ -443,7 +447,7 @@ PreservedAnalyses RemoveAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM
 // Julia-specific pass
 //
 
-unsigned removeJuliaAddrspaces(unsigned AS)
+static unsigned removeJuliaAddrspaces(unsigned AS)
 {
     if (AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial)
         return AddressSpace::Generic;

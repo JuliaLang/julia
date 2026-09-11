@@ -28,11 +28,21 @@ AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for us
 STAGE1_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile-generate=$(PROFILE_DIR)" $\
 			CFLAGS="-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)" $\
 			CXXFLAGS="-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)"
+# Emit bitcode and ensure configure checks link it with lld. -fuse-ld=lld is
+# a link-only flag, so compile-only invocations need -Qunused-arguments or
+# -Werror'd compile probes fail (e.g. LLVM's -fPIC check, which would silently
+# disable PIC and break the libLLVM link).
 STAGE2_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile-use=$(PROFILE_FILE) -Wl,--icf=safe" $\
-			CFLAGS="-fprofile-use=$(PROFILE_FILE)" $\
-			CXXFLAGS="-fprofile-use=$(PROFILE_FILE)"
+			CFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments" $\
+			CXXFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments"
 
-COMMON_FLAGS:=USE_BINARYBUILDER_LLVM=0
+COMMON_FLAGS = $\
+	"CC=$(STAGE0_TOOLS)clang" $\
+	"CXX=$(STAGE0_TOOLS)clang++" $\
+	"LD=$(STAGE0_TOOLS)ld.lld" $\
+	"AR=$(STAGE0_TOOLS)llvm-ar" $\
+	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib" $\
+	"USE_BINARYBUILDER_LLVM=0"
 
 all: stage2 # Default target as first in file
 
@@ -50,7 +60,10 @@ stage0: | $(STAGE0_BUILD)
 $(STAGE1_BUILD): stage0
 stage1: | $(STAGE1_BUILD)
 	@echo "--- Build Julia Stage 1 - with instrumentation"
-	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE1_FLAGS) $(MAKE) -C $(STAGE1_BUILD) $(COMMON_FLAGS) && touch $@
+	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE1_FLAGS) $(MAKE) -C $(STAGE1_BUILD) $(COMMON_FLAGS)
+	# Remove the empty profile emitted by the instrumented launcher.
+	rm -f $(JULIA_ROOT)/base/default.profraw
+	touch $@
 	@echo $(AFTER_STAGE1_MESSAGE)
 
 stage2: $(PROFILE_FILE) | $(STAGE2_BUILD)

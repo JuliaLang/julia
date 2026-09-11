@@ -221,8 +221,8 @@ end
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
-            twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
+            twopk = ((k % UInt64) +% UInt64(53)) << 52
+            return reinterpret(T, twopk +% reinterpret(UInt64, small_part))*0x1p-53
         end
         #k == 1024 && return (small_part * 2.0) * 0x1p1023
     end
@@ -249,8 +249,8 @@ end
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
-            twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
+            twopk = ((k % UInt64) +% UInt64(53)) << 52
+            return reinterpret(T, twopk +% reinterpret(UInt64, small_part))*0x1p-53
         end
         k == 1024 && return (small_part * 2.0) * 0x1p1023
     end

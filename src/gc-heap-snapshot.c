@@ -366,7 +366,7 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
 // returns the index of the new node
-size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
+static size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 {
     size_t idx;
     if (!snapshot_insert_node(g_snapshot, a, &idx))
@@ -407,6 +407,20 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         name = "Task";
         self_size = sizeof(jl_task_t);
     }
+    else if (jl_is_cancel_source(a)) {
+        // variable-sized: one link entry per parent follows the fixed fields
+        node_type = "jl_cancel_source_t";
+        name = "CancellationTokenSource";
+        self_size = sizeof(jl_cancel_source_t) +
+                    ((jl_cancel_source_t*)a)->nparents * sizeof(jl_cancel_parent_link_t);
+    }
+    else if (jl_is_wait_entry(a)) {
+        // variable-sized: one wait slot per waitable follows the fixed fields
+        node_type = "jl_wait_entry_t";
+        name = "WaitEntryN";
+        self_size = sizeof(jl_wait_entry_t) +
+                    ((jl_wait_entry_t*)a)->nslots * sizeof(jl_wait_slot_t);
+    }
     else if (jl_is_datatype(a)) {
         ios_need_close = 1;
         ios_mem(&str_, 0);
@@ -433,7 +447,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
             jl_genericmemory_t *mem = (jl_genericmemory_t*)a;
             int how = jl_genericmemory_how(mem);
             if (how != JL_GENERICMEMORY_STRINGOWNED && how != JL_GENERICMEMORY_MALLOCD) {
-                // Memory's that are string-owned or point to foreign memory have
+                // `Memory`s that are string-owned or point to foreign memory have
                 // explicit snapshot edges to pointee data. Otherwise the array
                 // contents are treated as part of the Memory itself.
                 self_size += jl_genericmemory_nbytes(mem);
@@ -556,7 +570,7 @@ void _gc_heap_snapshot_record_finlist(jl_value_t *obj, size_t index) JL_NOTSAFEP
 // Each task points at a stack frame, which points at the stack frame of
 // the function it's currently calling, forming a linked list.
 // Stack frame nodes point at the objects they have as local variables.
-size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEPOINT
+static size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEPOINT
 {
     size_t idx;
     if (!snapshot_insert_node(g_snapshot, frame, &idx))

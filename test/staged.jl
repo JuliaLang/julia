@@ -188,6 +188,22 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
     @test gf_err_ref[] < 1000
 end
 
+# the error must fire even when the scheduler holds no other runnable task:
+# `yield()` then pops the current task itself, and the switch-to-self fast
+# path must not skip the forbidden-context checks
+gf_err_ref[] = 0
+let
+    @generated function gf_err_yield_to_self()
+        gf_err_ref[] += 1
+        yield()
+        gf_err_ref[] += 1000
+    end
+    Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
+    @test_throws Expected gf_err_yield_to_self()
+    @test_throws Expected gf_err_yield_to_self()
+    @test gf_err_ref[] < 1000
+end
+
 gf_err_ref[] = 0
 let gf_err2
     @generated function gf_err2(::f) where {f}

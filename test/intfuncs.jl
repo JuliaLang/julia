@@ -57,14 +57,15 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
             @test_throws OverflowError gcd(typemin(T), T(0))
             @test_throws OverflowError gcd(T(0), typemin(T))
         elseif T != BigInt
+            negtmax = one(T)
             # For Unsigned Integer types, -typemax(T) == 1.
-            @test gcd(-typemax(T), T(1)) === T(1)
-            @test gcd(T(1), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), T(0)) === T(1)
-            @test gcd(T(0), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), typemax(T)) === T(1)
-            @test gcd(typemax(T), -typemax(T)) === T(1)
+            @test gcd(negtmax, T(1)) === T(1)
+            @test gcd(T(1), negtmax) === T(1)
+            @test gcd(negtmax, T(0)) === T(1)
+            @test gcd(T(0), negtmax) === T(1)
+            @test gcd(negtmax, negtmax) === T(1)
+            @test gcd(negtmax, typemax(T)) === T(1)
+            @test gcd(typemax(T), negtmax) === T(1)
 
             # For Unsigned Integer types, typemin(T) == 0.
             @test gcd(typemin(T), T(1)) === T(1)
@@ -131,14 +132,15 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
                 @test_throws OverflowError lcm(typemin(T), typemin(T)+T(1)) # lcm(n, n+1) = n*(n+1).
                 @test_throws OverflowError lcm(typemin(T), typemin(T))
             else
+                negtmax = one(T)
                 # For Unsigned Integer types, -typemax(T) == 1.
-                @test lcm(-typemax(T), T(1)) === T(1)
-                @test lcm(T(1), -typemax(T)) === T(1)
-                @test lcm(-typemax(T), T(0)) === T(0)
-                @test lcm(T(0), -typemax(T)) === T(0)
-                @test lcm(-typemax(T), -typemax(T)) === T(1)
-                @test lcm(-typemax(T), typemax(T)) === typemax(T)
-                @test lcm(typemax(T), -typemax(T)) === typemax(T)
+                @test lcm(negtmax, T(1)) === T(1)
+                @test lcm(T(1), negtmax) === T(1)
+                @test lcm(negtmax, T(0)) === T(0)
+                @test lcm(T(0), negtmax) === T(0)
+                @test lcm(negtmax, negtmax) === T(1)
+                @test lcm(negtmax, typemax(T)) === typemax(T)
+                @test lcm(typemax(T), negtmax) === typemax(T)
 
                 # For Unsigned Integer types, typemin(T) == 0.
                 @test lcm(typemin(T), T(1)) === lcm(T(0), T(1)) === T(0)
@@ -514,6 +516,13 @@ primitive type BitString128 128 end
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
     @test bitstring(reinterpret(BitString128, Int128(3))) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+    primitive type BitString6 <: Unsigned 6 end
+    bit6(x::UInt64) = Core.Intrinsics.trunc_int(BitString6, x)
+    @test bitstring(bit6(UInt64(0x11))) == "010001"
+    primitive type BitString63 <: Unsigned 63 end
+    bit63(x::UInt64) = Core.Intrinsics.trunc_int(BitString63, x)
+    @test bitstring(bit63(0x7fff_ffff_ffff_ffff)) == repeat("1", 63)
+    @test bitstring(bit63(0x4000_0000_0000_0001)) == "1" * repeat("0", 61) * "1"
 end
 
 @testset "digits/base" begin

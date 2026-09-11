@@ -9,6 +9,8 @@
 #else
 #include <stdatomic.h>
 #endif
+#include "analyzer_annotations.h"
+
 
 // Thread-local storage access
 
@@ -22,7 +24,7 @@ extern "C" {
 
 typedef struct _jl_gcframe_t jl_gcframe_t;
 
-typedef jl_gcframe_t **(jl_get_pgcstack_func)(void);
+typedef jl_gcframe_t **(*jl_get_pgcstack_func_t)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
 #if !defined(_OS_WINDOWS_)
 #define JULIA_DEFINE_FAST_TLS                                                                   \

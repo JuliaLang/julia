@@ -30,6 +30,61 @@ Compiler.get_inference_world(interp::InvalidationTester) = interp.world
 Compiler.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
 Compiler.cache_owner(::InvalidationTester) = InvalidationTesterToken()
 
+# Local constprop proofs expose same-module binding dependencies on the published caller.
+module LocalProofBindingInvalidation61752
+    _getproperty(M::Module, s::Symbol) = getglobal(M, s)
+
+    const VALUE = "v1"
+    probe() = _getproperty(LocalProofBindingInvalidation61752, :VALUE)::String
+end
+
+let interp = InvalidationTester()
+    @test Base.infer_return_type(LocalProofBindingInvalidation61752.probe, (); interp) === String
+
+    mi = Base.method_instance(LocalProofBindingInvalidation61752.probe, ())
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world === typemax(UInt)
+
+    binding = convert(Core.Binding,
+        GlobalRef(LocalProofBindingInvalidation61752, :VALUE))
+    @test any(edge -> edge === binding, ci.edges)
+    callee_mi = Base.method_instance(
+        LocalProofBindingInvalidation61752._getproperty, (Module, Symbol))
+    @test any(edge -> edge isa Core.CodeInstance && edge.def === callee_mi, ci.edges)
+
+    world_before = Base.get_world_counter()
+    @eval LocalProofBindingInvalidation61752 const VALUE = "v2"
+    @test ci.max_world != typemax(UInt)
+    @test ci.max_world <= world_before
+end
+
+# Eliding a finalizer registration based on inferred effects must keep the proof
+# for those effects on the caller's CodeInstance.
+module FinalizerEffectInvalidation62338
+    mutable struct Target end
+    callback(::Target) = nothing
+    register(x::Target) = finalizer(callback, x)
+end
+
+let
+    inf_params = Compiler.InferenceParams(
+        ; cache_owner=FinalizerEffectInvalidation62338)
+    interp = Compiler.NativeInterpreter(Base.get_world_counter(); inf_params)
+    mi = Base.method_instance(FinalizerEffectInvalidation62338.register,
+        (FinalizerEffectInvalidation62338.Target,))
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_GET_SOURCE)
+    src = Compiler.ci_get_source(interp, ci)
+    @test !any(iscall((src, Core.finalizer)), src.code)
+    @test ci.max_world == typemax(UInt)
+
+    world_before = Base.get_world_counter()
+    @eval FinalizerEffectInvalidation62338 callback(::Target) =
+        (global callback_ran = true; nothing)
+    @test world_before < Base.get_world_counter()
+    @test ci.max_world < Base.get_world_counter()
+end
+
 # basic functionality test
 # ------------------------
 
@@ -116,8 +171,7 @@ begin
         @test any(iscall((src, pr48932_callee)), src.code)
     end
 
-    let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee))))
-        # Base.method_instance(pr48932_callee, (Any,))
+    let mi = only(Base.method_instances(pr48932_callee, Tuple, Base.get_world_counter()))
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
@@ -281,7 +335,7 @@ begin take!(GLOBAL_BUFFER)
         @test any(isinvoke(:pr48932_callee_inlined), src.code)
     end
 
-    let mi = Base.method_instance(pr48932_callee_inlined, (Int,))
+    let mi = only(Base.method_instances(pr48932_callee_inlined, (Any,), Base.get_world_counter()))
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
@@ -291,7 +345,7 @@ begin take!(GLOBAL_BUFFER)
         @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
-    let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
+    let mi = only(Base.method_instances(pr48932_caller_inlined, (Int,), Base.get_world_counter()))
         ci = mi.cache
         @test !isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
@@ -302,7 +356,7 @@ begin take!(GLOBAL_BUFFER)
     @test "42" == String(take!(GLOBAL_BUFFER))
 
     # test that we added the backedge from `pr48932_callee_inlined` to `pr48932_caller_inlined`:
-    # this redefinition below should invalidate the cache of `pr48932_callee_inlined` but not that of `pr48932_caller_inlined`
+    # this redefinition below should invalidate the cache of both `pr48932_callee_inlined` and `pr48932_caller_inlined`
     @noinline pr48932_callee_inlined(@nospecialize x) = (print(GLOBAL_BUFFER, x); nothing)
 
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inlined, Tuple{Any}))))
@@ -350,12 +404,15 @@ end
     """
 
     io = Pipe()
-    # Run the test in a subprocess because Base.drop_all_caches() is extreme
-    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io))
+    # Run the test in a subprocess because Base.drop_all_caches() is extreme.
+    # Drain stderr concurrently: the trace-compile output can exceed the pipe
+    # buffer, and the child blocks in its atexit uv loop until it is read.
+    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io), wait=false)
     close(io.in)
-    err = read(io, String)
-    # println(err)
+    reader = @async read(io, String)
     @test success(result)
+    err = fetch(reader)::String
+    # println(err)
     err_before, err_after = split(err, "==DROPPING ALL CACHES==")
     @test occursin("SUCCESS: drop_all_caches test passed", err_after)
     @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
@@ -371,4 +428,38 @@ begin
     @test isdefined(callee_mi, :backedges)
     pr61102_callee(x::Int) = 3x
     @test !isdefined(callee_mi, :backedges)
+end
+
+# `Core.TypeName.concrete_only`: inference records no backedge at call sites with
+# non-concrete argument types, so adding a more-specific method later does not
+# invalidate the caller's compiled code
+abstract type COStyle end
+struct CODefStyle <: COStyle end
+struct COFill end
+function co_callee end
+typeof(co_callee).name.concrete_only = true
+co_callee(::COStyle, op, x) = 1
+struct COBox
+    s::COStyle
+    x::Any
+end
+co_caller(b::COBox) = co_callee(b.s, zero, b.x)
+
+# the non-concrete call site gives up to `Any`
+@test Base.return_types((COBox,); interp=InvalidationTester()) do b
+    co_caller(b)
+end |> only === Any
+
+let mi = Base.method_instance(co_caller, (COBox,))
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+end
+
+# add a more-specific method; the caller must remain valid
+co_callee(::CODefStyle, op, x::COFill) = 2
+let mi = Base.method_instance(co_caller, (COBox,))
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
 end

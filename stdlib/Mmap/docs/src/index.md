@@ -7,7 +7,7 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Mmap/docs/src/i
 Low level module for mmap (memory mapping of files).
 
 ```@docs
-Mmap.Anonymous
+Mmap.SharedMemory
 Mmap.mmap
 Mmap.sync!
 ```

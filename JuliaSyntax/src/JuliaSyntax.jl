@@ -102,7 +102,7 @@ include("porcelain/green_node.jl")
 include("porcelain/syntax_node.jl")
 include("integration/expr.jl")
 if VERSION >= v"1.12"
-    include("porcelain/syntax_graph.jl")
+    include("porcelain/syntax.jl")
 end
 
 # Hooks to integrate the parser with Base

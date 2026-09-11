@@ -181,6 +181,7 @@ upper = $(shell echo $1 | tr a-z A-Z)
 # so it's harder to get half-installed (or half-reinstalled) dependencies
 # # and enables sharing deps compiles, uninstall, and fast reinstall
 MAKE_INSTALL = MSYS2_ARG_CONV_EXCL="prefix=" $$(MAKE) -C $1 install $$(MAKE_COMMON) $3 DESTDIR="$2"
+CMAKE_INSTALL = DESTDIR="$2" $$(CMAKE) --install $1 $3
 
 define SHLIBFILE_INSTALL
 	mkdir -p $2/$$(build_shlibdir)
