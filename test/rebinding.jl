@@ -666,6 +666,124 @@ module ReexportTests
     @test User3.same_name == 42
 end
 
+# Test some edge cases of the `*global_partition` builtins:
+# notably that calling them with non-leaf partitions re-runs the import walk in the runtime world.
+module PartitionImportTarget
+    export ix
+    global ix::Int = 11
+    global iundef::Int
+end
+module PartitionImportUser
+    using ..PartitionImportTarget           # implicit import of `ix`
+    import ..PartitionImportTarget: iundef  # explicit import
+end
+currentpart(m::Module, s::Symbol) =
+    Base.lookup_binding_partition(Base.get_world_counter(), convert(Core.Binding, GlobalRef(m, s)))
+let grimplicit = GlobalRef(PartitionImportUser, :ix),
+    grexplicit = GlobalRef(PartitionImportUser, :iundef),
+    grleaf = GlobalRef(PartitionImportTarget, :ix),
+    pimplicit = currentpart(PartitionImportUser, :ix),
+    pexplicit = currentpart(PartitionImportUser, :iundef),
+    pleaf = currentpart(PartitionImportTarget, :ix)
+    @test Base.binding_kind(pimplicit) == Base.PARTITION_KIND_IMPLICIT_GLOBAL
+    @test Base.is_some_explicit_imported(Base.binding_kind(pexplicit))
+    @test Base.binding_kind(pleaf) == Base.PARTITION_KIND_GLOBAL
+
+    @test Core.getglobal_partition(grimplicit, pimplicit, :acquire) === 11
+    @test Core.getglobal_partition(grleaf, pleaf, :acquire) === 11
+    @test Core.isdefinedglobal_partition(pimplicit, :acquire)
+    @test !Core.isdefinedglobal_partition(pexplicit, :acquire)
+    # An undefined import names the binding that was asked for, not the one it resolved to.
+    err = try; Core.getglobal_partition(grexplicit, pexplicit, :acquire); catch e; e; end
+    @test err isa UndefVarError && err.var === :iundef && err.scope === PartitionImportUser
+
+    # Stores never follow the import.
+    @test_throws "cannot assign a value to imported variable" Core.setglobal_partition(pimplicit, 22)
+    @test_throws "cannot assign a value to imported variable" Core.swapglobal_partition(pimplicit, 22)
+    @test_throws "cannot assign a value to imported variable" Core.setglobalonce_partition(pimplicit, 22)
+    @test_throws "cannot assign a value to imported variable" Core.replaceglobal_partition(pimplicit, 11, 22)
+    @test_throws "cannot assign a value to imported variable" Core.modifyglobal_partition(pimplicit, +, 22)
+    @test PartitionImportTarget.ix === 11
+
+    # A read through the import observes the target's current value.
+    @test Core.setglobal_partition(pleaf, 12) === 12
+    @test Core.getglobal_partition(grimplicit, pimplicit, :acquire) === 12
+    @test Core.modifyglobal_partition(pleaf, +, 1) === (12 => 13)
+    @test Core.modifyglobal_partition(pleaf, -, 2) === (13 => 11)
+    @test Core.setglobal_partition(pleaf, 11) === 11
+end
+# The same accesses with the partition as an inference constant. The leaf folds to its
+# declared type; the import does not, because inference has no edge to cover the
+# world-dependent walk (and `isdefinedglobal_partition` has no tfunc at all).
+let grimplicit = GlobalRef(PartitionImportUser, :ix),
+    grleaf = GlobalRef(PartitionImportTarget, :ix),
+    pimplicit = currentpart(PartitionImportUser, :ix),
+    pleaf = currentpart(PartitionImportTarget, :ix),
+    fimp = @eval(() -> Core.getglobal_partition($(QuoteNode(grimplicit)), $(QuoteNode(pimplicit)), :acquire)),
+    fleaf = @eval(() -> Core.getglobal_partition($(QuoteNode(grleaf)), $(QuoteNode(pleaf)), :acquire)),
+    dimp = @eval(() -> Core.isdefinedglobal_partition($(QuoteNode(pimplicit)), :acquire))
+    @test Base.infer_return_type(fimp, ()) === Any
+    @test Base.infer_return_type(fleaf, ()) === Int
+    @test fimp() === 11
+    @test fleaf() === 11
+    @test dimp()
+    # and the read still tracks the target it imports
+    @test Core.setglobal_partition(pleaf, 13) === 13
+    @test fimp() === 13
+    @test Core.setglobal_partition(pleaf, 11) === 11
+end
+
+# Whatever the partition's kind, a compiled access answers from the partition it was handed,
+# exactly as the builtin does -- codegen inlines the kinds that are a property of the
+# partition object and leaves the other two (an import, which must be followed at the calling
+# world, and a backdated constant, whose read has a side effect) on the runtime path.
+module PartitionKinds
+    module Inner; export ix; global ix::Int = 11; end
+    using .Inner            # implicit import
+    global decl             # weakly declared, no value
+    global typed::Int = 5
+    const c = 7
+end
+let kinds = (currentpart(PartitionKinds, :ix), currentpart(PartitionKinds, :decl),
+             currentpart(PartitionKinds, :typed), currentpart(PartitionKinds, :c),
+             currentpart(PartitionKinds, :undeclared_name))
+    @test map(Base.binding_kind, kinds) == (Base.PARTITION_KIND_IMPLICIT_GLOBAL,
+        Base.PARTITION_KIND_DECLARED, Base.PARTITION_KIND_GLOBAL, Base.PARTITION_KIND_CONST,
+        Base.PARTITION_KIND_GUARD)
+    attempt(f) = try f() catch e; (typeof(e), e isa UndefVarError ? e.var : nothing) end
+    for p in kinds
+        gr = Base.partition_owner(p).globalref
+        read = @eval(() -> Core.getglobal_partition($(QuoteNode(gr)), $(QuoteNode(p)), :acquire))
+        defined = @eval(() -> Core.isdefinedglobal_partition($(QuoteNode(p)), :acquire))
+        @test attempt(read) == attempt(() -> Core.getglobal_partition(gr, p, :acquire))
+        @test defined() === Core.isdefinedglobal_partition(p, :acquire)
+    end
+end
+# A store writes to the partition it names, so that partition's kind decides whether it is
+# refused and with which error. Declaring the binding later does not change the partition the
+# store named, so the store keeps failing the same way.
+module StaleStoreTarget end
+let pguard = currentpart(StaleStoreTarget, :x),
+    refused = "Global StaleStoreTarget.x does not exist and cannot be assigned."
+    @test Base.binding_kind(pguard) == Base.PARTITION_KIND_GUARD
+    store = @eval(() -> Core.setglobal_partition($(QuoteNode(pguard)), 99))
+    @test_throws refused store()
+    # the binding becomes writable, but only in a newer partition
+    Core.eval(StaleStoreTarget, :(global x::Int = 5))
+    @test Base.binding_kind(currentpart(StaleStoreTarget, :x)) == Base.PARTITION_KIND_GLOBAL
+    @test_throws refused Core.setglobal_partition(pguard, 99)
+    @test_throws refused invokelatest(store)
+    @test invokelatest(getglobal, StaleStoreTarget, :x) === 5
+end
+
+# A module binding is always accessed atomically, and the compiled query reports the failure
+# under the same name the runtime builtin does.
+let p = currentpart(PartitionImportTarget, :ix),
+    msg = "isdefined: module binding cannot be accessed non-atomically"
+    @test_throws ConcurrencyViolationError(msg) Core.isdefinedglobal_partition(p, :not_atomic)
+    @test_throws ConcurrencyViolationError(msg) @eval(() -> Core.isdefinedglobal_partition($(QuoteNode(p)), :not_atomic))()
+end
+
 # A deprecated declared global and a deprecated guard have the same read result (an
 # untyped runtime read with `effect_free` false), but a store to the former is `nothrow`
 # while a store to the latter throws. Deleting the binding must still invalidate code that
