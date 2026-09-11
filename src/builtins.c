@@ -27,6 +27,7 @@
 #include "builtin_proto.h"
 #include "intrinsics.h"
 #include "julia_assert.h"
+#include "gc-regions.h"   // iddict.c borrows the region of the table it replaces
 
 #ifdef __cplusplus
 extern "C" {
@@ -1771,6 +1772,10 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
     tv->name = name;
     tv->lb = lb;
     tv->ub = ub;
+    // A bound made inside a window (a Union or a UnionAll is built where it is
+    // written) under a TypeVar made after it: the escape barrier alone.
+    jl_gc_wb_fresh(tv, lb);
+    jl_gc_wb_fresh(tv, ub);
     return tv;
 }
 

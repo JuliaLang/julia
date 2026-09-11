@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1210 420" font-size="13">
+<rect width="1210" height="420" fill="#fcfcfb"/>
+<text x="40.0" y="30.0" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#0b0b0b" text-anchor="start" font-weight="bold">Peak memory of the demonstrators at their largest point</text>
+<text x="40.0" y="50.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="start">one process runs both modes, region first; the peak is the process maximum after each mode</text>
+<line x1="40" y1="70" x2="62" y2="70" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">stock GC</text>
+<line x1="131.6" y1="70" x2="153.6" y2="70" stroke="#eb6834" stroke-width="3" stroke-linecap="round"/>
+<text x="159.6" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">regions</text>
+<line x1="90" y1="340.0" x2="1170" y2="340.0" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="344.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">0 MB</text>
+<line x1="90" y1="274.4" x2="1170" y2="274.4" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="278.4" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">200 MB</text>
+<line x1="90" y1="208.8" x2="1170" y2="208.8" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="212.8" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">400 MB</text>
+<line x1="90" y1="143.2" x2="1170" y2="143.2" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="147.2" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">600 MB</text>
+<rect x="127.8" y="247.9" width="94.2" height="92.1" fill="#2a78d6"/>
+<text x="174.9" y="242.9" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">281 MB</text>
+<rect x="225.0" y="247.9" width="94.2" height="92.1" fill="#eb6834"/>
+<text x="272.1" y="242.9" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">281 MB</text>
+<text x="225.0" y="358.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">A: bt_solver, large</text>
+<text x="225.0" y="373.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">(5000 instances, n=34, K=3)</text>
+<rect x="397.8" y="246.2" width="94.2" height="93.8" fill="#2a78d6"/>
+<text x="444.9" y="241.2" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">286 MB</text>
+<rect x="495.0" y="246.2" width="94.2" height="93.8" fill="#eb6834"/>
+<text x="542.1" y="241.2" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">286 MB</text>
+<text x="495.0" y="358.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">B: pathtrace, large</text>
+<text x="495.0" y="373.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">(160x100, 64 spp, depth 8, 4 threads)</text>
+<rect x="667.8" y="136.6" width="94.2" height="203.4" fill="#2a78d6"/>
+<text x="714.9" y="131.6" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">620 MB</text>
+<rect x="765.0" y="170.5" width="94.2" height="169.5" fill="#eb6834"/>
+<text x="812.1" y="165.5" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">517 MB</text>
+<text x="765.0" y="358.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">C: optimistic_bst, work=1024</text>
+<text x="765.0" y="373.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">(80000 keys, work=1024, 4 threads)</text>
+<rect x="937.8" y="240.6" width="94.2" height="99.4" fill="#2a78d6"/>
+<text x="984.9" y="235.6" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">303 MB</text>
+<rect x="1035.0" y="241.9" width="94.2" height="98.1" fill="#eb6834"/>
+<text x="1082.1" y="236.9" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">299 MB</text>
+<text x="1035.0" y="358.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">D: dmr, work=2048</text>
+<text x="1035.0" y="373.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">(grid 16, work=2048, 4 threads)</text>
+<text x="32.0" y="220.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="middle" transform="rotate(-90 32 220.0)">peak RSS</text>
+<text x="40.0" y="408.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">julia ab23c8cde4 (1.13.0-rc4) · AMD RYZEN AI MAX+ 395 w/ Radeon 8060S · core 29 (one thread), cores 13,29 (several) · time-shared · 2026-09-06</text>
+</svg>

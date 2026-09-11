@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 930 450" font-size="13">
+<rect width="930" height="450" fill="#fcfcfb"/>
+<text x="40.0" y="30.0" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#0b0b0b" text-anchor="start" font-weight="bold">bt_solver: backtracking search, one thread</text>
+<text x="40.0" y="50.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="start">an instance is solved in a region; the search tree dies at once; 1 thread; under a pair: collections stock → regions, and the speedup</text>
+<line x1="40" y1="70" x2="62" y2="70" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">stock GC</text>
+<line x1="131.6" y1="70" x2="153.6" y2="70" stroke="#eb6834" stroke-width="3" stroke-linecap="round"/>
+<text x="159.6" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">regions</text>
+<line x1="90" y1="350.0" x2="890" y2="350.0" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="354.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">0</text>
+<line x1="90" y1="253.1" x2="890" y2="253.1" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="257.1" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">200 ms</text>
+<line x1="90" y1="156.1" x2="890" y2="156.1" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="160.1" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">400 ms</text>
+<rect x="127.3" y="292.7" width="93.0" height="57.3" fill="#2a78d6"/>
+<text x="173.8" y="287.7" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">118 ms</text>
+<rect x="223.3" y="296.5" width="93.0" height="53.5" fill="#eb6834"/>
+<text x="269.8" y="291.5" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">110 ms</text>
+<text x="223.3" y="368.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">small</text>
+<text x="223.3" y="383.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">(1500 instances, n=30, K=3)</text>
+<text x="223.3" y="398.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">11 → 0 collections, ×1.07</text>
+<rect x="394.0" y="229.3" width="93.0" height="120.7" fill="#2a78d6"/>
+<text x="440.5" y="224.3" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">249 ms</text>
+<rect x="490.0" y="237.7" width="93.0" height="112.3" fill="#eb6834"/>
+<text x="536.5" y="232.7" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">232 ms</text>
+<text x="490.0" y="368.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">medium</text>
+<text x="490.0" y="383.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">(3000 instances, n=32, K=3)</text>
+<text x="490.0" y="398.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">23 → 0 collections, ×1.07</text>
+<rect x="660.7" y="138.1" width="93.0" height="211.9" fill="#2a78d6"/>
+<text x="707.2" y="133.1" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">437 ms</text>
+<rect x="756.7" y="151.5" width="93.0" height="198.5" fill="#eb6834"/>
+<text x="803.2" y="146.5" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">409 ms</text>
+<text x="756.7" y="368.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">large</text>
+<text x="756.7" y="383.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">(5000 instances, n=34, K=3)</text>
+<text x="756.7" y="398.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="middle">41 → 0 collections, ×1.07</text>
+<text x="32.0" y="225.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="middle" transform="rotate(-90 32 225.0)">wall time</text>
+<text x="40.0" y="438.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">julia ab23c8cde4 (1.13.0-rc4) · AMD RYZEN AI MAX+ 395 w/ Radeon 8060S · core 29 · time-shared · 2026-09-06</text>
+</svg>

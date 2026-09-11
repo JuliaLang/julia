@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 440" font-size="13">
+<rect width="740" height="440" fill="#fcfcfb"/>
+<text x="40.0" y="30.0" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#0b0b0b" text-anchor="start" font-weight="bold">The same event loop, region-native Julia against C++</text>
+<text x="40.0" y="50.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="start">5 M events, one core; W words of garbage per event</text>
+<line x1="40" y1="70" x2="62" y2="70" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">Julia, stock GC</text>
+<line x1="182.0" y1="70" x2="204.0" y2="70" stroke="#eb6834" stroke-width="3" stroke-linecap="round"/>
+<text x="210.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">Julia, regions</text>
+<line x1="316.8" y1="70" x2="338.8" y2="70" stroke="#52514e" stroke-width="3" stroke-linecap="round"/>
+<text x="344.8" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">C++, malloc/free</text>
+<line x1="90" y1="360.0" x2="650" y2="360.0" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="364.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">0 M</text>
+<line x1="90" y1="295.8" x2="650" y2="295.8" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="299.8" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">20 M</text>
+<line x1="90" y1="231.6" x2="650" y2="231.6" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="235.6" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">40 M</text>
+<line x1="90" y1="167.5" x2="650" y2="167.5" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="171.5" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">60 M</text>
+<line x1="90" y1="103.3" x2="650" y2="103.3" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="107.3" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">80 M</text>
+<rect x="129.2" y="158.7" width="64.2" height="201.3" fill="#2a78d6"/>
+<text x="161.3" y="153.7" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">62.7 M</text>
+<rect x="196.4" y="173.2" width="64.2" height="186.8" fill="#eb6834"/>
+<text x="228.5" y="168.2" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">58.2 M</text>
+<rect x="263.6" y="139.7" width="64.2" height="220.3" fill="#52514e"/>
+<text x="295.7" y="134.7" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">68.7 M</text>
+<text x="230.0" y="378.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">W = 3</text>
+<rect x="409.2" y="258.0" width="64.2" height="102.0" fill="#2a78d6"/>
+<text x="441.3" y="253.0" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">31.8 M</text>
+<rect x="476.4" y="256.7" width="64.2" height="103.3" fill="#eb6834"/>
+<text x="508.5" y="251.7" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">32.2 M</text>
+<rect x="543.6" y="235.2" width="64.2" height="124.8" fill="#52514e"/>
+<text x="575.7" y="230.2" font-family="DejaVu Sans, sans-serif" font-size="10" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">38.9 M</text>
+<text x="510.0" y="378.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle">W = 200</text>
+<text x="32.0" y="230.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="middle" transform="rotate(-90 32 230.0)">events per second</text>
+<text x="40.0" y="428.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">julia ab23c8cde4 (1.13.0-rc4) · AMD RYZEN AI MAX+ 395 w/ Radeon 8060S · core 29 · time-shared · 2026-09-06</text>
+</svg>

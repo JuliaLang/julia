@@ -143,21 +143,36 @@ end
     newsz = _tablesz(newsz)
     h.age += 1
     h.idxfloor = 1
+    # The three tables replace the three the Dict holds, so they take the
+    # region of the Dict, not the region of an open window. The region comes
+    # from the Dict and not from the old tables, because an empty container
+    # can share a permanent empty `Memory` of region 0
+    # (genericmemory.jl, `_region_borrow`).
+    lent = _region_borrow(h)
     if h.count == 0
         # TODO: tryresize
-        h.slots = Memory{UInt8}(undef, newsz)
+        try
+            h.slots = Memory{UInt8}(undef, newsz)
+            h.keys = Memory{K}(undef, newsz)
+            h.vals = Memory{V}(undef, newsz)
+        finally
+            _region_unborrow(lent)
+        end
         fill!(h.slots, 0x0)
-        h.keys = Memory{K}(undef, newsz)
-        h.vals = Memory{V}(undef, newsz)
         h.ndel = 0
         h.maxprobe = 0
         return h
     end
 
-    slots = Memory{UInt8}(undef, newsz)
+    local slots, keys, vals
+    try
+        slots = Memory{UInt8}(undef, newsz)
+        keys = Memory{K}(undef, newsz)
+        vals = Memory{V}(undef, newsz)
+    finally
+        _region_unborrow(lent)
+    end
     fill!(slots, 0x0)
-    keys = Memory{K}(undef, newsz)
-    vals = Memory{V}(undef, newsz)
     age0 = h.age
     count = 0
     maxprobe = 0

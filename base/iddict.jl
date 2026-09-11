@@ -123,7 +123,15 @@ function delete!(d::IdDict{K}, @nospecialize(key)) where K
 end
 
 function empty!(d::IdDict)
-    d.ht = Memory{Any}(undef, 32)
+    # The fresh table replaces the table the dictionary holds, so it takes
+    # the region of the dictionary, not the region of an open window
+    # (genericmemory.jl, `_region_borrow`).
+    lent = _region_borrow(d)
+    try
+        d.ht = Memory{Any}(undef, 32)
+    finally
+        _region_unborrow(lent)
+    end
     ht = d.ht
     t = @_gc_preserve_begin ht
     memset(unsafe_convert(Ptr{Cvoid}, ht), 0, sizeof(ht) % UInt)

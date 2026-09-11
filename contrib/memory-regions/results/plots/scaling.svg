@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 910 470" font-size="13">
+<rect width="910" height="470" fill="#fcfcfb"/>
+<text x="40.0" y="30.0" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#0b0b0b" text-anchor="start" font-weight="bold">The sibling leaves scale with the threads</text>
+<text x="40.0" y="50.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="start">the largest point of each demonstrator, at 1, 2, 4 and 8 threads; wall time, lower is better</text>
+<line x1="40" y1="70" x2="62" y2="70" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">stock GC</text>
+<line x1="131.6" y1="70" x2="153.6" y2="70" stroke="#eb6834" stroke-width="3" stroke-linecap="round"/>
+<text x="159.6" y="74.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">regions</text>
+<text x="90.0" y="96.0" font-family="DejaVu Sans, sans-serif" font-size="15" fill="#0b0b0b" text-anchor="start" font-weight="bold">pathtrace, large</text>
+<line x1="90.0" y1="110" x2="90.0" y2="370" stroke="#e8e7e4" stroke-width="1"/>
+<text x="90.0" y="388.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">1</text>
+<line x1="203.3" y1="110" x2="203.3" y2="370" stroke="#e8e7e4" stroke-width="1"/>
+<text x="203.3" y="388.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">2</text>
+<line x1="316.7" y1="110" x2="316.7" y2="370" stroke="#e8e7e4" stroke-width="1"/>
+<text x="316.7" y="388.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">4</text>
+<line x1="430.0" y1="110" x2="430.0" y2="370" stroke="#e8e7e4" stroke-width="1"/>
+<text x="430.0" y="388.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">8</text>
+<line x1="90" y1="370.0" x2="430" y2="370.0" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="374.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">0</text>
+<line x1="90" y1="315.9" x2="430" y2="315.9" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="319.9" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">25 ms</text>
+<line x1="90" y1="261.8" x2="430" y2="261.8" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="265.8" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">50 ms</text>
+<line x1="90" y1="207.7" x2="430" y2="207.7" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="211.7" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">75 ms</text>
+<line x1="90" y1="153.6" x2="430" y2="153.6" stroke="#e8e7e4" stroke-width="1"/>
+<text x="82.0" y="157.6" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">100 ms</text>
+<path d="M90.0,149.7 L203.3,196.7 L316.7,275.4 L430.0,311.8" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="430.0" cy="311.8" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M90.0,151.7 L203.3,198.6 L316.7,277.4 L430.0,314.0" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="430.0" cy="314.0" r="2.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="260.0" y="408.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="middle">threads</text>
+<text x="530.0" y="96.0" font-family="DejaVu Sans, sans-serif" font-size="15" fill="#0b0b0b" text-anchor="start" font-weight="bold">dmr, work=2048</text>
+<line x1="530.0" y1="110" x2="530.0" y2="370" stroke="#e8e7e4" stroke-width="1"/>
+<text x="530.0" y="388.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">1</text>
+<line x1="643.3" y1="110" x2="643.3" y2="370" stroke="#e8e7e4" stroke-width="1"/>
+<text x="643.3" y="388.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">2</text>
+<line x1="756.7" y1="110" x2="756.7" y2="370" stroke="#e8e7e4" stroke-width="1"/>
+<text x="756.7" y="388.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">4</text>
+<line x1="870.0" y1="110" x2="870.0" y2="370" stroke="#e8e7e4" stroke-width="1"/>
+<text x="870.0" y="388.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">8</text>
+<line x1="530" y1="370.0" x2="870" y2="370.0" stroke="#e8e7e4" stroke-width="1"/>
+<text x="522.0" y="374.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">0</text>
+<line x1="530" y1="309.2" x2="870" y2="309.2" stroke="#e8e7e4" stroke-width="1"/>
+<text x="522.0" y="313.2" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">25 ms</text>
+<line x1="530" y1="248.5" x2="870" y2="248.5" stroke="#e8e7e4" stroke-width="1"/>
+<text x="522.0" y="252.5" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">50 ms</text>
+<line x1="530" y1="187.7" x2="870" y2="187.7" stroke="#e8e7e4" stroke-width="1"/>
+<text x="522.0" y="191.7" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">75 ms</text>
+<line x1="530" y1="127.0" x2="870" y2="127.0" stroke="#e8e7e4" stroke-width="1"/>
+<text x="522.0" y="131.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="end">100 ms</text>
+<path d="M530.0,151.3 L643.3,201.4 L756.7,254.7 L870.0,279.7" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="870.0" cy="279.7" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M530.0,149.7 L643.3,219.4 L756.7,274.6 L870.0,308.2" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="870.0" cy="308.2" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="700.0" y="408.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#52514e" text-anchor="middle">threads</text>
+<text x="40.0" y="458.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">julia ab23c8cde4 (1.13.0-rc4) · AMD RYZEN AI MAX+ 395 w/ Radeon 8060S · cores 13,29 · time-shared · 2026-09-06</text>
+</svg>

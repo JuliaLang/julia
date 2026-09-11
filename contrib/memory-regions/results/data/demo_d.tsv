@@ -1,0 +1,7 @@
+# demo	point	threads	mode	wall_ms	collections	gc_ms	peak_rss_mb
+D	work=0     (grid 16, work=0, 4 threads)	4	region	36.153352	0	0.0	288.34765625
+D	work=0     (grid 16, work=0, 4 threads)	4	stock	36.515385	0	0.0	288.34375
+D	work=512   (grid 16, work=512, 4 threads)	4	region	36.665197	0	0.0	288.98828125
+D	work=512   (grid 16, work=512, 4 threads)	4	stock	37.825437	4	2.413956	298.67578125
+D	work=2048  (grid 16, work=2048, 4 threads)	4	region	38.232405	0	0.0	299.109375
+D	work=2048  (grid 16, work=2048, 4 threads)	4	stock	46.14209	24	8.188873	303.0859375

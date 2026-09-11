@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 260" font-size="13">
+<rect width="960" height="260" fill="#fcfcfb"/>
+<text x="40.0" y="30.0" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#0b0b0b" text-anchor="start" font-weight="bold">The longest pause any event took</text>
+<line x1="40" y1="50" x2="62" y2="50" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
+<text x="68.0" y="54.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">stock, heuristics</text>
+<line x1="196.4" y1="50" x2="218.4" y2="50" stroke="#eda100" stroke-width="3" stroke-linecap="round"/>
+<text x="224.4" y="54.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">stock, scheduled</text>
+<line x1="345.6" y1="50" x2="367.6" y2="50" stroke="#eb6834" stroke-width="3" stroke-linecap="round"/>
+<text x="373.6" y="54.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">regions, census every 100 k</text>
+<line x1="574.0" y1="50" x2="596.0" y2="50" stroke="#1baf7a" stroke-width="3" stroke-linecap="round"/>
+<text x="602.0" y="54.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="start">regions, no census</text>
+<line x1="220.0" y1="80" x2="220.0" y2="195" stroke="#e8e7e4" stroke-width="1"/>
+<text x="220.0" y="215.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">10 µs</text>
+<line x1="440.0" y1="80" x2="440.0" y2="195" stroke="#e8e7e4" stroke-width="1"/>
+<text x="440.0" y="215.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">100 µs</text>
+<line x1="660.0" y1="80" x2="660.0" y2="195" stroke="#e8e7e4" stroke-width="1"/>
+<text x="660.0" y="215.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">1.0 ms</text>
+<line x1="880.0" y1="80" x2="880.0" y2="195" stroke="#e8e7e4" stroke-width="1"/>
+<text x="880.0" y="215.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">10 ms</text>
+<text x="204.0" y="115.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="end">~1.7 KB per event</text>
+<circle cx="791.5" cy="110.0" r="7.0" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="791.5" y="96.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">4.0 ms</text>
+<circle cx="781.0" cy="110.0" r="7.0" fill="#eda100" stroke="#fcfcfb" stroke-width="2"/>
+<text x="781.0" y="96.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">3.5 ms</text>
+<circle cx="379.1" cy="110.0" r="7.0" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="379.1" y="96.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">53 µs</text>
+<circle cx="254.4" cy="110.0" r="7.0" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<text x="254.4" y="96.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">14 µs</text>
+<text x="204.0" y="180.0" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#0b0b0b" text-anchor="end">~100 B per event</text>
+<circle cx="791.8" cy="175.0" r="7.0" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="791.8" y="161.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">4.0 ms</text>
+<circle cx="785.8" cy="175.0" r="3.9" fill="#eda100" stroke="#fcfcfb" stroke-width="2"/>
+<text x="785.8" y="201.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">3.7 ms</text>
+<circle cx="362.9" cy="175.0" r="7.0" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="362.9" y="161.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">45 µs</text>
+<circle cx="224.2" cy="175.0" r="7.0" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<text x="224.2" y="161.0" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#0b0b0b" text-anchor="middle" paint-order="stroke" stroke="#fcfcfb" stroke-width="3" stroke-linejoin="round">10 µs</text>
+<text x="40.0" y="248.0" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#52514e" text-anchor="start">julia ab23c8cde4 (1.13.0-rc4) · AMD RYZEN AI MAX+ 395 w/ Radeon 8060S · core 29 · SCHED_FIFO 50 · 2026-09-06</text>
+</svg>

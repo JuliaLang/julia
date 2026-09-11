@@ -1,0 +1,3 @@
+# variant	events	latency_p50_ns	latency_p999_ns	latency_max_ns	lateness_p999_ns	lateness_max_ns	slot_misses	gc_events	gc_ms
+baseline	1000000	70	602	5149068	975	5149109	105	2	9.64866
+regions	1000000	70	170	5530	241	5588	0	0	0.0

@@ -11,6 +11,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "gc-regions.h"   // a grown buffer takes the region of its array
 
 #ifdef __cplusplus
 extern "C" {
@@ -196,8 +197,15 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
     jl_value_t *mtype = (jl_value_t*)jl_typetagof(a->ref.mem);
     int isbitsunion = jl_genericmemory_isbitsunion(a->ref.mem);
     size_t newnrows = n + inc;
+    // The new memory replaces the memory the array holds, so it takes the
+    // region of the array, not the region of an open window (gc-regions.h).
+    // The runtime grows its own region-0 arrays through this entry while a
+    // task holds a window; without the borrow the buffer would be a younger
+    // object of an older array, and the barrier would quarantine the region.
     if (!isbitsunion && elsz == 0) {
+        int lent = jl_gc_region_borrow(jl_gc_region_of((jl_value_t*)a));
         jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, MAXINTVAL - 2);
+        jl_gc_region_unborrow(lent);
         a->ref.mem = newmem;
         jl_gc_wb(a, newmem);
         a->dimsize[0] = newnrows;
@@ -219,7 +227,9 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
         if (newmaxsize < reqmaxsize)
             newmaxsize = reqmaxsize;
         // TODO: round this up to newmaxsize < GC_MAX_SZCLASS ? jl_gc_sizeclasses[jl_gc_szclass(newmaxsize)] : LLT_ALIGN(newmaxsize, 4096), after accounting for the object header (24 bytes)
+        int lent = jl_gc_region_borrow(jl_gc_region_of((jl_value_t*)a));
         jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, newmaxsize);
+        jl_gc_region_unborrow(lent);
         char *newdata = (char*)newmem->ptr + oldoffset * elsz;
         memcpy(newdata, data, n * elsz);
         if (isbitsunion) {

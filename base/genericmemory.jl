@@ -2,6 +2,19 @@
 
 ## genericmemory.jl: Managed Memory
 
+# A buffer that replaces another takes the lifetime of the one it replaces,
+# so it must take its GC region as well. Allocated in the region of an open
+# window instead, it would be a younger object held by an older container:
+# an escape, and the region would be quarantined for an ordinary `push!` or
+# rehash. `_region_borrow` gives the region of `like` to the next
+# allocations of this thread, and `_region_unborrow` gives it back. A borrow
+# is not a window and changes no window state. Keep it short, do not yield
+# inside one, and always give it back in a `finally`.
+# (doc/src/devdocs/gc-regions.md, "A replacement buffer".)
+_region_borrow(@nospecialize(like)) =
+    ccall(:jl_gc_region_borrow, Cint, (Cint,), ccall(:jl_gc_region_of, Cint, (Any,), like))
+_region_unborrow(lent::Cint) = ccall(:jl_gc_region_unborrow, Cvoid, (Cint,), lent)
+
 """
     GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: DenseVector{T}
 

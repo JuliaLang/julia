@@ -1100,6 +1100,33 @@ end
 
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
+# Every array growth passes through here: `_growbeg!`, `_growend!`,
+# `_growat!` and `sizehint!` replace the backing memory of an array through
+# this function, so `push!`, `pushfirst!`, `append!`, `insert!` and
+# `resize!` do too.
+#
+# The new memory replaces the one `a` holds, so it takes the lifetime of the
+# array and it must take the array's GC region as well. Allocated in the
+# region of an open window instead, it would be a younger object held by an
+# older array: an escape, and the region would be quarantined for a `push!`
+# the program has every right to make.
+#
+# The region comes from the array and not from the old memory, because an
+# empty array shares one permanent empty `Memory` that belongs to region 0.
+# An array made inside a window starts with that shared memory, and its
+# first growth must land in the window's region, where the array lives.
+# The borrow is two field writes and no window, and the `finally` gives the
+# region back however the allocation leaves.
+# (doc/src/devdocs/gc-regions.md, "A replacement buffer".)
+function array_new_memory_for(a::Array, mem::Memory, newlen::Int)
+    lent = _region_borrow(a)
+    try
+        return array_new_memory(mem, newlen)
+    finally
+        _region_unborrow(lent)
+    end
+end
+
 function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     @_terminates_locally_meta
     ref = a.ref
@@ -1126,7 +1153,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
             @inbounds _unsetindex!(mem, j)
         end
     else
-        newmem = array_new_memory(mem, newmemlen)
+        newmem = array_new_memory_for(a, mem, newmemlen)
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
     end
     if ref !== a.ref
@@ -1178,7 +1205,7 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
         # or exactly the requested size, whichever is larger
         # TODO we should possibly increase the offset if the current offset is nonzero.
         newmemlen2 = max(overallocation(memlen), newmemlen)
-        newmem = array_new_memory(mem, newmemlen2)
+        newmem = array_new_memory_for(a, mem, newmemlen2)
         newoffset = offset
     end
     newref = @inbounds memoryref(newmem, newoffset)
@@ -1246,7 +1273,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         # the +1 is because I didn't want to have an off by 1 error.
         newmemlen = max(overallocation(memlen), len+2*delta+1)
         newoffset = (newmemlen - newlen) ÷ 2 + 1
-        newmem = array_new_memory(mem, newmemlen)
+        newmem = array_new_memory_for(a, mem, newmemlen)
         newref = @inbounds memoryref(newmem, newoffset)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
@@ -1595,7 +1622,7 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
         if !shrink || memlen - sz <= div(memlen, 8)
             return a
         end
-        newmem = array_new_memory(mem, sz)
+        newmem = array_new_memory_for(a, mem, sz)
         if first
             newref = memoryref(newmem, inc + 1)
         else
