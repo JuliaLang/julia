@@ -290,7 +290,15 @@ static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x
     return args[0];
 }
 
-void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) {
+// Declare (or re-declare) a global binding, optionally installing a new value atomically.
+//
+// If `newval` is non-NULL (the `global x::T = v` form), the binding is declared and the new
+// value is swapped in as a single atomic step under `world_counter_lock`: the old partition
+// is capped, the value is swapped in, and only then is the new partition published (by
+// bumping the world counter). There is therefore never an observable intermediate state in
+// which the binding carries the new type with a stale value, nor one in which it is
+// transiently undefined.
+void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong, jl_value_t *newval) {
     // create uninitialized mutable binding for "global x" decl sometimes or probably
     jl_module_t *gm;
     jl_sym_t *gs;
@@ -304,16 +312,23 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         gm = m;
         gs = (jl_sym_t*)arg;
     }
+    JL_GC_PUSH1(&newval);
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
     jl_binding_partition_t *bpart = NULL;
     if (!strong && set_type)
         jl_error("Weak global definitions cannot have types");
+    assert((newval == NULL) || (strong && set_type)); // a value is only carried by `global x::T = v`
     enum jl_partition_kind new_kind = strong ? PARTITION_KIND_GLOBAL : PARTITION_KIND_DECLARED;
     jl_value_t *global_type = set_type;
     if (strong && !global_type)
         global_type = (jl_value_t*)jl_any_type;
+    // A carried value must conform to the declared type. Check before mutating any state so
+    // that a non-conforming value errors cleanly. (The `global x::T = v` lowering converts
+    // `v` to `T` before calling us, so this normally holds by construction.)
+    if (newval != NULL && !jl_isa(newval, global_type))
+        jl_type_error_global("setglobal!", gm, gs, global_type, newval);
     int replaced = 0; // whether a new partition was installed (so the world must be bumped)
     int update_partition = 0;
     int update_in_place = 0;
@@ -357,9 +372,17 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
             replaced = 1;
         }
     }
+    // Atomically swap in the carried value *before* publishing the new partition (by bumping
+    // the world counter), so there is never an observable state where the new type is visible
+    // with a stale value, nor one where the binding is transiently undefined.
+    if (newval != NULL) {
+        jl_gc_wb(b, newval);
+        jl_atomic_store_release(&b->value, newval);
+    }
     if (replaced)
         jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
+    JL_GC_POP();
 }
 
 // module referenced by (top ...) from within m
