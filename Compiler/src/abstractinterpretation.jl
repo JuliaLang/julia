@@ -2831,28 +2831,62 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
     end
 end
 
-function abstract_eval_swapglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool,
-                                   @nospecialize(M), @nospecialize(s), @nospecialize(v))
-    scm = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
-    scm.rt === Bottom && return scm
-    gcm = abstract_eval_getglobal(interp, sv, saw_latestworld, M, s)
-    return CallMeta(gcm.rt, Union{scm.exct,gcm.exct}, merge_effects(scm.effects, gcm.effects), scm.info)
-end
-
-function abstract_eval_swapglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool,
-                                   @nospecialize(M), @nospecialize(s), @nospecialize(v), @nospecialize(order))
-    scm = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v, order)
-    scm.rt === Bottom && return scm
-    gcm = abstract_eval_getglobal(interp, sv, saw_latestworld, M, s, order)
-    return CallMeta(gcm.rt, Union{scm.exct,gcm.exct}, merge_effects(scm.effects, gcm.effects), scm.info)
+# Shared model for the read-modify-write global builtins (`swapglobal!`, `replaceglobal!`).
+# The runtime resolves a single binding for the whole operation: `jl_get_binding_wr` (a
+# `write=true` walk, which never follows imports -- a store through an import throws) picks
+# the slot that is both read and written, so the read is modeled from that same own
+# partition rather than from the leaf a `getglobal` would resolve. The read is observable
+# without a successful store (`replaceglobal!` returns the old value when the comparison
+# fails), so its exception type and effects are always merged in; conversely, when the store
+# can never succeed the old value is never returned, so the result type is `Bottom`.
+# Returns the operation's `CallMeta` -- whose `rt` is the type of the value read -- paired
+# with the binding's declared type, or `nothing` if the partition does not declare one.
+function abstract_eval_rmwglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool,
+                                  @nospecialize(M), @nospecialize(s), @nospecialize(v))
+    if isa(M, Const) && isa(s, Const)
+        M, s = M.val, s.val
+        if M isa Module && s isa Symbol
+            gr = GlobalRef(M, s)
+            info = GlobalAccessInfo(convert(Core.Binding, gr))
+            if saw_latestworld
+                return Pair{CallMeta,Any}(CallMeta(Any, Any,
+                    merge_effects(generic_getglobal_effects, setglobal!_effects), info), nothing)
+            end
+            world = get_inference_world(interp)
+            valid_worlds, (b, partition) = binding_access_range(gr, binding_world_hints(world, sv), true)
+            update_valid_age!(sv, world, valid_worlds)
+            rte = abstract_eval_partition_load(interp, b, partition)
+            (srt, sexct) = global_assignment_binding_rt_exct(interp, partition, v)
+            exct = Union{rte.exct, sexct}
+            effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
+            T = binding_kind(partition) == PARTITION_KIND_GLOBAL ? partition_restriction(partition) : nothing
+            return Pair{CallMeta,Any}(CallMeta(srt === Bottom ? Bottom : rte.rt, exct, effects, info), T)
+        end
+        return Pair{CallMeta,Any}(CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo()), nothing)
+    end
+    ⊑ = partialorder(typeinf_lattice(interp))
+    if !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
+        return Pair{CallMeta,Any}(CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo()), nothing)
+    elseif M ⊑ Module && s ⊑ Symbol
+        exct = Union{UndefVarError, ErrorException}
+    else
+        exct = Union{UndefVarError, TypeError, ErrorException}
+    end
+    return Pair{CallMeta,Any}(CallMeta(Any, exct,
+        merge_effects(generic_getglobal_effects, setglobal!_effects), NoCallInfo()), nothing)
 end
 
 function abstract_eval_swapglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if !isvarargtype(argtypes[end])
-        if length(argtypes) == 4
-            return abstract_eval_swapglobal!(interp, sv, saw_latestworld, argtypes[2], argtypes[3], argtypes[4])
-        elseif length(argtypes) == 5
-            return abstract_eval_swapglobal!(interp, sv, saw_latestworld, argtypes[2], argtypes[3], argtypes[4], argtypes[5])
+        if length(argtypes) in (4, 5)
+            cm = abstract_eval_rmwglobal!(interp, sv, saw_latestworld, argtypes[2], argtypes[3], argtypes[4])
+            sg = cm.first
+            if length(argtypes) == 5
+                # a swap both loads and stores, so the order is validated once, as the runtime
+                # does with `jl_get_atomic_order_checked(order, #=loading=#1, #=storing=#1)`
+                sg = merge_exct(sg, global_order_exct(argtypes[5], #=loading=#true, #=storing=#true))
+            end
+            return sg
         else
             return CallMeta(Union{}, ArgumentError, EFFECTS_THROWS, NoCallInfo())
         end
@@ -2889,26 +2923,10 @@ end
 function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if !isvarargtype(argtypes[end])
         if length(argtypes) in (5, 6, 7)
-            (M, s, v) = argtypes[2], argtypes[3], argtypes[5]
-            T = nothing
-            if isa(M, Const) && isa(s, Const)
-                M, s = M.val, s.val
-                M isa Module || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
-                s isa Symbol || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
-                gr = GlobalRef(M, s)
-                world = get_inference_world(interp)
-                valid_worlds, (b, partition) = binding_access_range(gr, binding_world_hints(world, sv), false)
-                update_valid_age!(sv, world, valid_worlds)
-                rte = abstract_eval_partition_load(interp, b, partition)
-                if binding_kind(partition) == PARTITION_KIND_GLOBAL
-                    T = partition_restriction(partition)
-                end
-                exct = Union{rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
-                effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
-                sg = CallMeta(Any, exct, effects, GlobalAccessInfo(convert(Core.Binding, gr)))
-            else
-                sg = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
-            end
+            # only the `desired` value (`argtypes[5]`) is type-checked against the binding;
+            # `expected` is merely compared
+            cm = abstract_eval_rmwglobal!(interp, sv, saw_latestworld, argtypes[2], argtypes[3], argtypes[5])
+            sg = cm.first
             if length(argtypes) >= 6
                 goe = global_order_exct(argtypes[6], #=loading=#true, #=storing=#true)
                 sg = merge_exct(sg, goe)
@@ -2917,6 +2935,8 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
                 goe = global_order_exct(argtypes[7], #=loading=#true, #=storing=#false)
                 sg = merge_exct(sg, goe)
             end
+            sg.rt === Bottom && return sg
+            T = cm.second
             rt = T === nothing ?
                 ccall(:jl_apply_cmpswap_type, Any, (Any,), S) where S :
                 ccall(:jl_apply_cmpswap_type, Any, (Any,), T)

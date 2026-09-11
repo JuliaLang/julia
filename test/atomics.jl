@@ -758,6 +758,24 @@ test_global_undef(UndefComplex{Any})
 test_global_undef(UndefComplex{UndefComplex{Any}})
 test_global_undef(Int)
 
+# the read-modify-write builtins resolve the binding for writing, which never follows
+# imports, so a store through an import fails before any value is read
+module ImportedGlobalSource
+    global imported_x::Int = 1
+    global used_x::Int = 2
+end
+import .ImportedGlobalSource: imported_x
+using .ImportedGlobalSource: used_x
+for r in (:imported_x, :used_x)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, -1, 3) # `expected` is never compared
+end
+@test getglobal(ImportedGlobalSource, :imported_x) === 1
+@test getglobal(ImportedGlobalSource, :used_x) === 2
+
 function gen_test_globalonce(@nospecialize r)
     M = @__MODULE__
     return quote
