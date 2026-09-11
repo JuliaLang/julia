@@ -766,6 +766,12 @@ static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 #endif
 }
 
+// Malformed DWARF should not add LLVM diagnostics to Julia's backtrace output.
+static void ignoreDWARFDiag(llvm::Error E) JL_NOTSAFEPOINT
+{
+    consumeError(std::move(E));
+}
+
 static void get_function_name_and_base(llvm::object::SectionRef Section, std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap,
                                        size_t pointer, uint64_t slide, bool inimage,
                                        void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
@@ -1069,7 +1075,9 @@ static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) 
             slide = -fbase;
         }
 
-        auto context = DWARFContext::create(*debugobj).release();
+        auto context = DWARFContext::create(*debugobj,
+                DWARFContext::ProcessDebugRelocations::Process, nullptr, "",
+                ignoreDWARFDiag, ignoreDWARFDiag).release();
         auto binary = errorobj->takeBinary();
         binary.first.release();
         binary.second.release();
@@ -1315,7 +1323,9 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
             *Section = *std::next(lazyobject->object->section_begin(), fit->second.SectionIndex);
             if (context) {
                 if (lazyobject->context == nullptr)
-                    lazyobject->context = DWARFContext::create(*lazyobject->object);
+                    lazyobject->context = DWARFContext::create(*lazyobject->object,
+                            DWARFContext::ProcessDebugRelocations::Process, nullptr, "",
+                            ignoreDWARFDiag, ignoreDWARFDiag);
                 *context = lazyobject->context.get();
             }
         }

@@ -1315,6 +1315,7 @@ namespace {
             return nullptr;
         }
         // Allocate a target...
+        // Keep jl_jit_uses_large_code_model (jitlayers.h) in sync with this.
         std::optional<CodeModel::Model> codemodel =
 #ifdef _P64
             // Make sure we are using the large code model on 64bit
@@ -1335,8 +1336,10 @@ namespace {
         // Generate simpler code for JIT
         Reloc::Model relocmodel = Reloc::Static;
         if (TheTriple.isRISCV()) {
-            // until large code model is supported, use PIC for RISC-V
-            // https://github.com/llvm/llvm-project/issues/106203
+            // LLVM < 20 uses the medium code model, which needs PIC for scattered
+            // JIT allocations (llvm/llvm-project#106203). With the large model,
+            // LLVM still loads external addresses indirectly through constant pools,
+            // so switching to static relocation does not remove the extra loads.
             relocmodel = Reloc::PIC_;
         }
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);

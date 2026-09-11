@@ -313,6 +313,10 @@ function cpu_info()
     cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
+        if isempty(cpus[i].model) || cpus[i].model == "unknown"
+            # libuv may lack model detection where Julia's CPU detection succeeds.
+            cpus[i].model = CPU_NAME
+        end
     end
     ccall(:uv_free_cpu_info, Cvoid, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
     return cpus

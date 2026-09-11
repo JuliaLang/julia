@@ -343,9 +343,10 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
     gettimeofday(&tv, NULL);
     return (int64_t)(tv.tv_sec) * 1000000 + tv.tv_usec;
 #elif defined(_CPU_RISCV64_)
-    // taken from https://github.com/google/benchmark/blob/3b3de69400164013199ea448f051d94d7fc7d81f/src/cycleclock.h#L190
+    // Linux may restrict user access to `cycle`. Use the fixed-frequency `time`
+    // counter, which is also used by the vDSO and is readable from user mode.
     uint64_t ret;
-    __asm__ volatile("rdcycle %0" : "=r"(ret));
+    __asm__ volatile("rdtime %0" : "=r"(ret));
     return ret;
 #elif defined(_CPU_PPC64_)
     // This returns a time-base, which is not always precisely a cycle-count.

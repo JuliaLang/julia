@@ -517,6 +517,8 @@ function sys_arch_category()
         :x86
     elseif Sys.ARCH === :aarch64 || startswith(string(Sys.ARCH), "arm")
         :arm
+    elseif Sys.ARCH === :riscv64
+        :riscv
     else
         :unsupported
     end
@@ -528,9 +530,13 @@ const x86_ptr = r"^(?:(?:[xyz]mm|[dq])?word|byte|ptr|offset)$"
 const avx512flags = r"^(?:z|r[nduz]-sae|sae|1to1?\d)$"
 const arm_cond = r"^(?:eq|ne|cs|ho|cc|lo|mi|pl|vs|vc|hi|ls|[lg][te]|al|nv)$"
 const arm_keywords = r"^(?:lsl|lsr|asr|ror|rrx|!|/[zm])$"
+# rounding modes and fence orderings
+const riscv_keywords = r"^(?:rne|rtz|rdn|rup|rmm|dyn|[iorw]{1,4})$"
 
-function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}})
+function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}, Val{:riscv}})
     x86 = arch isa Val{:x86}
+    arm = arch isa Val{:arm}
+    riscv = arch isa Val{:riscv}
     m = match(r"^((?:[^\s:]+:|\"[^\"]+\":)?)(\s*)(.*)", tokens)
     if m !== nothing
         label, spaces, tokens = m.captures
@@ -541,7 +547,8 @@ function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}})
     if m !== nothing
         instruction, spaces, tokens = m.captures
         printstyled_ll(io, instruction, :instruction, spaces)
-        haslabel = occursin(r"^(?:bl?|bl?\.\w{2,5}|[ct]bn?z)?$", instruction)
+        haslabel = riscv ? occursin(r"^(?:b(?:eqz?|nez?|(?:lt|ge|gt|le)[uz]?)|j|jal|call|tail|c\.(?:beqz|bnez|j))$", instruction) :
+                           occursin(r"^(?:bl?|bl?\.\w{2,5}|[ct]bn?z)?$", instruction)
     end
 
     isfuncname = false
@@ -560,7 +567,7 @@ function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}})
             continue
         end
         m = match(r"^#([0-9a-fx.-]+)(\s*)(.*)", tokens)
-        if !x86 && m !== nothing && occursin(num_regex, m.captures[1])
+        if arm && m !== nothing && occursin(num_regex, m.captures[1])
             num, spaces, tokens = m.captures
             printstyled_ll(io, "#" * num, :number, spaces)
             continue
@@ -574,8 +581,13 @@ function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}})
         elseif x86 && occursin(x86_ptr, token) || occursin(avx512flags, token)
             printstyled_ll(io, token, :keyword)
             isfuncname = token == "offset"
-        elseif !x86 && (occursin(arm_keywords, token) || occursin(arm_cond, token))
+        elseif arm && (occursin(arm_keywords, token) || occursin(arm_cond, token))
             printstyled_ll(io, token, :keyword)
+        elseif riscv && (occursin(riscv_keywords, token) || occursin(r"^%\w+$", token))
+            # relocation specifiers such as `%pcrel_hi`, `%pcrel_lo` or `%got_pcrel_hi`
+            printstyled_ll(io, token, :keyword)
+        elseif riscv && occursin(r"^\.L.+$", token)
+            printstyled_ll(io, token, :label)
         elseif occursin(r"^L.+$", token)
             printstyled_ll(io, token, :label)
         elseif occursin(r"^\$.+$", token)

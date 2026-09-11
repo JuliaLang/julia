@@ -576,6 +576,11 @@ static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
     for (const object::SymbolRef &Sym : Section.getObject()->symbols()) {
         if (!Section.containsSymbol(Sym))
             continue;
+        // Only functions delimit functions. Local labels (RISC-V `.Lpcrel_hi`
+        // anchors), mapping symbols (`$x`/`$d`) and the like can sit at interior
+        // offsets and would otherwise truncate the size.
+        if (cantFail(Sym.getType()) != object::SymbolRef::ST_Function)
+            continue;
         uint64_t Addr = cantFail(Sym.getAddress());
         if (Addr <= offset && Addr >= lo) {
             // test for lower bound on symbol
@@ -700,6 +705,7 @@ StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
     if (object == NULL)
         return StringRef();
     object::section_iterator ESection = object->section_end();
+    StringRef fallback;
     for (const object::SymbolRef &Sym : object->symbols()) {
         auto Sect = cantFail(Sym.getSection());
         if (Sect == ESection)
@@ -707,13 +713,20 @@ StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
         if (Sect->getAddress() == 0)
             continue;
         uint64_t Addr = cantFail(Sym.getAddress());
-        if (Addr == offset) {
-            auto sNameOrError = Sym.getName();
-            if (sNameOrError)
-                return sNameOrError.get();
-        }
+        if (Addr != offset)
+            continue;
+        auto sNameOrError = Sym.getName();
+        if (!sNameOrError)
+            continue;
+        StringRef name = sNameOrError.get();
+        // Prefer the function symbol when several share an address (AArch64 and
+        // RISC-V also place a `$x` mapping symbol at every function entry).
+        if (cantFail(Sym.getType()) == object::SymbolRef::ST_Function)
+            return name;
+        if (fallback.empty() && !name.starts_with("$x") && !name.starts_with("$d"))
+            fallback = name;
     }
-    return StringRef();
+    return fallback;
 }
 
 // Insert an address
@@ -1126,14 +1139,25 @@ static void jl_dump_asm_internal(
                         // attempt to symbolicate any immediate operands
                         const MCInstrDesc &opinfo = MCII->get(Inst.getOpcode());
                         for (unsigned Op = 0; Op < opinfo.NumOperands; Op++) {
-                            const MCOperand &OpI = Inst.getOperand(Op);
+                            MCOperand &OpI = Inst.getOperand(Op);
                             if (OpI.isImm()) {
                                 int64_t imm = OpI.getImm();
-                                if (opinfo.operands()[Op].OperandType == MCOI::OPERAND_PCREL)
+                                bool pcrel = opinfo.operands()[Op].OperandType == MCOI::OPERAND_PCREL;
+                                if (pcrel)
                                     imm += Fptr + Index;
                                 const char *name = DisInfo.lookupSymbolName(imm);
-                                if (name)
+                                if (!name)
+                                    continue;
+                                if (pcrel && TheTriple.isRISCV()) {
+                                    // Some disassemblers (RISC-V) do not run the symbolizer
+                                    // on branch targets, leaving the raw displacement here.
+                                    // Print the label we emit for that address instead.
+                                    OpI = MCOperand::createExpr(MCSymbolRefExpr::create(
+                                                Ctx.getOrCreateSymbol(name), Ctx));
+                                }
+                                else {
                                     Streamer->AddComment(name);
+                                }
                             }
                         }
                     }

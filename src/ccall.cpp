@@ -1762,6 +1762,15 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             ctx.builder.CreateCall(wait_inst);
             JL_GC_POP();
             return ghostValue(ctx, jl_nothing_type);
+        } else if (ctx.emission_context.TargetTriple.isRISCV64()) {
+            if (is_libjulia_func(jl_cpu_pause)) {
+                auto pauseinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false),
+                                                ".insn i 0x0F, 0, x0, x0, 0x010", "~{memory}", true);
+                ctx.builder.CreateCall(pauseinst);
+            }
+            // jl_cpu_suspend has no RISC-V equivalent and stays a no-op
+            JL_GC_POP();
+            return ghostValue(ctx, jl_nothing_type);
         } else {
             JL_GC_POP();
             return ghostValue(ctx, jl_nothing_type);

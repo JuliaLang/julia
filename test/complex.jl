@@ -1104,12 +1104,12 @@ end
 
         @test isequal(one(T) / complex(T(Inf),-zero(T)), complex(zero(T), zero(T)))
         @test isequal(one(T) / complex(T(Inf),-one(T)),  complex(zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(Inf),T(-NaN)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),-T(NaN)),  complex(zero(T), zero(T)))
         @test isequal(one(T) / complex(T(Inf),T(-Inf)),  complex(zero(T), zero(T)))
 
         @test isequal(one(T) / complex(T(-Inf),-zero(T)),complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-Inf),-one(T)), complex(-zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(-Inf),T(-NaN)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),-T(NaN)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-Inf),T(-Inf)), complex(-zero(T), zero(T)))
 
         @test isequal(one(T) / complex(zero(T), T(Inf)), complex(zero(T), -zero(T)))
@@ -1122,11 +1122,11 @@ end
 
         @test isequal(one(T) / complex(-zero(T), T(Inf)), complex(-zero(T), -zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(Inf)), complex(-zero(T), -zero(T)))
-        @test isequal(one(T) / complex(T(-NaN),  T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(-T(NaN),  T(Inf)), complex(-zero(T), -zero(T)))
 
         @test isequal(one(T) / complex(-zero(T), T(-Inf)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(-Inf)), complex(-zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(-T(NaN),  T(-Inf)), complex(-zero(T), zero(T)))
 
         # divide complex by complex Inf
         @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
