@@ -397,7 +397,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.10.1+0"
+version = "7.14.0+1"
 
     [deps.SuiteSparse_jll.syntax]
     julia_version = "1.13.0"
