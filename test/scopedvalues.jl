@@ -86,7 +86,7 @@ end
         @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(2)"
         objid = sprint(show, Base.objectid(sval))
         let str = sprint(show, Core.current_scope(), context=(:module=>Core,))
-            @test startswith(str, "Base.ScopedValues.Scope")
+            @test startswith(str, "Base.Scope")
             @test contains(str, "Base.ScopedValues.ScopedValue{$Int}@$objid => 2")
         end
     end

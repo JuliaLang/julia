@@ -91,7 +91,7 @@ JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddLLVMIRModule_impl(
 }
 
 JL_DLLEXPORT_CODEGEN LLVMErrorRef
-JLJITJDLookup_impl(JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcExecutorAddress *Result, const char *Name, int ExternalJDOnly)
+JLJITJDLookup_impl(JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcExecutorAddress *Result, const char *Name, int ExternalJDOnly) JL_CANSAFEPOINT
 {
     auto Sym = unwrap(JIT)->findJDSymbol(*unwrap(JD), Name, ExternalJDOnly);
     if (Sym) {

@@ -80,7 +80,16 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
+    # Only assert the methods shipped with Base and the stdlibs: test files
+    # that ran earlier in the same process may have added their own isequal
+    # methods (e.g. arrayops' totally_not_five26034), and what those infer
+    # depends on the session's accumulated method tables, not on `missing`.
+    let ms = collect(methods(isequal, Tuple{Any,Any})),
+        rts = Base.return_types(isequal, Tuple{Any,Any})
+        @test all(zip(ms, rts)) do (m, rt)
+            Base.moduleroot(parentmodule(m)) === Main || rt === Bool
+        end
+    end
 end
 
 @testset "arithmetic operators" begin
@@ -92,20 +101,20 @@ end
     end
 
     # All arithmetic operators return missing when operating on two missing's
-    # All arithmetic operators return missing when operating on a scalar and an missing
-    # All arithmetic operators return missing when operating on an missing and a scalar
+    # All arithmetic operators return missing when operating on a scalar and a missing
+    # All arithmetic operators return missing when operating on a missing and a scalar
     for f in arithmetic_operators
         @test ismissing(f(missing, missing))
         @test ismissing(f(1, missing))
         @test ismissing(f(missing, 1))
     end
 
-    @test ismissing(min(missing, missing))
-    @test ismissing(max(missing, missing))
-    for f in [min, max]
+    for (f, result) in ((min, missing), (max, missing), (minmax, (missing, missing)))
+        @test f(missing, missing) === result
+        @test f(missing) === result
         for arg in ["", "a", 1, -1.0, [2]]
-            @test ismissing(f(missing, arg))
-            @test ismissing(f(arg, missing))
+            @test f(missing, arg) === result
+            @test f(arg, missing) === result
         end
     end
 end
@@ -114,8 +123,8 @@ end
     two_argument_functions = [atan, hypot, log]
 
     # All two-argument functions return missing when operating on two missing's
-    # All two-argument functions return missing when operating on a scalar and an missing
-    # All two-argument functions return missing when operating on an missing and a scalar
+    # All two-argument functions return missing when operating on a scalar and a missing
+    # All two-argument functions return missing when operating on a missing and a scalar
     for f in two_argument_functions
         @test ismissing(f(missing, missing))
         @test ismissing(f(1, missing))

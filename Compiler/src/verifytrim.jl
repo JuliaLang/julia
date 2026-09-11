@@ -110,7 +110,7 @@ const MAX_NESTING_DEPTH = 1
 
 function is_call_expr(codeinfo::CodeInfo, @nospecialize(stmt))
     stmt = unwrap_stmt(codeinfo, stmt)
-    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :new)
+    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :foreignglobal, :new)
 end
 
 function has_unstable_arg(codeinfo::CodeInfo, sptypes::Vector{VarState}, args, startidx::Int)
@@ -307,6 +307,9 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                     ci = get(caches, edge_mi, nothing)
                     ci isa CodeInstance && continue # assume that only this_world matters for trim
                 end
+            elseif edge isa MethodInstance
+                ci = get(caches, edge, nothing)
+                ci isa CodeInstance && continue
             end
             # TODO: check for calls to Base.atexit?
         elseif isexpr(stmt, :call)
@@ -340,7 +343,7 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                         end
                     end
                 elseif Core.finalizer isa ftyp
-                    if length(stmt.args) == 3
+                    if 3 <= length(stmt.args) <= 5
                         finalizer = argextype(stmt.args[2], codeinfo, sptypes)
                         obj = argextype(stmt.args[3], codeinfo, sptypes)
                         atype = argtypes_to_type(Any[finalizer, obj])
@@ -350,9 +353,8 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                             ci = get(caches, mi, nothing)
                             ci isa CodeInstance && continue
                         end
-
-                        error = "unresolved finalizer registered"
                     end
+                    error = "unresolved finalizer registered"
                 elseif Core._apply isa ftyp
                     error = "trim verification not yet implemented for builtin `Core._apply`"
                 elseif Core._call_in_world_total isa ftyp
@@ -438,7 +440,10 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         item = codeinfos[i]
         if item isa CodeInstance
             push!(inspected, item)
-            if item.owner === nothing && item.min_world <= this_world <= item.max_world
+            # Trim inference caches its results under the `:trim` symbol as the owner (see
+            # `typeinf_ext_toplevel`), so the `CodeInstance`s handed to us here carry that
+            # owner rather than `nothing`.
+            if item.owner === :trim && item.min_world <= this_world <= item.max_world
                 mi = get_ci_mi(item)
                 if mi === item.def
                     caches[mi] = item
@@ -454,9 +459,7 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         elseif item isa SimpleVector
             rt = item[1]::Type
             sig = item[2]::Type
-            mi = ccall(:jl_get_specialization1, Any,
-                        (Any, Csize_t, Cint),
-                        sig, this_world, #= mt_cache =# 0)
+            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, this_world)
             asrt = Any
             valid = if mi !== nothing
                 mi = mi::MethodInstance

@@ -97,7 +97,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 }
 #endif
 
-typedef void* (*dlopen_prototype)(const char* filename, int flags) JL_NOTSAFEPOINT;
+typedef void* (*dlopen_prototype)(const char* filename, int flags) JL_CANCALLBACK;
 
 #if defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 struct link_map;
@@ -152,7 +152,7 @@ void ForEachMappedRegion(struct link_map *map, void (*cb)(const volatile void *,
 #endif
 
 #if defined(_OS_WINDOWS_)
-JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
+void *jl_dlopen(const char *filename, unsigned flags)
 {
     ssize_t len = uv_wtf8_length_as_utf16(filename);
     if (len < 0) return NULL;
@@ -171,7 +171,6 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-#if defined(__GLIBC__)
 int jl_running_under_sanitizer(int recheck) JL_NOTSAFEPOINT
 {
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
@@ -192,7 +191,6 @@ int jl_running_under_sanitizer(int recheck) JL_NOTSAFEPOINT
     return detected == 1;
 #endif
 }
-#endif
 
 #ifdef RTLD_DEEPBIND
 // RTLD_DEEPBIND is incompatible with the sanitizers' libc interposition
@@ -220,7 +218,7 @@ static int jl_use_rtld_deepbind(int recheck) JL_NOTSAFEPOINT
    instead using the real dlopen directly from the current shared library.
    Of course, this does mean that we need to manually perform the work that
    the sanitizers would otherwise do. */
-static JL_NO_SANITIZE dlopen_prototype resolve_dlopen(void) JL_NOTSAFEPOINT
+static JL_NO_SANITIZE dlopen_prototype resolve_dlopen(void) JL_CANCALLBACK
 {
 #if defined(__GLIBC__)
     // When a sanitizer is active, bypass its dlopen interposition by resolving and
@@ -245,7 +243,7 @@ static JL_NO_SANITIZE dlopen_prototype resolve_dlopen(void) JL_NOTSAFEPOINT
     return &dlopen;
 }
 
-JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
+JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags)
 {
     dlopen_prototype dlopen_fptr = resolve_dlopen();
     if (dlopen_fptr == NULL)
@@ -277,8 +275,29 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
 }
 #endif
 
+static void jl_dlopen_throw(int err, const char *filename) {
+#ifdef _OS_WINDOWS_
+    char reason[256];
+    win32_formatmessage(err, reason, sizeof(reason));
+#else
+    const char *reason = dlerror();
+#endif
+    jl_errorf("could not load library \"%s\"\n%s", filename, reason);
+}
 
-JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
+extern jl_libhandle jl_dlopen_e(const char *filename, unsigned flags) JL_NO_SAFEPOINT_ANALYSIS
+#ifdef __clang_gcanalyzer__
+; // function used when we know that jl_dlopen will not safepoint
+#else
+{
+    void *handle = jl_dlopen(filename, flags);
+    if (!handle)
+        jl_dlopen_throw(errno, filename);
+    return handle;
+}
+#endif
+
+int jl_dlclose(void *handle)
 {
 #ifdef _OS_WINDOWS_
     if (!handle) {
@@ -306,39 +325,28 @@ void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL
         return NULL;
     }
 #else
-    Dl_info info;
-    if (!dladdr(symbol, &info) || !info.dli_fname) {
+    const char *path = jl_pathname_for_symbol(symbol);
+    if (path == NULL) {
         if (throw_err)
             jl_error("could not load base module");
         return NULL;
     }
-    dlerror();
-    handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-#if defined(_OS_FREEBSD_)
-    // FreeBSD will not give you a handle for the executable if you dlopen() it
-    // with RTLD_NOLOAD, so check jl_exe_handle.
-    if (handle == NULL && dlerror() == NULL) {
-        handle = jl_exe_handle;
+    if (path[0] == '\0') { // symbol is in the main executable
+        handle = dlopen(NULL, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+    } else {
+        handle = dlopen(path, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
     }
-#elif !defined(__APPLE__)
-    if (handle == RTLD_DEFAULT && (RTLD_DEFAULT != NULL || dlerror() == NULL)) {
-        // We loaded the executable but got RTLD_DEFAULT back, ask for a real handle instead
-        handle = dlopen("", RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-    }
-#endif
     if (handle != NULL && close)
         dlclose(handle); // Undo ref count increment from `dlopen`
 #endif
     return handle;
 }
 
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err) JL_CANSAFEPOINT
 {
     ios_t path, relocated;
     int i;
-#ifdef _OS_WINDOWS_
-    int err;
-#endif
+    int err = 0;
     uv_stat_t stbuf;
     void *handle;
     int abspath;
@@ -459,15 +467,9 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 
 notfound:
     if (throw_err) {
-#ifdef _OS_WINDOWS_
-        char reason[256];
-        win32_formatmessage(err, reason, sizeof(reason));
-#else
-        const char *reason = dlerror();
-#endif
         ios_close(&relocated);
         ios_close(&path);
-        jl_errorf("could not load library \"%s\"\n%s", modname, reason);
+        jl_dlopen_throw(err, modname);
     }
     handle = NULL;
 
@@ -480,7 +482,7 @@ success:
 /*
  * When search_deps is 1, act like dlsym and search both the library for the
  * handle and all its dependencies.  Use this option only when compatibility
- * with dlsym(3) is required, thought this behaviour is not possible on Windows.
+ * with dlsym(3) is required, though this behaviour is not possible on Windows.
  *
  * At time of writing, only Base.dlsym() uses search_deps = 1.
  */

@@ -13,6 +13,10 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     auto ptls = target->getArgOperand(0);
     auto type = target->getArgOperand(2);
+    // Sites that may execute with a cancellation reset region published
+    // (annotated by CancellationLowering) allocate through the reset-safe
+    // entry points, which unpublish/republish the region themselves.
+    bool resetSafe = target->hasMetadata("julia.reset_region");
     uint64_t derefBytes = 0;
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
         size_t sz = (size_t)CI->getZExtValue();
@@ -21,7 +25,7 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         int offset = jl_gc_classify_pools(sz, &osize);
         if (offset < 0) {
             newI = builder.CreateCall(
-                bigAllocFunc,
+                resetSafe ? bigAllocResetSafeFunc : bigAllocFunc,
                 { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
             if (sz > 0)
                 derefBytes = sz;
@@ -29,14 +33,16 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         else {
             auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
             auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize, type });
+            newI = builder.CreateCall(resetSafe ? smallAllocResetSafeFunc : smallAllocFunc,
+                                      { ptls, pool_offs, pool_osize, type });
             if (sz > 0)
                 derefBytes = sz;
         }
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
         // allocTypedFunc does not include the type tag in the allocation size!
-        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
+        newI = builder.CreateCall(resetSafe ? allocTypedResetSafeFunc : allocTypedFunc,
+                                  { ptls, size, type });
         derefBytes = sizeof(void*);
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
@@ -50,6 +56,20 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto parent = target->getArgOperand(0);
+    // A NULL child means a field is being cleared (e.g. memoryrefunset!): no
+    // young object is stored, so the generational barrier never needs to
+    // remember the parent for it. Skip such children and never load their tag
+    // (which would dereference null). If every child is NULL there is nothing
+    // to remember, so emit no barrier; the caller erases the call.
+    SmallVector<Value*, 8> children;
+    for (unsigned i = 1; i < target->arg_size(); i++) {
+        Value *child = target->getArgOperand(i);
+        if (isa<ConstantPointerNull>(child->stripPointerCasts()))
+            continue;
+        children.push_back(child);
+    }
+    if (children.empty())
+        return;
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
     auto parTag = EmitLoadTag(builder, T_size, parent, tbaa_tag);
@@ -64,13 +84,12 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE | GC_IN_IMAGE_REMSET), "parent_in_image");
     auto parIsImage = builder.CreateICmpEQ(parInImage, ConstantInt::get(T_size, GC_IN_IMAGE_NOT_REMSET), "parent_is_image");
     Value *anyChldNotMarked = NULL;
-    for (unsigned i = 1; i < target->arg_size(); i++) {
-        Value *child = target->getArgOperand(i);
+    for (Value *child : children) {
         Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child, tbaa_tag), GC_MARKED, "child_bit");
         Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
         anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
     }
-    assert(anyChldNotMarked); // handled by all_of test above
+    assert(anyChldNotMarked); // children is non-empty
     auto shouldTrigger = builder.CreateOr(parIsImage, anyChldNotMarked, "should_trigger_wb");
     MDBuilder MDB(parent->getContext());
     SmallVector<uint32_t, 2> Weights{1, 9};
@@ -79,7 +98,11 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     trigTerm->getParent()->setName("trigger_wb");
     builder.SetInsertPoint(trigTerm);
     if (target->getCalledOperand() == write_barrier_func) {
-        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        // Propagate CancellationLowering's reset-region annotation to the
+        // slow-path call, so lowerQueueGCRoot selects the reset-safe entry.
+        if (auto *MD = target->getMetadata("julia.reset_region"))
+            qr->setMetadata("julia.reset_region", MD);
     }
     else {
         assert(false);

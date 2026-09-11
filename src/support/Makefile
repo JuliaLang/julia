@@ -115,6 +115,20 @@ regenerate-compile_commands:
 compile-database: regenerate-compile_commands
 	@echo "Compilation database created for src/support"
 
+# Standalone unit tests for support utilities. Built with assertions enabled
+# so the internal consistency checks in the tested code are exercised too.
+TEST_SRCS := rletest eytzingertest
+TEST_BINS := $(TEST_SRCS:%=$(BUILDDIR)/%$(EXE))
+
+$(TEST_BINS): $(BUILDDIR)/%$(EXE): $(SRCDIR)/test/%.c $(BUILDDIR)/libsupport-debug.a $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) $< \
+		$(BUILDDIR)/libsupport-debug.a $(LIBUV) -o $@ -lpthread -ldl -lm)
+
+test: $(TEST_BINS)
+	@for t in $(TEST_BINS); do echo "  RUN     $$t"; $$t || exit 1; done
+
+.PHONY: test
+
 clean:
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
@@ -125,5 +139,6 @@ clean:
 	rm -f $(BUILDDIR)/libsupport-debug.a
 	rm -f $(BUILDDIR)/compile_commands.json*
 	rm -f $(BUILDDIR)/host/*
+	rm -f $(TEST_BINS)
 
 .PHONY: compile-database

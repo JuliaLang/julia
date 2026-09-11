@@ -119,6 +119,16 @@ typedef struct _jl_gc_pagemeta_t {
     // still be old dead objects in the page and `nold` and `prev_nold`
     // should be used to determine if the page needs to be swept
     uint8_t has_young;
+    // Whether any object requiring weak processing on death (see
+    // jl_gc_set_needs_weak_processing) was ever allocated in this page:
+    // such pages must not be freed wholesale when fully dead, and their
+    // dead cells must be inspected by the sweep so those objects get their
+    // processing (currently: linked cancellation token sources, see
+    // gc_is_dead_linked_cancel_source). Atomic: mutators may set it
+    // concurrently for a shared parent's page; all other accesses happen
+    // inside the collection (relaxed suffices - the flag-setter's object
+    // publication, not the flag, carries the ordering)
+    _Atomic(uint8_t) has_weak_processing;
     // Number of old objects in the page
     uint16_t nold;
     // Number of old objects in the page at the end of the previous full sweep
@@ -575,7 +585,7 @@ STATIC_INLINE void gc_record_full_sweep_reason(int reason) JL_NOTSAFEPOINT
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_collect_neighbors(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void jl_gc_debug_init(void);
+void jl_gc_debug_init(void) JL_NOTSAFEPOINT;
 
 // GC permanent allocation
 extern uv_mutex_t gc_perm_lock;
@@ -713,9 +723,6 @@ extern int gc_verifying;
 #define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
 #define gc_verifying (0)
 #endif
-
-int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
-int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;

@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "../rle.h"
 
-int main()
+int main(void)
 {
     /* Iteration */
     rle_iter_state state = rle_iter_init(22);

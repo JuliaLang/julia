@@ -1,0 +1,154 @@
+From d307fe69fd3f8e178a106f5b929991f55abb1681 Mon Sep 17 00:00:00 2001
+From: Keno Fischer <Keno@users.noreply.github.com>
+Date: Sun, 19 Jul 2026 02:04:15 +0000
+Subject: [PATCH 3/3] Refuse to open environments across pid namespaces
+
+LMDB identifies other users of an environment by pid: the reader
+table records reader pids, F_SETLK pid locks are used for liveness
+checks, and mdb_reader_check() clears slots whose pid is gone.  All
+of this assumes every user of the environment observes the same pid
+numbers, which is not true across pid namespaces: the same numeric
+pid can name different processes, so a reader in another namespace
+can be judged dead (its slot recycled and its pages reclaimed) while
+it is still active, or a stale slot can pin the environment because
+its pid happens to be taken in the checking process's namespace.
+
+Record the pid namespace of the process that initializes the lock
+region (the exclusive-lock holder, i.e. the first active opener) in
+a new lockfile header field, and refuse to join an active lock
+region initialized from a different pid namespace with a new
+MDB_PIDNS_MISMATCH error code.  Once all users are gone, the next
+opener re-initializes the lock region and stamps its own namespace.
+Pid namespaces are identified by the inode of /proc/self/ns/pid on
+Linux; on other platforms (and if /proc is unavailable) the field is
+0 and the check is disabled.
+
+Since this changes the lockfile layout, bump MDB_LOCK_VERSION to 902
+so unpatched LMDB rejects these lockfiles instead of misreading them.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+---
+ libraries/liblmdb/lmdb.h |  4 +++-
+ libraries/liblmdb/mdb.c  | 51 ++++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 52 insertions(+), 3 deletions(-)
+
+diff --git a/libraries/liblmdb/lmdb.h b/libraries/liblmdb/lmdb.h
+index 1e34fd7..b7733c1 100644
+--- a/libraries/liblmdb/lmdb.h
++++ b/libraries/liblmdb/lmdb.h
+@@ -542,8 +542,10 @@ typedef enum MDB_cursor_op {
+ #define MDB_ADDR_BUSY	(-30769)
+ 	/** Environment resides on a network filesystem */
+ #define MDB_REMOTE_FS	(-30768)
++	/** Environment is in use from a different pid namespace */
++#define MDB_PIDNS_MISMATCH	(-30767)
+ 	/** The last defined error code */
+-#define MDB_LAST_ERRCODE	MDB_REMOTE_FS
++#define MDB_LAST_ERRCODE	MDB_PIDNS_MISMATCH
+ /** @} */
+ 
+ /** @brief Statistics for a database in the environment */
+diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
+index 985323a..9cfb1b7 100644
+--- a/libraries/liblmdb/mdb.c
++++ b/libraries/liblmdb/mdb.c
+@@ -683,8 +683,10 @@ static txnid_t mdb_debug_start;
+ 
+ 	/**	The version number for a database's datafile format. */
+ #define MDB_DATA_VERSION	 ((MDB_DEVEL) ? 999 : 3)
+-	/**	The version number for a database's lockfile format. */
+-#define MDB_LOCK_VERSION	 ((MDB_DEVEL) ? 999 : 2)
++	/**	The version number for a database's lockfile format.
++	 *	902 = upstream version 2, plus the #MDB_txbody.%mtb_pidns field.
++	 */
++#define MDB_LOCK_VERSION	 ((MDB_DEVEL) ? 999 : 902)
+ 	/** Number of bits representing #MDB_LOCK_VERSION in #MDB_LOCK_FORMAT.
+ 	 *	The remaining bits must leave room for #MDB_lock_desc.
+ 	 */
+@@ -908,6 +910,17 @@ typedef struct MDB_txbody {
+ 		 *	when readers release their slots.
+ 		 */
+ 	volatile unsigned	mtb_numreaders;
++		/** The pid namespace of the process that initialized the lock
++		 *	region, or 0 if it could not be determined (also on platforms
++		 *	without pid namespaces).  Liveness detection of other users of
++		 *	the environment (reader table pids, pid locks and, depending
++		 *	on the platform, robust mutex recovery) relies on pids being
++		 *	comparable between all users, which does not hold across pid
++		 *	namespaces, so #mdb_env_open() refuses to join a lock region
++		 *	initialized in a different pid namespace with
++		 *	#MDB_PIDNS_MISMATCH.
++		 */
++	uint64_t	mtb_pidns;
+ #if defined(_WIN32) || defined(MDB_USE_POSIX_SEM)
+ 		/** Binary form of names of the reader/writer locks */
+ 	mdb_hash_t			mtb_mutexid;
+@@ -931,6 +944,7 @@ typedef struct MDB_txninfo {
+ #define mti_rmutex	mt1.mtb.mtb_rmutex
+ #define mti_txnid	mt1.mtb.mtb_txnid
+ #define mti_numreaders	mt1.mtb.mtb_numreaders
++#define mti_pidns	mt1.mtb.mtb_pidns
+ #define mti_mutexid	mt1.mtb.mtb_mutexid
+ #ifdef MDB_USE_SYSV_SEM
+ #define	mti_semid	mt1.mtb.mtb_semid
+@@ -1926,6 +1940,7 @@ static char *const mdb_errstr[] = {
+ 	"MDB_IS_READONLY: Can't write in readonly txn or environment",
+ 	"MDB_ADDR_BUSY: Requested map address is unavailable",
+ 	"MDB_REMOTE_FS: Environment resides on a network filesystem",
++	"MDB_PIDNS_MISMATCH: Environment is in use from a different pid namespace",
+ };
+ 
+ char *
+@@ -5911,6 +5926,23 @@ mdb_env_mname_init(MDB_env *env)
+ 
+ #endif
+ 
++/** Return an identifier for the pid namespace this process runs in,
++ *	or 0 if it cannot be determined.  Non-zero only on Linux; other
++ *	supported platforms have no pid namespaces.
++ */
++static uint64_t ESECT
++mdb_env_pidns(void)
++{
++#ifdef __linux__
++	struct stat st;
++	if (stat("/proc/self/ns/pid", &st))
++		return 0;
++	return (uint64_t)st.st_ino;
++#else
++	return 0;
++#endif
++}
++
+ /** Open and/or initialize the lock region for the environment.
+  * @param[in] env The LMDB environment.
+  * @param[in] fname Filename + scratch area, from #mdb_fname_init().
+@@ -6099,6 +6131,7 @@ mdb_env_setup_locks(MDB_env *env, MDB_name *fname, int mode, int *excl)
+ 		env->me_txns->mti_format = MDB_LOCK_FORMAT;
+ 		env->me_txns->mti_txnid = 0;
+ 		env->me_txns->mti_numreaders = 0;
++		env->me_txns->mti_pidns = mdb_env_pidns();
+ 
+ 	} else {
+ #ifdef MDB_USE_SYSV_SEM
+@@ -6115,6 +6148,20 @@ mdb_env_setup_locks(MDB_env *env, MDB_name *fname, int mode, int *excl)
+ 			rc = MDB_VERSION_MISMATCH;
+ 			goto fail;
+ 		}
++		{
++			/* The exclusive-lock holder that initialized the lock region
++			 * is (or was, while any of the openers it admitted are still
++			 * alive) in charge of pid-based liveness detection, which
++			 * breaks down if users of the environment disagree about pid
++			 * namespaces.  Refuse to join from a different pid namespace.
++			 */
++			uint64_t pidns = mdb_env_pidns();
++			if (pidns && env->me_txns->mti_pidns &&
++				env->me_txns->mti_pidns != pidns) {
++				rc = MDB_PIDNS_MISMATCH;
++				goto fail;
++			}
++		}
+ #ifdef _WIN32
+ 		mdb_env_mname_init(env);
+ 		env->me_rmutex = OpenMutexA(SYNCHRONIZE, FALSE, MUTEXNAME(env, 'r'));

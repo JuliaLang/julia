@@ -13,8 +13,8 @@ USE_BINARYBUILDER_LLVM=1
 override SANITIZE=1
 override SANITIZE_ADDRESS=1
 
-# make the GC use regular malloc/frees, which are hooked by ASAN
-override WITH_GC_DEBUG_ENV=1
+# Limit allocation stack traces to reduce ASAN memory and runtime overhead.
+export ASAN_OPTIONS=allow_user_segv_handler=1:detect_leaks=0:malloc_context_size=2
 
 # Enable Julia assertions and LLVM assertions
 FORCE_ASSERTIONS=1

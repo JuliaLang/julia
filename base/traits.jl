@@ -13,6 +13,11 @@ OrderStyle(::Type{Symbol}) = Ordered()
 OrderStyle(::Type{<:Any}) = Unordered()
 OrderStyle(::Type{Union{}}, slurp...) = Ordered()
 
+function OrderStyle(T::Type{<:Tuple})
+    isconcretetype(T) || return Unordered()
+    all(map(S -> OrderStyle(S) === Ordered(), fieldtypes(T))) ? Ordered() : Unordered()
+end
+
 # trait for objects that support arithmetic
 abstract type ArithmeticStyle end
 struct ArithmeticRounds <: ArithmeticStyle end     # least significant bits can be lost

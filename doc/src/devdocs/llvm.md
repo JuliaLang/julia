@@ -46,9 +46,13 @@ and therefore its arguments must be statically typed.
 
 ### [Alias Analysis](@id LLVM-Alias-Analysis)
 
-Julia currently uses LLVM's [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata).
-To find the comments that document the inclusion relationships, look for `static MDNode*` in
-`src/codegen.cpp`.
+Julia emits two orthogonal kinds of alias metadata: LLVM's
+[Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata) describes the
+layout/type of the data at a location (see `jl_tbaacache_t` in `src/codegen.cpp` for the
+inclusion relationships), while `!alias.scope`/`!noalias` metadata describes the disjoint
+memory regions (GC frame, stack, heap data, constant; see `jl_noaliascache_t`). Codegen
+tracks both together in `jl_aliasinfo_t`, with some standard pairings precomputed in
+`jl_aliascache_t`.
 
 The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 
@@ -71,7 +75,7 @@ system image documentation for the procedure.
 You can also specify to build a debug version of LLVM, by setting either `LLVM_DEBUG = 1` or
 `LLVM_DEBUG = Release` in your `Make.user` file. The former will be a fully unoptimized build
 of LLVM and the latter will produce an optimized build of LLVM. Depending on your needs the
-latter will suffice and it quite a bit faster. If you use `LLVM_DEBUG = Release` you will also
+latter will suffice and it is quite a bit faster. If you use `LLVM_DEBUG = Release` you will also
 want to set `LLVM_ASSERTIONS = 1` to enable diagnostics for different passes. Only `LLVM_DEBUG = 1`
 implies that option by default.
 
@@ -307,7 +311,7 @@ First, only the following address space casts are allowed:
   pointers should generally be storable to a GC slot, even in this address space.
 
 Now let us consider what constitutes a use:
-- Loads whose loaded values is in one of the address spaces
+- Loads whose loaded values are in one of the address spaces
 - Stores of a value in one of the address spaces to a location
 - Stores to a pointer in one of the address spaces
 - Calls for which a value in one of the address spaces is an operand
@@ -395,8 +399,7 @@ void @llvm.julia.gc_preserve_end(token)
 ```
 (The `llvm.` in the name is required in order to be able to use the `token`
 type). The semantics of these intrinsics are as follows:
-At any safepoint that is dominated by a `gc_preserve_begin` call, but that is not
-not dominated by a corresponding `gc_preserve_end` call (i.e. a call whose argument
+At any safepoint that is dominated by a `gc_preserve_begin` call, but that is not dominated by a corresponding `gc_preserve_end` call (i.e. a call whose argument
 is the token returned by a `gc_preserve_begin` call), the values passed as
 arguments to that `gc_preserve_begin` will be kept live. Note that the
 `gc_preserve_begin` still counts as a regular use of those values, so the

@@ -58,15 +58,19 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
-    elseif isa(a, TypeEq) || isa(b, TypeEq)
+    elseif isTypeEgal(a) || isTypeEgal(b)
+        a = isTypeEgal(a) ? typeof(type_parameter(a)) : a
+        b = isTypeEgal(b) ? typeof(type_parameter(b)) : b
+        return typejoin(a, b)
+    elseif isTypeEq(a) || isTypeEq(b)
         # At least one operand is a `Type{X}` kind. We have already ruled out
         # `a <: b`, `b <: a`, and any `UnionAll`/`Union`/`TypeVar`. The least supertype
         # of a `Type{X}` kind is the abstract `Type`, so widen each kind to `Type` and
         # join the two by subtyping. We compare directly instead of recursing through
         # `typejoin`, because `Type === (Type{T} where T)` would re-enter this branch and
         # not terminate.
-        a = isa(a, TypeEq) ? Type : a
-        b = isa(b, TypeEq) ? Type : b
+        a = isTypeEq(a) ? Type : a
+        b = isTypeEq(b) ? Type : b
         return a <: b ? b :
                b <: a ? a : Any
     end
@@ -452,6 +456,10 @@ end
 -(x::Number, y::Number) = -(promote(x,y)...)
 /(x::Number, y::Number) = /(promote(x,y)...)
 
++%(x::Number, y::Number) = +%(promote(x,y)...)
+*%(x::Number, y::Number) = *%(promote(x,y)...)
+-%(x::Number, y::Number) = -%(promote(x,y)...)
+
 """
     ^(x, y)
 
@@ -511,9 +519,7 @@ end
 
 rem(x::Real, y::Real) = rem(promote(x,y)...)
 mod(x::Real, y::Real) = mod(promote(x,y)...)
-
 mod1(x::Real, y::Real) = mod1(promote(x,y)...)
-fld1(x::Real, y::Real) = fld1(promote(x,y)...)
 
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)

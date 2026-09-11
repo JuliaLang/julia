@@ -20,7 +20,7 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
     @nospecialize
     used_withex = false
     function escapes(@nospecialize(ex), escs::Int)
-        for i = 1:escs
+        for _ = 1:escs
             ex = esc(ex)
         end
         return ex
@@ -101,7 +101,7 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
         return main_ex, used_withex
     end
     if ex isa Expr && ex.head === :macrocall
-        # Blithly modifying the arguments to another macro is unwise, so call
+        # Blithely modifying the arguments to another macro is unwise, so call
         # macroexpand first on it.
         # Unfortunately, macroexpand itself corrupts the scope of variables in
         # the result by calling macroexpand.scm before returning which cannot be

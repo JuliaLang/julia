@@ -74,8 +74,7 @@ end
 """
 Like `Base.parse(Union{Float64,Float32}, str)`, but permits float underflow
 
-Parse a Float64. str[firstind:lastind] must be a valid floating point literal
-string. If the value is outside Float64 range.
+Parse a floating point value of type T. str[firstind:lastind] must be a valid floating point literal string. Returns a tuple (value, status) where status is :ok, :overflow, or :underflow.
 """
 function parse_float_literal(::Type{T}, str::Union{String,SubString,Vector{UInt8}},
         firstind::Integer, endind::Integer) where {T} # force specialize with where {T}

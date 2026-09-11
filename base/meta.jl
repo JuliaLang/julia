@@ -407,11 +407,15 @@ function parse(str::AbstractString;
     return ex
 end
 
-function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+function parseatom(text::AbstractString, pos::Integer; filename="none",
+                   lineno=1, mod::Union{Nothing, Module}=nothing,
+                   _parse = parser_for_module(mod))
     return _parse_string(text, String(filename), lineno, pos, :atom, _parse)
 end
 
-function parseall(text::AbstractString; filename="none", lineno=1, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+function parseall(text::AbstractString; filename="none", lineno=1,
+                  mod::Union{Nothing, Module}=nothing,
+                  _parse = parser_for_module(mod))
     ex,_ = _parse_string(text, String(filename), lineno, 1, :all, _parse)
     return ex
 end
@@ -548,7 +552,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 4
                     @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt16, Bool}})
+                    @assert isa((x.args[5]::QuoteNode).value,
+                                Union{Symbol, Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool},
+                                      Tuple{Symbol, UInt16, Bool, Bool, Bool}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,

@@ -72,7 +72,7 @@ can sometimes simplify such tests.
 ### Linear indexing (`LinearIndices`)
 
 
-Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)): does `v[i]` mean linear indexing , or Cartesian indexing with the array's native indices?
+Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)): does `v[i]` mean linear indexing, or Cartesian indexing with the array's native indices?
 
 For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `LinearIndices(A)`. This will return `axes(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
 
@@ -198,7 +198,7 @@ Base.has_offset_axes(obj::MyNon1IndexedArraylikeObject) = true
 ```
 This will allow code that assumes 1-based indexing to detect a problem
 and throw a helpful error, rather than returning incorrect results or
-segfaulting julia.
+segfaulting Julia.
 
 ### Catching errors
 

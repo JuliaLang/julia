@@ -54,7 +54,7 @@ end
 """
     LibGit2.addblob!(repo::GitRepo, path::AbstractString)
 
-Read the file at `path` and adds it to the object database of `repo` as a loose blob.
+Read the file at `path` and add it to the object database of `repo` as a loose blob.
 Return the [`GitHash`](@ref) of the resulting blob.
 
 # Examples
@@ -76,7 +76,7 @@ end
 function Base.show(io::IO, blob::GitBlob)
     if !isbinary(blob)
         conts   = split(content(blob), "\n")
-        showlen = max(length(conts), 3)
+        showlen = min(length(conts), 3)
         println(io, "GitBlob:\nBlob id: ", GitHash(blob), "\nContents:")
         for i in 1:showlen
             println(io, conts[i])

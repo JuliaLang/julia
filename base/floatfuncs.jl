@@ -293,21 +293,43 @@ end
 
 """ Splits a Float64 into a hi bit and a low bit where the high bit has 27 trailing 0s and the low bit has 26 trailing 0s"""
 @inline function splitbits(x::Float64)
-    hi = reinterpret(Float64, reinterpret(UInt64, x) & 0xffff_ffff_f800_0000)
+    hi = truncbits(x, 27)
     return hi, x-hi
 end
 
-function twomul(a::Float64, b::Float64)
-    ahi, alo = splitbits(a)
-    bhi, blo = splitbits(b)
-    abhi = a*b
-    blohi, blolo = splitbits(blo)
-    ablo = alo*blohi - (((abhi - ahi*bhi) - alo*bhi) - ahi*blo) + blolo*alo
-    return abhi, ablo
+# two-product: returns (hi, lo) with hi + lo == x*y exactly. Uses a hardware
+# fma when available, otherwise a split-based error-free transformation.
+function two_mul(x::T, y::T) where {T<:Number}
+    xy = x*y
+    xy, fma(x, y, -xy)
+end
+
+@assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
+    if Core.Intrinsics.have_fma(Float64)
+        xy = x*y
+        return xy, fma_float(x, y, -xy)
+    end
+    # fma-free fallback; `fma_emulated` relies on this branch never calling `fma`
+    xhi, xlo = splitbits(x)
+    yhi, ylo = splitbits(y)
+    xy = x*y
+    ylohi, ylolo = splitbits(ylo)
+    xylo = xlo*ylohi - (((xy - xhi*yhi) - xlo*yhi) - xhi*ylo) + ylolo*xlo
+    return xy, xylo
+end
+
+@assume_effects :consistent @inline function two_mul(x::T, y::T) where T<:Union{Float16, Float32}
+    if Core.Intrinsics.have_fma(T)
+        xy = x*y
+        return xy, fma(x, y, -xy)
+    end
+    xy = widen(x)*y
+    Txy = T(xy)
+    return Txy, T(xy-Txy)
 end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
-    abhi, ablo = @inline twomul(a,b)
+    abhi, ablo = @inline two_mul(a, b)
     if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
         aandbfinite = isfinite(a) && isfinite(b)
         if !(isfinite(c) && aandbfinite)
@@ -324,7 +346,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             a = reinterpret(Float64, (reinterpret(UInt64, a) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             b = reinterpret(Float64, (reinterpret(UInt64, b) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             c = c_denorm
-            abhi, ablo = twomul(a,b)
+            abhi, ablo = two_mul(a, b)
             # abhi <= 4 -> isfinite(r)      (α)
             r = abhi+c
             # s ≈ 0                         (β)
@@ -341,7 +363,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
                 bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
                 if (bits_lost != 1) ⊻ (sumhiInt&1 == 1)
-                    sumhi = nextfloat(sumhi, cmp(sumlo,0))
+                    sumhi = nextfloat(sumhi, cmp(sumlo, 0))
                 end
             end
             return ldexp(sumhi, bias)

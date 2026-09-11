@@ -343,6 +343,7 @@ function matchregions(spec::FilterSpec, candidate::AbstractString)
         i == length(matches) && break
         nextmatch = matches[i + 1]
         nxt = nextind(candidate, last(match))
+        nxt > ncodeunits(candidate) && continue
         if nextind(candidate, nxt) == first(nextmatch) && candidate[nxt] == ' '
             matches[i] = first(match):last(nextmatch)
             matches[i+1] = nextind(candidate, last(nextmatch)):last(nextmatch)

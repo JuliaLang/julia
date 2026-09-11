@@ -1098,7 +1098,7 @@ end
         cmd2 = addenv(cmd, "BAR" => "bar"; inherit=true)
         @test strip(String(read(cmd2))) == "foo bar"
 
-        # Changing the environment doesn't effect the command,
+        # Changing the environment doesn't affect the command,
         # because it was baked in at `addenv()` time
         withenv("FOO" => "baz") do
             @test strip(String(read(cmd2))) == "foo bar"
@@ -1215,7 +1215,7 @@ end
     @test Base.escape_microsoft_c_args("hello world\\") == "\"hello world\\\\\""
 
     # input : A\B
-    # output: A\B"
+    # output: A\B
     @test Base.escape_microsoft_c_args("A\\B") == "A\\B"
 
     # input : [A\, B]
@@ -1297,7 +1297,7 @@ let buf = IOBuffer()
     @test String(take!(buf)) == "Hello\n"
 end
 
-# Test passing a pipe server as an addition fd
+# Test passing a pipe server as an additional fd
 @testset "Pipe server as additional fd" begin
     if !Sys.iswindows()
         # Windows CRT does not support passing server sockets as stdio fds

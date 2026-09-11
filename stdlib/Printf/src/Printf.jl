@@ -188,8 +188,8 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
         else
-            while b - UInt8('0') < 0x0a
-            width = 10 * width + (b - UInt8('0'))
+            while UInt8('0') <= b <= UInt8('9')
+                width = 10 * width + (b - UInt8('0'))
                 b = bytes[pos]
                 pos += 1
                 pos > len && break
@@ -212,7 +212,7 @@ function Format(f::AbstractString)
                     pos += 1
                 else
                     precision = 0
-                    while b - UInt8('0') < 0x0a
+                    while UInt8('0') <= b <= UInt8('9')
                         precision = 10precision + (b - UInt8('0'))
                         b = bytes[pos]
                         pos += 1
@@ -872,7 +872,7 @@ end
 function plength(f::Spec{T}, x) where {T <: Chars}
     c = Char(first(x))
     w = textwidth(c)
-    return max(f.width, w) + (ncodeunits(c) - w)
+    return Base.checked_add(max(f.width, w), ncodeunits(c) - w)
 end
 
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
@@ -880,22 +880,22 @@ plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 function plength(f::Spec{T}, x) where {T <: Strings}
     str = string(x)
     sw = textwidth(str)
-    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - sw)
+    p = f.precision == -1 ? Base.checked_add(sw, f.hash ? (x isa Symbol ? 1 : 2) : 0) : f.precision
+    return Base.checked_add(max(f.width, p), sizeof(str) - sw)
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
     return max(
         f.width,
-        f.precision + ndigits(x2, base=base(T), pad=1) + MAX_FMT_CHARS_WIDTH
+        Base.checked_add(f.precision, ndigits(x2, base=base(T), pad=1), MAX_FMT_CHARS_WIDTH)
     )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
+    max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, MAX_FMT_CHARS_WIDTH))
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
+    max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, f.precision, MAX_FMT_CHARS_WIDTH))
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
@@ -906,13 +906,13 @@ plength(::Spec{PositionCounter}, x) = 0
     Base.@nexprs 16 i -> begin
         if N >= i
             l, argp = plength(formats[i], args, argp)
-            len += l
+            len = Base.checked_add(len, l)
         end
     end
     if N > 16
         for i = 17:length(formats)
             l, argp = plength(formats[i], args, argp)
-            len += l
+            len = Base.checked_add(len, l)
         end
     end
     return len

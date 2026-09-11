@@ -645,7 +645,7 @@ a
 b
 ```
 
-Any number of expressions many be documented together in this way. This syntax can be useful when
+Any number of expressions may be documented together in this way. This syntax can be useful when
 two functions are related, such as non-mutating and mutating versions `f` and `f!`.
 
 ### Macro-generated code

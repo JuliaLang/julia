@@ -205,7 +205,28 @@ If set to `true`, this indicates to the package server that any package operatio
 
 ### [`JULIA_NUM_PRECOMPILE_TASKS`](@id JULIA_NUM_PRECOMPILE_TASKS)
 
-The number of parallel tasks to use when precompiling packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+The number of parallel tasks (worker subprocesses) to use when precompiling
+packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+
+### [`JULIA_PRECOMPILE_THREADS`](@id JULIA_PRECOMPILE_THREADS)
+
+An unsigned integer that sets the total CPU-thread budget shared across all
+parallel precompile worker subprocesses, keeping the combined number of active
+threads bounded no matter how many workers run. Defaults to one more than the
+number of effective CPU threads.
+
+Unlike [`JULIA_NUM_PRECOMPILE_TASKS`](@ref JULIA_NUM_PRECOMPILE_TASKS) (which caps
+worker *processes*) and [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) (which
+caps a *per-worker* thread count), this is the shared total. The two compose:
+the budget bounds what all workers may use together, while `JULIA_IMAGE_THREADS`
+bounds what any one worker may use. Setting `JULIA_IMAGE_THREADS` alone uses a fixed
+number of threads in each worker and leaves total threads unconstrained. For example:
+
+  * neither set: budget = `EFFECTIVE_CPU_THREADS + 1`
+  * `JULIA_PRECOMPILE_THREADS=8`: 8 total threads
+  * `JULIA_IMAGE_THREADS=4`: every worker is pinned to 4 threads; no total thread limit
+  * `JULIA_IMAGE_THREADS=4` and `JULIA_PRECOMPILE_THREADS=8`: budget = 8 total threads,
+    with no worker exceeding 4 imaging threads of its own
 
 ### [`JULIA_PKG_DEVDIR`](@id JULIA_PKG_DEVDIR)
 
@@ -389,10 +410,15 @@ ignored if the module is a small module. If left unspecified, the smaller
 of the value of [`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) or half the
 number of logical CPU cores is used in its place.
 
+During parallel package precompilation, workers additionally coordinate their
+CPU usage through a shared token pool sized by
+[`JULIA_PRECOMPILE_THREADS`](@ref JULIA_PRECOMPILE_THREADS), so their combined
+thread count stays bounded. If set, `JULIA_IMAGE_THREADS` limits the imaging
+threads for a single worker and does not affect the total thread limit.
+
 ### [`JULIA_IMAGE_TIMINGS`](@id JULIA_IMAGE_TIMINGS)
 
-A boolean value that determines if detailed timing information is printed during
-during image compilation. Defaults to 0.
+A boolean value that determines if detailed timing information is printed during image compilation. Defaults to 0.
 
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
@@ -597,3 +623,11 @@ Arguments to be passed to the LLVM backend.
 ### `JULIA_FALLBACK_REPL`
 
 Forces the fallback repl instead of REPL.jl.
+
+### `JULIA_LOAD_CODEGEN_LIB`
+
+If set to a false value (`0`, `f`, `false`, `n`, or `no`, case-insensitive),
+the loader does not load `libjulia-codegen`, and the fallback
+(interpreter-only) implementations in `libjulia-internal` are used instead —
+exactly as if the library were absent from the installation. Intended for
+testing and debugging the no-codegen configuration.

@@ -53,10 +53,10 @@ end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 # faster-but-weaker than hash_mix intended for small keys
-hash_mix_linear(x::Union{UInt64, UInt32}, h::UInt) = 3h - x
+hash_mix_linear(x::Union{UInt64, UInt32}, h::UInt) = 3 *% h -% x
 function hash_finalizer(x::UInt64)
     x ⊻= (x >> 32)
-    x *= 0x63652a4cd374b267
+    x *%= 0x63652a4cd374b267
     x ⊻= (x >> 33)
     return x
 end
@@ -230,7 +230,7 @@ function hash(x::Real, h::UInt)
                 left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
             # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
-            # Float64s only have 53 mantisa bits (including implicit bit)
+            # Float64s have 53 mantissa bits (including implicit bit)
             left <= 1024 && left - pow <= 53 && return hash(ldexp(Float64(num), pow), h)
         end
     else
