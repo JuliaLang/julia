@@ -304,7 +304,7 @@ bits, and has [`Integer`](@ref) as its immediate supertype. A primitive type of 
 its value in the first `cld(N, 8)` bytes. Its alignment is the smallest power of two of bytes that
 holds them, capped at the platform's maximum alignment, and `sizeof(T)` rounds the value bytes up
 to a multiple of that alignment. This is the layout C23 gives `_BitInt(N)`, and it always equals
-`Base.aligned_sizeof(T)`. Bits past the declared width are padding and take no part in comparison
+`Base.elsize(Array{T})`. Bits past the declared width are padding and take no part in comparison
 or hashing. Use `Core.bitsizeof(T)` to query the declared logical width — for
 `primitive type T 24 end`, `Core.bitsizeof(T)` is 24 while `sizeof(T)` is 4.
 
