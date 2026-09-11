@@ -338,6 +338,16 @@ function exec_options(opts)
         end
     end
 
+    # restore a saved session (julia --restore)
+    if opts.restore_session != 0
+        try
+            restore_session(opts.restore_file != C_NULL ? unsafe_string(opts.restore_file) : nothing)
+        catch
+            invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
+            !(repl || is_interactive::Bool) && exit(1)
+        end
+    end
+
     # drop all caches if code coverage is enabled. Do it here not earlier, so julia has a chance
     # of starting up quickly
     if Base.JLOptions().code_coverage == 2
