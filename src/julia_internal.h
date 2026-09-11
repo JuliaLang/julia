@@ -1236,6 +1236,9 @@ JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_bindi
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_t *jl_binding_partition_owner(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 
+// The value of a primordial constant binding, or NULL if `b` is not one.
+JL_DLLEXPORT jl_value_t *jl_binding_primordial_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+
 struct restriction_kind_pair {
     jl_binding_t *binding_if_global;
     jl_value_t *restriction;

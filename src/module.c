@@ -1998,6 +1998,21 @@ JL_DLLEXPORT int jl_maybe_add_binding_backedge(jl_binding_t *b, jl_value_t *edge
     return 0;
 }
 
+static int jl_is_primordial_module(jl_module_t *m) JL_NOTSAFEPOINT
+{
+    return m == jl_core_module || (m->parent == jl_core_module && strcmp(jl_symbol_name(m->name), "Intrinsics") == 0);
+}
+
+JL_DLLEXPORT jl_value_t *jl_binding_primordial_const(jl_binding_t *b)
+{
+    if (!jl_is_primordial_module(b->globalref->mod))
+        return NULL;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, 1);
+    if (jl_binding_kind(bpart) != PARTITION_KIND_CONST)
+        return NULL;
+    return bpart->restriction;
+}
+
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world)
 {
@@ -2011,6 +2026,20 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world)
 {
     check_safe_newbinding(b->globalref->mod, b->globalref->name);
+
+    // A primordial constant (a builtin, intrinsic, or core type: a constant binding of `Core`
+    // or `Core.Intrinsics` covering world age 1) is assumed immutable by the compiler, which
+    // embeds its value directly with no invalidation edge (`world1_const` in the optimizer,
+    // `binding_const_world1` in codegen). Flag-only repartitioning (e.g. `export`, depwarn)
+    // keeps the kind and value and is permitted; any replacement or deletion that changes
+    // them must error here rather than let stale values be embedded.
+    if ((kind & PARTITION_MASK_KIND) != PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE &&
+        (((kind ^ old_bpart->kind) & PARTITION_MASK_KIND) != 0 ||
+         restriction_val != old_bpart->restriction)) {
+        if (jl_binding_primordial_const(b))
+            jl_errorf("invalid binding replacement for `%s.%s`: a builtin constant is immutable and cannot be replaced or deleted",
+                      jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
+    }
 
     // Check if this is a replacing a binding in the system or a package image.
     // Until the first such replacement, we can fast-path validation.
