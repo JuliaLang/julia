@@ -186,6 +186,21 @@ SYMLINK_SYSTEM_LIBRARIES += symlink_$2
 endif
 endef
 
+# Also create an unversioned `lib<name>` symlink next to the versioned one
+# created by `symlink_system_library`, for libraries that must be resolvable
+# via `-l<name>` (which only matches unversioned names).
+define symlink_system_library_unversioned
+symlink_$2_unversioned: $$(build_private_libdir)/$2.$$(SHLIB_EXT)
+$$(build_private_libdir)/$2.$$(SHLIB_EXT): | $$(build_private_libdir)/$$(libname_$2)
+	@if [ -e "$$(build_private_libdir)/$$(libname_$2)" ]; then \
+		printf "ln -sf %s %s\n" "$$(libname_$2)" "$$@" && \
+		ln -sf "$$(libname_$2)" "$$@"; \
+	fi
+ifneq ($$(USE_SYSTEM_$1),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_$2_unversioned
+endif
+endef
+
 # libexec executables
 symlink_p7zip: $(build_private_libexecdir)/7z$(EXE)
 
@@ -249,6 +264,14 @@ $(eval $(call symlink_system_library,CSL,libssp,0,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libquadmath,0,ALLOW_FAILURE))
+# Base.Linking links pkgimages with `-lgcc_s` and `-latomic`, which only match
+# unversioned library names, so create those too (#63094)
+ifneq ($(OS),Darwin)
+ifneq ($(OS),WINNT)
+$(eval $(call symlink_system_library_unversioned,CSL,libgcc_s))
+$(eval $(call symlink_system_library_unversioned,CSL,libatomic))
+endif
+endif
 $(eval $(call symlink_system_library,PCRE,libpcre2-8))
 $(eval $(call symlink_system_library,DSFMT,libdSFMT))
 $(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))
