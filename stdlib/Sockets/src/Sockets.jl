@@ -851,11 +851,14 @@ function leave_multicast_group(sock::UDPSocket, group_addr::IPAddr,
 end
 
 """
-    getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
+    getsockname(sock::Union{TCPServer, TCPSocket, UDPSocket}) -> (IPAddr, UInt16)
 
 Get the IP address and port that the given socket is bound to.
+
+!!! compat "Julia 1.14"
+    `UDPSocket` support requires Julia 1.14.
 """
-getsockname(sock::Union{TCPSocket, TCPServer}) = _sockname(sock, true)
+getsockname(sock::Union{TCPSocket, TCPServer, UDPSocket}) = _sockname(sock, true)
 
 
 """
@@ -873,7 +876,11 @@ function _sockname(sock, self=true)
     rfamily = Ref{Cuint}(0)
 
     iolock_begin()
-    if self
+    if sock isa UDPSocket
+        r = ccall(:jl_udp_getsockname, Int32,
+                (Ptr{Cvoid}, Ref{Cushort}, Ptr{Cvoid}, Ref{Cuint}),
+                sock.handle, rport, raddress, rfamily)
+    elseif self
         r = ccall(:jl_tcp_getsockname, Int32,
                 (Ptr{Cvoid}, Ref{Cushort}, Ptr{Cvoid}, Ref{Cuint}),
                 sock.handle, rport, raddress, rfamily)

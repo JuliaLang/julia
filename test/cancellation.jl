@@ -1792,17 +1792,13 @@ end
 end
 
 @testset "cancelled recvfrom stops reception (no dropped datagram)" begin
-    # bind the receiver to a known free port (found via listenany, like the
-    # Sockets tests; retried in case another process grabs it in between)
-    local udp, port
-    for attempt in 1:10
-        port, tcpserver = Sockets.listenany(Sockets.localhost, 0)
-        close(tcpserver)
-        udp = Sockets.UDPSocket()
-        Sockets.bind(udp, Sockets.localhost, port) && break
-        close(udp)
-        attempt == 10 && error("could not bind a UDP test port")
-    end
+    # bind the receiver to an OS-assigned port: deriving a UDP port from a
+    # free TCP port (as `listenany` would) fails on Windows CI, where whole
+    # blocks of UDP ports are reserved (excluded port ranges) and sequential
+    # ephemeral TCP port assignment keeps landing inside them (#38711)
+    udp = Sockets.UDPSocket()
+    Sockets.bind(udp, Sockets.localhost, 0) || error("could not bind a UDP test port")
+    port = Sockets.getsockname(udp)[2]
     src = CancellationTokenSource()
     t = @async Sockets.recvfrom(udp; cancel=CancellationToken(src))
     @test timedwait(() -> is_parked(t), 10.0) == :ok
