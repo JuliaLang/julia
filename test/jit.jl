@@ -160,7 +160,7 @@ end
                 @eval \$f(x) = x + \$i
                 @eval \$f(1)
             end
-            print("OK")
+            print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0 ? "enabled" : "disabled")
         """
         cmd = addenv(
             `$(Base.julia_cmd()) --startup-file=no --color=no -e $script`,
@@ -186,11 +186,11 @@ end
         end
         @test completed
         @test ok
-        @test read(outpath, String) == "OK"
+        status = read(outpath, String)
+        @test status in ("enabled", "disabled")
         lines = isfile(logfile) ? readlines(logfile) : String[]
         nevicted = count(startswith("evict,"), lines)
-        if nevicted == 0 &&
-           (Sys.isapple() || ccall(:jl_running_under_rr, Cint, (Cint,), 0) != 0)
+        if status == "disabled"
             @test_skip false
         else
             @test nevicted > 0
