@@ -46,7 +46,7 @@ LLVM_ENABLE_PROJECTS :=
 LLVM_EXTERNAL_PROJECTS :=
 LLVM_ENABLE_RUNTIMES :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
-LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang;clang-tools-extra
 LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
 else ifeq ($(OS),Darwin)
 LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
@@ -113,8 +113,7 @@ LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=FORCE_ON -DZSTD_ROOT="$(build_prefix)"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
-LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
-LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
+LLVM_CMAKE += -DCMAKE_INSTALL_BINDIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_LIBEDIT=Off -DLLVM_ENABLE_LIBEDIT=OFF
 ifeq ($(LLVM_ASSERTIONS), 1)
@@ -323,16 +322,15 @@ LLVM_INSTALL = \
 	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/lit $2$$(build_depsbindir)/lit/ && \
 	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
-LLVM_INSTALL += && cp $2$$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_depsbindir)
+# CMAKE_INSTALL_BINDIR puts the DLL in build_depsbindir alongside the tools,
+# but Julia loads it out of build_shlibdir, so it has to be in both places
+LLVM_INSTALL += && cp $2$$(build_depsbindir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_shlibdir)
 endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
 # compiler-rt is required for linking sysimages on Darwin
 LLVM_INSTALL += && install -m 0644 $2$$(build_prefix)/lib/clang/$$(LLVM_VER_MAJ)/lib/darwin/libclang_rt.osx.a $2$$(build_libdir)/libclang_rt.osx.a
-endif
-ifeq ($(BUILD_LLD), 1)
-LLVM_INSTALL += && cp $2$$(build_bindir)/lld$$(EXE) $2$$(build_depsbindir)
 endif
 
 $(eval $(call staged-install, \
