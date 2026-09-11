@@ -506,7 +506,12 @@ end
           catch ex
               LazyString("Exception handling log message: ", ex)
           end
-    bt = real ? catch_backtrace() : backtrace()
+    bt = Base.scrub_repl_backtrace(real ? catch_backtrace() : stacktrace())
+    if !real
+        # drop the frames of the logging machinery itself
+        i = findfirst(fr -> fr.func === :logging_error, bt)
+        i === nothing || deleteat!(bt, 1:i)
+    end
     handle_message(
         logger, Error, msg, _module, :logevent_error, id, filepath, line;
         exception=(err,bt))
