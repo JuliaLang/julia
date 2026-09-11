@@ -343,7 +343,7 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-JuliaSyntax.enable_in_core!(true)
+JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
 
 # May be replaced in incremental sysimage build after-the-fact
 const JuliaLowering = nothing
@@ -611,6 +611,8 @@ function __init__()
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === true
         JuliaSyntax.enable_in_core!(false)
+    else
+        JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
     end
 
     if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
