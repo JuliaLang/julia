@@ -220,6 +220,20 @@ and the current REPL mode you were in. The history searcher reads this log file 
 Multiple REPLs can write to this file at once, and every time you begin a search the newest history is fetched.
 Use of this file can be disabled at startup by passing the `--history-file=no` flag to Julia.
 
+## Terminal integration
+
+The interactive REPL emits OSC 133 semantic prompt markers. Terminals that support these markers
+can identify prompts, input, and output, enabling features such as navigating between prompts and
+selecting a command's output. Unsupported terminals ignore the markers.
+
+Semantic prompt markers can be disabled in `startup.jl`:
+
+```julia
+atreplinit() do repl
+    repl.options.semantic_prompts = false
+end
+```
+
 ## Key bindings
 
 The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced

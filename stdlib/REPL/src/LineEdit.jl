@@ -330,6 +330,9 @@ options(s::PromptState) =
         REPL.GlobalOptions::Options
     end
 
+semantic_prompts_enabled(p::Prompt) =
+    isdefined(p, :repl) && p.repl !== nothing && REPL.semantic_prompts_enabled(p.repl)
+
 function setmark(s::MIState, guess_region_active::Bool=true)
     refresh = set_action!(s, :setmark)
     s.current_action === :setmark && s.key_repeats > 0 && activate_region(s, :mark)
@@ -1902,7 +1905,13 @@ refresh_line(s::BufferLike, termbuf::AbstractTerminal) = refresh_multi_line(term
 default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
-write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
+function write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool)
+    semantic_prompts = semantic_prompts_enabled(s.p)
+    semantic_prompts && write(terminal, REPL.OSC_133_PROMPT_START)
+    width = write_prompt(terminal, s.p, color)
+    semantic_prompts && write(terminal, REPL.OSC_133_PROMPT_END)
+    return width
+end
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
@@ -3136,6 +3145,10 @@ function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=ini
                 move_input_end(s)
                 refresh_line(s)
                 print(terminal(s), "^C\n\n")
+                current_mode = mode(s)
+                if current_mode isa Prompt && semantic_prompts_enabled(current_mode)
+                    write(terminal(s), REPL.OSC_133_COMMAND_FINISH)
+                end
                 transition(s, :reset)
                 refresh_line(s)
             catch

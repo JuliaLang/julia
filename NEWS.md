@@ -211,6 +211,8 @@ Standard library changes
 
 #### REPL
 
+* The Julia REPL now emits OSC 133 semantic prompt markers for terminal integration.
+
 #### Sockets
 
 * `getsockname` now also accepts a `UDPSocket`, returning the address and port it is bound to ([#63091]).

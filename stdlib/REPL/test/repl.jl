@@ -66,7 +66,10 @@ end
 #end
 
 # REPL tests
-function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false,style_input=false,auto_insert_closing_bracket=false))
+function fake_repl(@nospecialize(f);
+        options::REPL.Options=REPL.Options(confirm_exit=false, style_input=false,
+            auto_insert_closing_bracket=false),
+        semantic_prompts::Bool=false)
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -79,6 +82,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
 
     repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in, options.hascolor), options.hascolor)
     repl.options = options
+    repl.options.semantic_prompts = semantic_prompts
 
     hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
     f(input.in, output.out, repl)
@@ -92,6 +96,38 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
     Base.wait(t)
     close(hard_kill)
     nothing
+end
+
+# Semantic prompt markers delimit prompt input and output and report evaluation status.
+@test REPL.Options().semantic_prompts
+fake_repl(semantic_prompts=true) do stdin_write, stdout_read, repl
+    repl.specialdisplay = REPL.REPLDisplay(repl)
+    repl.history_file = false
+    repltask = @async REPL.run_repl(repl)
+
+    prompt = readuntil(stdout_read, REPL.OSC_133_PROMPT_END, keep=true)
+    @test occursin(REPL.OSC_133_PROMPT_START, prompt)
+
+    global semantic_prompt_output = repl.t
+    command = "print($(curmod_prefix)semantic_prompt_output, \"semantic output\"); nothing\n"
+    write(stdin_write, command)
+    response = readuntil(stdout_read, REPL.OSC_133_COMMAND_FINISH_OK, keep=true)
+    @test occursin(REPL.OSC_133_COMMAND_START * "semantic output", response)
+    readuntil(stdout_read, REPL.OSC_133_PROMPT_END)
+
+    write(stdin_write, "error(\"semantic failure\")\n")
+    response = readuntil(stdout_read, REPL.OSC_133_COMMAND_FINISH_ERROR, keep=true)
+    @test occursin(REPL.OSC_133_COMMAND_START, response)
+    @test occursin("semantic failure", response)
+    readuntil(stdout_read, REPL.OSC_133_PROMPT_END)
+
+    write(stdin_write, '\n')
+    readuntil(stdout_read, REPL.OSC_133_COMMAND_FINISH)
+    readuntil(stdout_read, REPL.OSC_133_PROMPT_END)
+
+    write(stdin_write, '\x04')
+    readuntil(stdout_read, REPL.OSC_133_COMMAND_FINISH)
+    Base.wait(repltask)
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that

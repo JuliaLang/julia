@@ -70,6 +70,15 @@ include("options.jl")
 include("StylingPasses.jl")
 using .StylingPasses
 
+const OSC_133_PROMPT_START = "\e]133;A\a"
+const OSC_133_PROMPT_END = "\e]133;B\a"
+const OSC_133_COMMAND_START = "\e]133;C\a"
+const OSC_133_COMMAND_FINISH = "\e]133;D\a"
+const OSC_133_COMMAND_FINISH_OK = "\e]133;D;0\a"
+const OSC_133_COMMAND_FINISH_ERROR = "\e]133;D;1\a"
+
+semantic_prompts_enabled(::AbstractREPL) = false
+
 function histsearch end # To work around circular dependency
 
 include("LineEdit.jl")
@@ -855,6 +864,7 @@ specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 hascolor(r::LineEditREPL) = r.hascolor
+semantic_prompts_enabled(r::LineEditREPL) = r.options.semantic_prompts
 
 LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     LineEditREPL(t, hascolor,
@@ -1243,12 +1253,15 @@ end
 
 function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon::Bool = true)
     return function do_respond(s::MIState, buf, ok::Bool)
+        semantic_prompts = semantic_prompts_enabled(repl)
         if !ok
+            semantic_prompts && write(terminal(repl), OSC_133_COMMAND_FINISH)
             return transition(s, :abort)
         end
         line = String(take!(buf)::Vector{UInt8})
         if !isempty(line) || pass_empty
             reset(repl)
+            semantic_prompts && write(terminal(repl), OSC_133_COMMAND_START)
             local response
             try
                 ast = Base.invokelatest(f, line)
@@ -1257,7 +1270,16 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
                 response = Pair{Any, Bool}(current_exceptions(), true)
             end
             hide_output = suppress_on_semicolon && ends_with_semicolon(line)
-            print_response(repl, response, !hide_output, hascolor(repl))
+            try
+                print_response(repl, response, !hide_output, hascolor(repl))
+            finally
+                if semantic_prompts
+                    marker = response[2] ? OSC_133_COMMAND_FINISH_ERROR : OSC_133_COMMAND_FINISH_OK
+                    write(terminal(repl), marker)
+                end
+            end
+        elseif semantic_prompts
+            write(terminal(repl), OSC_133_COMMAND_FINISH)
         end
         prepare_next(repl)
         reset_state(s)
