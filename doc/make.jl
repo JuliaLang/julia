@@ -239,6 +239,40 @@ function generate_agent_skill_docs()
 end
 AgentSkillDocs = generate_agent_skill_docs()
 
+# Generate the Julia LLVM dialect reference from its specification in
+# src/JuliaDialect.td, using the llvm-dialects-tblgen tool built with the
+# deps. When the tool is not available (e.g. a documentation-only build), a
+# stub page is emitted so that the manual still builds.
+function generate_llvm_dialect_docs()
+    outpath = joinpath(buildrootdoc, "src", "devdocs", "llvm-dialect.md")
+    tblgen = joinpath(buildroot, "usr", "tools",
+                      Sys.iswindows() ? "llvm-dialects-tblgen.exe" : "llvm-dialects-tblgen")
+    td = normpath(joinpath(@__DIR__, "..", "src", "JuliaDialect.td"))
+    incdir = joinpath(buildroot, "usr", "include")
+    header = """
+        ```@meta
+        EditURL = "https://github.com/JuliaLang/julia/blob/master/src/JuliaDialect.td"
+        ```
+
+        """
+    body = if isfile(tblgen) && isfile(td)
+        read(`$tblgen -gen-dialect-docs --dialect julia -I $incdir -I $(dirname(td)) $td`, String)
+    else
+        @warn "llvm-dialects-tblgen not available; emitting a stub Julia dialect reference" tblgen
+        """
+        # `julia` Dialect
+
+        This page is generated from
+        [`src/JuliaDialect.td`](https://github.com/JuliaLang/julia/blob/master/src/JuliaDialect.td)
+        by `llvm-dialects-tblgen -gen-dialect-docs`, which was not available
+        when this documentation was built.
+        """
+    end
+    write(outpath, header * body)
+    return "devdocs/llvm-dialect.md"
+end
+LLVMDialectDoc = generate_llvm_dialect_docs()
+
 Manual = [
     "manual/getting-started.md",
     "manual/installation.md",
@@ -337,6 +371,7 @@ DevDocs = [
         "devdocs/pkgimg.md",
         "devdocs/llvm-passes.md",
         "devdocs/llvm.md",
+        LLVMDialectDoc,
         "devdocs/stdio.md",
         "devdocs/boundscheck.md",
         "devdocs/locks.md",

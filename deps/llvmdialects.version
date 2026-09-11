@@ -1,0 +1,9 @@
+# -*- makefile -*-
+
+## jll artifact
+LLVMDIALECTS_JLL_NAME := llvm_dialects
+LLVMDIALECTS_JLL_VER := 0.1.0+0
+
+## source build
+LLVMDIALECTS_BRANCH=julia-release/21.x
+LLVMDIALECTS_SHA1=dfdfc4beb4f950212736489cf6cc47b7077eaa32
