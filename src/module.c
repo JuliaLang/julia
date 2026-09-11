@@ -2054,19 +2054,19 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr) JL_CANSAFEPOINT
     if (!b)
         b = jl_get_module_binding(gr->mod, gr->name, 1);
 
-    for (;;) {
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_atomic_load_acquire(&jl_world_counter));
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
 
-        if (jl_binding_kind(bpart) == PARTITION_KIND_GUARD) {
-            // Already guard
-            return;
-        }
-
-        if (!jl_replace_binding(b, bpart, NULL, PARTITION_KIND_GUARD))
-            continue;
-
+    if (jl_binding_kind(bpart) == PARTITION_KIND_GUARD) {
+        // Already guard
+        JL_UNLOCK(&world_counter_lock);
         return;
     }
+
+    jl_replace_binding_locked(b, bpart, NULL, PARTITION_KIND_GUARD, new_world);
+    jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
 }
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
