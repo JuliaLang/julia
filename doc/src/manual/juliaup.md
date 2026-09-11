@@ -154,8 +154,9 @@ juliaup default release
 ```
 
 The argument is any channel, so you can make a specific version, a minor version
-channel, or a named channel such as `release` your default. If the channel is not
-yet installed, Juliaup installs it as part of this command.
+channel, or a named channel such as `release` your default. The channel must
+already be installed; if it is not, Juliaup reports an error and asks you to run
+`juliaup add` first.
 
 ## Keeping versions up to date
 
@@ -245,7 +246,7 @@ The active project is determined from `--project`, the `JULIA_PROJECT`
 environment variable, or `JULIA_LOAD_PATH`.
 
 This behavior is controlled by the `manifestversiondetect` configuration option,
-which accepts `true`, `false`, or `default`:
+which accepts `true` or `false`:
 
 ```
 juliaup config manifestversiondetect true
@@ -312,7 +313,8 @@ juliaup config versionsdbupdateinterval 0
 ```
 
 With automatic refresh disabled, the set of versions that channels resolve to is
-frozen until you update the database yourself by running `juliaup self update`.
+frozen until you run a command that refreshes the database explicitly. Three
+commands do this: `juliaup update`, `juliaup add`, and `juliaup self update`.
 
 ### Automatic installation of requested channels
 
@@ -431,13 +433,34 @@ Supported shells are `bash`, `zsh`, `fish`, `elvish`, `powershell`, and
 
 ## Using a different download server
 
-By default Juliaup downloads the official Julia binaries from
-`https://julialang-s3.julialang.org`. If you need to use a mirror — for example
-inside a network that cannot reach the public server — set the `JULIAUP_SERVER`
-environment variable to the mirror's URL.
+Juliaup downloads Julia builds from three different servers, depending on the
+kind of channel, and each can be redirected to a mirror with its own environment
+variable:
+
+- `JULIAUP_SERVER` is used for released versions and the channels that resolve to
+  them (`release`, `lts`, `1.10`, and so on). The default is
+  `https://julialang-s3.julialang.org`.
+- `JULIAUP_NIGHTLY_SERVER` is used for the `nightly` and `x.y-nightly` channels.
+  The default is `https://julialangnightlies-s3.julialang.org`.
+- `JULIAUP_PR_SERVER` is used for the `pr{number}` channels. The default is
+  `https://julialang-ephemeral-pr.s3.amazonaws.com`.
+
+If you need to use a mirror — for example inside a network that cannot reach the
+public servers — set the corresponding variable to the mirror's URL. Note that
+setting only `JULIAUP_SERVER` redirects downloads of released versions; Juliaup
+will still contact the public nightly and pull request servers for those channels
+unless the other two variables are set as well.
+
+All three URLs must use `https`. Plain `http` is accepted only for loopback hosts
+(`localhost`, `127.0.0.1`, or `::1`), for example when testing against a mirror
+running on the same machine.
 
 !!! note
-    The `nightly` and `pr{number}` channels require the server to provide `etag`
-    headers in its HTTP responses so that Juliaup can track builds. A mirror that
-    does not support `etag` headers will not be able to serve these channels,
-    although regular versioned releases will continue to work.
+    The `nightly` and `pr{number}` channels require the nightly server to provide
+    `etag` headers in its HTTP responses so that Juliaup can track builds. When
+    `JULIAUP_SERVER` is left at its default, Juliaup assumes this is the case.
+    When `JULIAUP_SERVER` is set to any other value, Juliaup sends a `HEAD`
+    request to the nightly server (the default one, or the one given by
+    `JULIAUP_NIGHTLY_SERVER`) and checks for an `etag` header. If none is
+    present, the `nightly` and `pr{number}` channels are refused, although
+    regular versioned releases continue to work.
