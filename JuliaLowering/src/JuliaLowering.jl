@@ -19,8 +19,8 @@ using .JuliaSyntax: @KSet_str, @stm, Kind, SourceAttrType, SourceRef,
     newnode, node_string, numchildren, provenance, setmeta, setmeta!, getmeta,
     CompileHints, source_location, sourcefile, sourceref, mapindex, mktree,
     ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
-    syntax_module, is_flisp_compat, adopt_scope, remove_context, fill_context!,
-    fill_context, JL_NEW_SYNTAX_VERSION, JL_OLD_SYNTAX_VERSION
+    syntax_module, edition, is_flisp_compat, adopt_scope,
+    remove_scope, fill_context, JL_NEW_EDITION, JL_OLD_EDITION
 
 const DEBUG = true
 

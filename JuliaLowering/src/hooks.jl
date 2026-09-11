@@ -27,7 +27,7 @@ function core_lowering_hook(@nospecialize(code), mod::Module, file::String="none
             # TODO: this ignores module docstrings for now
             return Core.svec(est_to_expr(st0[2]))
         end
-        st0 = rebase_layers(st0, mod, JL_OLD_SYNTAX_VERSION)
+        st0 = rebase_layers(st0, mod)
         st1 = expand_forms_1(st0, world, true)
         ctx2, st2 = expand_forms_2(st1, world)
         ctx3, st3 = resolve_scopes(ctx2, st2)
@@ -52,10 +52,6 @@ function core_lowering_hook(@nospecialize(code), mod::Module, file::String="none
         # return Base.fl_lower(code, mod, file, line, world, warn)
     end
 end
-
-# TODO: Write a parser hook here.  The input to `core_lowering_hook` should
-# eventually be a (convertible to) SyntaxTree, but we need to make updates to
-# the parsing API to include a parameter for AST type.
 
 const _has_v1_13_hooks = isdefined(Core, :_lower)
 

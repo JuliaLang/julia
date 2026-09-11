@@ -51,7 +51,8 @@ Lexical scope ID
 const ScopeId = Int
 
 const DEFAULT_NODE = SyntaxTree(
-    K"None", nothing, nothing, LineNumberNode(0), nothing)
+    K"None", nothing, nothing, LineNumberNode(0),
+    SyntaxContext(JuliaLowering, (0, 0)))
 
 """
     @mknode(old; attr=val...)
@@ -107,8 +108,8 @@ function _debug_check_attrs(x)
     x
 end
 
-function JuliaSyntax.newleaf(prov, k, @nospecialize(value))
-    context = prov isa SyntaxTree ? prov.context : nothing
+function JuliaSyntax.newleaf(prov::SyntaxTree, k::Kind, @nospecialize(value))
+    context = prov.context
     @jl_assert k === K"Value" || value !== nothing (
         prov, "only Value may contain nothing")
     if k == K"Identifier" || k == K"BindingId" || k == K"Value" ||

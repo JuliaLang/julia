@@ -65,7 +65,7 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
     print(io, rpad(treestr, 60))
     print(io, " | ")
     sc = ex.context
-    if sc isa SyntaxContext && sc !== parent_sc
+    if sc !== parent_sc
         print(io, sc)
         print(io, ",")
     end

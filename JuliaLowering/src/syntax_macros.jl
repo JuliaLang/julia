@@ -248,10 +248,10 @@ end
 # @eval should mostly ignore hygiene against our system's best wishes.  Still
 # attempt to preserve provenance.
 function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
-    sc = mc.macrocall.context::SyntaxContext
-    val = remove_context(@ast mc mc.macrocall ("eval_result"::K"Identifier"))
+    sc = mc.macrocall.context
+    val = remove_scope(@ast mc mc.macrocall ("eval_result"::K"Identifier"))
     q = _legacy_quote_to_syntax((@ast mc mc.macrocall [K"quote" ex]), 0, true)
-    new_sc = SyntaxContext(base_layer(sc).mod, sc.version)
+    new_sc = SyntaxContext(base_layer(sc).mod, sc.edition)
     @ast mc mc.macrocall [K"block"
         [K"local"
             [K"="
@@ -267,7 +267,7 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
     ]
 end
 function Base.var"@eval"(__context__::MacroContext, ex)
-    sc = __context__.macrocall.context::SyntaxContext
+    sc = __context__.macrocall.context
     mod = @ast __context__ __context__.macrocall base_layer(sc).mod::K"Value"
     _at_eval_code(__context__, mod, ex)
 end
@@ -356,7 +356,7 @@ function var"@syntaxunquote"(__context__::MacroContext, st)
     @ast __context__ __context__.macrocall [K"syntaxunquote" st]
 end
 
-# If the syntax version allows, convert quote/$ to syntaxquote/syntaxunquote.
+# If the edition allows, convert quote/$ to syntaxquote/syntaxunquote.
 # This is just a convenient way to create SyntaxTree with full provenance
 # without dedicated surface syntax, mainly for testing metaprogramming in JL.
 # It is insufficient in many ways, e.g. not all forms can be expressed (need
@@ -402,40 +402,44 @@ macro legacy_quote_to_syntax(x)
 end
 
 """
-Retrieve the syntax version of the macrocall
+Retrieve the edition of the macrocall
 """
-function var"@syntax_version"(__context__::MacroContext)
-    (__context__.macrocall.context::SyntaxContext).version
+function var"@edition"(__context__::MacroContext)
+    __context__.macrocall.context.edition
 end
-macro syntax_version()
-    JL_OLD_SYNTAX_VERSION
+macro edition()
+    JL_OLD_EDITION
 end
 
 """
-Set the syntax version of some syntax.  This can be used to define macros
-producing older syntax than the current version.
+Set the edition for some syntax.  This can be used to define macros with older
+signatures in newer editions.
 """
-function var"@syntax_version"(__context__::MacroContext, ver_st, st)
+function var"@edition"(__context__::MacroContext, ver_st, st)
     kind(st) === K"macro" || throw(LoweringError(
-        st, "`@syntax_version version macro` only supports macro definitions"))
+        st, "`@edition edition macro` only supports macro definitions"))
     ver = JuliaLowering.eval(syntax_module(ver_st), ver_st)
-    ver isa VersionNumber || throw(LoweringError(
-        ver_st, "version argument should be literal `v\"...\" call`"))
-    _ensure_syntax_version(st, ver)
+    en = ver isa Tuple{Int, Int} ? ver :
+        ver isa VersionNumber ? (Int(ver.major), Int(ver.minor)) : throw(LoweringError(
+            ver_st, "expected version `v\"...\"`"))
+    _ensure_edition(st, en)
 end
-macro syntax_version(_, x)
-    throw(ArgumentError("@syntax_version can't set version when lowering with flisp"))
+macro edition(_, x)
+    throw(ArgumentError("@edition requires JuliaLowering"))
 end
 
-function _ensure_syntax_version(st, ver::VersionNumber)
-    st_sc = st.context::SyntaxContext
-    sc = st_sc.version == ver ? st_sc :
-        SyntaxContext(st_sc.layer, st_sc.unexpanded, ver, st_sc.internal)
-
+function _ensure_edition(st, en::Tuple{Int, Int},
+                         scmap=Dict{SyntaxContext, SyntaxContext}())
+    sc = st.context
+    sc2 = get(scmap, sc, nothing)
+    if isnothing(sc2)
+        sc2 = scmap[sc] = sc.edition == en ? sc :
+            SyntaxContext(sc.layer, sc.unexpanded, en, sc.internal)
+    end
     if is_leaf(st) || numchildren(st) == 0
-        st_sc == sc ? st : @mknode(st; context=sc)
+        sc2 == sc ? st : @mknode(st; context=sc2)
     else
-        out = mapchildren(c->_ensure_syntax_version(c, ver), st)
-        (st_sc === sc && out === st) ? out : @mknode(st; context=sc)
+        out = mapchildren(c->_ensure_edition(c, en, scmap), st)
+        sc2 == sc ? out : @mknode(out; context=sc2)
     end
 end

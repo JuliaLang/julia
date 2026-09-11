@@ -742,3 +742,6 @@ const ver_regs =
     Regex("^((?:≥\\s*)|(?:>=\\s*)|(?:=\\s*)|(?:<\\s*)|(?:=\\s*))v?$version\$") => inequality_interval, # < 0.2 >= 0.5,2
     Regex("^[\\s]*$version[\\s]*?\\s-\\s[\\s]*?$version[\\s]*\$") => hyphen_interval, # 0.7 - 1.3
 ]
+
+# Interaction with language edition
+EditionNumber(v::VersionNumber) = (Int(v.major), Int(v.minor))

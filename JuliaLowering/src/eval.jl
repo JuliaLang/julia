@@ -1,10 +1,8 @@
 # Non-incremental lowering API for non-toplevel non-module expressions.
 # May be removed?
 
-function lower(mod::Module, ex_in::SyntaxTree; expr_compat_mode::Bool=false,
-               soft_scope::Union{Nothing,Bool}=nothing)
-    ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
-    ex0 = rebase_layers(ex_in, mod, ver)
+function lower(mod::Module, ex_in::SyntaxTree; soft_scope::Union{Nothing,Bool}=nothing)
+    ex0 = rebase_layers(ex_in, mod)
     world = Base.get_world_counter()
     ex1 = expand_forms_1(ex0, world, true)
     ctx2, ex2 = expand_forms_2(ex1, world)
@@ -14,12 +12,8 @@ function lower(mod::Module, ex_in::SyntaxTree; expr_compat_mode::Bool=false,
     ex5
 end
 
-function macroexpand(mod::Module, ex_in::SyntaxTree;
-                     expr_compat_mode::Bool=false,
-                     ver::VersionNumber=expr_compat_mode ?
-                         JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION,
-                     recursive::Bool=true)
-    ex0 = rebase_layers(ex_in, mod, ver)
+function macroexpand(mod::Module, ex_in::SyntaxTree; recursive::Bool=true)
+    ex0 = rebase_layers(ex_in, mod)
     expand_forms_1(ex0, Base.get_world_counter(), recursive)
 end
 
@@ -30,22 +24,21 @@ function macroexpand(st::SyntaxTree)
     expand_forms_1(ctx, st)
 end
 
-# If a top-level thunk has existing context, we can assume all syntax has the
+# If a top-level thunk has any existing layer, we can assume all syntax has the
 # same base layer: either it was produced by a macro expansion and went through
-# `apply_expansion_layer`, or it was produced by parsing (which we assume either
-# adds zero or uniform context to the tree).
+# `apply_expansion_layer`, or it was produced by parsing (no layers).
 
 # We ignore old the base layer's module, which should usually be the same as the
 # current lowering module.  (counterexample: macroexpand in mod A producing
 # escaped :toplevel st, then eval st in mod B, but flisp does the same thing by
 # spamming globalrefs to mod A throughout st).
-function rebase_layers(st, mod::Module, ver::VersionNumber)
-    out = if st.context === nothing
-        # assert zero context
-        sc = SyntaxContext(mod, ver)
-        fill_context!(st, sc)
+function rebase_layers(st, mod::Module)
+    out = if st.context.layer === nothing
+        # assert no layers throughout tree
+        sc = SyntaxContext(mod, st.context.edition)
+        fill_context(st, sc)
     else
-        base = base_layer(st.context::SyntaxContext)
+        base = base_layer(st.context)
         newbase = ScopeLayer(mod, nothing)
         _rebase_layers(
             st, Dict{ScopeLayer, ScopeLayer}(base=>newbase),
@@ -56,11 +49,11 @@ function rebase_layers(st, mod::Module, ver::VersionNumber)
 end
 
 function _rebase_layers(st, slmap, scmap)
-    sc = st.context::SyntaxContext
+    sc = st.context
     sc2 = get(scmap, sc, nothing)
     if isnothing(sc2)
         sl2 = _get_sl!(slmap, sc.layer)
-        sc2 = scmap[sc] = SyntaxContext(sl2, sc.unexpanded, sc.version, sc.internal)
+        sc2 = scmap[sc] = SyntaxContext(sl2, sc.unexpanded, sc.edition, sc.internal)
     end
     if is_leaf(st) || numchildren(st) == 0
         @mknode(st; context=sc2)
@@ -95,12 +88,11 @@ end
 # how we end up putting this into Base.
 
 struct LoweringIterator
-    ver::VersionNumber # later stored in module?
     todo::Vector{Tuple{SyntaxTree, Bool, Int}}
 end
 
-function lower_init(ex::SyntaxTree, ver)
-    LoweringIterator(ver, [(ex, false, 0)])
+function lower_init(ex::SyntaxTree)
+    LoweringIterator([(ex, false, 0)])
 end
 
 function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
@@ -125,7 +117,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
 
     k = kind(ex)
     if !(k in KSet"toplevel module")
-        ex = rebase_layers(ex, mod, iter.ver)
+        ex = rebase_layers(ex, mod)
         ex = expand_forms_1(ex, world, true)
         k = kind(ex)
     end
@@ -146,13 +138,20 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
+    elseif k === K"thunk" && numchildren(ex) == 1
+        return Core.svec(:thunk, Expr(:thunk, ex[1].value))
+    elseif (k === K"error" || k === K"incomplete") && numchildren(ex) == 1
+        err = ex[1].value
+        throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
+        # TODO: code coverage should visit
+        # `source_location(LineNumberNode, ex)::LineNumberNode`
          ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
-        thunk = to_lowered_expr(ex5)
-        return Core.svec(:thunk, thunk)
+        out = to_lowered_expr(ex5)
+        return Core.svec((out isa Core.CodeInfo ? :value : :thunk), out)
     end
 end
 
@@ -766,23 +765,17 @@ function _foreignsymbol_expr(ex)
     end
 end
 
-#-------------------------------------------------------------------------------
-# Our version of eval - should be upstreamed though?
 @fzone "JL: eval" function eval(mod::Module, @nospecialize(ex);
-                                soft_scope::Union{Nothing,Bool}=nothing,
-                                expr_compat_mode::Bool=false)
-    # Run the `eval` driver in the lowering world. Any internal operations
-    # are required to `invokelatest` before executing any code that dispatches
-    # on user code / types.
-    ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
-    return invoke_in_lowering_world(_lower_and_eval, mod, ex, ver, soft_scope)
+                                soft_scope::Union{Nothing,Bool}=nothing)
+    if !(ex isa SyntaxTree)
+        ex = expr_to_est(ex)
+    end
+    return invoke_in_lowering_world(_lower_and_eval, mod, ex, soft_scope)
 end
 
-# `ex` may be a `SyntaxTree` or an `Expr` (or `Expr` tree leaves of any type).
-function _lower_and_eval(mod::Module, @nospecialize(ex), ver::VersionNumber,
+function _lower_and_eval(mod::Module, st::SyntaxTree,
                          soft_scope::Union{Nothing,Bool})
-    st = ex isa SyntaxTree ? ex : expr_to_est(ex)
-    iter = lower_init(st, ver)
+    iter = lower_init(st)
     return _eval(mod, iter; soft_scope)
 end
 
@@ -803,9 +796,15 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
         elseif type == :end_module
             @ccall jl_end_new_module(modules[end]::Module)::Cvoid
             result = pop!(modules)
-        else
-            @assert type == :thunk
-            result = Base.invokelatest(Core.eval, modules[end], thunk[2])
+        elseif type == :thunk
+            code = thunk[2]
+            if !(Meta.isexpr(code, :thunk, 1) && code.args[1] isa Core.CodeInfo)
+                throw(ErrorException("syntax: expected (thunk x::CodeInfo)"))
+            end
+            result = @ccall jl_eval_thunk(
+                modules[end]::Any, code.args[1]::Any, #=fast=#1::Cint)::Any
+        elseif type == :value
+            result = thunk[2]
         end
     end
     @assert length(modules) === 1
@@ -846,32 +845,31 @@ end
 Like `include`, except reads code from the given string rather than from a file.
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
-                        filename::AbstractString; expr_compat_mode=false,
-                        version::Union{VersionNumber, Nothing}=nothing)
-    # TODO: fix this hack.  The normal way of getting the parser for this module
-    # only gives us Expr.  We probably want the parser to always create
-    # SyntaxTree, then convert it to Expr if the version is too low.
-    version = if isnothing(version) && invokelatest(
-            isdefined, mod, Symbol("#_internal_julia_parse"))
+                        filename::AbstractString)
+    version = if invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
         vp = invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
-        vp isa Base.VersionedParse ? vp.ver : VERSION
+        vp isa Base.VersionedParse ? vp.edition : Base.VERSION_EDITION
     else
-        version isa VersionNumber ? version : VERSION
+        Base.VERSION_EDITION
     end
-    st = parseall(SyntaxTree, code; filename, version, ignore_warnings=true)
+    st = parseall(SyntaxTree, code; filename, version=VersionNumber(version),
+                  ignore_warnings=true)
     @jl_assert kind(st) === K"toplevel" st
     if mapexpr !== identity
         # TODO: Is there any way to support provenance here?
         local last = nothing
+        sc = SyntaxContext(mod, version)
         for c in children(st)
-            last = eval(mod, expr_to_est(mapexpr(est_to_expr(c))); expr_compat_mode)
+            last = eval(mod, expr_to_est(
+                mapexpr(est_to_expr(c)),
+                source_location(LineNumberNode, c), sc))
         end
         last
     else
-        eval(mod, st; expr_compat_mode)
+        eval(mod, st)
     end
 end
-include_string(mod, code, filename="string"; kws...) =
-    include_string(identity, mod, code, filename; kws...)
+include_string(mod, code, filename="string") =
+    include_string(identity, mod, code, filename)
 
 include(path::AbstractString) = include(JuliaLowering, path)
