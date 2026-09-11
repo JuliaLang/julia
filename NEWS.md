@@ -98,6 +98,15 @@ Compiler/Runtime improvements
 * `--code-coverage=user` no longer includes inlined Base methods whose module cannot be recovered from debug
   information. This prevents coverage from writing `.cov` files for Base sources into the Julia installation
   ([#62514]).
+* Resolved global variable accesses now carry the binding partition they act on through lowered code, instead
+  of code generation re-deriving it by scanning a binding's partitions. After optimization, an access that
+  previously appeared as a `GlobalRef`, `getglobal` or `setglobal!` may instead appear as a
+  `Core.BindingPartition`, as the left-hand side of an assignment to one, or as a call to one of the new
+  `Core.getglobal_partition`, `Core.setglobal_partition`, `Core.swapglobal_partition`,
+  `Core.modifyglobal_partition`, `Core.replaceglobal_partition`, `Core.setglobalonce_partition`,
+  `Core.isdefinedglobal_partition` or `Core.depwarn_partition` builtin function. This does not change the
+  meaning of the program, but packages that inspect optimized IR (e.g. from `code_typed`) will encounter
+  these new forms. See the "Lowered form" section of the developer documentation for their semantics ([#62452]).
 
 Command-line option changes
 ---------------------------

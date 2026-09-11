@@ -1817,7 +1817,8 @@ function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
             (isa(func, Symbol) && !is_valid_identifier(func)) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
-            isa(func, GlobalRef)
+            isa(func, GlobalRef) ||
+            isa(func, Core.BindingPartition)
         show_unquoted(io, func, indent, 0, quote_level)
     else
         print(io, '(')
@@ -1873,6 +1874,8 @@ show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allo
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
+show_unquoted(io::IO, bpart::Core.BindingPartition, ::Int, ::Int) =
+    show_globalref(io, partition_owner(bpart).globalref)
 
 function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     print(io, ex.mod)

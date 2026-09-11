@@ -3321,6 +3321,8 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, GlobalRef)
         # No need for an edge since an explicit GlobalRef will be picked up by the source scan
         return abstract_eval_globalref(interp, e, sstate.saw_latestworld, sv)
+    elseif isa(e, Core.BindingPartition)
+        return abstract_eval_partition_load(interp, partition_owner(e), e)
     end
     if isa(e, QuoteNode)
         e = e.value
@@ -3990,13 +3992,30 @@ world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-# Like `walk_binding_partition` but drops the WorldRange tracking — IR-only callers
-# don't use it.
-@inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
-    while !is_leaf_partition(partition)
+# Like `walk_binding_partition` but drops the WorldRange tracking — IR-only callers don't use it.
+#
+# Walk imports to the leaf partition, also reporting whether `getglobal` would
+# deprecation-warn for the access: the deprecation flag is ORed across the walk but
+# suppressed once an explicit import is passed (the `import`/`using: x` site warns
+# instead), mirroring the runtime `jl_walk_binding_inplace_depwarn`.
+@inline function walk_to_leaf_partition_depwarn(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
+    passed_explicit = false
+    depwarn = false
+    while true
+        kind = binding_kind(partition)
+        if !passed_explicit
+            depwarn |= (partition.kind & PARTITION_FLAG_DEPWARN) != 0
+        end
+        is_leaf_partition(partition) && break
+        is_some_explicit_imported(kind) && (passed_explicit = true)
         binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(world, binding)
     end
+    return (binding, partition, depwarn)
+end
+
+@inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
+    binding, partition, _ = walk_to_leaf_partition_depwarn(binding, partition, world)
     return (binding, partition)
 end
 
@@ -4047,8 +4066,8 @@ globalref_rt_widened(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompa
 
 # `singleton_type`-compatible variant — skips the `Const(...)` box on defined-const
 # bindings, and (like `singleton_type`) also unwraps `Type{T}` / singleton restrictions.
-function globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
-    partition = globalref_leaf_partition(g, src)
+function partition_singleton(partition::Core.BindingPartition)
+    is_leaf_partition(partition) || return nothing
     kind = binding_kind(partition)
     (is_some_guard(kind) || kind == PARTITION_KIND_DECLARED) && return nothing
     if is_defined_const_binding(kind)
@@ -4057,6 +4076,9 @@ function globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, Incremen
     end
     return singleton_type(partition_restriction(partition))
 end
+
+globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}) =
+    partition_singleton(globalref_leaf_partition(g, src))
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::Union{GlobalRef, Core.Binding}, sv::AbsIntState)
     world = get_inference_world(interp)

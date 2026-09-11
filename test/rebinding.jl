@@ -578,6 +578,20 @@ module Invalidate61745
     @test caller_both() == "foo_changed!bar_changed!"
 end
 
+# Test that a global access which only becomes a `getglobal(::Module, ::Symbol)`
+# after inlining is still invalidated on redefinition (#61745).
+module Invalidate61745_indirect
+    using Test
+    module M
+        const foo = "unchanged"
+    end
+    indirect_access(modref::Module) = Base.getproperty(modref, :foo)::String
+    caller() = indirect_access(M)
+    @test caller() == "unchanged"
+    Core.eval(M, :(const foo = "changed!"))
+    @test caller() == "changed!"
+end
+
 # Test that redirecting a binding to a different typed-global partition with an
 # identical declared type still invalidates code that froze the old partition.
 module RedirectTypedGlobal
@@ -799,4 +813,24 @@ let m = DeprecatedDeclaredDelete
         Base.PARTITION_KIND_GUARD
     @test ci.max_world != typemax(UInt)
     @test !Base.invokelatest(Base.infer_effects, m.store_depdecl, (Int,)).nothrow
+end
+
+# A backdated constant acts like an untyped global: inference types it as `Any`, and the
+# optimizer must leave it as a runtime read rather than freezing its partition.
+module BackdatedNotFrozen
+    read_backdated() = backdated_const
+    const before = Base.tls_world_age()
+    const backdated_const = 1
+end
+let m = BackdatedNotFrozen
+    @test Base.binding_kind(Base.lookup_binding_partition(m.before, GlobalRef(m, :backdated_const))) ==
+        Base.PARTITION_KIND_BACKDATED_CONST
+    @test Base.binding_kind(m, :backdated_const) == Base.PARTITION_KIND_CONST
+    src, rt = only(code_typed(m.read_backdated, (); world=m.before))
+    @test rt === Any
+    @test !any(x -> x isa Core.BindingPartition, src.code)
+    @test any(x -> x === GlobalRef(m, :backdated_const), src.code)
+    # and in the current world it is an ordinary constant
+    src, rt = only(code_typed(m.read_backdated, ()))
+    @test rt === Int
 end

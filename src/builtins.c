@@ -1875,9 +1875,7 @@ JL_CALLABLE(jl_f_depwarn_partition)
 {
     JL_NARGS(depwarn_partition, 1, 1);
     JL_TYPECHK(depwarn_partition, binding_partition, args[0]);
-    jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
-    if (jl_options.depwarn && (bpart->kind & PARTITION_FLAG_DEPWARN))
-        jl_binding_deprecation_warning(jl_binding_partition_owner(bpart));
+    jl_binding_deprecation_check((jl_binding_partition_t*)args[0]);
     return jl_nothing;
 }
 

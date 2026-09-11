@@ -1160,6 +1160,7 @@ void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name);
 void jl_module_run_initializer(jl_module_t *m) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_binding_t *b) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_binding_deprecation_check(jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
@@ -1233,20 +1234,11 @@ size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *previous_part, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_t *jl_binding_partition_owner(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 
 // The value of a primordial constant binding, or NULL if `b` is not one.
 JL_DLLEXPORT jl_value_t *jl_binding_primordial_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 
-struct restriction_kind_pair {
-    jl_binding_t *binding_if_global;
-    jl_value_t *restriction;
-    enum jl_partition_kind kind;
-    int maybe_depwarn;
-};
-JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b JL_PROPAGATES_ROOT, struct restriction_kind_pair *rkp, size_t min_world, size_t max_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT, int *maybe_depwarn, size_t min_world, size_t max_world) JL_CANSAFEPOINT;
 void check_safe_newbinding(jl_module_t *m, jl_sym_t *var) JL_CANSAFEPOINT;
 
 STATIC_INLINE int is10digit(char c) JL_NOTSAFEPOINT
