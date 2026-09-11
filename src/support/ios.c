@@ -947,6 +947,9 @@ static int open_cloexec(const char *path, int flags, mode_t mode)
 #endif
 
 #if defined(_OS_WINDOWS_)
+// The CRT cannot request FILE_SHARE_DELETE, so the open below is a Win32 call
+// and the errno value has to be set here. The CRT's own mapping function
+// (_dosmaperr) is not in the toolchain's import libraries.
 // Translate a Win32 error into the corresponding errno value.
 static void ios_set_errno_win32(DWORD error)
 {
@@ -976,12 +979,6 @@ static void ios_set_errno_win32(DWORD error)
     case ERROR_DISK_FULL:
     case ERROR_HANDLE_DISK_FULL:
         errno = ENOSPC;
-        break;
-    case ERROR_DIR_NOT_EMPTY:
-        errno = ENOTEMPTY;
-        break;
-    case ERROR_INVALID_HANDLE:
-        errno = EBADF;
         break;
 #ifdef ENAMETOOLONG
     case ERROR_FILENAME_EXCED_RANGE:
