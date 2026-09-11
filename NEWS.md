@@ -211,6 +211,10 @@ Standard library changes
 
 #### REPL
 
+#### Sockets
+
+* `getsockname` now also accepts a `UDPSocket`, returning the address and port it is bound to ([#63091]).
+
 #### SharedArrays
 
 * `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the

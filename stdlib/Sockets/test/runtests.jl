@@ -338,12 +338,16 @@ end
 @testset "getsockname errors" begin
     sock = TCPSocket()
     serv = Sockets.TCPServer()
+    udp = UDPSocket()
     @test_throws MethodError getpeername(serv)
+    @test_throws MethodError getpeername(udp)
     @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getpeername(sock)
     @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(serv)
     @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(sock)
+    @test_throws Base._UVError("cannot obtain socket name", Base.UV_EBADF) getsockname(udp)
     close(sock)
     close(serv)
+    close(udp)
 end
 
 
@@ -459,6 +463,7 @@ end
         set_sockets_watchdog_state("UDP IPv4 bind";
             details=(host=ip"127.0.0.1",))
         a, aport = bind_udp_any(ip"127.0.0.1")
+        @test getsockname(a) == (ip"127.0.0.1", aport)
         b = UDPSocket()
         set_sockets_watchdog_state("UDP IPv4 bind";
             details=(host=ip"127.0.0.1", receiver_port=aport),
@@ -564,6 +569,7 @@ end
         set_sockets_watchdog_state("UDP IPv6 bind";
             details=(host=ip"::1",))
         a, aport = bind_udp_any(ip"::1")
+        @test getsockname(a) == (ip"::1", aport)
         b = UDPSocket()
         set_sockets_watchdog_state("UDP IPv6 bind";
             details=(host=ip"::1", receiver_port=aport),
