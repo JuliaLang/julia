@@ -295,7 +295,7 @@ end
     @test Meta.isexpr(Meta.parse(tg; mod=Module(:MetaTGDefault)), :typegroup)
 
     # 1.13 parser
-    p13 = Base.VersionedParse(v"1.13")
+    p13 = Base.VersionedParse(Base.OLDEST_EDITION)
     @test_throws Meta.ParseError Meta.parse(tg; _parse=p13)
     @test Meta.isexpr(Meta.parse(tg; raise=false, _parse=p13), :error)
 

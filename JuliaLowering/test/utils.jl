@@ -133,7 +133,7 @@ end
 
 function format_ir_for_test(mod, case)
     @assert !case.is_broken
-    ex = parsestmt(SyntaxTree, case.input; version=JL_NEW_EDITION)
+    ex = parsestmt(SyntaxTree, case.input; version=VersionNumber(JL_NEW_EDITION))
     try
         if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
             syntax_name(ex[1]) == "@ast_")
@@ -237,7 +237,7 @@ function watch_ir_tests(dir, delay=0.5)
 end
 
 function lower_str(mod::Module, s::AbstractString)
-    ex = parsestmt(JuliaLowering.SyntaxTree, s; version=JL_NEW_EDITION)
+    ex = parsestmt(JuliaLowering.SyntaxTree, s; version=VersionNumber(JL_NEW_EDITION))
     return JuliaLowering.to_lowered_expr(JuliaLowering.lower(mod, ex))
 end
 
@@ -332,7 +332,7 @@ end
 # test case.
 function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_eval::Bool=false)
     text = read(filename, String)
-    ex0 = parseall(SyntaxTree, text; filename, version=JL_NEW_EDITION)
+    ex0 = parseall(SyntaxTree, text; filename, version=VersionNumber(JL_NEW_EDITION))
     for ex in children(ex0)
         try
             ex_compiled = JuliaLowering.lower(mod, ex)
@@ -398,37 +398,38 @@ function fl_eval(mod::Module, x::Expr)
     Core.eval(mod, fl_lower(mod, x))
 end
 
-function _force_syntax(x, edition::VersionNumber)
+function _force_syntax(x, mod, edition::Tuple{Int, Int})
     if x isa SyntaxTree
-        x
+        JuliaLowering._ensure_edition(x, edition)
     elseif x isa AbstractString
         # note macroexpand/lower aren't particularly useful with parseall
-        JuliaSyntax.parseall(SyntaxTree, x; version=edition, ignore_warnings=true)
+        JuliaSyntax.parseall(SyntaxTree, x; version=VersionNumber(edition), ignore_warnings=true)
     elseif x isa Expr
-        JuliaLowering.expr_to_est(x)
+        JuliaLowering.expr_to_est(x, LineNumberNode(0),
+                                  JuliaSyntax.SyntaxContext(mod, edition))
     else
         error("expected string or AST, got $x")
     end
 end
 
-function jl_macroexpand(mod::Module, st::SyntaxTree; edition=JL_NEW_EDITION)
-    JuliaLowering.macroexpand(mod, JuliaLowering._ensure_edition(st, edition))
+function _jl_macroexpand(mod::Module, st::SyntaxTree)
+    JuliaLowering.macroexpand(mod, st)
 end
 
-function jl_lower(mod::Module, st::SyntaxTree; edition=JL_NEW_EDITION)
-    JuliaLowering.lower(mod, JuliaLowering._ensure_edition(st, edition))
+function _jl_lower(mod::Module, st::SyntaxTree)
+    JuliaLowering.lower(mod, st)
 end
 
-function jl_eval(mod::Module, st::SyntaxTree; edition=JL_NEW_EDITION)
-    JuliaLowering.eval(mod, JuliaLowering._ensure_edition(st, edition))
+function _jl_eval(mod::Module, st::SyntaxTree)
+    JuliaLowering.eval(mod, st)
 end
 
 jl_macroexpand(mod::Module, x; edition=JL_NEW_EDITION) =
-    jl_macroexpand(mod, _force_syntax(x, edition); edition)
+    _jl_macroexpand(mod, _force_syntax(x, mod, edition))
 jl_lower(mod::Module, x; edition=JL_NEW_EDITION) =
-    jl_lower(mod, _force_syntax(x, edition); edition)
+    _jl_lower(mod, _force_syntax(x, mod, edition))
 jl_eval(mod::Module, x; edition=JL_NEW_EDITION) =
-    jl_eval(mod, _force_syntax(x, edition); edition)
+    _jl_eval(mod, _force_syntax(x, mod, edition))
 
 fl_macroexpand(mod::Module, st::SyntaxTree; kws...) =
     fl_macroexpand(mod, JuliaLowering.est_to_expr(st); kws...)

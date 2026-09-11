@@ -80,14 +80,14 @@ function check_no_assignment(exs, msg="misplaced assignment statement in `[ ... 
 end
 
 function new_internal_context(st::SyntaxTree)
-    sc_orig = st.context::SyntaxContext
+    sc_orig = st.context
     SyntaxContext(
         ScopeLayer(syntax_module(st), nothing),
         # macro provenance: could use nothing, but this is easier for consumers
         sc_orig.unexpanded,
-        # version: internal bindings are only used in syntax we create, so the
-        # version should be the latest one
-        JL_NEW_SYNTAX_VERSION,
+        # internal bindings are only used in syntax we create, so the edition
+        # should be the latest one
+        JL_NEW_EDITION,
         true)
 end
 
@@ -107,7 +107,7 @@ end
 # work, etc.), but compatible.  flisp: `unescape`, `unescape-global-lhs`.  TODO:
 # It would be cleaner to do this in compat.jl.
 function relayer_global_if_unhygienic(ctx, st::SyntaxTree)
-    sc = st.context::SyntaxContext
+    sc = st.context
     relayered = SyntaxList()
     # TODO: is_base_layer(sc) or sc.layer == ctx.layer?
     (!is_flisp_compat(sc) || is_base_layer(sc)) && return st, relayered
@@ -116,7 +116,7 @@ function relayer_global_if_unhygienic(ctx, st::SyntaxTree)
 end
 function _relayer_global_if_unhygienic(done::SyntaxList, st::SyntaxTree, sc::SyntaxContext)
     k = kind(st)
-    if k === K"Identifier" && is_flisp_compat(st) && st.context::SyntaxContext !== sc
+    if k === K"Identifier" && is_flisp_compat(st) && st.context !== sc
         push!(done, st)
         @mknode(st; context=sc)
     elseif k === K"::" || k === K"kw"
@@ -2545,7 +2545,7 @@ function _expr_arg_syms(args)
         @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
         name = if kind(a[1]) === K"Placeholder"
             UNUSED
-        elseif (a[1].context::SyntaxContext).internal && i > 1
+        elseif a[1].context.internal && i > 1
             # we lose context, so deduplicate names (ignoring #self# to be
             # safe).  HACK: destructured args must match the desugared rhs
             n = syntax_name(a[1])
@@ -2569,7 +2569,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
         new_global_binding(ctx, src, mangled, ctx.layer.mod)
     end
 
-    sc = src.context::SyntaxContext
+    sc = src.context
     gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
          gen_argl = SyntaxList(
              @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
@@ -2590,7 +2590,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
         nongen_body = @ast ctx body[2] [K"block" [K"meta" "generated"::K"Symbol"
             [K"new"
                 GeneratedFunctionStub::K"Value" # Use stub type from JuliaLowering
-                SyntaxContext(ctx.layer.mod, sc.version)::K"Value"
+                SyntaxContext(ctx.layer.mod, sc.edition)::K"Value"
                 gen_name
                 # Truncate provenance to just the source file range, as this
                 # will live permanently in the IR and we probably don't want
@@ -2753,10 +2753,10 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),
         mangled = string("#", n, "#kw_body#", module_unique_name(ctx.layer.mod))
         # probably not desirable, but fixes eval-into-closed-module
-        m1_sc = escape_layer(mtable.context::SyntaxContext, true)
+        m1_sc = escape_layer(mtable.context, true)
         @mknode(newsym(ctx, mtable, mangled);
                 context=SyntaxContext(
-                    m1_sc.layer, m1_sc.unexpanded, m1_sc.version, true))
+                    m1_sc.layer, m1_sc.unexpanded, m1_sc.edition, true))
     end
     # (1) Body method.  This contains the actual function body, and requires
     # every possible default to be filled.  `rett` is only passed here since it
@@ -4573,7 +4573,7 @@ function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector}
 end
 
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
-    sl = base_layer(ex.context::SyntaxContext)
+    sl = base_layer(ex.context)
     ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(), world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
