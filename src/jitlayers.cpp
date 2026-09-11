@@ -280,7 +280,7 @@ StringRef jl_codegen_output_t::get_call_target(jl_code_instance_t *ci, bool spec
             jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
         jl_returninfo_t info =
             get_specsig_function(*this, &get_module(), nullptr, protoname, get_ci_abi(ci),
-                                 ci->rettype, is_opaque_closure);
+                                 jl_ci_rettype(ci), is_opaque_closure);
         target.decl = cast<Function>(info.decl.getCallee());
     }
     else {
@@ -339,7 +339,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
             }
             else if (invoke == jl_fptr_args_addr) {
                 assert(specptr != nullptr);
-                if (!from_abi.specsig && jl_subtype(codeinst->rettype, from_abi.rt))
+                if (!from_abi.specsig && jl_subtype(jl_ci_rettype(codeinst), from_abi.rt))
                     return specptr; // no adapter required
 
                 target = specptr;
@@ -347,7 +347,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
             }
             else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
                 assert(specptr != nullptr);
-                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
+                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(jl_ci_rettype(codeinst), from_abi.rt))
                     return specptr; // no adapter required
 
                 target = specptr;
@@ -375,7 +375,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
         }
         else if (invoke == jl_fptr_const_return_addr) {
             assert(codeinst);   // Convince the static analyzer
-            gf_thunk_name = emit_abi_constreturn(out, from_abi, codeinst->rettype_const);
+            gf_thunk_name = emit_abi_constreturn(out, from_abi, jl_ci_rettype_const(codeinst));
         }
         else {
             Value *llvminvoke = invoke ? literal_static_pointer_val((void*)invoke, PointerType::get(*ctx, 0)) : nullptr;
@@ -551,7 +551,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         jl_method_instance_t *mi = jl_get_ci_mi(unspec);
         jl_code_instance_t *uninferred = jl_cached_uninferred(jl_atomic_load_relaxed(&mi->cache), 1);
         assert(uninferred);
-        src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
+        src = (jl_code_info_t*)jl_ci_inferred(uninferred);
         assert(src);
     }
     if (src) {

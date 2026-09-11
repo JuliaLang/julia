@@ -536,6 +536,7 @@ typedef struct _jl_opaque_closure_t {
 #define JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR   0b0010
 #define JL_CI_FLAGS_FROM_IMAGE               0b0100
 #define JL_CI_FLAGS_NATIVE_CACHE_VALID       0b1000
+#define JL_CI_FLAGS_BACKEDGES_LOGGED        0b10000 // the image's backedge log carries this CodeInstance's backedges
 
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
@@ -596,6 +597,23 @@ typedef struct _jl_code_instance_t {
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
 } jl_code_instance_t;
+
+// Relocation-free serialized form of a CodeInstance's forward-edge list:
+// `nedges` opaque words follow the header in the same allocation. Words with
+// the high bit set are immediates (bit 62 set: zigzag-encoded literal Int;
+// clear: special-object ids, 0 = nothing); otherwise they are object
+// references encoded as (image-key << 40) | (offset in 8-byte units), where
+// image-key 0 is the containing image itself and k > 0 is its k-1'th
+// serialized dependency. Decoded lazily (jl_ici_ref); needs no GC tracing
+// since the referents are immortal image objects.
+typedef struct {
+    JL_DATA_TYPE
+    size_t nedges;
+    uintptr_t defword;   // interned ci->def reference, or 0 if the field is kept
+    uintptr_t fieldmask; // which owner fields have interned words appended after the edges
+    // uintptr_t words[nedges + popcount(fieldmask)];
+} jl_interned_code_instance_t;
+
 
 // May be used as the ->def field of a CodeInstance to override the ABI
 typedef struct _jl_abi_override_t {

@@ -2072,7 +2072,10 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
     @test any(internal_methods) do ci
         ci isa Core.CodeInstance || return false
-        mi = ci.def::Core.MethodInstance
+        # image CodeInstances carry `def` in the interned edge container;
+        # the raw field is not readable until rematerialized
+        mi = Base.ci_def(ci)
+        mi isa Core.MethodInstance || return false
         return mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end
@@ -2219,6 +2222,219 @@ precompile_test_harness("Issue #48391") do load_path
     x = invokelatest(()->I48391.SurrealFinite())
     @test Base.invokelatest(isless, x, x) === "good"
     @test_throws ErrorException isless(x, x)
+end
+
+# Replay of the precompile worker's method-activation and edge-validity results
+# (JULIA_ACTIVATE_REPLAY): every scenario below loads in a fresh process so each
+# load order starts from the images alone.
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    global function replay_test_output(load_path, depot, body)
+        code = """
+            insert!(LOAD_PATH, 1, $(repr(load_path)))
+            insert!(DEPOT_PATH, 1, $(repr(depot)))
+            $body
+            """
+        return readchomp(`$exename -e $code`)
+    end
+end
+
+precompile_test_harness("replay: activation order") do load_path
+    write(joinpath(load_path, "ReplayDep.jl"),
+        """
+        module ReplayDep
+        f(x) = :dep
+        end
+        """)
+    # two extenders of ReplayDep.f, each precompiled without knowledge of the other;
+    # their callers are inferred against their own method only
+    write(joinpath(load_path, "ReplayExtA.jl"),
+        """
+        module ReplayExtA
+        using ReplayDep
+        ReplayDep.f(::Integer) = :a
+        callf() = ReplayDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    write(joinpath(load_path, "ReplayExtB.jl"),
+        """
+        module ReplayExtB
+        using ReplayDep
+        ReplayDep.f(::Signed) = :b
+        callf() = ReplayDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    Base.compilecache(Base.PkgId("ReplayDep"))
+    Base.compilecache(Base.PkgId("ReplayExtA"))
+    Base.compilecache(Base.PkgId("ReplayExtB"))
+    depot = DEPOT_PATH[1]
+    # whichever loads second, the more specific method wins everywhere: A's caller
+    # is invalidated by B's activation, or verified against B's method at A's load
+    for order in (("ReplayExtA", "ReplayExtB"), ("ReplayExtB", "ReplayExtA"))
+        out = replay_test_output(load_path, depot, """
+            using ReplayDep, $(order[1]), $(order[2])
+            print(Base.invokelatest(ReplayExtA.callf), " ", Base.invokelatest(ReplayExtB.callf), " ",
+                  Base.invokelatest(ReplayDep.f, 1))
+            """)
+        @test out == "b b b"
+    end
+    # a method defined in the session before loading is foreign to the image's
+    # dependency closure and must be scanned live
+    out = replay_test_output(load_path, depot, """
+        using ReplayDep
+        ReplayDep.f(::Int) = :session
+        using ReplayExtA
+        print(Base.invokelatest(ReplayExtA.callf), " ", Base.invokelatest(ReplayDep.f, 1))
+        """)
+    @test out == "session session"
+    # a deletion in the session leaves no method behind but marks the function's
+    # history, so the image's records for it cannot be replayed
+    out = replay_test_output(load_path, depot, """
+        using ReplayDep
+        ReplayDep.f(::Int) = :session
+        Base.delete_method(which(ReplayDep.f, (Int,)))
+        using ReplayExtA
+        print(Base.invokelatest(ReplayExtA.callf), " ", Base.invokelatest(ReplayDep.f, 1))
+        """)
+    @test out == "a a"
+end
+
+precompile_test_harness("replay: worklist-owned method tables") do load_path
+    # methods of a method table the package itself defines carry no activation
+    # certificate; they must not break the (method, certificate) pairing of the
+    # image's method list (Revise's "External method tables" test found this)
+    write(joinpath(load_path, "ReplayOverlay.jl"),
+        """
+        module ReplayOverlay
+        Base.Experimental.@MethodTable(method_table)
+        Base.Experimental.@MethodTable(method_table_2)
+        foo() = 1
+        Base.Experimental.@overlay method_table print(x) = "print"
+        Base.Experimental.@overlay method_table show(x) = "show"
+        Base.Experimental.@overlay method_table cos(x) = "cos"
+        Base.Experimental.@overlay method_table_2 foo() = 2
+        bar() = foo()
+        baz() = bar()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ReplayOverlay"))
+    out = replay_test_output(load_path, DEPOT_PATH[1], """
+        using ReplayOverlay
+        nm(sig, mt) = length(Base._methods_by_ftype(sig, mt, -1, Base.get_world_counter()))
+        print(Base.invokelatest(ReplayOverlay.baz), " ", nm(Tuple{typeof(cos), Any}, ReplayOverlay.method_table),
+              " ", nm(Tuple{typeof(ReplayOverlay.foo)}, ReplayOverlay.method_table_2))
+        """)
+    @test out == "1 1 1"
+end
+
+precompile_test_harness("replay: bare TypeEq slot") do load_path
+    # `TypeEq`, the kind of every `Type{X}`, is the only DataType carrying the
+    # `Type` typename and it has no parameters; activating a method with that
+    # slot type must not index into them (the Compiler-as-a-package load did)
+    write(joinpath(load_path, "ReplayTypeEq.jl"),
+        """
+        module ReplayTypeEq
+        f(@nospecialize x) = 1
+        f(::Core.TypeEq) = 2
+        g() = f(Type{Int}) + f(1)
+        end
+        """)
+    Base.compilecache(Base.PkgId("ReplayTypeEq"))
+    out = replay_test_output(load_path, DEPOT_PATH[1], """
+        using ReplayTypeEq
+        print(ReplayTypeEq.g(), " ", ReplayTypeEq.f(Type{Vector}))
+        """)
+    @test out == "3 2"
+end
+
+precompile_test_harness("replay: extension activation") do load_path
+    host_uuid = "0f0f2a5c-6c6d-4b1e-9d2a-2e7d5b7a1c01"
+    trig_uuid = "9b4b1d2e-7a3f-4c0e-8f6b-5a2c1d3e4f02"
+    mkpath(joinpath(load_path, "ReplayHost", "src")); mkpath(joinpath(load_path, "ReplayHost", "ext"))
+    mkpath(joinpath(load_path, "ReplayTrig", "src"))
+    write(joinpath(load_path, "Project.toml"),
+        """
+        [deps]
+        ReplayHost = "$host_uuid"
+        ReplayTrig = "$trig_uuid"
+        """)
+    write(joinpath(load_path, "Manifest.toml"),
+        """
+        julia_version = "$(VERSION)"
+        manifest_format = "2.0"
+
+        [[deps.ReplayHost]]
+        path = "ReplayHost"
+        uuid = "$host_uuid"
+        version = "0.1.0"
+        weakdeps = ["ReplayTrig"]
+
+            [deps.ReplayHost.extensions]
+            ReplayHostExt = "ReplayTrig"
+
+        [[deps.ReplayTrig]]
+        path = "ReplayTrig"
+        uuid = "$trig_uuid"
+        version = "0.1.0"
+        """)
+    write(joinpath(load_path, "ReplayHost", "Project.toml"),
+        """
+        name = "ReplayHost"
+        uuid = "$host_uuid"
+        version = "0.1.0"
+
+        [weakdeps]
+        ReplayTrig = "$trig_uuid"
+
+        [extensions]
+        ReplayHostExt = "ReplayTrig"
+        """)
+    write(joinpath(load_path, "ReplayHost", "src", "ReplayHost.jl"),
+        """
+        module ReplayHost
+        h(x) = :host
+        callh() = h(1)
+        precompile(callh, ())
+        end
+        """)
+    write(joinpath(load_path, "ReplayHost", "ext", "ReplayHostExt.jl"),
+        """
+        module ReplayHostExt
+        using ReplayHost, ReplayTrig
+        ReplayHost.h(::Int) = :ext
+        end
+        """)
+    write(joinpath(load_path, "ReplayTrig", "Project.toml"),
+        """
+        name = "ReplayTrig"
+        uuid = "$trig_uuid"
+        version = "0.1.0"
+        """)
+    write(joinpath(load_path, "ReplayTrig", "src", "ReplayTrig.jl"),
+        """
+        module ReplayTrig
+        end
+        """)
+    Base.compilecache(Base.PkgId(Base.UUID(host_uuid), "ReplayHost"))
+    Base.compilecache(Base.PkgId(Base.UUID(trig_uuid), "ReplayTrig"))
+    depot = DEPOT_PATH[1]
+    # the extension's worker sees the host's caller and records its invalidation;
+    # loading the trigger after the host must apply it
+    out = replay_test_output(load_path, depot, """
+        using ReplayHost
+        before = Base.invokelatest(ReplayHost.callh)
+        using ReplayTrig
+        print(before, " ", Base.invokelatest(ReplayHost.callh))
+        """)
+    @test out == "host ext"
+    # the other order: the extension activates as soon as the host arrives
+    out = replay_test_output(load_path, depot, """
+        using ReplayTrig
+        using ReplayHost
+        print(Base.invokelatest(ReplayHost.callh))
+        """)
+    @test out == "ext"
 end
 
 precompile_test_harness("Generator nospecialize") do load_path

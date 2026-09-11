@@ -44,6 +44,18 @@ end
 function scan_edge_list(ci::Core.CodeInstance, binding::Core.Binding)
     isdefined(ci, :edges) || return false
     edges = ci.edges
+    if edges isa Core.InternedCodeInstance
+        # image CodeInstances carry their edges as relocation-free words
+        i = 1
+        while i <= getfield(edges, :nedges)
+            if ccall(:jl_ici_ref, Any, (Any, Csize_t), edges, i - 1) === binding
+                return true
+            end
+            i += 1
+        end
+        return false
+    end
+    edges = edges::Core.SimpleVector
     i = 1
     while i <= length(edges)
         if isassigned(edges, i) && edges[i] === binding
@@ -197,7 +209,7 @@ function scan_new_methods!(internal_methods::Vector{Any}, image_backedges_only::
     end
     for method in internal_methods
         if isa(method, Method)
-           scan_new_method!(method, image_backedges_only)
+            scan_new_method!(method, image_backedges_only)
         end
     end
 end

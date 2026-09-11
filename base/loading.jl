@@ -1165,7 +1165,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
     d = get_deps(parsed_toml(manifest_file))
     for (dep_name, entries) in d
-        entries::Vector{Any}
+        entries = entries::Vector{Any}
         for entry in entries
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
@@ -1493,8 +1493,14 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
+        backedge_log = sv[4]::Union{Vector{Any}, Nothing}
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
-            ReinferUtils.insert_backedges_typeinf(internal_methods)
+            ccall(:jl_set_loading_closure_from_depmods, Cvoid, (Any, Any), depmods, internal_methods)
+            try
+                ReinferUtils.insert_backedges_typeinf(internal_methods, backedge_log)
+            finally
+                ccall(:jl_clear_loading_closure, Cvoid, ())
+            end
         end
         restored = register_restored_modules(sv, pkg, path)
 
@@ -1756,7 +1762,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
         for (dep_name, entries) in d
-            entries::Vector{Any}
+            entries = entries::Vector{Any}
             for entry in entries
                 entry = entry::Dict{String, Any}
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
@@ -1771,7 +1777,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                         deps′_expanded = Dict{String, Any}()
                         for (dep_name, entries) in d
                             dep_name in deps′ || continue
-                            entries::Vector{Any}
+                            entries = entries::Vector{Any}
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end
@@ -4605,7 +4611,10 @@ end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
 end
-@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
+@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String; kwargs...)
+    Compiler.@zone "STALECHECK" _stale_cachefile(modkey, build_id, modspec, cachefile; kwargs...)
+end
+@constprop :none function _stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true,
                                           verify_checksums::Bool=true)

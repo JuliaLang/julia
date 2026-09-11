@@ -855,9 +855,210 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, size_t target_world) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst, size_t target_world) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT jl_value_t *jl_ici_materialize_def(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_ci_def_ro(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_ici_fieldref(jl_value_t *edges, int rank) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_ci_materialize_all(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_di_materialize_all(jl_debuginfo_t *di) JL_CANSAFEPOINT; // allocates: converts the subtree
+int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*) JL_CANSAFEPOINT, jl_value_t *argtypes JL_PROPAGATES_ROOT, int all_subtypes, void *env) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_register_sig_tns(jl_array_t *tab) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_image_ref_of(jl_value_t *v, uint64_t *key, uint64_t *offset) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_is_atom_type(jl_value_t *a) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_image_ref_resolve(int is_sysimg, uint64_t key, uint64_t offset) JL_NOTSAFEPOINT;
+
+// interned-field ranks (must match the hooks in staticdata.c)
+#define JL_ICI_CI_OWNER         0
+#define JL_ICI_CI_NEXT          1
+#define JL_ICI_CI_RETTYPE       2
+#define JL_ICI_CI_EXCTYPE       3
+#define JL_ICI_CI_RETTYPE_CONST 4
+#define JL_ICI_CI_INFERRED      5
+#define JL_ICI_CI_DEBUGINFO     6
+#define JL_ICI_CI_ANALYSIS      7
+#define JL_ICI_DI_DEF           0
+#define JL_ICI_DI_LINETABLE     1
+#define JL_ICI_DI_CODELOCS      2
+
+// Set-once object fields that a materializing compare-and-swap may publish
+// concurrently are read with atomic loads. The GC analyzer sees the plain
+// member read, which it tracks as rooted by the object (a cast through
+// `_Atomic` hides that from it).
+#ifdef __clang_gcanalyzer__
+#define jl_load_set_once(fieldp) (*(fieldp))
+#define jl_load_set_once_acquire(fieldp) (*(fieldp))
+#else
+#define jl_load_set_once(fieldp) jl_atomic_load_relaxed((_Atomic(__typeof__(*(fieldp)))*)(fieldp))
+#define jl_load_set_once_acquire(fieldp) jl_atomic_load_acquire((_Atomic(__typeof__(*(fieldp)))*)(fieldp))
+#endif
+
+// materializing accessors: image CodeInstances/DebugInfos may carry these
+// fields in the interned container; decode on first read and write back
+STATIC_INLINE jl_value_t *jl_ci_owner(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = (jl_value_t*)jl_load_set_once(&ci->owner);
+    if (v == NULL) {
+        jl_ci_materialize_all(ci);
+        v = (jl_value_t*)jl_load_set_once(&ci->owner);
+    }
+    return v;
+}
+
+STATIC_INLINE jl_code_instance_t *jl_ci_next(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    // `next` itself is never interned (runtime-mutable chain state; materialize_all
+    // does not touch it), but chain walks are the universal materialization trigger
+    // for the set-once interned fields: every CI a walk visits may be handed out as
+    // an edge/invoke target and read by raw getfield without further accessor checks
+    jl_ci_materialize_all(ci);
+    return jl_atomic_load_relaxed(&ci->next);
+}
+
+STATIC_INLINE jl_value_t *jl_ci_rettype(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = (jl_value_t*)jl_load_set_once(&ci->rettype);
+    if (v == NULL) {
+        jl_ci_materialize_all(ci);
+        v = (jl_value_t*)jl_load_set_once(&ci->rettype);
+    }
+    return v;
+}
+
+STATIC_INLINE jl_value_t *jl_ci_exctype(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = (jl_value_t*)jl_load_set_once(&ci->exctype);
+    if (v == NULL) {
+        jl_ci_materialize_all(ci);
+        v = (jl_value_t*)jl_load_set_once(&ci->exctype);
+    }
+    return v;
+}
+
+STATIC_INLINE jl_value_t *jl_ci_rettype_const(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = (jl_value_t*)jl_load_set_once(&ci->rettype_const);
+    if (v == NULL) {
+        jl_ci_materialize_all(ci);
+        v = (jl_value_t*)jl_load_set_once(&ci->rettype_const);
+    }
+    return v;
+}
+
+STATIC_INLINE jl_value_t *jl_ci_inferred(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = jl_atomic_load_relaxed(&ci->inferred);
+    if (v == NULL) {
+        jl_ci_materialize_all(ci);
+        v = jl_atomic_load_relaxed(&ci->inferred);
+    }
+    return v;
+}
+
+STATIC_INLINE jl_debuginfo_t *jl_ci_debuginfo(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_debuginfo_t *v = jl_atomic_load_relaxed(&ci->debuginfo);
+    if (v == NULL) {
+        jl_ci_materialize_all(ci);
+        v = jl_atomic_load_relaxed(&ci->debuginfo);
+    }
+    return v;
+}
+
+STATIC_INLINE jl_value_t *jl_ci_analysis_results(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = (jl_value_t*)jl_load_set_once(&ci->analysis_results);
+    if (v == NULL) {
+        jl_ci_materialize_all(ci);
+        v = (jl_value_t*)jl_load_set_once(&ci->analysis_results);
+    }
+    return v;
+}
+
+// read-only variants for signal/dump contexts
+STATIC_INLINE jl_debuginfo_t *jl_ci_debuginfo_ro(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_debuginfo_t *v = jl_atomic_load_relaxed(&ci->debuginfo);
+    if (v == NULL)
+        v = (jl_debuginfo_t*)jl_ici_fieldref((jl_value_t*)jl_atomic_load_relaxed(&ci->edges), JL_ICI_CI_DEBUGINFO);
+    return v;
+}
+
+STATIC_INLINE jl_value_t *jl_di_def(jl_debuginfo_t *di JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+{
+    // convert the whole subtree while the interned container is still in
+    // place, so that raw reads below this node are safe once any materializing
+    // accessor has returned (a racing converter publishes `edges` last)
+    jl_value_t *edges = (jl_value_t*)jl_load_set_once_acquire(&di->edges);
+    if (edges != NULL && jl_typetagis(edges, jl_interned_code_instance_type))
+        jl_di_materialize_all(di);
+    return (jl_value_t*)jl_load_set_once_acquire(&di->def);
+}
+
+STATIC_INLINE jl_value_t *jl_di_linetable(jl_debuginfo_t *di JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+{
+    // convert the whole subtree while the interned container is still in
+    // place, so that raw reads below this node are safe once any materializing
+    // accessor has returned (a racing converter publishes `edges` last)
+    jl_value_t *edges = (jl_value_t*)jl_load_set_once_acquire(&di->edges);
+    if (edges != NULL && jl_typetagis(edges, jl_interned_code_instance_type))
+        jl_di_materialize_all(di);
+    return (jl_value_t*)jl_load_set_once_acquire(&di->linetable);
+}
+
+STATIC_INLINE jl_value_t *jl_di_codelocs_(jl_debuginfo_t *di JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+{
+    // convert the whole subtree while the interned container is still in
+    // place, so that raw reads below this node are safe once any materializing
+    // accessor has returned (a racing converter publishes `edges` last)
+    jl_value_t *edges = (jl_value_t*)jl_load_set_once_acquire(&di->edges);
+    if (edges != NULL && jl_typetagis(edges, jl_interned_code_instance_type))
+        jl_di_materialize_all(di);
+    return (jl_value_t*)jl_load_set_once_acquire(&di->codelocs);
+}
+
+// read-only DebugInfo variants (stackwalk may run in a signal context)
+STATIC_INLINE jl_value_t *jl_di_def_ro(jl_debuginfo_t *di JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = (jl_value_t*)jl_load_set_once(&di->def);
+    if (v == NULL) {
+        jl_value_t *edges = (jl_value_t*)jl_load_set_once_acquire(&di->edges);
+        v = jl_ici_fieldref(edges, JL_ICI_DI_DEF);
+        if (v == NULL) // converted meanwhile: the field was published before `edges`
+            v = (jl_value_t*)jl_load_set_once_acquire(&di->def);
+    }
+    return v;
+}
+
+STATIC_INLINE jl_value_t *jl_di_linetable_ro(jl_debuginfo_t *di JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = (jl_value_t*)jl_load_set_once(&di->linetable);
+    if (v == NULL) {
+        jl_value_t *edges = (jl_value_t*)jl_load_set_once_acquire(&di->edges);
+        v = jl_ici_fieldref(edges, JL_ICI_DI_LINETABLE);
+        if (v == NULL) // converted meanwhile: the field was published before `edges`
+            v = (jl_value_t*)jl_load_set_once_acquire(&di->linetable);
+    }
+    return v;
+}
+
+STATIC_INLINE jl_value_t *jl_di_codelocs_ro(jl_debuginfo_t *di JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *v = (jl_value_t*)jl_load_set_once(&di->codelocs);
+    if (v == NULL) {
+        jl_value_t *edges = (jl_value_t*)jl_load_set_once_acquire(&di->edges);
+        v = jl_ici_fieldref(edges, JL_ICI_DI_CODELOCS);
+        if (v == NULL) // converted meanwhile: the field was published before `edges`
+            v = (jl_value_t*)jl_load_set_once_acquire(&di->codelocs);
+    }
+    return v;
+}
+JL_DLLEXPORT jl_value_t *jl_ci_def(jl_code_instance_t *ci);
+
 STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    jl_value_t *def = ci->def;
+    jl_value_t *def = (jl_value_t*)jl_load_set_once(&ci->def);
+    if (def == NULL) // interned in the image; decode and write back
+        def = jl_ici_materialize_def(ci);
     if (jl_is_abioverride(def))
         return ((jl_abi_override_t*)def)->def;
     assert(jl_is_method_instance(def));
@@ -887,6 +1088,15 @@ STATIC_INLINE jl_value_t *jl_sparam_defined_value(jl_value_t *sp JL_PROPAGATES_R
     return sp;
 }
 JL_DLLEXPORT jl_value_t *jl_sparam_slot_value(jl_value_t *sp JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+
+// materializing variant returning the raw def object (MethodInstance or ABIOverride)
+STATIC_INLINE jl_value_t *jl_ci_defobj(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *def = (jl_value_t*)jl_load_set_once(&ci->def);
+    if (def == NULL)
+        def = jl_ici_materialize_def(ci);
+    return def;
+}
 
 JL_DLLEXPORT jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def) JL_NOTSAFEPOINT;
 JL_DLLEXPORT const char *jl_debuginfo_name(jl_value_t *func) JL_NOTSAFEPOINT;
@@ -1306,6 +1516,18 @@ STATIC_INLINE jl_value_t *normalize_typeofbottom_layout_alias(jl_value_t *ty JL_
     return ty;
 }
 
+// `Type{Union{}}` and `typeof(Union{})` denote the same singleton set
+// {Union{}} but with different kinds (a `TypeEq` node vs the `TypeofBottom`
+// `DataType`), so the type-equality class of the bottom singleton type spans
+// more than one kind: `Type{typeof(Union{})}` contains both a `DataType`
+// instance and `TypeEq` instances, and `TypeEq(T) <: kind(typeof(T))`
+// reasoning (subtyping, method matching, cache guards) does not apply to it.
+STATIC_INLINE int jl_is_bottom_singleton_class(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    return t == (jl_value_t*)jl_typeofbottom_type ||
+           (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type);
+}
+
 STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(jl_is_vararg(v));
@@ -1428,6 +1650,17 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 // GC configuration baked into generated code; must match between an image and the runtime that loads it.
 JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
+size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributor_methods JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_set_loading_closure_blobs(size_t *bits, size_t nblobs);
+void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t *cert) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_activation_cert(jl_method_t *method);
+JL_DLLEXPORT int jl_edge_sig_replayable(jl_value_t *sig) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_set_loading_closure_from_depmods(jl_array_t *depmods, jl_array_t *anchors);
+JL_DLLEXPORT void jl_clear_loading_closure(void);
+extern JL_DLLEXPORT jl_genericmemory_t *jl_activation_certs JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_sig_tn_table JL_GLOBALLY_ROOTED;
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
@@ -1451,6 +1684,23 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance_t *caller) JL_CANSAFEPOINT;
+extern JL_DLLEXPORT jl_array_t *jl_backedge_log JL_GLOBALLY_ROOTED;
+void jl_record_binding_backedge(jl_binding_t *b, jl_value_t *edge) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_apply_backedge_log(jl_array_t *log) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_ici_ref(jl_interned_code_instance_t *ici, size_t i) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_ici_ref_nobox(jl_interned_code_instance_t *ici, size_t i) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_svec_t *jl_ici_to_svec(jl_interned_code_instance_t *ici) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_ici_literal(jl_interned_code_instance_t *ici, size_t i, intptr_t *out) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_edgelist_len(jl_value_t *edges) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_edgelist_ref(jl_value_t *edges, size_t i) JL_CANSAFEPOINT;
+// element of an edge list without boxing literal words (NULL for a literal);
+// enough for DebugInfo edge lists, which hold only objects
+STATIC_INLINE jl_value_t *jl_edgelist_ref_nobox(jl_value_t *edges, size_t i) JL_NOTSAFEPOINT
+{
+    if (jl_typetagis(edges, jl_interned_code_instance_type))
+        return jl_ici_ref_nobox((jl_interned_code_instance_t*)edges, i);
+    return jl_svecref(edges, i);
+}
 JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
                                      jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
@@ -1979,6 +2229,9 @@ struct typemap_intersection_env {
     int emptiness_only; // if set, `ti` and `env` are not materialized (`ti` is only a
                         // nonempty/bottom placeholder); the callback may consume just
                         // the match verdict and `issubty`
+    int (*entry_filter)(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
+                        // if set, entries for which this returns 0 are skipped without
+                        // performing any intersection
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
 void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);

@@ -1754,6 +1754,30 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
     return wrap_tvar_env(*new_tvar, constrained);
 }
 
+// A type is an "atom" if it has no proper nonempty subtypes: any X <: A is
+// equal either to A or to Union{}. Values of a concrete non-kind datatype A
+// satisfy typeof(v) == A exactly. Kinds are excluded (Type{X} <: DataType is
+// proper and nonempty); TypeEq nodes are not datatypes. A concrete Tuple
+// additionally requires atom parameters: e.g. Tuple{DataType} has the proper
+// nonempty subtype Tuple{Type{Int}}. Used by the loader's foreign-method
+// disjointness check: an atom slot is disjoint from a method slot as soon as
+// it is not a subtype of it.
+JL_DLLEXPORT int jl_is_atom_type(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(a))
+        return 0;
+    jl_datatype_t *d = (jl_datatype_t*)a;
+    if (!d->isconcretetype || jl_is_kind(a))
+        return 0;
+    if (d->name == jl_tuple_typename) {
+        for (size_t i = 0; i < jl_nparams(d); i++) {
+            if (!jl_is_atom_type(jl_tparam(d, i)))
+                return 0;
+        }
+    }
+    return 1;
+}
+
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     u = unalias_unionall(u, e);

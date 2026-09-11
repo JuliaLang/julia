@@ -874,7 +874,7 @@ function is_edge_recursed(edge::MethodInstance, caller::AbsIntState)
     end
 end
 is_edge_recursed(edge::CodeInstance, caller::AbsIntState) =
-    is_edge_recursed(edge.def, caller)
+    is_edge_recursed(ci_def(edge), caller)
 
 function is_method_recursed(method::Method, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
