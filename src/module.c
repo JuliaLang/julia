@@ -2213,7 +2213,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
     if (jl_bkind_is_some_constant(kind))
         jl_errorf("invalid assignment to constant %s.%s",
                   jl_symbol_name(mod->name), jl_symbol_name(var));
-    jl_value_t *ty = bpart->restriction;
+    jl_value_t *ty = kind == PARTITION_KIND_DECLARED ? (jl_value_t*)jl_any_type : bpart->restriction;
     JL_GC_PROMISE_ROOTED(ty);
     return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, b, mod, var);
 }
