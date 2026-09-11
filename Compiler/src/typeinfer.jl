@@ -304,8 +304,9 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(interp) === true`
         optimize(interp::I, opt::OptimizationState{I}, frame.result)
-        # check the valid_worlds hasn't been narrowed by added :invoke edges
-        valid_worlds = intersect(frame.valid_worlds, compute_recursive_worlds(opt.inlining.edges))
+        # check the valid_worlds hasn't been narrowed by added :invoke edges or resolving a global access
+        valid_worlds = intersect(frame.valid_worlds, world_range(opt.src))
+        valid_worlds = intersect(valid_worlds, compute_recursive_worlds(opt.inlining.edges))
         update_valid_age!(frame, get_inference_world(interp::I), valid_worlds)
     end
     empty!(opt_cache)
@@ -394,6 +395,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp::I, opt::OptimizationState{I}, caller.result)
+            cycle_valid_worlds = intersect(cycle_valid_worlds, world_range(opt.src))
             cycle_valid_worlds = intersect(cycle_valid_worlds, compute_recursive_worlds(opt.inlining.edges))
             time_now = _time_ns()
             caller.time_self_ns += (time_now - time_before)

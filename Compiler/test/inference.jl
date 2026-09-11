@@ -1996,6 +1996,8 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                 end
             elseif isa(farg, Core.SSAValue)
                 farg = Compiler.widenconst(code.ssavaluetypes[farg.id])
+            elseif isa(farg, Core.BindingPartition)
+                farg = typeof(Base.partition_restriction(farg))
             else
                 farg = typeof(farg)
             end
@@ -4780,7 +4782,8 @@ end
 for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     local badf
     local code = code_typed(badf, Tuple{})[1].first.code
-    @test Meta.isexpr(code[1], :call)
+    # the invalid `getfield` call is not constant-folded away
+    @test any(x -> Meta.isexpr(x, :call), code)
     @test code[end] === Core.ReturnNode()
     @test_throws TypeError badf()
 end
@@ -5438,9 +5441,10 @@ function call_func_itr(func, itr)
 end
 
 global inline_checker = c -> c # untyped global, a call of this func will prevent inlining
-# if `f` is inlined, `GlobalRef(m, :inline_checker)` should appear within the body of `invokef`
+# if `f` is inlined, a read of `inline_checker` should appear within the body of `invokef`
 function is_inline_checker(@nospecialize stmt)
-    isa(stmt, GlobalRef) && stmt.name === :inline_checker
+    (isa(stmt, GlobalRef) && stmt.name === :inline_checker) ||
+        (isa(stmt, Core.BindingPartition) && Base.partition_owner(stmt).globalref.name === :inline_checker)
 end
 
 function func_nospecialized(@nospecialize a)
@@ -7547,6 +7551,44 @@ end === Int
 @test Base.infer_return_type((String,)) do x
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
+# a swap does both a load and store, so its order is validated once for both
+@test Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :swapglobal!_xxx, x, :unordered)
+end >: ConcurrencyViolationError
+@test !(Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :swapglobal!_xxx, x, :acquire_release)
+end >: ConcurrencyViolationError)
+
+# `replaceglobal!` reads the binding it writes, so it can throw `UndefVarError`
+@test Base.infer_exception_type((Module,)) do m
+    replaceglobal!(m, :swapglobal!_xxx, 1, 2)
+end >: UndefVarError
+# the `desired` value is type-checked before the comparison, so a bad store never returns
+@test Base.infer_return_type((String,)) do x
+    replaceglobal!(@__MODULE__, :swapglobal!_xxx, 1, x)
+end === Union{}
+@test Base.infer_return_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :swapglobal!_xxx, 1, x)
+end === ccall(:jl_apply_cmpswap_type, Any, (Any,), Int)
+# a store through an import throws before anything is read, so no old value is returned
+module RMWGlobalImportSource
+    global rmwglobal_imported::Int = 1
+    global rmwglobal_used::Int = 2
+end
+import .RMWGlobalImportSource: rmwglobal_imported
+using .RMWGlobalImportSource: rmwglobal_used
+@test Base.infer_return_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :rmwglobal_imported, 1, x)
+end === Union{}
+@test Base.infer_exception_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :rmwglobal_imported, 1, x)
+end >: ErrorException
+@test Base.infer_return_type((Int,)) do x
+    swapglobal!(@__MODULE__, :rmwglobal_used, x)
+end === Union{}
+@test Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :rmwglobal_used, x)
+end >: ErrorException
 
 @newinterp AssumeBindingsStaticInterp
 Compiler.InferenceParams(::AssumeBindingsStaticInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
@@ -7645,6 +7687,290 @@ A58257.get!      # Creates binding partition in A, N+1:∞
 A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
 Base.invoke_in_world(A58257.B58257.age, getglobal, A58257, :get!) # Expands binding partition in A through <N
 @test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
+
+# Tests for `reformulate_globals_pass!`.
+module ReformGlobals
+    global g::Int = 0
+    getg() = g
+    setg!(v) = setglobal!(ReformGlobals, :g, v)
+end
+let readcode = code_typed(ReformGlobals.getg, ())[1][1].code,
+    writecode = code_typed(ReformGlobals.setg!, (Int,))[1][1].code
+    # the read is reformulated to a bare partition, with no `GlobalRef` left over
+    @test any(x -> isa(x, Core.BindingPartition), readcode)
+    @test !any(x -> isa(x, GlobalRef), readcode)
+    # the store reformulates to `BindingPartition = value`, even though `global g::Int`
+    # creates a one-world `PARTITION_KIND_DECLARED` partition just before the `= 0`
+    # assignment: the write must resolve the typed-global partition.
+    @test any(x -> Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition), writecode)
+end
+# The `load_consistent` bound must still span flag-only (`public`/`export`) partition
+# changes, so adding an `export` does not needlessly invalidate the store.
+module ReformGlobalsExport
+    global g::Int = 0
+    getg() = g
+    setg!(v) = setglobal!(ReformGlobalsExport, :g, v)
+    export g
+end
+let setg! = ReformGlobalsExport.setg!
+    b = convert(Core.Binding, GlobalRef(ReformGlobalsExport, :g))
+    exported_min = Base.lookup_binding_partition(Base.get_world_counter(), b).min_world
+    writeci = code_typed(setg!, (Int,))[1][1]
+    # store still reformulates
+    @test any(x -> Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition), writeci.code)
+    # and its validity spans back across the `export` flag-only partition boundary
+    @test writeci.min_world < exported_min
+end
+# A user-inserted `BindingPartition` should get handled the same as `GlobalRef` in IR.
+module ReformGlobalsSplice
+    global gdecl::Int # declared but unassigned: reading it throws UndefVarError
+end
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsSplice, :gdecl)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    readpart = @eval function ()
+        v = $(part)
+        return v
+    end
+    effects = Base.infer_effects(readpart, ())
+    @test !Compiler.is_consistent(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Base.infer_return_type(readpart, ()) == Int
+    @test Base.infer_exception_type(readpart, ()) == UndefVarError
+    @test_throws UndefVarError readpart()
+end
+# The partition queries may be handed a non-leaf (import) partition, whose restriction is
+# another binding rather than a value or a declared type: the `Core.*_partition` builtins are
+# ordinary functions, and a `Core.BindingPartition` can be spliced into hand-built code. Such
+# an access is resolved by an import walk at the calling world, and inference has no edge to
+# cover that walk, so it answers conservatively -- exactly as for an unresolved global read.
+module ReformGlobalsImport
+    module Inner
+        export gi
+        global gi::Int = 5
+        const ci = identity
+    end
+    using .Inner
+    import .Inner: ci
+end
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsImport, :gi)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    readpart = @eval function ()
+        v = $(part)
+        return v
+    end
+    @test !Compiler.is_leaf_partition(part)
+    @test Compiler.partition_singleton(part) === nothing
+    @test Compiler.partition_rt(part) === Any
+    @test Compiler.partition_rt_widened(part) === Any
+    @test Base.infer_return_type(readpart, ()) === Any
+    @test Base.infer_exception_type(readpart, ()) === UndefVarError
+    @test !Compiler.is_nothrow(Base.infer_effects(readpart, ()))
+    @test readpart() === 5
+end
+# Inference does not walk an imported partition in value position -- it has no edge to
+# cover the world-dependent walk -- so the callee stays dynamic even though the import
+# currently resolves to a constant. It must still run.
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsImport, :ci)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    callpart = @eval function (x)
+        f = $(part)
+        return f(x)
+    end
+    @test !Compiler.is_leaf_partition(part)
+    @test Compiler.partition_singleton(part) === nothing
+    @test callpart(42) === 42
+end
+
+# A read through an import still freezes its leaf, but as the call form carrying the source
+# `GlobalRef`: a bare partition would name the module the binding was imported from in the
+# `UndefVarError`, not the one the source asked for.
+module ReformGlobalsImportName
+    module Inner
+        export gu
+        global gu::Int          # declared, never assigned
+    end
+    using .Inner
+    getgu() = gu
+end
+let code = code_typed(ReformGlobalsImportName.getgu, ())[1][1].code
+    @test !any(x -> isa(x, Core.BindingPartition), code)
+    @test any(code) do x
+        Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition) &&
+            x.args[2] === QuoteNode(GlobalRef(ReformGlobalsImportName, :gu)) &&
+            isa(x.args[3], QuoteNode) && isa(x.args[3].value, Core.BindingPartition)
+    end
+    # the frozen partition is still the leaf, so no import walk happens at run time
+    part = only(x.args[3].value for x in code
+                if Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition))
+    @test Compiler.is_leaf_partition(part)
+    @test Base.partition_owner(part) === convert(Core.Binding, GlobalRef(ReformGlobalsImportName.Inner, :gu))
+    # and the error names the module the source asked for, as the unoptimized read does
+    err = try; ReformGlobalsImportName.getgu(); catch e; e; end
+    @test err isa UndefVarError && err.var === :gu && err.scope === ReformGlobalsImportName
+    err2 = try; getglobal(ReformGlobalsImportName, :gu); catch e; e; end
+    @test err2 isa UndefVarError && err2.var === :gu && err2.scope === ReformGlobalsImportName
+end
+# The same read in operand position: an operand slot cannot hold a call, so the call form is
+# inserted as its own statement and its value used, keeping the partition frozen.
+module ReformGlobalsImportOperand
+    module Inner
+        export go
+        global go::Int          # declared, never assigned
+    end
+    using .Inner
+    useo() = identity(go)
+end
+let code = code_typed(ReformGlobalsImportOperand.useo, ())[1][1].code
+    @test any(code) do x
+        Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition) &&
+            x.args[2] === QuoteNode(GlobalRef(ReformGlobalsImportOperand, :go)) &&
+            isa(x.args[3], QuoteNode) && isa(x.args[3].value, Core.BindingPartition)
+    end
+    err = try; ReformGlobalsImportOperand.useo(); catch e; e; end
+    @test err isa UndefVarError && err.var === :go && err.scope === ReformGlobalsImportOperand
+end
+# An imported *constant* is always defined, so it has no error to misname and keeps the
+# bare-partition form.
+module ReformGlobalsImportConst
+    module Inner
+        export cu
+        const cu = 42
+    end
+    using .Inner
+    getcu() = cu
+end
+@test ReformGlobalsImportConst.getcu() === 42
+
+# An atomic order inference cannot prove constant does not keep an access on the runtime
+# path: it rides along on the reformulated node as an ordinary operand, which the
+# `Core.*_partition` builtin validates exactly as the access it replaces would. Only the
+# inlined access is given up (codegen falls back to a generic builtin call), not the frozen
+# partition or its invalidation edge.
+module ReformGlobalsOrder
+    global g::Int = 0
+    getg(o) = getglobal(ReformGlobalsOrder, :g, o)
+    setg!(v, o) = setglobal!(ReformGlobalsOrder, :g, v, o)
+    swapg!(v, o) = swapglobal!(ReformGlobalsOrder, :g, v, o)
+    replaceg!(c, v, o, fo) = replaceglobal!(ReformGlobalsOrder, :g, c, v, o, fo)
+    onceg!(v, o) = setglobalonce!(ReformGlobalsOrder, :g, v, o)
+    definedg(o) = isdefinedglobal(ReformGlobalsOrder, :g, true, o)
+    # a literal `nothing` operand: an invalid order, not an absent one
+    @eval setgnothing!(v) = setglobal!(ReformGlobalsOrder, :g, v, $(nothing))
+end
+# the sole reformulated `Core.<name>` call in the optimized code of `f(tt...)`
+function only_partition_call(@nospecialize(f), @nospecialize(tt::Tuple), name::Symbol)
+    code = code_typed(f, tt)[1][1].code
+    return only(x for x in code
+                if Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, name))
+end
+is_frozen_partition(@nospecialize x) = isa(x, QuoteNode) && isa(x.value, Core.BindingPartition)
+let M = ReformGlobalsOrder
+    # every access still freezes its partition, with the unproven order as an operand
+    read = only_partition_call(M.getg, (Symbol,), :getglobal_partition)
+    @test is_frozen_partition(read.args[3]) && read.args[4] === Core.Argument(2)
+    store = only_partition_call(M.setg!, (Int,Symbol), :setglobal_partition)
+    @test is_frozen_partition(store.args[2]) && store.args[4] === Core.Argument(3)
+    swap = only_partition_call(M.swapg!, (Int,Symbol), :swapglobal_partition)
+    @test is_frozen_partition(swap.args[2]) && swap.args[4] === Core.Argument(3)
+    repl = only_partition_call(M.replaceg!, (Int,Int,Symbol,Symbol), :replaceglobal_partition)
+    @test is_frozen_partition(repl.args[2]) && repl.args[5] === Core.Argument(4) &&
+        repl.args[6] === Core.Argument(5)
+    once = only_partition_call(M.onceg!, (Int,Symbol), :setglobalonce_partition)
+    @test is_frozen_partition(once.args[2]) && once.args[4] === Core.Argument(3)
+    defined = only_partition_call(M.definedg, (Symbol,), :isdefinedglobal_partition)
+    @test is_frozen_partition(defined.args[2]) && defined.args[3] === Core.Argument(2)
+    # a `nothing` order is carried as an order, not mistaken for an absent argument
+    setnothing = only_partition_call(M.setgnothing!, (Int,), :setglobal_partition)
+    @test is_frozen_partition(setnothing.args[2]) && setnothing.args[4] === QuoteNode(nothing)
+    # and every forwarded order is validated as the access it replaced would validate it
+    @test M.getg(:acquire) === 0
+    @test_throws ConcurrencyViolationError M.getg(:not_atomic)
+    @test_throws TypeError M.getg(1)
+    @test M.setg!(3, :release) === 3
+    @test M.getg(:monotonic) === 3
+    @test_throws ConcurrencyViolationError M.setg!(4, :acquire)
+    @test_throws TypeError M.setg!(4, 1)
+    @test_throws TypeError M.setgnothing!(4)
+    @test M.swapg!(4, :acquire_release) === 3
+    @test M.replaceg!(4, 5, :acquire_release, :monotonic) === (old = 4, success = true)
+    @test !M.onceg!(6, :release)
+    @test M.definedg(:acquire)
+    @test_throws ConcurrencyViolationError M.definedg(:not_atomic)
+    @test M.getg(:acquire) === 5
+end
+
+# `modifyglobal!` reformulates like the other stores, in both the plain call form and the
+# `:invoke_modify` form the inliner gives it: the module and name become the frozen partition,
+# and an `:invoke_modify` keeps the reduce function's code instance so codegen still calls the
+# specialized op. A store that does not resolve names no partition, so it is left alone.
+module ReformGlobalsModify
+    module Inner
+        export mi
+        global mi::Int = 0
+    end
+    using .Inner                # a store to `mi` is an error, so it never resolves
+    global g::Int = 0
+    addg!(v) = modifyglobal!(ReformGlobalsModify, :g, +, v)
+    addmi!(v) = modifyglobal!(ReformGlobalsModify, :mi, +, v)
+    addgop!(op, v) = modifyglobal!(ReformGlobalsModify, :g, op, v)
+end
+# the callee is the `GlobalRef` the reformulation writes, or the builtin itself for a call
+# whose callee inlining already resolved
+is_modify_partition_callee(@nospecialize callee) =
+    callee === GlobalRef(Core, :modifyglobal_partition) || callee === Core.modifyglobal_partition
+is_modify_partition_call(@nospecialize x) =
+    iscall(is_modify_partition_callee, x) ||
+    (Meta.isexpr(x, :invoke_modify) && is_modify_partition_callee(x.args[2]))
+# the sole reformulated modify statement in the optimized code of `f(tt...)`
+only_modify_call(@nospecialize(f), @nospecialize(tt::Tuple)) =
+    only(x for x in code_typed(f, tt)[1][1].code if is_modify_partition_call(x))
+let M = ReformGlobalsModify
+    # a constant reduce function is statically dispatched, so the node keeps its code
+    # instance, and the resolved store names the frozen partition
+    inv = only_modify_call(M.addg!, (Int,))
+    @test Meta.isexpr(inv, :invoke_modify) && isa(inv.args[1], Core.CodeInstance)
+    @test is_frozen_partition(inv.args[3]) && inv.args[5] === Core.Argument(2)
+    # a store that does not resolve is left on the runtime path, code instance and all
+    unrescode = code_typed(M.addmi!, (Int,))[1][1].code
+    unres = only(x for x in unrescode if Meta.isexpr(x, :invoke_modify))
+    @test !any(is_modify_partition_call, unrescode)
+    @test isa(unres.args[1], Core.CodeInstance)
+    # a reduce function that is not statically dispatched has no code instance, so the store
+    # reformulates as a plain call
+    dyn = only_modify_call(M.addgop!, (Any,Int))
+    @test Meta.isexpr(dyn, :call) && is_frozen_partition(dyn.args[2])
+    # and each form runs, enforcing the declared type as `modifyglobal!` does
+    @test Base.infer_return_type(M.addg!, (Int,)) === Pair{Int,Int}
+    @test M.addg!(2) === (0 => 2)
+    # the resolved store records exactly one edge to the binding it froze
+    b = convert(Core.Binding, GlobalRef(M, :g))
+    @test count(==(b), collect(Base.method_instance(M.addg!, (Int,)).cache.edges)) == 1
+    @test M.addgop!(+, 5) === (2 => 7)
+    @test M.addgop!(-, 7) === (7 => 0)
+    @test_throws TypeError M.addgop!((_, _) -> 1.5, 1)
+    @test_throws "cannot assign a value to imported variable" M.addmi!(1)
+    @test M.Inner.mi === 0
+    # the builtin is modeled by `abstract_modifyop!`, like `modifyglobal!`: it takes the
+    # declared type from the frozen partition, and its reduce function is inlined the same
+    # way (so a hand-written call becomes an `:invoke_modify` too)
+    callpart = @eval v -> Core.modifyglobal_partition($(QuoteNode(inv.args[3].value)), +, v)
+    @test Base.infer_return_type(callpart, (Int,)) === Pair{Int,Int}
+    @test Meta.isexpr(only_modify_call(callpart, (Int,)), :invoke_modify)
+    @test callpart(3) === (0 => 3)
+    @test M.g === 3
+end
+
+# There should be exactly one edge to `g`, even though it is referenced twice.
+module ReformGlobalsEdges
+    global g::Int = 0
+    getgg() = g + g
+end
+let f = ReformGlobalsEdges.getgg
+    @test f() === 0
+    ci = Base.method_instance(f, ()).cache
+    b = convert(Core.Binding, GlobalRef(ReformGlobalsEdges, :g))
+    @test count(==(b), collect(ci.edges)) == 1
+end
 
 function tt57873(a::Vector{String}, pref)
     ret = String[]

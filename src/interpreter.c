@@ -248,6 +248,15 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 #endif
         return val;
     }
+    if (jl_is_binding_partition(e)) {
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)e;
+        jl_value_t *v = jl_get_binding_partition_leaf_value(bpart);
+        if (v == NULL) {
+            jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+            jl_undefined_var_error(bnd->globalref->name, (jl_value_t*)bnd->globalref->mod);
+        }
+        return v;
+    }
     assert(!jl_is_phinode(e) && !jl_is_phicnode(e) && !jl_is_upsilonnode(e) && "malformed IR");
     if (!jl_is_expr(e))
         return e;
@@ -737,6 +746,15 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     ssize_t n = jl_slot_number(lhs);
                     assert(n <= jl_source_nslots(s->src) && n > 0);
                     s->locals[n - 1] = rhs;
+                }
+                else if (jl_is_binding_partition(lhs)) {
+                    jl_binding_partition_t *bpart = (jl_binding_partition_t*)lhs;
+                    jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+                    jl_module_t *mod = bnd->globalref->mod;
+                    jl_sym_t *name = bnd->globalref->name;
+                    s->locals[jl_source_nslots(s->src) + s->ip] = rhs;
+                    jl_check_binding_currently_writable(bnd, bpart, mod, name);
+                    jl_checked_assignment(bnd, bpart, mod, name, rhs);
                 }
                 else {
                     // This is an unmodeled error. Our frontend only generates

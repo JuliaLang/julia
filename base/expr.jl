@@ -1833,6 +1833,7 @@ function isa_ast_node(@nospecialize x)
            x isa Argument ||
            x isa QuoteNode ||
            x isa GlobalRef ||
+           x isa Core.BindingPartition ||
            x isa Symbol ||
            x isa PiNode ||
            x isa PhiNode ||

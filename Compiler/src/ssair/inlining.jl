@@ -1322,6 +1322,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
                 f !== Core.finalizer &&
                 f !== modifyfield! &&
                 f !== Core.modifyglobal! &&
+                f !== Core.modifyglobal_partition &&
                 f !== Core.memoryrefmodify! &&
                 f !== atomic_pointermodify &&
                 f !== Core._task)
