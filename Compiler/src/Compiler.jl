@@ -62,7 +62,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     is_some_const_binding, is_some_guard, is_some_global, is_some_imported, is_some_explicit_imported, is_some_binding_imported, is_valid_intrinsic_elptr,
     isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
-    kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
+    PARTITION_KIND_CONST, kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
     partition_owner, partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
