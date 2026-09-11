@@ -24,6 +24,7 @@
 #  include <sys/syscall.h>
 #  include <sys/utsname.h>
 #  include <sys/resource.h>
+#  include <pthread.h>
 #endif
 #ifndef _OS_WINDOWS_
 #  include <sys/mman.h>
@@ -333,6 +334,8 @@ ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr) JL_NO
 }
 
 // Do not call this directly.
+static void reopen_self_mem() JL_NOTSAFEPOINT;
+
 // Use `get_self_mem_fd` which has a guard to call this only once.
 static int _init_self_mem() JL_NOTSAFEPOINT
 {
@@ -371,13 +374,38 @@ static int _init_self_mem() JL_NOTSAFEPOINT
         return -1;
     }
     munmap(test_pg, jl_page_size);
+    // The handler runs in a child of a fork; the child inherits the flag as
+    // set, so it registers nothing again.
+    static int registered = 0;
+    if (!registered) {
+        registered = 1;
+        pthread_atfork(NULL, NULL, reopen_self_mem);
+    }
     return fd;
+}
+
+static int &self_mem_fd() JL_NOTSAFEPOINT
+{
+    static int fd = _init_self_mem();
+    return fd;
+}
+
+// `/proc/self/mem` names the address space of the process that opened it, so
+// the descriptor that a fork gives to the child still names the parent. Code
+// that the child writes through it lands in the parent, and the child runs
+// whatever was there. The child opens its own.
+static void reopen_self_mem() JL_NOTSAFEPOINT
+{
+    int &fd = self_mem_fd();
+    if (fd >= 0) {
+        close(fd);
+        fd = _init_self_mem();
+    }
 }
 
 static int get_self_mem_fd() JL_NOTSAFEPOINT
 {
-    static int fd = _init_self_mem();
-    return fd;
+    return self_mem_fd();
 }
 
 static void write_self_mem(void *dest, void *ptr, size_t size) JL_NOTSAFEPOINT
