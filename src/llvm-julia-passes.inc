@@ -6,6 +6,7 @@ MODULE_PASS("JuliaMultiVersioning", MultiVersioningPass())
 MODULE_PASS("RemoveJuliaAddrspaces", RemoveJuliaAddrspacesPass())
 MODULE_PASS("RemoveAddrspaces", RemoveAddrspacesPass())
 MODULE_PASS("LowerPTLSPass", LowerPTLSPass())
+MODULE_PASS("JuliaDialectsVerifier", JuliaDialectsVerifierPass())
 #endif
 
 //Function passes

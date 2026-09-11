@@ -43,6 +43,13 @@ struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     static bool isRequired() { return true; }
 };
 
+// Verifies that all uses of Julia dialect ops match their specification in
+// JuliaDialect.td (see the llvm-dialects verifier).
+struct JuliaDialectsVerifierPass : PassInfoMixin<JuliaDialectsVerifierPass> {
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
+    static bool isRequired() { return true; }
+};
+
 struct CancellationLoweringPass : PassInfoMixin<CancellationLoweringPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }

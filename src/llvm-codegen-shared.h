@@ -16,15 +16,10 @@
 
 static constexpr std::nullopt_t None = std::nullopt;
 
-enum AddressSpace {
-    Generic = 0,
-    Tracked = 10,
-    Derived = 11,
-    CalleeRooted = 12,
-    Loaded = 13,
-    FirstSpecial = Tracked,
-    LastSpecial = Loaded,
-};
+// The AddressSpace enum is defined together with the Julia LLVM dialect.
+#include "JuliaDialect.h"
+#include <llvm-dialects/Dialect/Builder.h>
+using namespace julia;
 
 namespace JuliaType {
     static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
@@ -249,20 +244,13 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_s
     using namespace llvm;
     llvm::Value *signal_page = get_current_signal_page_from_ptls(builder, ptls, tbaa);
     emit_signal_fence(builder);
-    Module *M = builder.GetInsertBlock()->getModule();
-    LLVMContext &C = builder.getContext();
-    // inline jlsafepoint_func->realize(M)
     if (final) {
         builder.CreateLoad(T_size, signal_page, true);
     }
     else {
-        Function *F = M->getFunction("julia.safepoint");
-        if (!F) {
-            FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {PointerType::getUnqual(T_size->getContext())}, false);
-            F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
-            F->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-        }
-        builder.CreateCall(F, {signal_page});
+        llvm_dialects::Builder db(builder.GetInsertBlock(), builder.GetInsertPoint());
+        db.SetCurrentDebugLocation(builder.getCurrentDebugLocation());
+        db.create<julia::Safepoint>(signal_page);
     }
     emit_signal_fence(builder);
 }

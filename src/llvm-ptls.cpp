@@ -297,7 +297,8 @@ bool LowerPTLS::run(bool *CFGModified)
 {
     bool need_init = true;
     auto runOnGetter = [&](bool or_new) {
-        Function *pgcstack_getter = M->getFunction(or_new ? "julia.get_pgcstack_or_new" : "julia.get_pgcstack");
+        Function *pgcstack_getter = or_new ? julia::getOpDeclaration<julia::GetPGCStackOrNew>(*M)
+                                           : julia::getOpDeclaration<julia::GetPGCStack>(*M);
         if (!pgcstack_getter)
             return false;
 

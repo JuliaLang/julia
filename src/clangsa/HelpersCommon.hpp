@@ -27,7 +27,8 @@ inline bool isInNonSafepointNamespace(const DeclContext *DC) {
   for (; DC; DC = DC->getParent())
     if (const auto *NS = dyn_cast<NamespaceDecl>(DC))
       if (NS->getName() == "llvm" || NS->getName() == "std" ||
-          NS->getName() == "tp")
+          NS->getName() == "tp" || NS->getName() == "llvm_dialects" ||
+          NS->getName() == "julia")
         return true;
   return false;
 }
