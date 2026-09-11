@@ -2,7 +2,7 @@
 
 // Static build of libjulia-internal (JL_LIBRARY_STATIC): the public data
 // symbols and installation lookup that libjulia (cli/) provides in the shared
-// build. Empty otherwise.
+// build.
 #ifdef JL_LIBRARY_STATIC
 
 #include "libsupport.h"
@@ -23,8 +23,6 @@ JL_HIDDEN const void **const jl_static_exported_data_ptrs[] = {
 #include "julia.h"
 #include "julia_internal.h"
 #include <libgen.h> // dirname
-
-// jl_small_typeof is defined by the linked system image (aotcompile.cpp).
 
 #ifdef _OS_DARWIN_
 // the public `jl_*` names, as indirect symbols (see julia.h)

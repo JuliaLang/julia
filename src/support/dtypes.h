@@ -77,7 +77,7 @@ typedef intptr_t ssize_t;
 # endif
 #define JL_HIDDEN
 # ifdef JL_LIBRARY_STATIC
-// static build: everything is linked into one image, no import indirection
+// static build: everything is linked into one image
 #  define JL_DLLIMPORT JL_VISIBILITY_DEFAULT
 # else
 #  define JL_DLLIMPORT __declspec(dllimport) JL_VISIBILITY_DEFAULT

@@ -3549,8 +3549,8 @@ extern const void **const jl_static_exported_data_ptrs[];
 
 void export_jl_sysimg_globals(void)
 {
-    // No libjulia: fill the public copies defined in static_exports.c through a
-    // table, since their names are macros for the internal copies here.
+    // fill the public copies defined in static_exports.c through the table,
+    // since their names are macros for the internal copies here
     size_t i = 0;
 #define XX(name, type) *jl_static_exported_data_ptrs[i++] = (const void*)jl_##name;
     JL_EXPORTED_DATA_POINTERS(XX)
