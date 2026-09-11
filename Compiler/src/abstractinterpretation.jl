@@ -3697,8 +3697,8 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     end
 
     world = get_inference_world(interp)
-    (_valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(interp, gr, binding_world_hints(world, sv))
-    # XXX: it is unsound to ignore valid_worlds here
+    (valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(interp, gr, binding_world_hints(world, sv))
+    update_valid_age!(sv, world, valid_worlds)
     if rte.exct == Union{}
         rt = Const(true)
     elseif rte.rt === Union{} && rte.exct === UndefVarError
