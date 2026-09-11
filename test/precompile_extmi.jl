@@ -96,8 +96,10 @@ precompile_test_harness() do load_path
         @test !Base.has_image_globalref(m)
         # Invalidation scanning must tolerate non-standard sources rather than
         # asserting on the `_uncompressed_ir(::Method)::CodeInfo` typeassert.
-        @test (Base.Compiler.ReinferUtils.scan_new_method!(m, false); true)
-        @test (Base.Compiler.ReinferUtils.scan_new_method!(m, true); true)
+        let w = Base.get_world_counter()
+            @test (Base.Compiler.ReinferUtils.scan_new_method!(m, w, false); true)
+            @test (Base.Compiler.ReinferUtils.scan_new_method!(m, w, true); true)
+        end
     end
 end
 

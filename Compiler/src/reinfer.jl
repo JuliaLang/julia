@@ -3,7 +3,8 @@
 using ..Compiler.Base
 using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
     _methods_by_ftype, get_methodtable, get_ci_mi, should_instrument,
-    morespecific, RefValue, get_require_world, Vector, IdDict
+    morespecific, RefValue, get_require_world, Vector, IdDict,
+    binding_access_range, is_leaf_partition, WorldWithRange, WorldRange, min_world, max_world
 using .Core: CodeInstance, MethodInstance
 
 const CI_FLAGS_NATIVE_CACHE_VALID = 0b1000
@@ -66,15 +67,34 @@ function VerifyMethodResultState()
 end
 
 
+function binding_access_range_at(b::Core.Binding, world::UInt)
+    wr, _ = binding_access_range(b, WorldWithRange(world, WorldRange(get_require_world(), world)), false)
+    return wr
+end
+
+# Whether an access to `b` can resolve differently now than it did in any process that serialized code against it.
+function binding_changed_since_require_world(b::Core.Binding, world::UInt)
+    require_world = get_require_world()
+    # Fast path: this binding has not been repartitioned since the require world at all, and it
+    # resolves without crossing an import, so no walk is needed to know its range reaches back.
+    # A non-leaf partition has to take the slow path: the walk continues into the binding it
+    # imports, which may itself have been repartitioned after the require world even though `b`
+    # was not.
+    if isdefined(b, :partitions)
+        p = b.partitions
+        p.min_world <= require_world && is_leaf_partition(p) && return false
+    end
+    return min_world(binding_access_range_at(b, world)) > require_world
+end
+
 # Restore backedges to external targets
 # `internal_methods` = [caller1, ...], the list of worklist-owned code instances internally
 function insert_backedges(internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-    scan_new_methods!(internal_methods, backedges_only)
-    workspace = VerifyMethodWorkspace()
-    scan_new_code!(internal_methods, workspace)
+    scan_new_methods!(internal_methods, get_world_counter(), backedges_only)
+    scan_new_code!(internal_methods, VerifyMethodWorkspace())
     nothing
 end
 
@@ -204,7 +224,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
             # Check for invalidation of GlobalRef edges
             if (initial.def.did_scan_source & 0x1) == 0x0
                 backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-                scan_new_method!(initial.def, backedges_only)
+                scan_new_method!(initial.def, validation_world, backedges_only)
             end
             if (initial.def.did_scan_source & 0x4) != 0x0
                 maxworld = 0
@@ -241,16 +261,16 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         edge = sig
                     elseif edge isa Core.Binding
                         j += 1
-                        min_valid2 = minworld
-                        max_valid2 = maxworld
-                        if !binding_was_invalidated(edge)
-                            if isdefined(edge, :partitions)
-                                min_valid2 = edge.partitions.min_world
-                                max_valid2 = edge.partitions.max_world
-                            end
-                        else
+                        # Check that what of and how this code accessed the leaf partition is still valid.
+                        wr = binding_access_range_at(edge, validation_world)
+                        if min_world(wr) > get_require_world()
+                            # Nothing can be backdated before the require world, so an access
+                            # whose range does not reach it cannot be shown valid at all.
                             min_valid2 = 1
                             max_valid2 = 0
+                        else
+                            min_valid2 = min_world(wr)
+                            max_valid2 = max_world(wr)
                         end
                     else
                         callee = initial.callees[j+1]
