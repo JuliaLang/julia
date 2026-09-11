@@ -432,7 +432,7 @@ private:
 inline Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
 {
     assert(T == T_size || isa<PointerType>(T));
-    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
+    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1, true), V->getName() + ".tag_addr");
 }
 
 inline Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V, llvm::MDNode *tbaa_tag)
