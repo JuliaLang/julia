@@ -2975,6 +2975,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === invoke
             return abstract_invoke(interp, arginfo, si, vtypes, sv)
         elseif f === modifyfield! || f === Core.modifyglobal! ||
+               f === Core.modifyglobal_partition ||
                f === Core.memoryrefmodify! || f === atomic_pointermodify
             return abstract_modifyop!(interp, f, argtypes, si, vtypes, sv)
         elseif f === Core.finalizer
@@ -4006,6 +4007,7 @@ end
     !is_some_binding_imported(binding_kind(partition))
 
 @inline function partition_rt(partition::Core.BindingPartition)
+    is_leaf_partition(partition) || return Any
     kind = binding_kind(partition)
     (is_some_guard(kind) || kind == PARTITION_KIND_DECLARED) && return Any
     if is_defined_const_binding(kind)
@@ -4016,6 +4018,7 @@ end
 end
 
 @inline function partition_rt_widened(partition::Core.BindingPartition)
+    is_leaf_partition(partition) || return Any
     kind = binding_kind(partition)
     (is_some_guard(kind) || kind == PARTITION_KIND_DECLARED) && return Any
     if is_defined_const_binding(kind)

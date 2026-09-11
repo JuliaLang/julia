@@ -1504,6 +1504,57 @@ JL_CALLABLE(jl_f_isdefined)
 
 // module bindings
 
+// Shared implementation of `getglobal` and `getglobal_partition`,
+// after the memory order is validated and the target partition resolved.
+static jl_value_t *getglobal_value(jl_binding_partition_t *bpart, enum jl_memory_order order) JL_CANSAFEPOINT
+{
+    if (order >= jl_memory_order_seq_cst)
+        jl_fence();
+    jl_value_t *v = jl_get_binding_partition_value(bpart); // relaxed load
+    if (order >= jl_memory_order_acquire)
+        jl_fence();
+    return v;
+}
+
+// Shared implementation of the store builtins and their `*_partition` counterparts,
+// after the memory order is validated and the target binding resolved.
+static jl_value_t *setglobal_value(jl_globalref_t *gr, jl_binding_t *b, jl_binding_partition_t *bpart, jl_value_t *rhs, enum jl_memory_order order) JL_CANSAFEPOINT
+{
+    if (order >= jl_memory_order_seq_cst)
+        jl_fence();
+    jl_check_binding_currently_writable(b, bpart, gr->mod, gr->name);
+    jl_checked_assignment(b, bpart, gr->mod, gr->name, rhs); // release store
+    if (order >= jl_memory_order_seq_cst)
+        jl_fence();
+    return rhs;
+}
+
+// The remaining stores are seq_cst already, so they need no fence of their own.
+static jl_value_t *swapglobal_value(jl_globalref_t *gr, jl_binding_t *b, jl_binding_partition_t *bpart, jl_value_t *rhs) JL_CANSAFEPOINT
+{
+    jl_check_binding_currently_writable(b, bpart, gr->mod, gr->name);
+    return jl_checked_swap(b, bpart, gr->mod, gr->name, rhs);
+}
+
+static jl_value_t *replaceglobal_value(jl_globalref_t *gr, jl_binding_t *b, jl_binding_partition_t *bpart, jl_value_t *expected, jl_value_t *rhs) JL_CANSAFEPOINT
+{
+    jl_check_binding_currently_writable(b, bpart, gr->mod, gr->name);
+    return jl_checked_replace(b, bpart, gr->mod, gr->name, expected, rhs);
+}
+
+static jl_value_t *modifyglobal_value(jl_globalref_t *gr, jl_binding_t *b, jl_binding_partition_t *bpart, jl_value_t *op, jl_value_t *rhs) JL_CANSAFEPOINT
+{
+    jl_check_binding_currently_writable(b, bpart, gr->mod, gr->name);
+    return jl_checked_modify(b, bpart, gr->mod, gr->name, op, rhs);
+}
+
+static jl_value_t *setglobalonce_value(jl_globalref_t *gr, jl_binding_t *b, jl_binding_partition_t *bpart, jl_value_t *rhs) JL_CANSAFEPOINT
+{
+    jl_check_binding_currently_writable(b, bpart, gr->mod, gr->name);
+    jl_value_t *old = jl_checked_assignonce(b, bpart, gr->mod, gr->name, rhs);
+    return old == NULL ? jl_true : jl_false;
+}
+
 JL_CALLABLE(jl_f_getglobal)
 {
     enum jl_memory_order order = jl_memory_order_monotonic;
@@ -1518,11 +1569,12 @@ JL_CALLABLE(jl_f_getglobal)
     JL_TYPECHK(getglobal, symbol, (jl_value_t*)sym);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
-    else if (order >= jl_memory_order_seq_cst)
-        jl_fence();
-    jl_value_t *v = jl_eval_global_var(mod, sym, jl_current_task->world_age); // relaxed load
-    if (order >= jl_memory_order_acquire)
-        jl_fence();
+    // Resolve the leaf partition (issuing `getglobal`'s deprecation warning), then read it.
+    jl_binding_t *b = jl_get_module_binding(mod, sym, 1);
+    jl_binding_partition_t *bpart = jl_get_binding_leaf_partition_depwarn(b, jl_current_task->world_age);
+    jl_value_t *v = getglobal_value(bpart, order);
+    if (v == NULL)
+        jl_undefined_var_error(sym, (jl_value_t*)mod);
     return v;
 }
 
@@ -1567,13 +1619,8 @@ JL_CALLABLE(jl_f_setglobal)
     JL_TYPECHK(setglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
-    else if (order >= jl_memory_order_seq_cst)
-        jl_fence();
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
-    jl_checked_assignment(b, mod, var, args[2]); // release store
-    if (order >= jl_memory_order_seq_cst)
-        jl_fence();
-    return args[2];
+    jl_binding_t *b = jl_get_module_binding(mod, var, 1);
+    return setglobal_value(b->globalref, b, NULL, args[2], order);
 }
 
 JL_CALLABLE(jl_f_get_binding_type)
@@ -1603,9 +1650,8 @@ JL_CALLABLE(jl_f_swapglobal)
     JL_TYPECHK(swapglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("swapglobal!: module binding cannot be written non-atomically");
-    // is seq_cst already, no fence needed
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
-    return jl_checked_swap(b, mod, var, args[2]);
+    jl_binding_t *b = jl_get_module_binding(mod, var, 1);
+    return swapglobal_value(b->globalref, b, NULL, args[2]);
 }
 
 JL_CALLABLE(jl_f_modifyglobal)
@@ -1622,9 +1668,9 @@ JL_CALLABLE(jl_f_modifyglobal)
     JL_TYPECHK(modifyglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("modifyglobal!: module binding cannot be written non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_binding_t *b = jl_get_module_binding(mod, var, 1);
     // is seq_cst already, no fence needed
-    return jl_checked_modify(b, mod, var, args[2], args[3]);
+    return modifyglobal_value(b->globalref, b, NULL, args[2], args[3]);
 }
 
 JL_CALLABLE(jl_f_replaceglobal)
@@ -1651,9 +1697,8 @@ JL_CALLABLE(jl_f_replaceglobal)
         jl_atomic_error("replaceglobal!: module binding cannot be written non-atomically");
     if (failure_order == jl_memory_order_notatomic)
         jl_atomic_error("replaceglobal!: module binding cannot be accessed non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
-    // is seq_cst already, no fence needed
-    return jl_checked_replace(b, mod, var, args[2], args[3]);
+    jl_binding_t *b = jl_get_module_binding(mod, var, 1);
+    return replaceglobal_value(b->globalref, b, NULL, args[2], args[3]);
 }
 
 JL_CALLABLE(jl_f_setglobalonce)
@@ -1680,10 +1725,160 @@ JL_CALLABLE(jl_f_setglobalonce)
         jl_atomic_error("setglobalonce!: module binding cannot be written non-atomically");
     if (failure_order == jl_memory_order_notatomic)
         jl_atomic_error("setglobalonce!: module binding cannot be accessed non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_binding_t *b = jl_get_module_binding(mod, var, 1);
+    return setglobalonce_value(b->globalref, b, NULL, args[2]);
+}
+
+// Type-check a `*global_partition` read builtin's partition argument. Resolving it to the leaf
+// partition of the access it names is deliberately separate: that walk may issue a deprecation
+// warning, so it must not run until every argument of the call has been validated.
+static jl_binding_partition_t *partition_read_arg(const char *fname, jl_value_t *arg JL_PROPAGATES_ROOT)
+{
+    if (!jl_is_binding_partition(arg))
+        jl_type_error(fname, (jl_value_t*)jl_binding_partition_type, arg);
+    return (jl_binding_partition_t*)arg;
+}
+
+JL_CALLABLE(jl_f_getglobal_partition)
+{
+    JL_NARGS(getglobal_partition, 3, 3);
+    JL_TYPECHK(getglobal_partition, globalref, args[0]);
+    jl_binding_partition_t *argpart = partition_read_arg("getglobal_partition", args[1]);
+    JL_TYPECHK(getglobal, symbol, args[2]);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
+    if (order == jl_memory_order_notatomic)
+        jl_atomic_error("getglobal: module binding cannot be read non-atomically");
+    jl_binding_partition_t *bpart = jl_get_leaf_binding_partition(argpart, jl_current_task->world_age, 1);
+    jl_value_t *v = getglobal_value(bpart, order);
+    if (v == NULL) {
+        jl_globalref_t *gr = (jl_globalref_t*)args[0];
+        jl_undefined_var_error(gr->name, (jl_value_t*)gr->mod);
+    }
+    return v;
+}
+
+// Type-check a `*global_partition` store builtin's partition argument and resolve it to the
+// binding the store targets. No import walk, unlike the read path: assigning to a name
+// imported from another module is an error rather than a store to the import's target.
+static jl_binding_t *partition_write_arg(const char *fname, jl_value_t *arg JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+{
+    if (!jl_is_binding_partition(arg))
+        jl_type_error(fname, (jl_value_t*)jl_binding_partition_type, arg);
+    return jl_binding_partition_owner((jl_binding_partition_t*)arg);
+}
+
+JL_CALLABLE(jl_f_setglobal_partition)
+{
+    enum jl_memory_order order = jl_memory_order_release;
+    JL_NARGS(setglobal_partition, 2, 3);
+    jl_binding_t *b = partition_write_arg("setglobal_partition", args[0]);
+    if (nargs == 3) {
+        JL_TYPECHK(setglobal!, symbol, args[2]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 0, 1);
+    }
+    if (order == jl_memory_order_notatomic)
+        jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
+    return setglobal_value(b->globalref, b, (jl_binding_partition_t*)args[0], args[1], order);
+}
+
+JL_CALLABLE(jl_f_swapglobal_partition)
+{
+    enum jl_memory_order order = jl_memory_order_release;
+    JL_NARGS(swapglobal_partition, 2, 3);
+    jl_binding_t *b = partition_write_arg("swapglobal_partition", args[0]);
+    if (nargs == 3) {
+        JL_TYPECHK(swapglobal!, symbol, args[2]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 1);
+    }
+    if (order == jl_memory_order_notatomic)
+        jl_atomic_error("swapglobal!: module binding cannot be written non-atomically");
+    return swapglobal_value(b->globalref, b, (jl_binding_partition_t*)args[0], args[1]);
+}
+
+JL_CALLABLE(jl_f_modifyglobal_partition)
+{
+    enum jl_memory_order order = jl_memory_order_release;
+    JL_NARGS(modifyglobal_partition, 3, 4);
+    jl_binding_t *b = partition_write_arg("modifyglobal_partition", args[0]);
+    if (nargs == 4) {
+        JL_TYPECHK(modifyglobal!, symbol, args[3]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+    }
+    if (order == jl_memory_order_notatomic)
+        jl_atomic_error("modifyglobal!: module binding cannot be written non-atomically");
     // is seq_cst already, no fence needed
-    jl_value_t *old = jl_checked_assignonce(b, mod, var, args[2]);
-    return old == NULL ? jl_true : jl_false;
+    return modifyglobal_value(b->globalref, b, (jl_binding_partition_t*)args[0], args[1], args[2]);
+}
+
+JL_CALLABLE(jl_f_replaceglobal_partition)
+{
+    enum jl_memory_order success_order = jl_memory_order_release;
+    JL_NARGS(replaceglobal_partition, 3, 5);
+    jl_binding_t *b = partition_write_arg("replaceglobal_partition", args[0]);
+    if (nargs >= 4) {
+        JL_TYPECHK(replaceglobal!, symbol, args[3]);
+        success_order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+    }
+    enum jl_memory_order failure_order = success_order;
+    if (nargs == 5) {
+        JL_TYPECHK(replaceglobal!, symbol, args[4]);
+        failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[4], 1, 0);
+    }
+    if (failure_order > success_order)
+        jl_atomic_error("invalid atomic ordering");
+    // TODO: filter more invalid ordering combinations?
+    if (success_order == jl_memory_order_notatomic)
+        jl_atomic_error("replaceglobal!: module binding cannot be written non-atomically");
+    if (failure_order == jl_memory_order_notatomic)
+        jl_atomic_error("replaceglobal!: module binding cannot be accessed non-atomically");
+    return replaceglobal_value(b->globalref, b, (jl_binding_partition_t*)args[0], args[1], args[2]);
+}
+
+JL_CALLABLE(jl_f_setglobalonce_partition)
+{
+    enum jl_memory_order success_order = jl_memory_order_release;
+    JL_NARGS(setglobalonce_partition, 2, 4);
+    jl_binding_t *b = partition_write_arg("setglobalonce_partition", args[0]);
+    if (nargs >= 3) {
+        JL_TYPECHK(setglobalonce!, symbol, args[2]);
+        success_order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 1);
+    }
+    enum jl_memory_order failure_order = success_order;
+    if (nargs == 4) {
+        JL_TYPECHK(setglobalonce!, symbol, args[3]);
+        failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 0);
+    }
+    if (failure_order > success_order)
+        jl_atomic_error("invalid atomic ordering");
+    // TODO: filter more invalid ordering combinations?
+    if (success_order == jl_memory_order_notatomic)
+        jl_atomic_error("setglobalonce!: module binding cannot be written non-atomically");
+    if (failure_order == jl_memory_order_notatomic)
+        jl_atomic_error("setglobalonce!: module binding cannot be accessed non-atomically");
+    return setglobalonce_value(b->globalref, b, (jl_binding_partition_t*)args[0], args[1]);
+}
+
+JL_CALLABLE(jl_f_isdefinedglobal_partition)
+{
+    JL_NARGS(isdefinedglobal_partition, 2, 2);
+    jl_binding_partition_t *argpart = partition_read_arg("isdefinedglobal_partition", args[0]);
+    JL_TYPECHK(isdefined, symbol, args[1]);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 1, 0);
+    if (order < jl_memory_order_unordered)
+        jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
+    jl_binding_partition_t *bpart = jl_get_leaf_binding_partition(argpart, jl_current_task->world_age, 0);
+    int bound = jl_get_binding_partition_boundp(bpart); // seq_cst
+    return bound ? jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f_depwarn_partition)
+{
+    JL_NARGS(depwarn_partition, 1, 1);
+    JL_TYPECHK(depwarn_partition, binding_partition, args[0]);
+    jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
+    if (jl_options.depwarn && (bpart->kind & PARTITION_FLAG_DEPWARN))
+        jl_binding_deprecation_warning(jl_binding_partition_owner(bpart));
+    return jl_nothing;
 }
 
 // declare_global(module::Module, name::Symbol, [strong::Bool=false, [ty::Type]])

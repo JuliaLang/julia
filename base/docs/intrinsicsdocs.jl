@@ -216,3 +216,85 @@ Core.Intrinsics.atomic_pointermodify
 See [`unsafe_replace!`](@ref Base.unsafe_replace!).
 """
 Core.Intrinsics.atomic_pointerreplace
+
+"""
+    Core.getglobal_partition(access::GlobalRef, partition::Core.BindingPartition, order::Symbol)
+
+Read the value from the global binding named by a binding partition, using the memory `order`.
+`access` is the `GlobalRef` the read was written as, and names the binding if the read throws
+an `UndefVarError` -- as [`getglobal`](@ref) reports the module and name it was given, rather
+than the binding an import resolved to.
+
+If `partition` is an import (its restriction is another binding rather than a value or a
+declared type), it is followed to the leaf partition of the access at the current world, as
+[`getglobal`](@ref) would for the importing module and name. The partitions the compiler
+freezes into code are already leaves, so no walk happens there.
+
+A deprecation the walk reaches warns as it would for [`getglobal`](@ref), but `partition`
+itself does not: having named a partition, the caller owns its deprecation, and can ask for it
+with [`Core.depwarn_partition`](@ref).
+"""
+Core.getglobal_partition
+
+"""
+    Core.setglobal_partition(partition::Core.BindingPartition, value, [order::Symbol])
+
+Store to the global binding named by a resolved binding partition, as
+[`setglobal!`](@ref) does for a module and name.
+
+Unlike the read builtins, the store targets the partition's own binding and follows no
+import: assigning to a name imported from another module is an error, exactly as it is for
+[`setglobal!`](@ref).
+"""
+Core.setglobal_partition
+
+"""
+    Core.swapglobal_partition(partition::Core.BindingPartition, value, [order::Symbol])
+
+Store to the global binding named by a resolved binding partition and return its old value,
+as [`swapglobal!`](@ref) does for a module and name.
+"""
+Core.swapglobal_partition
+
+"""
+    Core.modifyglobal_partition(partition::Core.BindingPartition, op, value, [order::Symbol])
+
+Read the global binding named by a resolved binding partition, store `op(old, value)` back to
+it, and return the pair `old => new`, as [`modifyglobal!`](@ref) does for a module and name.
+"""
+Core.modifyglobal_partition
+
+"""
+    Core.replaceglobal_partition(partition::Core.BindingPartition, expected, desired, [order::Symbol, [failorder::Symbol]])
+
+Store to the global binding named by a resolved binding partition if it currently holds
+`expected`, as [`replaceglobal!`](@ref) does for a module and name.
+"""
+Core.replaceglobal_partition
+
+"""
+    Core.setglobalonce_partition(partition::Core.BindingPartition, value, [order::Symbol, [failorder::Symbol]])
+
+Store to the global binding named by a resolved binding partition if it is not already
+defined, as [`setglobalonce!`](@ref) does for a module and name.
+"""
+Core.setglobalonce_partition
+
+"""
+    Core.isdefinedglobal_partition(partition::Core.BindingPartition, order::Symbol)
+
+Return whether the global binding named by a binding partition has a defined value, using the
+memory `order`. An import partition is followed to its leaf, as for
+[`Core.getglobal_partition`](@ref), making this the `allow_import=true` query.
+"""
+Core.isdefinedglobal_partition
+
+"""
+    Core.depwarn_partition(partition::Core.BindingPartition)
+
+Emit the deprecation warning `partition` calls for, if the command line argument `--depwarn` is
+enabled (and throwing under `--depwarn=error`). The compiler emits this alongside a global read
+or store it has resolved, in place of the warning [`getglobal`](@ref) or [`setglobal!`](@ref)
+would have issued while resolving the name.
+"""
+Core.depwarn_partition
