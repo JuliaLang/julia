@@ -30,7 +30,7 @@ mutable struct Options
     hint_tab_completes::Bool
     auto_insert_closing_bracket::Bool # automatically insert closing brackets, quotes, etc.
     style_input::Bool # enable syntax highlighting for input
-    semantic_prompts::Bool # emit OSC 133 markers for terminal integration
+    semantic_prompts::Bool # emit semantic prompt markers for terminal integration
     # default IOContext settings at the REPL
     iocontext::Dict{Symbol,Any}
 end

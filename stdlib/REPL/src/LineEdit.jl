@@ -330,8 +330,8 @@ options(s::PromptState) =
         REPL.GlobalOptions::Options
     end
 
-semantic_prompts_enabled(p::Prompt) =
-    isdefined(p, :repl) && p.repl !== nothing && REPL.semantic_prompts_enabled(p.repl)
+semantic_prompt_markers(p::Prompt) =
+    isdefined(p, :repl) && p.repl !== nothing ? REPL.semantic_prompt_markers(p.repl) : nothing
 
 function setmark(s::MIState, guess_region_active::Bool=true)
     refresh = set_action!(s, :setmark)
@@ -1906,10 +1906,16 @@ default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 function write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool)
-    semantic_prompts = semantic_prompts_enabled(s.p)
-    semantic_prompts && write(terminal, REPL.OSC_133_PROMPT_START)
+    markers = semantic_prompt_markers(s.p)
+    # Prompt rendering runs on every line refresh. Re-emitting these markers keeps
+    # the redrawn prompt bracketed and matches established shell integrations.
+    if markers !== nothing
+        write(terminal, markers.prompt_start)
+    end
     width = write_prompt(terminal, s.p, color)
-    semantic_prompts && write(terminal, REPL.OSC_133_PROMPT_END)
+    if markers !== nothing
+        write(terminal, markers.prompt_end)
+    end
     return width
 end
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
@@ -3146,8 +3152,9 @@ function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=ini
                 refresh_line(s)
                 print(terminal(s), "^C\n\n")
                 current_mode = mode(s)
-                if current_mode isa Prompt && semantic_prompts_enabled(current_mode)
-                    write(terminal(s), REPL.OSC_133_COMMAND_FINISH)
+                markers = current_mode isa Prompt ? semantic_prompt_markers(current_mode) : nothing
+                if markers !== nothing
+                    write(terminal(s), markers.command_finish)
                 end
                 transition(s, :reset)
                 refresh_line(s)

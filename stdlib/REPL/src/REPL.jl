@@ -70,14 +70,54 @@ include("options.jl")
 include("StylingPasses.jl")
 using .StylingPasses
 
-const OSC_133_PROMPT_START = "\e]133;A\a"
-const OSC_133_PROMPT_END = "\e]133;B\a"
-const OSC_133_COMMAND_START = "\e]133;C\a"
-const OSC_133_COMMAND_FINISH = "\e]133;D\a"
-const OSC_133_COMMAND_FINISH_OK = "\e]133;D;0\a"
-const OSC_133_COMMAND_FINISH_ERROR = "\e]133;D;1\a"
+struct SemanticPromptMarkers
+    prompt_start::String
+    prompt_end::String
+    command_start::String
+    command_finish::String
+    command_finish_ok::String
+    command_finish_error::String
+    command_line::Union{Nothing,String}
+end
 
-semantic_prompts_enabled(::AbstractREPL) = false
+# FinalTerm semantic prompt protocol:
+# https://iterm2.com/documentation-escape-codes.html
+const OSC_133_MARKERS = SemanticPromptMarkers(
+    "\e]133;A\a", "\e]133;B\a", "\e]133;C\a", "\e]133;D\a",
+    "\e]133;D;0\a", "\e]133;D;1\a", nothing,
+)
+# VS Code shell integration protocol:
+# https://code.visualstudio.com/docs/terminal/shell-integration#_supported-escape-sequences
+const OSC_633_MARKERS = SemanticPromptMarkers(
+    "\e]633;A\a", "\e]633;B\a", "\e]633;C\a", "\e]633;D\a",
+    "\e]633;D;0\a", "\e]633;D;1\a", "\e]633;E;",
+)
+
+semantic_prompt_markers(::AbstractREPL) = nothing
+default_semantic_prompt_markers() =
+    get(ENV, "TERM_PROGRAM", "") == "vscode" ? OSC_633_MARKERS : OSC_133_MARKERS
+
+function serialize_vscode_osc_message(message::AbstractString)
+    io = IOBuffer()
+    for byte in codeunits(message)
+        if byte == UInt8('\\')
+            write(io, "\\\\")
+        elseif byte == UInt8(';') || byte <= 0x20
+            write(io, "\\x", string(byte, base=16, pad=2))
+        else
+            write(io, byte)
+        end
+    end
+    return String(take!(io))
+end
+
+function write_semantic_command_line(
+    repl::AbstractREPL, markers::SemanticPromptMarkers, line::AbstractString,
+)
+    markers.command_line === nothing && return
+    write(terminal(repl), markers.command_line, serialize_vscode_osc_message(line), '\a')
+    return
+end
 
 function histsearch end # To work around circular dependency
 
@@ -842,6 +882,7 @@ mutable struct LineEditREPL <: AbstractREPL
     options::Options
     mistate::Union{MIState,Nothing}
     last_shown_line_infos::Vector{Tuple{String,Int}}
+    semantic_prompt_markers::SemanticPromptMarkers
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
@@ -854,7 +895,7 @@ mutable struct LineEditREPL <: AbstractREPL
             opts.beep_colors = [""]
         end
         r = new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[], default_semantic_prompt_markers())
         r.prompt_ready_event = nothing
         r
     end
@@ -864,7 +905,8 @@ specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 hascolor(r::LineEditREPL) = r.hascolor
-semantic_prompts_enabled(r::LineEditREPL) = r.options.semantic_prompts
+semantic_prompt_markers(r::LineEditREPL) =
+    r.options.semantic_prompts ? r.semantic_prompt_markers : nothing
 
 LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     LineEditREPL(t, hascolor,
@@ -1253,15 +1295,20 @@ end
 
 function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon::Bool = true)
     return function do_respond(s::MIState, buf, ok::Bool)
-        semantic_prompts = semantic_prompts_enabled(repl)
+        current_mode = LineEdit.mode(s)
+        markers = current_mode isa Prompt ? LineEdit.semantic_prompt_markers(current_mode) : nothing
         if !ok
-            semantic_prompts && write(terminal(repl), OSC_133_COMMAND_FINISH)
+            if markers !== nothing
+                write(terminal(repl), markers.command_finish)
+            end
             return transition(s, :abort)
         end
         line = String(take!(buf)::Vector{UInt8})
         if !isempty(line) || pass_empty
             reset(repl)
-            semantic_prompts && write(terminal(repl), OSC_133_COMMAND_START)
+            if markers !== nothing
+                write(terminal(repl), markers.command_start)
+            end
             local response
             try
                 ast = Base.invokelatest(f, line)
@@ -1273,13 +1320,17 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
             try
                 print_response(repl, response, !hide_output, hascolor(repl))
             finally
-                if semantic_prompts
-                    marker = response[2] ? OSC_133_COMMAND_FINISH_ERROR : OSC_133_COMMAND_FINISH_OK
+                if markers !== nothing
+                    # Julia cannot access VS Code's nonce, so its command-line report is
+                    # untrusted and gets replaced when execution starts. Report it again
+                    # immediately before marking the command as finished.
+                    write_semantic_command_line(repl, markers, line)
+                    marker = response[2] ? markers.command_finish_error : markers.command_finish_ok
                     write(terminal(repl), marker)
                 end
             end
-        elseif semantic_prompts
-            write(terminal(repl), OSC_133_COMMAND_FINISH)
+        elseif markers !== nothing
+            write(terminal(repl), markers.command_finish)
         end
         prepare_next(repl)
         reset_state(s)

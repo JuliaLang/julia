@@ -100,34 +100,72 @@ end
 
 # Semantic prompt markers delimit prompt input and output and report evaluation status.
 @test REPL.Options().semantic_prompts
-fake_repl(semantic_prompts=true) do stdin_write, stdout_read, repl
-    repl.specialdisplay = REPL.REPLDisplay(repl)
-    repl.history_file = false
-    repltask = @async REPL.run_repl(repl)
+@test REPL.serialize_vscode_osc_message("a b;c\\d\nα") ==
+    "a\\x20b\\x3bc\\\\d\\x0aα"
+withenv("TERM_PROGRAM" => "") do
+    fake_repl(semantic_prompts=true) do stdin_write, stdout_read, repl
+        markers = REPL.OSC_133_MARKERS
+        repl.specialdisplay = REPL.REPLDisplay(repl)
+        repl.history_file = false
+        repltask = @async REPL.run_repl(repl)
 
-    prompt = readuntil(stdout_read, REPL.OSC_133_PROMPT_END, keep=true)
-    @test occursin(REPL.OSC_133_PROMPT_START, prompt)
+        prompt = readuntil(stdout_read, markers.prompt_end, keep=true)
+        @test occursin(markers.prompt_start, prompt)
 
-    global semantic_prompt_output = repl.t
-    command = "print($(curmod_prefix)semantic_prompt_output, \"semantic output\"); nothing\n"
-    write(stdin_write, command)
-    response = readuntil(stdout_read, REPL.OSC_133_COMMAND_FINISH_OK, keep=true)
-    @test occursin(REPL.OSC_133_COMMAND_START * "semantic output", response)
-    readuntil(stdout_read, REPL.OSC_133_PROMPT_END)
+        write(stdin_write, "\"semantic output\"\n")
+        response = readuntil(stdout_read, markers.command_finish_ok, keep=true)
+        @test occursin(markers.command_start * "\"semantic output\"", response)
+        readuntil(stdout_read, markers.prompt_end)
 
-    write(stdin_write, "error(\"semantic failure\")\n")
-    response = readuntil(stdout_read, REPL.OSC_133_COMMAND_FINISH_ERROR, keep=true)
-    @test occursin(REPL.OSC_133_COMMAND_START, response)
-    @test occursin("semantic failure", response)
-    readuntil(stdout_read, REPL.OSC_133_PROMPT_END)
+        write(stdin_write, "error(\"semantic failure\")\n")
+        response = readuntil(stdout_read, markers.command_finish_error, keep=true)
+        @test occursin(markers.command_start, response)
+        @test occursin("semantic failure", response)
+        readuntil(stdout_read, markers.prompt_end)
 
-    write(stdin_write, '\n')
-    readuntil(stdout_read, REPL.OSC_133_COMMAND_FINISH)
-    readuntil(stdout_read, REPL.OSC_133_PROMPT_END)
+        write(stdin_write, '\n')
+        readuntil(stdout_read, markers.command_finish)
+        readuntil(stdout_read, markers.prompt_end)
 
-    write(stdin_write, '\x04')
-    readuntil(stdout_read, REPL.OSC_133_COMMAND_FINISH)
-    Base.wait(repltask)
+        # A prompt without an associated REPL emits neither prompt nor command markers.
+        julia_prompt = repl.interface.modes[1]::LineEdit.Prompt
+        julia_prompt.repl = nothing
+        write(stdin_write, "1 + 1\n")
+        response = readuntil(stdout_read, "julia> ", keep=true)
+        @test !occursin("\e]133;", response)
+        julia_prompt.repl = repl
+
+        write(stdin_write, '\x04')
+        readuntil(stdout_read, markers.command_finish)
+        Base.wait(repltask)
+    end
+end
+
+withenv("TERM_PROGRAM" => "vscode") do
+    fake_repl(semantic_prompts=true) do stdin_write, stdout_read, repl
+        markers = REPL.OSC_633_MARKERS
+        # The terminal protocol is selected once when the REPL is constructed.
+        withenv("TERM_PROGRAM" => "") do
+            repl.specialdisplay = REPL.REPLDisplay(repl)
+            repl.history_file = false
+            repltask = @async REPL.run_repl(repl)
+
+            prompt = readuntil(stdout_read, markers.prompt_end, keep=true)
+            @test occursin(markers.prompt_start, prompt)
+
+            write(stdin_write, "2 + 2\n")
+            response = readuntil(stdout_read, markers.command_finish_ok, keep=true)
+            command_line = markers.command_line * "2\\x20+\\x202\a"
+            @test occursin(markers.command_start * "4", response)
+            @test occursin(command_line * markers.command_finish_ok, response)
+            @test !occursin("\e]133;", response)
+            readuntil(stdout_read, markers.prompt_end)
+
+            write(stdin_write, '\x04')
+            readuntil(stdout_read, markers.command_finish)
+            Base.wait(repltask)
+        end
+    end
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that

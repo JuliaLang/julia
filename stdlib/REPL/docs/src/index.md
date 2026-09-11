@@ -225,6 +225,8 @@ Use of this file can be disabled at startup by passing the `--history-file=no` f
 The interactive REPL emits OSC 133 semantic prompt markers. Terminals that support these markers
 can identify prompts, input, and output, enabling features such as navigating between prompts and
 selecting a command's output. Unsupported terminals ignore the markers.
+In the VS Code integrated terminal, the REPL also reports the exact command line so that commands
+can be copied together with their output.
 
 Semantic prompt markers can be disabled in `startup.jl`:
 
