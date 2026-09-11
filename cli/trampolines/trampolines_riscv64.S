@@ -16,8 +16,5 @@
 .cfi_endproc SEP \
 
 JL_RUNTIME_EXPORTED_FUNCS(XX)
-#ifndef JL_LIBRARY_STATIC
-// static build: the codegen fallbacks are defined under the public names
 JL_CODEGEN_EXPORTED_FUNCS(XX)
-#endif
 #undef XX

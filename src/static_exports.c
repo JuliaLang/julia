@@ -1,7 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// Static build of libjulia-internal (JL_LIBRARY_STATIC): what libjulia (cli/)
-// provides in the shared build. Empty otherwise.
+// Static build of libjulia-internal (JL_LIBRARY_STATIC): the public data
+// symbols and installation lookup that libjulia (cli/) provides in the shared
+// build. Empty otherwise.
 #ifdef JL_LIBRARY_STATIC
 
 #include "libsupport.h"
@@ -21,36 +22,17 @@ JL_HIDDEN const void **const jl_static_exported_data_ptrs[] = {
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "jl_exported_funcs.inc"
 #include <libgen.h> // dirname
 
 // jl_small_typeof is defined by the linked system image (aotcompile.cpp).
 
-// The public `jl_*` names are the loader's trampolines (cli/trampolines/*.S),
-// which jump through `jl_<name>_addr`. The loader fills the slots with dlsym;
-// here they are bound at link time to the `ijl_*` implementations. Only the
-// trampolines may define these names (see jl_egal in builtins.c): PE-COFF weak
-// symbols do not work across objects with GNU ld. The `__asm__` label avoids
-// needing a prototype for every `ijl_*` function.
-#if defined(_OS_DARWIN_) || (defined(_OS_WINDOWS_) && defined(_CPU_X86_))
-#define JL_TRAMPOLINE_TARGET(name) "_i" name // C ABI symbols have an underscore prefix
-#else
-#define JL_TRAMPOLINE_TARGET(name) "i" name
+#ifdef _OS_DARWIN_
+// the public `jl_*` names, as indirect symbols (see julia.h)
+#include "jl_exported_funcs.inc"
+JL_RUNTIME_EXPORTED_FUNCS(JL_STATIC_ALIAS)
 #endif
-typedef void (anonfunc)(void);
-#define XX(name) \
-    extern anonfunc jl_static_impl_##name __asm__(JL_TRAMPOLINE_TARGET(#name)); \
-    JL_HIDDEN anonfunc *const name##_addr = &jl_static_impl_##name;
-JL_RUNTIME_EXPORTED_FUNCS(XX)
-#ifdef _OS_WINDOWS_
-JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
-#endif
-#undef XX
 
-// In the loader, the directory of libjulia; here, the directory of the object
-// containing the static runtime (the executable or a shared library).
-// jl_resolve_sysimg_location takes julia_bindir to be `<libdir>/../bin`
-// (except on Windows), i.e. an installation layout.
+// jl_resolve_sysimg_location derives julia_bindir from this as `<libdir>/../bin`
 const char *jl_get_libdir(void) // declared in julia.h
 {
     static char *libdir = NULL;

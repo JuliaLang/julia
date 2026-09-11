@@ -260,7 +260,7 @@ JL_DLLEXPORT int jl_types_struct_equiv(jl_value_t *a, jl_value_t *b)
 }
 
 #ifndef JL_LIBRARY_STATIC
-// in the static build the public jl_egal is the trampoline to ijl_egal
+// in the static build the public jl_egal is an alias of ijl_egal (julia.h)
 JL_DLLEXPORT int (jl_egal)(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     // warning: a,b may NOT have been gc-rooted by the caller
