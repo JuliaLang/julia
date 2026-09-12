@@ -440,18 +440,36 @@ end
     @test div(typemax(Int)-2, typemax(Int), RoundNearest) === 1
 
     # Exhaustively test (U)Int8 to catch any overflow-style issues
-    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
+    for r in (RoundToZero, RoundDown, RoundUp, RoundFromZero,
+              RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
         for T in (UInt8, Int8)
             for x in typemin(T):typemax(T)
                 for y in typemin(T):typemax(T)
                     if y == 0 || (T <: Signed && x == typemin(T) && y == -1)
                         @test_throws DivideError div(x, y, r)
                     else
-                        @test div(x, y, r) == T(div(widen(T)(x), widen(T)(y), r))
+                        d = div(x, y, r)
+                        @test d == T(div(widen(T)(x), widen(T)(y), r))
+                        # rem must agree with divrem and, modulo 2^nbits, with
+                        # the exact remainder x - y*d.  rem(x, y, RoundUp) used
+                        # to be computed as mod(x, -y), whose -y overflows at
+                        # y == typemin(T) and wraps for all unsigned y, breaking
+                        # both properties (RoundFromZero delegates to RoundUp).
+                        @test divrem(x, y, r) === (d, rem(x, y, r))
+                        @test rem(x, y, r) === (widen(x) - widen(y) * widen(d)) % T
                     end
                 end
             end
         end
+    end
+
+    # the rem(x, y, RoundUp) negation-overflow corner at every signed width
+    for T in Base.BitSigned_types
+        tm = typemin(T)
+        @test rem(T(7), tm, RoundUp) === T(7)
+        @test divrem(T(7), tm, RoundUp) === (T(0), T(7))
+        @test rem(T(-7), tm, RoundFromZero) === typemax(T) - T(6)
+        @test div(T(-7), tm, RoundFromZero) * tm + rem(T(-7), tm, RoundFromZero) === T(-7)
     end
 end
 
