@@ -619,7 +619,7 @@ The default syntax highlighting theme is quite conservative but can be customize
     foreground = "#E6DB74"
     weight = "bold"
 
-    [julia_cmdstring]
+    [julia_cmd]
     inherit = "julia_string"
 
     [julia_char]
