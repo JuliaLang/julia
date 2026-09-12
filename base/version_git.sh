@@ -99,7 +99,11 @@ case $(uname) in
     date_string="$(date --date="@$git_time" -u '+%Y-%m-%d %H:%M %Z')"
     ;;
 esac
-if [ $(git describe --tags --exact-match 2> /dev/null) ]; then
+if [ "${JULIA_RELEASE_BUILD:-0}" = "1" ]; then
+    # Declared release build (see JULIA_RELEASE_BUILD in Make.inc): report the
+    # state that building from the (possibly not yet created) release tag would.
+    tagged_commit="true"
+elif [ $(git describe --tags --exact-match 2> /dev/null) ]; then
     tagged_commit="true"
 else
     tagged_commit="false"
