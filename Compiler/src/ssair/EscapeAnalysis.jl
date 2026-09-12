@@ -8,6 +8,8 @@ export
     has_arg_escape,
     has_return_escape,
     has_thrown_escape,
+    has_address_observed,
+    has_finalizer_escape,
     has_all_escape
 
 using Base: Base
@@ -53,6 +55,24 @@ A lattice for escape information, which holds the following properties:
   * `pc ∈ x.ThrownEscape`: `x` may be thrown at the SSA statement at `pc`
   * `-1 ∈ x.ThrownEscape`: `x` may be thrown at arbitrary points of this call frame (the top)
   This information will be used by `escape_exception!` to propagate potential escapes via exception.
+- `x.AddressObserved::Bool`: indicates `x` may become reachable from GC-managed memory,
+  i.e. it may be stored into a field of another (possibly heap-allocated) object,
+  or registered in the finalizer list.
+  Note that this is distinct from escape in the traditional sense: storing `x` into an
+  object that itself never escapes the frame still sets this property, since the GC would
+  trace `x` through that object if it remains heap-allocated.
+  This property does not track GC rooting performed by codegen (GC frame slots at
+  safepoints, `GC.@preserve`, `:foreigncall` roots), which is an artifact of the calling
+  convention rather than of the analyzed program: consumers that require `x` to never be
+  observed by the GC need to control the calling convention of the calls `x` is passed to
+  in addition to querying this property.
+- `x.FinalizerEscape::Bool`: indicates `x` may be registered with a finalizer via
+  `Core.finalizer` (either as the finalized object or as the callback).
+  This is a refinement of `AddressObserved` (`FinalizerEscape` implies `AddressObserved`, since
+  the finalizer list is scanned by the GC), separated out because it has strictly stronger
+  lifetime semantics than the other `AddressObserved` sources: the finalizer list outlives the
+  current frame, and the callback is eventually invoked on the object at an arbitrary
+  later point.
 - `x.AliasInfo::Union{Bool,IndexableFields,Unindexable}`: maintains all possible values
   that can be aliased to fields or array elements of `x`:
   * `x.AliasInfo === false` indicates the fields/elements of `x` aren't analyzed yet
@@ -86,6 +106,8 @@ struct EscapeInfo
     Analyzed::Bool
     ReturnEscape::Bool
     ThrownEscape::BitSet
+    AddressObserved::Bool
+    FinalizerEscape::Bool
     AliasInfo #::Union{IndexableFields,Unindexable,Bool}
     Liveness::BitSet
 
@@ -93,6 +115,8 @@ struct EscapeInfo
         Analyzed::Bool,
         ReturnEscape::Bool,
         ThrownEscape::BitSet,
+        AddressObserved::Bool,
+        FinalizerEscape::Bool,
         AliasInfo#=::Union{IndexableFields,Unindexable,Bool}=#,
         Liveness::BitSet)
         @nospecialize AliasInfo
@@ -100,6 +124,8 @@ struct EscapeInfo
             Analyzed,
             ReturnEscape,
             ThrownEscape,
+            AddressObserved,
+            FinalizerEscape,
             AliasInfo,
             Liveness)
     end
@@ -111,12 +137,16 @@ struct EscapeInfo
         Analyzed::Bool = x.Analyzed,
         ReturnEscape::Bool = x.ReturnEscape,
         ThrownEscape::BitSet = x.ThrownEscape,
+        AddressObserved::Bool = x.AddressObserved,
+        FinalizerEscape::Bool = x.FinalizerEscape,
         Liveness::BitSet = x.Liveness)
         @nospecialize AliasInfo
         return new(
             Analyzed,
             ReturnEscape,
             ThrownEscape,
+            AddressObserved,
+            FinalizerEscape,
             AliasInfo,
             Liveness)
     end
@@ -136,13 +166,16 @@ const TOP_LIVENESS = BitSet(-1:0)
 const ARG_LIVENESS = BitSet(0)
 
 # the constructors
-NotAnalyzed() = EscapeInfo(false, false, BOT_THROWN_ESCAPE, false, BOT_LIVENESS) # not formally part of the lattice
-NoEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, false, BOT_LIVENESS)
-ArgEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, true, ARG_LIVENESS)
-ReturnEscape(pc::Int) = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, BitSet(pc))
-AllReturnEscape() = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, TOP_LIVENESS)
-ThrownEscape(pc::Int) = EscapeInfo(true, false, BitSet(pc), false, BOT_LIVENESS)
-AllEscape() = EscapeInfo(true, true, TOP_THROWN_ESCAPE, true, TOP_LIVENESS)
+NotAnalyzed() = EscapeInfo(false, false, BOT_THROWN_ESCAPE, false, false, false, BOT_LIVENESS) # not formally part of the lattice
+NoEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, false, false, false, BOT_LIVENESS)
+ArgEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, false, false, true, ARG_LIVENESS)
+ReturnEscape(pc::Int) = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, false, false, BitSet(pc))
+AllReturnEscape() = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, false, false, TOP_LIVENESS)
+ThrownEscape(pc::Int) = EscapeInfo(true, false, BitSet(pc), false, false, false, BOT_LIVENESS)
+AddressObserved() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, true, false, false, BOT_LIVENESS)
+# N.B. `FinalizerEscape` implies `AddressObserved` since the finalizer list is scanned by the GC
+FinalizerEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, true, true, false, BOT_LIVENESS)
+AllEscape() = EscapeInfo(true, true, TOP_THROWN_ESCAPE, true, true, true, TOP_LIVENESS)
 
 const ⊥, ⊤ = NotAnalyzed(), AllEscape()
 
@@ -153,6 +186,8 @@ has_return_escape(x::EscapeInfo) = x.ReturnEscape
 has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && (-1 ∈ x.Liveness || pc ∈ x.Liveness)
 has_thrown_escape(x::EscapeInfo) = !isempty(x.ThrownEscape)
 has_thrown_escape(x::EscapeInfo, pc::Int) = -1 ∈ x.ThrownEscape || pc ∈ x.ThrownEscape
+has_address_observed(x::EscapeInfo) = x.AddressObserved
+has_finalizer_escape(x::EscapeInfo) = x.FinalizerEscape
 has_all_escape(x::EscapeInfo) = ⊤ ⊑ₑ x
 
 # utility lattice constructors
@@ -160,6 +195,7 @@ ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete!(copy(x.Liveness
 ignore_thrownescapes(x::EscapeInfo) = EscapeInfo(x; ThrownEscape=BOT_THROWN_ESCAPE)
 ignore_aliasinfo(x::EscapeInfo) = EscapeInfo(x, false)
 ignore_liveness(x::EscapeInfo) = EscapeInfo(x; Liveness=BOT_LIVENESS)
+with_address_observed(x::EscapeInfo) = x.AddressObserved ? x : EscapeInfo(x; AddressObserved=true)
 
 # AliasInfo
 struct IndexableFields
@@ -190,6 +226,8 @@ x::EscapeInfo == y::EscapeInfo = begin
     x === y && return true
     x.Analyzed === y.Analyzed || return false
     x.ReturnEscape === y.ReturnEscape || return false
+    x.AddressObserved === y.AddressObserved || return false
+    x.FinalizerEscape === y.FinalizerEscape || return false
     xt, yt = x.ThrownEscape, y.ThrownEscape
     if xt === TOP_THROWN_ESCAPE
         yt === TOP_THROWN_ESCAPE || return false
@@ -238,6 +276,8 @@ x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
     end
     x.Analyzed ≤ y.Analyzed || return false
     x.ReturnEscape ≤ y.ReturnEscape || return false
+    x.AddressObserved ≤ y.AddressObserved || return false
+    x.FinalizerEscape ≤ y.FinalizerEscape || return false
     xt, yt = x.ThrownEscape, y.ThrownEscape
     if xt === TOP_THROWN_ESCAPE
         yt !== TOP_THROWN_ESCAPE && return false
@@ -336,6 +376,8 @@ x::EscapeInfo ⊔ₑ y::EscapeInfo = begin
         x.Analyzed | y.Analyzed,
         x.ReturnEscape | y.ReturnEscape,
         ThrownEscape,
+        x.AddressObserved | y.AddressObserved,
+        x.FinalizerEscape | y.FinalizerEscape,
         AliasInfo,
         Liveness,
         )
@@ -484,17 +526,23 @@ function ArgEscapeInfo(x::EscapeInfo)
     escape_bits = 0x00
     has_return_escape(x) && (escape_bits |= ARG_RETURN_ESCAPE)
     has_thrown_escape(x) && (escape_bits |= ARG_THROWN_ESCAPE)
+    has_address_observed(x) && (escape_bits |= ARG_ADDRESS_OBSERVED)
+    has_finalizer_escape(x) && (escape_bits |= ARG_FINALIZER_ESCAPE)
     return ArgEscapeInfo(escape_bits)
 end
 
-const ARG_ALL_ESCAPE    = 0x01 << 0
-const ARG_RETURN_ESCAPE = 0x01 << 1
-const ARG_THROWN_ESCAPE = 0x01 << 2
+const ARG_ALL_ESCAPE        = 0x01 << 0
+const ARG_RETURN_ESCAPE     = 0x01 << 1
+const ARG_THROWN_ESCAPE     = 0x01 << 2
+const ARG_ADDRESS_OBSERVED  = 0x01 << 3
+const ARG_FINALIZER_ESCAPE  = 0x01 << 4
 
 has_no_escape(x::ArgEscapeInfo)     = !has_all_escape(x) && !has_return_escape(x) && !has_thrown_escape(x)
 has_all_escape(x::ArgEscapeInfo)    = x.escape_bits & ARG_ALL_ESCAPE    ≠ 0
 has_return_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_RETURN_ESCAPE ≠ 0
 has_thrown_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_THROWN_ESCAPE ≠ 0
+has_address_observed(x::ArgEscapeInfo) = x.escape_bits & ARG_ADDRESS_OBSERVED ≠ 0
+has_finalizer_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_FINALIZER_ESCAPE ≠ 0
 
 struct ArgAliasing
     aidx::Int
@@ -968,6 +1016,13 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
                 if arg isa GlobalRef
                     continue # :effect_free guarantees that nothing escapes to the global scope
                 end
+                # N.B. `cache === true` is inferred from the callee's `:effect_free` and
+                # `:inaccessiblememonly` effects, but those still permit the callee to store
+                # this argument into a freshly allocated (caller-invisible) object, which the
+                # GC would trace, so we must still taint the argument with `AddressObserved`
+                # (no `FinalizerEscape` taint is needed however, since `Core.finalizer` is
+                # incompatible with the `:effect_free`+`:inaccessiblememonly` effects)
+                add_escape_change!(astate, arg, AddressObserved())
                 if !is_identity_free_argtype(argextype(arg, astate.ir))
                     add_alias_change!(astate, ret, arg)
                 end
@@ -1014,6 +1069,8 @@ in the context of the caller frame, where `pc` is the SSA statement number of th
 function from_interprocedural(argescape::ArgEscapeInfo, pc::Int)
     has_all_escape(argescape) && return ⊤
     ThrownEscape = has_thrown_escape(argescape) ? BitSet(pc) : BOT_THROWN_ESCAPE
+    AddressObserved = has_address_observed(argescape)
+    FinalizerEscape = has_finalizer_escape(argescape)
     # TODO implement interprocedural memory effect-analysis:
     # currently, this essentially disables the entire field analysis–it might be okay from
     # the SROA point of view, since we can't remove the allocation as far as it's passed to
@@ -1021,7 +1078,7 @@ function from_interprocedural(argescape::ArgEscapeInfo, pc::Int)
     # or some other IPO optimizations
     AliasInfo = true
     Liveness = BitSet(pc)
-    return EscapeInfo(#=Analyzed=#true, #=ReturnEscape=#false, ThrownEscape, AliasInfo, Liveness)
+    return EscapeInfo(#=Analyzed=#true, #=ReturnEscape=#false, ThrownEscape, AddressObserved, FinalizerEscape, AliasInfo, Liveness)
 end
 
 # the only possible 'escape' here is really just that it can return a
@@ -1179,13 +1236,15 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
         # fields are known precisely: propagate escape information imposed on recorded possibilities to the exact field values
         infos = AliasInfo.infos
         nf = length(infos)
-        objinfo′ = ignore_aliasinfo(objinfo)
+        # propagate the escape information of this object ignoring field information,
+        # and taint the field values with `AddressObserved` since this object may be
+        # heap-allocated, making them reachable from GC-traced memory
+        objinfo′ = with_address_observed(ignore_aliasinfo(objinfo))
         for i in 2:nargs
             i-1 > nf && break # may happen when e.g. ϕ-node merges values with different types
             arg = args[i]
             add_alias_escapes!(astate, arg, infos[i-1])
             push!(infos[i-1], LocalDef(pc))
-            # propagate the escape information of this object ignoring field information
             add_escape_change!(astate, arg, objinfo′)
             add_liveness_change!(astate, arg, pc)
         end
@@ -1195,12 +1254,14 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
         @label escape_unindexable_def
         # fields are known partially: propagate escape information imposed on recorded possibilities to all field values
         info = AliasInfo.info
-        objinfo′ = ignore_aliasinfo(objinfo)
+        # propagate the escape information of this object ignoring field information,
+        # and taint the field values with `AddressObserved` since this object may be
+        # heap-allocated, making them reachable from GC-traced memory
+        objinfo′ = with_address_observed(ignore_aliasinfo(objinfo))
         for i in 2:nargs
             arg = args[i]
             add_alias_escapes!(astate, arg, info)
             push!(info, LocalDef(pc))
-            # propagate the escape information of this object ignoring field information
             add_escape_change!(astate, arg, objinfo′)
             add_liveness_change!(astate, arg, pc)
         end
@@ -1212,9 +1273,11 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
         @label conservative_propagation
         # the fields couldn't be analyzed precisely: propagate the entire escape information
         # of this object to all its fields as the most conservative propagation
+        # (also taint them with `AddressObserved` since this object may be heap-allocated)
+        objinfo′ = with_address_observed(objinfo)
         for i in 2:nargs
             arg = args[i]
-            add_escape_change!(astate, arg, objinfo)
+            add_escape_change!(astate, arg, objinfo′)
             add_liveness_change!(astate, arg, pc)
         end
     end
@@ -1353,8 +1416,10 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         push!(AliasInfo.infos[fidx], LocalDef(pc))
         objinfo = EscapeInfo(objinfo, AliasInfo)
         add_escape_change!(astate, obj, objinfo) # update with new AliasInfo
-        # propagate the escape information of this object ignoring field information
-        add_escape_change!(astate, val, ignore_aliasinfo(objinfo))
+        # propagate the escape information of this object ignoring field information,
+        # and taint the stored value with `AddressObserved` since this object may be
+        # heap-allocated, making the value reachable from GC-traced memory
+        add_escape_change!(astate, val, with_address_observed(ignore_aliasinfo(objinfo)))
     elseif isa(AliasInfo, Unindexable)
         AliasInfo = copy(AliasInfo)
         @label escape_unindexable_def
@@ -1362,8 +1427,10 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         push!(AliasInfo.info, LocalDef(pc))
         objinfo = EscapeInfo(objinfo, AliasInfo)
         add_escape_change!(astate, obj, objinfo) # update with new AliasInfo
-        # propagate the escape information of this object ignoring field information
-        add_escape_change!(astate, val, ignore_aliasinfo(objinfo))
+        # propagate the escape information of this object ignoring field information,
+        # and taint the stored value with `AddressObserved` since this object may be
+        # heap-allocated, making the value reachable from GC-traced memory
+        add_escape_change!(astate, val, with_address_observed(ignore_aliasinfo(objinfo)))
     else
         # this object has been used as array, but it is used as struct here (i.e. should throw)
         # update obj's field information and just handle this case conservatively
@@ -1372,6 +1439,11 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
         # the field couldn't be analyzed: alias this object to the value being assigned
         # as the most conservative propagation (as required for ArgAliasing)
         add_alias_change!(astate, val, obj)
+        # taint the stored value with `AddressObserved` since this object may be heap-allocated
+        # (N.B. the alias change above equalizes escape information between `val` and `obj`,
+        # so `obj` is tainted as well; this is conservative but unavoidable without
+        # interprocedural field analysis for unanalyzable objects such as arguments)
+        add_escape_change!(astate, val, AddressObserved())
     end
     # also propagate escape information imposed on the return value of this `setfield!`
     ssainfo = estate[SSAValue(pc)]
@@ -1392,8 +1464,14 @@ end
 
 function escape_builtin!(::typeof(Core.finalizer), astate::AnalysisState, pc::Int, args::Vector{Any})
     if length(args) ≥ 3
-        obj = args[3]
-        add_liveness_change!(astate, obj, pc) # TODO setup a proper FinalizerEscape?
+        f, obj = args[2], args[3]
+        # the finalizer callback and the finalized object are registered in the
+        # task-local finalizer list, which the GC scans and which outlives this frame
+        # (`FinalizerEscape()` also includes the `AddressObserved` taint)
+        # TODO also model the effects of the eventual `f(obj)` invocation?
+        add_escape_change!(astate, f, FinalizerEscape())
+        add_escape_change!(astate, obj, FinalizerEscape())
+        add_liveness_change!(astate, obj, pc)
     end
     return false
 end
