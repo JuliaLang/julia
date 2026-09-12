@@ -937,10 +937,16 @@ typedef struct _jl_binding_t {
     _Atomic(uint8_t) flags;
 } jl_binding_t;
 
-typedef struct {
-    uint64_t hi;
+// A 128-bit UUID with the layout of `Core.UUID`: a little-endian `UInt128`
+typedef struct JL_ALIGNED_ATTR(16) {
     uint64_t lo;
+    uint64_t hi;
 } jl_uuid_t;
+
+typedef struct {
+    jl_uuid_t pkg;
+    jl_value_t *name;
+} jl_libraryid_t;
 
 // Reading or writing requires `lock`:
 //   scanned_methods, usings

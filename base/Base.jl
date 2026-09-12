@@ -137,6 +137,7 @@ Core.eval(Sys, :(include("osinfo.jl")))
 module Filesystem end # Filesystem is populated in stages during bootstrap
 Core.eval(Filesystem, :(include("path.jl")))
 using .Filesystem
+import Core: UUID
 include("libc.jl") # Libdl (include in libc.jl) is required for regex.jl
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
