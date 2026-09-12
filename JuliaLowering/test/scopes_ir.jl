@@ -74,18 +74,18 @@ end
 5   latestworld
 6   TestMod.#f##0
 7   (new %₆)
-8   (= slot₁/f %₇)
-9   TestMod.#f##0
-10  (call core.svec %₉)
-11  (call core.svec)
-12  SourceLocation::1:4
-13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  (call core.define_method TestMod core.nothing %₁₃
+8   TestMod.#f##0
+9   (call core.svec %₈)
+10  (call core.svec)
+11  SourceLocation::1:4
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
-15  latestworld
+14  latestworld
+15  (= slot₁/f %₇)
 16  (return core.nothing)
 
 ########################################

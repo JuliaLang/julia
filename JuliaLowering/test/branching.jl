@@ -222,6 +222,13 @@ end
     @test jl_eval(test_mod, Expr(:elseif, false, 1, 2)) == 2
 end
 
+@testset "comparison" begin
+    @test jl_eval(
+        test_mod,
+        Expr(:comparison, 1, :(Base.FastMath.le_fast), 2,
+             :(Base.FastMath.le_fast), 3))
+end
+
 #-------------------------------------------------------------------------------
 # Block condition
 @test JuliaLowering.include_string(test_mod, """

@@ -82,18 +82,6 @@ function _expr_to_est(@nospecialize(e), src::SourceAttrType)
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(e.value, src)
         newnode(src, K"inert", SyntaxList(cid))
-    elseif e isa Expr && e.head === :lambda && length(e.args) == 2
-        argnames = e.args[1]::Vector
-        arg_cs = SyntaxTree[]
-        for name in argnames
-            id = newleaf(src, K"Identifier", String(name::Symbol))
-            push!(arg_cs, id)
-        end
-        body_id, src = _expr_to_est(e.args[2], src)
-        args_block = newnode(src, K"block", arg_cs)
-        tvars_block = newnode(src, K"block", SyntaxTree[])
-        st = newnode(src, K"lambda",
-                     SyntaxTree[args_block, tvars_block, body_id])
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)
@@ -504,7 +492,7 @@ function collect_body_meta(st)
                 km = kind(m)
                 if km === K"purity"
                     push!(mmetas, m)
-                elseif syntax_name(m) in (
+                elseif kind(m) === K"Identifier" && syntax_name(m) in (
                     "inline", "noinline", "propagate_inbounds",
                     "nospecializeinfer", "aggressive_constprop", "no_constprop")
                     push!(mmetas, @mknode(m; kind=K"Symbol"))
@@ -525,6 +513,12 @@ function _dst_function_body(ctx, st, r, method_metas)
         est_to_dst(ctx, r)
     end
     isnothing(method_metas) ? r2 : setmeta(r2, :method_metas, method_metas)
+end
+
+function dst_raw_lambda(ctx, st, sps)
+    argl = map(x->_expr_to_est(x::Symbol, st[1])[1], st[1].value::Vector)
+    @ast _ st [K"lambda" [K"block" argl...] [K"block" sps...]
+        est_to_dst(with(ctx; toplevel=false), st[2])]
 end
 
 """
@@ -640,6 +634,14 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
                 @ast _ st [K"call" "collect"::K"top" arg]
             end
         end
+        [K"typed_comprehension" t g] -> let
+            arg = rec(ctx, g)
+            if kind(arg) === K"generator"
+                @ast _ st [K"typed_comprehension" t arg]
+            else
+                @ast _ st [K"call" "collect"::K"top" t arg]
+            end
+        end
         # hack: `[_ for _ in rhs]`, `[f(_) for _ in rhs]` works
         ([K"generator" body [K"=" u2 rhs]],
          when=is_flisp_compat(st) &&
@@ -741,8 +743,9 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         [K"core" x] -> newleaf(st, K"core", syntax_name(x))
         [K"top" x] -> newleaf(st, K"top", syntax_name(x))
         [K"static_parameter" x] -> newleaf(st, K"static_parameter", x.value::IdTag)
-        [K"lambda" args sps body] -> @mknode(st; children=SyntaxTree[
-            args, sps, rec(with(ctx; toplevel=false), body)])
+        [K"with-static-parameters" lam sps...] ->
+            dst_raw_lambda(ctx, lam, sps)
+        [K"lambda" _ _] -> dst_raw_lambda(ctx, st, SyntaxTree[])
         [K"copyast" [K"inert" ex]] -> @ast _ st [K"call"
             interpolate_expr::K"Value"
             [K"inert"(st[1]) ex]

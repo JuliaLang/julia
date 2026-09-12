@@ -890,7 +890,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         compile_try(ctx, ex, needs_value, in_tail_pos)
     elseif k == K"method"
         @jl_assert ctx.is_toplevel_thunk (ex, "method not at top level")
-        res = if numchildren(ex) == 1
+        mval = if numchildren(ex) == 1
             # Generic function declaration: define_method(module, name)
             func_name = ex[1]
             mod, name = if kind(func_name) == K"BindingId"
@@ -901,16 +901,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 ctx.mod, syntax_name(func_name)
             end
-            call_ex = @ast ctx ex [K"call" "define_method"::K"core"
-                                   mod::K"Value" name::K"Symbol"]
-            if in_tail_pos
-                emit_return(ctx, call_ex)
-            elseif needs_value
-                call_ex
-            else
-                emit(ctx, call_ex)
-                nothing
-            end
+            emit_assign_tmp(ctx, @ast ctx ex [K"call" "define_method"::K"core"
+                                              mod::K"Value" name::K"Symbol"])
         else
             @jl_assert numchildren(ex) == 3 ex
             fname = ex[1]
@@ -924,11 +916,18 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
-            emit(ctx, @ast ctx ex [K"call" "define_method"::K"core"
-                                   ctx.mod::K"Value" fname sig lam])
+            emit_assign_tmp(ctx, @ast ctx ex [K"call" "define_method"::K"core"
+                                              ctx.mod::K"Value" fname sig lam])
         end
         emit_latestworld(ctx, ex)
-        res
+        out = if in_tail_pos
+            emit_return(ctx, mval)
+        elseif needs_value
+            mval
+        else
+            nothing
+        end
+        out
     elseif k == K"opaque_closure_method"
         @ast ctx ex [K"opaque_closure_method"
             ex[1]
