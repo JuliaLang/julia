@@ -1115,66 +1115,6 @@ end
 
 ### from abstractarray.jl
 
-function mightalias(A::SubArray, B::SubArray)
-    # There are three ways that SubArrays might _problematically_ alias one another:
-    #   1. The parents are the same we can conservatively check if the indices might overlap OR
-    #   2. The parents alias each other in a more complicated manner (and we can't trace indices) OR
-    #   3. One's parent is used in the other's indices
-    # Note that it's ok for just the indices to alias each other as those should not be mutated,
-    # so we can always do better than the default !_isdisjoint(dataids(A), dataids(B))
-    if isbits(A.parent) || isbits(B.parent)
-        return false # Quick out for immutables
-    elseif _parentsmatch(A.parent, B.parent)
-        # Each SubArray unaliases its own parent from its own indices upon construction, so if
-        # the two parents are the same, then by construction one cannot alias the other's indices
-        # and therefore this is the only test we need to perform:
-        return _indicesmightoverlap(A.indices, B.indices)
-    else
-        A_parent_ids = dataids(A.parent)
-        B_parent_ids = dataids(B.parent)
-        return !_isdisjoint(A_parent_ids, B_parent_ids) ||
-            !_isdisjoint(A_parent_ids, _splatmap(dataids, B.indices)) ||
-            !_isdisjoint(B_parent_ids, _splatmap(dataids, A.indices))
-    end
-end
-# Test if two arrays are backed by exactly the same memory in exactly the same order
-_parentsmatch(A::AbstractArray, B::AbstractArray) = A === B
-_parentsmatch(A::DenseArray, B::DenseArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && size(A) == size(B)
-_parentsmatch(A::StridedArray, B::StridedArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && strides(A) == strides(B)
-
-# Given two SubArrays with the same parent, check if the indices might overlap (returning true if unsure)
-_indicesmightoverlap(A::Tuple{}, B::Tuple{}) = true
-_indicesmightoverlap(A::Tuple{}, B::Tuple) = error("malformed subarray")
-_indicesmightoverlap(A::Tuple, B::Tuple{}) = error("malformed subarray")
-# For ranges, it's relatively cheap to construct the intersection
-@inline function _indicesmightoverlap(A::Tuple{AbstractRange, Vararg{Any}}, B::Tuple{AbstractRange, Vararg{Any}})
-    !isempty(intersect(A[1], B[1])) ? _indicesmightoverlap(tail(A), tail(B)) : false
-end
-# But in the common AbstractUnitRange case, there's an even faster shortcut
-@inline function _indicesmightoverlap(A::Tuple{AbstractUnitRange, Vararg{Any}}, B::Tuple{AbstractUnitRange, Vararg{Any}})
-    max(first(A[1]),first(B[1])) <= min(last(A[1]),last(B[1])) ? _indicesmightoverlap(tail(A), tail(B)) : false
-end
-# And we can check scalars against each other and scalars against arrays quite easily
-@inline _indicesmightoverlap(A::Tuple{Real, Vararg{Any}}, B::Tuple{Real, Vararg{Any}}) =
-    A[1] == B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
-@inline _indicesmightoverlap(A::Tuple{Real, Vararg{Any}}, B::Tuple{AbstractArray, Vararg{Any}}) =
-    A[1] in B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
-@inline _indicesmightoverlap(A::Tuple{AbstractArray, Vararg{Any}}, B::Tuple{Real, Vararg{Any}}) =
-    B[1] in A[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
-# And small arrays are quick, too
-@inline function _indicesmightoverlap(A::Tuple{AbstractArray, Vararg{Any}}, B::Tuple{AbstractArray, Vararg{Any}})
-    if length(A[1]) == 1
-        return A[1][1] in B[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
-    elseif length(B[1]) == 1
-        return B[1][1] in A[1] ? _indicesmightoverlap(tail(A), tail(B)) : false
-    else
-        # But checking larger arrays requires O(m*n) and is too much work
-        return true
-    end
-end
-# And in general, checking the intersection is too much work
-_indicesmightoverlap(A::Tuple{Any, Vararg{Any}}, B::Tuple{Any, Vararg{Any}}) = true
-
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                   src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
