@@ -756,6 +756,29 @@ t = Rational{BigInt}(0, 1)
 
     @test aa == a && bb == b && cc == c
 
+    @testset "aliased arguments" begin
+        # inputs sharing BigInts with the output must not be passed to GMP as
+        # separate mpq_t structs (their limb pointers go stale on reallocation)
+        x = big(1)//1
+        @test Base.GMP.MPQ.add!(x, big(1)//2) == 3//2
+        x = big(1)//1
+        @test Base.GMP.MPQ.sub!(x, big(1)//2) == 1//2
+        x = big(1)//1
+        @test Base.GMP.MPQ.mul!(x, big(3)//2) == 3//2
+        x = big(1)//1
+        @test Base.GMP.MPQ.div!(x, big(2)//3) == 3//2
+        z = big(1)//2
+        @test Base.GMP.MPQ.add!(z, big(1)//3, z) == 5//6
+        z = big(1)//1
+        @test Base.GMP.MPQ.add!(z, z, z) == 2
+        z = big(1)//1
+        @test Base.GMP.MPQ.set!(z, z) == 1
+        # partial aliasing: only one BigInt shared with the output
+        n = big(1)
+        z = Base.unsafe_rational(BigInt, n, big(1))
+        @test Base.GMP.MPQ.add!(z, Base.unsafe_rational(BigInt, n, big(2))) == 3//2
+    end
+
     @testset "set" begin
         @test Base.GMP.MPQ.set!(a, b) == b
         @test a == b == bb
