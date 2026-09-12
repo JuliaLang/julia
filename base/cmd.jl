@@ -196,13 +196,7 @@ function show(io::IO, cmd::Cmd)
     print_uid && print(io, "setuid(")
 
     print(io, '`')
-    join(io, map(cmd.exec) do arg
-        replace(sprint(context=io) do io
-            with_output_color(:underline, io) do io
-                print_shell_word(io, arg, shell_special)
-            end
-        end, '`' => "\\`")
-    end, ' ')
+    _show_backtick_body(io, cmd)
     print(io, '`')
 
     print_uid && (print(io, ", "); show(io, Int32(cmd.uid)); print(io, ")"))
@@ -221,12 +215,18 @@ function show(io::IO, cmd::Cmd)
 end
 
 function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
-    print(io, "pipeline(")
-    show(io, cmds.a)
-    print(io, ", ")
-    print(io, isa(cmds, ErrOrCmds) ? "stderr=" : "stdout=")
-    show(io, cmds.b)
-    print(io, ")")
+    if isa(cmds, OrCmds) && _is_backtick_representable(cmds)
+        print(io, '`')
+        _show_backtick_body(io, cmds)
+        print(io, '`')
+    else
+        print(io, "pipeline(")
+        show(io, cmds.a)
+        print(io, ", ")
+        print(io, isa(cmds, ErrOrCmds) ? "stderr=" : "stdout=")
+        show(io, cmds.b)
+        print(io, ")")
+    end
 end
 
 function show(io::IO, cmds::AndCmds)
@@ -271,22 +271,71 @@ struct CmdRedirect <: AbstractCmd
 end
 CmdRedirect(cmd, handle, stream_no) = CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
 
-function show(io::IO, cr::CmdRedirect)
-    print(io, "pipeline(")
-    show(io, cr.cmd)
-    print(io, ", ")
+
+# Returns true if cmd can be shown using backtick syntax (no wrappers like setenv, setuid, etc.)
+_is_backtick_representable(::AbstractCmd) = false
+_is_backtick_representable(cmd::Cmd) =
+    cmd.env === nothing && isempty(cmd.dir) &&
+    cmd.uid === nothing && cmd.gid === nothing &&
+    cmd.cpus === nothing
+_is_backtick_representable(cmd::OrCmds) =
+    _is_backtick_representable(cmd.a) &&
+    _is_backtick_representable(cmd.b)
+_is_backtick_representable(cr::CmdRedirect) =
+    cr.handle isa FileRedirect &&
+    (cr.stream_no == STDIN_NO || cr.stream_no == STDOUT_NO || cr.stream_no == STDERR_NO) &&
+    _is_backtick_representable(cr.cmd)
+
+# Print the inner content of a backtick command (without surrounding backticks).
+function _show_backtick_body(io::IO, cmd::Cmd)
+    join(io, map(cmd.exec) do arg
+        replace(sprint(context=io) do io
+            with_output_color(:underline, io) do io
+                print_shell_word(io, arg, shell_special)
+            end
+        end, '`' => "\\`")
+    end, ' ')
+end
+function _show_backtick_body(io::IO, cmds::OrCmds)
+    _show_backtick_body(io, cmds.a)
+    print(io, " | ")
+    _show_backtick_body(io, cmds.b)
+end
+function _show_backtick_body(io::IO, cr::CmdRedirect)
+    _show_backtick_body(io, cr.cmd)
     if cr.stream_no == STDOUT_NO
-        print(io, "stdout")
-    elseif cr.stream_no == STDERR_NO
-        print(io, "stderr")
+        print(io, cr.handle.append ? " >> " : " > ")
     elseif cr.stream_no == STDIN_NO
-        print(io, "stdin")
-    else
-        print(io, cr.stream_no)
+        print(io, " < ")
+    else  # STDERR_NO
+        print(io, cr.handle.append ? " 2>> " : " 2> ")
     end
-    print(io, cr.readable ? "<" : ">")
-    show(io, cr.handle)
-    print(io, ")")
+    s = sprint(print_shell_word, cr.handle.filename, shell_special; context=io)
+    print(io, replace(s, '`' => "\\`"))
+end
+
+function show(io::IO, cr::CmdRedirect)
+    if _is_backtick_representable(cr)
+        print(io, '`')
+        _show_backtick_body(io, cr)
+        print(io, '`')
+    else
+        print(io, "pipeline(")
+        show(io, cr.cmd)
+        print(io, ", ")
+        if cr.stream_no == STDOUT_NO
+            print(io, "stdout")
+        elseif cr.stream_no == STDERR_NO
+            print(io, "stderr")
+        elseif cr.stream_no == STDIN_NO
+            print(io, "stdin")
+        else
+            print(io, cr.stream_no)
+        end
+        print(io, cr.readable ? "<" : ">")
+        show(io, cr.handle)
+        print(io, ")")
+    end
 end
 
 """
