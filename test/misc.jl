@@ -385,10 +385,19 @@ end
 @test sprint(Base.time_print, 1e9) == "  1.000000 seconds"
 @test sprint(Base.time_print, 1e9, 111, 0, 222) == "  1.000000 seconds (222 allocations: 111 bytes)"
 @test sprint(Base.time_print, 1e9, 111, 0.5e9, 222) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time)"
-@test sprint(Base.time_print, 1e9, 111, 0, 222, 333) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts)"
-@test sprint(Base.time_print, 1e9, 0, 0, 0, 333) == "  1.000000 seconds (333 lock conflicts)"
-@test sprint(Base.time_print, 1e9, 111, 0, 222, 333, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts, 25.00% compilation time)"
-@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 0, 0, 333) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 0, 0, 333) == "  1.000000 seconds (333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 0, 0, 333, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts, 25.00% compilation time)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 0, 0, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
+# estimated dispatch time is reported as a share of elapsed, once it rounds to >=1% and
+# enough dispatches happened for that share to mean anything
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 1e6, 1000) == "  1.000000 seconds"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 5e6, 1000) == "  1.000000 seconds"   # 0.5% rounds to 0
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 6e6, 1000) == "  1.000000 seconds (1000 dynamic dispatches: ~1% time)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 6e6, 9) == "  1.000000 seconds"      # too few to report
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 2.4e8, 1000) == "  1.000000 seconds (1000 dynamic dispatches: ~24% time)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 2.4e8, 1460) == "  1.000000 seconds (1.46 k dynamic dispatches: ~24% time)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 2.4e8, 1000, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 1000 dynamic dispatches: ~24% time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
 
 # @showtime
 @test @showtime true
@@ -1605,6 +1614,26 @@ end
         _lock_conflicts,Threads.nthreads()
     '`, String)))
     @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
+
+    # dynamic dispatch counting
+    stable_dispatch_test() = sum(Int[1, 2, 3])
+    unstable_dispatch_test() = sum(Any[1, 2, 3])
+    stable_dispatch_test(); unstable_dispatch_test() # compile before measuring
+    @test (@dispatches stable_dispatch_test()) == 0
+    @test (@dispatches unstable_dispatch_test()) > 0
+    @test (@timed unstable_dispatch_test()).dispatches > 0
+    @test (@timed unstable_dispatch_test()).dispatch_time > 0
+    # the call-cache miss cost must come out above the hit cost for the estimate to mean
+    # anything, and both must be plausible for a method lookup
+    let (hit, miss) = Base.dispatch_cost()
+        @test 0.5 <= hit <= 200.0
+        @test hit <= miss <= 5000.0
+    end
+    # the dispatches inference itself makes are not attributed to the code being measured,
+    # so compiling a fresh method does not swamp the count
+    let f = @eval $(gensym())(x) = x + 1
+        @test (@dispatches f(1)) < 100
+    end
 
     # Test the output of `format_bytes()`
     inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
