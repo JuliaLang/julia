@@ -680,3 +680,332 @@ let ci = method_instance(iter61667, ()).cache
     Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
     @test ci.max_world == typemax(UInt)
 end
+
+## world age segments: worlds form an append-only DAG of (segment, index)
+## pairs; see the comment next to jl_world_reaches in julia_internal.h
+module WorldAgeSegments
+using Test
+
+const WORLD_IDX_BITS = Sys.WORD_SIZE == 64 ? 48 : 16
+wseg(w::UInt) = w >> WORLD_IDX_BITS
+widx(w::UInt) = w & ((UInt(1) << WORLD_IDX_BITS) - UInt(1))
+seg_reaches(sa::UInt, sb::UInt) = ccall(:jl_world_seg_reaches, Cint, (Csize_t, Csize_t), sa, sb) != 0
+# mirror of the C-side jl_world_reaches/jl_world_in_range inlines
+reaches(a::UInt, b::UInt) = wseg(a) == wseg(b) ? a <= b : seg_reaches(wseg(a), wseg(b))
+in_range(w::UInt, minw::UInt, maxw::UInt) =
+    reaches(minw, w) && (maxw == typemax(UInt) || !reaches(maxw + UInt(1), w))
+new_segment(parents::Vector{UInt}) =
+    ccall(:jl_world_new_segment, Csize_t, (Ptr{Csize_t}, Csize_t), parents, length(parents)) % UInt
+advance_into_segment(extra::Vector{UInt}) =
+    ccall(:jl_world_advance_into_segment, Csize_t, (Ptr{Csize_t}, Csize_t), extra, length(extra)) % UInt
+mt_entry(@nospecialize(ft), w::UInt) = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, Csize_t), ft, nothing, w)
+
+@testset "world segment reachability algebra" begin
+    w0 = Base.get_world_counter()
+    @test widx(w0) > UInt(16) # plenty of room below the current index
+    a = new_segment([w0]) # branch A off the current spine segment
+    b = new_segment([w0]) # branch B, sibling of A
+    m = new_segment([a + UInt(9), b + UInt(9)]) # merge of A and B
+    @test reaches(w0, a) && reaches(w0, b) && reaches(w0, m)
+    @test !reaches(a, b) && !reaches(b, a) # siblings are unordered
+    @test reaches(a, m) && reaches(b, m) # a merge sees both parents
+    @test !reaches(m, a) && !reaches(m, b) && !reaches(m, w0)
+    @test !reaches(a, w0) && !reaches(b, w0) # nothing reaches back in time
+    # within-segment order is the index order
+    @test reaches(a + UInt(5), a + UInt(9)) && !reaches(a + UInt(9), a + UInt(5))
+    @test reaches(a + UInt(5), a + UInt(5)) && reaches(w0, w0) # reflexivity
+    @test reaches(a + UInt(5), m) # parent segments are ancestors at full extent
+    # transitivity through a deeper chain
+    c = new_segment([m])
+    @test reaches(w0, c) && reaches(a, c) && reaches(b, c) && reaches(m, c)
+    @test !reaches(c, m)
+    # ~0 acts as the end of time: everything reaches it, it reaches nothing
+    @test reaches(w0, typemax(UInt)) && reaches(m, typemax(UInt))
+    @test !reaches(typemax(UInt), m)
+end
+
+@testset "validity bounds across branches" begin
+    w0 = Base.get_world_counter()
+    x = new_segment([w0])
+    y = new_segment([w0])
+    # an entry created on X and never invalidated is visible on X and its
+    # descendants, but not on the sibling branch Y
+    @test in_range(x + UInt(2), x + UInt(1), typemax(UInt))
+    @test !in_range(y + UInt(2), x + UInt(1), typemax(UInt))
+    xy = new_segment([x + UInt(3), y + UInt(3)])
+    @test in_range(xy, x + UInt(1), typemax(UInt))
+    # an entry created before the fork and invalidated on X (max_world capped
+    # inclusively at x+4, i.e. the invalidating event is at x+5) is dead in
+    # that event's future cone, but still live on the sibling branch
+    minw = w0 - UInt(5)
+    capw = x + UInt(4)
+    @test in_range(x + UInt(2), minw, capw)
+    @test !in_range(x + UInt(6), minw, capw)
+    @test in_range(y + UInt(6), minw, capw) # sibling never sees the invalidation
+    @test !in_range(xy, minw, capw) # but the merge of both branches does
+    # hard-killed bounds (max_world = 0) match nowhere
+    @test !in_range(x + UInt(2), minw, UInt(0))
+    # inverted "unactivated" bounds (min=~0, max=1) match nowhere
+    @test !in_range(x + UInt(2), typemax(UInt), UInt(1))
+end
+
+# Advancing the spine into a fresh segment must be transparent to execution:
+# everything below exercises the cross-segment paths of the world predicates
+# through real dispatch.
+f_before_advance() = 1
+fresh_branch_fn(x) = 2x # deliberately not called (or inferred) until the branch tests
+g_frozen() = 1
+@test f_before_advance() == 1
+const w_preadvance = Base.get_world_counter()
+const w_postadvance = advance_into_segment(UInt[])
+@testset "spine advance is transparent" begin
+    # the `const` declaration of w_postadvance itself bumped the counter, so
+    # compare segments rather than exact worlds
+    @test wseg(Base.get_world_counter()) == wseg(w_postadvance)
+    @test reaches(w_postadvance, Base.get_world_counter())
+    @test wseg(w_postadvance) != wseg(w_preadvance)
+    @test widx(w_postadvance) == UInt(0)
+    @test reaches(w_preadvance, w_postadvance)
+    @test f_before_advance() == 1 # pre-advance code still dispatches
+    @test Base.invoke_in_world(w_preadvance, f_before_advance) == 1
+    @test invokelatest(f_before_advance) == 1
+end
+f_after_advance() = 2
+g_redefined() = 1
+g_frozen() = 2 # redefinition on the spine, invisible to branches forked before it
+@test f_after_advance() == 2
+@test g_redefined() == 1
+const w_mid = Base.get_world_counter()
+g_redefined() = 2
+@testset "definitions and invalidations after the advance" begin
+    @test g_redefined() == 2
+    @test Base.invoke_in_world(w_mid, g_redefined) == 1
+    @test mt_entry(Tuple{typeof(f_after_advance)}, Base.get_world_counter()) !== nothing
+end
+@testset "sibling branches of the spine" begin
+    # fork a branch at the (now closed) pre-advance spine world: spine
+    # definitions made after the advance must be invisible there, while
+    # everything from before the fork remains visible
+    sib = new_segment([w_preadvance]) + UInt(1)
+    @test reaches(w_preadvance, sib) && !reaches(w_postadvance, sib) && !reaches(sib, w_postadvance)
+    @test mt_entry(Tuple{typeof(f_before_advance)}, sib) !== nothing
+    @test mt_entry(Tuple{typeof(f_after_advance)}, sib) === nothing
+    # (n.b. lookup at typemax(UInt) is refused by ml_matches as an
+    # unenumerable future world, as it was with linear world ages)
+    @test mt_entry(Tuple{typeof(f_after_advance)}, Base.get_world_counter()) !== nothing
+    # dispatch of already-compiled code at a branch world
+    @test Base.invoke_in_world(sib, f_before_advance) == 1
+    @test Base.invoke_in_world(sib, +, 1, 2) == 3
+end
+@testset "run rollover on index exhaustion" begin
+    # Force the counter near the end of its run's index space in a throwaway
+    # subprocess and check that definitions roll the trunk over into a fresh
+    # run segment (the natural path on 32-bit platforms, where indices are
+    # only 16 bits).
+    code = """
+        const IDXBITS = $(WORLD_IDX_BITS)
+        IDXMASK = (UInt(1) << IDXBITS) - UInt(1)
+        w0 = Base.get_world_counter()
+        unsafe_store!(cglobal(:jl_world_counter, UInt), (w0 & ~IDXMASK) | (IDXMASK - UInt(8)))
+        seg0 = Base.get_world_counter() >> IDXBITS
+        for i in 1:8
+            Core.eval(Main, :(\$(Symbol(:rollfn, i))() = \$i))
+        end
+        seg1 = Base.get_world_counter() >> IDXBITS
+        @assert seg1 > seg0
+        for i in 1:8
+            @assert Base.invokelatest(getglobal(Main, Symbol(:rollfn, i))) == i
+        end
+        println("ROLLOVER OK")
+        """
+    out = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
+    @test occursin("ROLLOVER OK", out)
+end
+
+@testset "three-point total order (asymmetric joins)" begin
+    ordered(x, y, obs) = ccall(:jl_world_ordered_before, Cint, (Csize_t, Csize_t, Csize_t), x, y, obs) != 0
+    w_pre = Base.get_world_counter()
+    t1 = advance_into_segment(UInt[]) # close w_pre's run; the trunk continues
+    a = new_segment([w_pre]) + UInt(1)          # side branch A forked at w_pre
+    b = new_segment([w_pre]) + UInt(1)          # side branch B forked at w_pre
+    t2 = advance_into_segment([a - UInt(1)])    # spine merges A
+    t3 = advance_into_segment([b - UInt(1)])    # spine merges B
+    obs = Base.get_world_counter()
+    @test !reaches(a, b) && !reaches(b, a)
+    # comparable pairs order by visibility
+    @test ordered(w_pre, a, obs) && !ordered(a, w_pre, obs)
+    @test ordered(a, t2, obs) && ordered(b, t3, obs)
+    # incomparable pairs order by their merge points on the observer's trunk:
+    # trunk events before a join precede the side branch's events, which
+    # precede trunk events after it
+    @test ordered(t1, a, obs) && !ordered(a, t1, obs)
+    @test ordered(a, b, obs) && !ordered(b, a, obs) # A merged before B
+    @test ordered(a, t3, obs) && !ordered(t3, a, obs)
+    # a side branch with internal structure merged wholesale: worlds that
+    # join at the same merge point order by the branch's own total order
+    x1 = new_segment([w_pre]) + UInt(1)
+    x2 = new_segment([w_pre]) + UInt(1)
+    z = new_segment([x1, x2]) # z's trunk is x1's branch; x2 is its side branch
+    advance_into_segment([z])
+    obs2 = Base.get_world_counter()
+    @test !reaches(x1, x2) && !reaches(x2, x1)
+    @test ordered(x1, x2, obs2) && !ordered(x2, x1, obs2)
+    @test ordered(x2, z, obs2) && !ordered(z, x1, obs2)
+end
+
+@testset "inference and compilation at branch worlds" begin
+    sib2 = new_segment([w_preadvance]) + UInt(1)
+    # a function that has never been called or inferred, invoked at a branch
+    # world: dispatch, inference, compilation and caching must work off-spine
+    @test Base.invoke_in_world(sib2, fresh_branch_fn, 21) == 42
+    # the published CodeInstance covers sib2 (its interval endpoints need not
+    # both lie on the spine's trunk)
+    mi = only(Base.specializations(only(methods(fresh_branch_fn))))
+    found_ci = false
+    ci = isdefined(mi, :cache) ? mi.cache : nothing
+    while ci !== nothing
+        if in_range(sib2, ci.min_world, ci.max_world)
+            found_ci = true
+        end
+        ci = isdefined(ci, :next) ? ci.next : nothing
+    end
+    @test found_ci
+    # the spine is unaffected and can still run and infer the same function
+    @test fresh_branch_fn(21) == 42
+    @test Base.infer_return_type(fresh_branch_fn, (Int,); world=sib2) == Int
+    # a method redefined on the spine after the fork keeps its old meaning on
+    # the branch: the invalidation's future cone does not contain sib2
+    @test g_frozen() == 2
+    @test Base.invoke_in_world(sib2, g_frozen) == 1
+end
+
+# WorldToken: opaque world capture, usable in place of a raw world age
+wt_f() = 1
+const wt_tok1 = Base.world_token()
+wt_f() = 2
+@testset "WorldToken (in-process)" begin
+    @test wt_tok1 isa Core.WorldToken
+    @test wt_f() == 2
+    @test Base.invoke_in_world(wt_tok1, wt_f) == 1
+    @test Base.invoke_in_world(wt_tok1.world, wt_f) == 1
+    @test Base.invoke_in_world(wt_tok1, sort, [3, 1, 2]; rev=true) == [3, 2, 1] # kwargs path accepts tokens
+end
+
+include("precompile_utils.jl")
+precompile_test_harness("WorldToken precompilation") do load_path
+    write(joinpath(load_path, "WTokenPkg.jl"),
+          """
+          module WTokenPkg
+          wfn() = 1
+          sfn(::Any) = 1
+          cfn(x) = sfn(x)
+          const tok = Base.world_token()
+          gfn() = 1
+          sfn(::Int) = 2
+          const tok2 = Base.world_token()
+          precompile(cfn, (Int,))
+          end
+          """)
+    @test !isa(Base.compilecache(Base.PkgId("WTokenPkg")), Base.PrecompilableError)
+    @eval using WTokenPkg
+    invokelatest() do
+        @test WTokenPkg.tok isa Core.WorldToken
+        # the tokens were rebased onto grafted copies of the saving process's
+        # spine runs, not left at its meaningless numbering
+        @test wseg(WTokenPkg.tok.world) != wseg(unsafe_load(cglobal(:jl_require_world, UInt)))
+        @test wseg(WTokenPkg.tok.world) != wseg(Base.get_world_counter())
+        # full fidelity within the image: tok predates gfn's definition,
+        # tok2 postdates it
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
+        @test_throws MethodError Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.gfn)
+        @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.wfn) == 1
+        @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.gfn) == 1
+        # a CodeInstance compiled against a method added after the capture
+        # keeps its true creation world through edge validation: it is not
+        # valid at tok, and off-spine inference resolves the older method
+        # state there instead
+        @test invokelatest(WTokenPkg.cfn, 1) == 2
+        @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.cfn, 1) == 2
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.cfn, 1) == 1
+        # redefinitions after loading are invisible at the tokens: they are
+        # not in the invalidating event's future cone
+        @eval WTokenPkg wfn() = 42
+        @test invokelatest(WTokenPkg.wfn) == 42
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
+        @test Base.invoke_in_world(WTokenPkg.tok2, WTokenPkg.wfn) == 1
+    end
+    # nested capture: a package that depends on the token-capturing package
+    # and captures its own token re-serializes both world histories; its
+    # token resolves the dependency's runs by their stable image identity
+    write(joinpath(load_path, "WTokenNested.jl"),
+          """
+          module WTokenNested
+          using WTokenPkg
+          nfn() = WTokenPkg.wfn() + 100
+          const ntok = Base.world_token()
+          end
+          """)
+    @test !isa(Base.compilecache(Base.PkgId("WTokenNested")), Base.PrecompilableError)
+    @eval using WTokenNested
+    invokelatest() do
+        @test WTokenNested.ntok isa Core.WorldToken
+        # at the latest world, nfn sees this session's wfn redefinition (the
+        # image CodeInstance fails edge validation and is re-inferred)
+        @test invokelatest(WTokenNested.nfn) == 142
+        # at the nested token, the loading session's redefinition of wfn is
+        # not part of the token's history: nfn resolves the dependency's
+        # original definition (via off-spine inference at the token's world)
+        @test Base.invoke_in_world(WTokenNested.ntok, WTokenNested.nfn) == 101
+        # that inference publishes a mixed-endpoint interval: created within
+        # the grafted history and capped by the session's spine redefinition,
+        # so it covers the token but not the latest world
+        nmi = only(Base.specializations(only(methods(WTokenNested.nfn))))
+        found_mixed = false
+        nci = isdefined(nmi, :cache) ? nmi.cache : nothing
+        while nci !== nothing
+            if in_range(WTokenNested.ntok.world, nci.min_world, nci.max_world) &&
+               !in_range(Base.get_world_counter(), nci.min_world, nci.max_world)
+                found_mixed = true
+            end
+            nci = isdefined(nci, :next) ? nci.next : nothing
+        end
+        @test found_mixed
+        # the dependency's own token still works and does not see WTokenNested
+        @test Base.invoke_in_world(WTokenPkg.tok, WTokenPkg.wfn) == 1
+        @test_throws MethodError Base.invoke_in_world(WTokenPkg.tok2, WTokenNested.nfn)
+    end
+    # binding history: partition chains and usings entries keep their
+    # (translated) verbatim worlds, so tokens see the binding state as of
+    # their capture
+    write(joinpath(load_path, "WTokenBind.jl"),
+          """
+          module WTokenBind
+          module Sub
+          export subname
+          const subname = 7
+          end
+          const cv = 1
+          const cw = 10
+          const tokb = Base.world_token()
+          const cv = 2
+          using .Sub
+          end
+          """)
+    @test !isa(Base.compilecache(Base.PkgId("WTokenBind")), Base.PrecompilableError)
+    @eval using WTokenBind
+    invokelatest() do
+        # a const replaced after the capture: the token sees the original value
+        @test invokelatest(getglobal, WTokenBind, :cv) == 2
+        @test Base.invoke_in_world(WTokenBind.tokb, getglobal, WTokenBind, :cv) == 1
+        # a `using` after the capture: the implicitly-resolved name is not
+        # visible at the token
+        @test invokelatest(getglobal, WTokenBind, :subname) == 7
+        @test_throws UndefVarError Base.invoke_in_world(WTokenBind.tokb, getglobal, WTokenBind, :subname)
+        # a const replaced after loading is likewise invisible at the token
+        @eval WTokenBind const cw = 20
+        @test invokelatest(getglobal, WTokenBind, :cw) == 20
+        @test Base.invoke_in_world(WTokenBind.tokb, getglobal, WTokenBind, :cw) == 10
+    end
+end
+
+end # module WorldAgeSegments

@@ -52,7 +52,7 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition__(jl_binding_t *b
     // resolution if necessary.
     while (is_some_partition(gap->replace)) {
         size_t replace_min_world = jl_atomic_load_relaxed(&gap->replace->min_world);
-        if (world >= replace_min_world)
+        if (jl_world_at_least(world, replace_min_world))
             break;
         gap->insert = &gap->replace->next;
         gap->max_world = replace_min_world - 1;
@@ -61,7 +61,7 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition__(jl_binding_t *b
         // `gap->replace` becomes that binding (not a partition) at end-of-chain.
         gap->replace = jl_atomic_load_relaxed(gap->insert);
     }
-    if (is_some_partition(gap->replace) && world <= jl_atomic_load_relaxed(&gap->replace->max_world)) {
+    if (is_some_partition(gap->replace) && jl_world_at_most(world, jl_atomic_load_relaxed(&gap->replace->max_world))) {
         return gap->replace;
     }
     gap->min_world = is_some_partition(gap->replace) ? jl_atomic_load_relaxed(&gap->replace->max_world) + 1 : 0;
@@ -462,6 +462,42 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     bpart->kind = resolution.ultimate_kind | resolution.deprecation_flags;
 }
 
+// During image loading: the head partition `bpart` of `b` came from a grafted
+// world history and carries the resolution the saving process computed.
+// Recompute the implicit resolution at the current world; if it matches, the
+// grafted partition stays valid everywhere it reaches (returns NULL).
+// Otherwise cap the grafted partition just before the current world -- it
+// remains valid in its own branch's cone of the world DAG -- and prepend a
+// fresh partition carrying this process's resolution for spine worlds
+// (returned). The new partition's min_world deliberately lies on the spine,
+// which is not an ancestor of the grafted history, so queries at grafted
+// worlds fall through to the capped partition.
+JL_DLLEXPORT jl_binding_partition_t *jl_bpart_reresolve_loaded(jl_binding_t *b, jl_binding_partition_t *bpart)
+{
+    size_t cur = jl_atomic_load_acquire(&jl_world_counter);
+    struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, cur, 0);
+    size_t flags = bpart->kind & PARTITION_MASK_FLAG;
+    if ((enum jl_partition_kind)(resolution.ultimate_kind) == (enum jl_partition_kind)(bpart->kind & PARTITION_MASK_KIND) &&
+        resolution.binding_or_const == bpart->restriction)
+        return NULL;
+    jl_value_t *restriction = resolution.binding_or_const;
+    JL_GC_PUSH1(&restriction);
+    jl_binding_partition_t *newp = new_binding_partition(b);
+    jl_gc_write(newp, newp->restriction, jl_value_t, restriction);
+    newp->kind = resolution.ultimate_kind | resolution.deprecation_flags | flags;
+    jl_atomic_store_relaxed(&newp->min_world, cur);
+    // (max_world is already ~(size_t)0)
+    jl_atomic_store_relaxed(&newp->next, bpart);
+    jl_gc_wb(newp, bpart);
+    jl_atomic_store_release(&b->partitions, newp);
+    jl_gc_wb(b, newp);
+    // the grafted resolution ends just before this process's resolution takes
+    // over on the spine
+    jl_atomic_store_release(&bpart->max_world, cur - 1);
+    JL_GC_POP();
+    return newp;
+}
+
 static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world) JL_CANSAFEPOINT
 {
     jl_binding_partition_t *bpart = *pbpart;
@@ -569,7 +605,7 @@ jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b, size_t min
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, min_world);
     if (!bpart)
         return NULL;
-    if (jl_atomic_load_relaxed(&bpart->max_world) < max_world)
+    if (!jl_world_at_most(max_world, jl_atomic_load_relaxed(&bpart->max_world)))
         return NULL;
     return bpart;
 }
@@ -1326,7 +1362,7 @@ static int jl_print_using_dep_messages(jl_module_t *m, jl_sym_t *name, jl_sym_t 
         JL_LOCK(&m->lock);
         struct _jl_module_using data = *module_usings_getidx(m, i);
         JL_UNLOCK(&m->lock);
-        if (data.min_world > world || data.max_world < world)
+        if (!jl_world_in_range(world, data.min_world, data.max_world))
             continue;
         jl_module_t *imp = data.mod;
         JL_GC_PROMISE_ROOTED(imp); // rooted via `m->usings`
@@ -1468,7 +1504,7 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
         return;
     }
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *btopart = jl_get_binding_partition(bto, new_world);
     enum jl_partition_kind btokind = jl_binding_kind(btopart);
     if (jl_bkind_is_some_implicit(btokind)) {
@@ -1567,7 +1603,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t fla
         }
     }
 
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
 
     if (existing_idx == (size_t)-1) {
         // Add new using entry
@@ -1692,7 +1728,7 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size
 {
     volatile int any_new = 0;
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     JL_TRY {
         for (size_t i = 0; i < nsymbols; i++) {
             jl_sym_t *name = (jl_sym_t*)symbols[i];
@@ -2015,7 +2051,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding(jl_binding_t *b,
         return NULL;
     }
 
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *bpart = jl_replace_binding_locked(b, old_bpart, restriction_val, kind, new_world);
     if (bpart && jl_atomic_load_relaxed(&bpart->min_world) == new_world)
         jl_atomic_store_release(&jl_world_counter, new_world);
@@ -2072,7 +2108,7 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag) 
                        flag == 2 ? PARTITION_FLAG_DEPRECATED :
                                    0;
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     if ((old_bpart->kind & DEPWARN_FLAGS) == new_flags) {
         JL_UNLOCK(&world_counter_lock);
@@ -2098,7 +2134,7 @@ JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int st
     int want_public = state >= 1;
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     int was_exported = (old_bpart->kind & PARTITION_FLAG_EXPORTED) != 0;
     if (was_exported != want_exported) {
@@ -2267,7 +2303,7 @@ static void _materialize_reexported_bindings(jl_module_t *m, size_t world, jl_ar
         struct _jl_module_using data = *module_usings_getidx(m, i);
         JL_UNLOCK(&m->lock);
 
-        if (data.min_world > world || data.max_world < world)
+        if (!jl_world_in_range(world, data.min_world, data.max_world))
             continue;
 
         if (data.flags & JL_MODULE_USING_REEXPORT) {

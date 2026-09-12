@@ -411,7 +411,7 @@ static jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi 
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
         if (codeinst->owner != jl_nothing)
             continue;
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
+        if (jl_world_in_range(world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world))) {
             if (emit_codeinst_and_edges(codeinst) && jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
                 return codeinst;
         }
@@ -589,8 +589,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
     jl_value_t *owner = jl_nothing; // TODO: owner should be arg
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
+        if (jl_world_range_in_range(min_world, max_world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world)) &&
             jl_egal(codeinst->owner, owner) &&
             jl_egal(codeinst->rettype, rettype)) {
             if (di == NULL)
@@ -685,7 +684,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         uint32_t effects, jl_value_t *analysis_results,
         jl_debuginfo_t *di, jl_svec_t *edges /*, int absolute_max*/)
 {
-    assert(min_world <= max_world && "attempting to set invalid world constraints");
+    assert(jl_world_at_most(min_world, max_world) && "attempting to set invalid world constraints");
     //assert((!jl_is_method(mi->def.value) || max_world != ~(size_t)0 || min_world <= 1 || edges == NULL || jl_svec_len(edges) != 0) && "missing edges");
     jl_task_t *ct = jl_current_task;
     jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_instance_t),
@@ -731,7 +730,7 @@ JL_DLLEXPORT void jl_fill_codeinst(
         double time_infer_total, double time_infer_cache_saved, double time_infer_self,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/)
 {
-    assert(min_world <= max_world && "attempting to set invalid world constraints");
+    assert(jl_world_at_most(min_world, max_world) && "attempting to set invalid world constraints");
     //assert((!jl_is_method(codeinst->def->def.value) || max_world != ~(size_t)0 || min_world <= 1 || jl_svec_len(edges) != 0) && "missing edges");
     jl_gc_write(codeinst, codeinst->rettype, jl_value_t, rettype);
     jl_gc_write(codeinst, codeinst->exctype, jl_value_t, exctype);
@@ -1762,7 +1761,7 @@ static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache
         //
         // n.b. this entire chain is type-equal to tt (by construction), so it is unnecessary to call `tt<:entry->sig`
         do {
-            if (jl_atomic_load_relaxed(&entry->min_world) <= world && world <= jl_atomic_load_relaxed(&entry->max_world)) {
+            if (jl_world_in_range(world, jl_atomic_load_relaxed(&entry->min_world), jl_atomic_load_relaxed(&entry->max_world))) {
                 if (entry->simplesig == (void*)jl_nothing || concretesig_equal(tt, (jl_value_t*)entry->simplesig))
                     return entry;
             }
@@ -1839,7 +1838,10 @@ static void cache_insert(
     // exact-dispatch lookups (`jl_typemap_entry_assoc_exact`) require datatype sigs
     assert(jl_is_datatype(cachett));
     int unconstrained_max = max_valid == ~(size_t)0;
-    if (max_valid > current_world)
+    // clamp bounds that extend past the current spine world (they are
+    // restored below if the world has not advanced); a point bound on a
+    // closed branch does not extend into the spine's future and stays as is
+    if (max_valid > current_world && (unconstrained_max || jl_world_reaches(current_world, max_valid)))
         max_valid = current_world;
     jl_datatype_t *simplett = NULL;
     jl_typemap_entry_t *newentry = NULL;
@@ -2440,7 +2442,9 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     JL_LOCK(&replaced_mi->def.method->writelock);
     size_t replacedmaxworld = jl_atomic_load_relaxed(&replaced->max_world);
     if (replacedmaxworld == ~(size_t)0) {
-        assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
+        assert((jl_world_at_most(jl_atomic_load_relaxed(&replaced->min_world), max_world) ||
+                max_world + 1 == jl_atomic_load_relaxed(&replaced->min_world)) &&
+               "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
         // recurse to all backedges to update their valid range also
         _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
@@ -3001,13 +3005,14 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
     int enabled = jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0;
     if (enabled) {
         // Narrow the world age on the method to make it uncallable
-        size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+        size_t new_world = jl_world_next_locked();
+        size_t world = new_world - 1;
         assert(method == methodentry->func.method);
         jl_atomic_store_relaxed(&method->dispatch_status, 0);
         assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
         jl_atomic_store_relaxed(&methodentry->max_world, world);
         jl_method_table_invalidate(method, world);
-        jl_atomic_store_release(&jl_world_counter, world + 1);
+        jl_atomic_store_release(&jl_world_counter, new_world);
     }
     JL_UNLOCK(&world_counter_lock);
     if (!enabled)
@@ -3023,7 +3028,11 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     jl_typemap_entry_t *newentry = NULL;
     JL_GC_PUSH1(&newentry);
     // add our new entry
-    assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0); // min-world
+    // min-world: either not yet activated, or already carrying its original
+    // world from a grafted image history (activation preserves it)
+    assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0 ||
+           jl_world_seg(jl_atomic_load_relaxed(&method->primary_world)) !=
+               jl_world_seg(jl_atomic_load_relaxed(&jl_world_counter)));
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     JL_LOCK(&mt->cache->writelock);
@@ -3202,7 +3211,10 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_value_t *oldvalue = NULL;
     jl_array_t *oldmi = NULL;
     size_t world = jl_atomic_load_relaxed(&method->primary_world);
-    assert(world == jl_atomic_load_relaxed(&jl_world_counter) + 1); // min-world
+    // min-world is the next spine world, or a world within a grafted image
+    // history (which the spine merges once the graft completes)
+    assert(world == jl_atomic_load_relaxed(&jl_world_counter) + 1 ||
+           jl_world_seg(world) != jl_world_seg(jl_atomic_load_relaxed(&jl_world_counter)));
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     assert(jl_atomic_load_relaxed(&newentry->min_world) == ~(size_t)0);
@@ -3459,7 +3471,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     JL_LOCK(&world_counter_lock);
     if (!jl_atomic_load_relaxed(&allow_new_worlds))
         jl_error("Method changes have been disabled via a call to disable_new_worlds.");
-    size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    size_t world = jl_world_next_locked();
     jl_atomic_store_relaxed(&method->primary_world, world);
     jl_method_table_activate(newentry);
     jl_atomic_store_release(&jl_world_counter, world);
@@ -3596,8 +3608,7 @@ STATIC_INLINE jl_value_t *_jl_rettype_inferred(jl_value_t *owner, jl_method_inst
 {
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
-            max_world <= jl_atomic_load_relaxed(&codeinst->max_world) &&
+        if (jl_world_range_in_range(min_world, max_world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world)) &&
             jl_egal(codeinst->owner, owner)) {
 
             jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
@@ -3627,7 +3638,7 @@ STATIC_INLINE jl_callptr_t jl_method_compiled_callptr(jl_method_instance_t *mi, 
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
         if (codeinst->owner != jl_nothing)
             continue;
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
+        if (jl_world_in_range(world, jl_atomic_load_relaxed(&codeinst->min_world), jl_atomic_load_relaxed(&codeinst->max_world))) {
             jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
             if (!invoke)
                 continue;
@@ -4730,7 +4741,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
             entry = jl_atomic_load_relaxed(&call_cache[cache_idx[i]]); \
             if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
                 sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
-                world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
+                jl_world_in_range(world, jl_atomic_load_relaxed(&entry->min_world), jl_atomic_load_relaxed(&entry->max_world))) { \
                 goto have_entry; \
             } \
         } while (0);
@@ -5053,20 +5064,30 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     // excluding it from the results is valid for the full span.
     size_t min_world = jl_atomic_load_relaxed(&ml->min_world);
     size_t max_world = jl_atomic_load_relaxed(&ml->max_world);
-    if (closure->world < min_world) {
-        // exclude method table entries that are part of a later world
-        if (closure->match.max_valid >= min_world)
-            closure->match.max_valid = min_world - 1;
+    if (!jl_world_at_least(closure->world, min_world)) {
+        // exclude method table entries that are part of a later (or unrelated) world
+        size_t cap = jl_world_cap_meet(closure->match.max_valid, min_world - 1);
+        if (cap == 0) {
+            // incomparable exclusion cones: degrade to point validity
+            closure->match.min_valid = closure->match.max_valid = closure->world;
+        }
+        else {
+            closure->match.max_valid = cap;
+        }
         return 1;
     }
-    else if (closure->world > max_world) {
+    else if (!jl_world_at_most(closure->world, max_world)) {
         // exclude method table entries that have been replaced in the current world
-        if (closure->match.min_valid <= max_world)
-            closure->match.min_valid = max_world + 1;
+        closure->match.min_valid = jl_world_join(closure->match.min_valid, max_world + 1, closure->world);
         return 1;
     }
-    if (closure->match.max_valid > max_world)
-        closure->match.max_valid = max_world;
+    {
+        size_t cap = jl_world_cap_meet(closure->match.max_valid, max_world);
+        if (cap == 0)
+            closure->match.min_valid = closure->match.max_valid = closure->world;
+        else
+            closure->match.max_valid = cap;
+    }
     jl_method_t *meth = ml->func.method;
     int only = jl_atomic_load_relaxed(&meth->dispatch_status) & METHOD_SIG_LATEST_ONLY;
     if (closure->lim >= 0 && only) {
@@ -5384,8 +5405,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               size_t *min_valid, size_t *max_valid, int *ambig)
 {
     size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
-    if (world > current_world)
-        return jl_nothing; // the future is not enumerable
+    if (!jl_world_at_most(world, current_world))
+        return jl_nothing; // the future is not enumerable (but closed sibling branches of the world DAG are)
     JL_TIMING(METHOD_MATCH, METHOD_MATCH);
     int has_ambiguity = 0;
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)type);
@@ -5460,10 +5481,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                 jl_array_ptr_set(env.t, 0, env.matc);
                 size_t min_world = jl_atomic_load_relaxed(&entry->min_world);
                 size_t max_world = jl_atomic_load_relaxed(&entry->max_world);
-                if (*min_valid < min_world)
-                    *min_valid = min_world;
-                if (*max_valid > max_world)
-                    *max_valid = max_world;
+                *min_valid = jl_world_join(*min_valid, min_world, world);
+                *max_valid = jl_world_cap_meet(*max_valid, max_world);
+                assert(*max_valid != 0);
                 JL_GC_POP();
                 return env.t;
             }
@@ -5493,10 +5513,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                         env.match.env, meth, FULLY_COVERS);
                     env.t = (jl_value_t*)jl_alloc_vec_any(1);
                     jl_array_ptr_set(env.t, 0, env.matc);
-                    if (*min_valid < min_world)
-                        *min_valid = min_world;
-                    if (*max_valid > max_world)
-                        *max_valid = max_world;
+                    *min_valid = jl_world_join(*min_valid, min_world, world);
+                    *max_valid = jl_world_cap_meet(*max_valid, max_world);
+                    assert(*max_valid != 0);
                     JL_GC_POP();
                     return env.t;
                 }
@@ -5684,8 +5703,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
         // method applicability is the same as typemapentry applicability
         size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
         // intersect the env valid range with method lookup's inclusive valid range
-        if (env.match.min_valid < min_world)
-            env.match.min_valid = min_world;
+        env.match.min_valid = jl_world_join(env.match.min_valid, min_world, world);
     }
     if (mc && cache_result_recursion && ((jl_datatype_t*)unw)->isdispatchtuple) { // cache_result_recursion prevents lock confusion and unnecessary work
         if (len == 1 && !has_ambiguity) {
@@ -5835,12 +5853,12 @@ JL_DLLEXPORT void jl_drop_all_caches(void)
     JL_LOCK(&world_counter_lock);
 
     // Get current world age - we'll invalidate everything at this world
-    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
+    size_t new_world = jl_world_next_locked();
+    size_t current_world = new_world - 1;
 
     invalidate_all_caches(jl_method_table, current_world);
 
     // Increment world age - this forces all subsequent compilation to happen in the new world
-    size_t new_world = current_world + 1;
     jl_atomic_store_release(&jl_world_counter, new_world);
 
     JL_UNLOCK(&world_counter_lock);

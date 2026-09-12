@@ -305,7 +305,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         gs = (jl_sym_t*)arg;
     }
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
     jl_binding_partition_t *bpart = NULL;
     if (!strong && set_type)
@@ -569,7 +569,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
 {
     JL_GC_PUSH1(&val);
     JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    size_t new_world = jl_world_next_locked();
     jl_binding_partition_t *bpart = jl_declare_constant_val3(b, mod, var, val, constant_kind, new_world);
     if (jl_atomic_load_relaxed(&bpart->min_world) == new_world)
         jl_atomic_store_release(&jl_world_counter, new_world);

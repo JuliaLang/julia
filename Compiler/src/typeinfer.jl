@@ -179,7 +179,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         end
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
-        if max_world >= validation_world
+        if world_reaches(validation_world, max_world)
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             store_backedges(ci, edges)
@@ -279,7 +279,7 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     ipo_effects = zero(UInt32)
     min_world = src.min_world
     max_world = src.max_world
-    if max_world >= get_world_counter()
+    if world_reaches(get_world_counter(), max_world)
         max_world = typemax(UInt)
     end
     if max_world == typemax(UInt)
@@ -1617,7 +1617,8 @@ end
 function ci_worlds_cover(code::CodeInstance, valid_worlds::WorldRange)
     min_world = @atomic :acquire code.min_world
     max_world = @atomic :acquire code.max_world
-    return min_world <= first(valid_worlds) && last(valid_worlds) <= max_world
+    return world_reaches(min_world, first(valid_worlds)) &&
+        world_at_most(last(valid_worlds), max_world)
 end
 
 function ci_cache_head(mi::MethodInstance)
@@ -2099,7 +2100,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             # if this method is generally visible to the current compilation world,
             # and this is either the primary world, or not applicable in the primary world
             # then we want to compile and emit this
-            if item.def.primary_world <= world
+            if world_reaches(item.def.primary_world, world)
                 ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
                 ci isa CodeInstance && push!(workqueue, ci)
             end
