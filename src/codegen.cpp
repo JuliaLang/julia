@@ -5022,7 +5022,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
                 }
                 ptindex = emit_ptrgep(ctx, ptindex, idx0);
-                *ret = typed_load(ctx, data, NULL, ety, ctx.alias().arraybuf, nullptr, false,
+                *ret = typed_load(ctx, data, NULL, ety, ctx.alias().arraybuf, false,
                         AtomicOrdering::NotAtomic, false, 0, nullptr, ptindex, ctx.alias().arrayselbyte);
             }
             else {
@@ -5037,7 +5037,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
                 *ret = typed_load(ctx, ptr, nullptr, ety,
                         isboxed ? ctx.alias().ptrarraybuf : ctx.alias().arraybuf,
-                        ctx.noalias().aliasscope.current,
                         isboxed, Order, maybenull, al);
                 if (needlock) {
                     emit_lockstate_value(ctx, lock, false);
@@ -5280,7 +5279,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     Value *ptr = data_pointer(ctx, ptrobj);
                     *ret = typed_load(ctx, ptr, vidx,
                             isboxed ? (jl_value_t*)jl_any_type : jt,
-                            ptrobj.aliasinfo, nullptr, isboxed, AtomicOrdering::NotAtomic, false);
+                            ptrobj.aliasinfo, isboxed, AtomicOrdering::NotAtomic, false);
                     return true;
                 }
 
@@ -9834,7 +9833,7 @@ static jl_llvm_functions_t
             Value *worldaddr = emit_ptrgep(ctx, oc_this, offsetof(jl_opaque_closure_t, world));
             Align alignof_ptr(ctx.types().alignof_ptr);
             jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
-                jl_aliasinfo_t(), nullptr, false, AtomicOrdering::NotAtomic, false, alignof_ptr.value());
+                jl_aliasinfo_t(), false, AtomicOrdering::NotAtomic, false, alignof_ptr.value());
             assert(ctx.world_age_at_entry == nullptr);
             ctx.world_age_at_entry = closure_world.V; // The tls world in a OC is the world of the closure
             emit_unbox_store(ctx, closure_world, get_tls_world_age_field(ctx), ctx.alias().gcframe, alignof_ptr, alignof_ptr);
@@ -9845,7 +9844,7 @@ static jl_llvm_functions_t
             // Load closure env, which is always a boxed value (usually some Tuple) currently
             Value *envaddr = emit_ptrgep(ctx, oc_this, offsetof(jl_opaque_closure_t, captures));
             theArg = typed_load(ctx, envaddr, NULL, (jl_value_t*)vi.value.typ,
-                jl_aliasinfo_t(), nullptr, /*isboxed*/true, AtomicOrdering::NotAtomic, false, sizeof(void*));
+                jl_aliasinfo_t(), /*isboxed*/true, AtomicOrdering::NotAtomic, false, sizeof(void*));
         }
         else {
             jl_value_t *argType = jl_nth_slot_type(abi, i);

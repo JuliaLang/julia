@@ -9,6 +9,17 @@
 # `llvm-link` is used to create a single module that can be passed to opt.
 # The order in which files are emitted and linked is important since `lit` will
 # process the test cases in order.
+#
+# Loads must NOT carry the user `@aliasscope` scope in their `!alias.scope`
+# metadata: codegen cannot distinguish loads from `Const` arrays (for which
+# that would be sound) from ordinary loads, and marking ordinary loads
+# asserts they do not alias any store inside the scope, miscompiling
+# read/write code such as loop-carried recurrences (#60029, #63129).
+# Stores keep the scope in their `!noalias` metadata. Because named alias
+# scopes are uniqued, every array load's `!alias.scope` list below is the
+# same `!{!"jnoalias_data"}` node; if the per-function user scope were ever
+# (re)added to loads, the lists would differ between functions and these
+# checks would fail.
 
 include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
@@ -28,7 +39,7 @@ end
 function constargs(A, B::Const)
     @aliasscope @inbounds for I in eachindex(A, B)
         A[I] = B[I]
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE2_LD:![0-9]+]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE_LD]]
 # CHECK: store double {{.*}} !noalias [[SCOPE2_ST:![0-9]+]]
     end
     return 0
@@ -40,9 +51,9 @@ function micro_ker!(AB, Ac, Bc, kc, offSetA, offSetB)
     @inbounds @aliasscope for k in 1:kc
         for j in 1:NR, i in 1:MR
             AB[i+(j-1)*MR] = muladd(Const(Ac)[offSetA+i], Const(Bc)[offSetB+j], Const(AB)[i+(j-1)*MR])
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE3_LD:![0-9]+]]
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE3_LD]]
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE3_LD]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE_LD]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE_LD]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE_LD]]
 # CHECK: store double {{.*}} !noalias [[SCOPE3_ST:![0-9]+]]
         end
         offSetA += MR
@@ -51,12 +62,11 @@ function micro_ker!(AB, Ac, Bc, kc, offSetA, offSetB)
     return
 end
 
-# CHECK-DAG: [[SCOPE_LD]] = !{[[ALIASSCOPE:![0-9]+]]
-# CHECK-DAG: [[SCOPE_ST]] = !{[[ALIASSCOPE]]
-# CHECK-DAG: [[SCOPE2_LD]] = !{[[ALIASSCOPE2:![0-9]+]]
-# CHECK-DAG: [[SCOPE2_ST]] = !{[[ALIASSCOPE2]]
-# CHECK-DAG: [[SCOPE3_LD]] = !{[[ALIASSCOPE3:![0-9]+]]
-# CHECK-DAG: [[SCOPE3_ST]] = !{[[ALIASSCOPE3]]
+# CHECK-DAG: [[SCOPE_LD]] = !{[[DATA_SCOPE:![0-9]+]]}
+# CHECK-DAG: [[DATA_SCOPE]] = !{!"jnoalias_data"
+# CHECK-DAG: [[SCOPE_ST]] = !{[[ALIASSCOPE:![0-9]+]]
+# CHECK-DAG: [[SCOPE2_ST]] = !{[[ALIASSCOPE2:![0-9]+]]
+# CHECK-DAG: [[SCOPE3_ST]] = !{[[ALIASSCOPE3:![0-9]+]]
 # CHECK-DAG: [[ALIASSCOPE]] = !{!"aliasscope", [[MDNODE:![0-9]+]]}
 # CHECK-DAG: [[MDNODE]] = !{!"simple"}
 

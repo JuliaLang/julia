@@ -388,6 +388,29 @@ str = String(take!(io))
 @test occursin("aliasscope", str)
 @test occursin("noalias", str)
 
+# Issues #60029, #63129 - `@aliasscope` must not assert that ordinary (non-`Const`)
+# loads don't alias stores within the scope; this loop-carried recurrence through `B`
+# was miscompiled when it did.
+function fwd63129!(B, a, n)
+    for l in axes(B, 1)
+        Base.Experimental.@aliasscope begin
+            @inbounds for i in 2:n
+                B[l, i] -= a[i] * B[l, i-1]
+            end
+        end
+    end
+    return B
+end
+function fwd63129_plain!(B, a, n)
+    for l in axes(B, 1), i in 2:n
+        B[l, i] -= a[i] * B[l, i-1]
+    end
+    return B
+end
+let B = rand(4, 16), a = rand(16)
+    @test fwd63129!(copy(B), a, 16) == fwd63129_plain!(copy(B), a, 16)
+end
+
 # Issue #10208 - Unnecessary boxing for calling objectid
 struct FooDictHash{T}
     x::T
