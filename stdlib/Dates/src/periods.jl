@@ -115,6 +115,28 @@ coarserperiod(::Type{Hour}) = (Day, 24)
 coarserperiod(::Type{Day}) = (Week, 7)
 coarserperiod(::Type{Month}) = (Year, 12)
 
+# Period types paired with the number of the next-finer period they contain, in
+# coarsest-to-finest order. The `OtherPeriod`s (Year, Quarter, Month) come first, followed
+# by the `FixedPeriod`s (Week down to Nanosecond). These tuples are the single source of
+# truth for the period ordering, the `FixedPeriod`/`OtherPeriod` unions, and the unit
+# conversions defined by `define_conversions`.
+const OTHER_PERIOD_CONVERSIONS = ((Year, 4), (Quarter, 3), (Month, 1))
+const FIXED_PERIOD_CONVERSIONS = ((Week, 7), (Day, 24), (Hour, 60), (Minute, 60),
+                                  (Second, 1000), (Millisecond, 1000), (Microsecond, 1000), (Nanosecond, 1))
+const OTHER_PERIOD_TYPES = map(first, OTHER_PERIOD_CONVERSIONS)
+const FIXED_PERIOD_TYPES = map(first, FIXED_PERIOD_CONVERSIONS)
+# All period types coarsest to finest; the order matches `CompoundPeriod`'s sort
+# (descending `tons ∘ oneunit`).
+const PERIOD_TYPES = (OTHER_PERIOD_TYPES..., FIXED_PERIOD_TYPES...)
+
+# A `FixedPeriod` is a fixed multiple of a day, so it has a constant length in the storage
+# unit (a week is always 7 days, an hour always 3600 seconds). An `OtherPeriod` is a
+# multiple of a month, whose length in days is not constant (28–31); they are exactly
+# convertible among themselves but not to a fixed number of days.
+const FixedPeriod = Union{FIXED_PERIOD_TYPES...}
+const OtherPeriod = Union{OTHER_PERIOD_TYPES...}
+const BuiltInPeriod = Union{FixedPeriod, OtherPeriod}
+
 # Stores multiple periods in greatest to least order by type, not values,
 # canonicalized to eliminate zero periods, merge equal period types,
 # and convert more-precise periods to less-precise periods when possible
@@ -353,9 +375,39 @@ Base.isequal(x::CompoundPeriod, y::Period) = isequal(x, CompoundPeriod(y))
 Base.isequal(x::Period, y::CompoundPeriod) = isequal(y, x)
 Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = isequal(x.periods, y.periods)
 
-# Capture TimeType+-Period methods
-(+)(a::TimeType, b::Period, c::Period) = (+)(a, b + c)
-(+)(a::TimeType, b::Period, c::Period, d::Period...) = (+)((+)(a, b + c), d...)
+# Capture chained additions such as `dt + Day(1) + Month(1)`, which Julia parses as a
+# single n-ary call `+(dt, Day(1), Month(1))`. The periods are grouped by type and
+# applied from the coarsest type to the finest, independent of the order in which they
+# are given, so that the result is order-independent and matches `dt + CompoundPeriod(...)`
+# without ever constructing a `CompoundPeriod`.
+
+# Total value of the periods in `ps` whose type is exactly `P`.
+Base.@constprop :aggressive _sumperiods(::Type{P}, ::Tuple{}) where {P<:BuiltInPeriod} = 0
+Base.@constprop :aggressive _sumperiods(::Type{P}, ps::Tuple) where {P<:BuiltInPeriod} =
+    (first(ps) isa P ? value(first(ps)) : 0) + _sumperiods(P, Base.tail(ps))
+
+Base.@constprop :aggressive _addperiods(x::TimeType, ::Tuple{}, ::Tuple) = x
+Base.@constprop :aggressive function _addperiods(x::TimeType, types::Tuple, ps::Tuple)
+    P = first(types)
+    s = _sumperiods(P, ps)
+    # Types with a zero total are skipped, so absent types produce no code and a zero
+    # total never forces an invalid addition (e.g. a `Year` onto a `Time`).
+    x = iszero(s) ? x : x + P(s)
+    return _addperiods(x, Base.tail(types), ps)
+end
+
+# `PERIOD_TYPES` is a compile-time constant. Its element type is only `DataType`, so the
+# per-type value `first(types)` is recovered through constant propagation; `@constprop
+# :aggressive` makes `_addperiods` unroll and fold to concrete period constructions.
+(+)(x::TimeType, p1::BuiltInPeriod, p2::BuiltInPeriod, ps::BuiltInPeriod...) =
+    _addperiods(x, PERIOD_TYPES, (p1, p2, ps...))
+
+# Fallback for custom `Period`s. Collecting the periods into a single `CompoundPeriod`
+# groups equal types and sorts them coarsest-to-finest (by `tons ∘ oneunit`, the same
+# order key the built-in fast path is checked against), so custom subtypes are preserved
+# and applied in the same order as the fast path and as `dt + CompoundPeriod(...)`.
+(+)(x::TimeType, p1::Period, p2::Period, ps::Period...) =
+    x + CompoundPeriod(Period[p1, p2, ps...])
 
 function (+)(x::TimeType, y::CompoundPeriod)
     for p in y.periods
@@ -374,10 +426,6 @@ end
 
 Base.iszero(x::CompoundPeriod) = isempty(canonicalize(x).periods)
 Base.zero(::Union{CompoundPeriod,Type{CompoundPeriod}}) = CompoundPeriod()
-
-# Fixed-value Periods (periods corresponding to a well-defined time interval,
-# as opposed to variable calendar intervals like Year).
-const FixedPeriod = Union{Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond}
 
 # like div but throw an error if remainder is nonzero
 function divexact(x, y)
@@ -414,12 +462,13 @@ function define_conversions(periods)
         end
     end
 end
-define_conversions([(:Week, 7), (:Day, 24), (:Hour, 60), (:Minute, 60), (:Second, 1000),
-                    (:Millisecond, 1000), (:Microsecond, 1000), (:Nanosecond, 1)])
-define_conversions([(:Year, 4), (:Quarter, 3), (:Month, 1)])
+# Two separate calls, one per group: conversions are exact within a group but must not
+# exist across the boundary (a month is not a fixed number of days), so `FixedPeriod`s and
+# `OtherPeriod`s are deliberately never made convertible to each other.
+define_conversions(FIXED_PERIOD_CONVERSIONS)
+define_conversions(OTHER_PERIOD_CONVERSIONS)
 
 # fixed is not comparable to other periods, except when both are zero (#37459)
-const OtherPeriod = Union{Month, Quarter, Year}
 (==)(x::FixedPeriod, y::OtherPeriod) = iszero(x) & iszero(y)
 (==)(x::OtherPeriod, y::FixedPeriod) = y == x
 
