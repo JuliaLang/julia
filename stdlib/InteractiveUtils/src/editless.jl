@@ -153,7 +153,8 @@ function define_default_editors()
         `$cmd +$line:$column $path`
     end
     define_editor(["micro", "kak"]; wait=true) do cmd, path, line, column
-        `$cmd +$line $path`
+        # micro ignores "+line:column" if column == 0
+        iszero(column) ? `$cmd +$line $path` : `$cmd +$line:$column $path`
     end
     define_editor(["hx", "helix"]; wait=true) do cmd, path, line, column
         `$cmd $path:$line:$column`
