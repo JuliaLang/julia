@@ -17,7 +17,8 @@ import
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, decompose, minmax, _precision_with_base_2,
-        sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
+        sinpi, cospi, sincospi, tanpi, asinpi, acospi, atanpi,
+        sind, cosd, tand, asind, acosd, atand,
         uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
         ispositive, isnegative
 
@@ -941,7 +942,8 @@ function sum(arr::AbstractArray{BigFloat})
 end
 
 # Functions for which NaN results are converted to DomainError, following Base
-for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sinpi, :cospi, :tanpi)
+for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh,
+          :sinpi, :cospi, :tanpi, :asinpi, :acospi, :atanpi)
     @eval begin
         function ($f)(x::BigFloat)
             isnan(x) && return x
@@ -957,6 +959,12 @@ sincospi(x::BigFloat) = (sinpi(x), cospi(x))
 function atan(y::BigFloat, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_atan2, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, y, x, rounding_raw(BigFloat))
+    return z
+end
+
+function atanpi(y::BigFloat, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_atan2pi, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, y, x, rounding_raw(BigFloat))
     return z
 end
 

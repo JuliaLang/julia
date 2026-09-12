@@ -390,31 +390,16 @@ arc_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
 
 
 @inline function asin_kernel(t::Float64, x::Float64)
-    # we use that for 1/2 <= x < 1 we have
-    #     asin(x) = pi/2-2*asin(sqrt((1-x)/2))
-    # Let y = (1-x), z = y/2, s := sqrt(z), and pio2_hi+pio2_lo=pi/2;
-    # then for x>0.98
-    #     asin(x) = pi/2 - 2*(s+s*z*R(z))
-    #         = pio2_hi - (2*(s+s*z*R(z)) - pio2_lo)
-    # For x<=0.98, let pio4_hi = pio2_hi/2, then
-    #     f = hi part of s;
-    #     c = sqrt(z) - f = (z-f*f)/(s+f)     ...f+c=sqrt(z)
-    #  and
-    #     asin(x) = pi/2 - 2*(s+s*z*R(z))
-    #         = pio4_hi+(pio4-2s)-(2s*z*R(z)-pio2_lo)
-    #         = pio4_hi+(pio4-2f)-(2s*z*R(z)-(pio2_lo+2c))
+    # for 1/2 <= |x| < 1 we have asin(|x|) = π/2 - 2asin(√t), t = (1-|x|)/2.
+    # two_sqrt gives √t = s + e, so 2asin(√t) = 2*(s + e + s*R(t)) up to the
+    # dropped e*R(t), and the π/2 is subtracted as a double-double.
+    pio2_hi = 1.57079632679489655800e+00
     pio2_lo = 6.12323399573676603587e-17
-    s = sqrt_llvm(t)
-    tRt = arc_tRt(t)
-    if abs(x) >= 0.975 # |x| > 0.975
-        return flipsign(pi/2 - (2.0*(s + s*tRt) - pio2_lo), x)
-    else
-        s0 = reinterpret(Float64, (reinterpret(UInt64, s) >> 32) << 32)
-        c = (t - s0*s0)/(s + s0)
-        p = 2.0*s*tRt - (pio2_lo - 2.0*c)
-        q = pi/4 - 2.0*s0
-        return flipsign(pi/4 - (p-q), x)
-    end
+    s, e = two_sqrt(t)
+    whi = 2.0*s
+    wlo = 2.0*muladd(s, arc_tRt(t), e)
+    r = pio2_hi - whi
+    return flipsign(r + (((pio2_hi - r) - whi) + (pio2_lo - wlo)), x)
 end
 @inline function asin_kernel(t::Float32, x::Float32)
     s = sqrt_llvm(Float64(t))
@@ -438,10 +423,7 @@ function asin(x::T) where T<:Union{Float32, Float64}
         end
         asin_domain_error(x)
     elseif absx < T(1.0)/2
-        # if |x| sufficiently small, |x| is a good approximation
-        if absx < ASIN_X_MIN_THRESHOLD(T)
-            return x
-        end
+        # arc_tRt(0) is 0, so tiny |x| returns x unchanged
         return muladd(x, arc_tRt(x*x), x)
     end
     # else 1/2 <= |x| < 1
@@ -523,33 +505,23 @@ function atan(x::T) where T<:Union{Float32, Float64}
             return x
         end
         p, q = atan_pq(x)
-        return x - x*(p + q)
+        return muladd(-x, p + q, x)
     end
     xsign = sign(x)
-    if absx < T(19/16) # 7/16 <= |x| < 19/16
-        if absx < T(11/16) # 7/16 <= |x| <11/16
-            hi = ATAN_1_O_2_HI(T)
-            lo = ATAN_1_O_2_LO(T)
-            x = (T(2.0)*absx - T(1.0))/(T(2.0) + absx)
-        else # 11/16 <= |x| < 19/16
-            hi = ATAN_2_O_2_HI(T)
-            lo = ATAN_2_O_2_LO(T)
-            x  = (absx - T(1.0))/(absx + T(1.0))
-        end
-    else
-        if absx < T(39/16)  # 19/16 <= |x| < 39/16
-            hi = ATAN_3_O_2_HI(T)
-            lo = ATAN_3_O_2_LO(T)
-            x = (absx - T(1.5))/(T(1.0) + T(1.5)*absx)
-        else # 39/16 <= |x| < upper threshold (2.0^66 or 2.0f0^26)
-            hi = ATAN_INF_HI(T)
-            lo = ATAN_INF_LO(T)
-            x  = -T(1.0)/absx
-        end
+    # The four centers share xr = (a*|x| - b)/(a + b*|x|), with (a, b) = (0, 1)
+    # degenerating to -1/|x|. Every coefficient is exact, so this agrees with the
+    # nested form bit for bit, and the three comparisons need no branch between them.
+    i = (absx >= T(11/16)) + (absx >= T(19/16)) + (absx >= T(39/16)) + 1
+    @assume_effects :nothrow begin # needed because of #63076
+        a = (T(2.0), T(1.0), T(2.0), T(0.0))[i]
+        b = (T(1.0), T(1.0), T(3.0), T(1.0))[i]
+        hi = (ATAN_1_O_2_HI(T), ATAN_2_O_2_HI(T), ATAN_3_O_2_HI(T), ATAN_INF_HI(T))[i]
+        lo = (ATAN_1_O_2_LO(T), ATAN_2_O_2_LO(T), ATAN_3_O_2_LO(T), ATAN_INF_LO(T))[i]
     end
+    x = muladd(a, absx, -b)/muladd(b, absx, a)
     # end of argument reduction
     p, q = atan_pq(x)
-    z = hi - ((x*(p + q) - lo) - x)
+    z = hi - (muladd(x, p + q, -lo) - x)
     copysign(z, xsign)
 end
 # atan2 methods
@@ -654,16 +626,12 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     end
 end
 # acos methods
-ACOS_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-26
-ACOS_X_MIN_THRESHOLD(::Type{Float64}) = 2.0^-57
 PIO2_HI(::Type{Float32}) = 1.5707962513f+00
 PIO2_LO(::Type{Float32}) = 7.5497894159f-08
 PIO2_HI(::Type{Float64}) = 1.57079632679489655800e+00
 PIO2_LO(::Type{Float64}) = 6.12323399573676603587e-17
 ACOS_PI(::Type{Float32}) = 3.1415925026f+00
 ACOS_PI(::Type{Float64}) = 3.14159265358979311600e+00
-@inline ACOS_CORRECT_LOWWORD(::Type{Float32}, x) = reinterpret(Float32, (reinterpret(UInt32, x) & 0xfffff000))
-@inline ACOS_CORRECT_LOWWORD(::Type{Float64}, x) = reinterpret(Float64, (reinterpret(UInt64, x) >> 32) << 32)
 
 @noinline acos_domain_error(x) = throw(DomainError(x, "acos(x) not defined for |x| > 1"))
 function acos(x::T) where T <: Union{Float32, Float64}
@@ -681,10 +649,9 @@ function acos(x::T) where T <: Union{Float32, Float64}
     # 3) For x > 0.5
     #     acos(x) = pi/2 - (pi/2 - 2asin(sqrt((1 - x)/2)))
     #        = 2asin(sqrt((1 - x)/2))
-    #        = 2s + 2s*z*R(z)     ...z=(1 - x)/2, s=sqrt(z)
-    #        = 2f + (2c + 2s*z*R(z))
-    #    where f=hi part of s, and c = (z - f*f)/(s + f) is the correction term
-    #    for f so that f + c ~ sqrt(z).
+    #        ≈ 2*(s + e + s*z*R(z))     ...z=(1 - x)/2, s+e=sqrt(z)
+    #    where s+e is the two_sqrt splitting of sqrt(z), which carries about
+    #    twice the working precision. The dropped term is e*z*R(z).
 
     # Special cases:
     #    4) if x is NaN, return x itself;
@@ -697,29 +664,277 @@ function acos(x::T) where T <: Union{Float32, Float64}
         # acos(x) is not defined for |x| > 1
         acos_domain_error(x) # see 5) above
     elseif absx < T(1.0)/2 # see 1) above
-        # if |x| sufficiently small, acos(x) ≈ pi/2
-        absx < ACOS_X_MIN_THRESHOLD(T) && return T(pi)/2
-        # if |x| < 0.5 we have acos(x) = pi/2 - (x + x*x^2*R(x^2))
+        # tiny |x| collapses this to pi/2
         return PIO2_HI(T) - (x - (PIO2_LO(T) - x*arc_tRt(x*x)))
     end
     z = (T(1.0) - absx)*T(0.5)
     zRz = arc_tRt(z)
-    s = sqrt_llvm(z)
+    s, e = two_sqrt(z)
     if x < T(0.0) # see 2) above
-        return ACOS_PI(T) - T(2.0)*(s + (zRz*s - PIO2_LO(T)))
+        return ACOS_PI(T) - T(2.0)*(s + (zRz*s + (e - PIO2_LO(T))))
     else # see 3) above
-        # if x > 0.5 we have
-        # acos(x) = pi/2 - (pi/2 - 2asin(sqrt((1-x)/2)))
-        #         = 2asin(sqrt((1-x)/2))
-        #         = 2s + 2s*z*R(z)    ...z=(1-x)/2, s=sqrt(z)
-        #         = 2f + (2c + 2s*z*R(z))
-        # where f=hi part of s, and c = (z-f*f)/(s+f) is the correction term
-        # for f so that f+c ~ sqrt(z).
-        df = ACOS_CORRECT_LOWWORD(T, s)
-        c  = (z - df*df)/(s + df)
-        return T(2.0)*(df + (zRz*s + c))
+        # √z = s + e, so acos(x) = 2asin(√z) = 2*(s + e + s*R(z)) for x > 0.5
+        return T(2.0)*(s + muladd(zRz, s, e))
     end
 end
+
+# Inverse trigonometric functions in half-turns
+#
+# asinpi, acospi and atanpi reuse the argument reductions and the rational
+# approximations of asin, acos and atan above, rescaled by a double-double 1/π.
+# The π/2, π, atan(1) and atan(Inf) that those reductions add become 1/2, 1,
+# 1/4 and 1/2, exact in binary floating point rather than rounded constants.
+# The results at ±1 and ±Inf, and the whole quadrant table of atanpi(y, x),
+# are exact as a consequence.
+const INV_PI_HI = 0.3183098861837907            # (1/π).hi
+const INV_PI_LO = -1.9678676675182486e-17       # (1/π).lo
+const TWO_INV_PI_HI = 2.0*INV_PI_HI
+const TWO_INV_PI_LO = 2.0*INV_PI_LO
+const ATANPI_1_O_2_HI = 0.14758361765043326     # (atan(0.5)/π).hi
+const ATANPI_1_O_2_LO = 1.1095511164473943e-17  # (atan(0.5)/π).lo
+const ATANPI_3_O_2_HI = 0.3128329581890012      # (atan(1.5)/π).hi
+const ATANPI_3_O_2_LO = -1.4076885713501453e-17 # (atan(1.5)/π).lo
+# atan(1.0)/π and atan(Inf)/π are exactly 0.25 and 0.5
+
+"""
+    divpi(x)
+
+Compute `x/π` with a single rounding.
+"""
+@inline function divpi(x::Float64)
+    Core.Intrinsics.have_fma(Float64) && return fma(x, INV_PI_HI, x*INV_PI_LO)
+    hi, lo = two_mul(x, INV_PI_HI)
+    return hi + muladd(x, INV_PI_LO, lo)
+end
+
+"""
+    scale_divpi(x, t)
+
+Compute `(x + x*t)/π` with a single rounding, for `t` small against 1.
+"""
+@inline function scale_divpi(x::Float64, t::Float64)
+    # x*INV_PI_HI has to reach the addition unrounded, which is what the outer
+    # fma gives. Hardware without an fma recovers the low word instead.
+    Core.Intrinsics.have_fma(Float64) &&
+        return fma(x, INV_PI_HI, x*fma(t, INV_PI_HI, INV_PI_LO))
+    hi, lo = two_mul(x, INV_PI_HI)
+    return hi + muladd(hi, t, muladd(x, INV_PI_LO, lo))
+end
+
+"""
+    acospi_kernel(x)
+
+Compute `acos(1-2x)/π = 2asin(√x)/π` on x∈(0; 1/4] as an unevaluated sum `hi + lo`.
+"""
+@inline function acospi_kernel(x::Float64)
+    # asin above approximates asin(s) = s + s*arc_tRt(s²) on s∈[0; 1/2]. Taking
+    # s = √x = shi + slo makes s² exactly x, so
+    #     v ≡ asin(√x) = shi + slo + shi*arc_tRt(x)
+    # dropping slo*arc_tRt(x), which stays under 2^-57 of v. Fast2Sum then
+    # renormalizes shi + vlo to v + verr, and the factor 2 of acos(1-2x) is
+    # included in the double-double 2/π.
+    shi, slo = two_sqrt(x)
+    vlo = muladd(shi, arc_tRt(x), slo)
+    v = shi + vlo
+    verr = (shi - v) + vlo
+    hi, lo = two_mul(v, TWO_INV_PI_HI)
+    return hi, muladd(verr, TWO_INV_PI_HI, muladd(v, TWO_INV_PI_LO, lo))
+end
+
+"""
+    asinpi(x::T) where T -> float(T)
+
+Compute ``\\arcsin(x)/\\pi``, the inverse sine of `x` in half-turns, more accurately than
+`asin(x)/pi`.
+
+Throw a [`DomainError`](@ref) if `abs(x) > 1`, return a `T(NaN)` if `isnan(x)`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`sinpi`](@ref), [`asind`](@ref), [`acospi`](@ref), [`atanpi`](@ref).
+
+# Examples
+```jldoctest
+julia> asinpi(0.5) # asin(0.5) is π/6, a sixth of a half-turn
+0.16666666666666666
+
+julia> asin(0.5)/pi
+0.16666666666666669
+
+julia> asinpi(1)
+0.5
+```
+"""
+function asinpi(x::Float64)
+    absx = abs(x)
+    if absx >= 1.0
+        absx == 1.0 && return copysign(0.5, x)
+        asin_domain_error(x)
+    elseif absx < 0.5
+        # if |x| sufficiently small, asin(x)/π is x/π to within a rounding
+        absx < ASIN_X_MIN_THRESHOLD(Float64) && return copysign(divpi(absx), x)
+        # asin(x)/π = (x/π)*(1 + x²R(x²))
+        return scale_divpi(x, arc_tRt(x*x))
+    end
+    # else 1/2 <= |x| < 1, where asin(|x|)/π = 1/2 - acos(|x|)/π
+    hi, lo = acospi_kernel((1.0 - absx)/2)
+    r = 0.5 - hi
+    return copysign(r + (((0.5 - r) - hi) - lo), x)
+end
+
+"""
+    acospi(x::T) where T -> float(T)
+
+Compute ``\\arccos(x)/\\pi``, the inverse cosine of `x` in half-turns, more accurately than
+`acos(x)/pi`.
+
+Throw a [`DomainError`](@ref) if `abs(x) > 1`, return a `T(NaN)` if `isnan(x)`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`cospi`](@ref), [`acosd`](@ref), [`asinpi`](@ref), [`atanpi`](@ref).
+
+# Examples
+```jldoctest
+julia> acospi(0.5) # acos(0.5) is π/3, a third of a half-turn
+0.3333333333333333
+
+julia> acos(0.5)/pi
+0.33333333333333337
+
+julia> acospi(-1)
+1.0
+```
+"""
+function acospi(x::Float64)
+    absx = abs(x)
+    if absx >= 1.0
+        absx == 1.0 && return x > 0.0 ? 0.0 : 1.0
+        acos_domain_error(x)
+    elseif absx < 0.5
+        # acos(x)/π = 1/2 - (x/π)*(1 + x²R(x²))
+        # tiny |x| collapses this to 1/2
+        hi, lo = two_mul(x, INV_PI_HI)
+        a = muladd(hi, arc_tRt(x*x), muladd(x, INV_PI_LO, lo))
+        r = 0.5 - hi
+        return r + (((0.5 - r) - hi) - a)
+    end
+    hi, lo = acospi_kernel((1.0 - absx)/2)
+    x > 0.0 && return hi + lo
+    # acos(x)/π = 1 - acos(|x|)/π for x < 0
+    r = 1.0 - hi
+    return r + (((1.0 - r) - hi) - lo)
+end
+
+"""
+    atanpi(y::T) where T -> float(T)
+    atanpi(y::T, x::S) where {T,S} -> float(promote_type(T,S))
+
+Compute ``\\arctan(y)/\\pi`` or ``\\arctan(y/x)/\\pi`` respectively, the inverse tangent in
+half-turns, more accurately than `atan(y)/pi` or `atan(y,x)/pi`.
+
+Return a `NaN` if `isnan(y)` or `isnan(x)`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`tanpi`](@ref), [`atand`](@ref), [`asinpi`](@ref), [`acospi`](@ref).
+
+# Examples
+```jldoctest
+julia> atanpi(1)
+0.25
+
+julia> atanpi(Inf)
+0.5
+
+julia> atanpi(-1, -1) # third quadrant, i.e. -135°
+-0.75
+```
+"""
+function atanpi(x::Float64)
+    absx = abs(x)
+    # for large |x| the correction to 1/2 is below half an ulp; NaN falls through
+    absx >= ATAN_LARGE_X(Float64) && return copysign(0.5, x)
+    # 7/16 is the radius atan_pq is fitted on. Past it, atan(x)/π is taken as
+    # atan(c)/π + atan(xr)/π around a center c ∈ {1/2, 1, 3/2, ∞}, the breakpoints
+    # chosen so that xr = (x-c)/(1+c*x) stays inside that radius. See atan above.
+    if absx < 7/16
+        # if |x| sufficiently small, atan(x)/π is x/π to within a rounding
+        absx < ATAN_SMALL_X(Float64) && return copysign(divpi(absx), x)
+        p, q = atan_pq(x)
+        # atan(x)/π = (x/π)*(1 - (p + q))
+        return scale_divpi(x, -(p + q))
+    end
+    # xr = (a*|x| - b)/(a + b*|x|) covers all four centers; see atan above.
+    i = (absx >= 11/16) + (absx >= 19/16) + (absx >= 39/16) + 1
+    @assume_effects :nothrow begin # needed because of #63076
+        a = (2.0, 1.0, 2.0, 0.0)[i]
+        b = (1.0, 1.0, 3.0, 1.0)[i]
+        zhi = (ATANPI_1_O_2_HI, 0.25, ATANPI_3_O_2_HI, 0.5)[i]
+        zlo = (ATANPI_1_O_2_LO, 0.0, ATANPI_3_O_2_LO, 0.0)[i]
+    end
+    xr = muladd(a, absx, -b)/muladd(b, absx, a)
+    # end of argument reduction
+    p, q = atan_pq(xr)
+    t = muladd(-xr, p + q, xr)
+    thi, tlo = two_mul(t, INV_PI_HI)
+    z = zhi + thi
+    return copysign(z + (((zhi - z) + thi) + (muladd(t, INV_PI_LO, tlo) + zlo)), x)
+end
+
+function atanpi(y::T, x::T) where T<:Union{Float32,Float64}
+    # The special cases are those of atan(y, x), scaled by 1/π. Unlike there,
+    # every one of them is exactly representable, so no π_lo correction is needed
+    # and each collapses to a magnitude selected by signbit(x), signed by y:
+    # atanpi is odd in y, and a negative x adds a half-turn.
+    if isnan(x) | isnan(y)
+        return isnan(x) ? x : y
+    end
+
+    if x == T(1.0) # then y/x = y and x > 0
+        return atanpi(y)
+    end
+
+    if iszero(y)
+        return signbit(x) ? flipsign(one(T), y) : y # ±0 for x > 0, ±1 for x < 0
+    elseif iszero(x)
+        return flipsign(T(0.5), y)
+    end
+
+    if isinf(x)
+        isinf(y) && return flipsign(signbit(x) ? T(0.75) : T(0.25), y)
+        return flipsign(signbit(x) ? one(T) : zero(T), y)
+    end
+
+    # x wasn't Inf, but y is
+    isinf(y) && return flipsign(T(0.5), y)
+
+    ypw = poshighword(y)
+    xpw = poshighword(x)
+    k = reinterpret(Int32, ypw -% xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
+
+    if k > ATAN2_RATIO_THRESHOLD(T) # |y/x| > threshold
+        z = T(0.5)
+    elseif x < 0 && k < -ATAN2_RATIO_THRESHOLD(T) # 0 > |y|/x > threshold
+        z = zero(T)
+    else # safe to do y/x
+        z = atanpi(abs(y/x))
+    end
+
+    return flipsign(signbit(x) ? one(T) - z : z, y)
+end
+
+for f in (:asinpi, :acospi, :atanpi)
+    @eval $f(x::Union{Float16,Float32}) = oftype(x, $f(Float64(x)))
+end
+asinpi(x::AbstractFloat) = asin(x)/oftype(x, pi)
+acospi(x::AbstractFloat) = acos(x)/oftype(x, pi)
+atanpi(x::AbstractFloat) = atan(x)/oftype(x, pi)
+atanpi(y::Real, x::Real) = atanpi(promote(float(y), float(x))...)
+atanpi(::T, ::T) where {T<:AbstractFloat} = Base.no_op_err("atanpi", T)
 
 # Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
 @inline function sinpi_kernel(x::Float64)
