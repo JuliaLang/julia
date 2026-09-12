@@ -1227,7 +1227,7 @@ end
 # Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
 # Core._parse and Core._lower respectively (if they are not `nothing`.)
 
-#    Core._parse(text, filename, lineno, offset, options)
+#    Core._parse(text, filename, lineno, offset, options, version)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
 # it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
@@ -1244,9 +1244,11 @@ _parse = nothing
 # the lowered code, and `xs` is possible additional information from
 # JuliaLowering (TBD).
 _lower = nothing
+_toplevel_eval = nothing
 
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
+_set_toplevel_eval!(f) = setglobal!(Core, :_toplevel_eval, f)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)

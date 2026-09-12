@@ -176,7 +176,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a."b")
-#     ╙ ── expected identifier
+#    └─┘ ── expected identifier
 
 ########################################
 # Error: Named tuple element without valid name
@@ -449,7 +449,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo("blah"::Cstring, "bad")::Int
-#                            └─┘ ── argument needs a type annotation
+#                           └───┘ ── argument needs a type annotation
 
 ########################################
 # Error: @ccall varargs without one fixed argument
@@ -497,7 +497,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall gc_safe="hi" foo(x::Int)::Int
-#               └┘ ── gc_safe must be true or false
+#              └──┘ ── gc_safe must be true or false
 
 ########################################
 # Error: unary & syntax
