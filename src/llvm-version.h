@@ -10,12 +10,8 @@
 #define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
                         + LLVM_VERSION_PATCH)
 
-#if JL_LLVM_VERSION < 170000
-    #error Only LLVM versions >= 17.0.0 are supported by Julia
-#endif
-
-#if JL_LLVM_VERSION < 19000 && defined(_CPU_RISCV64_)
-    #error Only LLVM versions >= 19.0.0 are supported by Julia on RISC-V
+#if JL_LLVM_VERSION < 220000
+    #error Only LLVM versions >= 22.0.0 are supported by Julia
 #endif
 
 // clang 22 destroys a by-value parameter both in the callee, at any `return`
@@ -25,7 +21,7 @@
 // that trip over this have to be hidden from the analyzer while this is
 // defined. Fixed in LLVM 23 by llvm/llvm-project#177363, which moved the
 // parameter destructors behind a CFG option that the analyzer does not set.
-#if defined(__clang_analyzer__) && JL_LLVM_VERSION >= 220000 && JL_LLVM_VERSION < 230000
+#if defined(__clang_analyzer__) && JL_LLVM_VERSION < 230000
 #define JL_SA_BROKEN_PARAM_DTORS 1
 #endif
 

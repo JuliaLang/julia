@@ -611,20 +611,12 @@ static AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::
 
 static inline Attribute NoCaptureAttr(LLVMContext &C)
 {
-#if JL_LLVM_VERSION < 210000
-    return Attribute::get(C, Attribute::NoCapture);
-#else
     return Attribute::getWithCaptureInfo(C, CaptureInfo(CaptureComponents::None));
-#endif
 }
 
 static inline void addNoCaptureAttr(AttrBuilder &param)
 {
-#if JL_LLVM_VERSION < 210000
-    param.addAttribute(Attribute::NoCapture);
-#else
     param.addCapturesAttr(CaptureInfo(CaptureComponents::None));
-#endif
 }
 
 static Type *get_pjlvalue(LLVMContext &C) { return JuliaType::get_pjlvalue_ty(C); }
@@ -1772,11 +1764,7 @@ struct jl_aliasinfo_t {
 
     AAMDNodes toAAMDNodes() const
     {
-#if JL_LLVM_VERSION < 220000
-        return AAMDNodes(tbaa, tbaa_struct, scope, noalias);
-#else
         return AAMDNodes(tbaa, tbaa_struct, scope, noalias, nullptr);
-#endif
     }
 };
 
@@ -2483,11 +2471,7 @@ static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, Align align,
 {
     ++EmittedAllocas;
     AllocaInst *AI = new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "",
-#if JL_LLVM_VERSION >= 200000
                 /*InsertBefore=*/ctx.topalloca->getIterator()
-#else
-                /*InsertBefore=*/ctx.topalloca
-#endif
     );
     if (mark_lifetime)
         ctx.stack_temporaries.push_back(AI);
@@ -2843,11 +2827,7 @@ static void alloc_def_flag(jl_codectx_t &ctx, jl_varinfo_t& vi)
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block)
 {
     Function *f = irbuilder.GetInsertBlock()->getParent();
-#if JL_LLVM_VERSION >= 200000
     Function *trap_func = Intrinsic::getOrInsertDeclaration(
-#else
-    Function *trap_func = Intrinsic::getDeclaration(
-#endif
             f->getParent(),
             Intrinsic::trap);
     irbuilder.CreateCall(trap_func);
@@ -2870,11 +2850,7 @@ static void CreateConditionalAbort(IRBuilder<> &irbuilder, Value *test)
     BasicBlock *postBB = BasicBlock::Create(irbuilder.getContext(), "post_abort", f);
     irbuilder.CreateCondBr(test, abortBB, postBB);
     irbuilder.SetInsertPoint(abortBB);
-#if JL_LLVM_VERSION >= 200000
     Function *trap_func = Intrinsic::getOrInsertDeclaration(
-#else
-    Function *trap_func = Intrinsic::getDeclaration(
-#endif
             f->getParent(),
             Intrinsic::trap);
     irbuilder.CreateCall(trap_func);
@@ -3201,11 +3177,7 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
     ++ModulesCreated;
     auto m = std::make_unique<Module>(name, context);
     m->setDataLayout(DL);
-#if JL_LLVM_VERSION < 210000
-    m->setTargetTriple(triple.str());
-#else
     m->setTargetTriple(triple);
-#endif
 
     if (source) {
         // Copy module flags from source module
@@ -4013,11 +3985,7 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
         counter);
     assert(allunboxed); (void)allunboxed;
     ctx.builder.SetInsertPoint(defaultBB);
-#if JL_LLVM_VERSION >= 200000
     Function *trap_func = Intrinsic::getOrInsertDeclaration(
-#else
-    Function *trap_func = Intrinsic::getDeclaration(
-#endif
         ctx.f->getParent(),
         Intrinsic::trap);
     ctx.builder.CreateCall(trap_func);
@@ -6700,11 +6668,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
                 return "phi::" + type_str;
             });
             phi = cast<AllocaInst>(dest->clone());
-#if JL_LLVM_VERSION >= 200000
             phi->insertBefore(dest->getIterator());
-#else
-            phi->insertBefore(dest);
-#endif
             setName(ctx.emission_context, phi, [&]() {
                 std::string type_str = jl_is_datatype(phiType) ? jl_symbol_name(((jl_datatype_t*)phiType)->name->name) : "<unknown type>";
                 return "phi_result::" + type_str;
@@ -8519,16 +8483,8 @@ static Function *gen_cfun_wrapper(
         Function::arg_iterator AI = cw_make->arg_begin();
         Argument *Tramp = &*AI; ++AI;
         Argument *NVal = &*AI; ++AI;
-#if JL_LLVM_VERSION >= 200000
         Function *init_trampoline = Intrinsic::getOrInsertDeclaration(cw_make->getParent(), Intrinsic::init_trampoline);
-#else
-        Function *init_trampoline = Intrinsic::getDeclaration(cw_make->getParent(), Intrinsic::init_trampoline);
-#endif
-#if JL_LLVM_VERSION >= 200000
         Function *adjust_trampoline = Intrinsic::getOrInsertDeclaration(cw_make->getParent(), Intrinsic::adjust_trampoline);
-#else
-        Function *adjust_trampoline = Intrinsic::getDeclaration(cw_make->getParent(), Intrinsic::adjust_trampoline);
-#endif
         cwbuilder.CreateCall(init_trampoline, {
                 Tramp,
                 cw,
@@ -11285,9 +11241,7 @@ extern "C" void jl_init_llvm(void)
     const char *const argv[1] = {"julia"};
     cl::ParseCommandLineOptions(1, argv, "",
                                 /*Errs=*/nullptr,
-#if JL_LLVM_VERSION >= 220000
                                 /*VFS=*/nullptr,
-#endif
                                 "JULIA_LLVM_ARGS");
 
     // Set preferred non-default options
@@ -11451,18 +11405,11 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mbb(void *v)
 {
     errs() << *(llvm::MachineBasicBlock*)v;
 }
-#if JL_LLVM_VERSION >= 200000
 extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mfunction(void *m, void *v)
 {
     llvm::printMIR(errs(), *(llvm::MachineModuleInfo*)v,
                 *(llvm::MachineFunction*)v);
 }
-#else
-extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mfunction(void *v)
-{
-    llvm::printMIR(errs(), *(llvm::MachineFunction*)v);
-}
-#endif
 
 extern "C" JL_DLLEXPORT_CODEGEN void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
