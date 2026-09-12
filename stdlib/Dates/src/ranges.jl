@@ -15,12 +15,13 @@ function len(a, b, c)
     i = guess(a, b, c)
     v = lo + st * i
     prev = v  # Ensure `v` does not overflow
+    hi -= st # Prevent overshooting
     while v <= hi && prev <= v
         prev = v
         v += st
         i += 1
     end
-    return i - 1
+    return i
 end
 Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.stop, r.step) + 1
 # Period ranges hook into Int64 overflow detection
