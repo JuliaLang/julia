@@ -88,7 +88,9 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     if (!jl_trylock_profile())
         return 0;
 #endif
-#if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
+// Windows guards RtlVirtualUnwind in jl_unw_step so recovery cannot bypass
+// cleanup of locks acquired during function-table lookup.
+#if !defined(_OS_WINDOWS_)
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     jl_set_safe_restore(&buf);
@@ -733,6 +735,18 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     else {
         PVOID HandlerData;
         DWORD64 EstablisherFrame;
+        // An asynchronous sample can have registers inconsistent with the unwind
+        // info (e.g. during a task switch), causing RtlVirtualUnwind to fault.
+        // Recover here to truncate the backtrace and let the profiler resume
+        // the sampled thread. Keep function-table lookup outside this guard:
+        // it can hold locks that recovery would leave locked.
+        jl_jmp_buf *old_buf = jl_get_safe_restore();
+        jl_jmp_buf buf;
+        jl_set_safe_restore(&buf);
+        if (jl_setjmp(buf, 0)) {
+            jl_set_safe_restore(old_buf);
+            return 0;
+        }
         (void)RtlVirtualUnwind(
                 0 /*UNW_FLAG_NHANDLER*/,
                 ImageBase,
@@ -742,6 +756,7 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
                 &HandlerData,
                 &EstablisherFrame,
                 NULL);
+        jl_set_safe_restore(old_buf);
     }
     return cursor->Rip != 0;
 #endif
