@@ -110,6 +110,8 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
             asm_str = "mrs $0, tpidr_el0";
         } else if (TargetTriple.isARM()) {
             asm_str = "mrc p15, 0, $0, c13, c0, 3";
+        } else if (TargetTriple.isLoongArch()) {
+            asm_str = "move $0, $$tp";
         } else if (TargetTriple.isRISCV()) {
             asm_str = "mv $0, tp";
         } else if (TargetTriple.getArch() == Triple::x86_64) {

@@ -41,6 +41,8 @@
 #define FLAG_MIPS64_LIBN64_NAN2008      0x0e00
 #define FLAG_RISCV_FLOAT_ABI_SOFT       0x0f00
 #define FLAG_RISCV_FLOAT_ABI_DOUBLE     0x1000
+#define FLAG_LOONGARCH_FLOAT_ABI_SOFT   0x1100
+#define FLAG_LOONGARCH_FLOAT_ABI_DOUBLE 0x1200
 
 #if defined(_CPU_X86_64_)
 
@@ -65,6 +67,16 @@
 # define _DL_CACHE_DEFAULT_ID    (FLAG_RISCV_FLOAT_ABI_DOUBLE | FLAG_ELF_LIBC6)
 #else
 # define _DL_CACHE_DEFAULT_ID    (FLAG_RISCV_FLOAT_ABI_SOFT | FLAG_ELF_LIBC6)
+#endif
+
+#define _dl_cache_check_flags(flags)    ((flags) == _DL_CACHE_DEFAULT_ID)
+
+#elif defined(_CPU_LOONG_)
+
+#if defined(__loongarch_soft_float)
+# define _DL_CACHE_DEFAULT_ID    (FLAG_LOONGARCH_FLOAT_ABI_SOFT | FLAG_ELF_LIBC6)
+#else
+# define _DL_CACHE_DEFAULT_ID    (FLAG_LOONGARCH_FLOAT_ABI_DOUBLE | FLAG_ELF_LIBC6)
 #endif
 
 #define _dl_cache_check_flags(flags)    ((flags) == _DL_CACHE_DEFAULT_ID)

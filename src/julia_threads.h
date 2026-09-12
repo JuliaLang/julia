@@ -62,7 +62,8 @@ typedef struct {
 #if !defined(JL_TASK_SWITCH_ASM) && \
     !defined(JL_TASK_SWITCH_LIBUNWIND)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
-     defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
+     defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_) || \
+     defined(_CPU_LOONG_))
 #define JL_TASK_SWITCH_ASM
 #endif
 #if 0

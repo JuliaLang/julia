@@ -110,7 +110,7 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
         #define MAX_ALIGN 8
-    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (JL_LLVM_VERSION >= 200000 && defined(_CPU_PPC64_)))
+    #elif defined(_CPU_AARCH64_) || defined(_CPU_LOONG_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (JL_LLVM_VERSION >= 200000 && defined(_CPU_PPC64_)))
     // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18 and on ppc64 with LLVM >= 20
         #define MAX_ALIGN 16
     #elif defined(_P64)
@@ -342,6 +342,14 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (int64_t)(tv.tv_sec) * 1000000 + tv.tv_usec;
+#elif defined(_CPU_LOONG_)
+    // TEMPORARY: Fallback to clock_gettime because the assembler 
+    // does not support 'rdtime' instruction yet.
+    // TODO: Upgrade binutils to >= 2.39 or use machine code encoding in a separate .S file.
+    #include <time.h>
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 #elif defined(_CPU_RISCV64_)
     // taken from https://github.com/google/benchmark/blob/3b3de69400164013199ea448f051d94d7fc7d81f/src/cycleclock.h#L190
     uint64_t ret;
