@@ -5,7 +5,7 @@
 using Random
 using Base: remove_linenums!
 
-using_JuliaSyntax = parentmodule(Core._parse) != Core.Compiler
+using_JuliaSyntax = parentmodule(Core._parse) != Base
 
 macro test_parseerror(str, msg)
     if using_JuliaSyntax
@@ -3771,7 +3771,9 @@ end
 end
 
 @testset "public keyword" begin
-    p(str) = Base.remove_linenums!(Meta.parse(str))
+    local test_mod = Module()
+    Base.set_syntax_version(test_mod, v"1.13")
+    p(str) = Base.remove_linenums!(Meta.parse(str; mod=test_mod))
     # tests ported from JuliaSyntax.jl
     @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
     @test p("public A, B") == Expr(:public, :A, :B)

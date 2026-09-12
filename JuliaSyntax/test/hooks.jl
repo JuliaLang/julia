@@ -132,6 +132,41 @@ end
         JuliaSyntax.enable_in_core!(false)
     end
 
+    if isdefined(Base, :VersionedParse) && isdefined(Base, :set_syntax_version)
+        @test VERSION > v"1.13"
+        @testset "`activate!` and `Base.set_syntax_version` should work together" begin
+            JuliaSyntax.enable_in_core!()
+            try
+                parse_in(mod, str) = Meta.parse(str; mod=mod, raise=false)
+                m = Module(:Mod)
+                w0 = Base.get_world_counter()
+                typegroup_src = "typegroup struct T end end"
+                @test Meta.isexpr(invokelatest(parse_in, m, typegroup_src), :typegroup)
+                Base.set_syntax_version(m, v"1.13")
+                @test Meta.isexpr(invokelatest(parse_in, m, typegroup_src), :error)
+                Base.set_syntax_version(m, VERSION)
+                @test Meta.isexpr(invokelatest(parse_in, m, typegroup_src), :typegroup)
+
+                # a parser defined after a Core._parse caller should work
+                old_parser = Core._parse
+                try
+                    late_parser = @eval m begin
+                        late_parser(code, args...) =
+                            Core.svec(:late, ncodeunits(code))
+                    end
+                    JuliaSyntax._set_core_parse_hook(late_parser)
+                    w1 = Base.get_world_counter()
+                    @test Base.invoke_in_world(w0, Meta.parse, "x") === :late
+                    @test Base.invoke_in_world(w1, Meta.parse, "x") === :late
+                finally
+                    JuliaSyntax._set_core_parse_hook(old_parser)
+                end
+            finally
+                JuliaSyntax.enable_in_core!(false)
+            end
+        end
+    end
+
     @testset "Expr(:incomplete)" begin
         for (str, tag) in [
                 "\""           => :string
