@@ -457,8 +457,12 @@ firstindex(a, d) = (@inline; first(axes(a, d)))
 """
     first(coll)
 
-Get the first element of an iterable collection. Return the start point of an
-[`AbstractRange`](@ref) even if it is empty.
+Get the first element of an iterable collection.
+
+!!! note
+    For an [`AbstractRange`](@ref) the start point is always returned,
+    even if the range is empty. For other empty collections, an error
+    is thrown.
 
 See also [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
 
