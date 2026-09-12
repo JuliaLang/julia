@@ -146,7 +146,14 @@ julia> cumsum(fill(1, 2) for i in 1:3)
  [3, 3]
 ```
 """
-cumsum(x::AbstractVector) = cumsum(x, dims=1)
+function cumsum(x::AbstractVector; dims::Integer=1)
+    dims > 0 || throw(ArgumentError("dims must be a positive integer"))
+    out = similar(x, _accumulate_promote_op(add_sum, x))
+    dims > 1 && return copyto!(out, x)
+    return cumsum!(out, x)
+end
+
+# avoid keyword self-call under strict keyword dispatch
 cumsum(itr) = accumulate(add_sum, itr)
 
 
@@ -162,14 +169,18 @@ cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(mul_prod, B, A, dims=dims)
 
 """
-    cumprod!(y::AbstractVector, x::AbstractVector)
+    cumprod!(y::AbstractVector, x::AbstractVector; dims::Integer=1)
 
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 """
-cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
+function cumprod!(y::AbstractVector, x::AbstractVector; dims::Integer=1)
+    dims > 0 || throw(ArgumentError("dims must be a positive integer"))
+    dims > 1 && return copyto!(y, x)
+    accumulate!(mul_prod, y, x)
+end
 
 """
     cumprod(A; dims::Integer)
@@ -227,7 +238,14 @@ julia> cumprod("julia")
  "julia"
 ```
 """
-cumprod(x::AbstractVector) = cumprod(x, dims=1)
+function cumprod(x::AbstractVector; dims::Integer=1)
+    dims > 0 || throw(ArgumentError("dims must be a positive integer"))
+    out = similar(x, _accumulate_promote_op(mul_prod, x))
+    dims > 1 && return copyto!(out, x)
+    return cumprod!(out, x)
+end
+
+# avoid keyword self-call under strict keyword dispatch
 cumprod(itr) = accumulate(mul_prod, itr)
 
 
