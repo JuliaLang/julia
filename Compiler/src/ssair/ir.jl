@@ -2245,7 +2245,16 @@ function complete(compact::IncrementalCompact)
         resize!(compact.result, length(compact.result) - nundef)
     end
 
-    return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
+    ir = IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
+    domtree = compact.cfg_transform.domtree
+    if domtree !== nothing
+        for (bb, idom) in pairs(domtree.idoms_bb)
+            if idom >= bb
+                return domsort_ssa!(ir, domtree)
+            end
+        end
+    end
+    return ir
 end
 
 function compact!(code::IRCode, allow_cfg_transforms::Bool=false)

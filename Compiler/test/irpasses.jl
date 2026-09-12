@@ -94,6 +94,69 @@ mutable struct SafeRef{T}; x::T; end
 Base.getindex(s::SafeRef) = getfield(s, 1)
 Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
 
+# Keep CFG compaction dominance-sorted before mutable SROA forwards field values (#53013).
+mutable struct Mutable53013; x; end
+let code = Any[
+        Expr(:new, GlobalRef(@__MODULE__, :Mutable53013), Argument(2)),
+        GotoIfNot(false, 5),
+        Expr(:call, GlobalRef(Base, :getfield), SSAValue(1), QuoteNode(:x)),
+        ReturnNode(SSAValue(3)),
+        Expr(:call, GlobalRef(Base, :getfield), SSAValue(1), QuoteNode(:x)),
+        Expr(:call, GlobalRef(Base, :+), SSAValue(5), 1),
+        Expr(:call, GlobalRef(Base, :setfield!), SSAValue(1), QuoteNode(:x), SSAValue(6)),
+        GotoNode(3),
+    ]
+    ir = make_ircode(code; ssavaluetypes=Any[Mutable53013, Any, Any, Any, Any, Any, Any, Any])
+    push!(ir.argtypes, Tuple{})
+    push!(ir.argtypes, Int)
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+    ir = Compiler.sroa_pass!(ir, Compiler.InliningState(Compiler.NativeInterpreter()))
+    @test Compiler.verify_ir(ir) === nothing
+end
+
+# Preserve dominance order when ADCE and compaction eliminate an SROA phi (#53011).
+mutable struct Mutable53011; x; end
+function issue53011(x)
+    data = Mutable53011(x)
+    if false
+        @label a
+        false && @goto b
+    else
+        @label b
+        data.x += 1
+        @goto a
+    end
+    return data.x
+end
+let ir = first(only(Base.code_ircode(issue53011, (Int,); optimize_until="CC: COMPACT_3")))
+    @test Compiler.verify_ir(ir) === nothing
+end
+
+# Restore dominance order across exception-region blocks after SROA and ADCE (#53011).
+mutable struct Mutable53011Try; x; end
+function issue53011_try(x)
+    data = Mutable53011Try(x)
+    try
+        if false
+            @label a
+            false && @goto b
+        else
+            @label b
+            data.x += 1
+            @goto a
+        end
+    catch
+        return 0
+    end
+    return data.x
+end
+let ir = first(only(Base.code_ircode(issue53011_try, (Int,); optimize_until="CC: COMPACT_3")))
+    @test count(inst -> inst isa EnterNode, ir.stmts.stmt) == 1
+    @test count(inst -> Meta.isexpr(inst, :leave), ir.stmts.stmt) == 1
+    @test Compiler.verify_ir(ir) === nothing
+end
+
 # simple immutability
 # -------------------
 
@@ -2111,14 +2174,16 @@ let code = Any[
         # block 8
         ReturnNode(nothing),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}], verify=true)
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}], verify=false)
     @test length(ir.cfg.blocks) == 8
 
-    # The IR should remain valid after domsorting
-    # (esp. including the insertion of new BasicBlocks for any fix-ups)
     domtree = Compiler.construct_domtree(ir)
+    @test any(idom >= bb for (bb, idom) in pairs(domtree.idoms_bb))
+
+    # The IR should become valid after domsorting
+    # (esp. including the insertion of new BasicBlocks for any fix-ups)
     ir = Compiler.domsort_ssa!(ir, domtree)
-    Compiler.verify_ir(ir)
+    @test Compiler.verify_ir(ir) === nothing
 end
 
 # https://github.com/JuliaLang/julia/issues/57141
