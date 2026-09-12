@@ -12,7 +12,7 @@ use mmtk::util::heap::GCTriggerPolicy;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
 
@@ -26,7 +26,7 @@ lazy_static! {
     static ref GC_THREADS: RwLock<HashSet<ThreadId>> = RwLock::new(HashSet::new());
 }
 
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 pub static CONCURRENT_MARKING_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn register_gc_thread() {
@@ -45,6 +45,34 @@ pub(crate) fn is_gc_thread() -> bool {
 pub struct VMCollection {}
 
 impl Collection<JuliaVM> for VMCollection {
+    /// Called by `LXR::release` at the start of every pause.
+    ///
+    /// `lxr` is true when the caller is the LXR plan, which is the only plan with no working
+    /// finalizer path. See [`crate::julia_finalizer::drop_all_finalizers`].
+    fn update_weak_processor(lxr: bool) {
+        if !lxr {
+            return;
+        }
+        // Deliberately *not* `drop_all_finalizers()`. The lists root the objects they name
+        // (see `collect_finalizer_roots`); zeroing them frees live objects that libuv and
+        // others still point at. The entries are retained and rooted at root-scanning time
+        // instead, which leaks them until LXR grows a real finalizer path.
+        // Prune `ptls->live_tasks`, which nothing else does under LXR.
+        //
+        // `SweepVMSpecific` would normally do this, but it is scheduled from
+        // `process_weak_refs`, which LXR never calls. Left unpruned, dead tasks stay on a list
+        // that `gather_mutator_roots` deliberately scans *unrooted*, and their gcstacks get
+        // walked after the memory is recycled -- the crash #10 segfault in `mmtk_scan_gcstack`.
+        //
+        // This depends on `mmtk_is_live_object` being LXR-aware (see `api.rs`): the sweep asks
+        // it about every entry, and the stock path faults on unmarked objects under
+        // `lxr_no_evac`. An earlier attempt to call this before that fix made `sys-o.a` fail
+        // *earlier* (GC 2 rather than 4-5).
+        unsafe {
+            crate::jl_gc_sweep_stack_pools_and_mtarraylist_buffers();
+        }
+    }
+
     fn stop_all_mutators<F>(_tls: VMWorkerThread, mut mutator_visitor: F)
     where
         F: FnMut(&'static mut Mutator<JuliaVM>),
@@ -81,7 +109,7 @@ impl Collection<JuliaVM> for VMCollection {
         trace!("Stopped the world!");
 
         // STW -- concurrent marking is not active.
-        #[cfg(feature = "concurrentimmix")]
+        #[cfg(feature = "concurrent_marking")]
         CONCURRENT_MARKING_ACTIVE.store(false, Ordering::SeqCst);
 
         // Tell MMTk the stacks are ready.
@@ -112,9 +140,16 @@ impl Collection<JuliaVM> for VMCollection {
             )
         }
 
-        #[cfg(feature = "concurrentimmix")]
+        #[cfg(feature = "concurrent_marking")]
         {
-            // For concurrent Immix, we need to check if SATB is active
+            // Every concurrent plan (concurrentimmix's SATB, and LXR) needs this: whether its
+            // background marking is still in flight decides whether gcstack scans have to keep
+            // using the stable snapshot in `GC_STACK_SNAPSHOTS` rather than live stack memory.
+            // This used to be spelled `concurrentimmix`, which silently excluded LXR -- so a
+            // task discovered live via ordinary heap tracing (not just root scanning) got its
+            // gcstack read directly out of live memory while marking ran concurrently with the
+            // mutator, racing a stack-pool release/reuse of that same memory and segfaulting in
+            // `mmtk_scan_gcstack`.
             let concurrent_plan = SINGLETON.get_plan().concurrent().unwrap();
             let concurrent_marking_active = concurrent_plan.concurrent_work_in_progress();
 
@@ -207,6 +242,18 @@ impl Collection<JuliaVM> for VMCollection {
 
     fn vm_live_bytes() -> usize {
         crate::api::JULIA_MALLOC_BYTES.load(Ordering::SeqCst)
+    }
+
+    /// Under LXR the concurrent phase (decrements, mature sweeping) ends by simply running out
+    /// of work rather than with a `FinalMark` pause, so `resume_mutators` -- the other place
+    /// that advances the epoch -- never runs for it. A thread parked in
+    /// `mmtk_wait_for_new_gc_epoch()` after a failed `mmtk_disable_collection()` would wait
+    /// forever; the sysimage writer's `jl_gc_enable(0)` is one such thread.
+    fn concurrent_work_finished() {
+        let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
+        let mut epoch = lock.lock().unwrap();
+        *epoch = epoch.wrapping_add(1);
+        cvar.notify_all();
     }
 
     fn create_gc_trigger() -> Box<dyn GCTriggerPolicy<JuliaVM>> {

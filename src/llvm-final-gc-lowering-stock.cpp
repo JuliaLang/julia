@@ -62,7 +62,9 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     // (which would dereference null). If every child is NULL there is nothing
     // to remember, so emit no barrier; the caller erases the call.
     SmallVector<Value*, 8> children;
-    for (unsigned i = 1; i < target->arg_size(); i++) {
+    // Operand 1 is the written field's address, which only a field-granularity
+    // barrier looks at; it is not a child and must not have its tag loaded.
+    for (unsigned i = 2; i < target->arg_size(); i++) {
         Value *child = target->getArgOperand(i);
         if (isa<ConstantPointerNull>(child->stripPointerCasts()))
             continue;

@@ -16,11 +16,14 @@ pub struct VMObjectModel {}
 
 /// Global logging bit metadata spec
 /// 1 bit per object
+/// Must stay first: the inlined write barrier fast path in gc-wb-mmtk.h derives the
+/// bit's address from MMTK_SIDE_LOG_BIT_BASE_ADDRESS.
 pub(crate) const LOGGING_SIDE_METADATA_SPEC: VMGlobalLogBitSpec = VMGlobalLogBitSpec::side_first();
 
 /// Global field-logging bit metadata spec
-/// 1 bit per word. Only plans that need a field-granularity log bit (e.g. LXR) actually
-/// reserve this; Julia does not currently use such a plan, so this is unused in practice.
+/// 1 bit per field-sized slot, as opposed to 1 bit per object above. Only plans that need a
+/// field-granularity log bit reserve this; LXR is the one Julia builds that does, and its
+/// barrier keys off it.
 pub(crate) const FIELD_LOGGING_SIDE_METADATA_SPEC: VMGlobalFieldUnlogBitSpec =
     VMGlobalFieldUnlogBitSpec::side_after(LOGGING_SIDE_METADATA_SPEC.as_spec());
 
@@ -58,7 +61,15 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
     const LOCAL_MARK_BIT_SPEC: VMLocalMarkBitSpec = MARKING_METADATA_SPEC;
     const LOCAL_LOS_MARK_NURSERY_SPEC: VMLocalLOSMarkNurserySpec = LOS_METADATA_SPEC;
     const UNIFIED_OBJECT_REFERENCE_ADDRESS: bool = false;
-    const OBJECT_REF_OFFSET_LOWER_BOUND: isize = 0;
+    // The smallest `ref - object_start` over *every* space, since `ref_to_object_start` is what
+    // MMTk measures the offset against:
+    //   * ordinary small object: one Julia header word          -> 8
+    //   * buffer (`JULIA_BUFF_TAG`): two header words           -> 16
+    //   * large object space: `ref_to_object_start` subtracts a -> 48
+    //     `bigval_t` header
+    // so the offset is always at least 8. Declaring 0 is also sound (it is a bound, not the
+    // exact offset), just looser than it needs to be.
+    const OBJECT_REF_OFFSET_LOWER_BOUND: isize = 8;
 
     #[cfg(feature = "object_pinning")]
     const LOCAL_PINNING_BIT_SPEC: VMLocalPinningBitSpec = LOCAL_PINNING_METADATA_BITS_SPEC;
