@@ -281,8 +281,10 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
             jl_svec_t *nc = jl_alloc_svec_uninit(ncl);
             if (i > 0)
                 memcpy((char*)jl_svec_data(nc), jl_svec_data(specializations), sizeof(void*) * i);
-            for (int j = 0; j < ncl - cl; j++)
-                jl_svecset(nc, j+i, jl_nothing);
+            for (int j = 0; j < ncl - cl; j++) {
+                jl_gc_wb_fresh(nc, jl_nothing);
+                jl_svec_data(nc)[j+i] = jl_nothing;
+            }
             if (i < cl)
                 memcpy((char*)jl_svec_data(nc) + sizeof(void*) * (i + ncl - cl),
                        (char*)jl_svec_data(specializations) + sizeof(void*) * i,
