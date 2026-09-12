@@ -88,6 +88,7 @@ A constructor call is just a call to a type, to a method defined on `Type{T}`.
 The "builtin" functions, defined in the `Core` module, are:
 
 ```@eval
+let
 function lines(words)
     io = IOBuffer()
     n = 0
@@ -103,7 +104,7 @@ function lines(words)
             n += length(w)+1
         end
     end
-    takestring!(io)
+    String(take!(io))
 end
 import Markdown
 [string(n) for n in names(Core;all=true)
@@ -111,6 +112,7 @@ import Markdown
     lines |>
     s ->  "```\n$s\n```" |>
     Markdown.parse
+end
 ```
 
 These are mostly singleton objects all of whose types are subtypes of `Builtin`, which is a

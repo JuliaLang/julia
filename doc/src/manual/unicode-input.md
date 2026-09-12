@@ -16,11 +16,12 @@ the symbol).
     glyphs in many fonts.
 
 ```@eval
+let
 #
 # Generate a table containing all LaTeX and Emoji tab completions available in the REPL.
 #
 import REPL, Markdown
-const NBSP = '\u00A0'
+NBSP = '\u00A0'
 
 function tab_completions(symbols...)
     completions = Dict{String, Vector{String}}()
@@ -31,7 +32,7 @@ function tab_completions(symbols...)
 end
 
 function unicode_data()
-    file = normpath(@__DIR__, "..", "..", "..", "..", "..", "doc", "UnicodeData.txt")
+    file = normpath(@__DIR__, "..", "..", "UnicodeData.txt")
     names = Dict{UInt32, String}()
     open(file) do unidata
         for line in readlines(unidata)
@@ -90,4 +91,5 @@ table_entries(
     ),
     unicode_data()
 )
+end
 ```
