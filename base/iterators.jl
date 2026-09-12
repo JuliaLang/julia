@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Methods for working with Iterators.
+    Iterators
+
+Module defining functions and data types for "lazy" iteration
+(iteration without necessarily allocating a data structure to store the collection).
 """
 baremodule Iterators
 
