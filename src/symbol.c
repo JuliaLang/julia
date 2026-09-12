@@ -123,6 +123,19 @@ JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void)
     return jl_atomic_load_relaxed(&symtab);
 }
 
+// Install the image's symbol tree as the symbol table. The table must be empty:
+// a symbol interned before the image is read would duplicate one of the image,
+// so `jl_init_common_symbols` runs after the restore.
+void jl_set_root_symbol(jl_sym_t *root) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&symtab) != NULL) {
+        jl_safe_printf("ERROR: a symbol was made before the system image was read, "
+                       "so the image's symbol table cannot be installed.\n");
+        exit(1);
+    }
+    jl_atomic_store_release(&symtab, root);
+}
+
 static _Atomic(uint32_t) gs_ctr = 0;  // TODO: per-module?
 uint32_t jl_get_gs_ctr(void) { return jl_atomic_load_relaxed(&gs_ctr); }
 void jl_set_gs_ctr(uint32_t ctr) { jl_atomic_store_relaxed(&gs_ctr, ctr); }

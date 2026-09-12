@@ -1998,6 +1998,89 @@ end
     end
 end
 
+@testset "--sysimage-prelink and --output-prelinked" begin
+    exename = `$(Base.julia_cmd())`
+    # The option takes yes or no and nothing else.
+    mktempdir() do dir
+        p = run(pipeline(ignorestatus(`$exename --sysimage-prelink=maybe -e 0`);
+                         stdout = devnull, stderr = "$(dir)/err"), wait = true)
+        @test p.exitcode != 0
+        @test occursin("invalid argument to --sysimage-prelink", read("$(dir)/err", String))
+    end
+    @test test_read_success(`$exename --sysimage-prelink=yes -E "Base.JLOptions().sysimage_prelink"`, Int) == 1
+    @test test_read_success(`$exename --sysimage-prelink=no -E "Base.JLOptions().sysimage_prelink"`, Int) == 0
+    # An image reserves the room only when it is asked to.
+    @test test_read_success(`$exename -E "Base.JLOptions().sysimage_prelink"`, Int) == 0
+    # An image written without the reservation cannot be pre-relocated, and the
+    # running image was written without it.
+    mktempdir() do dir
+        out = joinpath(dir, "prelinked")
+        p = run(pipeline(ignorestatus(`$exename --output-prelinked=$out -e 0`);
+                         stdout = devnull, stderr = "$(dir)/err"), wait = true)
+        @test p.exitcode == 1
+        @test occursin("reserved no room", read("$(dir)/err", String))
+        @test !isfile(out)
+    end
+    # An image asked to reserve the room is larger than the same image without,
+    # carries the record that says so, and both load.
+    magic = collect(reinterpret(UInt8, [0x50524c4e4b303031]))  # JL_PRELINK_MAGIC
+    carries_the_record(path) = open(path) do io
+        window = UInt8[]
+        while !eof(io)
+            append!(window, read(io, 1 << 20))
+            findfirst(magic, window) === nothing || return true
+            # Keep the last bytes, so that a record on a border is seen.
+            window = window[max(1, lastindex(window) - length(magic) + 2):end]
+        end
+        return false
+    end
+    mktempdir() do dir
+        for (name, prelink) in (("plain", "no"), ("room", "yes"))
+            @test "" == test_read_success(`$exename --sysimage-prelink=$prelink -t1,0 --output-o $(dir)/$(name).o.a -e 0`)
+        end
+        if isfile(joinpath(dir, "plain.o.a")) && isfile(joinpath(dir, "room.o.a"))
+            @test filesize(joinpath(dir, "room.o.a")) > filesize(joinpath(dir, "plain.o.a"))
+            @test !carries_the_record(joinpath(dir, "plain.o.a"))
+            @test carries_the_record(joinpath(dir, "room.o.a"))
+            for name in ("plain", "room")
+                Base.Linking.link_image(joinpath(dir, "$name.o.a"), joinpath(dir, "$name.so"))
+                @test readchomp(`$exename -t1,0 -J $(dir)/$(name).so -E "1 + 1"`) == "2"
+            end
+        end
+    end
+end
+
+@testset "the system image holds `nothing`, the booleans and the symbols" begin
+    exename = `$(Base.julia_cmd())`
+    # A system image holds these itself, so that every field which points at
+    # one is final in the file. The start adopts them: a symbol interned at run
+    # time finds the image's, and every field of the root task that holds
+    # `nothing` holds the image's `nothing`. A stale one there breaks `wait`.
+    script = """
+        in_image(x) = ccall(:jl_object_in_image, UInt8, (Any,), x) == 1
+        function failures()
+            bad = String[]
+            in_image(nothing) || push!(bad, "nothing")
+            (in_image(true) && in_image(false)) || push!(bad, "the booleans")
+            in_image(:sin) || push!(bad, "a symbol of the image")
+            in_image(Symbol("si" * "n")) || push!(bad, "a symbol interned at run time")
+            nameof(sin) === Symbol("si" * "n") || push!(bad, "the identity of a symbol")
+            # The other way round, so that the question is a real one.
+            in_image(Symbol("zz", rand(UInt))) && push!(bad, "a symbol of neither")
+            for f in fieldnames(Task)
+                isdefined(current_task(), f) || continue
+                v = getfield(current_task(), f)
+                if v === nothing && !in_image(v)
+                    push!(bad, "the field \$f of the root task")
+                end
+            end
+            return join(bad, ", ")
+        end
+        print(failures())
+        """
+    @test readchomp(`$exename -e $script`) == ""
+end
+
 # Build and use a system image, exercising both split (--output-o together with
 # --output-ji, heap goes into the .ji) and non-split (--output-o only, heap goes
 # into the .so) layouts, with --compress-sysimage on and off in each.
