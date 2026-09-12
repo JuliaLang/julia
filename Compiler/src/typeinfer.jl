@@ -2281,6 +2281,9 @@ function _return_type_opaque_closure(@nospecialize(oc::Core.OpaqueClosure), t::D
     return ocrt
 end
 
+# TODO change the interface of `return_type` to allow it to recognize caller module context
+# so that we can see its `get_max_methods` setting as the ordinary inference
+
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     isa(f, Core.OpaqueClosure) && return _return_type_opaque_closure(f, t)
     world = tls_world_age()
@@ -2312,7 +2315,10 @@ function _return_type(interp::AbstractInterpreter, t::DataType)
         rt = builtin_tfunction(interp, f, args, nothing)
         rt = widenconst(rt)
     else
-        for match in _methods_by_ftype(t, -1, get_inference_world(interp))::Vector
+        lim = get_max_methods(interp, f)
+        ms = _methods_by_ftype(t, lim, get_inference_world(interp))
+        ms isa Vector || return Any
+        for match in ms
             ty = typeinf_type(interp, match::MethodMatch)
             ty === nothing && return Any
             rt = tmerge(rt, ty)
