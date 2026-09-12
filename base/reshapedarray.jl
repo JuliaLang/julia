@@ -119,34 +119,39 @@ julia> reshape(1:6, 2, 3)
 """
 reshape
 
-reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
-reshape(parent::AbstractArray, shp::Tuple{Union{Integer,AbstractOneTo}, Vararg{Union{Integer,AbstractOneTo}}}) = reshape(parent, to_shape(shp))
-# legacy method for packages that specialize reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo,CustomAxis}, Vararg{Union{Integer,OneTo,CustomAxis}}})
-# leaving this method in ensures that Base owns the more specific method
-reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, dims::Union{Integer,Colon,AbstractUnitRange}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Tuple{Integer, Vararg{Integer}}) = reshape(parent, map(Int, dims))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
-reshape(parent::AbstractVector, ::Colon) = parent
-reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
-reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Integer...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Union{Integer,Colon}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
+# Replace `OneTo`s by their lengths, and convert colons to sizes using _reshape_uncolon
+# We add a level of indirection to avoid method ambiguities in reshape
+function reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}})
+    _reshape_maybecolon(parent, dims)
+end
+_reshape_maybecolon(parent::AbstractVector, ::Tuple{Colon}) = parent
+# Helper function analogous to to_shape, but this preserves colons and doesn't cast Integers to Int
+# This allows dispatching to a specialized reshape(M::MyArray, dims::Tuple{Vararg{Integer}})
+_to_shape_or_colon(i::AbstractOneTo) = length(i)
+_to_shape_or_colon(i::Union{Integer, Colon}) = i
+function _reshape_maybecolon(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}})
+    reshape(parent, _reshape_uncolon(parent, map(_to_shape_or_colon, dims)))
+end
 
-@noinline throw1(dims) = throw(DimensionMismatch(LazyString("new dimensions ", dims,
+@noinline _reshape_throwcolon(dims) = throw(DimensionMismatch(LazyString("new dimensions ", dims,
         " may have at most one omitted dimension specified by `Colon()`")))
-@noinline throw2(lenA, dims) = throw(DimensionMismatch(string("array size ", lenA,
+@noinline _reshape_throwsize(lenA, dims) = throw(DimensionMismatch(LazyString("array size ", lenA,
     " must be divisible by the product of the new dimensions ", dims)))
 
-@inline function _reshape_uncolon(A, _dims::Tuple{Vararg{Union{Integer, Colon}}})
+_reshape_uncolon(parent::AbstractArray, dims::Tuple) =  _reshape_uncolon(length(parent), dims)
+_reshape_uncolon(len::Integer, ::Tuple{Colon}) = len
+@inline function _reshape_uncolon(len::Integer, _dims::Tuple{Vararg{Union{Integer, Colon}}})
     # promote the dims to `Int` at least
     dims = map(x -> x isa Colon ? x : promote_type(typeof(x), Int)(x), _dims)
+    dims isa Tuple{Vararg{Integer}} && return dims
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
-    _any_colon(post...) && throw1(dims)
-    len = length(A)
+    _any_colon(post...) && _reshape_throwcolon(dims)
     _reshape_uncolon_computesize(len, dims, pre, post)
 end
 @inline function _reshape_uncolon_computesize(len::Int, dims, pre::Tuple{Vararg{Int}}, post::Tuple{Vararg{Int}})
@@ -170,9 +175,9 @@ end
     (pre..., sz, post...)
 end
 @inline function _reshape_uncolon_computesize_nonempty(len, dims, pr)
-    iszero(pr) && throw2(len, dims)
+    iszero(pr) && _reshape_throwsize(len, dims)
     (quo, rem) = divrem(len, pr)
-    iszero(rem) || throw2(len, dims)
+    iszero(rem) || _reshape_throwsize(len, dims)
     quo
 end
 @inline _any_colon() = false
@@ -180,8 +185,10 @@ end
 @inline _any_colon(dim::Any, tail...) = _any_colon(tail...)
 @inline _before_colon(dim::Any, tail...) = (dim, _before_colon(tail...)...)
 @inline _before_colon(dim::Colon, tail...) = ()
+@inline _before_colon() = ()
 @inline _after_colon(dim::Any, tail...) =  _after_colon(tail...)
 @inline _after_colon(dim::Colon, tail...) = tail
+@inline _after_colon() = ()
 
 reshape(parent::AbstractArray{T,N}, ndims::Val{N}) where {T,N} = parent
 function reshape(parent::AbstractArray, ndims::Val{N}) where N
