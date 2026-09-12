@@ -311,10 +311,8 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
             return AtomicRMWInst::Min;
           case Intrinsic::umin:
             return AtomicRMWInst::UMin;
-#if JL_LLVM_VERSION >= 200000
           case Intrinsic::usub_sat:
            return AtomicRMWInst::USubSat;
-#endif
         }
       }
     }

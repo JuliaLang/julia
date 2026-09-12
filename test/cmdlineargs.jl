@@ -288,13 +288,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
         @test contains(v[2], r"enable-tail-merge + = 1")
         @test isempty(v[3])
     end
-    if Base.libllvm_version < v"15" #LLVM over 15 doesn't care for multiple options
-        @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
-            @test !v[1]
-            @test isempty(v[2])
-            @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
-        end
-    end
     @testset "time-trace" begin
         mktempdir() do dir
             tracefile = joinpath(dir, "test_trace.json")
@@ -1610,8 +1603,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # issue #12671, starting from a non-directory
     # rm(dir) fails on windows with Permission denied
-    # and was an upstream bug in llvm <= v3.3
-    if !Sys.iswindows() && Base.libllvm_version > v"3.3"
+    if !Sys.iswindows()
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)

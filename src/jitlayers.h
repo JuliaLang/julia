@@ -20,11 +20,7 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Passes/PassBuilder.h>
-#if JL_LLVM_VERSION >= 220000
 #  include <llvm/Plugins/PassPlugin.h>
-#else
-#  include <llvm/Passes/PassPlugin.h>
-#endif
 #include <llvm/Passes/StandardInstrumentations.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -634,11 +630,7 @@ private:
     template <typename AnyT>
     static void verifyResource(AnyT &resource) JL_NOTSAFEPOINT { }
     static void verifyResource(orc::ThreadSafeContext &context) JL_NOTSAFEPOINT {
-#if JL_LLVM_VERSION < 210000
-        assert(context.getContext());
-#else
         context.withContextDo([](LLVMContext *ctx) { assert(ctx); });
-#endif
     }
 public:
     typedef orc::ObjectLinkingLayer ObjLayerT;
@@ -978,11 +970,7 @@ static inline const char *jl_symbol_prefix(jl_symbol_prefix_t type,
 // NewPM
 #include "passes.h"
 
-#if JL_LLVM_VERSION >= 180000
 CodeGenOptLevel CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
-#else
-CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
-#endif
 
 void jl_jit_add_bytes(size_t bytes) JL_NOTSAFEPOINT;
 
