@@ -118,6 +118,10 @@ end
             @test x isa BigInt
             @test x == big(2)
         end
+
+        @test isnan(clamp(NaN, 0.0, 1.0))
+        @test isnan(clamp(0.5, NaN, 1.0))
+        @test isnan(clamp(0.5, 0.0, NaN))
     end
 end
 
