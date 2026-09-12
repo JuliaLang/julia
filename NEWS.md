@@ -109,6 +109,11 @@ Compiler/Runtime improvements
   package images in hit mode. `@path` instruments newly compiled and interpreted code like `user`,
   while also reporting compatible image counters under the selected path ([#62724]).
 
+* Debug information emitted for JIT-compiled code at `-g2` now describes unboxed values
+  accurately: primitive types carry their DWARF encoding (so `Float64` locals display as
+  floats in a debugger), struct locals list their fields by name with offsets, and type
+  names include their parameters (`Complex{Float64}` rather than `Complex`).
+
 Command-line option changes
 ---------------------------
 
