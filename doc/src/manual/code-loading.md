@@ -62,7 +62,7 @@ At a high-level, each environment conceptually defines three maps: roots, graph 
 Each kind of environment defines these three maps differently, as detailed in the following sections.
 
 !!! note
-    For ease of understanding, the examples throughout this chapter show full data structures for roots, graph and paths. However, Julia's package loading code does not explicitly create these. Instead, it lazily computes only as much of each structure as it needs to load a given package.
+    For clarity, the examples below show complete roots, graph, and paths maps. Julia stores roots and graph data for each environment, computes paths on demand, and searches stacked environments in order.
 
 ### [Project environments](@id project-environments)
 
