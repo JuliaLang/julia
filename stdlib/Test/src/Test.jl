@@ -45,6 +45,11 @@ end
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
+
+# the path of this file as it appears in compiled frames, which is not
+# necessarily `@__FILE__` (BUILD_PATH_PREFIX_MAP can rewrite it)
+this_file() = String(Base.moduleloc(@__MODULE__).file)
+
 function ip_has_file_and_func(ip, file, funcs)
     return any(fr -> (in_file(fr, file) && fr.func in funcs), StackTraces.lookup(ip))
 end
@@ -52,7 +57,7 @@ in_file(frame, file) = string(frame.file) == file
 
 function test_location(bt, file_ts, file_t)
     if (isnothing(file_ts) || isnothing(file_t))
-        return macrocall_location(bt, something(file_ts, @__FILE__))
+        return macrocall_location(bt, something(file_ts, this_file()))
     else
         return test_callsite(bt, file_ts, file_t)
     end
@@ -63,7 +68,7 @@ function test_callsite(bt, file_ts, file_t)
     # For that, we retrieve locations from lower to higher stack elements
     # and only traverse parts of the backtrace which we haven't traversed before.
     # The order will always be <internal functions> -> `@test` -> `@testset`.
-    internal = @something(macrocall_location(bt, @__FILE__), return nothing)
+    internal = @something(macrocall_location(bt, this_file()), return nothing)
     test = internal - 1 + @something(findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end]), return nothing)
     testset = test - 1 + @something(macrocall_location(@view(bt[test:end]), file_ts), return nothing)
 
@@ -86,7 +91,8 @@ end
 macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
 
 function scrub_backtrace(bt, file_ts, file_t)
-    do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
+    file = this_file()
+    do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, file, (:do_test, :do_test_throws)), bt)
     if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end

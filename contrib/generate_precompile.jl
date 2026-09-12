@@ -353,7 +353,7 @@ function generate_precompile_statements()
                 occursin("InterruptException", output) ||
                     error("unexpected output from the pty-attached process:\n$output")
             catch ex
-                @warn "Failed to collect precompile statements from the pty-attached process" exception=(ex, catch_backtrace())
+                @warn "Failed to collect precompile statements from the pty-attached process" exception=(ex, catch_backtrace()) _module=nothing _file=nothing _line=0
             end
         end
         for (name, f) in (("package precompilation", tmp_prec), ("script", tmp_proc))
@@ -362,7 +362,7 @@ function generate_precompile_statements()
                 # in a real sysimage build (bare sysimage) both processes trace plenty;
                 # when run standalone against a finished sysimage they may trace nothing
                 msg = "no precompile statements were traced from the $name process"
-                Base.get_bool_env("CI", false) ? error(msg) : @warn(msg)
+                Base.get_bool_env("CI", false) ? error(msg) : @warn(msg, _module=nothing, _file=nothing, _line=0)
             end
             n > 0 && append!(statements, eachline(f))
         end
