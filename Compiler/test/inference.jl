@@ -2434,17 +2434,20 @@ let T1 = Array{Float64}, T2 = Array{_1,2} where _1
     @test rt >: Union{Type{Array{Float64}}, Type{Array{Float32}}}
 end
 
-# An unused static parameter does not invalidate the callable ABI (#27813).
-@testset "ABI eligibility of unused static parameters (#27813)" begin
+# An undefined static parameter does not invalidate the callable ABI (#27813).
+@testset "ABI eligibility of undefined static parameters (#27813)" begin
     @test_warn r"declares type variable S but does not use it" @eval begin
         abi_sparams27813(x::T) where {T,S} = x
         abi_sparams_first27813(x::T) where {S,T} = x
         abi_sparams_conditional27813(::Union{Nothing,Ref{S}}) where S = nothing
     end
+    abi_sparams_vararg27813(::S...) where S = nothing
     @test Compiler.has_valid_abi_sparams(Base.method_instance(abi_sparams27813, Tuple{Int}))
     @test Compiler.has_valid_abi_sparams(Base.method_instance(abi_sparams_first27813, Tuple{Int}))
     @test !Compiler.has_valid_abi_sparams(get_linfo(abi_sparams27813, Tuple{Any}))
-    @test !Compiler.has_valid_abi_sparams(Base.method_instance(abi_sparams_conditional27813, Tuple{Nothing}))
+    @test Compiler.has_valid_abi_sparams(Base.method_instance(abi_sparams_conditional27813, Tuple{Nothing}))
+    @test Compiler.has_valid_abi_sparams(Base.method_instance(abi_sparams_vararg27813, Tuple{}))
+    @test !Compiler.has_valid_abi_sparams(get_linfo(abi_sparams_conditional27813, Tuple{Union{Nothing,Ref{Float64}}}))
 end
 
 # Demonstrate IPO constant propagation (#24362)

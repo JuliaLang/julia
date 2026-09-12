@@ -1681,7 +1681,12 @@ get_c_func(fcn::FCN_TYPE) where {FCN_TYPE<:Function} = return make_cfunc27178(Ca
         @noinline cfunction_undefined_arg27813(x::T) where {T,S} =
             @cfunction(identity, Any, (Ref{S},))
     end
+    @noinline function cfunction_conditional27813(x::T, ::Union{Nothing,Ref{S}}) where {T,S}
+        cf = @cfunction identity Ref{T} (Ref{T},)
+        ccall(cf, Ref{T}, (Ref{T},), x)
+    end
     @test cfunction27813(1) === 1
+    @test cfunction_conditional27813(1, nothing) === 1
 
     r = Ref{Any}("callback")
     cf = cfunction_arg27813(r)
