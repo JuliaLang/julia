@@ -818,15 +818,14 @@ static jl_value_t *jl_arrayref(jl_array_t *a, size_t i) JL_CANSAFEPOINT
     return jl_memoryrefget(jl_memoryrefindex(a->ref, i), 0);
 }
 
-JL_CALLABLE(jl_f__apply_iterate)
+static jl_value_t *do_apply_iterate(jl_value_t **args, uint32_t nargs, jl_code_instance_t *ci) JL_CANSAFEPOINT
 {
-    JL_NARGSV(_apply_iterate, 2);
     jl_value_t *iterate = args[0];
     jl_value_t *f = args[1];
     assert(iterate);
     args += 1;
     nargs -= 1;
-    if (nargs == 2) {
+    if (nargs == 2 && ci == NULL) {
         // some common simple cases
         if (f == BUILTIN(svec)) {
             if (jl_is_svec(args[1]))
@@ -1038,9 +1037,25 @@ JL_CALLABLE(jl_f__apply_iterate)
         ((void**)roots)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(1);
 #endif
     }
-    jl_value_t *result = jl_apply(newargs, n);
+    jl_value_t *result = ci == NULL ? jl_apply(newargs, n) :
+        jl_invoke_codeinst(newargs[0], &newargs[1], n - 1, ci);
     JL_GC_POP();
     return result;
+}
+
+JL_CALLABLE(jl_f__apply_iterate)
+{
+    JL_NARGSV(_apply_iterate, 2);
+    return do_apply_iterate(args, nargs, NULL);
+}
+
+// `_apply_iterate` where `ci` is the code instance of the flattened `f(args...)`
+// call: flatten the containers, then invoke `ci` instead of dispatching dynamically.
+JL_DLLEXPORT jl_value_t *jl_apply_iterate_codeinst(jl_value_t *ci, jl_value_t **args, uint32_t nargs)
+{
+    JL_NARGSV(_apply_iterate, 2);
+    assert(jl_is_code_instance(ci));
+    return do_apply_iterate(args, nargs, (jl_code_instance_t*)ci);
 }
 
 // this is like a regular call, but always runs in the newest world

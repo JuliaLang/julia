@@ -112,3 +112,26 @@ let m = Meta.@lower 1 + 1
     @test :b === @eval $m
     @test isempty(current_exceptions())
 end
+
+# Long tuple splats become `Expr(:invoke, ci, Core._apply_iterate, ...)`; the
+# interpreter must flatten the containers and invoke `ci` (#62742).
+@noinline interp_invoke_apply_target(xs...) = (xs[1], xs[end], length(xs))
+interp_invoke_apply_prefix(t::NTuple{33,Float32}) =
+    interp_invoke_apply_target(0.0f0, t...)
+interp_invoke_apply_multiple(a::NTuple{33,Float32}, b::NTuple{33,Float32}) =
+    interp_invoke_apply_target(a..., b...)
+let t = ntuple(Float32, 33)
+    for (f, tt, args, expected) in (
+            (interp_invoke_apply_prefix, (NTuple{33,Float32},), (t,), (0.0f0, 33.0f0, 34)),
+            (interp_invoke_apply_multiple, (NTuple{33,Float32}, NTuple{33,Float32}), (t, t), (1.0f0, 33.0f0, 66)))
+        ir = first(only(Base.code_ircode(f, tt)))
+        @test any(1:length(ir.stmts)) do i
+            stmt = ir[SSAValue(i)][:stmt]
+            Meta.isexpr(stmt, :invoke) &&
+                Compiler.singleton_type(Compiler.argextype(stmt.args[2], ir)) === Core._apply_iterate
+        end
+        ir.argtypes[1] = Tuple{}
+        oc = Core.OpaqueClosure(ir; do_compile=false)
+        @test oc(args...) === expected
+    end
+end

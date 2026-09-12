@@ -65,6 +65,12 @@ function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instructio
     add_inference_proof!(irsv.edges, code)
     argtypes = collect_argtypes(interp, stmt.args[2:end], StatementState(nothing, false), irsv)
     argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
+    if !isempty(argtypes) && singleton_type(argtypes[1]) === Core._apply_iterate
+        # `code` has the flattened signature, not the physical apply signature.
+        # These argument types therefore cannot be used for concrete evaluation.
+        effects = decode_effects(code.ipo_purity_bits)
+        return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
+    end
     return concrete_eval_invoke(interp, code, argtypes, irsv)
 end
 

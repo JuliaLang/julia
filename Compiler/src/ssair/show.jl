@@ -118,6 +118,29 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         print(io, ")")
     elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], Union{MethodInstance,CodeInstance})
         stmt = stmt::Expr
+        physical_ft = maybe_argextype(stmt.args[2], code, sptypes)
+        if length(stmt.args) >= 5 && singleton_type(physical_ft) === Core._apply_iterate
+            printstyled(io, "   invoke apply "; color = :light_black)
+            f = stmt.args[4]
+            show_unquoted(io, f, indent)
+            ft = maybe_argextype(f, code, sptypes)
+            if singleton_type(ft) === nothing
+                print(io, "::")
+                show(io, ft)
+            end
+            print(io, "(")
+            for i = 5:length(stmt.args)
+                i > 5 && print(io, ", ")
+                arg = stmt.args[i]
+                print(io, "(")
+                show_unquoted(io, arg, indent)
+                print(io, "::")
+                show(io, maybe_argextype(arg, code, sptypes))
+                print(io, ")...")
+            end
+            print(io, ")")
+            return nothing
+        end
         # TODO: why is this here, and not in Base.show_unquoted
         ci = stmt.args[1]
         if ci isa Core.CodeInstance

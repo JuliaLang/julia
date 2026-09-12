@@ -947,6 +947,13 @@ end
 
 # escape statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
 function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    if length(args) > 4 &&
+            singleton_type(argextype(args[2], astate.ir)) === Core._apply_iterate
+        # The code instance describes the flattened call, but the operands still hold
+        # the tuple containers. Cached argument and alias indices therefore do not match
+        # the operands; be conservative until they can be mapped through tuple fields.
+        return add_conservative_changes!(astate, pc, args, 2)
+    end
     codeinst = first(args)
     if codeinst isa MethodInstance
         mi = codeinst
