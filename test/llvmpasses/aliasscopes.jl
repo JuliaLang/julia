@@ -51,15 +51,34 @@ function micro_ker!(AB, Ac, Bc, kc, offSetA, offSetB)
     return
 end
 
+# Loads of arrays that are not wrapped in `Const` must not be tagged with the scope
+# (issue #63129): the store to A[i] and the next iteration's load of A[i-1] alias.
+# CHECK-LABEL: @julia_recurrence
+function recurrence(A, B)
+    @aliasscope @inbounds for i in 2:length(A)
+        A[i] -= Const(B)[i] * A[i-1]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE4_PLAIN:![0-9]+]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE4_LD:![0-9]+]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE4_PLAIN]]
+# CHECK: store double {{.*}} !noalias [[SCOPE4_ST:![0-9]+]]
+    end
+    return 0
+end
+
 # CHECK-DAG: [[SCOPE_LD]] = !{[[ALIASSCOPE:![0-9]+]]
 # CHECK-DAG: [[SCOPE_ST]] = !{[[ALIASSCOPE]]
 # CHECK-DAG: [[SCOPE2_LD]] = !{[[ALIASSCOPE2:![0-9]+]]
 # CHECK-DAG: [[SCOPE2_ST]] = !{[[ALIASSCOPE2]]
 # CHECK-DAG: [[SCOPE3_LD]] = !{[[ALIASSCOPE3:![0-9]+]]
 # CHECK-DAG: [[SCOPE3_ST]] = !{[[ALIASSCOPE3]]
+# CHECK-DAG: [[SCOPE4_LD]] = !{[[ALIASSCOPE4:![0-9]+]]
+# CHECK-DAG: [[SCOPE4_ST]] = !{[[ALIASSCOPE4]]
+# CHECK-DAG: [[SCOPE4_PLAIN]] = !{[[JNOALIAS_DATA:![0-9]+]]}
+# CHECK-DAG: [[JNOALIAS_DATA]] = !{!"jnoalias_data"
 # CHECK-DAG: [[ALIASSCOPE]] = !{!"aliasscope", [[MDNODE:![0-9]+]]}
 # CHECK-DAG: [[MDNODE]] = !{!"simple"}
 
 emit(simple, Vector{Float64}, Vector{Float64})
 emit(constargs, Vector{Float64}, Const{Float64, 1})
 emit(micro_ker!, Matrix{Float64}, Vector{Float64}, Vector{Float64}, Int64, Int64, Int64)
+emit(recurrence, Vector{Float64}, Vector{Float64})

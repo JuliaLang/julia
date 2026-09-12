@@ -2341,6 +2341,7 @@ end
 end
 
 add_tfunc(Core.memoryrefget, 3, 3, memoryrefget_tfunc, 20)
+add_tfunc(Core.const_memoryrefget, 3, 3, memoryrefget_tfunc, 20)
 add_tfunc(Core.memoryrefset!, 4, 4, memoryrefset!_tfunc, 20)
 add_tfunc(Core.memoryrefunset!, 3, 3, memoryrefunset!_tfunc, 20)
 add_tfunc(Core.memoryrefswap!, 4, 4, memoryrefswap!_tfunc, 20)
@@ -2511,7 +2512,7 @@ function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vec
     if ismemoryset
         # Additionally check element type compatibility
         memoryset_typecheck(𝕃, memtype, argtypes[2]) || return false
-    elseif f === memoryrefget
+    elseif f === memoryrefget || f === Core.const_memoryrefget
         # If we could potentially throw undef ref errors, bail out now.
         array_type_undefable(memtype) && return false
     end
@@ -2567,7 +2568,7 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefunset!
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
-    elseif f === memoryrefget
+    elseif f === memoryrefget || f === Core.const_memoryrefget
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryref_isassigned
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
@@ -2682,6 +2683,7 @@ const _EFFECT_FREE_BUILTINS = [
     memoryrefnew,
     memoryrefoffset,
     memoryrefget,
+    Core.const_memoryrefget,
     memoryref_isassigned,
     isdefined,
     Core.bitsizeof,
@@ -2727,6 +2729,7 @@ const _ARGMEM_BUILTINS = Any[
     memoryrefnew,
     memoryrefoffset,
     memoryrefget,
+    Core.const_memoryrefget,
     memoryref_isassigned,
     memoryrefset!,
     memoryrefunset!,
@@ -2912,6 +2915,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     Core.memorynew,
     memoryref_isassigned,
     memoryrefget,
+    Core.const_memoryrefget,
     # Core.memoryrefmodify!,
     memoryrefnew,
     memoryrefoffset,
@@ -3007,7 +3011,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
+        elseif f === memoryrefget || f === Core.const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
@@ -3029,7 +3033,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        if f === memoryrefnew || f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
+        if f === memoryrefnew || f === memoryrefget || f === Core.const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -3050,7 +3054,7 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
             return true
         end
         expected_nargs = 3
-    elseif f === memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
+    elseif f === memoryrefget || f === Core.const_memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
         expected_nargs = 3
     else
         @assert f === memoryrefset! "unexpected memoryop is given"
