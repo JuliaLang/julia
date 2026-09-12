@@ -288,7 +288,7 @@ LoadingCache() = LoadingCache(
 
 
 struct TOMLCache{Dates}
-    p::TOML.Parser{Dates}
+    p::TOML.Parser{Dates, Dict{String, Any}}
     d::Dict{String, CachedTOMLDict}
 end
 TOMLCache(p::TOML.Parser) = TOMLCache(p, Dict{String, CachedTOMLDict}())
