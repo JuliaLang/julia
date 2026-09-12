@@ -351,6 +351,7 @@ Specifies what type should be used by [`promote`](@ref) when given values of typ
 it for new types as appropriate.
 """
 function promote_rule end
+typeof(promote_rule).name.concrete_only = true
 
 promote_rule(::Type, ::Type) = Bottom
 # Define some methods to avoid needing to enumerate unrelated possibilities when presented
