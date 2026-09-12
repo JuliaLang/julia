@@ -745,6 +745,11 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
+# We don't add any _reinterpret methods until we include reinterpretarray.jl,
+# but defining the function up front avoids a whole lot of invalidations when we
+# do.
+function _reinterpret end
+
 """
     reinterpret(::Type{Out}, x::In)
 
