@@ -1864,6 +1864,11 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                         jl_atomic_store_release(&newci->max_world, 0);
                     }
                 }
+                // these vary per build, so the image differs between builds;
+                // the only reader is return_cached_result, for a timing report
+                newci->time_infer_total = 0;
+                newci->time_infer_cache_saved = 0;
+                newci->time_infer_self = 0;
                 jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
                 // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID bits
