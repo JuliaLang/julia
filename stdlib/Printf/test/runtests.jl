@@ -350,6 +350,16 @@ end
     @test_throws Printf.InvalidFormatStringError Printf.Format("%+")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.0")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%1")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%12")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%*")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%.1")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%.12")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%.*")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%*.*")
+    @test_throws Printf.InvalidFormatStringError Printf.Format(SubString("%1d", 1:2))
+    @test_throws Printf.InvalidFormatStringError Printf.Format(SubString("%*d", 1:2))
+    @test_throws Printf.InvalidFormatStringError Printf.Format(SubString("%.1f", 1:3))
     @test isempty(Printf.Format("%%").formats)
     @test Printf.@sprintf("%d%d", 1, 2) == "12"
     @test (Printf.@sprintf "%d%d" [1 2]...) == "12"
