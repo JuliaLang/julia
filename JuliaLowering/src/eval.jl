@@ -242,7 +242,7 @@ struct SourceByteTable
         if !isempty(spans)
             @assert !isempty(line_starts)
             min_byte = spans[begin][begin]
-            max_byte = maximum(last, spans)
+            max_byte = maximum(maximum, spans)
             @assert line_starts[begin] <= min_byte
             for ls in line_starts[begin+1:end]
                 @assert min_byte < ls
@@ -265,7 +265,7 @@ function SourceByteTable(sf::SourceFile, spans::Vector{Tuple{Int32, Int32}})
         popfirst!(line_starts)
         first_line += 1
     end
-    max_byte = maximum(last, spans)
+    max_byte = maximum(maximum, spans)
     while !isempty(line_starts) && max_byte < line_starts[end]
         pop!(line_starts)
     end
