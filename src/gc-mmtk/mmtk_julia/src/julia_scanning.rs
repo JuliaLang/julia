@@ -466,13 +466,19 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
 
         loop {
             let rts = Address::from_mut_ptr(s).shift::<Address>(2);
+            // The low two bits of nroots hold the frame kind (JL_GCFRAME_*
+            // in julia.h); see gc_mark_stack in gc-stock.c. Only
+            // finalizer-list frames (JL_GCFRAME_FINLIST = 3) carry GC_FIN_*
+            // tagged slots; in the other kinds a slot value with either low
+            // bit set is a tagged pointer (an immediate value stored in the
+            // pointer's low bits, e.g. introduced by a foreign runtime
+            // sharing Julia's GC), not a heap reference.
+            let frame_kind = nroots.as_usize() & 3;
             let mut i = 0;
             while i < nr {
-                if (nroots.as_usize() & 1) != 0 {
-                    let slot = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
-                    let real_addr = get_stack_addr(slot, offset, lb, ub);
-                    process_slot(closure, real_addr);
-                } else {
+                if frame_kind == 3 {
+                    // in-flight finalizer list pushed as a GC frame by
+                    // jl_gc_run_finalizers_in_list
                     let real_addr =
                         get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
 
@@ -493,6 +499,23 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                     }
 
                     process_slot(closure, real_addr);
+                } else if (frame_kind & 1) != 0 {
+                    // JL_GC_PUSH1..8 frame: slots hold addresses of local
+                    // `jl_value_t*` variables
+                    let slot = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    let real_addr = get_stack_addr(slot, offset, lb, ub);
+                    let val = read_stack(slot, offset, lb, ub);
+                    if val.as_usize() & 3 == 0 {
+                        process_slot(closure, real_addr);
+                    }
+                } else {
+                    // direct roots (JL_GC_PUSHARGS, codegen, interpreter)
+                    let real_addr =
+                        get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    let val = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    if val.as_usize() & 3 == 0 {
+                        process_slot(closure, real_addr);
+                    }
                 }
 
                 i += 1;

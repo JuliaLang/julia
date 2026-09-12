@@ -52,7 +52,7 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
 #else
 
-#define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<2)|2)
+#define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<2)|JL_GCFRAME_INTERP)
 
 #define JL_GC_PUSHFRAME(frame,locals,n)                                             \
   JL_CPPALLOCA(frame, sizeof(*frame)+(((n)+3)*sizeof(jl_value_t*)));                \
