@@ -404,6 +404,11 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
                 }
             }
             else {
+                // only native-owned CIs can land in the cfunc cache: the image
+                // slot is filtered by generate_cfunc_thunks and the runtime path
+                // above falls back to the unspecialized thunk for non-native
+                // inference results
+                assert(jl_ci_owner_is_native(last_ci));
                 if ((jl_value_t*)jl_get_ci_mi(last_ci) == mi && jl_atomic_load_relaxed(&last_ci->max_world) >= world) { // same dispatch and source
                     jl_atomic_store_release(&cfuncdata->last_world, world);
                     JL_UNLOCK(&cfun_lock);
@@ -414,6 +419,13 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         JL_UNLOCK(&cfun_lock);
         // next, try to figure out what the target should look like (outside of the lock since this is very slow)
         codeinst = mi != jl_nothing ? jl_type_infer((jl_method_instance_t*)mi, world, SOURCE_MODE_ABI, jl_options.trim) : NULL;
+        if (codeinst != NULL && !jl_ci_owner_is_native(codeinst)) {
+            // a CI owned by an external interpreter cannot be used as a direct
+            // call target (and we cannot consult that interpreter from here),
+            // so fall back to the unspecialized thunk, which performs a full
+            // dynamic dispatch
+            codeinst = NULL;
+        }
         // relock for the remainder of the function
         JL_LOCK(&cfun_lock);
     } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart entirely, since jl_world_counter changed thus jl_get_specialization1 might have changed
