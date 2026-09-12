@@ -10618,7 +10618,11 @@ static jl_llvm_functions_t
                    FromBB->getName() + "." + PhiBB->getName() + "_crit_edge", FromBB->getParent(), FromBB->getNextNode()); // insert after existing block
                 terminator->replaceSuccessorWith(PhiBB, NewBB);
                 DebugLoc Loc = terminator->getDebugLoc();
+#if JL_LLVM_VERSION >= 230000
+                terminator = UncondBrInst::Create(PhiBB);
+#else
                 terminator = BranchInst::Create(PhiBB);
+#endif
                 terminator->setDebugLoc(Loc);
                 ctx.builder.SetInsertPoint(NewBB);
             }
