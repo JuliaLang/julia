@@ -16,7 +16,7 @@ define void @argument_refinement({} addrspace(10)* %a) {
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
-    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !7
     call void @jl_safepoint()
     %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
     %loaded2 = load i64, i64 addrspace(10)* %casted2
@@ -31,7 +31,7 @@ define void @heap_refinement1(i64 %a) {
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
-    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !7
 ; OPAQUE: store ptr addrspace(10) %aboxed
     call void @jl_safepoint()
     %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
@@ -48,7 +48,7 @@ define void @heap_refinement2(i64 %a) {
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
-    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !7
 ; OPAQUE: store ptr addrspace(10) %loaded1
     call void @jl_safepoint()
     %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
@@ -64,7 +64,7 @@ define void @issue22770() {
     %ptls = call {}*** @julia.ptls_states()
     %y = call {} addrspace(10)* @allocate_some_value()
     %casted1 = bitcast {} addrspace(10)* %y to {} addrspace(10)* addrspace(10)*
-    %x = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    %x = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !7
 ; OPAQUE: store ptr addrspace(10) %y,
     %a = call {} addrspace(10)* @allocate_some_value()
 
@@ -138,7 +138,7 @@ top:
 L1:
   %continue = phi i1 [ true, %top ], [ false, %L1 ]
   %p = phi {} addrspace(10)* [ %x, %top ], [ %v, %L1 ]
-  %v0 = load {}*, {}** @gv1, !tbaa !4
+  %v0 = load {}*, {}** @gv1, !tbaa !4, !invariant.load !18
   %v = addrspacecast {}* %v0 to {} addrspace(10)*
   call void @one_arg_boxed({} addrspace(10)* %v)
   call void @one_arg_boxed({} addrspace(10)* %p)
@@ -164,7 +164,7 @@ L1:
 ; of the phi node. Therefore, we need only one gc slot for `%a`.
   %p = phi {} addrspace(10)* [ %x, %top ], [ %v, %L1 ]
   %ca = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
-  %v = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %ca, !tbaa !1
+  %v = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %ca, !tbaa !1, !alias.scope !7
   call void @one_arg_boxed({} addrspace(10)* %v)
   call void @one_arg_boxed({} addrspace(10)* %p)
   br i1 %continue, label %L1, label %L2
@@ -187,7 +187,7 @@ L1:
 ; `%p` has circular dependency but it can only be derived from `%a` which dominate `%p`.
   %p = phi {} addrspace(10)* [ %a, %top ], [ %v, %L1 ]
   %ca = bitcast {} addrspace(10)* %p to {} addrspace(10)* addrspace(10)*
-  %v = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %ca, !tbaa !1
+  %v = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %ca, !tbaa !1, !alias.scope !7
   call void @one_arg_boxed({} addrspace(10)* %v)
   call void @one_arg_boxed({} addrspace(10)* %p)
   br i1 %continue, label %L1, label %L2
@@ -223,11 +223,135 @@ define {} addrspace(10)* @setfield({} addrspace(10)* %p) {
   ret {} addrspace(10)* %c
 }
 
+; The rooting refinement is keyed on the memory region ('!alias.scope'), not on
+; the layout description ('!tbaa'): a content tag that says nothing about
+; immutability still refines ...
+define void @refine_region_without_type_tag({} addrspace(10)* %a) {
+; CHECK-LABEL: @refine_region_without_type_tag
+; CHECK-NOT: %gcframe
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !5, !alias.scope !7
+    call void @jl_safepoint()
+    %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
+    %loaded2 = load i64, i64 addrspace(10)* %casted2
+    ret void
+}
+
+; ... and the same layout tag also describes the element data of a `GenericMemory`,
+; which may be overwritten while the memory object stays live.
+define void @dont_refine_memorybuf_region({} addrspace(10)* %a) {
+; CHECK-LABEL: @dont_refine_memorybuf_region
+; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !10
+    call void @jl_safepoint()
+    %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
+    %loaded2 = load i64, i64 addrspace(10)* %casted2
+    ret void
+}
+
+; An access merged across regions may reside in the unrooted one, so any unrooted
+; member of the scope list vetoes the refinement.
+define void @dont_refine_merged_region({} addrspace(10)* %a) {
+; CHECK-LABEL: @dont_refine_merged_region
+; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !12
+    call void @jl_safepoint()
+    %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
+    %loaded2 = load i64, i64 addrspace(10)* %casted2
+    ret void
+}
+
+; Scopes from another domain (`@aliasscope`, loop versioning, ...) describe
+; something else entirely, even when they happen to share our names.
+define void @dont_refine_foreign_domain({} addrspace(10)* %a) {
+; CHECK-LABEL: @dont_refine_foreign_domain
+; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !15
+    call void @jl_safepoint()
+    %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
+    %loaded2 = load i64, i64 addrspace(10)* %casted2
+    ret void
+}
+
+; No region metadata at all is no information, so we conservatively re-root.
+define void @dont_refine_without_region({} addrspace(10)* %a) {
+; CHECK-LABEL: @dont_refine_without_region
+; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    call void @jl_safepoint()
+    %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
+    %loaded2 = load i64, i64 addrspace(10)* %casted2
+    ret void
+}
+
+; A `const` field of a mutable object cannot be reassigned either, so it roots what
+; it holds just as an immutable's payload does.
+define void @refine_mutconst_region({} addrspace(10)* %a) {
+; CHECK-LABEL: @refine_mutconst_region
+; CHECK-NOT: %gcframe
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !alias.scope !19
+    call void @jl_safepoint()
+    %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
+    %loaded2 = load i64, i64 addrspace(10)* %casted2
+    ret void
+}
+
+; Foreign IR carrying no region metadata still refines through `!invariant.load`.
+define void @refine_invariant_load({} addrspace(10)* %a) {
+; CHECK-LABEL: @refine_invariant_load
+; CHECK-NOT: %gcframe
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !invariant.load !18
+    call void @jl_safepoint()
+    %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
+    %loaded2 = load i64, i64 addrspace(10)* %casted2
+    ret void
+}
+
 attributes #0 = { argmemonly norecurse nounwind readonly }
 attributes #1 = { inaccessiblememonly norecurse nounwind }
 
 !0 = !{!"jtbaa"}
 !1 = !{!2, !2, i64 0}
-!2 = !{!"jtbaa_immut", !0, i64 0}
+!2 = !{!"jtbaa_value", !0, i64 0}
 !3 = !{!"jtbaa_const", !0, i64 0}
 !4 = !{!3, !3, i64 0, i64 1}
+!5 = !{!6, !6, i64 0}
+!6 = !{!"jtbaa_memorylen", !2, i64 0}
+
+; The memory-region '!alias.scope' domain (`jl_regions_t` in codegen.cpp).
+!7 = !{!8}
+!8 = !{!"jnoalias_immutdata", !9}
+!9 = !{!"jnoalias"}
+!10 = !{!11}
+!11 = !{!"jnoalias_memorybuf", !9}
+!12 = !{!8, !11}
+; Same scope name, but a domain that is not ours.
+!15 = !{!16}
+!16 = !{!"jnoalias_immutdata", !17}
+!17 = !{!"not_jnoalias"}
+
+!18 = !{}
+
+!19 = !{!20}
+!20 = !{!"jnoalias_mutconstdata", !9}
+
