@@ -2522,7 +2522,41 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                                        GlobalVariable::InternalLinkage,
                                                        cpu_target_data, "jl_cpu_target_string");
 
-            AT = ArrayType::get(T_psize, 6);
+            // Thunks for the runtime entry points, one per slot; a pre-relocated image
+            // points at these instead of at libjulia-internal, which moves at every start.
+            auto T_thunk_int32 = Type::getInt32Ty(Context);
+            auto entry_slots_ty = ArrayType::get(T_ptr, JL_IMAGE_ENTRY_THUNKS);
+            auto entry_targets = new GlobalVariable(metadataM, entry_slots_ty, false,
+                                            GlobalVariable::ExternalLinkage,
+                                            Constant::getNullValue(entry_slots_ty),
+                                            "jl_image_entry_targets");
+            SmallVector<Constant*, JL_IMAGE_ENTRY_THUNKS> entry_thunk_ptrs;
+            for (size_t i = 0; i < JL_IMAGE_ENTRY_THUNKS; i++) {
+                // A calling convention takes the code instance as its fourth argument; a
+                // builtin does not.
+                FunctionType *FT = i < JL_IMAGE_ENTRY_CONVENTIONS ?
+                    FunctionType::get(T_ptr, {T_ptr, T_ptr, T_thunk_int32, T_ptr}, false) :
+                    FunctionType::get(T_ptr, {T_ptr, T_ptr, T_thunk_int32}, false);
+                auto thunk = Function::Create(FT, GlobalValue::InternalLinkage,
+                                              "jl_image_entry_thunk_" + std::to_string(i), metadataM);
+                IRBuilder<> thunk_builder(BasicBlock::Create(Context, "top", thunk));
+                auto slot = thunk_builder.CreateConstInBoundsGEP2_32(entry_slots_ty, entry_targets, 0, i);
+                auto target = thunk_builder.CreateAlignedLoad(T_ptr, slot, Align(sizeof(void*)));
+                SmallVector<Value*, 4> thunk_args;
+                for (auto &argument : thunk->args())
+                    thunk_args.push_back(&argument);
+                auto forwarded = thunk_builder.CreateCall(FT, target, thunk_args);
+                forwarded->setTailCallKind(CallInst::TCK_MustTail);
+                thunk_builder.CreateRet(forwarded);
+                entry_thunk_ptrs.push_back(thunk);
+            }
+            auto entry_thunks_ty = ArrayType::get(T_ptr, JL_IMAGE_ENTRY_THUNKS);
+            auto entry_thunks = new GlobalVariable(metadataM, entry_thunks_ty, true,
+                                            GlobalVariable::ExternalLinkage,
+                                            ConstantArray::get(entry_thunks_ty, entry_thunk_ptrs),
+                                            "jl_image_entry_thunks");
+
+            AT = ArrayType::get(T_psize, 8);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
                                             ConstantArray::get(AT, {
@@ -2531,7 +2565,9 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                                     ConstantExpr::getBitCast(ptls, T_psize),
                                                     ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
                                                     ConstantExpr::getBitCast(target_ids, T_psize),
-                                                    ConstantExpr::getBitCast(cpu_target_global, T_psize)
+                                                    ConstantExpr::getBitCast(cpu_target_global, T_psize),
+                                                    ConstantExpr::getBitCast(entry_thunks, T_psize),
+                                                    ConstantExpr::getBitCast(entry_targets, T_psize)
                                             }),
                                             "jl_image_pointers");
             addComdat(pointers, TheTriple);

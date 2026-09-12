@@ -55,6 +55,9 @@ struct _jl_image_t {
     void **jl_small_typeof;
     uint32_t heap_checksum;
     bool_t is_split;
+    // Entry thunks and their targets, for a pre-relocated image; NULL in an older image.
+    void *const *entry_thunks;
+    void **entry_targets;
 };
 
 // The header for each image
@@ -145,6 +148,12 @@ typedef struct {
     size_t *tls_offset;
 } jl_image_ptls_t;
 
+// Runtime entry points a pre-relocated image reaches through a thunk: the
+// calling conventions (`jl_invoke_api_t` order) followed by the builtins. Fixed
+// size so the image object has one shape; the runtime checks that it fits.
+#define JL_IMAGE_ENTRY_CONVENTIONS 8
+#define JL_IMAGE_ENTRY_THUNKS 128
+
 //The root struct for images, points to all the other globals
 typedef struct {
     // The image header, contains numerical global data
@@ -162,6 +171,9 @@ typedef struct {
     const void *target_data;
     // Original CPU target string used to build this sysimage
     const char *cpu_target_string;
+    // `entry_thunks[i]` jumps through `entry_targets[i]`, filled at every start.
+    void *const *entry_thunks;
+    void **entry_targets;
 } jl_image_pointers_t;
 
 /**

@@ -119,6 +119,12 @@ Glossary
 #include <dlfcn.h>
 #include <sys/mman.h>
 #endif
+#if defined(_OS_LINUX_)
+#include <errno.h>
+#include <fcntl.h>
+#include <link.h>
+#include <unistd.h>
+#endif
 
 #include "valgrind.h"
 #include "julia_assert.h"
@@ -396,26 +402,40 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 #define NBOX_C 1024
 
+// A package image references `nothing`, the small boxed integers and the
+// symbols by tag, since they belong to the loading runtime; a trimmed image
+// does too, to stay small. A full system image holds them as objects.
+static int primordials_by_tag(jl_serializer_state *s) JL_NOTSAFEPOINT
+{
+    return s->incremental || jl_options.trim;
+}
+
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
         return 0;
 
-    if (v == NULL || jl_is_symbol(v) || v == jl_nothing) {
+    if (v == NULL) {
         return 0;
     }
-    else if (jl_typetagis(v, jl_int64_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_is_symbol(v)) {
+        return 0;
+    }
+    else if (primordials_by_tag(s) && v == jl_nothing) {
+        return 0;
+    }
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_int64_tag << 4)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
             return 0;
     }
-    else if (jl_typetagis(v, jl_int32_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_int32_tag << 4)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
             return 0;
     }
-    else if (jl_typetagis(v, jl_uint8_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_uint8_tag << 4)) {
         return 0;
     }
     else if (v == (jl_value_t*)s->ptls->root_task) {
@@ -641,6 +661,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
 
     if (!recursive)
         goto done_fields;
+
+    // A symbol's two children are not fields of its type.
+    if (!primordials_by_tag(s) && jl_is_symbol(v)) {
+        jl_sym_t *sym = (jl_sym_t*)v;
+        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&sym->left), 1, immediate);
+        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&sym->right), 1, immediate);
+        goto done_fields;
+    }
 
     if (s->incremental && jl_is_datatype(v) && immediate) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
@@ -1184,7 +1212,7 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_GC_DISABLED JL_CANSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
-    if (jl_is_symbol(v)) {
+    if (primordials_by_tag(s) && jl_is_symbol(v)) {
         void **pidx = ptrhash_bp(&symbol_table, v);
         void *idx = *pidx;
         if (idx == HT_NOTFOUND) {
@@ -1201,20 +1229,20 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
     else if (v == (jl_value_t*)s->ptls->root_task) {
         return (uintptr_t)TagRef << RELOC_TAG_OFFSET;
     }
-    else if (v == jl_nothing) {
+    else if (primordials_by_tag(s) && v == jl_nothing) {
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + 1;
     }
-    else if (jl_typetagis(v, jl_int64_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_int64_tag << 4)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
             return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i64 + 2;
     }
-    else if (jl_typetagis(v, jl_int32_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_int32_tag << 4)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
             return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i32 + 2 + NBOX_C;
     }
-    else if (jl_typetagis(v, jl_uint8_tag << 4)) {
+    else if (primordials_by_tag(s) && jl_typetagis(v, jl_uint8_tag << 4)) {
         uint8_t u8 = *(uint8_t*)v;
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
@@ -1445,7 +1473,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         assert((!jl_is_datatype_singleton(t) || t->instance == v) && "detected singleton construction corruption");
         int mutabl = t->name->mutabl;
         ios_t *f = s->s;
-        if (t->smalltag) {
+        // A symbol has relocations (its children), so it stays in the data section.
+        if (t->smalltag && t != jl_symbol_type) {
             if (t->layout->npointers == 0 || t == jl_string_type) {
                 if (jl_datatype_nfields(t) == 0 || mutabl == 0 || t == jl_string_type) {
                     f = s->const_data;
@@ -1662,6 +1691,17 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         else if (jl_is_string(v)) {
             ios_write(f, (char*)v, sizeof(void*) + jl_string_len(v));
             write_uint8(f, '\0'); // null-terminated strings for easier C-compatibility
+        }
+        else if (jl_is_symbol(v)) {
+            // left, right, hash, name; padded so the next object stays aligned
+            assert(f == s->s);
+            jl_sym_t *sym = (jl_sym_t*)v;
+            write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&sym->left));
+            write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&sym->right));
+            write_uint(f, sym->hash);
+            size_t len = strlen(jl_symbol_name(sym)) + 1;
+            ios_write(f, jl_symbol_name(sym), len);
+            write_padding(f, LLT_ALIGN(len, sizeof(void*)) - len);
         }
         else if (jl_is_cancel_source(v)) {
             // Variable-sized. Store parents, reset children (reconstructed on load).
@@ -2082,7 +2122,10 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
     }
 }
 
-// Compute target location at deserialization
+// While recording, an entry point of the runtime is written as the image's
+// thunk for it; `prelink_entry_targets` fills the slots the thunks jump through.
+static int prelink_recording = 0;
+
 static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t base, uintptr_t reloc_id, jl_array_t *link_ids, int *link_index) JL_CANSAFEPOINT
 {
     enum RefTags tag = (enum RefTags)(reloc_id >> RELOC_TAG_OFFSET);
@@ -2120,14 +2163,19 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         jl_unreachable(); // terminate control flow if assertion is disabled.
     }
     case FunctionRef: {
+        // written as the thunk, whose address the file can hold
         if (offset & BuiltinFunctionTag) {
             offset &= ~BuiltinFunctionTag;
             assert(offset < jl_n_builtins && "unknown function pointer ID");
+            if (prelink_recording)
+                return (uintptr_t)s->image->entry_thunks[JL_IMAGE_ENTRY_CONVENTIONS + offset];
             return (uintptr_t)jl_builtin_f_addrs[offset];
         }
         jl_invoke_api_t type = (jl_invoke_api_t)(offset & ~BuiltinInvokeTag);
         uintptr_t fptr = (uintptr_t)jl_invoke_api_callptr(type);
         assert(fptr && "corrupt relocation item id");
+        if (prelink_recording)
+            return (uintptr_t)s->image->entry_thunks[type];
         // If use_sysimage_native_code != yes, zero out the invoke pointer for
         // CodeInstances with native code, but not if invoke is jl_fptr_args and
         // the specptr is a builtin.
@@ -2211,7 +2259,209 @@ static void jl_write_arraylist(ios_t *s, arraylist_t *list)
     ios_write(s, (const char*)list->items, list->len * sizeof(void*));
 }
 
-static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint8_t bits) JL_CANSAFEPOINT
+// --- A pre-relocated system image ---
+//
+// When the image is linked into a non-PIE program it is at the same address at
+// every start, so the relocation passes can run once, at build time, and the
+// result be written back into the program file (`--output-prelinked`). A start
+// then applies only the residual list: pointers to objects the runtime creates
+// before reading the image, and entry points of libjulia-internal. The writer
+// reserves room for that list when asked (`--sysimage-prelink=yes`); an image
+// written without it is unchanged and carries no record.
+
+#define JL_PRELINK_MAGIC 0x50524c4e4b303031ull // "PRLNK001"
+
+static void prelink_failed(const char *what) JL_NOTSAFEPOINT
+{
+    // The restore is half way through: neither throwing nor the atexit hook works.
+    jl_safe_printf("ERROR: pre-relocated system image: %s\n", what);
+    exit(1);
+}
+
+// Fill the slots the thunks jump through, before any is called.
+static void prelink_entry_targets(jl_image_t *image) JL_NOTSAFEPOINT
+{
+    if (image->entry_targets == NULL)
+        return;
+    if (JL_IMAGE_ENTRY_CONVENTIONS + (size_t)jl_n_builtins > JL_IMAGE_ENTRY_THUNKS)
+        prelink_failed("the image holds fewer thunks than the runtime has entry points");
+    for (int type = JL_INVOKE_ARGS; type <= JL_INVOKE_INTERPRETED; type++)
+        image->entry_targets[type] = (void*)jl_invoke_api_callptr((jl_invoke_api_t)type);
+    for (size_t i = 0; i < (size_t)jl_n_builtins; i++)
+        image->entry_targets[JL_IMAGE_ENTRY_CONVENTIONS + i] = (void*)jl_builtin_f_addrs[i];
+}
+
+typedef struct {
+    uintptr_t lo, hi;      // one loadable segment of the program that holds the image
+    uintptr_t file_offset; // where that segment starts in the program file
+    uintptr_t file_size;   // how much of it the file holds
+} prelink_segment_t;
+
+static struct {
+    uintptr_t blob;        // the image being located
+    int located;
+    int fixed;             // the program is at its link address
+    size_t n;
+    prelink_segment_t segments[32];
+} prelink_program;
+
+#if defined(_OS_LINUX_)
+static int prelink_visit_program(struct dl_phdr_info *info, size_t size, void *data) JL_NOTSAFEPOINT
+{
+    int holds = 0;
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        const ElfW(Phdr) *ph = &info->dlpi_phdr[i];
+        uintptr_t lo = info->dlpi_addr + ph->p_vaddr;
+        if (ph->p_type == PT_LOAD && lo <= prelink_program.blob && prelink_program.blob < lo + ph->p_memsz)
+            holds = 1;
+    }
+    if (!holds)
+        return 0;
+    prelink_program.fixed = info->dlpi_addr == 0;
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        const ElfW(Phdr) *ph = &info->dlpi_phdr[i];
+        if (ph->p_type != PT_LOAD || prelink_program.n == sizeof(prelink_program.segments) / sizeof(prelink_segment_t))
+            continue;
+        prelink_segment_t *seg = &prelink_program.segments[prelink_program.n++];
+        seg->lo = info->dlpi_addr + ph->p_vaddr;
+        seg->hi = seg->lo + ph->p_memsz;
+        seg->file_offset = ph->p_offset;
+        seg->file_size = ph->p_filesz;
+    }
+    return 1;
+}
+#endif
+
+// Find the segments of the program that holds the image.
+static void prelink_locate(const char *blob) JL_NOTSAFEPOINT
+{
+    memset(&prelink_program, 0, sizeof(prelink_program));
+    prelink_program.blob = (uintptr_t)blob;
+    prelink_program.located = 1;
+#if defined(_OS_LINUX_)
+    dl_iterate_phdr(prelink_visit_program, NULL);
+#endif
+}
+
+// A pointer is final when its target is inside the program: image data,
+// constants, or native code.
+static int prelink_is_final(uintptr_t v) JL_NOTSAFEPOINT
+{
+    if (v == 0)
+        return 1;
+    for (size_t i = 0; i < prelink_program.n; i++)
+        if (prelink_program.segments[i].lo <= v && v < prelink_program.segments[i].hi)
+            return 1;
+    return 0;
+}
+
+// Residual list: two counts (type-tag pass, general pass), then the
+// `(position, relocation id)` pairs, type-tag pass first.
+typedef struct {
+    uintptr_t *zone;
+    size_t capacity;       // pairs the zone holds
+    size_t n;              // pairs recorded
+    size_t total;          // pointers seen while recording
+} prelink_residual_t;
+
+static void prelink_record(prelink_residual_t *r, int pass, uintptr_t pos, uintptr_t id) JL_NOTSAFEPOINT
+{
+    if (r->n == r->capacity)
+        prelink_failed("the reserved room is full, which the writer's count should have prevented");
+    r->zone[2 + 2 * r->n] = pos;
+    r->zone[3 + 2 * r->n] = id;
+    r->n += 1;
+    r->zone[pass] += 1;
+}
+
+// Resolve one relocation to its target (before the type-tag substitution).
+static inline uintptr_t jl_apply_reloc(jl_serializer_state *s, uintptr_t base, uintptr_t *pv, uintptr_t id,
+                                       uint8_t bits, jl_array_t *link_ids, int *link_index) JL_CANSAFEPOINT
+{
+    uintptr_t v = get_item_for_reloc(s, base, id, link_ids, link_index);
+    uintptr_t stored = v;
+    if (bits && v && ((jl_datatype_t*)v)->smalltag)
+        stored = (uintptr_t)((jl_datatype_t*)v)->smalltag << 4; // TODO: should we have a representation that supports sweep without a relocation step?
+    *pv = stored | bits;
+    return v;
+}
+
+// Apply one pass of the residual list.
+static void prelink_apply_residual(jl_serializer_state *s, const prelink_residual_t *r, int pass,
+                                   jl_array_t *link_ids, uint8_t bits) JL_CANSAFEPOINT
+{
+    uintptr_t base = (uintptr_t)s->s->buf;
+    size_t first = pass == 0 ? 0 : r->zone[0];
+    size_t n = r->zone[pass];
+    const uintptr_t *pairs = r->zone + 2 + 2 * first;
+    int link_index = 0;
+    for (size_t i = 0; i < n; i++)
+        jl_apply_reloc(s, base, (uintptr_t*)(base + pairs[2 * i]), pairs[2 * i + 1], bits, link_ids, &link_index);
+    assert(!link_ids || link_index == jl_array_len(link_ids));
+}
+
+// Copy the running program to `output` with the restored image written over
+// its image bytes. Read through /proc/self/exe: Linux refuses to open a
+// running program for writing.
+static void prelink_write_back(const char *blob, size_t size, const char *output)
+{
+#if defined(_OS_LINUX_)
+    if (!prelink_program.located)
+        prelink_locate(blob);
+    if (prelink_program.n == 0)
+        prelink_failed("the image is not inside a loaded program");
+    if (!prelink_program.fixed)
+        prelink_failed("the program moves at every start; link it as an ET_EXEC (-no-pie)");
+    uintptr_t lo = (uintptr_t)blob, hi = lo + size;
+    const prelink_segment_t *seg = NULL;
+    for (size_t i = 0; i < prelink_program.n; i++) {
+        const prelink_segment_t *candidate = &prelink_program.segments[i];
+        if (candidate->lo <= lo && hi <= candidate->lo + candidate->file_size)
+            seg = candidate;
+    }
+    if (seg == NULL)
+        prelink_failed("the image is not inside one segment of the program that the file holds");
+    off_t file_offset = (off_t)(seg->file_offset + (lo - seg->lo));
+    int in = open("/proc/self/exe", O_RDONLY);
+    if (in < 0)
+        prelink_failed("cannot read the running program");
+    int out = open(output, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+    if (out < 0)
+        prelink_failed("cannot create the output file");
+    size_t chunk = 1 << 20;
+    char *buffer = (char*)malloc_s(chunk);
+    while (1) {
+        ssize_t got = read(in, buffer, chunk);
+        if (got < 0)
+            prelink_failed("cannot read the running program");
+        if (got == 0)
+            break;
+        for (ssize_t done = 0; done < got; ) {
+            ssize_t put = write(out, buffer + done, got - done);
+            if (put < 0)
+                prelink_failed("cannot write the output file");
+            done += put;
+        }
+    }
+    free(buffer);
+    for (size_t done = 0; done < size; ) {
+        ssize_t put = pwrite(out, blob + done, size - done, file_offset + done);
+        if (put < 0)
+            prelink_failed("cannot write the image into the output file");
+        done += put;
+    }
+    if (close(out) != 0)
+        prelink_failed("cannot close the output file");
+    close(in);
+#else
+    (void)blob; (void)size; (void)output;
+    prelink_failed("writing a pre-relocated program needs Linux");
+#endif
+}
+
+// `residual` records the pointers a pre-relocation cannot finalize, or NULL.
+static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint8_t bits,
+                              prelink_residual_t *residual, int pass) JL_CANSAFEPOINT
 {
     uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
@@ -2237,16 +2487,20 @@ static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint
         uintptr_t pos = last_pos + pos_diff;
         last_pos = pos;
         uintptr_t *pv = (uintptr_t *)(base + pos);
-        uintptr_t v = *pv;
-        v = get_item_for_reloc(s, base, v, link_ids, &link_index);
-        if (bits && v && ((jl_datatype_t*)v)->smalltag)
-            v = (uintptr_t)((jl_datatype_t*)v)->smalltag << 4; // TODO: should we have a representation that supports sweep without a relocation step?
-        *pv = v | bits;
+        uintptr_t id = *pv;
+        uintptr_t v = jl_apply_reloc(s, base, pv, id, bits, link_ids, &link_index);
+        if (residual != NULL) {
+            residual->total += 1;
+            if (!prelink_is_final(v))
+                prelink_record(residual, pass, pos, id);
+        }
     }
     assert(!link_ids || link_index == jl_array_len(link_ids));
 }
 
-static void jl_read_memreflist(jl_serializer_state *s)
+// While recording, a memory reference outside the program cannot be written
+// to the file; none is expected.
+static void jl_read_memreflist(jl_serializer_state *s, int check_final)
 {
     uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
@@ -2273,6 +2527,8 @@ static void jl_read_memreflist(jl_serializer_state *s)
         jl_genericmemoryref_t *pv = (jl_genericmemoryref_t*)(base + pos);
         size_t offset = (size_t)pv->ptr_or_offset;
         pv->ptr_or_offset = (void*)((char*)pv->mem->ptr + offset);
+        if (check_final && !prelink_is_final((uintptr_t)pv->ptr_or_offset))
+            prelink_failed("a memory reference points outside the program");
     }
 }
 
@@ -2343,6 +2599,22 @@ static jl_value_t *jl_delayed_reloc(jl_serializer_state *s, uintptr_t offset) JL
     return ret;
 }
 
+
+// Register the image's native code. The fptrs record already holds each
+// entry's method instance, written by `jl_update_all_fptrs` or by a pre-relocation.
+static void jl_register_image_fptrs(jl_serializer_state *s, jl_image_t *image)
+{
+    jl_image_fptrs_t fvars = image->fptrs;
+    // make these NULL now so we skip trying to restore GlobalVariable pointers later
+    image->gvars_base = NULL;
+    if (fvars.nptrs == 0)
+        return;
+    memcpy(image->jl_small_typeof, &jl_small_typeof, sizeof(jl_small_typeof));
+    int img_fvars_max = s->fptr_record->size / sizeof(void*);
+    jl_code_instance_t **linfos = (jl_code_instance_t**)&s->fptr_record->buf[0];
+    // Tell LLVM about the native code
+    jl_register_fptrs(image->base, &fvars, linfos, img_fvars_max);
+}
 
 static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
 {
@@ -3322,7 +3594,25 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_write_arraylist(s.relocs, &s.uniquing_objs);
         jl_write_arraylist(s.relocs, &s.fixup_types);
     }
+    size_t fixup_objs_pos = ios_pos(s.relocs);
     jl_write_arraylist(s.relocs, &s.fixup_objs);
+    // Room for the residual list: bounded by the relocations whose target is
+    // outside the image data and the constant data. Reserved only when asked.
+    write_padding(s.relocs, LLT_ALIGN(ios_pos(s.relocs), 8) - ios_pos(s.relocs));
+    size_t residual_pos = ios_pos(s.relocs);
+    size_t residual_capacity = 0;
+    if (!s.incremental && jl_options.sysimage_prelink) {
+        arraylist_t *lists[2] = {&s.gctags_list, &s.relocs_list};
+        for (int l = 0; l < 2; l++) {
+            for (size_t i = 0; i < lists[l]->len; i += 2) {
+                uintptr_t item = (uintptr_t)lists[l]->items[i + 1];
+                enum RefTags tag = (enum RefTags)(item >> RELOC_TAG_OFFSET);
+                if (tag != DataRef && tag != ConstDataRef)
+                    residual_capacity += 1;
+            }
+        }
+        write_padding(s.relocs, (2 + 2 * residual_capacity) * sizeof(uintptr_t));
+    }
     write_uint(f, relocs.size);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&relocs, 0);
@@ -3360,6 +3650,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 #undef XX
             jl_write_value(&s, global_roots_list);
             jl_write_value(&s, global_roots_keyset);
+            jl_write_value(&s, primordials_by_tag(&s) ? NULL : (jl_value_t*)jl_get_root_symbol());
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             size_t world = jl_atomic_load_acquire(&jl_world_counter);
@@ -3389,6 +3680,17 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
         ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars, uint32_t), jl_array_len(s.link_ids_external_fnvars) * sizeof(uint32_t));
         write_uint32(f, external_fns_begin);
+        // Prelink record. The addresses stay zero until a pre-relocation writes the
+        // image back. The magic is last so a reader finds the record from the end.
+        if (residual_capacity != 0) {
+            write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
+            write_uint(f, 0);                 // the address it was pre-relocated for
+            write_uint(f, 0);                 // reserved: the stub table it points at
+            write_uint(f, residual_pos);
+            write_uint(f, residual_capacity);
+            write_uint(f, fixup_objs_pos);
+            write_uint64(f, JL_PRELINK_MAGIC);
+        }
     }
 
     assert(object_worklist.len == 0);
@@ -4080,6 +4382,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     assert(!ios_eof(f));
     s.s = f;
     uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    // the `nothing` allocated by `julia_init`, replaced by the image's below
+    jl_value_t *init_nothing = jl_nothing;
+    jl_sym_t *image_symtab = NULL;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -4102,6 +4407,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         export_jl_sysimg_globals();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
+        // installed after the relocations, below
+        image_symtab = (jl_sym_t*)jl_read_value(&s);
         jl_gc_write(s.ptls->root_task, s.ptls->root_task->tls, jl_value_t, jl_read_value(&s));
 
         uint32_t gs_ctr = read_uint32(f);
@@ -4139,6 +4446,26 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         ios_read(f, (char*)jl_array_data(s.link_ids_external_fnvars, uint32_t), nlinks_external_fnvars * sizeof(uint32_t));
     }
     uint32_t external_fns_begin = read_uint32(f);
+    // The prelink record, if any, is at the end of the stream and ends with the
+    // magic; without `--sysimage-prelink=yes` there is none.
+    uintptr_t prelink_base = 0, prelink_stubs = 0;
+    size_t residual_pos = 0, residual_capacity = 0, fixup_objs_pos = 0;
+    size_t prelink_record_pos = 0;
+    if (!s.incremental && f->size >= 6 * sizeof(uintptr_t)) {
+        size_t magic_pos = f->size - sizeof(uint64_t);
+        if (jl_load_unaligned_i64(f->buf + magic_pos) == JL_PRELINK_MAGIC) {
+            prelink_record_pos = f->size - 6 * sizeof(uintptr_t);
+            size_t here = ios_pos(f);
+            ios_seek(f, prelink_record_pos);
+            prelink_base = read_uint(f);
+            prelink_stubs = read_uint(f);
+            residual_pos = read_uint(f);
+            residual_capacity = read_uint(f);
+            fixup_objs_pos = read_uint(f);
+            ios_seek(f, here);
+        }
+    }
+    (void)prelink_stubs;
     if (s.incremental) {
         assert(restored && init_order && extext_methods && internal_methods && method_roots_list);
         *restored = (jl_array_t*)jl_delayed_reloc(&s, offset_restored);
@@ -4150,6 +4477,34 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     s.s = NULL;
 
+    // `prelink_output`: write a pre-relocated copy. `prelinked`: this image is one;
+    // take the fast path.
+    const char *prelink_output = s.incremental ? NULL : jl_options.output_prelinked;
+    int prelinked = prelink_base != 0;
+    if (prelinked && prelink_base != (uintptr_t)f->buf)
+        prelink_failed("the image was pre-relocated for another address than the one it is at");
+    if (prelinked && image->fptrs.nptrs == 0)
+        prelink_failed("a pre-relocated image needs its native code");
+    if (prelink_output != NULL && prelinked)
+        prelink_failed("the image is pre-relocated already");
+    if (prelink_output != NULL && residual_capacity == 0)
+        prelink_failed("the image reserved no room; write it with --sysimage-prelink=yes");
+    if (prelink_output != NULL && image->fptrs.nclones != 0)
+        prelink_failed("the image holds several code variants, and a pre-relocation would "
+                       "freeze the one this machine selected");
+    if (!s.incremental)
+        prelink_entry_targets(image);
+    if (prelink_output != NULL && image->entry_thunks == NULL)
+        prelink_failed("the image carries no thunks for the entry points of the runtime");
+    prelink_recording = prelink_output != NULL;
+    if (prelink_output != NULL)
+        prelink_locate(f->buf);
+    prelink_residual_t residual = {0};
+    if (residual_capacity != 0) {
+        residual.zone = (uintptr_t*)(relocs.buf + residual_pos);
+        residual.capacity = residual_capacity;
+    }
+
     // step 3: apply relocations
     assert(!ios_eof(f));
     jl_read_symbols(&s);
@@ -4159,15 +4514,44 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
     s.s = &sysimg;
-    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE); // gctags
-    size_t sizeof_tags = ios_pos(&relocs);
+    size_t sizeof_tags = 0;
+    if (prelinked) {
+        // Fast path: pointers into the program and memory references are final in the
+        // file; apply the residual list. The gvar slots live in .bss and are filled
+        // below either way.
+        prelink_apply_residual(&s, &residual, 0, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE);
+        prelink_apply_residual(&s, &residual, 1, s.link_ids_relocs, 0);
+        ios_seek(&relocs, fixup_objs_pos);
+    }
+    else {
+        prelink_residual_t *recording = prelink_output != NULL ? &residual : NULL;
+        jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE, recording, 0); // gctags
+        sizeof_tags = ios_pos(&relocs);
+        jl_read_reloclist(&s, s.link_ids_relocs, 0, recording, 1); // general relocs
+        jl_read_memreflist(&s, recording != NULL); // memowner_list relocs (must come before memref_list reads the pointers and after general relocs computes the pointers)
+        jl_read_memreflist(&s, recording != NULL); // memref_list relocs
+    }
     (void)sizeof_tags;
-    jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
-    jl_read_memreflist(&s); // memowner_list relocs (must come before memref_list reads the pointers and after general relocs computes the pointers)
-    jl_read_memreflist(&s); // memref_list relocs
     // s.link_ids_gvars will be processed in `jl_update_all_gvars`
     // s.link_ids_external_fns will be processed in `jl_update_all_gvars`
     jl_update_all_gvars(&s, image, external_fns_begin); // gvars relocs
+
+    if (image_symtab != NULL)
+        jl_set_root_symbol(image_symtab);
+
+    // `julia_init` allocated a `nothing` before the root task existed, and the
+    // image's `nothing` replaced it above. Point the root task's fields at the
+    // image's one. The walk is over the layout so it does not depend on the field
+    // list; no other thread exists yet, so plain stores are fine.
+    if (!s.incremental && init_nothing != jl_nothing) {
+        jl_value_t *root = (jl_value_t*)s.ptls->root_task;
+        const jl_datatype_layout_t *task_layout = jl_task_type->layout;
+        for (size_t i = 0; i < task_layout->npointers; i++) {
+            jl_value_t **slot = &((jl_value_t**)root)[jl_ptr_offset(jl_task_type, i)];
+            if (*slot == init_nothing)
+                jl_gc_write(root, *slot, jl_value_t, jl_nothing);
+        }
+    }
     if (s.incremental) {
         jl_read_arraylist(s.relocs, &s.uniquing_types);
         jl_read_arraylist(s.relocs, &s.uniquing_objs);
@@ -4177,8 +4561,28 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         arraylist_new(&s.uniquing_types, 0);
         arraylist_new(&s.uniquing_objs, 0);
         arraylist_new(&s.fixup_types, 0);
+        assert(prelink_record_pos == 0 || ios_pos(&relocs) == fixup_objs_pos);
     }
     jl_read_arraylist(s.relocs, &s.fixup_objs);
+    if (!s.incremental) {
+        // Resolve the function pointers before the fixup list: the fixups write the
+        // first pointers a file cannot hold, and the image is written back before them.
+        if (prelinked)
+            jl_register_image_fptrs(&s, image);
+        else
+            jl_update_all_fptrs(&s, image); // fptr relocs and registration
+        if (prelink_output != NULL) {
+            uintptr_t base = (uintptr_t)f->buf;
+            memcpy(f->buf + prelink_record_pos, &base, sizeof(base));
+            jl_safe_printf("pre-relocated: %zu of %zu pointers on the list (%zu type tags, %zu other), room for %zu\n",
+                           residual.n, residual.total, (size_t)residual.zone[0],
+                           (size_t)residual.zone[1], residual.capacity);
+            prelink_recording = 0;
+            prelink_write_back(f->buf, f->size, prelink_output);
+            // Written. The fixup list was not applied, so stop here.
+            exit(0);
+        }
+    }
     // Perform the uniquing of objects that we don't "own" and consequently can't promise
     // weren't created by some other package before this one got loaded:
     // - iterate through all objects that need to be uniqued. The first encounter has to be the
@@ -4518,9 +4922,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         cachesizes->fptrlist = sizeof_fptr_record;
     }
 
-    s.s = &sysimg;
-    jl_update_all_fptrs(&s, image); // fptr relocs and registration
-    s.s = NULL;
+    if (s.incremental) {
+        s.s = &sysimg;
+        jl_update_all_fptrs(&s, image); // fptr relocs and registration
+        s.s = NULL;
+    }
 
     ios_close(&fptr_record);
     ios_close(&sysimg);
