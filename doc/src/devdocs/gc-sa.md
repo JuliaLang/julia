@@ -315,6 +315,38 @@ void example() {
 }
 ```
 
+### `JL_GC_TRACKED_TYPE`
+
+Marks a type whose values the analyzer tracks for rooting, exactly as it tracks a
+`jl_value_t*`. Julia's GC-managed object types all carry this annotation, as do a
+few stack structures that are treated as roots. A type is recognised by the
+annotation alone, so code embedding Julia can mark its own object types the same
+way.
+
+Put the annotation on the struct rather than on a typedef of it. A typedef that
+names a pointer is desugared away before the declaration is inspected, so only
+the annotation on the tag covers every typedef, however many levels deep:
+
+```c
+struct JL_GC_TRACKED_TYPE MyObject;
+typedef struct MyObject *MyValue;   // tracked
+typedef MyValue MyValueAlias;       // also tracked
+
+extern MyValue my_alloc(void);
+extern void my_use(MyValue v);
+
+void example() {
+  MyValue v = my_alloc();
+  JL_GC_PUSH1(&v);
+  my_use(v);
+  JL_GC_POP();
+}
+```
+
+It applies equally to a C++ `class`. Where there is no tag to annotate -- for
+instance `jl_gc_tracked_buffer_t`, which is a typedef of `void` -- put it on the
+typedef instead.
+
 ## Completeness of analysis
 
 The analyzer only looks at local information. In particular, e.g. in the `PROPAGATES_ROOT` case

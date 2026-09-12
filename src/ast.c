@@ -28,7 +28,7 @@ static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
 };
 
-typedef struct _jl_ast_context_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_ast_context_t {
     fl_context_t fl;
     fltype_t *jvtype;
 

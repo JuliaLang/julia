@@ -161,7 +161,7 @@ typedef HANDLE jl_thread_t;
 typedef pthread_t jl_thread_t;
 #endif
 
-struct _jl_task_t;
+struct JL_GC_TRACKED_TYPE _jl_task_t;
 
 // Recursive spin lock
 typedef struct {
@@ -470,7 +470,7 @@ static inline jl_cancel_parent_link_t *jl_cancel_source_link(jl_cancel_source_t 
 }
 
 
-typedef struct _jl_task_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_task_t {
     JL_DATA_TYPE
     jl_value_t *next; // invasive linked list for scheduler
     jl_value_t *queue; // invasive linked list for scheduler

@@ -200,7 +200,7 @@ static inline void jl_set_typeof(void *v, void *t) JL_NOTSAFEPOINT
 
 // Symbols are interned strings (hash-consed) stored as an invasive binary tree.
 // The string data is nul-terminated and hangs off the end of the struct.
-typedef struct _jl_sym_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_sym_t {
     JL_DATA_TYPE
     _Atomic(struct _jl_sym_t*) left;
     _Atomic(struct _jl_sym_t*) right;
@@ -217,14 +217,14 @@ typedef struct _jl_ssavalue_t {
 
 // A SimpleVector is an immutable pointer array
 // Data is stored at the end of this variable-length struct.
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     size_t length;
     // pointer size aligned
     // jl_value_t *data[];
 } jl_svec_t;
 
-JL_EXTENSION typedef struct _jl_genericmemory_t {
+JL_EXTENSION typedef struct JL_GC_TRACKED_TYPE _jl_genericmemory_t {
     JL_DATA_TYPE
     size_t length;
     void *ptr;
@@ -242,13 +242,13 @@ JL_EXTENSION typedef struct _jl_genericmemory_t {
 #endif
 } jl_genericmemory_t;
 
-JL_EXTENSION typedef struct {
+JL_EXTENSION typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     void *ptr_or_offset;
     jl_genericmemory_t *mem;
 } jl_genericmemoryref_t;
 
-JL_EXTENSION typedef struct {
+JL_EXTENSION typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_genericmemoryref_t ref;
     size_t dimsize[]; // dimension sizes; mem may hold more than prod(dimsize) elements
@@ -256,7 +256,7 @@ JL_EXTENSION typedef struct {
 
 
 typedef struct _jl_datatype_t jl_tupletype_t;
-struct _jl_code_instance_t;
+struct JL_GC_TRACKED_TYPE _jl_code_instance_t;
 typedef struct _jl_method_instance_t jl_method_instance_t;
 typedef struct _jl_globalref_t jl_globalref_t;
 typedef struct _jl_typemap_entry_t jl_typemap_entry_t;
@@ -327,7 +327,7 @@ typedef struct _jl_sourcebytetable_header_t {
 // packed size
 #define SBT_HEADER_SIZE 14
 
-typedef struct _jl_debuginfo_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_debuginfo_t {
     jl_value_t *def;
     jl_value_t *linetable; // debuginfo, compressed string, or nothing
     jl_svec_t *edges; // Memory{DebugInfo}
@@ -360,7 +360,7 @@ typedef union __jl_purity_overrides_t {
 #define NUM_IR_FLAGS 3
 
 // This type describes a single function body
-typedef struct _jl_code_info_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_code_info_t {
     JL_DATA_TYPE
     // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
@@ -410,7 +410,7 @@ typedef struct _jl_code_info_t {
 //   roots, root_blocks, nroots_sysimg, ccallable
 // No lock is required to read these fields, set once on construction:
 //   all other fields
-typedef struct _jl_method_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
     JL_DATA_TYPE
     jl_sym_t *name;  // for error reporting
     struct _jl_module_t *module;
@@ -488,7 +488,7 @@ typedef struct _jl_method_t {
 //   cache_with_orig
 // No lock is required to read these fields, set once on construction:
 //   def, specTypes, sparam_vals
-struct _jl_method_instance_t {
+struct JL_GC_TRACKED_TYPE _jl_method_instance_t {
     JL_DATA_TYPE
     union {
         jl_value_t *value; // generic accessor
@@ -515,7 +515,7 @@ struct _jl_method_instance_t {
 #define JL_MI_FLAGS_MASK_DISPATCHED     0x02
 
 // OpaqueClosure
-typedef struct _jl_opaque_closure_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_opaque_closure_t {
     JL_DATA_TYPE
     jl_value_t *captures;
     size_t world;
@@ -537,7 +537,7 @@ typedef struct _jl_opaque_closure_t {
 #define JL_CI_FLAGS_FROM_IMAGE               0b0100
 #define JL_CI_FLAGS_NATIVE_CACHE_VALID       0b1000
 
-typedef struct _jl_code_instance_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_code_instance_t {
     JL_DATA_TYPE
     jl_value_t *def; // MethodInstance or ABIOverride
     jl_value_t *owner; // Compiler token this belongs to, `jl_nothing` is reserved for native
@@ -598,13 +598,13 @@ typedef struct _jl_code_instance_t {
 } jl_code_instance_t;
 
 // May be used as the ->def field of a CodeInstance to override the ABI
-typedef struct _jl_abi_override_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_abi_override_t {
     JL_DATA_TYPE
     jl_value_t *abi;
     jl_method_instance_t *def;
 } jl_abi_override_t;
 
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_sym_t *JL_NONNULL name;
     jl_value_t *JL_NONNULL lb;   // lower bound
@@ -613,7 +613,7 @@ typedef struct {
 
 // UnionAll type (iterated union over all values of a variable in certain bounds)
 // written `body where lb<:var<:ub`
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_tvar_t *JL_NONNULL var;
     jl_value_t *JL_NONNULL body;
@@ -622,7 +622,7 @@ typedef struct {
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,
 // including a cache for hash-consed allocation of DataType objects.
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *module;
@@ -651,7 +651,7 @@ typedef struct {
     uint8_t concrete_only; // Bool: inference refuses to commit (records no backedge) at non-concrete call sites
 } jl_typename_t;
 
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_value_t *JL_NONNULL a;
     jl_value_t *JL_NONNULL b;
@@ -730,7 +730,7 @@ typedef struct {
     // };
 } jl_datatype_layout_t;
 
-typedef struct _jl_datatype_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
     struct _jl_datatype_t *super;
@@ -753,7 +753,7 @@ typedef struct _jl_datatype_t {
     uint16_t smalltag:6; // whether this type has a small-tag optimization
 } jl_datatype_t;
 
-typedef struct _jl_vararg_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_vararg_t {
     JL_DATA_TYPE
     jl_value_t *T;
     jl_value_t *N;
@@ -892,7 +892,7 @@ static const uint16_t PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100;
     __attribute__((aligned(alignment)))
 #endif
 
-typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
+typedef struct JL_GC_TRACKED_TYPE JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
      *   // For ->kind == PARTITION_KIND_GLOBAL
@@ -928,7 +928,7 @@ enum jl_binding_flags {
     BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x8
 };
 
-typedef struct _jl_binding_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_binding_t {
     JL_DATA_TYPE
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
     _Atomic(jl_value_t*) value;
@@ -951,7 +951,7 @@ typedef struct {
 // No lock is required to read these fields, set once on construction:
 //   name, parent, file, line, build_id, uuid, nospecialize, optlevel, compile,
 //   infer, iistopmod, max_methods
-typedef struct _jl_module_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
@@ -990,7 +990,7 @@ struct _jl_module_using {
 // Flags for _jl_module_using.flags
 static const uint8_t JL_MODULE_USING_REEXPORT = 0x1;
 
-struct _jl_globalref_t {
+struct JL_GC_TRACKED_TYPE _jl_globalref_t {
     JL_DATA_TYPE
     jl_module_t *mod;
     jl_sym_t *name;
@@ -998,7 +998,7 @@ struct _jl_globalref_t {
 };
 
 // one Type-to-Value entry
-struct _jl_typemap_entry_t {
+struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
     JL_DATA_TYPE
     _Atomic(struct _jl_typemap_entry_t*) next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
@@ -1018,7 +1018,7 @@ struct _jl_typemap_entry_t {
 };
 
 // one level in a TypeMap tree (each level splits on a type at a given offset)
-typedef struct _jl_typemap_level_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_typemap_level_t {
     JL_DATA_TYPE
     // these vectors contains vectors of more levels in their intended visit order
     // with an index that gives the functionality of a sorted dict.
@@ -1035,7 +1035,7 @@ typedef struct _jl_typemap_level_t {
     _Atomic(jl_typemap_t*) any;
 } jl_typemap_level_t;
 
-typedef struct _jl_methcache_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_methcache_t {
     JL_DATA_TYPE
     // hash map from dispatchtuple type to a linked-list of TypeMapEntry
     // entry.sig == type for all entries in the linked-list
@@ -1048,7 +1048,7 @@ typedef struct _jl_methcache_t {
 } jl_methcache_t;
 
 // contains global MethodTable
-typedef struct _jl_methtable_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_methtable_t {
     JL_DATA_TYPE
     // full set of entries
     _Atomic(jl_typemap_t*) defs;
@@ -1058,13 +1058,13 @@ typedef struct _jl_methtable_t {
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
 } jl_methtable_t;
 
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_sym_t *head;
     jl_array_t *args;
 } jl_expr_t;
 
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_tupletype_t *spec_types;
     jl_svec_t *sparams;
