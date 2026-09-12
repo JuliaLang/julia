@@ -1017,7 +1017,7 @@
                       (cons next args))))
             (if (length= args 1)
                 (car args)
-                (list* 'call '* (reverse args))))))))
+                (list* 'call '* (reverse args)) " " (peek-token s)))))))
 
 (define (maybe-negate op num)
   (if (eq? op '-)
