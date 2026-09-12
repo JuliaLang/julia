@@ -1581,6 +1581,71 @@ function resize!(a::Vector, nl_::Integer)
     return a
 end
 
+resize!(A::Array, d1::Integer, drest::Integer...) = resize!(A, (d1, drest...))
+
+"""
+    resize!(a::Array{T,N}, dims::NTuple{N,Integer}) -> a
+    resize!(a::Array{T,N}, dims::Integer...) -> a
+
+Resize the `N`-dimensional array `a` to size `dims`. The elements are preserved in their
+linear (column-major) order: the element at linear index `i` keeps linear index `i`, as if
+`vec(a)` was resized and then reshaped. If the new array is larger, the new elements are
+not guaranteed to be initialized. The number of dimensions must not change.
+
+Note that when a dimension other than the last one is changed, elements end up at
+different Cartesian indices: for example, the columns of a matrix are not preserved when
+the first dimension is changed. If only the last dimension is changed, `a[I]` is preserved
+for every index `I` that is valid for both the old and the new size.
+
+!!! compat "Julia 1.14"
+    `resize!` for `N`-dimensional arrays, as well as the tuple form for vectors,
+    requires Julia 1.14.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> resize!(A, 4, 4);
+
+julia> A[:, 1] # all of the old elements end up in the first column
+4-element Vector{Int64}:
+ 1
+ 3
+ 2
+ 4
+
+julia> resize!(A, (2, 2)) # the round trip restores the original
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> resize!(A, (2, 1)) # shrinking the trailing dimension drops columns
+2×1 Matrix{Int64}:
+ 1
+ 3
+```
+"""
+resize!(A::Array{T,N}, dims::NTuple{N,Integer}) where {T,N} = resize!(A, map(Int, dims))
+resize!(a::Vector, dims::Dims{1}) = resize!(a, dims[1])
+function resize!(A::Array{T,N}, nd::Dims{N}) where {T,N}
+    od = size(A)
+    nd == od && return A
+    for d in nd
+        d < 0 && _throw_argerror("each dimension must be ≥ 0")
+    end
+    newlen = Core.checked_dims(nd...)
+    ref = getfield(A, :ref)
+    v = vec(A)
+    resize!(v, newlen)
+    ref === getfield(A, :ref) || throw(ConcurrencyViolationError("array cannot be resized concurrently"))
+    setfield!(A, :ref, getfield(v, :ref))
+    setfield!(A, :size, nd)
+    return A
+end
+
 """
     sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
