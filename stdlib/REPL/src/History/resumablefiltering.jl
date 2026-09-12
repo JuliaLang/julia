@@ -278,6 +278,7 @@ are added to avoid showing duplicate history items.
 function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEntry},
                          spec::FilterSpec, seen::Set{Tuple{Symbol,String}}, idx::Int = length(candidates);
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates))
+    length(out) >= maxresults && return idx
     batchsize = clamp(length(candidates) ÷ 512, 10, 1000)
     for batch in Iterators.partition(idx:-1:1, batchsize)
         time() > maxtime && break
@@ -313,7 +314,7 @@ function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEnt
             matchfail && continue
             push!(seen, (entry.mode, entry.content))
             pushfirst!(out, entry)
-            length(out) == maxresults && break
+            length(out) >= maxresults && return max(0, idx - 1)
         end
     end
     max(0, idx - 1)
