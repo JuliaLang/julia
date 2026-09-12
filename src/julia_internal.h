@@ -993,6 +993,22 @@ int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_free_typevars(jl_value_t *t, jl_array_t *pre);
 int jl_has_fixed_layout(jl_datatype_t *t) JL_CANSAFEPOINT;
+
+// upper bound on the bit size of a primitive type, keeping its byte size well
+// within the 32 bits the layout reserves for it
+#define JL_MAX_PRIMITIVE_NBITS (1 << 23)
+
+// how many leading type parameters `jl_typename_t.nbits_param` can address
+#define JL_MAX_NBITS_PARAM 15
+
+STATIC_INLINE int valid_primitive_nbits(jl_value_t *nbits) JL_NOTSAFEPOINT
+{
+    if (!jl_is_long(nbits))
+        return 0;
+    ssize_t nb = jl_unbox_long(nbits);
+    return nb >= 1 && nb < JL_MAX_PRIMITIVE_NBITS;
+}
+
 JL_DLLEXPORT int jl_struct_try_layout(jl_datatype_t *dt) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_type_mappable_to_c(jl_value_t *ty) JL_CANSAFEPOINT;
 jl_svec_t *jl_outer_unionall_vars(jl_value_t *u) JL_CANSAFEPOINT;

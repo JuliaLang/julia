@@ -83,6 +83,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id.lo : 0, name->hash), 0xa1ada1da);
     tn->_unused = 0;
+    tn->nbits_param = 0;
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
@@ -641,6 +642,8 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     }
 }
 
+static const jl_datatype_layout_t *primitive_layout(size_t nbits) JL_NOTSAFEPOINT;
+
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     const uint64_t max_offset = (((uint64_t)1) << 32) - 1;
@@ -657,6 +660,16 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     }
     if (st->name == jl_genericmemory_typename) {
         jl_get_genericmemory_layout(st);
+        return;
+    }
+    if (st->name->nbits_param) {
+        // primitive type sized by a type parameter: the layout exists only once
+        // that parameter is a concrete bit count
+        jl_value_t *nbits = jl_tparam(st, st->name->nbits_param - 1);
+        if (jl_is_long(nbits)) {
+            st->layout = primitive_layout(jl_unbox_long(nbits));
+            st->isbitstype = st->isconcretetype;
+        }
         return;
     }
     int isbitstype = st->isconcretetype && st->name->mayinlinealloc;
@@ -1012,12 +1025,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     return t;
 }
 
-JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *module,
-                                                 jl_datatype_t *super,
-                                                 jl_svec_t *parameters, size_t nbits)
+// layout of a primitive type holding `nbits` bits, padded up to whole bytes
+static const jl_datatype_layout_t *primitive_layout(size_t nbits) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, module, super, parameters,
-                                        jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     uint32_t nbytes = (nbits + 7) / 8;
     uint8_t unused_bits = (uint8_t)(nbytes * 8 - nbits);
     uint32_t alignm = next_power_of_two(nbytes);
@@ -1035,15 +1045,49 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
 # endif
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
+    return jl_get_layout(nbytes, 0, 0, alignm, unused_bits != 0, 1, 0, unused_bits, NULL, NULL);
+}
+
+static jl_datatype_t *new_primitivetype(jl_value_t *name, jl_module_t *module,
+                                        jl_datatype_t *super, jl_svec_t *parameters) JL_CANSAFEPOINT
+{
+    jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, module, super, parameters,
+                                        jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     // memoize isprimitivetype, since it is much easier than checking
     // (dta->name->names == svec() && dta->layout && dta->layout->size != 0)
     // and we easily have a free bit for it in the DataType flags
     bt->isprimitivetype = 1;
     bt->ismutationfree = 1;
     bt->isidentityfree = 1;
-    bt->isbitstype = (parameters == jl_emptysvec);
-    bt->layout = jl_get_layout(nbytes, 0, 0, alignm, unused_bits != 0, 1, 0, unused_bits, NULL, NULL);
+    // jl_new_datatype saw a fieldless type and gave it a singleton layout
+    bt->layout = NULL;
     bt->instance = NULL;
+    return bt;
+}
+
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *module,
+                                                 jl_datatype_t *super,
+                                                 jl_svec_t *parameters, size_t nbits)
+{
+    jl_datatype_t *bt = new_primitivetype(name, module, super, parameters);
+    bt->isbitstype = (parameters == jl_emptysvec);
+    bt->layout = primitive_layout(nbits);
+    return bt;
+}
+
+// primitive type whose bit size is the `nbits_param`-th (1-based) type
+// parameter: the wrapper has no layout, each instantiation computes its own
+// from the parameter (see `jl_compute_field_offsets`)
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype_paramsize(jl_value_t *name, jl_module_t *module,
+                                                           jl_datatype_t *super,
+                                                           jl_svec_t *parameters,
+                                                           uint32_t nbits_param)
+{
+    assert(nbits_param >= 1 && nbits_param <= jl_svec_len(parameters) &&
+           nbits_param <= JL_MAX_NBITS_PARAM);
+    jl_datatype_t *bt = new_primitivetype(name, module, super, parameters);
+    bt->name->nbits_param = nbits_param;
+    bt->isbitstype = 0;
     return bt;
 }
 

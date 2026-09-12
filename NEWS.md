@@ -23,6 +23,8 @@ New language features
   call can be placed on its own line without switching to the comma separated
   call syntax ([#60181]).
 * Primitive types with non-byte-multiple logical widths can now be defined ([#61359]).
+* The width of a primitive type may be given by one of its type parameters, as in
+  `primitive type BitInt{N} <: Signed N end`, so that each instantiation has its own size ([#63074]).
 * Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
   that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
   operators. However, in a future version, there may be opt-in support to detect unannotated wrapping

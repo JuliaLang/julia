@@ -78,6 +78,9 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAF
                 return 0;
             if (dt->layout || !dt->name->mayinlinealloc)
                 return 0;
+            if (dt->name->nbits_param)
+                // primitive type whose size is a type parameter
+                return layout_uses_free_typevars(jl_tparam(dt, dt->name->nbits_param - 1), env);
             if (dt->name == jl_namedtuple_typename) {
                 jl_value_t *names = jl_tparam0(dt);
                 jl_value_t *types = jl_tparam1(dt);
@@ -357,6 +360,10 @@ JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua)
 
 int jl_has_fixed_layout(jl_datatype_t *dt)
 {
+    if (dt->name->nbits_param)
+        // a primitive type sized by a type parameter has a layout exactly when
+        // that parameter is a concrete bit count
+        return jl_is_long(jl_tparam(dt, dt->name->nbits_param - 1));
     // A type with isconcretetype=1 but types=NULL is currently being instantiated
     // and doesn't have a fixed layout yet. This prevents infinite recursion when
     // computing layouts for mutually recursive parametric types.
@@ -399,7 +406,9 @@ int jl_type_mappable_to_c(jl_value_t *ty)
     if (jl_is_structtype(ty))
         return jl_has_fixed_layout((jl_datatype_t*)ty) && ((jl_datatype_t*)ty)->name->atomicfields == NULL;
     if (jl_is_primitivetype(ty))
-        return 1; // as isbits
+        // a primitive type sized by a type parameter has no layout until that
+        // parameter is known
+        return ((jl_datatype_t*)ty)->layout != NULL; // as isbits
     if (ty == (jl_value_t*)jl_any_type || ty == (jl_value_t*)jl_bottom_type || jl_is_abstract_ref_type(ty))
         return 1; // as boxed
     return 0; // refuse to map Union and UnionAll to C
@@ -2804,6 +2813,22 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         if (!jl_is_typevar(addrspace) && !jl_is_addrspace(addrspace)) {
             if (!nothrow)
                 jl_type_error_rt("GenericMemory", "addrspace parameter", (jl_value_t*)jl_addrspace_type, addrspace);
+            invalid = 1;
+        }
+    }
+    else if (tn->nbits_param) {
+        // the bit size of a parametric primitive type must be a positive Int
+        jl_value_t *nbits = jl_svecref(p, tn->nbits_param - 1);
+        if (!jl_is_typevar(nbits) && !valid_primitive_nbits(nbits)) {
+            if (!nothrow) {
+                jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(tn->wrapper);
+                jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(w->parameters, tn->nbits_param - 1);
+                if (!jl_is_long(nbits))
+                    jl_type_error_rt(jl_symbol_name(tn->name), jl_symbol_name(tv->name),
+                                     (jl_value_t*)jl_long_type, nbits);
+                jl_errorf("invalid number of bits in primitive type %s",
+                          jl_symbol_name(tn->name));
+            }
             invalid = 1;
         }
     }
