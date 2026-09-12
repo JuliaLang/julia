@@ -3759,9 +3759,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                         jl_emptysvec, 0, 0, 2);
     jl_intersect_type->name->mayinlinealloc = 0;
 
+    // `T` must be declared `Any`: jl_valid_type_param admits non-type values
+    // (`Type{1}`), so a narrower field type would be unsound (#62897)
     jl_typeeq_type = jl_new_datatype(jl_symbol("TypeEq"), core, jl_anytype_type, jl_emptysvec,
                                      jl_perm_symsvec(1, "T"),
-                                     jl_svec(1, kind_or_typevar_type),
+                                     jl_svec(1, jl_any_type),
                                      jl_emptysvec, 0, 0, 1);
     XX(typeeq);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
