@@ -70,6 +70,11 @@ include("options.jl")
 include("StylingPasses.jl")
 using .StylingPasses
 
+# OSC 133/633 lifecycle markers:
+# A: prompt starts; B: prompt ends and command input starts;
+# C: command execution/output starts; D: command finishes, optionally with an exit status
+# (0 for success, 1 for an error; no status for input cancelled or left empty).
+# VS Code's OSC 633 also supports E to report the explicit command line.
 struct SemanticPromptMarkers
     prompt_start::String
     prompt_end::String
@@ -1321,9 +1326,11 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
                 print_response(repl, response, !hide_output, hascolor(repl))
             finally
                 if markers !== nothing
-                    # Julia cannot access VS Code's nonce, so its command-line report is
-                    # untrusted and gets replaced when execution starts. Report it again
-                    # immediately before marking the command as finished.
+                    # VS Code documents E between B and C, but without its nonce an
+                    # untrusted command-line report gets replaced when execution starts.
+                    # Send E just before D instead, relying on VS Code's implementation:
+                    # setCommandLine updates the current command, which
+                    # handleCommandFinished then promotes to a completed command.
                     write_semantic_command_line(repl, markers, line)
                     marker = response[2] ? markers.command_finish_error : markers.command_finish_ok
                     write(terminal(repl), marker)

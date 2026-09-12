@@ -1905,20 +1905,14 @@ refresh_line(s::BufferLike, termbuf::AbstractTerminal) = refresh_multi_line(term
 default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
-function write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool)
-    markers = semantic_prompt_markers(s.p)
+write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
+function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
+    markers = semantic_prompt_markers(p)
     # Prompt rendering runs on every line refresh. Re-emitting these markers keeps
     # the redrawn prompt bracketed and matches established shell integrations.
     if markers !== nothing
         write(terminal, markers.prompt_start)
     end
-    width = write_prompt(terminal, s.p, color)
-    if markers !== nothing
-        write(terminal, markers.prompt_end)
-    end
-    return width
-end
-function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
     write(terminal, prefix)
@@ -1926,6 +1920,9 @@ function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     width = write_prompt(terminal, p.prompt, color)
     color && write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
+    if markers !== nothing
+        write(terminal, markers.prompt_end)
+    end
     return width
 end
 

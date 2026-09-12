@@ -228,6 +228,9 @@ selecting a command's output. Unsupported terminals ignore the markers.
 In the VS Code integrated terminal, the REPL also reports the exact command line so that commands
 can be copied together with their output.
 
+Output from background tasks while the REPL is waiting for input is not bracketed by command
+markers, so terminals may associate it with the prompt rather than the command that started the task.
+
 Semantic prompt markers can be disabled in `startup.jl`:
 
 ```julia
