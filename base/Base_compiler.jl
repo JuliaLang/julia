@@ -410,5 +410,43 @@ Core._setlowerer!(fl_lower)
 @assert !isassigned(_included_files, 1)
 _included_files[1] = (@__MODULE__, ccall(:jl_prepend_cwd, Any, (Any,), "Base_compiler.jl"))
 
+## postoutput: register post output hooks ##
+## like atexit but runs after any requested output.
+const postoutput_hooks = Callable[]
+
+postoutput(f::Function) = (pushfirst!(postoutput_hooks, f); nothing)
+
+function _postoutput()
+    while !isempty(postoutput_hooks)
+        f = popfirst!(postoutput_hooks)
+        try
+            f()
+        catch ex
+            # `showerror` is not available yet when this runs during the compiler
+            # image build; `jl_postoutput_hook` reports whatever escapes from here
+            showerror(stderr, ex)
+            show_backtrace(stderr, catch_backtrace())
+            println(stderr)
+        end
+    end
+end
+
+if JLOptions().outputo != C_NULL || JLOptions().outputbc != C_NULL
+    # Time the output of this image (LLVM codegen + object emission)
+    Core.println(Core.stdout, "Outputting compiler image...")
+    let pre_output_time = RefValue{UInt64}(time_ns())
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+              pre_output_time, :x, UInt64(0))
+        postoutput() do
+            pre_output_time[] == 0 && return nothing
+            output_time = time_ns() - pre_output_time[]
+            @ccall jl_printf(Core.io_pointer(Core.stdout)::Ptr{Cvoid},
+                             "Output ────── %10.6f seconds\n"::Ptr{UInt8};
+                             (output_time / 1e9)::Cdouble)::Cint
+            return nothing
+        end
+    end
+end
+
 end # module Base
 using .Base
