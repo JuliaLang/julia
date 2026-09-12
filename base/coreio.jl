@@ -5,11 +5,14 @@ typeof(print).name.max_methods = UInt8(1)
 
 print(x) = print(stdout, x)
 print(x1, x2) = print(stdout, x1, x2)
-println(x) = print(stdout, x, "\n")
-println(x1, x2) = print(stdout, x1, x2, "\n")
+println(x) = (print(stdout, x, "\n"); flush(stdout))
+println(x1, x2) = (print(stdout, x1, x2, "\n"); flush(stdout))
 
 print(xs...)   = print(stdout, xs...)
-println(xs...) = print(stdout, xs..., "\n")  # fewer allocations than `println(stdout, xs...)`
+function println(xs...)
+    print(stdout, xs..., "\n")  # fewer allocations than `println(stdout, xs...)`
+    flush(stdout)
+end
 println(io::IO) = print(io, "\n")
 
 function show end
