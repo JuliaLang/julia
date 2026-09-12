@@ -40,9 +40,11 @@ macro _lock_ios(s, expr)
         l = ($s)._dolock
         temp = ($s).lock
         l && lock(temp)
-        val = $(esc(expr))
-        l && unlock(temp)
-        val
+        try
+            $(esc(expr))
+        finally
+            l && unlock(temp)
+        end
     end
 end
 
@@ -185,13 +187,41 @@ julia> read(io, Char)
 seekstart(s::IO) = seek(s,0)
 
 """
-    seekend(s)
+    seekend(s, n=0)
 
-Seek a stream to its end.
+Seek a stream to `n` bytes relative to its end. With the default `n == 0`,
+the stream is positioned at its end (equivalent to the legacy
+single-argument form `seekend(s)`).
+
+`n` may be negative to position the stream that many bytes before the end.
+Behavior at the boundaries depends on the underlying stream: file-backed
+streams permit positioning past end-of-file (POSIX `lseek`/`SEEK_END`
+semantics), while in-memory buffers clamp the resulting position to the
+buffer's writable range. A non-seekable in-memory buffer rejects calls
+with `n != 0` by throwing an `ArgumentError`.
 """
 function seekend(s::IOStream)
     err = @_lock_ios s ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
     systemerror("seekend", err)
+    return s
+end
+function seekend(s::IOStream, n::Integer)
+    n == 0 && return seekend(s)
+    # Hold the stream's reentrant lock across position/seekend/skip/restore so a
+    # concurrent task on the same `IOStream` cannot observe the intermediate EOF
+    # state, and so an error in the seek pair restores the original position before
+    # rethrowing. The inner Julia-level calls each reacquire the same `ReentrantLock`
+    # as no-ops.
+    @_lock_ios s begin
+        pos = position(s)
+        try
+            seekend(s)
+            skip(s, n)
+        catch
+            seek(s, pos)
+            rethrow()
+        end
+    end
     return s
 end
 
