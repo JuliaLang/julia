@@ -44,6 +44,7 @@ extern "C" JL_DLLEXPORT jl_value_t *ijl_genericmemory_owner(jl_genericmemory_t *
 
 STATISTIC(EmittedCCalls, "Number of ccalls emitted");
 STATISTIC(DeferredCCallLookups, "Number of ccalls looked up at runtime");
+STATISTIC(NativeLinkedCCalls, "Number of ccalls bound by direct external symbol reference");
 STATISTIC(LiteralCCalls, "Number of ccalls directly emitted through a pointer");
 STATISTIC(RetBoxedCCalls, "Number of ccalls that were retboxed");
 STATISTIC(SRetCCalls, "Number of ccalls that were marked sret");
@@ -55,7 +56,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 }
 
 typedef struct {
-    jl_value_t *gcroot[2];     // GC roots for strings [f_name, f_lib]
+    jl_value_t *gcroot[3];     // GC roots [f_name, f_lib, lib_id]
 
     // Static name resolution (compile-time known)
     const char *f_name;        // static function name
@@ -64,6 +65,7 @@ typedef struct {
     // Dynamic name resolution (simple runtime expressions)
     jl_value_t *f_name_expr;   // expression for function name
     jl_value_t *f_lib_expr;    // expression for library name
+    jl_value_t *lib_id;        // value returned by dlid() at definition time
 
     // Runtime pointer
     Value *jl_ptr;             // callable pointer expression result
@@ -655,6 +657,8 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     out.jl_ptr = nullptr;
     out.gcroot[0] = nullptr;
     out.gcroot[1] = nullptr;
+    out.gcroot[2] = nullptr;
+    out.lib_id = nullptr;
 
     // Check if this is a tuple (normalized by julia-syntax.scm)
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
@@ -679,8 +683,8 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                 }
              }
         }
-        else if (nargs == 2) {
-            // Two element tuple: (func_name, lib_name)
+        else if (nargs == 2 || nargs == 3) {
+            // Three element tuple: (func_name, lib_ref, lib_id)
             jl_value_t *fname_arg = jl_array_ptr_ref(tuple_args, 0);
             jl_value_t *lib_arg = jl_array_ptr_ref(tuple_args, 1);
             out.f_name_expr = fname_arg;
@@ -708,6 +712,11 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                     out.f_lib = jl_string_data(lib_val);
                 }
             }
+
+            if (nargs == 3) {
+                out.lib_id = jl_array_ptr_ref(tuple_args, 2);
+                out.gcroot[2] = out.lib_id;
+            }
         }
     }
     else {
@@ -732,6 +741,28 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     }
 }
 
+// Is this call site eligible for native linking, i.e. should it reference the
+// external symbol directly instead of resolving it lazily via a PLT at runtime?
+static bool is_native_link_target(jl_codectx_t &ctx, const native_sym_arg_t &symarg) JL_NOTSAFEPOINT
+{
+    if (!ctx.emission_context.imaging_mode)
+        return false;
+    if (symarg.f_name == nullptr || symarg.lib_id == nullptr)
+        return false;
+    return jl_get_foreign_link_policy(symarg.lib_id) == 1;
+}
+
+// Record a ccall/cglobal usage site for the used-foreign-symbol manifest.
+static void record_used_foreign_symbol(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
+                               bool is_cglobal, bool native_linked) JL_NOTSAFEPOINT
+{
+    if (jl_get_export_foreign_symbol_usage() == nullptr)
+        return;
+    ctx.emission_context.used_foreign_symbols.push_back(
+        jl_used_foreign_symbol_t{symarg.f_name, symarg.f_lib, symarg.lib_id,
+                         is_cglobal, native_linked});
+}
+
 // --- code generator for cglobal ---
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayRef<jl_cgval_t> argv, size_t nargs) JL_CANSAFEPOINT;
@@ -744,9 +775,18 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
         // Name lookup form
         native_sym_arg_t sym = {};
-        JL_GC_PUSH2(&sym.gcroot[0], &sym.gcroot[1]);
+        JL_GC_PUSH3(&sym.gcroot[0], &sym.gcroot[1], &sym.gcroot[2]);
         interpret_foreignsymbol(ctx, sym, arg);
-        Value *res = runtime_sym_lookup(ctx, sym, ctx.f);
+        Value *res;
+        bool native_linked = is_native_link_target(ctx, sym);
+        if (native_linked) {
+            // Reference the data symbol directly; the system linker binds it.
+            res = jl_Module->getOrInsertGlobal(sym.f_name, getInt8Ty(ctx.builder.getContext()));
+        }
+        else {
+            res = runtime_sym_lookup(ctx, sym, ctx.f);
+        }
+        record_used_foreign_symbol(ctx, sym, /*is_cglobal=*/true, native_linked);
         JL_GC_POP();
         return mark_julia_type(ctx, res, false, (jl_value_t*)jl_voidpointer_type);
     } else {
@@ -1560,7 +1600,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
-    JL_GC_PUSH4(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1]);
+    JL_GC_PUSH5(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1], &symarg.gcroot[2]);
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;
@@ -2280,6 +2320,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         null_pointer_check(ctx, symarg.jl_ptr, nullptr);
         llvmf = symarg.jl_ptr;
     }
+    else if (is_native_link_target(ctx, symarg)) {
+        // Emit a plain external call and let the system linker bind it
+        ++NativeLinkedCCalls;
+        llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype).getCallee();
+        record_used_foreign_symbol(ctx, symarg, /*is_cglobal=*/false, /*native_linked=*/true);
+    }
     else if (!ctx.params->use_jlplt) {
         if ((symarg.f_lib && !((symarg.f_lib == JL_EXE_LIBNAME) ||
               (symarg.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
@@ -2293,6 +2339,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else {
         ++DeferredCCallLookups;
+        record_used_foreign_symbol(ctx, symarg, /*is_cglobal=*/false, /*native_linked=*/false);
         // vararg requires musttail,
         // but musttail is incompatible with noreturn.
         if (functype->isVarArg())
