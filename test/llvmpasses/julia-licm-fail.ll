@@ -56,7 +56,7 @@ return:
   ret void
 }
 
-declare void @julia.write_barrier({}*, ...)
+declare void @julia.object_write_barrier({}*, ...)
 
 declare {}*** @julia.get_pgcstack()
 

@@ -1077,7 +1077,44 @@ end
 let io = IOBuffer()
     code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
     str = String(take!(io))
-    @test occursin("julia.write_barrier", str)
+    @test occursin("julia.field_write_barrier", str)
+end
+
+# Aggregate unsets must name every reference relative to the cleared payload, including locked elements.
+struct UnsetFieldBarrierElement
+    tag::Int
+    a::Any
+    b::Any
+    c::Any
+end
+unset_field_barrier(r, ::Val{order}) where {order} = Core.memoryrefunset!(r, order, false)
+@testset "memoryrefunset! field barriers" begin
+    T = UnsetFieldBarrierElement
+    for (M, order) in ((Memory{T}, :not_atomic), (AtomicMemory{T}, :sequentially_consistent))
+        R = typeof(GenericMemoryRef(M(undef, 0)))
+        ir = get_llvm(unset_field_barrier, Tuple{R,Val{order}}, true, false, false)
+        barriers = filter(line -> occursin("call void", line) && occursin("@julia.field_write_barrier", line), split(ir, '\n'))
+        @test length(barriers) == 1
+        isempty(barriers) && continue
+        slots = [m.captures[1] for m in eachmatch(r"ptr addrspace\(13\) (%[^ ,]+), ptr addrspace\(10\) null", only(barriers))]
+        @test length(slots) == 3
+        geps = Dict(m.captures[1] => (m.captures[2], parse(Int, m.captures[3]))
+                    for m in eachmatch(r"(%[^ ,]+) = getelementptr(?: inbounds)? i8, ptr addrspace\(13\) (%[^ ,]+), i(?:32|64) ([0-9]+)", ir))
+        payloads = String[]
+        offsets = Int[]
+        for slot in slots
+            @test haskey(geps, slot)
+            haskey(geps, slot) || continue
+            payload, offset = geps[slot]
+            push!(payloads, payload)
+            push!(offsets, offset)
+        end
+        @test offsets == [fieldoffset(T, i) for i in 2:4]
+        @test length(unique(payloads)) == 1
+        if !isempty(payloads)
+            @test any(line -> occursin("store ", line) && occursin("zeroinitializer, ptr addrspace(13) $(first(payloads)),", line), split(ir, '\n'))
+        end
+    end
 end
 
 # Test phi node codegen for union types with inline roots

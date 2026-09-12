@@ -208,7 +208,7 @@ define {} addrspace(10)* @typeof({} addrspace(10)* %x) {
   ret {} addrspace(10)* %v
 }
 
-declare void @julia.write_barrier({} addrspace(10)*, {} addrspace(10)*) #1
+declare void @julia.object_write_barrier({} addrspace(10)*, ...) #1
 
 define {} addrspace(10)* @setfield({} addrspace(10)* %p) {
 ; CHECK-LABEL: @setfield(
@@ -219,7 +219,7 @@ define {} addrspace(10)* @setfield({} addrspace(10)* %p) {
   %c = call {} addrspace(10)* @allocate_some_value()
   %fp = bitcast {} addrspace(10)* %p to {} addrspace(10)* addrspace(10)*
   store {} addrspace(10)* %c, {} addrspace(10)* addrspace(10)* %fp
-  call void @julia.write_barrier({} addrspace(10)* %p, {} addrspace(10)* %c)
+  call void ({} addrspace(10)*, ...) @julia.object_write_barrier({} addrspace(10)* %p, {} addrspace(10)* %c)
   ret {} addrspace(10)* %c
 }
 

@@ -4,7 +4,9 @@
 
 @tag = external addrspace(10) global {}, align 16
 
-declare void @julia.write_barrier({} addrspace(10)*, ...)
+declare void @julia.object_write_barrier({} addrspace(10)*, ...)
+
+declare void @julia.field_write_barrier.p11({} addrspace(10)*, {} addrspace(11)*, {} addrspace(10)*, ...)
 
 declare {}*** @julia.get_pgcstack()
 
@@ -148,13 +150,13 @@ top:
 preheader:
 ; CHECK-NEXT: [[WB:[0-9]+]] = MemoryDef([[PGCSTACK]])
 ; CHECK-NEXT: call void
-; CHECK-SAME: @julia.write_barrier
+; CHECK-SAME: @julia.object_write_barrier
 ; CHECK-NEXT: br label %loop
   br label %loop
 ; CHECK: loop:
 loop:
-; CHECK-NOT: @julia.write_barrier
-  call void ({} addrspace(10)*, ...) @julia.write_barrier({} addrspace(10)* %obj)
+; CHECK-NOT: write_barrier
+  call void ({} addrspace(10)*, ...) @julia.object_write_barrier({} addrspace(10)* %obj, {} addrspace(10)* %obj)
 ; CHECK-NEXT: [[MPHI:[0-9]+]] = MemoryPhi({preheader,[[WB]]},{loop,[[MPHI]]})
   br i1 %ret, label %return, label %loop
 ; CHECK: return:
@@ -163,5 +165,47 @@ return:
 ; CHECK-NEXT: call void @mssa_use
   call void @mssa_use({} addrspace(10)* %obj)
 ; CHECK-NEXT: ret void
+  ret void
+}
+
+; COM: a field write barrier whose slot is loop-varying (but whose parent and child are
+; COM: loop-invariant) is demoted to an object write barrier built in the preheader. Its
+; COM: MemoryDef must be ordered after the preheader's pre-existing access, matching the
+; COM: instruction's position -- placing it at the block start inverts the def ordering
+; COM: and corrupts MemorySSA, which later loop passes (e.g. loop unswitch) then trip on.
+; CHECK-LABEL: MemorySSA for function: demote_write_barrier_varying_slot
+; CHECK-LABEL: @demote_write_barrier_varying_slot
+define void @demote_write_barrier_varying_slot({} addrspace(10)* %parent, {} addrspace(10)* %child, i64 %n, i1 %c) {
+; CHECK: top:
+top:
+; CHECK-NEXT: [[PGCSTACK:[0-9]+]] = MemoryDef(liveOnEntry)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %current_task = bitcast {}*** %pgcstack to {}**
+  br label %preheader
+; CHECK: preheader:
+preheader:
+; COM: the pre-existing preheader access; the demoted barrier must be ordered after it
+; CHECK: [[MU:[0-9]+]] = MemoryDef([[PGCSTACK]])
+; CHECK-NEXT: call void @mssa_use
+  call void @mssa_use({} addrspace(10)* %parent)
+; CHECK: [[WB:[0-9]+]] = MemoryDef([[MU]])
+; CHECK-NEXT: call void
+; CHECK-SAME: @julia.object_write_barrier
+; CHECK-NEXT: br label %loop
+  br label %loop
+loop:
+  %iv = phi i64 [ 0, %preheader ], [ %iv.next, %latch ]
+  br i1 %c, label %do_wb, label %latch
+do_wb:
+; CHECK-NOT: @julia.field_write_barrier
+  %pd = addrspacecast {} addrspace(10)* %parent to {} addrspace(11)*
+  %slot = getelementptr {}, {} addrspace(11)* %pd, i64 %iv
+  call void ({} addrspace(10)*, {} addrspace(11)*, {} addrspace(10)*, ...) @julia.field_write_barrier.p11({} addrspace(10)* %parent, {} addrspace(11)* %slot, {} addrspace(10)* %child)
+  br label %latch
+latch:
+  %iv.next = add i64 %iv, 1
+  %cond = icmp slt i64 %iv.next, %n
+  br i1 %cond, label %loop, label %exit
+exit:
   ret void
 }

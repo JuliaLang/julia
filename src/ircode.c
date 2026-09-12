@@ -1092,7 +1092,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     v = jl_pchar_to_string(s.s->buf, s.s->size);
     ios_close(s.s);
     if (jl_array_nrows(m->roots) == 0) {
-        jl_gc_wb(m, NULL);
+        jl_gc_wb(m, (void*)&m->roots, NULL);
         m->roots = NULL;
     }
     JL_UNLOCK(&m->writelock); // Might GC
@@ -1175,7 +1175,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
 
     if (metadata) {
         jl_debuginfo_t *new_debuginfo = jl_atomic_load_relaxed(&metadata->debuginfo);
-        jl_gc_wb(code, new_debuginfo);
+        jl_gc_wb(code, (void*)&code->debuginfo, new_debuginfo);
         code->debuginfo = new_debuginfo;
     } else
         jl_gc_write(code, code->debuginfo, jl_debuginfo_t, m->debuginfo);

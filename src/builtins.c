@@ -1021,7 +1021,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
                 JL_GC_ASSERT_LIVE(value);
                 if (arg_heap)
-                    jl_gc_wb(arg_heap, value);
+                    jl_gc_wb(arg_heap, (void*)&newargs[n], value);
                 newargs[n++] = value;
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
@@ -1130,7 +1130,8 @@ JL_CALLABLE(jl_f_svec)
         return (jl_value_t*)jl_emptysvec;
     jl_svec_t *t = jl_alloc_svec_uninit(nargs);
     for (i = 0; i < nargs; i++) {
-        jl_svecset(t, i, args[i]);
+        jl_gc_wb_fresh(t, args[i]);
+        jl_svec_data(t)[i] = args[i];
     }
     return (jl_value_t*)t;
 }

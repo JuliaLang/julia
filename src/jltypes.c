@@ -1265,7 +1265,7 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
     do {
         jl_value_t *tab_i = jl_atomic_load_relaxed(&tab[index]);
         if (tab_i == jl_nothing) {
-            jl_gc_wb(a, (jl_value_t*)val);
+            jl_gc_wb(a, (void*)&tab[index], (jl_value_t*)val);
             if (atomic)
                 jl_atomic_store_release(&tab[index], (jl_value_t*)val);
             else
@@ -2642,8 +2642,10 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         // complain, but this is used as rooting storage for normalized types
         // below so it must be rooted properly by the GC
         p = jl_alloc_svec_uninit(ntp);
-        for (size_t i = 0; i < ntp; i++)
-            jl_svecset(p, i, iparams[i]);
+        for (size_t i = 0; i < ntp; i++) {
+            jl_gc_wb_fresh(p, iparams[i]);
+            jl_svec_data(p)[i] = iparams[i];
+        }
         iparams = jl_svec_data(p);
     }
     assert(jl_is_svec(p) && iparams == jl_svec_data(p));
@@ -3452,7 +3454,7 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     // keeps a single winner
     super = NULL;
     if (jl_atomic_cmpswap(superp, &super, (jl_datatype_t*)s)) {
-        jl_gc_wb(ndt, s);
+        jl_gc_wb(ndt, (void*)superp, s);
         super = (jl_datatype_t*)s;
     }
     return super;
