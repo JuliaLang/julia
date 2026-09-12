@@ -1879,6 +1879,54 @@ callback27178(cb::CTF) where CTF<:CallThisFunc27178 = nothing
 get_c_func(fcn::FCN_TYPE) where {FCN_TYPE<:Function} = return make_cfunc27178(CallThisFunc27178(fcn))
 @test isa(get_c_func(sin), Ptr)
 
+# An unrelated unresolved static parameter must not make `@cfunction` dynamic (#27813).
+@testset "cfunction static parameters (#27813)" begin
+    @test_warn r"declares type variable S but does not use it" @eval begin
+        @noinline function cfunction27813(x::T) where {T,S}
+            cf = @cfunction identity Ref{T} (Ref{T},)
+            ccall(cf, Ref{T}, (Ref{T},), x)
+        end
+        @noinline cfunction_arg27813(::Ref{T}) where {T,S} =
+            @cfunction(identity, Any, (Ref{T},))
+        @noinline cfunction_ret27813(::Ref{T}) where {T,S} =
+            @cfunction(identity, Ref{T}, (Any,))
+        @noinline cfunction_undefined27813(x::T) where {T,S} =
+            @cfunction(identity, Ref{S}, (Any,))
+        @noinline cfunction_undefined_arg27813(x::T) where {T,S} =
+            @cfunction(identity, Any, (Ref{S},))
+    end
+    @noinline function cfunction_conditional27813(x::T, ::Union{Nothing,Ref{S}}) where {T,S}
+        cf = @cfunction identity Ref{T} (Ref{T},)
+        ccall(cf, Ref{T}, (Ref{T},), x)
+    end
+    @test cfunction27813(1) === 1
+    @test cfunction_conditional27813(1, nothing) === 1
+
+    r = Ref{Any}("callback")
+    cf = cfunction_arg27813(r)
+    @test ccall(cf, Any, (Ref{Any},), r) === r[]
+
+    cf = cfunction_ret27813(Ref(1))
+    @test ccall(cf, Any, (Any,), 1) === 1
+    @test_throws ErrorException("cfunction return type Ref{Any} is invalid. Use Any or Ptr{Any} instead.") cfunction_ret27813(Ref{Any}(1))
+    @test_throws UndefVarError cfunction_undefined27813(1)
+    @test_throws UndefVarError cfunction_undefined_arg27813(1)
+
+    if cfunction_closure
+        @eval begin
+            cfunction_pair27813(x, y) = (x, y)
+            @noinline function cfunction_mixed27813(x::T, y::S) where {T,S}
+                @nospecialize y
+                cf = @cfunction cfunction_pair27813 Any (Ref{T}, Ref{S})
+                GC.@preserve cf ccall(cf, Any, (Ref{T}, Ref{S}), x, y)
+            end
+        end
+        @test cfunction_mixed27813(1, 2) === (1, 2)
+        @test cfunction_mixed27813(1, "callback") === (1, "callback")
+        @test occursin("jl_get_cfunction_trampoline", sprint(code_llvm, cfunction_mixed27813, (Int, Any)))
+    end
+end
+
 # issue #27215
 function once_removed()
     function mycompare(a, b)::Cint

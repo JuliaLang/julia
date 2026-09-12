@@ -1884,11 +1884,19 @@ function has_valid_abi_sparams(mi::MethodInstance)
     def = mi.def
     isa(def, Method) || return true
     unionall_depth(def.sig) == length(mi.sparam_vals) || return false
+    env = def.sig
     for i = 1:length(mi.sparam_vals)
         sp = mi.sparam_vals[i]
-        if isa(sp, SimpleVector) || isvarargtype(sp)
-            return false
+        isvarargtype(sp) && return false
+        if isa(sp, SimpleVector)
+            # Parameter binding cannot vary across calls if it is unused
+            # in the signature or if this is a dispatch tuple
+            if length(sp) != 2 || sp[1] !== env.var || sp[2] !== false ||
+                    (has_typevar(env.body, env.var) && !isdispatchtuple(mi.specTypes))
+                return false
+            end
         end
+        env = env.body
     end
     return true
 end
