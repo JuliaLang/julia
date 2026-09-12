@@ -361,6 +361,7 @@ DevDocs = [
         "devdocs/valgrind.md",
         "devdocs/gc-debug.md",
         "devdocs/external_profilers.md",
+        "devdocs/precompile_profiling.md",
         "devdocs/sanitizers.md",
         "devdocs/probes.md",
     ],

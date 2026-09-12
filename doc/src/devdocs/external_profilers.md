@@ -89,6 +89,8 @@ end
 
 Here, we use a custom port for tracy which makes it easier to find the correct client in the Tracy UI to connect to.
 
+For sampled stack traces of the same worker processes, rather than the zones described here, see [Profiling package precompilation](@ref).
+
 ### Adding metadata to zones
 
 The various `jl_timing_show_*` and `jl_timing_printf` functions can be used to attach a string (or strings) to a zone. For example, the trace zone for inference shows the method instance that is being inferred.
