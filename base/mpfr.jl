@@ -282,16 +282,16 @@ See also:
 # Examples
 ```jldoctest
 julia> BigFloat(2.1) # 2.1 here is a Float64
-2.100000000000000088817841970012523233890533447265625
+big"2.100000000000000088817841970012523233890533447265625"
 
 julia> BigFloat("2.1") # the closest BigFloat to 2.1
-2.099999999999999999999999999999999999999999999999999999999999999999999999999986
+big"2.099999999999999999999999999999999999999999999999999999999999999999999999999986"
 
 julia> BigFloat("2.1", RoundUp)
-2.100000000000000000000000000000000000000000000000000000000000000000000000000021
+big"2.100000000000000000000000000000000000000000000000000000000000000000000000000021"
 
 julia> BigFloat("2.1", RoundUp, precision=128)
-2.100000000000000000000000000000000000007
+big"2.100000000000000000000000000000000000007"
 ```
 """
 BigFloat(x, r::RoundingMode)
@@ -1235,7 +1235,7 @@ function string_mpfr(x::BigFloat, fmt::String)
     return str
 end
 
-function _prettify_bigfloat(s::String)::String
+function _prettify_bigfloat(s::String, prec::Int)::String
     mantissa, exponent = eachsplit(s, 'e')
     if !occursin('.', mantissa)
         mantissa = string(mantissa, '.')
@@ -1245,7 +1245,7 @@ function _prettify_bigfloat(s::String)::String
         mantissa = string(mantissa, '0')
     end
     expo = parse(Int, exponent)
-    if -5 < expo < 6
+    if -5 < expo < prec - 1
         expo == 0 && return mantissa
         int, frac = eachsplit(mantissa, '.')
         if expo > 0
@@ -1254,30 +1254,32 @@ function _prettify_bigfloat(s::String)::String
                 string(int, frac, '0'^(expo-length(frac)), '.', '0')
         else
             neg = startswith(int, '-')
-            neg == true && (int = lstrip(int, '-'))
-            @assert length(int) == 1 "length(int) != 1"
-            string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
+            neg && (int = lstrip(int, '-'))
+            string(neg ? '-' : "", '0', '.', '0'^(-expo-length(int)), int, frac == "0" ? "" : frac)
         end
     else
         string(mantissa, 'e', expo)
     end
 end
 
-function _string(x::BigFloat, fmt::String)::String
+function _string(x::BigFloat,
+                 prec::Int = ceil(Int, log10(2)*precision(x)),
+                 exp::Int = prec-1)::String
     isfinite(x) || return string(Float64(x))
-    _prettify_bigfloat(string_mpfr(x, fmt))
+    _prettify_bigfloat(string_mpfr(x, "%.$(prec)Re"), exp)
 end
-_string(x::BigFloat) = _string(x, "%Re")
-_string(x::BigFloat, k::Integer) = _string(x, "%.$(k)Re")
 
 string(b::BigFloat) = _string(b)
 
 print(io::IO, b::BigFloat) = print(io, string(b))
 function show(io::IO, b::BigFloat)
     if get(io, :compact, false)::Bool
-        print(io, _string(b, 5))
-    else
+        print(io, precision(b) > 15 ? _string(b, 5, 6) : _string(b))
+    elseif get(io, :typeinfo, Any) == BigFloat
         print(io, _string(b))
+    else
+        str = _string(b)
+        print(io, str[1] == '-' ? "-big\"" * str[2:end] * '"' : "big\"" * str * '"')
     end
 end
 

@@ -738,7 +738,7 @@ julia> big"123_456"
 123456
 
 julia> big"7891.5"
-7891.5
+big"7891.5"
 
 julia> big"_"
 ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat

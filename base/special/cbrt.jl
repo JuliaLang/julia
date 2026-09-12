@@ -27,10 +27,10 @@ See also [`sqrt`](@ref), [`fourthroot`](@ref).
 # Examples
 ```jldoctest
 julia> cbrt(big(27))
-3.0
+big"3.0"
 
 julia> cbrt(big(-27))
--3.0
+-big"3.0"
 ```
 """
 cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
