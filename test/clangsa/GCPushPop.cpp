@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -Xclang -verify -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -x c++ %s
+// RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%{shlibext} -Xclang -verify -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -x c++ %s
 
 #include "julia.h"
 #include <string>
@@ -21,6 +21,20 @@ void missingPop2() {
 void superfluousPop() {
   JL_GC_POP(); // expected-warning{{JL_GC_POP without corresponding push}}
 }              // expected-note@-1{{JL_GC_POP without corresponding push}}
+
+void uninitializedValuePush() {
+  jl_value_t *x;
+  JL_GC_PUSH1(&x); // expected-warning{{Pushing an uninitialized value to the GC root stack}}
+                   // expected-note@-1{{Pushing an uninitialized value to the GC root stack}}
+  JL_GC_POP();
+}
+
+extern void JL_NORETURN no_return_error(void);
+void noreturnAfterPush() {
+  jl_value_t *x = NULL;
+  JL_GC_PUSH1(&x);
+  no_return_error();
+}
 
 // From gc.c, jl_gc_push_arraylist creates a custom stack frame.
 extern void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list);

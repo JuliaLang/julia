@@ -2,7 +2,7 @@
 
 # SizedArrays
 
-# This test file defines an array wrapper with statical size. It can be used to
+# This test file defines an array wrapper with static size. It can be used to
 # test the action of LinearAlgebra with non-number eltype.
 
 module SizedArrays

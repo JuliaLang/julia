@@ -188,7 +188,7 @@ ERROR: Whoops!
 ## Exception stacks and [`current_exceptions`](@ref)
 
 !!! compat "Julia 1.1"
-    Exception stacks requires at least Julia 1.1.
+    Exception stacks require at least Julia 1.1.
 
 While handling an exception further exceptions may be thrown. It can be useful to inspect all these exceptions to
 identify the root cause of a problem. The julia runtime supports this by pushing each exception onto an internal

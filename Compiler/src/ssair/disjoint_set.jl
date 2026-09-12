@@ -14,7 +14,7 @@ using Base: OneTo, collect, zero, zeros, one, typemax
 #   A forest of disjoint sets of integers
 #
 #   Since each element is an integer, we can use arrays
-#   instead of dictionary (for efficiency)
+#   instead of a dictionary (for efficiency)
 #
 #   Disjoint sets over other key types can be implemented
 #   based on an IntDisjointSet through a map from the key
@@ -46,7 +46,7 @@ length(s::IntDisjointSet) = length(s.parents)
 """
     num_groups(s::IntDisjointSet)
 
-Get a number of groups.
+Get the number of groups.
 """
 num_groups(s::IntDisjointSet) = s.ngroups
 eltype(::Type{IntDisjointSet{T}}) where {T<:Integer} = T
@@ -73,7 +73,7 @@ end
 """
     find_root!(s::IntDisjointSet{T}, x::T)
 
-Find the root element of the subset that contains an member `x`.
+Find the root element of the subset that contains a member `x`.
 Path compression happens here.
 """
 find_root!(s::IntDisjointSet{T}, x::T) where {T<:Integer} = find_root_impl!(s.parents, x)

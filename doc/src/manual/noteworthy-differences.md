@@ -299,7 +299,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     and unlike decimal literals in Julia, have a type based on the *length* of the literal, including
     leading 0s. For example, `0x0` and `0x00` have type [`UInt8`](@ref), `0x000` and `0x0000` have type
     [`UInt16`](@ref), then literals with 5 to 8 hex digits have type `UInt32`, 9 to 16 hex digits type
-    `UInt64`, 17 to 32 hex digits type `UInt128`, and more that 32 hex digits type `BigInt`.
+    `UInt64`, 17 to 32 hex digits type `UInt128`, and more than 32 hex digits type `BigInt`.
     This needs to be taken into account when defining
     hexadecimal masks, for example `~0xf == 0xf0` is very different from `~0x000f == 0xfff0`. 64 bit `Float64`
     and 32 bit [`Float32`](@ref) bit literals are expressed as `1.0` and `1.0f0` respectively. Floating point
@@ -426,7 +426,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 ### Julia ⇔ C/C++: Module interface
   * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s mark
-    specific symbols that are intended for their users as `public`or `export`ed.
+    specific symbols that are intended for their users as `public` or `export`ed.
     * Often, Julia `module`s simply add functionality by generating new "methods" to existing
       functions (ex: `Base.push!`).
     * Developers of Julia packages therefore cannot rely on header files for interface

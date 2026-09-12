@@ -15,6 +15,14 @@
 # `JuliaLowering.include()` or something. Then we'll be in the fun little world
 # of bootstrapping but it shouldn't be too painful :)
 
+# Note that `@ast __context__ __context__.macrocall [K"foo" ...]` is unhygienic,
+# since `@ast` is meant for internal lowering use (it requires an explicit
+# provenance argument, and then copies any syntax context from the provenance to
+# any created syntax).  A real user-facing macro to replace it should use the
+# provenance of the literal K"foo" expression in the file instead, and should
+# not copy context (this is not hard to implement, but the provenance requires
+# it and callers to be JL-lowered, which this file currently isn't.)
+
 function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
     if length(exs) == 0
         @ast __context__ __context__.macrocall [K"meta"
@@ -113,7 +121,7 @@ function ccall_macro_parse(ctx, exs)
     ex = exs[end]
     for opt in opts
         @stm opt begin
-            [K"=" [K"Identifier"] val] -> if opt[1].name_val != "gc_safe"
+            [K"=" [K"Identifier"] val] -> if syntax_name(opt[1]) != "gc_safe"
                 throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
             elseif !(kind(val) in KSet"Bool Value")
                 throw(MacroExpansionError(val, "gc_safe must be true or false"))
@@ -135,7 +143,7 @@ function ccall_macro_parse(ctx, exs)
             [K"$" x] -> let kx = kind(x)
                 if kx in KSet"tuple String string" ||
                         (kx === K"Value" && x.value isa Tuple) ||
-                        kx == K"inert" && !(kx[1].value isa Ptr)
+                        kx == K"inert" && !(kind(x[1]) == K"Value" && x[1].value isa Ptr)
                     throw(MacroExpansionError(
                         f, "interpolated value should be a variable or expression, not a literal name or tuple"))
                 end
@@ -161,8 +169,8 @@ function ccall_macro_parse(ctx, exs)
     end
 
     # collect args and types
-    args = SyntaxList(ctx)
-    types = SyntaxList(ctx)
+    args = SyntaxList()
+    types = SyntaxList()
     function pusharg!(at)
         @stm at begin
             [K"::" a t] -> (push!(args, a); push!(types, t))
@@ -237,37 +245,35 @@ function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
     ]
 end
 
-function _at_eval_code(ctx, srcref, mod, ex)
-    @ast ctx srcref [K"block"
+# @eval should mostly ignore hygiene against our system's best wishes.  Still
+# attempt to preserve provenance.
+function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
+    sc = mc.macrocall.context::SyntaxContext
+    val = remove_context(@ast mc mc.macrocall ("eval_result"::K"Identifier"))
+    q = _legacy_quote_to_syntax((@ast mc mc.macrocall [K"quote" ex]), 0, true)
+    new_sc = SyntaxContext(base_layer(sc).mod, sc.version)
+    @ast mc mc.macrocall [K"block"
         [K"local"
             [K"="
-                "eval_result"::K"Identifier"
-                [K"call"
-                    # TODO: Call "eval"::K"core" here
-                    JuliaLowering.eval::K"Value"
-                    [K"parameters"
-                        [K"kw"
-                            "expr_compat_mode"::K"Identifier"
-                            ctx.expr_compat_mode::K"Bool"
-                        ]
-                    ]
-                    mod
-                    [K"quote" ex]
+                val
+                [K"call" JuliaLowering.eval::K"Value"
+                    mod_st
+                    [K"call" JuliaSyntax.fill_context::K"Value" q new_sc::K"Value"]
                 ]
             ]
         ]
-        [K"unknown_head"(name_val="latestworld-if-toplevel")]
-        "eval_result"::K"Identifier"
+        [K"unknown_head"(;value="latestworld-if-toplevel")]
+        val
     ]
 end
-
 function Base.var"@eval"(__context__::MacroContext, ex)
-    mod = @ast __context__ __context__.macrocall __context__.scope_layer.mod::K"Value"
-    _at_eval_code(__context__, __context__.macrocall, mod, ex)
+    sc = __context__.macrocall.context::SyntaxContext
+    mod = @ast __context__ __context__.macrocall base_layer(sc).mod::K"Value"
+    _at_eval_code(__context__, mod, ex)
 end
 
 function Base.var"@eval"(__context__::MacroContext, mod, ex)
-    _at_eval_code(__context__, __context__.macrocall, mod, ex)
+    _at_eval_code(__context__, mod, ex)
 end
 
 #--------------------------------------------------------------------------------
@@ -336,4 +342,100 @@ quote+quasiquote 😅
 function var"@inert"(__context__::MacroContext, ex)
     @jl_assert kind(ex) == K"quote" ex
     @ast __context__ __context__.macrocall [K"inert" ex]
+end
+
+# `quote`/`inert` for syntaxtree
+function var"@syntaxinert"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [K"syntaxinert" st]
+end
+function var"@syntaxquote"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [K"syntaxquote" st]
+end
+# not particularly good or useful, as @syntaxquote must expand first
+function var"@syntaxunquote"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [K"syntaxunquote" st]
+end
+
+# If the syntax version allows, convert quote/$ to syntaxquote/syntaxunquote.
+# This is just a convenient way to create SyntaxTree with full provenance
+# without dedicated surface syntax, mainly for testing metaprogramming in JL.
+# It is insufficient in many ways, e.g. not all forms can be expressed (need
+# surface syntax)
+function var"@legacy_quote_to_syntax"(__context__::MacroContext, st)
+    @jl_assert kind(st) === K"quote" || kind(st) === K"inert" st
+    if is_flisp_compat(__context__.macrocall)
+        st
+    elseif kind(st) === K"inert"
+        @mknode(st; kind=K"syntaxinert") # parser simplifies quote to inert
+    else
+        _legacy_quote_to_syntax(st, 0, false)
+    end
+end
+function _legacy_quote_to_syntax(st::SyntaxTree, depth, force::Bool)
+    k = kind(st)
+    if k === K"quote" && depth == 0 && (force || !is_flisp_compat(st))
+        @jl_assert numchildren(st) == 1 st
+        @mknode(st; kind=K"syntaxquote", children=
+            mapsyntax(c->_legacy_quote_to_syntax(c, depth+1, force), children(st)))
+    elseif k === K"$" && depth == 1 && (force || !is_flisp_compat(st))
+        @jl_assert numchildren(st) == 1 (st, "bad multi-syntaxunquote")
+        @mknode(st; kind=K"syntaxunquote")
+    else
+        depth2 = k === K"quote" ? depth + 1 : k === K"$" ? depth - 1 : depth
+        cs = SyntaxList()
+        for c in children(st)
+            # Convert multi-unquote to single unquote
+            if depth2 == 1 && kind(c) === K"$" && numchildren(c) > 1
+                for c2 in children(c)
+                    push!(cs, @ast _ c [K"$" c2])
+                end
+            else
+                push!(cs, c)
+            end
+        end
+        cs_out = mapsyntax(c->_legacy_quote_to_syntax(c, depth2, force), cs)
+        cs_out == children(st) ? st : @mknode(st; children=cs_out)
+    end
+end
+macro legacy_quote_to_syntax(x)
+    esc(x)
+end
+
+"""
+Retrieve the syntax version of the macrocall
+"""
+function var"@syntax_version"(__context__::MacroContext)
+    (__context__.macrocall.context::SyntaxContext).version
+end
+macro syntax_version()
+    JL_OLD_SYNTAX_VERSION
+end
+
+"""
+Set the syntax version of some syntax.  This can be used to define macros
+producing older syntax than the current version.
+"""
+function var"@syntax_version"(__context__::MacroContext, ver_st, st)
+    kind(st) === K"macro" || throw(LoweringError(
+        st, "`@syntax_version version macro` only supports macro definitions"))
+    ver = JuliaLowering.eval(syntax_module(ver_st), ver_st)
+    ver isa VersionNumber || throw(LoweringError(
+        ver_st, "version argument should be literal `v\"...\" call`"))
+    _ensure_syntax_version(st, ver)
+end
+macro syntax_version(_, x)
+    throw(ArgumentError("@syntax_version can't set version when lowering with flisp"))
+end
+
+function _ensure_syntax_version(st, ver::VersionNumber)
+    st_sc = st.context::SyntaxContext
+    sc = st_sc.version == ver ? st_sc :
+        SyntaxContext(st_sc.layer, st_sc.unexpanded, ver, st_sc.internal)
+
+    if is_leaf(st) || numchildren(st) == 0
+        st_sc == sc ? st : @mknode(st; context=sc)
+    else
+        out = mapchildren(c->_ensure_syntax_version(c, ver), st)
+        (st_sc === sc && out === st) ? out : @mknode(st; context=sc)
+    end
 end

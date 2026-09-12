@@ -42,7 +42,7 @@
 struct ABI_PPC64leLayout : AbiLayout {
 
 // count the homogeneous floating aggregate size (saturating at max count of 8)
-unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
+unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const JL_CANSAFEPOINT
 {
     if (jl_datatype_size(ty) > 128 || ty->layout->npointers || !ty->layout->flags.isbitsegal || ty->layout->flags.haspadding)
         return 9;
@@ -95,7 +95,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
     return n;
 }
 
-bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
@@ -104,7 +104,7 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return false;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override JL_CANSAFEPOINT
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
@@ -115,7 +115,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
     return false;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override JL_CANSAFEPOINT
 {
     // Arguments are either scalar or passed by value
 

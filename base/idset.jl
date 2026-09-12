@@ -108,7 +108,7 @@ function empty!(s::IdSet)
     _zero!(s.idxs)
     list = s.list
     for i = 1:s.max
-        _unsetindex!(list, i)
+        unsetindex!(list, i)
     end
     s.count = 0
     s.max = 0

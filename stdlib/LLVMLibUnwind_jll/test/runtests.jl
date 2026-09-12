@@ -11,4 +11,7 @@ using Test, Libdl, LLVMLibUnwind_jll
         @test dlsym(llvmlibunwind, :unw_set_reg; throw_error=false) !== nothing
         @test dlsym(llvmlibunwind, :unw_resume; throw_error=false) !== nothing
     end
+
+    # Preserve the JLLWrappers path compatibility accessor used by packages.
+    @test LLVMLibUnwind_jll.get_llvmlibunwind_path() == LLVMLibUnwind_jll.llvmlibunwind_path
 end

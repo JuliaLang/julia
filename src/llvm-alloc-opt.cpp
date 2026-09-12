@@ -75,7 +75,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
 }
 
 /**
- * Promote `julia.gc_alloc_obj` which do not have escaping root to a alloca.
+ * Promote `julia.gc_alloc_obj` which do not have escaping root to an alloca.
  * Uses that are not considered to escape the object (i.e. heap address) includes,
  *
  * * load
@@ -305,7 +305,7 @@ void Optimizer::optimizeAll()
         // The move to stack code below, if has_ref is set, changes the allocation to an array of jlvalue_t's. This is fine
         // if all objects are jlvalue_t's. However, if part of the allocation is an unboxed value (e.g. it is a { float, jlvaluet }),
         // then moveToStack will create a [2 x jlvaluet] bitcast to { float, jlvaluet }.
-        // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
+        // This later causes the GC rooting pass to mischaracterize the float as a pointer to a GC value
         if (has_ref && (has_unboxed || use_info.addrescaped)) {
             REMARK([&]() {
                 std::string str;
@@ -428,7 +428,11 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
-#if JL_LLVM_VERSION >= 200000
+#if JL_LLVM_VERSION >= 220000
+    // LLVM 22 dropped the size operand from the lifetime intrinsics.
+    (void)sz;
+    CallInst::Create(pass.lifetime_end, {ptr}, "", insert->getIterator());
+#elif JL_LLVM_VERSION >= 200000
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert->getIterator());
 #else
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
@@ -437,7 +441,11 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
 
 void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 {
-#if JL_LLVM_VERSION >= 200000
+#if JL_LLVM_VERSION >= 220000
+    // LLVM 22 dropped the size operand from the lifetime intrinsics.
+    (void)sz;
+    CallInst::Create(pass.lifetime_start, {ptr}, "", orig->getIterator());
+#elif JL_LLVM_VERSION >= 200000
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig->getIterator());
 #else
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
@@ -626,6 +634,11 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     // and compute the new name mangling schema
     SmallVector<Type*, 4> overloadTys;
     {
+#if JL_LLVM_VERSION >= 230000
+        bool valid = Intrinsic::isSignatureValid(ID, newfType, overloadTys);
+        assert(valid);
+        (void)valid;
+#else
         SmallVector<Intrinsic::IITDescriptor, 8> Table;
         getIntrinsicInfoTableEntries(ID, Table);
         ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
@@ -635,6 +648,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         bool matchvararg = !Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
         assert(matchvararg);
         (void)matchvararg;
+#endif
     }
 #if JL_LLVM_VERSION >= 200000
     auto newF = Intrinsic::getOrInsertDeclaration(call->getModule(), ID, overloadTys);
@@ -1246,12 +1260,9 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
                 }
-#ifndef __clang_analyzer__
-                // FIXME: SA finds "Called C++ object pointer is null" inside the LLVM code.
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
                 call->replaceAllUsesWith(new_call);
-#endif
                 call->eraseFromParent();
                 return;
             }

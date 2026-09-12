@@ -180,7 +180,7 @@ function scan_new_method!(method::Method, image_backedges_only::Bool)
     foreachgr(src) do gr::GlobalRef
         b = convert(Core.Binding, gr)
         if binding_was_invalidated(b)
-            # TODO: We could turn this into an addition if condition. For now, use it as a reasonably cheap
+            # TODO: We could turn this into an additional if condition. For now, use it as a reasonably cheap
             # additional consistency check
             @assert !image_backedges_only
             @atomic method.did_scan_source |= 0x4

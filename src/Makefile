@@ -39,7 +39,7 @@ JCFLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 # Add common flags that apply to both compilers
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-FLAGS_COMMON += -I$(MMTK_API_INC)
+FLAGS_COMMON := -I$(SRCDIR)/gc-mmtk -I$(MMTK_API_INC) $(FLAGS_COMMON)
 endif
 
 FLAGS_COMMON += -DJL_BUILD_ARCH='"$(ARCH)"'
@@ -77,7 +77,6 @@ ifeq ($(JULIACODEGEN),LLVM)
 # Currently these files are used by both GCs. But we should make the list specific to stock, and MMTk should have its own implementation.
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-FLAGS_COMMON += -I$(MMTK_API_INC)
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
 else
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
@@ -86,8 +85,14 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
-	pipeline llvm_api \
+	llvm-cancellation-lowering \
+	pipeline llvm_api objcache \
 	$(GC_CODEGEN_SRCS)
+# translation units of $(CODEGEN_SRCS), except objcache, which includes the hash
+CODEGEN_SRCS_HASH := $(patsubst %,$(SRCDIR)/%.cpp,$(filter-out objcache llvm-final-gc-lowering-mmtk,$(CODEGEN_SRCS)))
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+CODEGEN_SRCS_HASH += $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp
+endif
 FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -132,14 +137,14 @@ UV_HEADERS += uv/*.h
 endif
 PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,work-stealing-queue.h gc-interface.h gc-tls-common.h julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h jl_exported_data.inc)
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-mmtk.h gc-wb-mmtk.h)
+	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/gc-mmtk/,gc-tls-mmtk.h gc-wb-mmtk.h)
 else
 	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-stock.h gc-wb-stock.h)
 endif
 ifeq ($(OS),WINNT)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,win32_ucontext.h)
 endif
-HEADERS := $(PUBLIC_HEADERS) $(addprefix $(SRCDIR)/,julia_internal.h options.h timing.h passes.h jl_internal_data.inc) $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS) jl_internal_funcs.inc jl_data_globals_defs.inc)
+HEADERS := $(PUBLIC_HEADERS) $(addprefix $(SRCDIR)/,julia_internal.h options.h timing.h passes.h gc-alloc-profiler.h jl_internal_data.inc) $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS) jl_internal_funcs.inc jl_data_globals_defs.inc)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,julia_gcext.h)
 PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)) $(UV_HEADERS))
 
@@ -205,9 +210,21 @@ LIBJULIA_PATH_REL := libjulia
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
+ifeq ($(OS),WINNT)
+COMMON_LIBPATHS := -L$(build_private_libdir) $(COMMON_LIBPATHS)
+RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd -L$(build_libdir) $(LIBTARGET_PARSING) $(WIN_LD_STDCXX) $(OSLIBS)
+# NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
+CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(LIBTRACYCLIENT) $(LIBITTAPI) $(WIN_LD_STDCXX) $(LIBLMDB) $(OSLIBS)
+else
 RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd -L$(build_libdir) $(LIBTARGET_PARSING)
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
-CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
+CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) $(LIBLMDB)
+endif
+
+ifeq ($(OS),Darwin)
+# needed for codegen's dSYM lookup.
+CG_LIBS += -framework CoreFoundation
+endif
 
 ifeq ($(USEGCC),1)
 ifeq ($(USE_RT_STATIC_LIBGCC),1)
@@ -230,6 +247,7 @@ CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
+STATIC_OBJS := $(SRCS:%=$(BUILDDIR)/%.static.o)
 
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
@@ -292,9 +310,28 @@ $(BUILDDIR)/%.h.gen : $(SRCDIR)/%.d
 # to have a `ijl_` prefix instead of `jl_`, to denote that they are coming from `libjulia-internal`.  This avoids
 # potential confusion with debugging tools, when inspecting a process that has both `libjulia` and `libjulia-internal`
 # loaded at the same time.
+#
+# When running under clang-tidy or the clang static analyzer, directly alias
+# the _fallback or _impl names to the exported name. This additionally catches any mistakes
+# where the prototype declaration mismatches the declaration.
 $(BUILDDIR)/jl_internal_funcs.inc: $(SRCDIR)/jl_exported_funcs.inc
 	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
-	grep 'XX(..*)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g' > $$TMPFILE; \
+	{ \
+		grep 'XX(..*)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g'; \
+		echo '#ifdef __clang_analyzer__'; \
+		echo ' #ifdef JL_LIBRARY_EXPORTS_INTERNAL'; \
+		grep '  YY(..*)' $< | sed -E 's/.*YY\((.+)\).*/  #define \1 \1_fallback/g'; \
+		echo ' #endif'; \
+		echo ' #ifdef JL_LIBRARY_EXPORTS_CODEGEN'; \
+		grep '  YY(..*)' $< | sed -E 's/.*YY\((.+)\).*/  #define \1 \1_impl/g'; \
+		echo ' #endif'; \
+		echo '#endif'; \
+	} > $$TMPFILE; \
+	mv $$TMPFILE $@
+
+$(BUILDDIR)/jl_static_codegen_fallbacks.inc: $(SRCDIR)/jl_exported_funcs.inc
+	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	grep 'YY(..*)' $< | sed -E 's/.*YY\((.+)\).*/#define \1_fallback \1/g' > $$TMPFILE; \
 	mv $$TMPFILE $@
 
 # Generate `.inc` file that contains a list of `#define` macros to access global data through struct instances
@@ -306,14 +343,50 @@ $(BUILDDIR)/jl_data_globals_defs.inc: $(SRCDIR)/jl_exported_data.inc
 	} > $$TMPFILE; \
 	mv $$TMPFILE $@
 
+SHA256SUM := $(shell command -v sha256sum 2>/dev/null)
+ifeq ($(SHA256SUM),)
+SHA256SUM := shasum -a 256
+endif
+
+# Hash of the preprocessed codegen sources, used to invalidate the objcache when
+# codegen changes (see objcache.cpp).  Preprocessing follows #includes and
+# applies the build configuration, so anything that can change the code
+# libjulia-codegen emits (its sources, headers, the LLVM headers, -D flags such
+# as USE_TRACY, and sanitizers) changes the hash.  The release flags are used
+# for the debug library too, so both share cache entries; the debug-only
+# differences in emitted code (stack protector) are part of the module.
+# The preprocessor also writes the list of files it read to $@.d, so the hash is
+# regenerated when any of them changes.
+$(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH) $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@rm -f $@.i $@.d
+	@$(call PRINT_CC, for f in $(CODEGEN_SRCS_HASH); do \
+	    $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -E -P -MD -MP -MT $@ -MF $@.d.tmp $$f >> $@.i || exit 1; \
+	    cat $@.d.tmp >> $@.d; \
+	done)
+	@$(SHA256SUM) < $@.i | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
+	@rm -f $@.i $@.d.tmp
+-include $(BUILDDIR)/jl_codegen_hash.inc.d
+
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCFLAGS) -c $< -o $@)
+$(BUILDDIR)/%.static.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
+$(BUILDDIR)/%.static.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
+$(BUILDDIR)/gc-mmtk.o: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+$(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCFLAGS) -c $< -o $@)
+$(BUILDDIR)/llvm-final-gc-lowering-mmtk.o: $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
+$(BUILDDIR)/llvm-final-gc-lowering-mmtk.dbg.obj: $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o : $(SRCDIR)/%.d
 	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
@@ -347,7 +420,13 @@ else
 JULIA_SPLITDEBUG := 0
 endif
 $(build_shlibdir)/libccalltest.$(SHLIB_EXT): $(SRCDIR)/ccalltest.c
-	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -shared -o $@.tmp $(LDFLAGS))
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -c -o $@.tmp.o)
+	@$(call PRINT_LINK, $(call link-dll,$@.tmp, \
+		$(WIN_LD_LIBPATHS), \
+		$(WIN_LD_DLL_CRT_START) $@.tmp.o $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CC) $(LDFLAGS) -shared, \
+		$@.tmp.o))
+	@rm -f $@.tmp.o
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@.tmp
 ifeq ($(JULIA_SPLITDEBUG),1)
 	@# Create split debug info file for libccalltest stacktraces test
@@ -364,13 +443,31 @@ endif
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT): $(SRCDIR)/ccalllazyfoo.c
-	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazyfoo.$(SHLIB_EXT)))
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -c -o $@.tmp.o)
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(WIN_LD_LIBPATHS), \
+		$(WIN_LD_DLL_CRT_START) $@.tmp.o $(COMMON_LIBPATHS) $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CC) $(LDFLAGS) -shared $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazyfoo.$(SHLIB_EXT)), \
+		$@.tmp.o))
+	@rm -f $@.tmp.o
 
 $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
-	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)) -lccalllazyfoo)
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -c -o $@.tmp.o)
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(WIN_LD_LIBPATHS), \
+		$(WIN_LD_DLL_CRT_START) $@.tmp.o $(COMMON_LIBPATHS) -lccalllazyfoo $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CC) $(LDFLAGS) -shared $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)), \
+		$@.tmp.o -lccalllazyfoo))
+	@rm -f $@.tmp.o
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
-	@$(call PRINT_CC, $(CXX) $(JCXXFLAGS) $(LLVM_CXXFLAGS) $(FLAGS_COMMON) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(CG_LLVMLINK)) -lpthread
+	@$(call PRINT_CC, $(CXX) $(JCXXFLAGS) $(LLVM_CXXFLAGS) $(FLAGS_COMMON) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -c -o $@.tmp.o)
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(WIN_LD_LIBPATHS), \
+		$(WIN_LD_DLL_CRT_START) $@.tmp.o $(COMMON_LIBPATHS) $(CG_LLVMLINK) $(WIN_LD_STDCXX) $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CXX) $(LDFLAGS) -shared $(COMMON_LIBPATHS), \
+		$@.tmp.o $(CG_LLVMLINK) -lpthread))
+	@rm -f $@.tmp.o
 
 .PHONY: julia_flisp.boot.inc.phony
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
@@ -389,51 +486,68 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 	  mv $$TMPFILE $@)
 
 # additional dependency links
-$(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.h llvm-julia-passes.inc)
-$(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/processor.h
-$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/idset.c $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/codegen-stubs.static.o: $(BUILDDIR)/jl_static_codegen_fallbacks.inc
+$(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj $(BUILDDIR)/codegen-stubs.static.o: $(addprefix $(SRCDIR)/,intrinsics.h llvm-julia-passes.inc)
+$(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h objcache.h serialize.h processor.h)
+$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj $(BUILDDIR)/ast.static.o: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
+$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj $(BUILDDIR)/builtins.static.o: $(addprefix $(SRCDIR)/,iddict.c idset.c builtin_proto.h intrinsics.h)
+$(BUILDDIR)/cgmemmgr.o $(BUILDDIR)/cgmemmgr.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
-	intrinsics.cpp jitlayers.h intrinsics.h llvm-codegen-shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h builtin_proto.h)
-$(BUILDDIR)/datatype.o $(BUILDDIR)/datatype.dbg.obj: $(SRCDIR)/support/htable.h $(SRCDIR)/support/htable.inc
-$(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h jitlayers.h debug-registry.h)
-$(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h $(SRCDIR)/processor.h
-$(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
-$(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
-$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h
-$(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
-$(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
-$(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj: $(SRCDIR)/gc-heap-snapshot.h
-$(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj: $(SRCDIR)/gc-alloc-profiler.h
-$(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj: $(SRCDIR)/gc-page-profiler.h
-$(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj: $(SRCDIR)/builtin_proto.h
-$(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/builtin_proto.h
-$(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/julia-task-dispatcher.h
-$(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj: $(SRCDIR)/builtin_proto.h
+	intrinsics.cpp jitlayers.h intrinsics.h llvm-codegen-shared.h objcache.h cgutils.cpp ccall.cpp abi_*.cpp processor.h builtin_proto.h)
+$(BUILDDIR)/crc32c.o $(BUILDDIR)/crc32c.dbg.obj $(BUILDDIR)/crc32c.static.o: $(SRCDIR)/crc32c-tables.c $(SRCDIR)/processor.h
+$(BUILDDIR)/datatype.o $(BUILDDIR)/datatype.dbg.obj $(BUILDDIR)/datatype.static.o: $(SRCDIR)/support/htable.h $(SRCDIR)/support/htable.inc
+$(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h jitlayers.h llvm-codegen-shared.h objcache.h debug-registry.h)
+$(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h jitlayers.h llvm-codegen-shared.h objcache.h)
+$(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj $(BUILDDIR)/gc-debug.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
+$(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj $(BUILDDIR)/gc-pages.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
+$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj $(BUILDDIR)/gc-mmtk.static.o: $(addprefix $(SRCDIR)/,gc-common.h gc-heap-snapshot.h gc-alloc-profiler.h threading.h gc-mmtk/gc-tls-mmtk.h gc-mmtk/gc-wb-mmtk.h)
+$(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj $(BUILDDIR)/gc-stacks.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
+$(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc-stock.dbg.obj $(BUILDDIR)/gc-stock.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
+$(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj $(BUILDDIR)/gc-heap-snapshot.static.o: $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-common.h
+$(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj $(BUILDDIR)/gc-alloc-profiler.static.o: $(SRCDIR)/gc-alloc-profiler.h
+$(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj $(BUILDDIR)/gc-page-profiler.static.o: $(addprefix $(SRCDIR)/,gc-page-profiler.h gc-stock.h gc-common.h threading.h)
+$(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj $(BUILDDIR)/init.static.o: $(SRCDIR)/builtin_proto.h $(SRCDIR)/processor.h
+$(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj $(BUILDDIR)/interpreter.static.o: $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h julia-task-dispatcher.h objcache.h processor.h)
+$(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj $(BUILDDIR)/jltypes.static.o: $(SRCDIR)/builtin_proto.h
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvm-codegen-shared.h $(BUILDDIR)/julia_version.h
 $(BUILDDIR)/llvm-alloc-helpers.o $(BUILDDIR)/llvm-alloc-helpers.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
 $(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
-$(BUILDDIR)/llvm-cpufeatures.o $(BUILDDIR)/llvm-cpufeatures.dbg.obj: $(SRCDIR)/jitlayers.h
-$(BUILDDIR)/llvm-demote-float16.o $(BUILDDIR)/llvm-demote-float16.dbg.obj: $(SRCDIR)/jitlayers.h
-$(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj: $(SRCDIR)/llvm-gc-interface-passes.h
+$(BUILDDIR)/llvm-Compression.o $(BUILDDIR)/llvm-Compression.dbg.obj: $(SRCDIR)/llvm-Compression.h
+$(BUILDDIR)/llvm-cancellation-lowering.o $(BUILDDIR)/llvm-cancellation-lowering.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h
+$(BUILDDIR)/llvm-cpufeatures.o $(BUILDDIR)/llvm-cpufeatures.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h objcache.h)
+$(BUILDDIR)/llvm-demote-float16.o $(BUILDDIR)/llvm-demote-float16.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h objcache.h)
 $(BUILDDIR)/llvm-gc-invariant-verifier.o $(BUILDDIR)/llvm-gc-invariant-verifier.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-julia-licm.o $(BUILDDIR)/llvm-julia-licm.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-alloc-helpers.h $(SRCDIR)/llvm-pass-helpers.h
-$(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-gc-interface-passes.h
+$(addprefix $(BUILDDIR)/,llvm-final-gc-lowering.o llvm-final-gc-lowering.dbg.obj \
+	llvm-final-gc-lowering-stock.o llvm-final-gc-lowering-stock.dbg.obj \
+	llvm-final-gc-lowering-mmtk.o llvm-final-gc-lowering-mmtk.dbg.obj \
+	llvm-late-gc-lowering.o llvm-late-gc-lowering.dbg.obj): \
+	$(addprefix $(SRCDIR)/,llvm-gc-interface-passes.h llvm-codegen-shared.h llvm-pass-helpers.h)
 $(BUILDDIR)/llvm-multiversioning.o $(BUILDDIR)/llvm-multiversioning.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/processor.h
 $(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-propagate-addrspaces.o $(BUILDDIR)/llvm-propagate-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-remove-addrspaces.o $(BUILDDIR)/llvm-remove-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-ptls.o $(BUILDDIR)/llvm-ptls.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
-$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(SRCDIR)/processor.h
-$(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
-$(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/staticdata_utils.c $(SRCDIR)/precompile_utils.c $(SRCDIR)/processor.h $(SRCDIR)/builtin_proto.h
-$(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
-$(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj: $(SRCDIR)/serialize.h $(SRCDIR)/common_symbols1.inc $(SRCDIR)/common_symbols2.inc
-$(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(addprefix $(SRCDIR)/,passes.h jitlayers.h llvm-julia-passes.inc)
-$(BUILDDIR)/llvm_api.o $(BUILDDIR)/llvm_api.dbg.obj: $(SRCDIR)/llvm-julia-passes.inc
+$(BUILDDIR)/method.o $(BUILDDIR)/method.dbg.obj $(BUILDDIR)/method.static.o: $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/null_sysimage.o $(BUILDDIR)/null_sysimage.dbg.obj $(BUILDDIR)/null_sysimage.static.o: $(SRCDIR)/processor.h
+$(BUILDDIR)/precompile.o $(BUILDDIR)/precompile.dbg.obj $(BUILDDIR)/precompile.static.o: $(SRCDIR)/serialize.h
+$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj $(BUILDDIR)/processor.static.o: $(SRCDIR)/processor.h
+$(BUILDDIR)/runtime_ccall.o $(BUILDDIR)/runtime_ccall.dbg.obj $(BUILDDIR)/runtime_ccall.static.o: $(SRCDIR)/processor.h
+$(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj $(BUILDDIR)/signal-handling.static.o: $(addprefix $(SRCDIR)/,signals-*.c)
+$(BUILDDIR)/stackwalk.o $(BUILDDIR)/stackwalk.dbg.obj $(BUILDDIR)/stackwalk.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/threading.h
+$(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj $(BUILDDIR)/staticdata.static.o: $(addprefix $(SRCDIR)/,staticdata_utils.c precompile_utils.c processor.h builtin_proto.h serialize.h)
+$(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj $(BUILDDIR)/toplevel.static.o: $(SRCDIR)/builtin_proto.h $(SRCDIR)/intrinsics.h
+$(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj $(BUILDDIR)/ircode.static.o: $(SRCDIR)/serialize.h $(SRCDIR)/common_symbols1.inc $(SRCDIR)/common_symbols2.inc
+$(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(addprefix $(SRCDIR)/,passes.h jitlayers.h llvm-codegen-shared.h objcache.h llvm-julia-passes.inc)
+$(BUILDDIR)/llvm_api.o $(BUILDDIR)/llvm_api.dbg.obj: $(addprefix $(SRCDIR)/,llvm-julia-passes.inc jitlayers.h llvm-codegen-shared.h objcache.h)
+$(BUILDDIR)/objcache.o $(BUILDDIR)/objcache.dbg.obj: $(SRCDIR)/objcache.h $(BUILDDIR)/jl_codegen_hash.inc
 
-$(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc-common.o gc-stock.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
-$(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h
+$(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj threading.static.o gc-common.o gc-common.dbg.obj gc-common.static.o gc-stock.o gc-stock.dbg.obj gc-stock.static.o init.o init.dbg.obj init.static.o task.o task.dbg.obj task.static.o safepoint.o safepoint.dbg.obj safepoint.static.o scheduler.o scheduler.dbg.obj scheduler.static.o): $(addprefix $(SRCDIR)/,threading.h)
+$(addprefix $(BUILDDIR)/,gc-common.o gc-common.dbg.obj gc-common.static.o): $(SRCDIR)/gc-common.h
+$(addprefix $(BUILDDIR)/,task.o task.dbg.obj task.static.o): $(SRCDIR)/builtin_proto.h
+$(addprefix $(BUILDDIR)/,APInt.o APInt.dbg.obj APInt.static.o runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o): $(SRCDIR)/APInt-C.h
+$(addprefix $(BUILDDIR)/,runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o): $(SRCDIR)/processor.h
 
 # archive library file rules
 $(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
@@ -479,16 +593,26 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION $(LLVM_
 	mv $$TMPFILE $@
 
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
-		$(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT)))
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS) $(BOLT_LDFLAGS), \
+		$(WIN_LD_DLL_CRT_START) $(OBJS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(WIN_LD_CRT_END), \
+		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
+		$(OBJS) $(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT))))
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
 $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBTARGET_PARSING)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ \
-		$(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT)))
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS), \
+		$(WIN_LD_DLL_CRT_START) $(DOBJS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(WIN_LD_CRT_END), \
+		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
+		$(DOBJS) $(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))))
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
+
+$(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
+	@rm -rf $@
+	@$(call PRINT_LINK, $(AR) -rcs $@ $(STATIC_OBJS))
 
 ifneq ($(OS), WINNT)
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal%.$(JL_MAJOR_SHLIB_EXT): \
@@ -506,15 +630,26 @@ libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_
 libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-internal-debug libjulia-internal-release: $(PUBLIC_HEADER_TARGETS)
 
+ifneq ($(USE_SYSTEM_LMDB),1)
+$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIBLMDB)
+$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIBLMDB)
+endif
+
 $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(CODEGEN_OBJS) $(BUILDDIR)/support/libsupport.a $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(CODEGEN_OBJS) $(RPATH_LIB) -o $@ \
-		$(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-codegen.$(JL_MAJOR_SHLIB_EXT)))
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS) $(BOLT_LDFLAGS), \
+		$(WIN_LD_DLL_CRT_START) $(CODEGEN_OBJS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) $(WIN_LD_CRT_END), \
+		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
+		$(CODEGEN_OBJS) $(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))))
 	@$(INSTALL_NAME_CMD)libjulia-codegen.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
 $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(CODEGEN_DOBJS) $(BUILDDIR)/support/libsupport-debug.a $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(CODEGEN_DOBJS) $(RPATH_LIB) -o $@ \
-		$(JLDFLAGS) $(JLIBLDFLAGS) $(CG_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT)))
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS), \
+		$(WIN_LD_DLL_CRT_START) $(CODEGEN_DOBJS) $(JLIBLDFLAGS) $(CG_DEBUG_LIBS) $(WIN_LD_CRT_END), \
+		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
+		$(CODEGEN_DOBJS) $(JLDFLAGS) $(JLIBLDFLAGS) $(CG_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))))
 	@$(INSTALL_NAME_CMD)libjulia-codegen-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
@@ -534,14 +669,22 @@ libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
 # set the exports for the source files based on where they are getting linked
 $(OBJS) $(DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
-$(CODEGEN_OBJS) $(CODEGEN_DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
+$(CODEGEN_OBJS) $(CODEGEN_DOBJS) $(BUILDDIR)/jl_codegen_hash.inc: FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
+$(STATIC_OBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DJL_LIBRARY_STATIC
 # set the exports for the source files based on where they are getting linked
-$(addprefix clang-sa-,$(SRCS)):      FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-sagc-,$(SRCS)):    FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-tidy-,$(SRCS)):    FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-sa-,$(CODEGEN_SRCS)):   FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
-$(addprefix clang-sagc-,$(CODEGEN_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
-$(addprefix clang-tidy-,$(CODEGEN_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-sa-,$(SRCS)) \
+$(addprefix clang-sagc-,$(SRCS)) \
+$(addprefix clang-safety-,$(SRCS)) \
+$(addprefix clang-tidy-,$(SRCS)): \
+	FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-sa-,$(CODEGEN_SRCS)) \
+$(addprefix clang-sagc-,$(CODEGEN_SRCS)) \
+$(addprefix clang-safety-,$(CODEGEN_SRCS)) \
+$(addprefix clang-tidy-,$(CODEGEN_SRCS)): \
+	FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
+
+$(addprefix clang-safety-,$(SRCS) $(CODEGEN_SRCS)): \
+	FLAGS_COMMON += -D__clang_analyzer__
 
 # Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
 CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(LLVM_CFLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
@@ -585,7 +728,7 @@ INCLUDED_CXX_FILES := \
 clean:
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen*
 	-rm -rf $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest* $(build_shlibdir)/libccalllazyfoo* $(build_shlibdir)/libccalllazybar*
-	-rm -f $(BUILDDIR)/julia_flisp.boot* $(BUILDDIR)/julia_flisp.boot.inc* $(BUILDDIR)/jl_internal_funcs.inc* $(BUILDDIR)/jl_data_globals_defs.inc*
+	-rm -f $(BUILDDIR)/julia_flisp.boot* $(BUILDDIR)/julia_flisp.boot.inc* $(BUILDDIR)/jl_internal_funcs.inc* $(BUILDDIR)/jl_data_globals_defs.inc* $(BUILDDIR)/jl_codegen_hash.inc* $(BUILDDIR)/jl_static_codegen_fallbacks.inc*
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
 	-rm -f $(BUILDDIR)/julia_version.h
@@ -602,7 +745,21 @@ clean-support:
 .PHONY: cleanall
 cleanall: clean clean-flisp clean-support clean-analyzegc
 
-$(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG_ABSOLUTE)
+GC_CHECKER_SOURCES := \
+	$(SRCDIR)/clangsa/GCChecker.cpp \
+	$(SRCDIR)/clangsa/GCCheckerState.cpp \
+	$(SRCDIR)/clangsa/GCCheckerReporting.cpp \
+	$(SRCDIR)/clangsa/GCCheckerPropagation.cpp
+
+CLANGSA_PLUGIN_NAMES := GCChecker ImplicitAtomics FirstDeclAnnotations StaticOrDeclared
+CLANGSA_PLUGINS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(CLANGSA_PLUGIN_NAMES)))
+GCCHECKER_PLUGIN := $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
+
+$(GCCHECKER_PLUGIN): $(GC_CHECKER_SOURCES) $(SRCDIR)/clangsa/GCChecker.h $(SRCDIR)/clangsa/HelpersCommon.hpp $(LLVM_CONFIG_ABSOLUTE)
+	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
+		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $(GC_CHECKER_SOURCES))
+
+$(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(SRCDIR)/clangsa/HelpersCommon.hpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
 		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $<)
 
@@ -611,7 +768,7 @@ $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG
 # before attempting this static analysis, so that all necessary headers
 # and dependencies are properly installed:
 #   make -C src install-analysis-deps
-ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd cpufeatures
+ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd cpufeatures lmdb
 ifeq ($(OS),Darwin)
 ANALYSIS_DEPS += llvmunwind
 else ifeq ($(OS),OpenBSD)
@@ -624,15 +781,14 @@ install-analysis-deps:
 	$(MAKE) -C $(JULIAHOME)/deps $(addprefix install-,$(ANALYSIS_DEPS))
 
 .PHONY: analyzegc-deps-check
-analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h julia_flisp.boot.inc jl_internal_funcs.inc jl_data_globals_defs.inc)
+analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h julia_flisp.boot.inc jl_internal_funcs.inc jl_data_globals_defs.inc jl_codegen_hash.inc)
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
 	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG=1) or use BinaryBuilder)
 endif
 endif
 
-clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
-clangsa: $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
+clangsa: $(CLANGSA_PLUGINS)
 
 # optarg is a required_argument for these
 SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.NonNullParamChecker;unix.cstring.NullArg"
@@ -645,20 +801,22 @@ SA_EXCEPTIONS-gc-stock.c                    := -Xanalyzer -analyzer-config -Xana
  # these need to be annotated (and possibly fixed)
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 
+CLANGSA_GC_CHECKERS := core,julia.GCChecker,apiModeling,unix.cstring.CStringModeling,unix.DynamicMemoryModeling,nullability.NullPassedToNonnull,nullability.NullReturnedFromNonnull
+
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
-clang-sagc-%: JCXXFLAGS_COMMON += -UNDEBUG
-clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-sagc-%: JCPPFLAGS_COMMON += -UNDEBUG
+clang-sagc-%: $(SRCDIR)/%.c $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
-		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=$(CLANGSA_GC_CHECKERS) \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -x c $<)
-clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-sagc-%: $(SRCDIR)/%.cpp $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
-		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=$(CLANGSA_GC_CHECKERS) \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -x c++ $<)
 
-clang-sa-%: JCXXFLAGS_COMMON += -UNDEBUG
+clang-sa-%: JCPPFLAGS_COMMON += -UNDEBUG
 clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
@@ -670,33 +828,69 @@ clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -Werror -x c++ $<)
 
-clang-tidy-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+# Clang Thread Safety Analysis of Julia's safepoint annotations. Compiling with
+# -D__clang_safetyanalysis__ makes JL_CANSAFEPOINT and the ENTER/LEAVE annotations expand to
+# capability attributes on the reentrant `jl_notsafepoint` token (see
+# src/support/analyzer_annotations.h), which -Wthread-safety then checks.
+#
+# -Wno-ignored-attributes and -Wno-thread-safety-attributes: JL_CANSAFEPOINT (and friends) expand to a
+# `requires_capability` attribute, which clang-21's thread-safety analysis only
+# accepts on functions and parameters -- not on a function-pointer *typedef*.
+# This should be revisisted after clang-23, which added some support for this.
+clang-safety-%: JCPPFLAGS_COMMON += -UNDEBUG -D__clang_safetyanalysis__ -fsyntax-only -fcolor-diagnostics \
+		-Wthread-safety -Wthread-safety-negative -Werror=thread-safety \
+		-Wno-ignored-attributes -Wno-thread-safety-attributes
+clang-safety-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang $(CLANG_TOOLING_C_FLAGS) -x c $<)
+clang-safety-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang \
+		$(CLANG_TOOLING_CXX_FLAGS) --system-header-prefix=llvm -x c++ $<)
+
+# Run clang-tidy with our plugins: `-header-filter='.*'` so the first
+# (header) declarations participate in the comparison. The annotation macros
+# only expand to an `annotate` attribute under `-D__clang_gcanalyzer__` (see
+# src/support/analyzer_annotations.h), so run the checks once in the normal
+# build configuration and once with the analyzer define active (when the
+# annotations are visible).
+TIDY_PLUGIN_NAMES := $(filter-out GCChecker,$(CLANGSA_PLUGIN_NAMES))
+TIDY_PLUGIN_LIBS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(TIDY_PLUGIN_NAMES)))
+TIDY_PLUGINS := $(addprefix -load ,$(TIDY_PLUGIN_LIBS))
+TIDY_CHECKS := -clang-analyzer-*,-clang-diagnostic-*,concurrency-implicit-atomics,julia-first-decl-annotations,julia-static-or-declared
+clang-tidy-%: $(SRCDIR)/%.c $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
-		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
+		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
 		-- $(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -fno-caret-diagnostics -x c)
-clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
-		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
+		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
+		-- $(CLANG_TOOLING_C_FLAGS) -D__clang_gcanalyzer__ -fcolor-diagnostics -fno-caret-diagnostics -x c)
+clang-tidy-%: $(SRCDIR)/%.cpp $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
+		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
 		-- $(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
+		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
+		-- $(CLANG_TOOLING_CXX_FLAGS) -D__clang_gcanalyzer__ -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 .PHONY: tidysrc
 tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
+.PHONY: safesrc
+safesrc: $(addprefix clang-safety-,$(CODEGEN_SRCS) $(SRCS))
 .PHONY: analyzesrc
 analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
 .PHONY: analyzegc
 analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
 .PHONY: analyze
-analyze: analyzesrc analyzegc tidysrc
+analyze: analyzesrc analyzegc tidysrc safesrc
 
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-sa-%
+$(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-safety-%
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-tidy-%
 $(addprefix analyze-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS))) : analyze-% : clang-sagc-%
 
 .PHONY: clean-analyzegc
 clean-analyzegc:
-	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
-	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
+	rm -f $(CLANGSA_PLUGINS)
 
 # Compilation database generation using existing clang infrastructure
 .PHONY: regenerate-compile_commands

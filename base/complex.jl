@@ -105,7 +105,7 @@ reim(z) = (real(z), imag(z))
     real(T::Type)
 
 Return the type that represents the real part of a value of type `T`.
-e.g: for `T == Complex{R}`, returns `R`.
+e.g., for `T == Complex{R}`, returns `R`.
 Equivalent to `typeof(real(zero(T)))`.
 
 # Examples
@@ -843,15 +843,23 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
         else
             r = -zᵣ
             θ = copysign(Tf(π),imag(z))
-            rᵖ = r^pᵣ * exp(-pᵢ*θ)
-            ϕ = pᵣ*θ + pᵢ*log(r)
+            logr = log(r)
+            re_log, im_phase = pᵣ*logr, pᵢ*θ
+            lim = log(floatmax(Tf)) - one(Tf)
+            rᵖ = (abs(re_log) < lim && abs(im_phase) < lim) ?
+                r^pᵣ * exp(-im_phase) : exp(re_log - im_phase)
+            ϕ = pᵣ*θ + pᵢ*logr
         end
     else
         pᵣ, pᵢ = reim(p)
         r = abs(z)
         θ = angle(z)
-        rᵖ = r^pᵣ * exp(-pᵢ*θ)
-        ϕ = pᵣ*θ + pᵢ*log(r)
+        logr = log(r)
+        re_log, im_phase = pᵣ*logr, pᵢ*θ
+        lim = log(floatmax(Tf)) - one(Tf)
+        rᵖ = (abs(re_log) < lim && abs(im_phase) < lim) ?
+            r^pᵣ * exp(-im_phase) : exp(re_log - im_phase)
+        ϕ = pᵣ*θ + pᵢ*logr
     end
 
     if isfinite(ϕ)

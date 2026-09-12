@@ -8,4 +8,7 @@ using Test, Libdl, LibSSH2_jll
     # BinaryBuilder or built from source here), the version number is
     # either "1.11.1" or "1.11.1_DEV", respectively.
     @test startswith(vn, "1.11.1")
+
+    # Preserve the JLLWrappers path compatibility accessor used by packages.
+    @test LibSSH2_jll.get_libssh2_path() == LibSSH2_jll.libssh2_path
 end

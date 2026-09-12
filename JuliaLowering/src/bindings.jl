@@ -5,9 +5,9 @@ mutable struct BindingInfo
     const id::IdTag                 # Unique integer identifying this binding
     const name::String
     const kind::Symbol              # :local :global :argument :static_parameter
-    const node_id::Int              # ID of some K"BindingId" node in the syntax graph
+    const node_id::SyntaxTree
     const mod::Union{Nothing,Module} # Set when `kind === :global`
-    type::Union{Nothing,NodeId}      # Type, for bindings declared like x::T = 10
+    type::Union{Nothing,SyntaxTree}      # Type, for bindings declared like x::T = 10
     lambda_id::Int            # from scope resolution; 0 if unresolved
     is_const::Bool            # Constant, cannot be reassigned
     is_ssa::Bool              # Single assignment, defined before use
@@ -26,9 +26,24 @@ mutable struct BindingInfo
     is_used_undef::Bool
 end
 
-function BindingInfo(id::IdTag, name::AbstractString, kind::Symbol, node_id::Integer;
+"""
+Metadata about "entities" (variables, constants, etc) in the program. Each
+entity is associated to a unique integer id, the BindingId. A binding will be
+inferred for each *name* in the user's source program by symbolic analysis of
+the source.
+
+However, bindings can also be introduced programmatically during lowering or
+macro expansion: the primary key for bindings is the `BindingId` integer, not
+a name.
+"""
+struct Bindings
+    info::Vector{BindingInfo}
+end
+
+function BindingInfo(bindings::Bindings,
+                     name::AbstractString, kind::Symbol, node_id::SyntaxTree;
                      mod::Union{Nothing,Module} = nothing,
-                     type::Union{Nothing,NodeId} = nothing,
+                     type::Union{Nothing,SyntaxTree} = nothing,
                      lambda_id::Int = 0,
                      is_const::Bool = false,
                      is_ssa::Bool = false,
@@ -43,10 +58,14 @@ function BindingInfo(id::IdTag, name::AbstractString, kind::Symbol, node_id::Int
                      is_captured::Bool = false,
                      is_always_defined::Bool = is_ssa || kind === :argument,
                      is_used_undef::Bool = false)
-    BindingInfo(id, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
-                is_internal, is_ambiguous_local, unboxed, is_nospecialize,
-                is_read, is_called, is_assigned, is_assigned_once, is_captured,
-                is_always_defined, is_used_undef)
+    bid = next_binding_id(bindings)
+    b = BindingInfo(
+        bid, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
+        is_internal, is_ambiguous_local, unboxed, is_nospecialize,
+        is_read, is_called, is_assigned, is_assigned_once, is_captured,
+        is_always_defined, is_used_undef)
+    add_binding(bindings, b)
+    b
 end
 
 function Base.show(io::IO, binfo::BindingInfo)
@@ -73,20 +92,6 @@ function Base.show(io::IO, binfo::BindingInfo)
     print(io, ")")
 end
 
-"""
-Metadata about "entities" (variables, constants, etc) in the program. Each
-entity is associated to a unique integer id, the BindingId. A binding will be
-inferred for each *name* in the user's source program by symbolic analysis of
-the source.
-
-However, bindings can also be introduced programmatically during lowering or
-macro expansion: the primary key for bindings is the `BindingId` integer, not
-a name.
-"""
-struct Bindings
-    info::Vector{BindingInfo}
-end
-
 Bindings() = Bindings(Vector{BindingInfo}())
 
 next_binding_id(bindings::Bindings) = length(bindings.info) + 1
@@ -98,37 +103,33 @@ function add_binding(bindings::Bindings, binding)
     push!(bindings.info, binding)
 end
 
-function _binding_id(id::IdTag)
-    id
-end
-
-function _binding_id(ex::SyntaxTree)
-    @jl_assert kind(ex) == K"BindingId" ex
-    ex.var_id::IdTag
+function syntax_id(ex::SyntaxTree)
+    @jl_assert kind(ex) in KSet"BindingId SSAValue slot static_parameter label" ex
+    ex.value::IdTag
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo
-    bindings.info[_binding_id(x)]
+    id = x isa SyntaxTree ? syntax_id(x) : x
+    bindings.info[id]
 end
 
 function get_binding(ctx::AbstractLoweringContext, x)::BindingInfo
     get_binding(ctx.bindings::Bindings, x)
 end
 
-function _new_binding(ctx::AbstractLoweringContext, srcref::SyntaxTree,
+function _new_binding(bindings::Bindings, srcref::SyntaxTree,
                       name::AbstractString, kind::Symbol; kws...)
-    binding_id = next_binding_id(ctx.bindings)
     # A binding is only useful when it shows up in the tree, so create its tree
     # node eagerly and share it among uses (see `binding_ex`)
-    ex = @ast ctx srcref binding_id::K"BindingId"
-    b = BindingInfo(binding_id, name, kind, ex._id; kws...)
-    add_binding(ctx.bindings, b)
+    bid = next_binding_id(bindings)
+    ex = @ast _ srcref bid::K"BindingId"
+    b = BindingInfo(bindings, name, kind, ex; kws...)
     return b
 end
 
 # Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
-    binding_ex(ctx, _new_binding(ctx, srcref, name, :local;
+    binding_ex(ctx, _new_binding(ctx.bindings, srcref, name, :local;
                                  is_ssa=true, is_internal=true))
 end
 
@@ -136,8 +137,8 @@ end
 function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
                            kind=:local, kws...)
     @jl_assert kind === :local || kind === :argument srcref
-    nameref = newleaf(ctx, srcref, K"Identifier", name)
-    b = _new_binding(ctx, nameref, name, kind; is_internal=true, kws...)
+    nameref = newleaf(srcref, K"Identifier", name)
+    b = _new_binding(ctx.bindings, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
     if !isnothing(lbindings)
         init_lambda_binding(lbindings, b, false)
@@ -146,21 +147,17 @@ function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
 end
 
 function new_global_binding(ctx::AbstractLoweringContext, srcref, name, mod; kws...)
-    nameref = newleaf(ctx, srcref, K"Identifier", name)
+    nameref = newleaf(srcref, K"Identifier", name)
     binding_ex(ctx, _new_binding(
-        ctx, nameref, name, :global; is_internal=true, mod=mod, kws...))
+        ctx.bindings, nameref, name, :global; is_internal=true, mod=mod, kws...))
 end
 
 function binding_ex(ctx::AbstractLoweringContext, b::BindingInfo)
-    # Reconstruct the SyntaxTree for this binding. We keep only the node_id
-    # here, because that's got a concrete type. Whereas if we stored SyntaxTree
-    # that would contain the type of the graph used in the pass where the
-    # bindings were created and we'd need to call reparent(), etc.
-    SyntaxTree(syntax_graph(ctx), b.node_id)
+    b.node_id
 end
 binding_ex(ctx, id::IdTag) = binding_ex(ctx, get_binding(ctx, id))
 binding_type_ex(ctx::AbstractLoweringContext, b::BindingInfo) =
-    SyntaxTree(syntax_graph(ctx), b.type)
+    b.type
 
 # One lambda's variables
 struct LambdaBindings
@@ -179,9 +176,14 @@ struct LambdaBindings
 end
 
 LambdaBindings(self::IdTag = 0, scope_id::ScopeId = 0) =
-    LambdaBindings(self, scope_id, Dict{IdTag,LambdaBindings}())
+    LambdaBindings(self, scope_id, Dict{IdTag,Bool}())
 
 function init_lambda_binding(bindings::LambdaBindings, b::BindingInfo, capt::Bool)
     bindings.locals_capt[b.id] = capt
     b.lambda_id = bindings.scope_id
+end
+
+function lambda_bindings(st::SyntaxTree)
+    @jl_assert kind(st) === K"LambdaBindings" st
+    st.value::LambdaBindings
 end

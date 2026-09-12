@@ -10,7 +10,7 @@ function withlocales(f, newlocales)
         end
     end
     try
-        # change to each of given locales
+        # change to each of the given locales
         for lc in newlocales
             set = true
             for (cat, _) in locales

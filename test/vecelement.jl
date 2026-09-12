@@ -80,7 +80,7 @@ end
 end
 @test bar32414(-35.0) === (-35.0, ((VecElement(10.0), VecElement(20.0), VecElement(30.0), VecElement(40.0), VecElement(50.0), VecElement(60.0), VecElement(70.0), VecElement(80.0)), (-35.0, (1.0e6, 1.0e9))))
 
-# The following test mimic SIMD.jl
+# The following test mimics SIMD.jl
 const _llvmtypes = Dict{DataType, String}(
     Float64 => "double",
     Float32 => "float",

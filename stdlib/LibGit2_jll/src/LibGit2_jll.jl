@@ -56,6 +56,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libgit2_path() = libgit2_path
+
 function __init__()
     global libgit2_path = string(libgit2.path)
     global artifact_dir = dirname(Sys.BINDIR)

@@ -8,12 +8,12 @@ using Base, Core.IR
 
 import Base: show
 using Base: isexpr, prec_decl, show_unquoted, with_output_color
-using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, argextype, BasicBlock, block_for_inst,
-    CachedMethodTable, CFG, compute_basic_blocks, DebugInfoStream, Effects,
-    EMPTY_SPTYPES, getdebugidx, IncrementalCompact, InferenceResult, InferenceState,
-    InvalidIRError, IRCode, LimitedAccuracy, NativeInterpreter, scan_ssa_use!,
-    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst,
-    get_ci_mi, get_ci_abi
+using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, BasicBlock, CFG, CachedMethodTable,
+    DebugInfoStream, EMPTY_SPTYPES, Effects, IRCode, IncrementalCompact, InferenceResult,
+    InferenceState, InvalidIRError, LimitedAccuracy, NativeInterpreter, StmtRange,
+    Timings, VarState, argextype, block_for_inst, compute_basic_blocks, edge_debuginfo,
+    get_ci_abi, get_ci_mi, has_prev_debuginfo, prev_debuginfo, scan_ssa_use!,
+    singleton_type, source_location, sptypes_from_meth_instance, widenconst
 
 @nospecialize
 
@@ -48,6 +48,20 @@ end
 
 const inlined_apply_iterate_types = Union{Array,Memory,Tuple,NamedTuple,Core.SimpleVector}
 
+# There is no @enum at this level of bootstrapping yet, so we use plain constants instead.
+const SSAWarnTypeClass = UInt8
+const SSA_WARN_TYPE_STABLE = SSAWarnTypeClass(0)
+const SSA_WARN_TYPE_MILD = SSAWarnTypeClass(1)
+const SSA_WARN_TYPE_STRONG = SSAWarnTypeClass(2)
+
+function ssa_warn_type_class(io::IO, idx::Int)
+    levels = get(io, :ssa_warn_levels, nothing)
+    if levels isa AbstractVector{SSAWarnTypeClass} && isassigned(levels, idx)
+        return levels[idx]
+    end
+    return SSA_WARN_TYPE_STABLE
+end
+
 function builtin_call_has_dispatch(
     @nospecialize(f),
     args::Vector{Any},
@@ -76,16 +90,25 @@ function builtin_call_has_dispatch(
 end
 
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,CodeInfo,IncrementalCompact},
-                    sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool)
+                    sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool, color_warntype::Bool)
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
-        print(io, "%", idx_s, pad, "= ")
+        cls = ssa_warn_type_class(io, idx)
+        if color && color_warntype && cls === SSA_WARN_TYPE_STRONG
+            printstyled(io, "%", idx_s; color=:light_red, bold=true)
+        elseif color && color_warntype && cls === SSA_WARN_TYPE_MILD
+            printstyled(io, "%", idx_s; color=Base.warn_color(), bold=true)
+        else
+            print(io, "%", idx_s)
+        end
+        print(io, pad, "= ")
     else
         print(io, " "^(maxlength_idx + 4))
     end
     # TODO: `indent` is supposed to be the full width of the leader for correct alignment
     indent = 16
+    io = color_warntype ? io : Base.IOContext(io, :ssa_warn_levels => nothing)
     if !color && stmt isa PiNode
         # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
@@ -99,7 +122,6 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         ci = stmt.args[1]
         if ci isa Core.CodeInstance
             printstyled(io, "   invoke "; color = :light_black)
-            mi = get_ci_mi(ci)
             abi = get_ci_abi(ci)
         else
             printstyled(io, "dynamic invoke "; color = :yellow)
@@ -221,7 +243,7 @@ end
 """
     Compute line number annotations for an IRCode or CodeInfo.
 
-This functions compute three sets of annotations for each IR line. Take the following
+This function computes three sets of annotations for each IR line. Take the following
 example (taken from `@code_typed sin(1.0)`):
 
 ```
@@ -282,7 +304,6 @@ function compute_ir_line_annotations(code::Union{IRCode,CodeInfo})
     loc_annotations = String[]
     loc_methods = String[]
     loc_lineno = String[]
-    cur_group = 1
     last_lineno = 0
     last_stack = LineInfoNode[] # nb. only file, line, and method are populated in this
     last_printed_depth = 0
@@ -360,7 +381,7 @@ end
 Base.show(io::IO, code::Union{IRCode, IncrementalCompact}) = show_ir(io, code)
 
 # A line_info_preprinter for disabling line info printing
-lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
+lineinfo_disabled(::IO, _linestart::String, _idx::Int) = ""
 
 # utility function to extract the file name from a DebugInfo object
 function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
@@ -378,14 +399,18 @@ function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
 end
 
 # utility function to extract the first line number and file of a block of code
-function debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream})
-    linetable = debuginfo.linetable
-    while linetable !== nothing
-        debuginfo = linetable
-        linetable = debuginfo.linetable
+function debuginfo_firstline(di::DebugInfoStream)
+    if di.linetable isa DebugInfo
+        di = di.linetable
+        debuginfo_firstline(di)
+    else
+        # likely doesn't contain any usable provenance
+        debuginfo_file1(di), di.firstline
     end
-    codeloc = getdebugidx(debuginfo, 0)
-    return debuginfo_file1(debuginfo), codeloc[1]
+end
+function debuginfo_firstline(di::DebugInfo)
+    firstline = ccall(:jl_cdi_firstline_all, Int32, (Any,), di)
+    debuginfo_file1(di), firstline
 end
 
 struct LineInfoNode
@@ -394,30 +419,31 @@ struct LineInfoNode
     line::Int32
 end
 
-# utility function for converting a debuginfo object a particular pc to list of LineInfoNodes representing the inlining info at that pc for function `def`
+# utility function for converting a debuginfo object at a particular pc to a list of LineInfoNodes representing the inlining info at that pc for function `def`
 # which is either `nothing` (macro-expand), a module (top-level), a Method (unspecialized code) or a MethodInstance (specialized code)
 # Returns `false` if the line info should not be updated with this info because this
 # statement has no effect on the line numbers. The `scopes` will still be populated however
 # with as much information as was available about the inlining at that statement.
-function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, debuginfo, @nospecialize(def))
+function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, di, @nospecialize(def))
     doupdate = true
-    while true
-        debuginfo.def isa Symbol || (def = debuginfo.def)
-        codeloc = getdebugidx(debuginfo, pc)
-        line::Int = codeloc[1]
-        inl_to::Int = codeloc[2]
-        doupdate &= line != 0 || inl_to != 0 # disabled debug info--no update
-        if debuginfo.linetable === nothing || pc <= 0 || line < 0
-            line < 0 && (doupdate = false; line = 0) # broken debug info
-            push!(scopes, LineInfoNode(def, debuginfo_file1(debuginfo), Int32(line)))
+    while di !== nothing
+        di.def isa Symbol || (def = di.def)
+        if pc <= 0
+            # TODO: assert false
+            return false
+        elseif !has_prev_debuginfo(di, pc)
+            line = source_location(di, pc).line # TODO: column ignored here
+            (line <= 0) && (doupdate = false; line = 0) # broken debug info
+            push!(scopes, LineInfoNode(def, debuginfo_file1(di), Int32(line)))
         else
-            doupdate = append_scopes!(scopes, line, debuginfo.linetable::DebugInfo, def) && doupdate
+            di2, pc2 = prev_debuginfo(di, pc)
+            doupdate &= append_scopes!(scopes, pc2, di2, def)
         end
-        inl_to == 0 && return doupdate
         def = :var"macro expansion"
-        debuginfo = debuginfo.edges[inl_to]
-        pc::Int = codeloc[3]
+        di, pc = edge_debuginfo(di, pc)
+        doupdate |= di !== nothing
     end
+    return doupdate
 end
 
 # utility wrapper around `append_scopes!` that returns an empty list instead of false
@@ -459,7 +485,6 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
             #context_depth[] = 0
             nframes = length(DI)
             nctx::Int = 0
-            pop_skips = 0
             # compute the size of the matching prefix in the inlining information stack
             for i = 1:min(length(context), nframes)
                 CtxLine = context[i]
@@ -596,6 +621,7 @@ end
   printed as part of the IR or not
 - `bb_color`: color used for printing the basic block brackets on the left
 - `label_dynamic_calls`: whether to label calls as dynamic / builtin / intrinsic
+- `color_warntype`: whether to color the SSA value index based on the stability of its type
 """
 struct IRShowConfig
     line_info_preprinter
@@ -603,19 +629,22 @@ struct IRShowConfig
     should_print_stmt
     bb_color::Symbol
     label_dynamic_calls::Bool
+    color_warntype::Bool
 
     IRShowConfig(
         line_info_preprinter,
         line_info_postprinter=default_expr_type_printer;
         should_print_stmt=Returns(true),
         bb_color::Symbol=:light_black,
-        label_dynamic_calls=true
+        label_dynamic_calls=true,
+        color_warntype=false
     ) = new(
         line_info_preprinter,
         line_info_postprinter,
         should_print_stmt,
         bb_color,
-        label_dynamic_calls
+        label_dynamic_calls,
+        color_warntype
     )
 end
 
@@ -674,7 +703,7 @@ end
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false)
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
-                        sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls)
+                        sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls, config.color_warntype)
 end
 
 function _print_ir_indentation(io::IO, cfg::CFG, bb_idx::Int, max_bb_idx_size::Int, bb_color,
@@ -718,7 +747,7 @@ function _print_ir_new_node(io::IO, node, code, sptypes::Vector{VarState}, used:
     @assert new_node_inst !== UNDEF # we filtered these out earlier
     show_type = should_print_ssa_type(new_node_inst)
     with_output_color(:green, io) do io′
-        print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls)
+        print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls, false)
     end
 
     if new_node_type === UNDEF
@@ -733,7 +762,7 @@ end
 
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false,
-                      bb_color=:light_black, label_dynamic_calls::Bool=true)
+                      bb_color=:light_black, label_dynamic_calls::Bool=true, color_warntype::Bool=false)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -774,7 +803,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             stmt = statement_indices_to_labels(stmt, cfg)
         end
         show_type = type !== nothing && should_print_ssa_type(stmt)
-        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, true, show_type, label_dynamic_calls)
+        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, true, show_type, label_dynamic_calls, color_warntype)
         if type !== nothing # ignore types for pre-inference code
             if type === UNDEF
                 # This is an error, but can happen if passes don't update their type information
@@ -864,7 +893,7 @@ function inline_linfo_printer(code::Union{IRCode,CodeInfo})
     max_lineno_width = maximum(length, loc_lineno)
     max_method_width = maximum(length, loc_methods)
 
-    function (io::IO, indent::String, idx::Int)
+    function (io::IO, _indent::String, idx::Int)
         cols = (displaysize(io)::Tuple{Int,Int})[2]
 
         if idx == 0
@@ -965,6 +994,23 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(io, ir)
     finish_show_ir(io, cfg, config)
 end
 
+function warntype_type_class(@nospecialize(type))
+    if type isa Union && is_expected_union(type)
+        return SSA_WARN_TYPE_MILD
+    elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
+        return SSA_WARN_TYPE_STRONG
+    else
+        return SSA_WARN_TYPE_STABLE
+    end
+end
+
+function ssa_warntype_class(code::CodeInfo, idx::Int)
+    types = code.ssavaluetypes
+    types isa Vector || return SSA_WARN_TYPE_STABLE
+    isassigned(types, idx) || return SSA_WARN_TYPE_STABLE
+    return warntype_type_class(types[idx])
+end
+
 function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
@@ -973,7 +1019,12 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, c
     sptypes = if parent isa MethodInstance
         sptypes_from_meth_instance(parent)
     else EMPTY_SPTYPES end
-    let io = IOContext(io, :maxssaid=>length(ci.code))
+    ssa_warn_levels = fill(SSA_WARN_TYPE_STABLE, length(ci.code))
+    for idx in used
+        checkbounds(Bool, ssa_warn_levels, idx) || continue
+        ssa_warn_levels[idx] = ssa_warntype_class(ci, idx)
+    end
+    let io = IOContext(io, :maxssaid=>length(ci.code), :ssa_warn_levels=>ssa_warn_levels)
         show_ir_stmts(io, ci, 1:length(ci.code), config, sptypes, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
@@ -1067,7 +1118,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     finish_show_ir(io, uncompacted_cfg, config)
 end
 
-function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
+function effectbits_letter(effects::Effects, name::Symbol, suffix::Union{Char, String})
     ft = fieldtype(Effects, name)
     if ft === UInt8
         prefix = getfield(effects, name) === ALWAYS_TRUE ? '+' :
@@ -1098,6 +1149,8 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :consistent,  'c'); color=effectbits_color(e, :consistent))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :effect_free, 'e'); color=effectbits_color(e, :effect_free))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :reset_safe, "re"); color=effectbits_color(e, :reset_safe))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :nothrow,     'n'); color=effectbits_color(e, :nothrow))
     print(io, ',')
@@ -1177,7 +1230,7 @@ const __debuginfo = Dict{Symbol, Any}(
     # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
     :source => src -> statementidx_lineinfo_printer(src),
     # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
-    :none => src -> lineinfo_disabled,
+    :none => _src -> lineinfo_disabled,
     )
 const default_debuginfo = Ref{Symbol}(:none)
 debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
@@ -1187,7 +1240,7 @@ const __debuginfo = Dict{Symbol, Any}(
     :source => src -> statementidx_lineinfo_printer(src),
     :source_inline => src -> inline_linfo_printer(src),
     # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
-    :none => src -> lineinfo_disabled,
+    :none => _src -> lineinfo_disabled,
     )
 
 const debuginfo_modes = [:none, :source, :source_inline]

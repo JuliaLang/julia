@@ -233,10 +233,38 @@ end
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
     end
 
-    @testset ":noshift constructor" begin
-        @test SubString("", 0, 0, Val(:noshift)) == ""
-        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
-        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
+    @testset "raw_substring" begin
+        s = "abcdefgøø"
+        raw_substring = Base.raw_substring
+
+        @test raw_substring(s, 1, 11) == s
+        @test raw_substring(s, 1, 3) == "abc"
+        @test raw_substring(s, 3, 3) == "cde"
+        @test raw_substring(s, 5, 4) == String(codeunits(s)[5:8])
+        @test raw_substring(s, 11, 1) == String(codeunits(s)[11:11])
+        @test raw_substring(s, 1, 2) isa SubString{String}
+        @test raw_substring(raw_substring(s, 2, 8), 1, 3) isa SubString{String}
+
+        @test raw_substring(s, 1, 0) == ""
+        @test raw_substring(s, 11, 0) == ""
+        @test_throws BoundsError raw_substring(s, 0, 0)
+        @test_throws BoundsError raw_substring(s, 11, 2)
+        @test_throws BoundsError raw_substring(s, 3, -1)
+
+        @test_throws BoundsError raw_substring(s, 0, 2)
+        @test_throws BoundsError raw_substring(s, 2, 11)
+    end
+
+    # if Substring of SubString is explicitly requested by typing out the type,
+    # we CAN construct them
+    @testset "Explicit sub-substring" begin
+        s = "abcdefg"
+        ss = view(s, 2:6)
+        sss = SubString{SubString{String}}(ss, 2, 3)
+        @test sss isa SubString{SubString{String}}
+        @test sss == "cd"
+        sss = SubString{SubString{String}}(ss)
+        @test sss == ss
     end
 end
 
@@ -604,7 +632,7 @@ end
             @test isvalid(String, UInt8[byt]) == flg
         end
     end
-    # Check overlong lead bytes for 2-character sequences (false)
+    # Check overlong lead bytes for 2-byte sequences (false)
     for byt = 0xc0:0xc1
         @test isvalid(String, UInt8[byt,0x80]) == false
     end
@@ -759,6 +787,17 @@ end
             @test repeat(s, T(3)) === S
             @test repeat(S, T(3)) === S*S*S
         end
+    end
+    # Repetition byte counts must not wrap before allocation.
+    @test repeat("", typemax(Csize_t)) === ""
+    for c in ('α', '∀', '🍕')
+        s = string(c)
+        n = Csize_t(ncodeunits(c))
+        r = typemax(Csize_t) ÷ n + one(Csize_t)
+        @test_throws OutOfMemoryError repeat(c, r)
+        @test_throws OutOfMemoryError repeat(s, r)
+        @test_throws OutOfMemoryError repeat(SubString(s, 1), r)
+        @test_throws OutOfMemoryError repeat(GenericString(s), r)
     end
     # Issue #32160 (string allocation unsigned overflow)
     @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))
@@ -1243,6 +1282,9 @@ end
     let i=49248
         @test String(lazy"PR n°$i") == "PR n°49248"
     end
+
+    @test lazy"$(Float64(pi))"c == "3.14159" # :compact=>true
+    @test lazy"$(collect(1:1000))"c == repr(collect(1:1000), context=:limit=>true) # :limit=>true
 end
 
 @testset "String Effects" begin
@@ -1478,7 +1520,7 @@ end
         end
 
         b3 = first(table_row[3])
-        #Prove that all valid forth bytes return correct state
+        #Prove that all valid fourth bytes return correct state
         for b4 = table_row[4]
             @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state3,[b4],1,1)
         end
@@ -1504,6 +1546,18 @@ end
         @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    end
+    # transcode(String, ::Vector{UInt8}) must not empty the input (#28612)
+    let v = UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+        @test transcode(String, v) == "hello"
+        @test length(v) == 5
+        @test v == UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+    end
+    let v = UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+        sv = view(v, 1:5)
+        @test transcode(String, sv) == "hello"
+        @test length(sv) == 5
+        @test v == UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
     end
 end
 
@@ -1531,4 +1585,27 @@ end
 
     u = b"hello"
     @test eltype(u) === UInt8
+end
+
+@testset "codeunits dataids delegate to the wrapped string" begin
+    s = "Hello, world!"
+    cu = codeunits(s)
+    # dataids must not hit the `objectid` fallback (which content-hashes the
+    # whole wrapped string, making every aliasing-checked chunked `copyto!`
+    # quadratic in the string length); `String` memory is immutable, so
+    # `codeunits` alias no mutable memory
+    @test Base.dataids(cu) === Base.dataids(s) === ()
+    @test !Base.mightalias(cu, Vector{UInt8}(undef, 4))
+    @test !Base.mightalias(Vector{UInt8}(undef, 4), cu)
+    @test Base.unalias(Vector{UInt8}(undef, 4), cu) === cu
+    # copyto! correctness through the (formerly aliasing-checked) generic path
+    dest = zeros(UInt8, ncodeunits(s))
+    @test copyto!(dest, 1, cu, 1, ncodeunits(s)) == Vector{UInt8}(s)
+    dest2 = zeros(UInt8, 5)
+    @test copyto!(dest2, 2, cu, 8, 4) == UInt8[0x00; codeunits("worl");]
+    # SubString-backed CodeUnits delegate too
+    ss = SubString(s, 8, 12)
+    @test Base.dataids(codeunits(ss)) === ()
+    @test !Base.mightalias(dest, codeunits(ss))
+    @test copyto!(zeros(UInt8, 5), codeunits(ss)) == Vector{UInt8}(codeunits(ss))
 end

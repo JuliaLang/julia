@@ -2,7 +2,7 @@
 
 module CoreDocs
 
-import Core: @nospecialize, SimpleVector
+import Core: SimpleVector
 
 struct DocLinkedList
     doc::SimpleVector

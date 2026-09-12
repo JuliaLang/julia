@@ -172,7 +172,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slott
         end
         return (ci.ssavaluetypes::Vector{Any})[idx]
     end
-    isa(x, GlobalRef) && return abstract_eval_globalref_type(x, ci)
+    isa(x, GlobalRef) && return globalref_rt(x, ci)
     isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{Any})[x.id]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return types(ir)[new_to_regular(x, length(ir.stmts))]
@@ -218,7 +218,7 @@ so it needs a ϕ-node.
 Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
 and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
 potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
-subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
+subset of those backedges from a subtree rooted at `A` (outside the subtree rooted
 at `A`). Note however that this does not work the other way. Thus, the algorithm
 needs to make sure that we always visit `B` before `A`.
 

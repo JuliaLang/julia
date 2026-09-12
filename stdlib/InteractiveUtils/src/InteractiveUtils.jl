@@ -10,7 +10,7 @@ module InteractiveUtils
 Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
-    versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
+    versioninfo, subtypes, supertypes, @which, @methods, @edit, @less, @functionloc, @code_warntype,
     @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard,
     has_system_clipboard, @trace_compile, @trace_dispatch, @activate
 
@@ -171,7 +171,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
 
     if verbose
-        println(io, "  Memory: $(Sys.total_memory()/2^30) GiB ($(Sys.free_memory()/2^20) MiB free)")
+        println(io, "  Memory: $(Base.format_bytes(Sys.total_memory())) ($(Base.format_bytes(Sys.free_memory())) free)")
         try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')

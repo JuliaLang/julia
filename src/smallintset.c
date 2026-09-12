@@ -103,7 +103,7 @@ void smallintset_empty(const jl_genericmemory_t *a) JL_NOTSAFEPOINT
     memset(a->ptr, 0, a->length * elsize);
 }
 
-static jl_genericmemory_t *jl_alloc_int_1d(size_t np, size_t len)
+static jl_genericmemory_t *jl_alloc_int_1d(size_t np, size_t len) JL_CANSAFEPOINT
 {
     jl_value_t *ty;
     if (np < 0xFF)
@@ -174,8 +174,8 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     if (val + 1 >= jl_max_int(a)) {
         a = smallintset_rehash(a, hash, data, a->length, val + 1);
-        jl_atomic_store_release(pcache, a);
         if (parent) jl_gc_wb(parent, a);
+        jl_atomic_store_release(pcache, a);
     }
     while (1) {
         if (smallintset_insert_(a, hash(val, data), val + 1))
@@ -195,9 +195,50 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
         else
             newsz = sz << 2;
         a = smallintset_rehash(a, hash, data, newsz, 0);
-        jl_atomic_store_release(pcache, a);
         if (parent) jl_gc_wb(parent, a);
+        jl_atomic_store_release(pcache, a);
     }
+}
+
+// Support for insertion-ordered dictionaries backed by a Memory{Any} that stores
+// its `jl_smallintset` index inline at slot [0], followed by fixed-size entries
+// of `stride` slots each (entry `i` occupies slots `[1 + stride*i, 1 + stride*(i+1))`).
+// Entries are only appended (never removed), so the occupied entries are contiguous
+// and the free region is at the end. Reserve space for one more entry, growing
+// `*pcache` if needed (with release ordering and a write barrier on `parent`), and
+// return the new entry's index. The caller fills the entry's slots and then
+// publishes it with `jl_smallintset_insert` on the inline index at slot [0].
+size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, size_t stride)
+{
+    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
+    // scan back from the end for the append position (entries are contiguous)
+    size_t idx = a->length < 1 + stride ? 0 : (a->length - 1) / stride;
+    while (idx > 0 && jl_genericmemory_ptr_ref(a, 1 + stride * (idx - 1)) == NULL)
+        idx--;
+    size_t need = 1 + stride * (idx + 1);
+    if (need > a->length) {
+        size_t newlen = a->length < 8 ? 8 : (a->length * 3) >> 1;
+        if (newlen < need)
+            newlen = need;
+        jl_genericmemory_t *na = NULL;
+        JL_GC_PUSH2(&na, &a);
+        na = jl_alloc_memory_any(newlen);
+        if (a == (jl_genericmemory_t*)jl_an_empty_memory_any) {
+            jl_genericmemory_ptr_set(na, 0, (jl_value_t*)jl_an_empty_memory_any); // empty index
+        }
+        else {
+            for (size_t i = 0; i < a->length; i++) {
+                jl_value_t *v = jl_genericmemory_ptr_ref(a, i);
+                if (v != NULL)
+                    jl_genericmemory_ptr_set(na, i, v);
+            }
+        }
+        if (parent)
+            jl_gc_wb(parent, na);
+        jl_atomic_store_release(pcache, na);
+        JL_GC_POP();
+    }
+    return idx;
 }
 
 jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash hash, jl_value_t *data, size_t newsz, size_t np)

@@ -94,7 +94,8 @@ function ld()
         # From`x86_64-w64-mingw32-gcc -shared -Wl,--verbose`
         flavor = "gnu"
         m = Sys.ARCH == :x86_64 ? "i386pep" : "i386pe"
-        default_args = `-m $m -Bdynamic -e DllMainCRTStartup --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
+        entry = Sys.ARCH == :x86_64 ? "DllMainCRTStartup" : "_DllMainCRTStartup"
+        default_args = `-m $m -Bdynamic -e $entry --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
     elseif Sys.isapple()
         flavor = "darwin"
         arch = Sys.ARCH == :aarch64 ? :arm64 : Sys.ARCH
@@ -183,14 +184,16 @@ function link_image_cmd(path, out)
     crtbegin = String[]
     crtend = String[]
     @static if Sys.iswindows()
-        # From `x86_64-w64-mingw32-gcc -shared -Wl,--verbose`
-        # but without repeated libraries (lld auto-resolves circular library references)
+        # From `x86_64-w64-mingw32-gcc -shared -Wl,--verbose`.
         append!(LIBS,     String["-lopenlibm"])
-        append!(LIBS,     String["-lmingw32", "-lgcc_s", "-lgcc", "-lmoldname", "-lmingwex", "-lmsvcrt", "-lkernel32"])
+        # libmsvcrt-os.a contains MinGW CRT objects that can refer back to
+        # libmingw32.a/libmingwex.a; keep the selected CRT last.
+        append!(LIBS,     String["-lmingw32", "-lgcc_s", "-lgcc", "-lmoldname", "-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os", "-lkernel32"])
         append!(LIBS,     String["-lpthread", "-ladvapi32", "-lshell32", "-luser32"])
         append!(crtbegin, String[_find_static("dllcrt2.o"), _find_static("crtbegin.o")])
         append!(crtend,   String[_find_static("crtend.o")])
         isdebugbuild() && push!(LIBS, "-lssp")
+        append!(LIBS,     String["-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os"])
     elseif Sys.isapple()
         # From `clang -dynamiclib -Wl,-v`
         append!(LIBS,     String[_find_static("libclang_rt.osx.a"), _find_static("libSystem.tbd")])
