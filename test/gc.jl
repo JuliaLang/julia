@@ -56,6 +56,110 @@ function full_sweep_reasons_test()
     @test keys(reasons) == Set(Base.FULL_SWEEP_REASONS)
 end
 
+# run with `JULIA_TEST_FAILFAST=1 GC_STRESS=1 make test-revise-gc` for a more-exhaustive test config
+function run_gc_aba_sweep_crash_oracle()
+    stress = get(ENV, "GC_STRESS", "") == "1"
+    smoke_nthreads = Sys.WORD_SIZE == 32 ? min(max(Sys.CPU_THREADS, 2), 4) : min(max(Sys.CPU_THREADS, 2), 8)
+    smoke_ngcthreads = Sys.WORD_SIZE == 32 ? 1 : min(max(Sys.CPU_THREADS ÷ 2, 1), 4)
+    smoke_iters = Sys.WORD_SIZE == 32 ? 10_000 : 50_000
+    nthreads = parse(Int, get(ENV, "JULIA_GC_ABA_SWEEP_THREADS",
+        string(stress ? min(max(4 * Sys.CPU_THREADS, 8), 64) : smoke_nthreads)))
+    ngcthreads = parse(Int, get(ENV, "JULIA_GC_ABA_SWEEP_GCTHREADS",
+        string(stress ? min(max(Sys.CPU_THREADS, 2), 8) : smoke_ngcthreads)))
+    iters = something(tryparse(Int, get(ENV, "JULIA_GC_ABA_SWEEP_ITERS", "")),
+        stress ? 24_000_000 : smoke_iters)
+    heap_hint = get(ENV, "JULIA_GC_ABA_HEAP_HINT", "32M")
+    timeout_s = something(tryparse(Float64, get(ENV, "JULIA_GC_ABA_SWEEP_TIMEOUT", "")),
+        stress ? 300.0 : 60.0)
+    attempts = something(tryparse(Int, get(ENV, "JULIA_GC_ABA_SWEEP_ATTEMPTS", "")),
+        stress ? 20 : 1)
+    seed = 0x9e3779b9
+
+    prog = """
+        sizefor(t) = (4, 6, 8, 12, 16, 24, 32, 48)[(t & 7) + 1]
+
+        @noinline function hammer(seed, iters, wsize)
+            r = seed
+            acc = 0
+            a = Vector{Int}(undef, wsize)
+            b = Vector{Int}(undef, wsize)
+            for i in 1:iters
+                r = xor(r, r << 13); r = xor(r, r >> 7); r = xor(r, r << 17)
+                c = Vector{Int}(undef, wsize)
+                @inbounds c[1] = i
+                @inbounds c[wsize] = r
+                acc += @inbounds a[1] + b[wsize]
+                a = b
+                b = c
+            end
+            return acc
+        end
+
+        function main()
+            tasks = Vector{Task}(undef, Threads.nthreads())
+            s = 0
+            for t in 1:Threads.nthreads()
+                tasks[t] = Threads.@spawn hammer(reinterpret(Int, UInt($(seed))) * t + 1, $iters, sizefor(t))
+            end
+            for t in tasks
+                s += fetch(t)
+            end
+            println("GC_ABA_DONE iterations=$iters checksum=\$(s)")
+            return s
+        end
+
+        main()
+        exit(0)
+    """
+
+    cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no -t $nthreads --gcthreads=$ngcthreads,1 --heap-size-hint=$heap_hint -e $prog`
+    rerun_cmd = "JULIA_GC_ABA_SWEEP_THREADS=$nthreads JULIA_GC_ABA_SWEEP_GCTHREADS=$ngcthreads JULIA_GC_ABA_SWEEP_ITERS=$iters JULIA_GC_ABA_HEAP_HINT=$heap_hint JULIA_GC_ABA_SWEEP_TIMEOUT=$timeout_s JULIA_GC_ABA_SWEEP_ATTEMPTS=$attempts make test-revise-gc"
+
+    function run_with_timeout(cmd, timeout_s)
+        output_file = tempname()
+        proc = open(output_file, "w") do output
+            run(pipeline(ignorestatus(cmd); stdout=output, stderr=output), wait=false)
+        end
+        deadline = time() + timeout_s
+        timed_out = false
+        while !process_exited(proc)
+            if time() >= deadline
+                timed_out = true
+                kill(proc)
+                break
+            end
+            sleep(0.1)
+        end
+        wait(proc)
+        output = read(output_file, String)
+        rm(output_file; force=true)
+        return (; ok=!timed_out && success(proc), timed_out, output)
+    end
+
+    result = nothing
+    attempt = 0
+    for i in 1:attempts
+        attempt = i
+        result = run_with_timeout(cmd, timeout_s)
+        result.ok || break
+    end
+    done_match = match(r"GC_ABA_DONE iterations=(\d+)", result.output)
+    iterations_before_failure = done_match === nothing ? "unknown (configured iters=$iters)" : done_match.captures[1]
+    cpu_model = isempty(Sys.cpu_info()) ? "unknown" : Sys.cpu_info()[1].model
+    kernel = try readchomp(`uname -srvm`) catch; "$(Sys.KERNEL) $(Sys.MACHINE)" end
+    runtime_versions = "julia=$(VERSION) git=$(Base.GIT_VERSION_INFO.commit_short)"
+    library_versions = "llvm=$(isdefined(Base, :libllvm_version) ? Base.libllvm_version : "unknown")"
+    scheduler_settings = "julia_threads=$nthreads gc_threads=$ngcthreads,1 cpu_threads=$(Sys.CPU_THREADS)"
+    gc_settings = "heap_size_hint=$heap_hint gcthreads=$ngcthreads,1"
+    timing_thresholds = "timeout_s=$timeout_s attempts=$attempts"
+    input_size = "iters=$iters size_classes=(4,6,8,12,16,24,32,48)"
+
+    if !result.ok
+        @error "GC concurrent sweep reuse crash oracle failed" cmd rerun_cmd nthreads ngcthreads attempt attempts cpu_model gpu_model="unknown" kernel runtime_versions library_versions gc_settings scheduler_settings timing_thresholds input_size random_seed=string(seed, base=16) iterations_before_failure timed_out=result.timed_out output=result.output
+    end
+    @test result.ok
+end
+
 # !!! note:
 #     Since we run our tests on 32bit OS as well we confine ourselves
 #     to parameters that allocate about 512MB of objects. Max RSS is lower
@@ -82,6 +186,10 @@ end
 
 @testset "Full GC reasons" begin
     full_sweep_reasons_test()
+end
+
+@testset "GC concurrent sweep reuse stress smoke" begin
+    run_gc_aba_sweep_crash_oracle()
 end
 
 @testset "GC Always Full" begin
