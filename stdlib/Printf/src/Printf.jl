@@ -381,7 +381,7 @@ toint(x) = x
 toint(x::Rational) = Integer(x)
 
 fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
-    fmt(buf, pos, arg, floatfmt(spec))
+    fmt(buf, pos, iszero(round(arg)) ? zero(arg) : arg, floatfmt(spec))
 
 function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
     leftalign, plus, space, zero, hash, width, prec =
