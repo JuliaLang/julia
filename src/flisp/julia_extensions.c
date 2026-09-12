@@ -151,6 +151,8 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
         cat == UTF8PROC_CATEGORY_NO ||
         // primes (single, double, triple, their reverses, and quadruple)
         (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057) ||
+        // fraction slash
+        wc == 0x2044 ||
         // "Rightwards Arrow with Lower Hook"
         wc == 0x1f8b2)
         return 1;
