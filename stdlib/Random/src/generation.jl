@@ -422,7 +422,7 @@ function SamplerBigInt(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition=
     m = last(r) - first(r)
     m.size < 0 && empty_collection_error()
     nlimbs = Int(m.size)
-    hm = nlimbs == 0 ? Limb(0) : GC.@preserve m unsafe_load(m.d, nlimbs)
+    hm = nlimbs == 0 ? Limb(0) : (@inbounds m.d[nlimbs])
     highsp = Sampler(RNG, Limb(0):hm, N)
     nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
     return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, highsp)
@@ -438,28 +438,26 @@ function rand!(rng::AbstractRNG, x::BigInt, sp::SamplerBigInt)
     nlimbs = sp.nlimbs
     nlimbs == 0 && return MPZ.set!(x, sp.a)
     MPZ.realloc2!(x, sp.nlimbsmax*8*sizeof(Limb))
-    @assert x.alloc >= nlimbs
+    @assert length(x.d) >= nlimbs
     # we randomize x ∈ [0, m] with rejection sampling:
     # 1. the first nlimbs-1 limbs of x are uniformly randomized
     # 2. the high limb hx of x is sampled from 0:hm where hm is the
     #    high limb of m
     # We repeat 1. and 2. until x <= m
-    hm = GC.@preserve sp unsafe_load(sp.m.d, nlimbs)
-    GC.@preserve x begin
-        limbs = UnsafeView(x.d, nlimbs-1)
+    hm = @inbounds sp.m.d[nlimbs]
+    xd = x.d
+    GC.@preserve xd begin
+        # deliberately a view of only nlimbs-1 limbs: the high limb is drawn
+        # separately below, and the buffer is sized for nlimbsmax
+        limbs = UnsafeView(pointer(xd), nlimbs-1)
         while true
             rand!(rng, limbs)
             hx = limbs[nlimbs] = rand(rng, sp.highsp)
             hx < hm && break # avoid calling mpn_cmp most of the time
             MPZ.mpn_cmp(x, sp.m, nlimbs) <= 0 && break
         end
-        # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
-        while nlimbs > 0
-            limbs[nlimbs] != 0 && break
-            nlimbs -= 1
-        end
-        x.size = nlimbs
     end
+    MPZ._finish!(x, xd, nlimbs, false)   # drops high zero limbs
     MPZ.add!(x, sp.a)
 end
 
