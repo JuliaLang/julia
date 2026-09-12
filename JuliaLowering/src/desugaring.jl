@@ -487,33 +487,6 @@ end
 #-------------------------------------------------------------------------------
 # Expand comparison chains
 
-function expand_scalar_compare_chain(ctx, srcref, terms, i)
-    comparisons = nothing
-    while i + 2 <= length(terms)
-        lhs = terms[i]
-        op = terms[i+1]
-        rhs = terms[i+2]
-        if kind(op) == K"."
-            break
-        end
-        comp = @ast ctx op [K"call"
-            op
-            lhs
-            rhs
-        ]
-        if isnothing(comparisons)
-            comparisons = comp
-        else
-            comparisons = @ast ctx srcref [K"&&"
-                comparisons
-                comp
-            ]
-        end
-        i += 2
-    end
-    (comparisons, i)
-end
-
 # Expanding comparison chains: (comparison a op b op c ...)
 #
 # We use && to combine pairs of adjacent scalar comparisons and .& to combine
@@ -529,18 +502,39 @@ function expand_compare_chain(ctx, ex)
     terms = children(ex)
     @jl_assert numchildren(ex) >= 3 ex
     @jl_assert isodd(numchildren(ex)) ex
+
     i = 1
+
+    # create ssa variables for each side in the comparison chain, skip operators
+    sym_and_expr = map(enumerate(terms)) do (i, term)
+        if isodd(i)
+            (ssavar(ctx, term, "hs_sym"), term)
+        else
+            (nothing, term)
+        end
+    end
+
+    # assign the evaluation of the rhs to the symbols
+    assignments = @ast ctx ex [K"block" map(sym_and_expr[1:2:end]) do (sym, expr)
+        @ast ctx ex [K"=" sym expr]
+    end...]
+
     comparisons = nothing
+
     # Combine any number of dotted comparisons
     while i + 2 <= length(terms)
-        if kind(terms[i+1]) != K"."
-            (comp, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
+        lhs = sym_and_expr[i][1]
+        op = terms[i+1]
+        rhs = sym_and_expr[i+2][1]
+
+        comp = if kind(op) != K"."
+            @ast ctx op [K"call"
+                op
+                lhs
+                rhs
+            ]
         else
-            lhs = terms[i]
-            op = terms[i+1]
-            rhs = terms[i+2]
-            i += 2
-            comp = @ast ctx op [K"dotcall"
+            @ast ctx op [K"dotcall"
                 op[1]
                 lhs
                 rhs
@@ -548,6 +542,11 @@ function expand_compare_chain(ctx, ex)
         end
         if isnothing(comparisons)
             comparisons = comp
+        elseif kind(op) != K"."
+            comparisons = @ast ctx ex [K"&&"
+                comparisons
+                comp
+            ]
         else
             comparisons = @ast ctx ex [K"dotcall"
                 "&"::K"top"
@@ -563,8 +562,9 @@ function expand_compare_chain(ctx, ex)
                 comp
             ]
         end
+        i += 2
     end
-    comparisons
+    @ast ctx ex [K"block" assignments comparisons]
 end
 
 #-------------------------------------------------------------------------------
