@@ -109,9 +109,67 @@ function _round_step(x, step, r::RoundingMode)
     return y
 end
 
+# Whether `T(base)^d` is exactly representable as type `T` (`d >= 0`).
+# When it is not, `_round_invstep`/`_round_step` lose precision and yield an
+# off-by-one-ulp result (issue #46596), so `_round_digits` falls back to a
+# higher-precision path. The default `true` keeps existing behavior for types
+# we do not handle here.
+_basepow_exact(::Type, base, d::Integer) = true
+function _basepow_exact(::Type{T}, base::Integer, d::Integer) where {T<:IEEEFloat}
+    d < 0 && return false
+    d == 0 && return true
+    base <= 0 && return false
+    base == 1 && return true
+    if base == 10
+        T === Float64 && return d <= 22
+        T === Float32 && return d <= 10
+        T === Float16 && return d <= 4
+    end
+    tz = trailing_zeros(base)
+    m = base >> tz
+    m == 1 && return true  # base is a power of 2
+    # log2(m) >= floor(log2(m)) >= 1 here; bail before allocating a BigInt
+    # if even this lower bound on bits of m^d exceeds the mantissa width.
+    log2m_floor = 8*sizeof(m) - leading_zeros(m) - 1
+    log2m_floor * d >= precision(T) && return false
+    return big(m)^d < (big(1) << precision(T))
+end
+
+# Number of bits to exactly represent `base^d` as an integer (`d >= 0`).
+_bitsizebasepow(base::Integer, d::Integer) =
+    d == 0 ? 1 : d * (8*sizeof(base) - leading_zeros(unsigned(abs(base)))) + 1
+
+# Higher-precision fallback for `_round_invstep`/`_round_step` used when
+# `T(base)^d` is not exactly representable in `T` (issue #46596).
+# `inv=true` mirrors `_round_invstep` (rounding to multiples of `1/base^d`);
+# `inv=false` mirrors `_round_step` (rounding to multiples of `base^d`).
+function _round_precise(x::T, r::RoundingMode, base, d::Integer, inv::Bool) where {T<:IEEEFloat}
+    p = max(precision(T) + 16, _bitsizebasepow(base, d) + 16)
+    y = setprecision(BigFloat, p) do
+        bx = BigFloat(x)
+        bp = BigFloat(big(base)^d)
+        yb = inv ? round(bx * bp, r) / bp : round(bx / bp, r) * bp
+        T(yb)
+    end
+    if !isfinite(y)
+        inv && return x
+        if x > 0
+            return (r == RoundUp ? oftype(x, Inf) : zero(x))
+        elseif x < 0
+            return (r == RoundDown ? -oftype(x, Inf) : -zero(x))
+        else
+            return x
+        end
+    end
+    return y
+end
+
 function _round_digits(x, r::RoundingMode, digits::Integer, base)
     fx = float(x)
     if digits >= 0
+        if !_basepow_exact(typeof(fx), base, digits)
+            return _round_precise(fx, r, base, digits, true)
+        end
         invstep = oftype(fx, base)^digits
         if isfinite(invstep)
             return _round_invstep(fx, invstep, r)
@@ -120,6 +178,9 @@ function _round_digits(x, r::RoundingMode, digits::Integer, base)
             return _round_invstepsqrt(fx, invstepsqrt, r)
         end
     else
+        if !_basepow_exact(typeof(fx), base, -digits)
+            return _round_precise(fx, r, base, -digits, false)
+        end
         step = oftype(fx, base)^-digits
         return _round_step(fx, step, r)
     end
