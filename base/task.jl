@@ -743,11 +743,13 @@ end
 
 function showerror(io::IO, cr::CancellationRequest)
     print(io, "CancellationRequest: ")
-    if cr === CANCEL_REQUEST_SAFE
+    is_terminate_request(cr) && print(io, "Process Termination, ")
+    sev = severity(cr)
+    if sev == CANCEL_REQUEST_SAFE.request
         print(io, "Safe Cancellation (CANCEL_REQUEST_SAFE)")
-    elseif cr === CANCEL_REQUEST_ABANDON_EXTERNAL
+    elseif sev == CANCEL_REQUEST_ABANDON_EXTERNAL.request
         print(io, "Abandonment of External Resources (CANCEL_REQUEST_ABANDON_EXTERNAL)")
-    elseif cr === CANCEL_REQUEST_ABANDON_ALL
+    elseif sev == CANCEL_REQUEST_ABANDON_ALL.request
         print(io, "Task Abandonment (CANCEL_REQUEST_ABANDON_ALL)")
     else
         print(io, "Unknown ($(cr.request))")

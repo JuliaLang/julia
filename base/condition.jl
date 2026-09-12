@@ -334,7 +334,7 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     # public kwarg method restores the lock-held contract.
     if src !== nothing && cancel_value
         st = @atomic :acquire src.state
-        if st >= max(min_severity, 0x01)
+        if st & SEVERITY_MASK >= max(min_severity, 0x01)
             return CancellationRequest(st)
         end
     elseif src !== nothing && min_severity == 0x00 && iscancelled(src)
@@ -378,7 +378,8 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
         withdraw!(ws, w, WAKE_FIRED)
         if cancel_value
             st = @atomic :acquire src.state
-            st >= max(min_severity, 0x01) || error("park fired without a cancelled source")
+            st & SEVERITY_MASK >= max(min_severity, 0x01) ||
+                error("park fired without a cancelled source")
             return CancellationRequest(st)
         end
         unlock(c.lock)
