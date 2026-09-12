@@ -844,7 +844,63 @@ JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow(void)
     throw_internal(ct, NULL);
 }
 
-JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
+JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow_other(
+    jl_value_t *e JL_MAYBE_UNROOTED,
+    size_t drop_above, size_t drop_below
+    // Where, as *inputs*:
+    //   "above" = top    of callstack = innermost scope = latest   call.
+    //   "below" = bottom of callstack = outermost scope = earliest call.
+    // With index 0 meaning bottom call and <backtrace size> meaning top call.
+    //
+    // But also where, since backtraces are captured upside down,
+    // we will internally transform (=complement) the indices to mean instead:
+    //    `a`bove = left = index 0.
+    //    `b`elow = right = backtrace size.
+    //
+    // Then, in the following situation (illustrated with transformed indices)..
+    //
+    //                                drop
+    //    (size, exception)     "below"   "above"
+    //                |            |         |        (current exception)
+    //      bt_1..    v bt_last..  v         v           v
+    //     |-------[s,e]----------->xxxxxxxxx<--------[s,e]   (remove 10/30)
+    //     ^            ^          ^         ^
+    //    raw         data        `b`       `a`
+    //                (0)    (included)    (excluded)
+    //                       (=dropped)       (=kept)
+    // .. end up there:
+    //
+    // ==> |-------[s,e]-----------<--------[s,e]||||||||||
+    //                                           (deinitialized)
+    // And in the following situation..
+    //
+    //     |-------[s,e]xxxxx<--------->xxxxxxxxxxxxxx[s,e]   (keep 10/30)
+    //                       ^         ^
+    //                       a         b
+    // .. end up there:
+    //
+    // ==> |-------[s,e]<---------[s,e]||||||||||||||||||||
+    //
+    //
+    // Limit case: drop everything:
+    //
+    //     |-------[s,e]>xxxxxxxxxxxxxxxxxxxxxxxxxxxxx[s,e]
+    //                  b=0                           a=s
+    //
+    // Limit case: keep everything:
+    //
+    //     |-------[s,e]<-----------------------------[s,e]
+    //                  a=0                           b=s
+    //
+    // Limit case: invalid input (meaningless):
+    //
+    //     |-------[s,e]------------X-----------------[s,e]
+    //                             a=b
+    //     The chosen (equal) input value is used to convey information then.
+    //     For instance "above" = "below" = 0 is a shorthand for 'drop nothing'.
+    //
+    // The rightmost 's' is updated and the rightmost 'e' overridden by input.
+  )
 {
     // TODO: Should uses of `rethrow(exc)` be replaced with a normal throw, now
     // that exception stacks allow root cause analysis?
@@ -852,8 +908,39 @@ JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow_other(jl_value_t *e JL_MAY
     jl_excstack_t *excstack = ct->excstack;
     if (!excstack || excstack->top == 0)
         jl_error("rethrow(exc) not allowed outside a catch block");
-    // overwrite exception on top of stack. see jl_excstack_exception
-    jl_excstack_raw(excstack)[excstack->top-1].jlvalue = e;
+
+    size_t top = excstack->top;
+    jl_bt_element_t *raw = jl_excstack_raw(excstack);
+    jl_bt_element_t *data = jl_excstack_bt_data(excstack, top);
+    size_t size = jl_excstack_bt_size(excstack, top);
+
+    if ((drop_above > size) || (drop_below > size))
+      jl_error("invalid index: cannot drop frames higher than the call stack");
+
+    if (drop_above == drop_below) {
+      if (drop_below == 0) { // Special value indicating default: drop nothing.
+        drop_above = size;
+      } else {
+        jl_error("invalid indices: frame cannot be both kept and dropped");
+      }
+    }
+
+    // Complement indices to match the above illustrations.
+    size_t a = size - drop_above; // The first item kept (from the left).
+    size_t b = size - drop_below; // The first item dropped (from the left).
+
+    // Move items kept above down, overwriting items dropped below.
+    size_t moved = ((a < b) ? b : size) - a;
+    if (moved && a)
+      memmove(data, data + a, sizeof(jl_bt_element_t) * moved);
+
+    // Update exception stack top.
+    size_t stayed = (a < b) ? 0 : b; // Items stayed still on the left.
+    size_t new_size = stayed + moved;
+    (data + new_size)->uintptr = new_size;
+    (data + new_size + 1)->jlvalue = e;
+    excstack->top = (data - raw) + new_size + 2;
+
     JL_GC_PROMISE_ROOTED(e);
     throw_internal(ct, NULL);
 }
