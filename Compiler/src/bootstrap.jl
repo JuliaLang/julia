@@ -27,7 +27,9 @@ function bootstrap!()
         optimize_tt = Tuple{typeof(optimize), NativeInterpreter, OptimizationState{NativeInterpreter}, InferenceResult}
         typeinf_ext_tt = Tuple{typeof(typeinf_ext), NativeInterpreter, MethodInstance, UInt8}
         typeinf_tt = Tuple{typeof(typeinf), NativeInterpreter, InferenceState{NativeInterpreter}}
-        typeinf_edge_tt = Tuple{typeof(typeinf_edge), NativeInterpreter, Method, Any, SimpleVector, InferenceState{NativeInterpreter}, Bool, Bool}
+        typeinf_edge_tt = Tuple{
+            typeof(typeinf_edge), NativeInterpreter, Method, Any, SimpleVector,
+            InferenceState{NativeInterpreter}, Bool, Bool, Bool}
         fs = Any[
             # we first create caches for the optimizer, because they contain many loop constructions
             # and they're better to not run in interpreter even during bootstrapping

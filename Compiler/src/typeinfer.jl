@@ -1060,17 +1060,12 @@ function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
     nothing
 end
 
-# Walk through `mi`'s upstream call chain, starting at `parent`. If a parent
-# frame matching `mi` is encountered, then there is a cycle in the call graph
-# (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
-# we "resolve" it by merging the call chain, which entails updating each intermediary
-# frame's `cycleid` field. Finally, we return `mi`'s pre-existing frame.
-# If no cycles are found, `nothing` is returned instead.
-function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+# Find `mi` in the contiguous inference portion of `parent`'s upstream call chain.
+function find_call_cycle(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
     # TODO (#48913) implement a proper recursion handling for irinterp:
     # This works most of the time currently just because the irinterp code doesn't get used much with
     # `@assume_effects`, so it never sees a cycle normally, but that may not be a sustainable solution.
-    parent isa InferenceState || return false
+    parent isa InferenceState || return nothing
     frames = parent.callstack
     uncached = false
     for frameid = reverse(1:length(frames))
@@ -1078,24 +1073,33 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
         isa(frame, InferenceState) || break
         uncached |= !is_cached(frame) # ensure we never add a (globally) uncached frame to a cycle
         if is_same_frame(interp, mi, frame)
-            if uncached
-                # our attempt to speculate into a constant call lead to an undesired self-cycle
-                # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
-                # with the limited flag and abort (set return type to Any) now
-                poison_callstack!(parent, frame)
-                return true
-            end
-            merge_call_chain!(interp, parent, frame)
-            return frame
+            return frame, uncached
         end
     end
-    return false
+    return nothing
+end
+
+# Resolve a cycle by merging its call chain and return `mi`'s pre-existing frame.
+# Return `true` for an unresolvable cycle and `false` when no cycle was found.
+function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+    cycle = find_call_cycle(interp, mi, parent)
+    cycle === nothing && return false
+    frame, uncached = cycle
+    if uncached
+        # our attempt to speculate into a constant call lead to an undesired self-cycle
+        # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
+        # with the limited flag and abort (set return type to Any) now
+        poison_callstack!(parent::InferenceState, frame)
+        return true
+    end
+    merge_call_chain!(interp, parent::InferenceState, frame)
+    return frame
 end
 
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
 # return cached result of regular inference
-function return_cached_result(interp::AbstractInterpreter, method::Method, codeinst::CodeInstance, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+function return_cached_result(interp::AbstractInterpreter, method::Method, codeinst::CodeInstance, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     rt = cached_return_type(codeinst)
     exct = codeinst.exctype
     effects = ipo_effects(codeinst)
@@ -1118,13 +1122,14 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
     return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst,
-        edgecycle, edgelimited, local_result))
+        edgecycle, edgelimited, edgerecursed, local_result))
 end
 
 function return_cached_result(interp::AbstractInterpreter, method::Method,
                               local_result::LocalInferenceResult,
                               codeinst::Union{Nothing,CodeInstance},
-                              caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+                              caller::AbsIntState, edgecycle::Bool, edgelimited::Bool,
+                              edgerecursed::Bool)
     inf_result = local_result.result
     rt = inf_result.result
     exct = inf_result.exc_result
@@ -1137,24 +1142,24 @@ function return_cached_result(interp::AbstractInterpreter, method::Method,
         caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
     end
     return Future(MethodCallResult(interp, caller, method, rt, exct, effects,
-        codeinst, edgecycle, edgelimited, local_result))
+        codeinst, edgecycle, edgelimited, edgerecursed, local_result))
 end
 
 function lookup_cached_edge(interp::AbstractInterpreter, method::Method,
                             mi::MethodInstance, caller::AbsIntState, force_inline::Bool,
-                            edgecycle::Bool, edgelimited::Bool)
+                            edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     local_result = lookup_local_inference_result(interp, mi)
     codeinst = get(code_cache(interp), mi, nothing)
     if !(codeinst isa CodeInstance)
         local_result === nothing && return nothing, nothing
         return return_cached_result(interp, method, local_result, nothing, caller,
-            edgecycle, edgelimited), nothing
+            edgecycle, edgelimited, edgerecursed), nothing
     end
     @assert codeinst.def === mi "MethodInstance for cached edge does not match"
 
     if local_result !== nothing
         return return_cached_result(interp, method, local_result, codeinst, caller,
-            edgecycle, edgelimited), nothing
+            edgecycle, edgelimited, edgerecursed), nothing
     end
 
     inferred = @atomic :monotonic codeinst.inferred
@@ -1164,17 +1169,17 @@ function lookup_cached_edge(interp::AbstractInterpreter, method::Method,
         src = ci_get_source(interp, codeinst, inferred)
         src === nothing && return nothing, codeinst
         return return_cached_result(interp, method, codeinst, src, caller,
-            edgecycle, edgelimited), nothing
+            edgecycle, edgelimited, edgerecursed), nothing
     end
     return return_cached_result(interp, method, codeinst, nothing, caller,
-        edgecycle, edgelimited), nothing
+        edgecycle, edgelimited, edgerecursed), nothing
 end
 
 
 function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,
                           @nospecialize(rt), @nospecialize(exct), effects::Effects,
                           edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
-                          call_result::Union{Nothing,InferredCallResult} = nothing;
+                          edgerecursed::Bool, call_result::Union{Nothing,InferredCallResult} = nothing;
                           force_edgecycle::Bool = true, needs_mi_edge::Bool = false)
     if force_edgecycle && edge === nothing && call_result === nothing
         edgecycle = edgelimited = true
@@ -1190,12 +1195,7 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
         effects = Effects(effects; terminates=true)
     elseif edgecycle
         # Some sort of recursion was detected.
-        edge_mi = if edge !== nothing
-            edge.def
-        elseif call_result isa LocalInferenceResult
-            call_result.result.linfo
-        end
-        if edge_mi !== nothing && !edgelimited && !is_edge_recursed(edge_mi, sv)
+        if (edge !== nothing || call_result isa LocalInferenceResult) && !edgelimited && !edgerecursed
             # no `MethodInstance` cycles -- don't taint :terminate
         else
             # we cannot guarantee that the call will terminate
@@ -1231,7 +1231,7 @@ end
 
 function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, result::InferenceResult,
                                     method::Method, edge_ci::Union{Nothing,CodeInstance},
-                                    edgecycle::Bool, edgelimited::Bool)
+                                    edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mresult = Future{MethodCallResult}()
     push!(caller.tasks, function get_infer_result(interp, caller)
         update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
@@ -1280,7 +1280,7 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
         # A missing target here is deliberate; preserve the cycle/limiting decision made
         # by `abstract_call_method` instead of inferring a new cycle from target absence.
         mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-            edge, edgecycle, edgelimited, call_result;
+            edge, edgecycle, edgelimited, edgerecursed, call_result;
             force_edgecycle=false, needs_mi_edge)
         return true
     end)
@@ -1288,16 +1288,22 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
 end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
-function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mi = specialize_method(method, atype, sparams)
     cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     force_inline = is_stmt_inline(get_curr_ssaflag(caller))
     edge_ci = nothing
     cached, missing_source_edge = lookup_cached_edge(interp, method, mi, caller,
-        force_inline, edgecycle, edgelimited)
+        force_inline, edgecycle, edgelimited, edgerecursed)
     if cached !== nothing
         return cached
     elseif missing_source_edge !== nothing
+        # Reuse a sourceless result only when `mi` is already active in this
+        # interpreter's inference cycle; otherwise local inference may recover source.
+        if edgerecursed && find_call_cycle(interp, mi, caller) !== nothing
+            return return_cached_result(interp, method, missing_source_edge, nothing, caller,
+                edgecycle, edgelimited, edgerecursed)
+        end
         # A globally published executable target exists, but its source was discarded.
         # Re-infer only the source/facts and certify that local work with a local proof.
         cache_mode = CACHE_MODE_LOCAL
@@ -1305,9 +1311,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     end
     if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
     end
-    if !is_cached(caller) && frame_parent(caller) === nothing
+    if !edgerecursed && !edgelimited
+        # the callstack walk proved there is no cycle to resolve, as long as
+        # `atype` was not coarsened to an on-stack specialization after that walk
+        frame = false
+    elseif !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
         # (if we asked resolve_call_cycle!, it might instead detect that there is a cycle that it can't merge)
         frame = false
@@ -1321,7 +1331,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             ci_from_engine = engine_reserve(interp, mi)
             caller.time_paused += (_time_ns() - reserve_start)
             cached, missing_source_edge = lookup_cached_edge(interp, method, mi, caller,
-                force_inline, edgecycle, edgelimited)
+                force_inline, edgecycle, edgelimited, edgerecursed)
             if cached !== nothing
                 engine_reject(interp, ci_from_engine)
                 return cached
@@ -1348,16 +1358,16 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if ci_from_engine !== nothing
                 engine_reject(interp, ci_from_engine)
             end
-            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
         end
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
         # while splitting off the rest of the work for this caller into a separate workq thunk
-        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited)
+        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited, edgerecursed)
     elseif frame === true
         # unresolvable cycle
         add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
@@ -1373,7 +1383,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         update_valid_age!(caller, get_inference_world(interp), proof_worlds(edge))
     end
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-        edge, edgecycle, edgelimited;
+        edge, edgecycle, edgelimited, edgerecursed;
         force_edgecycle=false, needs_mi_edge=edge === nothing))
 end
 

@@ -679,7 +679,7 @@ function abstract_call_method(interp::AbstractInterpreter,
     # look through the parents list to see if there's a call to the same method
     # and from the same method.
     # Returns the topmost occurrence of that repeated edge.
-    edgecycle = edgelimited = false
+    edgecycle = edgelimited = edgerecursed = false
     topmost = nothing
 
     for sv′ in AbsIntStackUnwind(sv)
@@ -687,9 +687,9 @@ function abstract_call_method(interp::AbstractInterpreter,
         if method === infmi.def
             if infmi.specTypes::Type == sig::Type
                 # avoid widening when detecting self-recursion
-                # TODO: merge call cycle and return right away
                 topmost = nothing
                 edgecycle = true
+                edgerecursed = true
                 break
             end
             topmost === nothing || continue
@@ -796,7 +796,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         #     sig = ?
     end
 
-    return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited)
+    return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited, edgerecursed)
 end
 
 function edge_matches_sv(interp::I, frame::AbsIntState,
@@ -867,14 +867,6 @@ function matches_sv(parent::AbsIntState, sv::AbsIntState)
     return (frame_instance(parent).def === frame_instance(sv).def &&
             method_for_inference_limit_heuristics(sv) === method_for_inference_limit_heuristics(parent))
 end
-
-function is_edge_recursed(edge::MethodInstance, caller::AbsIntState)
-    return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
-        return edge === frame_instance(sv)
-    end
-end
-is_edge_recursed(edge::CodeInstance, caller::AbsIntState) =
-    is_edge_recursed(edge.def, caller)
 
 function is_method_recursed(method::Method, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
