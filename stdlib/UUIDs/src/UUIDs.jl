@@ -22,6 +22,8 @@ Inspects the given UUID and returns its version
 
 # Examples
 ```jldoctest
+julia> using UUIDs
+
 julia> uuid_version(uuid4())
 4
 ```
@@ -53,7 +55,7 @@ detail that may change in the future.
 
 # Examples
 ```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
-julia> using Random
+julia> using Random, UUIDs
 
 julia> rng = MersenneTwister(1234);
 
@@ -105,7 +107,7 @@ detail that may change in the future.
 
 # Examples
 ```jldoctest
-julia> using Random
+julia> using Random, UUIDs
 
 julia> rng = Xoshiro(123);
 
@@ -131,7 +133,7 @@ as specified by [RFC 4122](https://tools.ietf.org/html/rfc4122).
 
 # Examples
 ```jldoctest
-julia> using Random
+julia> using Random, UUIDs
 
 julia> rng = Xoshiro(123);
 
@@ -178,7 +180,7 @@ detail that may change in the future.
 
 # Examples
 ```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
-julia> using Random
+julia> using Random, UUIDs
 
 julia> rng = Xoshiro(123);
 
