@@ -19,6 +19,28 @@
 
 #include "julia_fasttls.h"
 #include "libsupport.h"
+
+#ifdef JL_LIBRARY_STATIC
+// In the static build the public `jl_*` names are aliases of the `ijl_*`
+// definitions. The assembler drops an equate to a symbol the translation unit
+// does not define, so on ELF and COFF the aliases are emitted in every unit
+// and take effect in the defining one. Mach-O makes them indirect symbols,
+// which the linker resolves, so there they are emitted once (static_exports.c).
+#if defined(_OS_DARWIN_) || (defined(_OS_WINDOWS_) && defined(_CPU_X86_))
+#define JL_ASM_SYM(name) "_" name
+#else
+#define JL_ASM_SYM(name) name
+#endif
+#define JL_STATIC_ALIAS(name) \
+    __asm__(".globl " JL_ASM_SYM(#name) "\n.set " JL_ASM_SYM(#name) ", " JL_ASM_SYM("i" #name));
+#if defined(JL_LIBRARY_EXPORTS_INTERNAL) && !defined(_OS_DARWIN_)
+#include "jl_exported_funcs.inc"
+JL_RUNTIME_EXPORTED_FUNCS(JL_STATIC_ALIAS)
+#ifdef _OS_WINDOWS_
+JL_RUNTIME_EXPORTED_FUNCS_WIN(JL_STATIC_ALIAS)
+#endif
+#endif
+#endif
 #include <stdint.h>
 #include <string.h>
 
@@ -2406,6 +2428,8 @@ JL_DLLEXPORT void jl_init(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
                                           const char *image_path) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_init_with_image_handle(void *handle) JL_CANSAFEPOINT_ENTER;
+// Initialize Julia from a statically linked runtime + system image
+JL_DLLEXPORT void jl_init_static(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_initialized(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_atexit_hook(int status) JL_CANSAFEPOINT_LEAVE; // also should be JL_NOTSAFEPOINT_ENTER
