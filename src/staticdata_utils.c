@@ -918,6 +918,9 @@ static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 }
 
 extern _Atomic(int) allow_new_worlds;
+// `world == 0` means the image's world history was grafted and every object
+// already carries its original (translated) creation world, which activation
+// preserves.
 static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(internal);
@@ -926,21 +929,24 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         jl_value_t *obj = jl_array_ptr_ref(internal, i);
         if (jl_typetagis(obj, jl_typemap_entry_type)) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)obj;
-            assert(jl_atomic_load_relaxed(&entry->min_world) == ~(size_t)0);
+            assert((jl_atomic_load_relaxed(&entry->min_world) == ~(size_t)0) == (world != 0));
             assert(jl_atomic_load_relaxed(&entry->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
-            jl_atomic_store_release(&entry->min_world, world);
+            if (world)
+                jl_atomic_store_release(&entry->min_world, world);
             jl_atomic_store_release(&entry->max_world, ~(size_t)0);
         }
         else if (jl_is_method(obj)) {
             jl_method_t *m = (jl_method_t*)obj;
-            assert(jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0);
-            jl_atomic_store_release(&m->primary_world, world);
+            assert((jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0) == (world != 0));
+            if (world)
+                jl_atomic_store_release(&m->primary_world, world);
         }
         else if (jl_is_code_instance(obj)) {
             jl_code_instance_t *ci = (jl_code_instance_t*)obj;
-            assert(jl_atomic_load_relaxed(&ci->min_world) == ~(size_t)0);
+            assert((jl_atomic_load_relaxed(&ci->min_world) == ~(size_t)0) == (world != 0));
             assert(jl_atomic_load_relaxed(&ci->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
-            jl_atomic_store_relaxed(&ci->min_world, world);
+            if (world)
+                jl_atomic_store_relaxed(&ci->min_world, world);
             // n.b. ci->max_world is not updated until edges are verified
         }
         else {

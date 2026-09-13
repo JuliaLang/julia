@@ -4707,6 +4707,7 @@ void post_boot_hooks(void)
     jl_typeapp_type = (jl_datatype_t*)core("TypeApp");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
+    jl_worldtoken_type = (jl_datatype_t*)core("WorldToken");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 

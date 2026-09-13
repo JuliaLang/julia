@@ -138,8 +138,8 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     jl_value_t *result = NULL;
     if (jl_is_code_instance(c)) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)c;
-        assert(jl_atomic_load_relaxed(&codeinst->min_world) <= jl_current_task->world_age &&
-               jl_current_task->world_age <= jl_atomic_load_relaxed(&codeinst->max_world));
+        assert(jl_world_in_range(jl_current_task->world_age, jl_atomic_load_relaxed(&codeinst->min_world),
+                                 jl_atomic_load_relaxed(&codeinst->max_world)));
         jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
         if (!invoke) {
             jl_compile_codeinst(codeinst);
