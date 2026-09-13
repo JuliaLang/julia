@@ -1643,6 +1643,12 @@ static int has_universal_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
     return env != NULL && jl_has_bound_typevars(x, env);
 }
 
+static int has_env_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    return jl_has_free_typevars(x) &&
+        (has_universal_typevar(x, e) || has_existential_typevar(x, e));
+}
+
 // Helper for the hoisted union-split of a `∀` variable's upper bound in
 // `subtype_unionall` below.
 // Test whether every occurrence of `var` in `t` is covariant, where covariant
@@ -1707,7 +1713,7 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
     if (vb->intvalued && lb == (jl_value_t*)jl_any_type)
         return (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
     if (!vb->occurs_inv && lb != jl_bottom_type) {
-        if (is_leaf_bound(lb)) {
+        if (is_leaf_bound(lb) && !has_env_typevar(lb, e)) {
             jl_value_t *marker = eq_pinned_envout_marker(u, vb, lb, new_tvar, constrained);
             if (marker)
                 return marker;
@@ -1738,7 +1744,7 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
     if (lb == vb->ub || lb != jl_bottom_type) {
         // TODO (lb != jl_bottom_type): for now return the least solution, which is what
         // method parameters expect.
-        if (vb->tainted_inner || has_universal_typevar(lb, e))
+        if (vb->tainted_inner || has_env_typevar(lb, e))
             return wrap_tvar_env(lb, constrained);
         jl_value_t *marker = eq_pinned_envout_marker(u, vb, lb, new_tvar, constrained);
         if (marker)
@@ -1754,16 +1760,78 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
     return wrap_tvar_env(*new_tvar, constrained);
 }
 
+static jl_value_t *resolve_envout_bound_sequential(jl_value_t *lb, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    if (!jl_has_free_typevars(lb))
+        return lb;
+    jl_value_t *value = NULL;
+    jl_tvar_t *var = NULL;
+    JL_GC_PUSH3(&lb, &value, &var);
+    for (jl_varbinding_t *v = e->vars; v; v = v->prev) {
+        var = v->var;
+        if (!v->existential || !(v->occurs_inv || cov_count(v) || v->lb == v->ub) ||
+            !jl_has_typevar(lb, var))
+            continue;
+        value = jl_substitute_var_nothrow(lb, var, v->lb, 2);
+        if (value != NULL)
+            lb = value;
+    }
+    JL_GC_POP();
+    return lb;
+}
+
+static jl_value_t *resolve_envout_bound(jl_value_t *lb, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    if (e->vars == NULL || e->vars->prev == NULL)
+        return resolve_envout_bound_sequential(lb, e);
+    size_t n = 0;
+    for (jl_varbinding_t *v = e->vars; v; v = v->prev)
+        if (v->existential && (v->occurs_inv || cov_count(v) || v->lb == v->ub))
+            n++;
+    if (n == 0)
+        return lb;
+    jl_value_t **env;
+    JL_GC_PUSHARGS(env, 2 * n);
+    size_t i = n;
+    for (jl_varbinding_t *v = e->vars; v; v = v->prev) {
+        if (!v->existential || !(v->occurs_inv || cov_count(v) || v->lb == v->ub))
+            continue;
+        i--;
+        env[2 * i] = (jl_value_t*)v->var;
+        env[2 * i + 1] = v->lb;
+    }
+    // Resolve matching bounds outermost first, then substitute them together.
+    // Closed replacements avoid repeatedly normalizing unions of sibling vars.
+    jl_value_t *value = NULL;
+    for (i = 0; i < n; i++) {
+        if (!jl_has_free_typevars(env[2 * i + 1]))
+            continue;
+        value = jl_instantiate_type_with_nothrow(env[2 * i + 1], env, i);
+        if (value == NULL || jl_has_free_typevars(value))
+            goto fallback;
+        env[2 * i + 1] = value;
+    }
+    value = jl_instantiate_type_with_nothrow(lb, env, n);
+    if (value != NULL) {
+        JL_GC_POP();
+        return value;
+    }
+fallback:
+    JL_GC_POP();
+    // Preserve the ordered pass for unresolved bounds and failed instantiations.
+    return resolve_envout_bound_sequential(lb, e);
+}
+
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     u = unalias_unionall(u, e);
-    jl_value_t *new_tvar = NULL;
+    jl_value_t *new_tvar = NULL, *widened_lb = NULL;
     jl_varbinding_t vb;
     memset(&vb, 0, sizeof(vb));
     vb.existential = R;
     vb.depth0 = e->invdepth;
     vb.prev = e->vars;
-    JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
+    JL_GC_PUSH6(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar, &widened_lb);
     if (jl_has_typevar(t, u->var))
         u = jl_rename_unionall(u);
     int body_occurs_inv = var_occurs_invariant(u->body, u->var);
@@ -1805,7 +1873,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // diagonal constraints, but not invariant matches. This is only a local
     // view for checks and envout; keep `vb.lb` structurally precise.
     int widen_lb = !vb.occurs_inv && (diagonal || (vb.occurs_cov == 1 && vb.cov_diag == 0));
-    jl_value_t *widened_lb = widen_lb ? widen_Type_if_concrete(vb.lb, e, NULL, e->intersection) : vb.lb;
+    widened_lb = widen_lb ? widen_Type_if_concrete(vb.lb, e, NULL, e->intersection) : vb.lb;
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
         jl_value_t *concrete_lb = diagonal ? widened_lb : vb.lb;
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
@@ -1915,7 +1983,24 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 
     // fill variable values into `envout` up to `envsz`
     if (R && ans && e->envidx < e->envsz) {
-        jl_value_t *lb = widened_lb;
+        jl_value_t *lb = vb.lb;
+        JL_GC_PUSH1(&lb);
+        if ((vb.occurs_inv || cov_count(&vb)) && jl_has_free_typevars(lb)) {
+            lb = resolve_envout_bound(lb, e);
+            if (lb != vb.lb && !jl_has_free_typevars(lb) && !jl_has_free_typevars(vb.ub) &&
+                !jl_subtype(lb, vb.ub))
+                lb = vb.lb;
+            // An invariant occurrence pins the value from both sides. Its
+            // upper bound can resolve a lower bound that still refers to an
+            // unbound sibling, or cannot be instantiated with that sibling's
+            // matching bound (e.g. a parameter with a stricter declared bound).
+            if (vb.occurs_inv && has_existential_typevar(lb, e) && !has_env_typevar(vb.ub, e))
+                lb = vb.ub;
+        }
+        if (lb == vb.lb)
+            lb = widened_lb;
+        else if (widen_lb)
+            lb = widen_Type_if_concrete(lb, e, NULL, e->intersection);
         // A var bound only through another variable's declared bounds (BOUND_PROXY)
         // need not be pinned by every call: matching `Type{<:Tuple{Vararg{E}}}`
         // against `Type{S} where S<:NInt` reaches `E` through `S`'s bound, but the
@@ -1965,7 +2050,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         }
         else
             e->envout[e->envidx] = val;
-        // TODO: substitute the value (if any) of this variable into previous envout entries
+        JL_GC_POP();
     }
 
     JL_GC_POP();

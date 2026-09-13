@@ -1003,6 +1003,7 @@ JL_DLLEXPORT int jl_types_struct_equiv(jl_value_t *a, jl_value_t *b) JL_NOTSAFEP
 // specificity comparison assuming !(a <: b) and !(b <: a)
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n) JL_CANSAFEPOINT;
+jl_value_t *jl_instantiate_type_with_nothrow(jl_value_t *t, jl_value_t **env, size_t n) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals) JL_CANSAFEPOINT;
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val) JL_CANSAFEPOINT;
 jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow) JL_CANSAFEPOINT;
