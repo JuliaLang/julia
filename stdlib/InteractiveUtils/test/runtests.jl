@@ -1098,6 +1098,30 @@ const _interactiveutils_some_var_ = 0
 
 @test InteractiveUtils.varloc(@__MODULE__, :_interactiveutils_some_var_) == (@__FILE__, var_line)
 
+@testset "code_llvm and code_warntype run the compiler in the typeinf world" begin
+    # Methods with broad signatures invalidate compiler code that normal inference never
+    # notices, because it runs in the frozen typeinf world. `code_llvm`, `code_native` and
+    # `code_warntype` used to run `typeinf_code` in the current world instead, so the first
+    # call after such a definition recompiled the invalidated compiler.
+    script = """
+        using InteractiveUtils
+        struct Displacement <: Integer; val::Int; end
+        Base.convert(::Type{Int64}, x::Displacement) = x.val
+        Base.Int64(x::Displacement) = x.val
+        struct NotReal; val; end
+        Base.isless(x, y::NotReal) = isless(x, y.val)
+        code_llvm(devnull, sin, (Float64,))
+        code_native(devnull, sin, (Float64,))
+        code_warntype(devnull, sin, (Float64,))
+        """
+    trace = mktemp() do path, io
+        run(pipeline(`$(Base.julia_cmd()) --startup-file=no --trace-compile=$path -e $script`, stderr=devnull))
+        read(path, String)
+    end
+    recompiled = filter(l -> occursin("# recompile", l) && occursin("Base.Compiler.", l), split(trace, '\n'))
+    @test isempty(recompiled)
+end
+
 @testset "world argument for varinfo and subtypes" begin
     # varinfo: a non-const binding added after the recorded world should not
     # appear when querying that older world (its partition does not yet exist
