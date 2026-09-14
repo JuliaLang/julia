@@ -241,6 +241,8 @@ function ExplicitEnv(envpath::String)
         extensions_expanded[pkg] = exts_expanded
     end
 
+    fixup_stdlib_deps!(deps_expanded, weakdeps_expanded, extensions_expanded, names, lookup_strategy)
+
     # Everything that does not yet have a lookup_strategy is missing from the manifest
     for (_, uuid) in project_deps
         get!(lookup_strategy, uuid, missing)
@@ -295,6 +297,67 @@ function ExplicitEnv(envpath::String)
                        project_extensions, workspace_deps,
                        deps_expanded, weakdeps_expanded, extensions_expanded,
                        names, lookup_strategy, #=prefs, local_prefs=#)
+end
+
+# A manifest resolved by a different Julia version can record stale information for
+# stdlibs: a dependency or extension the stdlib gained later, a dependency that is not in
+# the manifest at all, or a git-tree-sha1 from when the package was not a stdlib yet.
+# Code loading tolerates this by falling back to the stdlib's own Project.toml (see
+# `Base.identify_stdlib_project_dep` and `Base.insert_extension_triggers`), so the
+# dependency graph must include those edges too, otherwise a missing dependency is never
+# precompiled before the stdlib that needs it and the strict precompile worker fails.
+function fixup_stdlib_deps!(deps::Dict{UUID, Vector{UUID}}, weakdeps::Dict{UUID, Vector{UUID}},
+                            extensions::Dict{UUID, Dict{String, Vector{UUID}}}, names::Dict{UUID, String},
+                            lookup_strategy::Dict{UUID, Union{SHA1, String, Nothing, Missing}})
+    stdlib_names = Set(readdir(Sys.STDLIB))
+    stack = collect(keys(lookup_strategy))
+    while !isempty(stack)
+        uuid = pop!(stack)
+        name = names[uuid]
+        # same check as `Base.is_stdlib`, but keeping the parsed Project.toml
+        name in stdlib_names || continue
+        project_file = Base.locate_project_file(joinpath(Sys.STDLIB, name))
+        project_file isa String || continue
+        project_d = parsed_toml(project_file)
+        project_uuid = get(project_d, "uuid", nothing)::Union{String, Nothing}
+        (project_uuid !== nothing && UUID(project_uuid) == uuid) || continue
+        project_deps = get(Dict{String, Any}, project_d, "deps")::Dict{String, Any}
+        project_weakdeps = get(Dict{String, Any}, project_d, "weakdeps")::Dict{String, Any}
+        project_extensions = get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
+        pkg_deps = get!(Vector{UUID}, deps, uuid)
+        for (dep_name, _dep_uuid) in project_deps
+            dep_uuid = UUID(_dep_uuid::String)
+            dep_uuid in pkg_deps && continue
+            push!(pkg_deps, dep_uuid)
+            if !haskey(lookup_strategy, dep_uuid)
+                # not in the manifest at all, so it is loaded as a stdlib
+                names[dep_uuid] = dep_name
+                lookup_strategy[dep_uuid] = nothing
+                push!(stack, dep_uuid)
+            end
+        end
+        pkg_weakdeps = get!(Vector{UUID}, weakdeps, uuid)
+        for (dep_name, _dep_uuid) in project_weakdeps
+            dep_uuid = UUID(_dep_uuid::String)
+            dep_uuid in pkg_weakdeps && continue
+            push!(pkg_weakdeps, dep_uuid)
+            get!(names, dep_uuid, dep_name)
+        end
+        pkg_extensions = get!(Dict{String, Vector{UUID}}, extensions, uuid)
+        for (ext, triggers) in project_extensions
+            haskey(pkg_extensions, ext) && continue
+            triggers = triggers isa String ? [triggers] : triggers::Vector{String}
+            trigger_uuids = UUID[]
+            for trigger in triggers
+                _trigger_uuid = get(project_weakdeps, trigger, get(project_deps, trigger, nothing))::Union{String, Nothing}
+                _trigger_uuid === nothing && break
+                push!(trigger_uuids, UUID(_trigger_uuid))
+            end
+            length(trigger_uuids) == length(triggers) || continue
+            pkg_extensions[ext] = trigger_uuids
+        end
+    end
+    return deps
 end
 
 ## PROGRESS BAR
