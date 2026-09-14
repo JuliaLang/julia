@@ -650,23 +650,6 @@ static void remove_features(std::string &features, const char *const *names) JL_
     features = std::move(out);
 }
 
-// The cpufeatures tables can be generated from an older LLVM than the one we
-// link against, which may have dropped some of the features they list. LLVM
-// warns on stderr about every unknown feature whenever it creates a target,
-// so leave those features out. Keep the feature bits intact, as with BF16.
-static void remove_unknown_llvm_features(std::string &features) JL_NOTSAFEPOINT
-{
-    static const char *const names[] = {
-#if JL_LLVM_VERSION >= 230000
-        "amx-tf32",             // x86
-        "experimental-zvqdotq", // riscv64
-        "hcx",                  // aarch64 (privileged, so only in the disassembler target)
-#endif
-        nullptr
-    };
-    remove_features(features, names);
-}
-
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 // LLVM selects vcvtneps2bf16 for f32-to-bf16 conversions despite the
 // instruction unconditionally flushing subnormal inputs. Until LLVM provides
@@ -695,7 +678,6 @@ jl_llvm_target_t jl_get_llvm_target(const char *cpu_target, bool imaging)
     init_jit_targets(cpu_target, imaging);
     auto &spec = jit_targets[0];
     disable_native_bf16_codegen(spec.cpu_features);
-    remove_unknown_llvm_features(spec.cpu_features);
     CF_DEBUG("[cpufeatures] jl_get_llvm_target: cpu='%s' features='%s'\n",
              spec.cpu_name.c_str(), spec.cpu_features.c_str());
     return {spec.cpu_name.c_str(), spec.cpu_features.c_str()};
@@ -715,7 +697,6 @@ jl_llvm_target_t jl_get_llvm_disasm_target(void)
                 features += tp::feature_table[i].name;
             }
         }
-        remove_unknown_llvm_features(features);
         return features;
     }();
     return {"generic", features.c_str()};
@@ -745,7 +726,6 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
         jl_target_spec_t &ele = result.specs[i];
         ele.cpu_name = strdup(s.cpu_name.c_str());
         disable_native_bf16_codegen(s.cpu_features);
-        remove_unknown_llvm_features(s.cpu_features);
         ele.cpu_features = strdup(s.cpu_features.c_str());
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
