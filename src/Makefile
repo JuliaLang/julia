@@ -151,6 +151,10 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
 LLVM_CFLAGS := $(shell $(LLVM_CONFIG_HOST) --cflags)
+ifeq ($(USEGCC),1)
+# GCC 9 warns about enum bitfields in LLVM 23 headers without a warning option.
+LLVM_CXXFLAGS := $(patsubst -I%,-isystem%,$(LLVM_CXXFLAGS))
+endif
 
 ifeq ($(OS)_$(BINARY),WINNT_32)
 LLVM_CXXFLAGS += -I$(SRCDIR)/support/win32-clang-ABI-bug
