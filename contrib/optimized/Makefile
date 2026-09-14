@@ -200,7 +200,8 @@ PROFILE_ARTIFACTS += $(CONTRIB_DIR_REL)/$(notdir $(BOLT_PROFILE_DIR))/*.merged.f
 endif
 
 # The whole flow, in one invocation. Every step below is reachable on its own
-# too, e.g. to collect extra profile data between stages.
+# too, e.g. to collect extra profile data between stages. The stages announce
+# themselves with a line that buildkite renders as a collapsible log section.
 ifeq ($(USE_BOLT),1)
 all: bolt
 else
@@ -214,6 +215,7 @@ $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 # built from source; everything else is downloaded.
 stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
+	@echo "--- Stage 0: toolchain"
 	# The toolchain links against zstd, which macOS does not provide.
 	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-zstd
 ifeq ($(USE_BOLT),1)
@@ -232,6 +234,7 @@ stage1: STAGE_CXXFLAGS:=$(PGO_GENERATE_FLAGS) $(PGO_COUNTER_FLAGS)
 stage1: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_GENERATE_FLAGS)
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
+	@echo "--- Stage 1: instrumented build"
 	# Building the dependencies runs instrumented build tools, e.g. llvm-tblgen,
 	# which share code with libLLVM but not Julia's workload. Keep their
 	# profiles out of the profile directory.
@@ -268,6 +271,7 @@ else
 stage2: stage0
 endif
 stage2: | $(STAGE2_BUILD)
+	@echo "--- Stage 2: optimized build"
 	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
 	touch $@
 
@@ -284,6 +288,7 @@ bolt-originals: stage2
 # as the final build uses -no-huge-pages
 # We reset the mtime of the files to prevent make from rebuilding targets depending on them.
 bolt-instrument: bolt-originals
+	@echo "--- BOLT: instrument"
 	mkdir -p $(BOLT_PROFILE_DIR)
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
@@ -297,6 +302,7 @@ bolt-instrument: bolt-originals
 # Build the rest of Julia against the instrumented libraries: the system image
 # and the stdlib package images are the BOLT training workload.
 bolt-train: bolt-instrument
+	@echo "--- BOLT: training build"
 	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry
 	# --emit-relocs, or the later BOLT rewrite of it fails.
 	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS)
@@ -316,6 +322,7 @@ bolt-merge: bolt-train
 # That flag saves less than 1 MiB for libjulia-internal so oh well.
 # We reset the mtime of the files to prevent make from rebuilding targets depending on them.
 bolt: bolt-merge
+	@echo "--- BOLT: rewrite the libraries"
 	internal=$$(readlink $(STAGE2_BUILD)/usr/lib/libjulia-internal.so); \
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
