@@ -14,6 +14,9 @@ config.substitutions.append(('%{shlibext}', '.dylib' if platform.system() == 'Da
     platform.system() == 'Windows' else '.so'))
 
 config.environment['HOME'] = "/tmp"
+# Always compile instead of reusing native code from the object cache in the
+# depot under HOME, which is shared with earlier runs and other builds.
+config.environment['JULIA_OBJCACHE'] = "0"
 
 if platform.machine() == "x86_64":
     config.available_features.add('x86_64')
