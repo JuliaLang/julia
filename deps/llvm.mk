@@ -206,6 +206,11 @@ LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 ifeq ($(OS),Darwin)
 # Explicitly use the default for -mmacosx-version-min=10.9 and later
 LLVM_CMAKE += -DLLVM_ENABLE_LIBCXX=ON
+# LLVM archives its static libraries with Xcode's libtool, which cannot index
+# LTO bitcode from a different LLVM; allow using e.g. llvm-libtool-darwin.
+ifneq ($(LLVM_LIBTOOL),)
+LLVM_CMAKE += -DCMAKE_LIBTOOL="$(LLVM_LIBTOOL)"
+endif
 endif
 
 ifeq ($(BUILD_LLVM_CLANG),0)

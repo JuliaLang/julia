@@ -97,7 +97,7 @@ stage0: | $(STAGE0_BUILD)
 	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-BOLT
 	# Turn [cd]tors into init/fini_array sections in libclang_rt, since lld
 	# doesn't do that, and otherwise the profile constructor is not executed
-	find $< -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
+	find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
 	touch $@
 
 $(STAGE1_BUILD): stage0
