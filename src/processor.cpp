@@ -626,6 +626,7 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
     return load_sysimg_target(image, match_pkgimg_target, NULL);
 }
 
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 // Remove the named features, whether enabled or disabled, from an LLVM
 // feature string. `names` is terminated by a null pointer.
 static void remove_features(std::string &features, const char *const *names) JL_NOTSAFEPOINT
@@ -650,7 +651,6 @@ static void remove_features(std::string &features, const char *const *names) JL_
     features = std::move(out);
 }
 
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 // LLVM selects vcvtneps2bf16 for f32-to-bf16 conversions despite the
 // instruction unconditionally flushing subnormal inputs. Until LLVM provides
 // a narrower workaround (llvm/llvm-project#221052), disable the feature groups
