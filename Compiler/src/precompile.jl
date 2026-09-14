@@ -341,6 +341,21 @@ function enqueue_specialization!(all::Bool, worklist, mi::MethodInstance)
     return true
 end
 
+# Sort key for the compilation order: file, line, name. Numeric only, since
+# `string` and `String` are unavailable here and a Symbol's id hashes its text.
+symbol_order(s::Symbol) = ccall(:jl_object_id, UInt, (Any,), s)
+
+function compilation_order_key(@nospecialize item)
+    if isa(item, Core.MethodInstance)
+        def = item.def
+        if isa(def, Method)
+            return (0, symbol_order(def.file), Int(def.line), symbol_order(def.name))
+        end
+        return (1, UInt(0), 0, UInt(0))
+    end
+    return (2, UInt(0), 0, UInt(0))
+end
+
 # Main unified compilation and emission function
 function compile_and_emit_native(worlds::Vector{UInt},
                                  trim_mode::UInt8,
@@ -428,6 +443,15 @@ function compile_and_emit_native(worlds::Vector{UInt},
                 push!(tocompile, mi.def.ccallable)
             end
         end
+    end
+
+    # The emission order follows this list, and a list built from hash tables
+    # carries the addresses of its keys. Sort it, so that two builds agree.
+    if trim_mode == TRIM_NO
+        order = Tuple{Tuple{Int, UInt, Int, UInt}, Int}[
+            (compilation_order_key(tocompile[i]), i) for i in 1:length(tocompile)]
+        sort!(order)
+        tocompile = Any[tocompile[pair[2]] for pair in order]
     end
 
     # Step 4: Perform type inference on tocompile to create codeinfos
