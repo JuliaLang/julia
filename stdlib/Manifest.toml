@@ -114,7 +114,7 @@ version = "1.13.0"
     julia_version = "1.12.0"
 
 [[deps.LLD_jll]]
-deps = ["Artifacts", "Libdl", "Zlib_jll", "libLLVM_jll"]
+deps = ["Artifacts", "Libdl", "Zlib_jll", "Zstd_jll", "libLLVM_jll"]
 uuid = "d55e3150-da41-5e91-b323-ecfd1eec6109"
 version = "21.1.8+0"
 
