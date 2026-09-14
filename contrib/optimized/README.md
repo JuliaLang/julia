@@ -1,73 +1,86 @@
 # Optimized Julia builds
 
 This directory builds Julia with profile-guided optimization (PGO), ThinLTO and,
-where supported, BOLT. It is what the nightly `*opt` builds use.
+where supported, BOLT. It replaces `contrib/pgo-lto`, `contrib/bolt` and
+`contrib/pgo-lto-bolt`.
 
-The build runs in stages:
-
-0. a stage-0 toolchain (clang, lld and the LLVM tools, downloaded from
-   BinaryBuilder; BOLT is built from source, as BinaryBuilder has none),
-1. an instrumented Julia, whose system image and package image builds are the
-   workload that the PGO profile is collected from,
-2. the optimized Julia, built with that profile and ThinLTO, and
-3. with BOLT: an instrumentation, training and rewriting pass over `libLLVM`,
-   `libjulia-internal` and `libjulia-codegen`.
-
-## Building
-
-```bash
-make -C contrib/optimized all
+```sh
+make -C contrib/optimized -j8 all
 ```
 
-That runs the complete flow and leaves the result in `optimized.build`. It takes
-a while: LLVM is built twice and Julia two or three times.
+The result is in `contrib/optimized/optimized.build`. The build first downloads
+clang, lld and LLVM tools from BinaryBuilder, and builds BOLT from source if
+needed. It then builds an instrumented Julia, using the system image and package
+image builds as the PGO workload, and builds Julia again with the resulting
+profile and ThinLTO. With BOLT enabled, it also instruments `libLLVM`,
+`libjulia-internal` and `libjulia-codegen`, builds the system image and package
+images against them, and rewrites the libraries using that profile.
 
-The stages are also available individually, mainly to collect profile data from a
-workload of your own in between (`cd` into this directory first):
+## Options
 
-```bash
-make stage1                       # instrumented build; profiles land in profiles/
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `USE_BOLT` | 1 on Linux x86-64 and AArch64, else 0 | Run the BOLT stages |
+| `USE_PGO` | 1 | Build and profile stage 1, then optimize with it |
+| `USE_LTO` | 1 | Build stage 2 with ThinLTO |
+| `STAGE1_CPU_TARGET` | `generic` | CPU target of the instrumented build |
+| `STAGE0_BUILD` | `$(CURDIR)/toolchain` | Toolchain build directory |
+| `STAGE1_BUILD` | `$(CURDIR)/pgo-instrumented.build` | Instrumented build directory |
+| `STAGE2_BUILD` | `$(CURDIR)/optimized.build` | Optimized build directory |
+
+For PGO+LTO alone, set `USE_BOLT=0`. For BOLT alone, set `USE_PGO=0 USE_LTO=0`;
+this skips stage 1. Command-line build variables are passed to the staged builds,
+including `JULIA_CPU_TARGET` for stage 2. Use absolute paths when overriding the
+build directories. `STAGE2_BUILD` can also point at the source checkout for
+packaging there. `make print-profile-artifacts` prints the profile globs to
+archive, relative to the source root.
+
+Stages use stamp files to resume completed builds. They do not track changes to
+options: use fresh build directories and remove the stamps with `make clean`
+when changing optimization settings. `make clean` only removes stamps and the
+merged PGO profile; it does not clean compiled objects or undo a BOLT rewrite.
+
+## Custom workloads
+
+Run the stages separately to collect additional profile data. From this directory,
+with PGO enabled:
+
+```sh
+make stage1
+# Optional: make clean-pgo-profiles to discard the build's PGO workload.
 ./pgo-instrumented.build/julia my-workload.jl
-make top                          # top 50 functions of the merged profile
-make stage2                       # optimized build
-make bolt-originals bolt-instrument
-./optimized.build/julia my-workload.jl
-make bolt-merge bolt              # rewrite the libraries
+make top                          # inspect the merged PGO profile
+make stage2
 ```
 
-`make clean-profiles` drops the collected profiles, e.g. to profile only your own
-workload rather than the build of Julia itself. `make clean` removes the stage
-stamps so that the next build redoes the stages incrementally.
+If BOLT is enabled, stage 2 stops after building the libraries. Complete the
+training build before running your own workload:
 
-`make delete-originals` removes the pre-BOLT copies of the rewritten libraries,
-and `make restore-originals` puts them back in place, undoing the rewrite.
+```sh
+make bolt-train
+# Optional: make clean-bolt-profiles to discard the build's BOLT workload.
+./optimized.build/julia my-workload.jl
+make bolt                         # merge profiles and rewrite the libraries
+```
 
-## Knobs
+Collect BOLT profiles before the final rewrite, while the libraries are still
+instrumented. The separate cleanup targets preserve the other optimization's
+profiles; `make clean-profiles` clears both. New or updated raw profiles cause
+the corresponding merge to run again.
 
-| Variable            | Default                               | Meaning                                      |
-| ------------------- | ------------------------------------- | -------------------------------------------- |
-| `USE_BOLT`          | 1 on Linux x86-64 and AArch64, else 0 | run the BOLT stages                          |
-| `USE_PGO`           | 1                                     | build and profile stage 1, optimize with it  |
-| `USE_LTO`           | 1                                     | build stage 2 with ThinLTO                   |
-| `STAGE1_CPU_TARGET` | `generic`                             | `JULIA_CPU_TARGET` of the instrumented build |
-| `STAGE0_BUILD`      | `toolchain`                           | stage-0 build directory                      |
-| `STAGE1_BUILD`      | `pgo-instrumented.build`              | stage-1 build directory                      |
-| `STAGE2_BUILD`      | `optimized.build`                     | stage-2 build directory                      |
+`make restore-originals` restores the libraries saved before BOLT and preserves
+their mtimes. A subsequent `make bolt` reapplies the rewrite. Once satisfied,
+`make delete-originals` removes those saved copies before packaging; restoring
+or rewriting again then requires rebuilding the libraries.
 
-Other variables are passed through to the staged builds, so
-`make all JULIA_CPU_TARGET=...` works as usual. CI points `STAGE2_BUILD` at the
-checkout, so that the optimized tree is the one it packages, and asks
-`make print-profile-artifacts` for the profile data to archive.
+## Platforms
 
-## Platform support
+The flow carries the macOS PGO+LTO toolchain settings, including Xcode's linker
+and SDK. BOLT defaults to Linux x86-64 and AArch64, where it can rewrite ELF
+libraries. The Windows linker settings are preparatory; they do not establish
+Windows build support. A default or an explicit optimization setting does not
+replace validation on the target platform.
 
-PGO and ThinLTO work wherever the stage-0 toolchain does. BOLT only rewrites ELF
-binaries, and only for x86-64 and AArch64, so it is off by default elsewhere: the
-macOS and Windows builds are PGO+LTO only.
-
-DO NOT STRIP THE RESULTING SHARED LIBRARIES when BOLT was used,
-<https://github.com/llvm/llvm-project/issues/56738>. If you really need to, try
-adding `-use-gnu-stack` to `BOLT_ARGS`.
-
-The BOLT rewrite does not align code for huge pages, since the regular build does
-not either; that keeps the shared libraries a few MB smaller.
+Do not strip shared libraries rewritten by BOLT; see
+<https://github.com/llvm/llvm-project/issues/56738>. The rewrite uses regular page
+alignment, as does the normal Julia build.
