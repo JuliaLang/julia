@@ -36,6 +36,10 @@ HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
 HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
 EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
 BUILD_MACHINE:=$(patsubst BUILD_MACHINE=%,%,$(filter BUILD_MACHINE=%,$(JULIA_BUILD_VARS)))
+ifeq (,$(HOST_OS))
+$(error Could not determine the build platform: `$(MAKE) -C $(JULIA_ROOT) print-OS` \
+        failed. Run it to see why; a XC_HOST without a matching OS is one way.)
+endif
 
 # Which optimizations to apply. PGO and ThinLTO work wherever the stage-0
 # toolchain does. BOLT rewrites ELF binaries only, and only for x86-64 and
