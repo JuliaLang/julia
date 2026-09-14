@@ -692,7 +692,8 @@ $(addprefix clang-safety-,$(SRCS) $(CODEGEN_SRCS)): \
 
 # Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
 CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(LLVM_CFLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
-CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(DEBUGFLAGS_CLANG) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG)
+# Undo GCC's system includes so the analyzer tracks ownership transfers in LLVM headers.
+CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(DEBUGFLAGS_CLANG) $(patsubst -isystem%,-I%,$(LLVM_CXXFLAGS)) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG)
 
 # Additional headers from dependency links, categorized by usage, for adding as fake compiler targets.
 # Adding these as compiler inputs doesn't always work (due to missing includes), but if we don't add them, they won't work at all.
