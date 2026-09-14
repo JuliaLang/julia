@@ -132,11 +132,18 @@ endif
 ifeq ($(USE_PGO),1)
 PGO_GENERATE_FLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR)
 PGO_COUNTER_FLAGS:=-Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)
+# Configure probes can collide with profiled functions such as main. Suppress
+# missing/stale-profile warnings so CMake's -Werror checks test the requested
+# option, not the profile's coverage. Otherwise LLVM can silently drop -fPIC
+# and -fno-semantic-interposition after a profile hash mismatch.
 PGO_USE_FLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
+PGO_WARNING_FLAGS:=-Wno-backend-plugin -Wno-profile-instr-unprofiled $\
+	-Wno-profile-instr-out-of-date
 else
 PGO_GENERATE_FLAGS:=
 PGO_COUNTER_FLAGS:=
 PGO_USE_FLAGS:=
+PGO_WARNING_FLAGS:=
 endif
 
 AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for use in PGO by running Julia $\
@@ -261,8 +268,8 @@ top: $(PGO_PROFILE_FILE)
 # The linker flags only matter when linking, so compile-only invocations need
 # -Qunused-arguments or -Werror'd compile probes fail (e.g. LLVM's -fPIC check,
 # which would silently disable PIC and break the libLLVM link).
-stage2 bolt-train: STAGE_CFLAGS:=$(PGO_USE_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
-stage2 bolt-train: STAGE_CXXFLAGS:=$(PGO_USE_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
+stage2 bolt-train: STAGE_CFLAGS:=$(PGO_USE_FLAGS) $(PGO_WARNING_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
+stage2 bolt-train: STAGE_CXXFLAGS:=$(PGO_USE_FLAGS) $(PGO_WARNING_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
 stage2 bolt-train: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_USE_FLAGS) $(STAGE2_LINK_ONLY_FLAGS)
 stage2 bolt-train: export USE_BINARYBUILDER_LLVM=0
 ifeq ($(USE_PGO),1)
