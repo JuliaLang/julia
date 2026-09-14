@@ -580,7 +580,7 @@ julia> collect(range(-0.1, 0.3, length=5))
 julia> collect(LinRange(-0.1, 0.3, 5))
 5-element Vector{Float64}:
  -0.1
- -1.3877787807814457e-17
+  -1.3877787807814457e-17
   0.09999999999999999
   0.19999999999999998
   0.3

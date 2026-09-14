@@ -3170,7 +3170,7 @@ alignment(io::IO, x::Number) = (alignment_from_show(io, x), 0)
 alignment(io::IO, x::Integer) = (alignment_from_show(io, x), 0)
 function alignment(io::IO, x::Real)
     s = sprint(show, x, context=nocolor(io), sizehint=0)
-    m = match(r"^(.*)(\..*[eEfF]-.*)|(.*)([\.eEfF].*)$", s)
+    m = match(r"^(.*)(.\..*[eEfF]-.*)|(.*)([\.eEfF].*)$", s)
     m === nothing ? (textwidth(s), 0) :
     m.captures[1] === nothing ? (textwidth(m.captures[3]), textwidth(m.captures[4])) :
                                 (textwidth(m.captures[1]), textwidth(m.captures[2]))
