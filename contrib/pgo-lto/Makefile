@@ -85,6 +85,10 @@ stage0: | $(STAGE0_BUILD)
 $(STAGE1_BUILD): stage0
 stage1: | $(STAGE1_BUILD)
 	@echo "--- Build Julia Stage 1 - with instrumentation"
+	# Building the dependencies runs instrumented build tools, e.g. llvm-tblgen,
+	# which share code with libLLVM but not Julia's workload. Keep their
+	# profiles out of the profile directory.
+	PATH=$(STAGE0_TOOLS):$$PATH LLVM_PROFILE_FILE=$(STAGE1_BUILD)/deps-profiles/%m.profraw $(STAGE1_FLAGS) $(MAKE) -C $(STAGE1_BUILD) $(COMMON_FLAGS) julia-deps
 	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE1_FLAGS) $(MAKE) -C $(STAGE1_BUILD) $(COMMON_FLAGS)
 	# Remove the empty profile emitted by the instrumented launcher.
 	rm -f $(JULIA_ROOT)/base/default.profraw

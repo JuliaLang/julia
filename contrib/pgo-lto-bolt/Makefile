@@ -106,6 +106,10 @@ stage1: PGO_CXXFLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR) -Xclang -mllvm -Xcla
 stage1: PGO_LDFLAGS:=-flto=thin -fprofile-generate=$(PGO_PROFILE_DIR)
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
+	# Building the dependencies runs instrumented build tools, e.g. llvm-tblgen,
+	# which share code with libLLVM but not Julia's workload. Keep their
+	# profiles out of the profile directory.
+	LLVM_PROFILE_FILE=$(STAGE1_BUILD)/deps-profiles/%m.profraw $(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) julia-deps
 	$(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS)
 	# Remove the empty profile emitted by the instrumented launcher.
 	rm -f $(JULIA_ROOT)/base/default.profraw
