@@ -5,6 +5,44 @@
 
 # See the makefiles in contrib/bolt and contrib/pgo-lto for more information.
 
+STAGE0_BUILD:=$(CURDIR)/toolchain
+STAGE1_BUILD:=$(CURDIR)/pgo-instrumented.build
+STAGE2_BUILD:=$(CURDIR)/optimized.build
+
+STAGE0_BINARIES:=$(STAGE0_BUILD)/usr/bin/
+STAGE0_TOOLS:=$(STAGE0_BUILD)/usr/tools/
+
+BOLT_PROFILE_DIR:=$(CURDIR)/profiles-bolt
+PGO_PROFILE_DIR:=$(CURDIR)/profiles
+PGO_PROFILE_FILE:=$(PGO_PROFILE_DIR)/merged.prof
+PGO_PROFRAW_FILES:=$(wildcard $(PGO_PROFILE_DIR)/*.profraw)
+JULIA_ROOT:=$(CURDIR)/../..
+
+# Ask the regular build system about the platform it would build for, so that
+# the staged builds agree with it. BUILD_MACHINE is the target triple recorded
+# in the system image (Sys.MACHINE); the stage-0 clang spells it differently
+# than the default compiler (e.g. aarch64-apple-darwin vs arm64-apple-darwin),
+# and a plain `make binary-dist` of the optimized build would then consider
+# build_h.jl stale and rebuild the system image.
+JULIA_BUILD_VARS:=$(shell MAKEFLAGS= $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-EXE print-BUILD_MACHINE)
+HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
+HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
+EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
+BUILD_MACHINE:=$(patsubst BUILD_MACHINE=%,%,$(filter BUILD_MACHINE=%,$(JULIA_BUILD_VARS)))
+
+# Which optimizations to apply. PGO and ThinLTO work wherever the stage-0
+# toolchain does. BOLT rewrites ELF binaries only, and only for x86-64 and
+# AArch64, so it defaults to off everywhere else; set USE_BOLT explicitly to
+# override. USE_PGO and USE_LTO are mostly there to bisect build problems.
+USE_PGO ?= 1
+USE_LTO ?= 1
+ifeq ($(HOST_OS),Linux)
+ifneq (,$(filter $(HOST_ARCH),x86_64 aarch64))
+USE_BOLT ?= 1
+endif
+endif
+USE_BOLT ?= 0
+
 # Settings taken from https://github.com/rust-lang/rust/blob/master/src/tools/opt-dist/src/bolt.rs
 BOLT_ARGS :=
 # Reorder basic blocks within functions
@@ -34,35 +72,16 @@ BOLT_ARGS += -dyno-stats
 # which we do in the bolt target
 BOLT_ARGS += -skip-funcs=.\*apply_cl.\*
 
+# BOLT needs relocations in the libraries it rewrites. Only pass this when BOLT
+# is enabled: --emit-relocs is an ELF linker flag.
 # -fno-reorder-blocks-and-partition is needed on gcc >= 8.
+ifeq ($(USE_BOLT),1)
 BOLT_FLAGS := $\
 	"BOLT_CFLAGS_GCC+=-fno-reorder-blocks-and-partition" $\
 	"BOLT_LDFLAGS=-Wl,--emit-relocs"
-
-STAGE0_BUILD:=$(CURDIR)/toolchain
-STAGE1_BUILD:=$(CURDIR)/pgo-instrumented.build
-STAGE2_BUILD:=$(CURDIR)/optimized.build
-
-STAGE0_BINARIES:=$(STAGE0_BUILD)/usr/bin/
-STAGE0_TOOLS:=$(STAGE0_BUILD)/usr/tools/
-
-BOLT_PROFILE_DIR:=$(CURDIR)/profiles-bolt
-PGO_PROFILE_DIR:=$(CURDIR)/profiles
-PGO_PROFILE_FILE:=$(PGO_PROFILE_DIR)/merged.prof
-PGO_PROFRAW_FILES:=$(wildcard $(PGO_PROFILE_DIR)/*.profraw)
-JULIA_ROOT:=$(CURDIR)/../..
-
-# Ask the regular build system about the platform it would build for, so that
-# the staged builds agree with it. BUILD_MACHINE is the target triple recorded
-# in the system image (Sys.MACHINE); the stage-0 clang spells it differently
-# than the default compiler (e.g. aarch64-apple-darwin vs arm64-apple-darwin),
-# and a plain `make binary-dist` of the optimized build would then consider
-# build_h.jl stale and rebuild the system image.
-JULIA_BUILD_VARS:=$(shell $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-EXE print-BUILD_MACHINE)
-HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
-HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
-EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
-BUILD_MACHINE:=$(patsubst BUILD_MACHINE=%,%,$(filter BUILD_MACHINE=%,$(JULIA_BUILD_VARS)))
+else
+BOLT_FLAGS :=
+endif
 
 LLVM_BOLT:=$(STAGE0_BINARIES)llvm-bolt
 LLVM_MERGEFDATA:=$(STAGE0_BINARIES)merge-fdata
@@ -70,10 +89,22 @@ LLVM_CXXFILT:=$(STAGE0_TOOLS)llvm-cxxfilt
 LLVM_PROFDATA:=$(STAGE0_TOOLS)llvm-profdata
 LLVM_OBJCOPY:=$(STAGE0_TOOLS)llvm-objcopy
 
+ifeq ($(USE_BOLT),1)
+# Stop stage 2 after the libraries that BOLT rewrites, so that building the
+# system image and the stdlib package images afterwards exercises the
+# instrumented libraries and produces the BOLT profile.
+STAGE2_TARGETS := julia-src-release julia-symlink julia-libccalltest \
+				  julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest
 # If you add new files to optimize, you need to add BOLT_LDFLAGS and BOLT_CFLAGS to the build of your new file.
-# The symlinks do not exist before stage 1.
+# The symlinks do not exist before stage 2.
 SYMLINKS_TO_OPTIMIZE := libLLVM.so libjulia-internal.so libjulia-codegen.so
-FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE1_BUILD)/usr/lib/$$file || :; done)
+FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE2_BUILD)/usr/lib/$$file || :; done)
+else
+# Without BOLT, stage 2 is the complete build.
+STAGE2_TARGETS :=
+SYMLINKS_TO_OPTIMIZE :=
+FILES_TO_OPTIMIZE :=
+endif
 
 AFTER_INSTRUMENT_MESSAGE:='Run `make finish_stage2` to finish off the build. $\
 	You can now optionally collect more profiling data by running Julia with an appropriate workload, $\
@@ -84,6 +115,22 @@ AFTER_INSTRUMENT_MESSAGE:='Run `make finish_stage2` to finish off the build. $\
 # significantly
 COUNTERS_PER_SITE:=6
 # Note: profile counters are not atomic by default, https://discourse.llvm.org/t/profile-guided-optimization-pgo-related-questions-and-suggestions/75232/5
+
+ifeq ($(USE_LTO),1)
+LTO_FLAGS:=-flto=thin
+else
+LTO_FLAGS:=
+endif
+
+ifeq ($(USE_PGO),1)
+PGO_GENERATE_FLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR)
+PGO_COUNTER_FLAGS:=-Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)
+PGO_USE_FLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
+else
+PGO_GENERATE_FLAGS:=
+PGO_COUNTER_FLAGS:=
+PGO_USE_FLAGS:=
+endif
 
 AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for use in PGO by running Julia $\
 	with an appropriate workload. If you wish, run `make clean_profiles` before doing so to remove any profiling data $\
@@ -130,9 +177,9 @@ TOOLCHAIN_FLAGS = $\
 	"LD=$(LINKER)" $\
 	"AR=$(STAGE0_TOOLS)llvm-ar$(EXE)" $\
 	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib$(EXE)" $\
-	"CFLAGS+=$(PGO_CFLAGS)" $\
-	"CXXFLAGS+=$(PGO_CXXFLAGS)" $\
-	"LDFLAGS+=$(LINKER_FLAGS) $(LINK_ONLY_FLAGS) $(PGO_LDFLAGS)" $\
+	"CFLAGS+=$(STAGE_CFLAGS)" $\
+	"CXXFLAGS+=$(STAGE_CXXFLAGS)" $\
+	"LDFLAGS+=$(LINKER_FLAGS) $(LINK_ONLY_FLAGS) $(STAGE_LDFLAGS)" $\
 	$(PLATFORM_FLAGS)
 
 $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
@@ -141,16 +188,20 @@ $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
 	# The toolchain links against zstd, which macOS does not provide.
-	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-zstd install-BOLT
+	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-zstd
+ifeq ($(USE_BOLT),1)
+	# BinaryBuilder has no BOLT, so this one is built from source.
+	$(MAKE) -C $(STAGE0_BUILD)/deps install-BOLT
+endif
 	# Turn [cd]tors into init/fini_array sections in libclang_rt, since lld
 	# doesn't do that, and otherwise the profile constructor is not executed
 	find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
 	touch $@
 
 $(STAGE1_BUILD): stage0
-stage1: PGO_CFLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)
-stage1: PGO_CXXFLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)
-stage1: PGO_LDFLAGS:=-flto=thin -fprofile-generate=$(PGO_PROFILE_DIR)
+stage1: STAGE_CFLAGS:=$(PGO_GENERATE_FLAGS) $(PGO_COUNTER_FLAGS)
+stage1: STAGE_CXXFLAGS:=$(PGO_GENERATE_FLAGS) $(PGO_COUNTER_FLAGS)
+stage1: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_GENERATE_FLAGS)
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
 	# Building the dependencies runs instrumented build tools, e.g. llvm-tblgen,
@@ -167,13 +218,17 @@ stage1: | $(STAGE1_BUILD)
 # The linker flags only matter when linking, so compile-only invocations need
 # -Qunused-arguments or -Werror'd compile probes fail (e.g. LLVM's -fPIC check,
 # which would silently disable PIC and break the libLLVM link).
-stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments
-stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments
-stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) $(STAGE2_LINK_ONLY_FLAGS)
+stage2: STAGE_CFLAGS:=$(PGO_USE_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
+stage2: STAGE_CXXFLAGS:=$(PGO_USE_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
+stage2: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_USE_FLAGS) $(STAGE2_LINK_ONLY_FLAGS)
 stage2: export USE_BINARYBUILDER_LLVM=0
-stage2: $(PGO_PROFILE_FILE) | $(STAGE2_BUILD)
-	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) julia-src-release julia-symlink julia-libccalltest \
-								julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest
+ifeq ($(USE_PGO),1)
+stage2: $(PGO_PROFILE_FILE)
+else
+stage2: stage0
+endif
+stage2: | $(STAGE2_BUILD)
+	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
 	touch $@
 
 copy_originals: stage2
@@ -197,9 +252,9 @@ bolt_instrument: copy_originals
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
-finish_stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments
-finish_stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments
-finish_stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) $(STAGE2_LINK_ONLY_FLAGS)
+finish_stage2: STAGE_CFLAGS:=$(PGO_USE_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
+finish_stage2: STAGE_CXXFLAGS:=$(PGO_USE_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
+finish_stage2: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_USE_FLAGS) $(STAGE2_LINK_ONLY_FLAGS)
 finish_stage2: stage2
 	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry
 	# --emit-relocs, or the later BOLT rewrite of it fails.
