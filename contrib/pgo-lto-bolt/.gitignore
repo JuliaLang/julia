@@ -1,10 +1,11 @@
-stage0*
-stage1*
-stage2*
+stage0
+stage1
+stage2
 bolt
-bolt_instrument
-merge_data
-copy_originals
+bolt-originals
+bolt-instrument
+bolt-train
+bolt-merge
 
 profiles
 profiles-bolt
