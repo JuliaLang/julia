@@ -1762,6 +1762,57 @@ end
             "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
         ))
     end
+    mkdepottempdir() do depot
+        # This manifest has a LibGit2 entry that is missing LibGit2_jll, and a LibGit2_jll entry
+        # with a git-tree-sha1, emulating an old manifest resolved when LibGit2_jll was a regular
+        # package. A copy of the stdlib is installed at that depot path so it is what gets loaded,
+        # which invalidates the bundled LibGit2 cache. The parallel precompiler then has to know
+        # that LibGit2 depends on LibGit2_jll although the manifest does not say so, otherwise
+        # its strict worker for LibGit2 fails (#63099)
+        badmanifest_test_dir3 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps3")
+        jll_uuid = Base.UUID("e37daf67-58a4-590a-8e99-b0245dd2ffc5")
+        jll_copy = joinpath(depot, "packages", "LibGit2_jll", Base.version_slug(jll_uuid, Base.SHA1("1"^40)))
+        mkpath(dirname(jll_copy))
+        cp(joinpath(Sys.STDLIB, "LibGit2_jll"), jll_copy)
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir3 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+        ))
+    end
+    mkdepottempdir() do depot
+        # Same for a dependency that is missing from the manifest altogether. Without the
+        # bundled stdlib caches in the depot path every stdlib in the chain has to be
+        # precompiled by the parallel precompiler, so its dependency graph has to include
+        # the stdlib deps the manifest does not list (#63099)
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+        # and for the git-tree-sha1 entry that is not installed, so the stdlib gets loaded
+        badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+    end
+    mkdepottempdir() do depot
+        # This manifest has a Statistics entry without its weakdeps and extensions, emulating
+        # a manifest from a version where SparseArraysExt did not exist yet. The extension
+        # has to be found from the stdlib Project.toml, both when loading and when building
+        # the precompilation dependency graph
+        badmanifest_test_dir4 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps4")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir4 --startup-file=no -e 'using Statistics, SparseArrays; exit(Base.get_extension(Statistics, :SparseArraysExt) === nothing ? 1 : 0)'`,
+            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+        ))
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir4 --startup-file=no -e 'Base.Precompilation.precompilepkgs(; io=devnull)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+        ext_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "SparseArraysExt")
+        @test isdir(ext_cache_dir) && !isempty(filter(endswith(".ji"), readdir(ext_cache_dir)))
+    end
 end
 
 @testset "code coverage disabled during precompilation" begin
