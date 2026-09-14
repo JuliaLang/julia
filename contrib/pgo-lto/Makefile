@@ -59,8 +59,15 @@ STAGE2_FLAGS:=LDFLAGS="$(LINKER_FLAGS) -flto=thin $(LINK_ONLY_FLAGS) -fprofile-u
 			CFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments" $\
 			CXXFLAGS="-fprofile-use=$(PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments"
 
+# The system image records the target triple of the compiler (Sys.MACHINE).
+# Use the one of the default compiler, which spells it differently than the
+# stage-0 clang, so that a plain `make binary-dist` of the optimized build does
+# not rebuild the system image.
+BUILD_MACHINE:=$(shell $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-BUILD_MACHINE | sed 's/^BUILD_MACHINE=//')
+
 COMMON_FLAGS = $\
 	"CC=$(STAGE0_TOOLS)clang" $\
+	"BUILD_MACHINE=$(BUILD_MACHINE)" $\
 	"CXX=$(STAGE0_TOOLS)clang++" $\
 	"LD=$(LINKER)" $\
 	"AR=$(STAGE0_TOOLS)llvm-ar" $\
