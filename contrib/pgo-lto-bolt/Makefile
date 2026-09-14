@@ -52,6 +52,18 @@ PGO_PROFILE_FILE:=$(PGO_PROFILE_DIR)/merged.prof
 PGO_PROFRAW_FILES:=$(wildcard $(PGO_PROFILE_DIR)/*.profraw)
 JULIA_ROOT:=$(CURDIR)/../..
 
+# Ask the regular build system about the platform it would build for, so that
+# the staged builds agree with it. BUILD_MACHINE is the target triple recorded
+# in the system image (Sys.MACHINE); the stage-0 clang spells it differently
+# than the default compiler (e.g. aarch64-apple-darwin vs arm64-apple-darwin),
+# and a plain `make binary-dist` of the optimized build would then consider
+# build_h.jl stale and rebuild the system image.
+JULIA_BUILD_VARS:=$(shell $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-EXE print-BUILD_MACHINE)
+HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
+HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
+EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
+BUILD_MACHINE:=$(patsubst BUILD_MACHINE=%,%,$(filter BUILD_MACHINE=%,$(JULIA_BUILD_VARS)))
+
 LLVM_BOLT:=$(STAGE0_BINARIES)llvm-bolt
 LLVM_MERGEFDATA:=$(STAGE0_BINARIES)merge-fdata
 LLVM_CXXFILT:=$(STAGE0_TOOLS)llvm-cxxfilt
@@ -79,29 +91,57 @@ AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for us
 	Note that running extensive scripts may result in counter overflows, which can be detected by running $\
 	`make top`. Afterwards run `make stage2`.'
 
-# The system image records the target triple of the compiler (Sys.MACHINE).
-# Use the one of the default compiler, which spells it differently than the
-# stage-0 clang, so that a plain `make binary-dist` of the optimized build does
-# not rebuild the system image.
-BUILD_MACHINE:=$(shell $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-BUILD_MACHINE | sed 's/^BUILD_MACHINE=//')
+# How to drive the toolchain on this platform. Everything else below is
+# platform independent.
+ifeq ($(HOST_OS),Darwin)
+# The stage-0 clang does not come with Xcode, so tell it where the SDK is.
+export SDKROOT ?= $(shell xcrun --show-sdk-path)
+# Link with Xcode's ld64: the stage-0 ld64.lld cannot always read the text stubs
+# of newer SDKs. ld64 has to use the stage-0 libLTO, since Xcode's cannot read
+# the stage-0 bitcode, and clang only passes it along when it knows the linker
+# version. Select ld64 explicitly for links driven by clang as well as make.
+LINKER:=$(shell xcrun --find ld)
+LINKER_FLAGS:=--ld-path=$(LINKER) -Wl,-lto_library,$(STAGE0_BUILD)/usr/lib/libLTO.dylib
+LINK_ONLY_FLAGS:=
+STAGE2_LINK_ONLY_FLAGS:=
+# For the same reason, LLVM's static libraries cannot be created with Xcode's
+# libtool, which does not index the stage-0 bitcode.
+PLATFORM_FLAGS:="LLVM_LIBTOOL=$(STAGE0_TOOLS)llvm-libtool-darwin"
+else ifeq ($(HOST_OS),WINNT)
+# Use lld's MinGW driver; the ELF-only flags below do not apply to PE/COFF.
+LINKER:=$(STAGE0_TOOLS)lld$(EXE)
+LINKER_FLAGS:=-fuse-ld=lld
+LINK_ONLY_FLAGS:=
+STAGE2_LINK_ONLY_FLAGS:=
+PLATFORM_FLAGS:=
+else
+LINKER:=$(STAGE0_TOOLS)ld.lld$(EXE)
+LINKER_FLAGS:=-fuse-ld=lld
+# Julia's version script names symbols that not every configuration defines.
+LINK_ONLY_FLAGS:=-Wl,--undefined-version
+STAGE2_LINK_ONLY_FLAGS:=-Wl,--icf=safe
+PLATFORM_FLAGS:=
+endif
 
 TOOLCHAIN_FLAGS = $\
-	"CC=$(STAGE0_TOOLS)clang" $\
+	"CC=$(STAGE0_TOOLS)clang$(EXE)" $\
 	"BUILD_MACHINE=$(BUILD_MACHINE)" $\
-	"CXX=$(STAGE0_TOOLS)clang++" $\
-	"LD=$(STAGE0_TOOLS)ld.lld" $\
-	"AR=$(STAGE0_TOOLS)llvm-ar" $\
-	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib" $\
+	"CXX=$(STAGE0_TOOLS)clang++$(EXE)" $\
+	"LD=$(LINKER)" $\
+	"AR=$(STAGE0_TOOLS)llvm-ar$(EXE)" $\
+	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib$(EXE)" $\
 	"CFLAGS+=$(PGO_CFLAGS)" $\
 	"CXXFLAGS+=$(PGO_CXXFLAGS)" $\
-	"LDFLAGS+=-fuse-ld=lld $(PGO_LDFLAGS)"
+	"LDFLAGS+=$(LINKER_FLAGS) $(LINK_ONLY_FLAGS) $(PGO_LDFLAGS)" $\
+	$(PLATFORM_FLAGS)
 
 $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
 
 stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
-	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-BOLT
+	# The toolchain links against zstd, which macOS does not provide.
+	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-zstd install-BOLT
 	# Turn [cd]tors into init/fini_array sections in libclang_rt, since lld
 	# doesn't do that, and otherwise the profile constructor is not executed
 	find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
@@ -123,13 +163,13 @@ stage1: | $(STAGE1_BUILD)
 	touch $@
 	@echo $(AFTER_STAGE1_MESSAGE)
 
-# Emit bitcode and ensure configure checks link it with lld. -fuse-ld=lld is
-# a link-only flag, so compile-only invocations need -Qunused-arguments or
-# -Werror'd compile probes fail (e.g. LLVM's -fPIC check, which would silently
-# disable PIC and break the libLLVM link).
-stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments
-stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments
-stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
+# Emit bitcode and ensure configure checks link it with the stage-0 LTO support.
+# The linker flags only matter when linking, so compile-only invocations need
+# -Qunused-arguments or -Werror'd compile probes fail (e.g. LLVM's -fPIC check,
+# which would silently disable PIC and break the libLLVM link).
+stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments
+stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments
+stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) $(STAGE2_LINK_ONLY_FLAGS)
 stage2: export USE_BINARYBUILDER_LLVM=0
 stage2: $(PGO_PROFILE_FILE) | $(STAGE2_BUILD)
 	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) julia-src-release julia-symlink julia-libccalltest \
@@ -157,9 +197,9 @@ bolt_instrument: copy_originals
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
-finish_stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments
-finish_stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin -fuse-ld=lld -Qunused-arguments
-finish_stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
+finish_stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments
+finish_stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE) -flto=thin $(LINKER_FLAGS) -Qunused-arguments
+finish_stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) $(STAGE2_LINK_ONLY_FLAGS)
 finish_stage2: stage2
 	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry
 	# --emit-relocs, or the later BOLT rewrite of it fails.
