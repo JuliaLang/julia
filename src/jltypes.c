@@ -3350,6 +3350,10 @@ static jl_tvar_t *tvar(const char *name) JL_CANSAFEPOINT
 
 void export_jl_small_typeof(void)
 {
+#define XX(name) \
+    ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type;
+    JL_SMALL_TYPEOF(XX)
+#undef XX
     memcpy(&jl_small_typeof, &ijl_small_typeof, sizeof(jl_small_typeof));
 }
 
