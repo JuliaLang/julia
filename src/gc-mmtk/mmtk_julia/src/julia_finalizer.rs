@@ -134,6 +134,115 @@ pub fn gc_ptr_tag(addr: Address, tag: usize) -> bool {
     addr & tag != 0
 }
 
+/// Drop every registered finalizer, so none is ever run.
+///
+/// LXR has no working finalizer path: it never calls `Scanning::process_weak_refs`, so lists
+/// are never swept and, more importantly, `mark_finlist` never runs -- and that trace is what
+/// keeps a registered object alive until its finalizer has been scheduled. Registered objects
+/// are therefore reclaimed with live entries still naming them, and `jl_gc_run_all_finalizers`
+/// at exit runs each one against recycled memory: an invalid `free` on the C path, a segfault
+/// reading the argument's type on the Julia path.
+///
+/// Until that path is built, drop the entries instead. This changes no observable behaviour --
+/// LXR already never ran a finalizer -- it only stops the crash at exit. Weak references are
+/// separately already treated as strong, so nothing here needs to clear them.
+///
+/// Called at the *start* of `release`, on every pause, which is what makes it airtight:
+/// reclamation happens later in the same pause (`STWRCDecsAndSweep`) or in a later one, so an
+/// entry is always dropped before the object it names can be freed.
+///
+/// This leaks whatever the finalizers would have released -- GMP limbs, file descriptors,
+/// malloc'd buffers. Acceptable for bring-up, not for a real GC.
+pub fn drop_all_finalizers() {
+    use crate::mmtk::vm::ActivePlan;
+    use mmtk::vm::VMBinding;
+    for mutator in <JuliaVM as VMBinding>::VMActivePlan::mutators() {
+        ArrayListT::thread_local_finalizer_list(mutator).len = 0;
+    }
+    ArrayListT::marked_finalizers_list().len = 0;
+    ArrayListT::to_finalize_list().len = 0;
+}
+
+/// Every object named by a finalizer list entry, to be reported as a root.
+///
+/// The finalizer lists are a *root set*, not just a to-do list: `jl_uv_closeHandle` reaches a
+/// stream through `handle->data`, a raw pointer libuv holds, and the comment in
+/// `jl_uv_call_close_callback` says outright that the value is "rooted in the finalizer list
+/// only". Dropping the entries (what [`drop_all_finalizers`] does) therefore un-roots live
+/// objects: the stream is reclaimed, its memory is reused, and at exit libuv calls the close
+/// callback on whatever now occupies it -- the `MethodError(f=Base._uv_hook_close,
+/// args=(Base.RefValue{...},))` seen after any `GC.gc()`, which also loses buffered stdio
+/// because the atexit hook dies before flushing.
+///
+/// So retain the entries and root them. LXR still never *runs* a finalizer and never sweeps
+/// these lists, so registered objects are immortal -- a leak. That is the deliberate trade:
+/// leaking a finalizable object is a bounded cost, freeing one that is still referenced is
+/// memory corruption.
+///
+/// Traversal mirrors [`mark_finlist`]: a zero slot is a hole, `GC_FIN_COBJ_TAG` marks a
+/// non-Julia pointer, and `GC_FIN_CFUNC_TAG` means the following slot is a bare C function
+/// pointer rather than a value.
+pub fn collect_finalizer_roots() -> Vec<ObjectReference> {
+    use crate::mmtk::vm::ActivePlan;
+    use mmtk::vm::VMBinding;
+
+    let mut roots = Vec::new();
+    let mut collect = |list: &ArrayListT| {
+        let mut i = 0;
+        while i < list.len {
+            let cur = list.get(i);
+            if cur.is_zero() {
+                i += 1;
+                continue;
+            }
+            if gc_ptr_tag(cur, GC_FIN_COBJ_TAG) {
+                i += 1;
+                continue;
+            }
+            let addr = if gc_ptr_tag(cur, GC_FIN_CFUNC_TAG) {
+                // The paired slot is an unboxed function pointer, so step over it.
+                i += 1;
+                gc_ptr_clear_tag(cur, GC_FIN_CFUNC_TAG)
+            } else {
+                cur
+            };
+            roots.push(unsafe { ObjectReference::from_raw_address_unchecked(addr) });
+            i += 1;
+        }
+    };
+
+    for mutator in <JuliaVM as VMBinding>::VMActivePlan::mutators() {
+        collect(ArrayListT::thread_local_finalizer_list(mutator));
+    }
+    collect(ArrayListT::marked_finalizers_list());
+    collect(ArrayListT::to_finalize_list());
+    roots
+}
+
+/// Whether a finalizer list entry is still live, i.e. must stay on the list.
+///
+/// `memory_manager::is_live_object` dispatches to the owning policy, and `ImmixSpace::is_live`
+/// has a reference-counting branch that no other plan takes. For an object that is *not*
+/// marked -- which is every dead entry, and dead entries are exactly the ones this sweep is
+/// looking for -- it falls through to `object_forwarding::is_forwarded`, a question about
+/// evacuation state. LXR is built with `lxr_no_evac`, so nothing ever moves, that state is
+/// never established, and reading it faults inside `side_metadata_access`. ConcurrentImmix
+/// shares this whole file and never sees the problem because it never enters that branch.
+///
+/// So answer the question in LXR's own terms instead: objects the plan does not reference
+/// count are never reclaimed and are always live; everything else is live if it is retained by
+/// a count or was reached by the trace. No forwarding query, because nothing moves.
+pub fn object_is_live(v: ObjectReference) -> bool {
+    let plan = crate::SINGLETON.get_plan();
+    if let Some(lxr) = plan.downcast_ref::<mmtk::plan::lxr::LXR<JuliaVM>>() {
+        if !lxr.is_rc_object(v) {
+            return true;
+        }
+        return lxr.rc.count(v) > 0 || lxr.is_marked(v);
+    }
+    memory_manager::is_live_object(v)
+}
+
 // sweep_finalizer_list in gc.c
 fn sweep_finalizer_list(
     list: &mut ArrayListT,
@@ -164,7 +273,7 @@ fn sweep_finalizer_list(
         let (isfreed, isold) = if gc_ptr_tag(v0, GC_FIN_COBJ_TAG) {
             (true, false)
         } else {
-            let isfreed = !memory_manager::is_live_object(v);
+            let isfreed = !object_is_live(v);
             let isold = finalizer_list_marked.is_some() && !isfreed;
             (isfreed, isold)
         };
