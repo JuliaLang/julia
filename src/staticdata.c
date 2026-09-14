@@ -24,8 +24,8 @@
     by `id`. The system is serialized into several distinct streams (see `jl_serializer_state`), a "main stream"
     (the `s` field) as well as parallel streams for writing specific categories of additional internal data (e.g.,
     global data invisible to codegen, as well as deserialization "touch-up" tables, see below). These different streams
-    will be concatenated in later steps. Certain key items (e.g., builtin types & functions associated with `INSERT_TAG`
-    below, integers smaller than 512) get serialized via a hard-coded tag table.
+    will be concatenated in later steps. Certain key items (e.g., the root task and cached small integers)
+    get serialized via hard-coded tags.
 
     Serialization builds "touch up" tables used during deserialization. Pointers and items requiring gc
     registration get encoded as `(location, target)` pairs in `relocs_list` and `gctags_list`, respectively.
@@ -154,7 +154,21 @@ extern "C" {
 
 // TODO: handle finalizers
 
-#define NUM_TAGS    5
+// Heap values restored from the system image.
+static jl_value_t **const jl_image_specials[] = {
+    (jl_value_t**)&jl_method_table,
+    (jl_value_t**)&jl_module_init_order,
+    &jl_typeinf_func,
+    &jl_compile_and_emit_func,
+    &jl_libdl_dlopen_func,
+#define XX(cname, jlname) &jl_builtin_instances[jl_builtin_id_##cname],
+    JL_BUILTIN_FUNCTIONS(XX)
+#undef XX
+#define XX(name, type) (jl_value_t**)&jl_##name,
+    JL_EXPORTED_DATA_POINTERS(XX)
+    JL_CONST_GLOBAL_VARS(XX)
+#undef XX
+};
 
 // Whether a package image stores the supertypes it leaves unset (`type_supers`)
 // for the loader to publish, instead of leaving them to `jl_datatype_compute_super`
@@ -163,22 +177,6 @@ extern "C" {
 #ifndef STORE_TYPE_SUPERS
 #define STORE_TYPE_SUPERS 0
 #endif
-
-// An array of special references that need to be restored from the sysimg
-static void get_tags(jl_value_t **tags[NUM_TAGS])
-{
-    // Make sure to keep an extra slot at the end to sentinel length
-    unsigned int i = 0;
-#define INSERT_TAG(sym) tags[i++] = (jl_value_t**)&(sym)
-    INSERT_TAG(jl_method_table);
-    INSERT_TAG(jl_typeinf_func);
-    INSERT_TAG(jl_compile_and_emit_func);
-    INSERT_TAG(jl_libdl_dlopen_func);
-    // n.b. must update NUM_TAGS when you add something here
-#undef INSERT_TAG
-    assert(i == NUM_TAGS - 1);
-    tags[i] = NULL;
-}
 
 // hash of definitions for predefined tagged object
 static htable_t symbol_table;
@@ -3305,7 +3303,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_strip_all_codeinfos(mod_array);
         jl_strip_all_docmeta(mod_array);
     }
-    // collect needed methods and replace method tables that are in the tags array
+    // collect needed methods and prepare method table replacements
     htable_new(&new_methtables, 0);
     arraylist_t MIs;
     arraylist_new(&MIs, 0);
@@ -3436,16 +3434,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.method_roots_list = NULL;
     s.type_supers = NULL;
     htable_new(&s.method_roots_index, 0);
-    jl_value_t **_tags[NUM_TAGS];
-    jl_value_t ***tags = s.incremental ? NULL : _tags;
     if (worklist) {
         s.method_roots_list = jl_alloc_vec_any(0);
         if (STORE_TYPE_SUPERS)
             s.type_supers = jl_alloc_vec_any(0);
         s.worklist_key = jl_worklist_key(worklist);
-    }
-    else {
-        get_tags(_tags);
     }
 
     jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
@@ -3463,21 +3456,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_array_t *args = jl_core_module ? (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS")) : NULL;
             if (args != NULL && jl_array_len(args) != 0)
                 record_object_change((jl_value_t*)args, (jl_value_t*)jl_alloc_array_1d(jl_typeof(args), 0));
-            for (i = 0; tags[i] != NULL; i++) {
-                jl_value_t *tag = *tags[i];
-                jl_queue_for_serialization(&s, tag);
-            }
-            for (i = 0; i < jl_n_builtins; i++)
-                jl_queue_for_serialization(&s, jl_builtin_instances[i]);
-#define XX(name, type) jl_queue_for_serialization(&s, (jl_value_t*)jl_##name);
-            JL_EXPORTED_DATA_POINTERS(XX)
-#undef XX
-#define XX(name, type) jl_queue_for_serialization(&s, (jl_value_t*)jl_##name);
-            JL_CONST_GLOBAL_VARS(XX)
-#undef XX
+            record_object_change((jl_value_t*)jl_module_init_order, (jl_value_t*)module_init_order);
+            for (i = 0; i < sizeof(jl_image_specials) / sizeof(jl_image_specials[0]); i++)
+                jl_queue_for_serialization(&s, *jl_image_specials[i]);
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
-            // only the modules with an `__init__`
-            jl_queue_for_serialization(&s, module_init_order);
         }
         else {
             // Queue the worklist itself as the first item we serialize
@@ -3644,22 +3626,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         s.s = f;
         if (worklist == NULL) {
             size_t i;
-            for (i = 0; tags[i] != NULL; i++) {
-                jl_value_t *tag = *tags[i];
-                jl_write_value(&s, tag);
-            }
-            for (i = 0; i < jl_n_builtins; i++)
-                jl_write_value(&s, jl_builtin_instances[i]);
-#define XX(name, type) jl_write_value(&s, (jl_value_t*)jl_##name);
-            JL_EXPORTED_DATA_POINTERS(XX)
-#undef XX
-#define XX(name, type) jl_write_value(&s, (jl_value_t*)jl_##name);
-            JL_CONST_GLOBAL_VARS(XX)
-#undef XX
+            for (i = 0; i < sizeof(jl_image_specials) / sizeof(jl_image_specials[0]); i++)
+                jl_write_value(&s, *jl_image_specials[i]);
             jl_write_value(&s, global_roots_list);
             jl_write_value(&s, global_roots_keyset);
             jl_write_value(&s, s.ptls->root_task->tls);
-            jl_write_value(&s, module_init_order);
             write_uint32(f, jl_get_gs_ctr());
             size_t world = jl_atomic_load_acquire(&jl_world_counter);
             // assert(world == precompilation_world); // This triggers on a normal build of julia
@@ -4419,10 +4390,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     s.gvar_record = &gvar_record;
     s.fptr_record = &fptr_record;
     s.ptls = ct->ptls;
-    jl_value_t **_tags[NUM_TAGS];
-    jl_value_t ***tags = s.incremental ? NULL : _tags;
-    if (!s.incremental)
-        get_tags(_tags);
 
     htable_t new_dt_objs;
     htable_new(&new_dt_objs, 0);
@@ -4479,28 +4446,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     jl_array_t *type_supers = NULL; // in the image
     if (!s.incremental) {
         size_t i;
-        for (i = 0; tags[i] != NULL; i++) {
-            jl_value_t **tag = tags[i];
-            *tag = jl_read_value(&s);
-        }
-        for (i = 0; i < jl_n_builtins; i++)
-            jl_builtin_instances[i] = jl_read_value(&s);
-#define XX(name, type) jl_##name = (type)jl_read_value(&s);
-        JL_EXPORTED_DATA_POINTERS(XX)
-#undef XX
-#define XX(name, type) jl_##name = (type)jl_read_value(&s);
-        JL_CONST_GLOBAL_VARS(XX)
-#undef XX
-#define XX(name) \
-        ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type;
-        JL_SMALL_TYPEOF(XX)
-#undef XX
+        for (i = 0; i < sizeof(jl_image_specials) / sizeof(jl_image_specials[0]); i++)
+            *jl_image_specials[i] = jl_read_value(&s);
         export_jl_small_typeof();
         export_jl_sysimg_globals();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
         jl_gc_write(s.ptls->root_task, s.ptls->root_task->tls, jl_value_t, jl_read_value(&s));
-        jl_module_init_order = (jl_array_t*)jl_read_value(&s);
 
         uint32_t gs_ctr = read_uint32(f);
         jl_require_world = read_uint(f);
