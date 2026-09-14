@@ -29,7 +29,8 @@ STAGE1_CPU_TARGET ?= generic
 # than the default compiler (e.g. aarch64-apple-darwin vs arm64-apple-darwin),
 # and a plain `make binary-dist` of the optimized build would then consider
 # build_h.jl stale and rebuild the system image.
-JULIA_BUILD_VARS:=$(shell MAKEFLAGS= $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-EXE print-BUILD_MACHINE)
+# Preserve command-line variables, but omit flags such as -n from the probe.
+JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-EXE print-BUILD_MACHINE)
 HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
 HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
 EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
