@@ -353,7 +353,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         push!(result_order, node_to_schedule)
         bb_rename[node_to_schedule] = length(result_order)
         cs = domtree.nodes[node_to_schedule].children
-        terminator = ir[SSAValue(last(ir.cfg.blocks[node_to_schedule].stmts))][:stmt]
+        block = ir.cfg.blocks[node_to_schedule]
+        terminator = ir[SSAValue(last(block.stmts))][:stmt]
         fallthrough = node_to_schedule + 1
         node_to_schedule = -1
 
@@ -374,7 +375,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
         # If a fallthrough successor is no longer the fallthrough after sorting, we need to
         # add a GotoNode (and either extend or split the basic block as necessary)
-        if node_to_schedule != fallthrough && !isa(terminator, Union{GotoNode, ReturnNode})
+        # Blocks with no successors may end in a must-throw instruction instead of a ReturnNode.
+        if node_to_schedule != fallthrough && !isempty(block.succs) && !isa(terminator, GotoNode)
             if isa(terminator, GotoIfNot)
                 # Need to break the critical edge
                 push!(result_order, 0)
@@ -452,7 +454,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             else
                 @assert isexpr(terminator, :leave)
             end
-        elseif !isa(terminator, ReturnNode)
+        elseif !isempty(ir.cfg.blocks[bb].succs)
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
