@@ -4727,7 +4727,12 @@ end
             end
             M = maybe_root_module(req_key)
             if M isa Module
-                if PkgId(M) == req_key && module_build_id(M) === req_build_id
+                # With `ignore_loaded` the verdict has to reflect the environment rather than the
+                # session: a dependency loaded at the version this cache was built against says
+                # nothing about the version the manifest resolves now, so only sysimage modules,
+                # which cannot differ, are accepted on that basis; everything else is checked below
+                # against its located source and on-disk cache.
+                if PkgId(M) == req_key && module_build_id(M) === req_build_id && (!ignore_loaded || in_sysimage(req_key))
                     depmods[i] = M
                     continue
                 elseif M == Core
