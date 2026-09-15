@@ -267,8 +267,7 @@ endif
 $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
 
-# Stage 0: a toolchain to build with. BinaryBuilder has no BOLT, so that one is
-# built from source; everything else is downloaded.
+# Stage 0: download the toolchain.
 stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
 	@echo "--- Stage 0: toolchain"
