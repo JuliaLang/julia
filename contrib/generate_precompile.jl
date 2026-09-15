@@ -110,10 +110,8 @@ precompile(Base.get_preferences, (Base.UUID,))
 precompile(Base.record_compiletime_preference, (Base.UUID, String))
 
 # Threads.@threads
-# threading_run ends with filter!(istaskfailed, tasks), whose sizehint! call pulls the
-# @noinline _growbeg_internal! into the compile unit of whoever runs the first threaded region
-precompile(Tuple{typeof(Base.sizehint!), Vector{Task}, Int})
-precompile(Tuple{typeof(Base._growbeg_internal!), Vector{Task}, Int, Int})
+# threading_run is not specialized on the loop body, so one compile covers every call site
+precompile(Tuple{typeof(Base.Threads.threading_run), Any, Bool})
 
 # miscellaneous
 precompile(Tuple{typeof(Base.exit)})

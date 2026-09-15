@@ -168,7 +168,17 @@ This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
-function threading_run(fun, static)
+# `fun` is captured by the scope closure and, inside it, by every task closure. Lowering
+# only keeps a `@nospecialize` argument untyped for a direct capture (#58426), not for the
+# nested one, so hold it in a struct with an untyped field: both closure types and
+# `threading_run` itself are then the same for every `@threads` site and compile once into
+# the sysimage. Cost: one dynamic dispatch per task at start.
+struct _ThreadsFun
+    fun
+end
+
+Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
+    tfun = _ThreadsFun(fun)
     if static && ccall(:jl_in_threaded_region, Cint, ()) != 0
         error("`@threads :static` cannot be used concurrently or nested")
     end
@@ -185,7 +195,7 @@ function threading_run(fun, static)
     try
         Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
             for i = 1:n
-                t = Task(() -> fun(i)) # pass in tid
+                t = Task(() -> tfun.fun(i)) # pass in tid
                 t.sticky = static
                 if static
                     ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
