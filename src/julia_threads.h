@@ -315,7 +315,7 @@ typedef struct _jl_tls_states_t {
 
 typedef struct _jl_timing_block_t jl_timing_block_t;
 typedef struct _jl_timing_event_t jl_timing_event_t;
-typedef struct _jl_excstack_t jl_excstack_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_excstack_t jl_excstack_t;
 
 typedef struct _jl_handler_t jl_handler_t;
 
