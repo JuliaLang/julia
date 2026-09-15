@@ -20,6 +20,29 @@ function new_state()
     LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
 end
 
+# Normal and prefix history search prompts emit one marker pair without changing their width.
+@testset "semantic prompt rendering" begin
+    for markers in (REPL.OSC_133_MARKERS, REPL.OSC_633_MARKERS),
+            enabled in (false, true), color in (false, true)
+        output = IOBuffer()
+        term = FakeTerminal(IOBuffer(), output, IOBuffer(), color)
+        repl = REPL.LineEditREPL(term, color)
+        repl.semantic_prompt_markers = markers
+        repl.options.semantic_prompts = enabled
+        prompt = LineEdit.Prompt("julia> "; repl)
+        prefix_prompt = LineEdit.PrefixHistoryPrompt(prompt.hist, prompt)
+        rendered = color ? Base.text_colors[:bold] * "julia> " * Base.text_colors[:normal] : "julia> "
+        expected = enabled ? markers.prompt_start * rendered * markers.prompt_end : rendered
+        for state in (prompt, LineEdit.init_state(term, prompt), LineEdit.init_state(term, prefix_prompt))
+            @test LineEdit.write_prompt(term, state, color) == 7
+            @test String(take!(output)) == expected
+        end
+        prompt.repl = nothing
+        @test LineEdit.write_prompt(term, prompt, color) == 7
+        @test String(take!(output)) == rendered
+    end
+end
+
 # History search initializes prompt modes added after MIState creation (#61584).
 module HistorySearchDynamicMode
 
