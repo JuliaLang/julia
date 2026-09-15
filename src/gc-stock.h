@@ -590,6 +590,13 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_
 void gc_collect_neighbors(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void jl_gc_debug_init(void) JL_NOTSAFEPOINT;
+#ifdef WITH_GC_REGIONS
+// What the census and the reset of a region use of the collector
+// (gc-regions.c).
+void gc_mark_loop_serial(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void gc_queue_execution_roots(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPOINT;
+void gc_region_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
+#endif
 
 // GC permanent allocation
 extern uv_mutex_t gc_perm_lock;
