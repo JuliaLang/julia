@@ -88,7 +88,9 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     if (!jl_trylock_profile())
         return 0;
 #endif
-#if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
+// Windows guards RtlVirtualUnwind in jl_unw_step so recovery cannot bypass
+// cleanup of locks acquired during function-table lookup.
+#if !defined(_OS_WINDOWS_)
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     jl_set_safe_restore(&buf);
@@ -247,6 +249,15 @@ JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, si
         return 0;
     }
     bt_data[0].uintptr = (uintptr_t) &failed_to_stop_thread_fun;
+    return 1;
+}
+
+JL_DLLEXPORT NOINLINE int failed_to_unwind_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
+{
+    if (maxsize < 1) {
+        return 0;
+    }
+    bt_data[0].uintptr = (uintptr_t) &failed_to_unwind_fun;
     return 1;
 }
 
@@ -724,6 +735,18 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     else {
         PVOID HandlerData;
         DWORD64 EstablisherFrame;
+        // An asynchronous sample can have registers inconsistent with the unwind
+        // info (e.g. during a task switch), causing RtlVirtualUnwind to fault.
+        // Recover here to truncate the backtrace and let the profiler resume
+        // the sampled thread. Keep function-table lookup outside this guard:
+        // it can hold locks that recovery would leave locked.
+        jl_jmp_buf *old_buf = jl_get_safe_restore();
+        jl_jmp_buf buf;
+        jl_set_safe_restore(&buf);
+        if (jl_setjmp(buf, 0)) {
+            jl_set_safe_restore(old_buf);
+            return 0;
+        }
         (void)RtlVirtualUnwind(
                 0 /*UNW_FLAG_NHANDLER*/,
                 ImageBase,
@@ -733,6 +756,7 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
                 &HandlerData,
                 &EstablisherFrame,
                 NULL);
+        jl_set_safe_restore(old_buf);
     }
     return cursor->Rip != 0;
 #endif
@@ -1489,27 +1513,36 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     assert(mc->mc_rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)
-    mc->mc_gpregs.gp_x[19] = ((long*)mctx)[0];
-    mc->mc_gpregs.gp_x[20] = ((long*)mctx)[1];
-    mc->mc_gpregs.gp_x[21] = ((long*)mctx)[2];
-    mc->mc_gpregs.gp_x[22] = ((long*)mctx)[3];
-    mc->mc_gpregs.gp_x[23] = ((long*)mctx)[4];
-    mc->mc_gpregs.gp_x[24] = ((long*)mctx)[5];
-    mc->mc_gpregs.gp_x[25] = ((long*)mctx)[6];
-    mc->mc_gpregs.gp_x[26] = ((long*)mctx)[7];
-    mc->mc_gpregs.gp_x[27] = ((long*)mctx)[8];
-    mc->mc_gpregs.gp_x[28] = ((long*)mctx)[9];
-    mc->mc_gpregs.gp_x[29] = ((long*)mctx)[10];
-    mc->mc_gpregs.gp_lr = ((long*)mctx)[11];
-    mc->mc_gpregs.gp_sp = ((long*)mctx)[12];
-    mc->mc_fpregs.fp_q[7] = ((long*)mctx)[13];
-    mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14];
-    mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15];
-    mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16];
-    mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17];
-    mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18];
-    mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19];
-    mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20];
+    // https://github.com/freebsd/freebsd-src/blob/main/lib/libc/aarch64/gen/_setjmp.S
+    // The jump buffer is a packed array of 8-byte words (the __int128_t element
+    // type in <machine/setjmp.h> only forces alignment/size, it is not the stride):
+    //   [0] magic, [1] sp, [2..13] x19..x30, [14..21] d8..d15
+    mc->mc_gpregs.gp_sp = ((long*)mctx)[1];
+    mc->mc_gpregs.gp_x[19] = ((long*)mctx)[2];
+    mc->mc_gpregs.gp_x[20] = ((long*)mctx)[3];
+    mc->mc_gpregs.gp_x[21] = ((long*)mctx)[4];
+    mc->mc_gpregs.gp_x[22] = ((long*)mctx)[5];
+    mc->mc_gpregs.gp_x[23] = ((long*)mctx)[6];
+    mc->mc_gpregs.gp_x[24] = ((long*)mctx)[7];
+    mc->mc_gpregs.gp_x[25] = ((long*)mctx)[8];
+    mc->mc_gpregs.gp_x[26] = ((long*)mctx)[9];
+    mc->mc_gpregs.gp_x[27] = ((long*)mctx)[10];
+    mc->mc_gpregs.gp_x[28] = ((long*)mctx)[11];
+    mc->mc_gpregs.gp_x[29] = ((long*)mctx)[12]; // aka fp
+    mc->mc_gpregs.gp_lr = ((long*)mctx)[13]; // aka x30
+    // d8-d15 are the low halves of q8-q15. Zero-extending is fine here: AAPCS64
+    // only requires the bottom 64 bits of v8-v15 to be preserved across a call.
+    mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14]; // aka d8
+    mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15]; // aka d9
+    mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16]; // aka d10
+    mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17]; // aka d11
+    mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18]; // aka d12
+    mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19]; // aka d13
+    mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20]; // aka d14
+    mc->mc_fpregs.fp_q[15] = ((long*)mctx)[21]; // aka d15
+    // AArch64 resumes from a signal at ELR, not LR, so the restored return
+    // address has to be installed as the pc as well.
+    mc->mc_gpregs.gp_elr = mc->mc_gpregs.gp_lr;
     mc->mc_gpregs.gp_x[0] = val;
     assert(mc->mc_gpregs.gp_sp % 16 == 0);
     return 1;

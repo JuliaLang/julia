@@ -18,6 +18,10 @@ New language features
   `continue name` to continue a labeled loop ([#60481]).
 * `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
   field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+* A macrocall directly inside parens — e.g.  `(@info "msg" x=1)` — may now
+  continue its arguments on subsequent lines, so each argument of a long macro
+  call can be placed on its own line without switching to the comma separated
+  call syntax ([#60181]).
 * Primitive types with non-byte-multiple logical widths can now be defined ([#61359]).
 * Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
   that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
@@ -88,12 +92,22 @@ Compiler/Runtime improvements
 * Coverage reports now include code executed by the interpreter, such as top-level statements and method
   bodies run with `--compile=min`. Consequently, LCOV output and `.cov` files may contain source lines that
   were absent in earlier releases ([#62514]).
-* Coverage and allocation tracking no longer update counters atomically. This reduces the overhead of
-  instrumented code, but counter values may be inaccurate when the same source line runs concurrently on
-  multiple threads ([#62514]).
+* Coverage and allocation tracking use separate unordered atomic loads and stores. This avoids the atomic
+  read-modify-write overhead reported in [#62424] while keeping concurrent accesses well-defined; execution
+  counts may still be inaccurate when the same source line runs on multiple threads ([#62724]).
 * `--code-coverage=user` no longer includes inlined Base methods whose module cannot be recovered from debug
   information. This prevents coverage from writing `.cov` files for Base sources into the Julia installation
   ([#62514]).
+* Coverage now records only whether each source line ran by default, and reports a count of 1 for executed
+  lines in `.cov` files and LCOV tracefiles. Use `--code-coverage-mode=count` to collect execution counts
+  instead. The default `hit` mode avoids the load and increment at each instrumentation point ([#62724]).
+* Coverage runs can reuse instrumented package images across processes. The counter mode is part of
+  the cache identity; `user`, `all`, and `@path` select the same image variants and filter the counters
+  reported. Count images can also serve hit requests ([#62724]).
+* `--code-coverage=all` no longer invalidates system-image code at startup. To collect coverage from
+  that code, build Julia with `JULIA_COVERAGE_IMAGES=1`, which instruments the system image and bundled
+  package images in hit mode. `@path` instruments newly compiled and interpreted code like `user`,
+  while also reporting compatible image counters under the selected path ([#62724]).
 
 Command-line option changes
 ---------------------------
@@ -206,6 +220,10 @@ Standard library changes
 #### Random
 
 #### REPL
+
+#### Sockets
+
+* `getsockname` now also accepts a `UDPSocket`, returning the address and port it is bound to ([#63091]).
 
 #### SharedArrays
 

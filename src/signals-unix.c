@@ -1181,6 +1181,7 @@ static void do_profile(void) JL_NOTSAFEPOINT
         // and restore from the SEGV handler if anything happens.
         jl_jmp_buf *old_buf = jl_get_safe_restore();
         jl_jmp_buf buf;
+        size_t bt_size_start = profile_bt_size_cur;
 
         jl_set_safe_restore(&buf);
         if (jl_setjmp(buf, 0)) {
@@ -1192,6 +1193,11 @@ static void do_profile(void) JL_NOTSAFEPOINT
                     profile_bt_size_max - profile_bt_size_cur - 1, &signal_context, NULL);
         }
         jl_set_safe_restore(old_buf);
+        if (profile_bt_size_cur == bt_size_start) {
+            // unwinding produced no frames: record a marker so the sample is not silently dropped
+            profile_bt_size_cur += failed_to_unwind_fun((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                    profile_bt_size_max - profile_bt_size_cur - 1, 0);
+        }
 
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
 

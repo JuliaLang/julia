@@ -146,7 +146,7 @@ $(eval $(call copy_csl_static,crti.o))
 $(eval $(call copy_csl_static,crtn.o))
 $(eval $(call copy_csl_static,crtbeginS.o))
 $(eval $(call copy_csl_static,crtendS.o))
-ifeq ($(OS),Linux) # glibc-specific
+ifeq ($(LIBC),glibc)
 $(eval $(call copy_csl_static,libc_nonshared.a))
 endif
 endif
@@ -216,7 +216,7 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtn.o $(build_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtbeginS.o $(build_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtendS.o $(build_libdir)/
-ifeq ($(OS),Linux)
+ifeq ($(LIBC),glibc)
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libc_nonshared.a $(build_libdir)/
 endif
 endif

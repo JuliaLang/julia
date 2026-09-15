@@ -6,8 +6,14 @@
 #include <llvm/Support/SHA1.h>
 
 #include "jl_codegen_hash.inc"
+#include "jitlayers.h"
 #include "julia.h"
 #include "julia_internal.h"
+
+#ifdef __linux__
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 
 namespace endian = llvm::support::endian;
 using endianness = llvm::endianness;
@@ -66,6 +72,21 @@ static FILE *getLogFile()
 
 static FILE *LogFile = getLogFile();
 
+// Linux LMDB uses robust process-shared mutexes to recover locks after an
+// owner dies. QEMU user mode returns ENOSYS for both robust-list syscalls,
+// but glibc still allows creating these mutexes, leaving dead owners' locks
+// unrecoverable. Query the current thread without changing libc's robust list.
+static bool robustMutexesAvailable() JL_NOTSAFEPOINT
+{
+#ifdef __linux__
+    void *head = nullptr;
+    size_t len = 0;
+    return syscall(SYS_get_robust_list, 0, &head, &len) == 0;
+#else
+    return true;
+#endif
+}
+
 static std::optional<std::string> getCachePath() JL_CANSAFEPOINT
 {
     // Useful to be able to override the objcache path for testing, or to use
@@ -83,9 +104,11 @@ static std::optional<std::string> getCachePath() JL_CANSAFEPOINT
 
     // LMDB 1.0 cannot open data files created by LMDB 0.9, so use a
     // different directory than the LMDB 0.9 based versions of this code.
+    // LMDB's data and lock layouts depend on the target ABI (including word
+    // size and libc mutex layout). Separate targets that share a depot.
     return (llvm::Twine(jl_string_ptr(DepotStr)) + "/cache/v" +
             llvm::Twine(JULIA_VERSION_MAJOR) + "." + llvm::Twine(JULIA_VERSION_MINOR) +
-            "/objcache-lmdb1")
+            "/objcache-lmdb1/" + jl_ExecutionEngine->getTargetTriple().str())
         .str();
 }
 
@@ -176,6 +199,11 @@ void ObjCache::initDB()
     // triggers an assertion in rr if another process does a writev() to the fd.
     if (jl_running_under_rr(0))
         goto done;
+
+    if (!robustMutexesAvailable()) {
+        DisabledNotice = "robust mutex support could not be verified";
+        goto done;
+    }
 
     if (checkMDB(mdb_env_create(&Env))) {
         Env = nullptr;
@@ -419,6 +447,97 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     }
 
     return Buf;
+}
+
+// Domain-separate KV entries from module-hash entries: the latter hash raw
+// bitcode, the former hash a tagged (namespace, key) frame.
+static ObjCache::Hash hashKVKey(const char *Ns, const uint8_t *Key,
+                                size_t KeyLen) JL_NOTSAFEPOINT
+{
+    llvm::SHA1 Hasher;
+    Hasher.update(llvm::StringRef("JLKV\0", 5));
+    uint64_t NsLen = strlen(Ns);
+    uint8_t Len[sizeof NsLen];
+    endian::write(Len, NsLen, endianness::big);
+    Hasher.update(Len);
+    Hasher.update(llvm::StringRef(Ns, NsLen));
+    Hasher.update({Key, KeyLen});
+    return Hasher.final();
+}
+
+jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key,
+                            size_t KeyLen) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    if (!Initialized.load(memory_order_acquire))
+        initDB();
+    if (!Env)
+        return jl_nothing;
+
+    auto Hash = hashKVKey(Ns, Key, KeyLen);
+    auto ObjKey = toObjKey(Hash);
+
+    jl_array_t *Ret = nullptr;
+    {
+        MDBTxn Txn{Env, MDB_RDONLY};
+        if (!Txn.Txn)
+            return jl_nothing;
+
+        MDB_val Data;
+        MDB_val MKey = mdbVal(ObjKey);
+        if (int Err = mdb_get(Txn.Txn, ObjCacheDbi, &MKey, &Data)) {
+            if (Err != MDB_NOTFOUND)
+                checkMDB(Err);
+            return jl_nothing;
+        }
+
+        // Copy out of the memory map while the read transaction is alive.
+        // The allocation can run GC, which is fine: LMDB read txns only
+        // pin a snapshot, they hold no lock that Julia code can contend on.
+        JL_GC_PUSH1(&Ret);
+        jl_task_t *ct = jl_current_task;
+        int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+        Ret = jl_alloc_array_1d(jl_array_uint8_type, Data.mv_size);
+        memcpy(jl_array_data(Ret, uint8_t), Data.mv_data, Data.mv_size);
+        jl_gc_unsafe_leave(ct->ptls, gc_state);
+        JL_GC_POP();
+    }
+    NHit.fetch_add(1, memory_order_relaxed);
+    NRead.fetch_add(jl_array_len(Ret), memory_order_relaxed);
+
+    // Queue an atime refresh for LRU bookkeeping.
+    {
+        std::unique_lock<std::mutex> Lock{Mutex};
+        ObjQueue.push_back({Hash, nullptr});
+    }
+    QueueCond.notify_one();
+
+    return (jl_value_t *)Ret;
+}
+
+int ObjCache::kvPut(const char *Ns, const uint8_t *Key, size_t KeyLen,
+                    const uint8_t *Val, size_t ValLen) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    if (!Initialized.load(memory_order_acquire))
+        initDB();
+    if (!Env)
+        return 0;
+
+    auto Hash = hashKVKey(Ns, Key, KeyLen);
+    auto Buf = llvm::MemoryBuffer::getMemBufferCopy(
+        llvm::StringRef((const char *)Val, ValLen));
+    {
+        std::unique_lock<std::mutex> Lock{Mutex};
+        ObjQueue.push_back({Hash, std::move(Buf)});
+    }
+    QueueCond.notify_one();
+    return 1;
+}
+
+int ObjCache::kvEnabled() JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    if (!Initialized.load(memory_order_acquire))
+        initDB();
+    return Env != nullptr;
 }
 
 bool ObjCache::isEnabled() const

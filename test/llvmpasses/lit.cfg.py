@@ -9,8 +9,8 @@ import lit.formats
 config.name = 'Julia'
 config.suffixes = ['.ll','.jl']
 config.test_source_root = os.path.dirname(__file__)
-config.test_format = lit.formats.ShTest(True)
-config.substitutions.append(('%shlibext', '.dylib' if platform.system() == 'Darwin' else '.dll' if
+config.test_format = lit.formats.ShTest(False)
+config.substitutions.append(('%{shlibext}', '.dylib' if platform.system() == 'Darwin' else '.dll' if
     platform.system() == 'Windows' else '.so'))
 
 config.environment['HOME'] = "/tmp"

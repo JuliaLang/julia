@@ -122,6 +122,8 @@ void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT;
 // Deallocates any memory previously used for thread-local GC data structures.
 // Mostly used to ensure that we perform this memory cleanup for foreign threads that are
 // about to leave Julia.
+// After this call the GC may no longer scan this thread's roots; the caller
+// must be GC-unsafe and must not poll a safepoint afterwards.
 void jl_free_thread_gc_state(struct _jl_tls_states_t *ptls);
 
 // ========================================================================= //
@@ -344,6 +346,8 @@ STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *p
 // per field of the object being copied, but may be special-cased for performance reasons.
 STATIC_INLINE void jl_gc_multi_wb(const void *parent,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
+// Write-barrier function that must be used before draining the finalizer queue.
+STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue) JL_NOTSAFEPOINT;
 // Write-barrier function that must be used after copying fields of elements of genericmemory objects
 // into another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.

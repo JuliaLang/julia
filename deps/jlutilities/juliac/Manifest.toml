@@ -28,7 +28,7 @@ version = "1.11.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.5.2+0"
+version = "1.5.7+0"
 
     [deps.CompilerSupportLibraries_jll.syntax]
     julia_version = "1.6.0"
@@ -58,7 +58,7 @@ version = "1.11.0"
 
 [[deps.Glob]]
 git-tree-sha1 = "246c628cec062230b7d183aab88841fa94fcabe9"
-registries = "General"
+registries = ["General", "General"]
 uuid = "c27321d9-0574-5035-807b-f59d2c89b15c"
 version = "1.5.0"
 
@@ -68,7 +68,7 @@ version = "1.5.0"
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
 git-tree-sha1 = "7204148362dafe5fe6a273f855b8ccbe4df8173e"
-registries = "General"
+registries = ["General", "General"]
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
 version = "1.8.0"
 
@@ -76,12 +76,12 @@ version = "1.8.0"
     julia_version = "1.0.0"
 
 [[deps.JuliaC]]
-deps = ["LazyArtifacts", "Libdl", "Mmap", "ObjectFile", "PackageCompiler", "Patchelf_jll", "Pkg", "Preferences", "RelocatableFolders", "StructIO", "TOML"]
-git-tree-sha1 = "e20ce4ef45c1abfcded4e0a6e2d0ca6d5d4267c4"
+deps = ["LIEF_Patchelf_jll", "LazyArtifacts", "Libdl", "Mmap", "ObjectFile", "PackageCompiler", "Pkg", "Preferences", "RelocatableFolders", "SHA", "StructIO", "TOML"]
+git-tree-sha1 = "b23c19d50a0f47d4cab16299c760ca842cd47599"
 repo-rev = "main"
 repo-url = "https://github.com/JuliaLang/JuliaC.jl.git"
 uuid = "acedd4c2-ced6-4a15-accc-2607eb759ba2"
-version = "0.3.8"
+version = "0.3.10"
 
     [deps.JuliaC.syntax]
     julia_version = "1.10.0"
@@ -93,6 +93,16 @@ version = "1.13.0"
 
     [deps.JuliaSyntaxHighlighting.syntax]
     julia_version = "1.12.0"
+
+[[deps.LIEF_Patchelf_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "dcc5301d81b1e7f1c9768aa2658fcd7ca36ff231"
+registries = "General"
+uuid = "d7f80cea-2d23-50ed-9ab7-0409554cddf2"
+version = "1.0.0+1"
+
+    [deps.LIEF_Patchelf_jll.syntax]
+    julia_version = "1.6.0"
 
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
@@ -113,7 +123,7 @@ version = "1.0.0"
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "Zlib_jll", "Zstd_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.20.0+1"
+version = "8.21.0+0"
 
     [deps.LibCURL_jll.syntax]
     julia_version = "1.11.0"
@@ -129,7 +139,7 @@ version = "1.11.0"
 [[deps.LibGit2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "PCRE2_jll", "Zlib_jll"]
 uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.9.4+0"
+version = "1.9.7+0"
 
     [deps.LibGit2_jll.syntax]
     julia_version = "1.9.0"
@@ -137,7 +147,7 @@ version = "1.9.4+0"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "OpenSSL_jll", "Zlib_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.11.101+0"
+version = "1.11.104+0"
 
     [deps.LibSSH2_jll.syntax]
     julia_version = "1.8.0"
@@ -165,6 +175,7 @@ version = "1.11.0"
     julia_version = "1.14.0-DEV"
 
 [[deps.Mmap]]
+deps = ["Serialization"]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 version = "1.11.0"
 
@@ -173,7 +184,7 @@ version = "1.11.0"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2026.5.14"
+version = "2026.8.13"
 
     [deps.MozillaCACerts_jll.syntax]
     julia_version = "1.14.0-DEV"
@@ -188,7 +199,7 @@ version = "1.3.0"
 [[deps.ObjectFile]]
 deps = ["Reexport", "StructIO"]
 git-tree-sha1 = "22faba70c22d2f03e60fbc61da99c4ebfc3eb9ba"
-registries = "General"
+registries = ["General", "General"]
 uuid = "d8793406-e978-5875-9003-1fc021f44a92"
 version = "0.5.0"
 
@@ -198,7 +209,7 @@ version = "0.5.0"
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.7+0"
+version = "3.5.8+0"
 
     [deps.OpenSSL_jll.syntax]
     julia_version = "1.6.0"
@@ -206,7 +217,7 @@ version = "3.5.7+0"
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
-version = "10.47.0+0"
+version = "10.48.0+0"
 
     [deps.PCRE2_jll.syntax]
     julia_version = "1.6.0"
@@ -214,25 +225,15 @@ version = "10.47.0+0"
 [[deps.PackageCompiler]]
 deps = ["Artifacts", "Glob", "LazyArtifacts", "Libdl", "Pkg", "Printf", "RelocatableFolders", "TOML", "UUIDs", "p7zip_jll"]
 git-tree-sha1 = "513193b976208b1b646ad4303323153e8bff0997"
-registries = "General"
+registries = ["General", "General"]
 uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
 version = "2.4.0"
 
     [deps.PackageCompiler.syntax]
     julia_version = "1.10.0"
 
-[[deps.Patchelf_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "ad1cab3e8273c912f722f40779e20f3e29d58f1f"
-registries = "General"
-uuid = "f2cf89d6-2bfd-5c44-bd2c-068eea195c0c"
-version = "0.18.0+0"
-
-    [deps.Patchelf_jll.syntax]
-    julia_version = "1.6.0"
-
 [[deps.Pkg]]
-deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "Zstd_jll", "p7zip_jll"]
+deps = ["ArgTools", "Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "Zstd_jll", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.14.0"
 
@@ -248,7 +249,7 @@ version = "1.14.0"
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "8b770b60760d4451834fe79dd483e318eee709c4"
-registries = "General"
+registries = ["General", "General"]
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.5.2"
 
@@ -273,7 +274,7 @@ version = "1.11.0"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
-registries = "General"
+registries = ["General", "General"]
 uuid = "189a3867-3050-52da-a836-e630ba90ab69"
 version = "1.2.2"
 
@@ -283,7 +284,7 @@ version = "1.2.2"
 [[deps.RelocatableFolders]]
 deps = ["SHA", "Scratch"]
 git-tree-sha1 = "ffdaf70d81cf6ff22c2b6e733c900c3321cab864"
-registries = "General"
+registries = ["General", "General"]
 uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
 version = "1.0.1"
 
@@ -300,16 +301,23 @@ version = "1.13.0"
 [[deps.Scratch]]
 deps = ["Dates"]
 git-tree-sha1 = "9b81b8393e50b7d4e6d0a9f14e192294d3b7c109"
-registries = "General"
+registries = ["General", "General"]
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
 version = "1.3.0"
 
     [deps.Scratch.syntax]
     julia_version = "1.9.0"
 
+[[deps.Serialization]]
+uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
+
+    [deps.Serialization.syntax]
+    julia_version = "1.14.0-DEV"
+
 [[deps.StructIO]]
 git-tree-sha1 = "c581be48ae1cbf83e899b14c07a807e1787512cc"
-registries = "General"
+registries = ["General", "General"]
 uuid = "53d494c1-5632-5724-8f4c-31dff12d585f"
 version = "0.3.1"
 
@@ -373,7 +381,7 @@ version = "1.5.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.69.0+0"
+version = "1.70.0+0"
 
     [deps.nghttp2_jll.syntax]
     julia_version = "1.11.0"
@@ -381,7 +389,7 @@ version = "1.69.0+0"
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.8.0+0"
+version = "17.8.2+0"
 
     [deps.p7zip_jll.syntax]
     julia_version = "1.6.0"

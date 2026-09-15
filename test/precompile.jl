@@ -1996,6 +1996,24 @@ precompile_test_harness("Module tparams") do load_path
     end
 end
 
+# A module reached only through a type parameter must support immediate serialization.
+precompile_test_harness("Module immediate serialization") do load_path
+    write(joinpath(load_path, "ModuleImmediateInline.jl"),
+        """
+        module ModuleImmediateInline
+            const value = Val{Module(:Anon)}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleImmediateInline"))
+    (@eval (using ModuleImmediateInline))
+    invokelatest() do
+        m = typeof(ModuleImmediateInline.value).parameters[1]
+        @test m isa Module
+        @test nameof(m) === :Anon
+        @test ModuleImmediateInline.value === Val(m)
+    end
+end
+
 precompile_test_harness("PkgCacheInspector") do load_path
     # Test functionality needed by PkgCacheInspector.jl
     write(joinpath(load_path, "PCI.jl"),
@@ -2258,19 +2276,10 @@ precompile_test_harness("Test flags") do load_path
           end
           """)
 
-    current_flags = Base.CacheFlags()
-    modified_flags = Base.CacheFlags(
-        current_flags.use_pkgimages,
-        current_flags.debug_level,
-        2,
-        current_flags.inline,
-        3
-    )
     ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
-        _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
-        cacheflags = Base.CacheFlags(flags)
+        _, _, _, _, _, _, cacheflags = Base.parse_cache_header(io, ji)
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
@@ -3443,6 +3452,104 @@ end
     end end
 end
 
+# Test that precompilepkgs recompiles a cached dependent of a loaded package when the
+# environment now resolves a different version of that package. The dependent's cache is
+# built against the loaded version, so a check that trusts loaded modules considers it fresh.
+@testset "precompilepkgs recompiles dependents of a loaded package at another version" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        for (dirname, marker, version) in (("LoadedDepOld", 1, "0.1.0"), ("LoadedDepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "LoadedDep"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "LoadedDep.jl"),
+                  """
+                  module LoadedDep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+        for (project, loaded_dep_dir, version) in (("old_project", "LoadedDepOld", "0.1.0"), ("new_project", "LoadedDepNew", "0.2.0"))
+            project_path = joinpath(dir, project)
+            mkpath(project_path)
+            write(joinpath(project_path, "Project.toml"),
+                  """
+                  [deps]
+                  DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+                  LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+                  """)
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  manifest_format = "2.0"
+
+                  [[deps.DepUser]]
+                  deps = ["LoadedDep"]
+                  path = "../dev/DepUser/"
+                  uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+                  version = "0.1.0"
+
+                  [[deps.LoadedDep]]
+                  path = "../dev/$loaded_dep_dir/"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+        end
+        old_project_path = joinpath(dir, "old_project")
+        new_project_path = joinpath(dir, "new_project")
+
+        # Cache DepUser against the old LoadedDep
+        @test success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e 'using DepUser'`,
+                             "JULIA_DEPOT_PATH" => depot))
+
+        # Load the old LoadedDep, switch to the project that resolves the new one, and precompile.
+        # DepUser has to be rebuilt against the new LoadedDep although the loaded one still matches
+        # its existing cache. Report which LoadedDep build the freshest DepUser cache requires.
+        script = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.Precompilation.precompilepkgs(; fancyprint=false)
+            dep = Base.identify_package("LoadedDep")
+            depuser = Base.identify_package("DepUser")
+            new_dep_build, _ = Base.parse_cache_buildid(Base.compilecache_freshest_path(dep; ignore_loaded=true))
+            depuser_cache = Base.compilecache_freshest_path(depuser; ignore_loaded=true)
+            io = open(depuser_cache)
+            Base.isvalid_cache_header(io)
+            required_modules = Base.parse_cache_header(io, depuser_cache)[3]
+            close(io)
+            required_dep_build = only(build_id for (pkg, build_id) in required_modules if pkg == dep)
+            println("DEPUSER_REBUILT_AGAINST_NEW_DEP=", required_dep_build == new_dep_build)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        logfile = joinpath(dir, "precompile.log")
+        proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+        output = read(logfile, String)
+        @test success(proc) || (println(output); false)
+        @test occursin("DEPUSER_REBUILT_AGAINST_NEW_DEP=true", output)
+    end end
+end
+
 # Test that warn_loaded does not warn when the loaded dep is already at the correct version
 @testset "warn_loaded does not warn when loaded dep matches env version" begin
     mkdepottempdir() do depot; mktempdir() do dir
@@ -3735,6 +3842,118 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
         @test Base.iscancelled(CancelExtB.B_MID)
         @test Base.iscancelled(CancelExtB.B_CHILD)
         @test Base.iscancelled(CancelExtB.B_GRAND)
+    end
+end
+
+precompile_test_harness("pkgimage type cache dedup") do dir
+    # Check deduplication when a type precedes its supertype in the image.
+    # The unused IFD binding preserves that order.
+    write(joinpath(dir, "DedupColors.jl"),
+          """
+          module DedupColors
+              export CAbstractGray, CGray
+              abstract type CAbstractGray{T} end
+              struct CGray{T} <: CAbstractGray{T}
+                  val::T
+              end
+              Base.adjoint(c::CAbstractGray) = c
+          end
+          """)
+    write(joinpath(dir, "DedupTrigger.jl"),
+          """
+          module DedupTrigger
+              using DedupColors
+
+              const IFD = Dict{UInt16, Any}
+
+              function readdata!(target::AbstractArray)
+                  fill!(reinterpret(UInt8, view(target, 1:length(target))), 0x00)
+              end
+
+              function load()
+                  ifd = IFD()
+                  ifd[0x0106] = UInt16(1)
+                  type = Int(ifd[0x0106]) == 2 ? Ref : CGray
+                  pixeltype = type{UInt8}
+                  cache = Array{pixeltype}(undef, 2, 2)
+                  readdata!(cache)
+                  Matrix(cache')
+              end
+
+              load()
+          end
+          """)
+    Base.compilecache(Base.PkgId("DedupColors"))
+    Base.compilecache(Base.PkgId("DedupTrigger"))
+    @eval using DedupColors
+    M = invokelatest() do
+        Memory{DedupColors.CGray{UInt8}}
+    end
+    @eval using DedupTrigger
+    invokelatest() do
+        CGrayU8 = DedupColors.CGray{UInt8}
+        for T in (Memory{CGrayU8}, DenseVector{CGrayU8})
+            tn = T.name
+            n = 0
+            for t in tn.cache
+                if t isa DataType && t.name === tn &&
+                        length(t.parameters) == length(T.parameters) &&
+                        all(i -> t.parameters[i] === T.parameters[i], eachindex(T.parameters))
+                    n += 1
+                end
+            end
+            @test n == 1
+        end
+        @test M === Memory{DedupColors.CGray{UInt8}}
+    end
+end
+
+# Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
+# the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
+# precompile in a child whose stderr is a pty and look for the color escapes in its output.
+if !Sys.iswindows() # child-on-fake-pty tests are skipped on Windows (see misc.jl)
+    @testset "precompile output to a TTY is colored" begin
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        mkdepottempdir() do depot
+            pkg_path = joinpath(depot, "dev", "ColorTTY")
+            mkpath(joinpath(pkg_path, "src"))
+            write(joinpath(pkg_path, "src", "ColorTTY.jl"), "module ColorTTY end\n")
+            write(joinpath(pkg_path, "Project.toml"),
+                """
+                name = "ColorTTY"
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            write(joinpath(pkg_path, "Manifest.toml"),
+                """
+                julia_version = "$(VERSION.major).$(VERSION.minor).0"
+                manifest_format = "2.0"
+
+                [[deps.ColorTTY]]
+                path = "."
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            # `stderr` is passed through untouched so the driver has to wrap the raw TTY itself
+            cmd = addenv(`$(Base.julia_cmd()) --color=yes --startup-file=no --project=$pkg_path -e 'Base.Precompilation.precompilepkgs(["ColorTTY"]; fancyprint=false)'`,
+                         "JULIA_DEPOT_PATH" => depot)
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, devnull, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            output = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(output, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            out = String(take!(output))
+            @test success(p)
+            @test occursin("ColorTTY", out)
+            @test occursin("\e[32m", out) # the green ✓ of the precompiled package
+        end
     end
 end
 

@@ -1154,6 +1154,20 @@ STATIC_INLINE void* bump_alloc_fast(MMTkMutatorContext* mutator, uintptr_t* curs
     }
 }
 
+// Like `bump_alloc_fast`, but the slow path is taken with explicit allocation options rather
+// than MMTk's defaults.
+STATIC_INLINE void* bump_alloc_fast_with_options(MMTkMutatorContext* mutator, uintptr_t* cursor, uintptr_t limit, size_t size, size_t align, size_t offset, int allocator, MMTk_AllocationOptions options) JL_NOTSAFEPOINT {
+    intptr_t delta = (-offset - *cursor) & (align - 1);
+    uintptr_t result = *cursor + (uintptr_t)delta;
+
+    if (__unlikely(result + size > limit)) {
+        return (void*) mmtk_alloc_with_options(mutator, size, align, offset, allocator, options);
+    } else {
+        *cursor = result + size;
+        return (void*)result;
+    }
+}
+
 STATIC_INLINE void* mmtk_immix_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
     ImmixAllocator* allocator = &mutator->allocators.immix[MMTK_DEFAULT_IMMIX_ALLOCATOR];
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (intptr_t)allocator->limit, size, align, offset, 0);
@@ -1168,9 +1182,18 @@ STATIC_INLINE void mmtk_immix_post_alloc_fast(MMTkMutatorContext* mutator, void*
     // but when supporting moving, this is where we set the valid object (VO) bit
 }
 
-STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
+// Permanent (immortal) allocation is `JL_NOTSAFEPOINT`.
+STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) JL_NOTSAFEPOINT {
     BumpAllocator* allocator = &mutator->allocators.bump_pointer[MMTK_IMMORTAL_BUMP_ALLOCATOR];
-    return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
+    MMTk_AllocationOptions options = {
+        // MMTk may go above the current heap size to allocate -- avoid returning NULL
+        .allow_overcommit = true,
+        // MMTk will not block here
+        .at_safepoint = false,
+        // MMTk will not call back into Julia to throw an exception -- we are in a `JL_NOTSAFEPOINT` region
+        .allow_oom_call = false,
+    };
+    return bump_alloc_fast_with_options(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1, options);
 }
 
 STATIC_INLINE void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
@@ -1340,14 +1363,22 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return realloc(p, sz);
 }
 
-void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     size_t allocsz = mmtk_align_alloc_sz(sz);
     void* addr = mmtk_immortal_alloc_fast(&ptls->gc_tls.mmtk_mutator, allocsz, align, offset);
+    if (__unlikely(addr == NULL)) {
+        // The immortal allocation is allowed to over-commit, so a NULL result means we could not
+        // get memory from the OS at all. We cannot block for a GC or throw from here (see the
+        // comment on `mmtk_immortal_alloc_fast`), and the callers have no way to recover from a
+        // failed permanent allocation, so this is fatal.
+        jl_safe_printf("FATAL: out of memory in permanent allocation of %zu bytes.\n", sz);
+        abort();
+    }
     return addr;
 }
 
-void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return jl_gc_perm_alloc_nolock(ptls, sz, zero, align, offset);

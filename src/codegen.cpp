@@ -209,6 +209,20 @@ static void setNameWithField(jl_codegen_output_t &out, Value *V, std::function<S
     }
 }
 
+
+// LLVM 23 redefined BasicBlock::getTerminator() to assume a well-formed block
+// (it asserts and returns the last instruction unconditionally) and introduced
+// getTerminatorOrNull() for the old null-returning behavior. Codegen inspects
+// blocks while they are still under construction, so it needs the latter.
+static Instruction *getTerminatorOrNull(BasicBlock *BB) JL_NOTSAFEPOINT
+{
+#if JL_LLVM_VERSION >= 230000
+    return BB->getTerminatorOrNull();
+#else
+    return BB->getTerminator();
+#endif
+}
+
 STATISTIC(EmittedAllocas, "Number of allocas emitted");
 STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
 STATISTIC(ModulesCreated, "Number of LLVM Modules created");
@@ -350,6 +364,7 @@ struct jl_tbaacache_t {
     MDNode *tbaa_arraybuf = nullptr;       // Data in an array of POD
     MDNode *tbaa_arrayselbyte = nullptr;   // a selector byte in a isbits Union jl_genericmemory_t
     MDNode *tbaa_const = nullptr;      // Memory that is immutable by the time LLVM can see it
+    MDNode *tbaa_coverage = nullptr;   // Coverage and malloc-log counters; disjoint from all user-visible memory
     bool initialized = false;
 
     jl_tbaacache_t() = default;
@@ -403,6 +418,7 @@ struct jl_tbaacache_t {
         tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_memory_scalar).first;
         tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_memory_scalar).first;
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
+        tbaa_coverage = tbaa_make_child(mbuilder, "jtbaa_coverage").first;
     }
 };
 }  // anonymous namespace
@@ -418,6 +434,7 @@ struct jl_noaliascache_t {
         MDNode *stack = nullptr;          // Stack slot
         MDNode *data = nullptr;           // Any user data that `pointerset/ref` are allowed to alias
         MDNode *constant = nullptr;       // Memory that is immutable by the time LLVM can see it
+        MDNode *coverage = nullptr;       // Coverage and malloc-log counters
 
         jl_regions_t() = default;
 
@@ -429,6 +446,7 @@ struct jl_noaliascache_t {
             this->stack = mbuilder.createAliasScope("jnoalias_stack", domain);
             this->data = mbuilder.createAliasScope("jnoalias_data", domain);
             this->constant = mbuilder.createAliasScope("jnoalias_const", domain);
+            this->coverage = mbuilder.createAliasScope("jnoalias_coverage", domain);
         }
     } regions;
 
@@ -1697,7 +1715,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
 //    '!tbaa' metadata from the jl_tbaacache_t tree.
 namespace {
 struct jl_aliasinfo_t {
-    enum class Region { unknown, gcframe, stack, data, constant }; // See jl_regions_t
+    enum class Region { unknown, gcframe, stack, data, constant, coverage }; // See jl_regions_t
 
     MDNode *tbaa = nullptr;          // '!tbaa': Struct-path TBAA. TBAA graph forms a tree (indexed by offset).
                                      //          Two pointers do not alias if they are not transitive parents
@@ -1788,6 +1806,8 @@ struct jl_aliascache_t {
     jl_aliasinfo_t memoryown;     // The owner in a foreign jl_genericmemory_t
     // Region::constant
     jl_aliasinfo_t constant;      // Memory that is immutable by the time LLVM can see it
+    // Region::coverage
+    jl_aliasinfo_t coverage;      // Coverage and malloc-log counters
 
     bool initialized = false;
     void initialize(jl_codectx_t &ctx);
@@ -2134,6 +2154,9 @@ public:
     // `AllocaInst *` used as stack temporaries. This opts in to optimization via LLVM's StackColoring pass.
     SmallVector<WeakVH, 0> stack_temporaries;
 
+    // (block, counter) pairs already instrumented in hit mode.
+    DenseSet<std::pair<BasicBlock*, void *>> coverage_seen;
+
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
@@ -2195,23 +2218,26 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
         case Region::constant:
             alias_scope = regions.constant;
             break;
+        case Region::coverage:
+            alias_scope = regions.coverage;
+            break;
     }
 
-    MDNode *all_scopes[4] = { regions.gcframe, regions.stack, regions.data, regions.constant };
+    MDNode *all_scopes[] = { regions.gcframe, regions.stack, regions.data, regions.constant,
+                             regions.coverage };
     if (alias_scope) {
         // The matching region is added to !alias.scope
         // All other regions are added to !noalias
 
-        int i = 0;
-        Metadata *scopes[1] = { alias_scope };
-        Metadata *noaliases[3];
-        for (auto const &scope: all_scopes) {
+        SmallVector<Metadata *, 4> noaliases;
+        for (MDNode *scope : all_scopes) {
             if (scope == alias_scope) continue;
-            noaliases[i++] = scope;
+            noaliases.push_back(scope);
         }
 
+        Metadata *scopes[1] = { alias_scope };
         this->scope = MDNode::get(ctx.builder.getContext(), ArrayRef<Metadata*>(scopes));
-        this->noalias = MDNode::get(ctx.builder.getContext(), ArrayRef<Metadata*>(noaliases));
+        this->noalias = MDNode::get(ctx.builder.getContext(), noaliases);
     }
 }
 
@@ -2261,6 +2287,7 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     memorylen = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_memorylen);
     memoryown = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_memoryown);
     constant = jl_aliasinfo_t(ctx, Region::constant, tbaa.tbaa_const);
+    coverage = jl_aliasinfo_t(ctx, Region::coverage, tbaa.tbaa_coverage);
 }
 
 // Alias info for the inline data of an `sret` return buffer. Both the caller
@@ -2322,6 +2349,10 @@ static Value *get_current_ptls(jl_codectx_t &ctx);
 static Value *get_tls_world_age(jl_codectx_t &ctx);
 static Value *get_scope_field(jl_codectx_t &ctx);
 static Value *get_tls_world_age_field(jl_codectx_t &ctx);
+static LoadInst *emit_tls_world_age_load(jl_codectx_t &ctx);
+static StoreInst *emit_tls_world_age_store(jl_codectx_t &ctx, Value *world);
+static LoadInst *emit_world_counter_load(jl_codectx_t &ctx, AtomicOrdering order = AtomicOrdering::Acquire);
+static LoadInst *emit_in_pure_callback_load(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
                              ArrayRef<jl_cgval_t> args, size_t nargs, JuliaFunction<> *trampoline) JL_CANSAFEPOINT;
@@ -2582,7 +2613,10 @@ static bool valid_as_globalinit(const Value *v) {
     return isa<Constant>(v);
 }
 
+static Type *zext_struct_type(Type *T);
 static Value *zext_struct(jl_codectx_t &ctx, Value *V);
+static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
+static Value *trunc_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
 
 // TODO: in the future, assume all callers will handle the interior pointers separately, and have
 // have zext_struct strip them out, so we aren't saving those to the stack here causing shadow stores
@@ -3312,27 +3346,99 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
 
 // Logging for code coverage and memory allocation
 
-static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
+static void visitLine(jl_codectx_t &ctx, Value *pv, Value *addend, const char *name, bool hit_only)
 {
-    Value *pv = ConstantExpr::getIntToPtr(
-        ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
-        getPointerTy(ctx.builder.getContext()));
-    // These approximate counters are seeded to 1 and only incremented, so racy
-    // updates stay nonzero. Avoiding an atomic RMW prevents #62424.
-    Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
-    v = ctx.builder.CreateAdd(v, addend);
-    ctx.builder.CreateStore(v, pv, true);
+    // Separate accesses avoid the atomic RMW overhead reported in #62424.
+    // Unordered accesses can be promoted out of loops, while the counters'
+    // own alias region and TBAA tag keep them from blocking optimizations of
+    // program memory.
+    jl_aliasinfo_t ai = ctx.alias().coverage;
+    if (hit_only) {
+        // Racing stores are harmless because hit mode records only zero or one.
+        StoreInst *s = ctx.builder.CreateAlignedStore(
+            ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), pv, Align(8));
+        s->setOrdering(AtomicOrdering::Unordered);
+        ai.decorateInst(s);
+        return;
+    }
+    LoadInst *v = ctx.builder.CreateAlignedLoad(getInt64Ty(ctx.builder.getContext()), pv, Align(8), name);
+    v->setOrdering(AtomicOrdering::Unordered);
+    ai.decorateInst(v);
+    Value *sum = ctx.builder.CreateAdd(v, addend);
+    StoreInst *s = ctx.builder.CreateAlignedStore(sum, pv, Align(8));
+    s->setOrdering(AtomicOrdering::Unordered);
+    ai.decorateInst(s);
 }
 
 // Code coverage
 
-static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
+// The only producer of the `jl_covctr` name prefix, which `isCoverageCounter`
+// in aotcompile.cpp relies on to recognize counters when partitioning images.
+static GlobalVariable *newCoverageCounter(jl_codectx_t &ctx)
 {
-    if (ctx.emission_context.imaging_mode)
-        return; // TODO
+    Type *T_i64 = getInt64Ty(ctx.builder.getContext());
+    auto counter = new GlobalVariable(ctx.emission_context.get_module(), T_i64, false,
+                                      GlobalVariable::InternalLinkage, ConstantInt::get(T_i64, 0),
+                                      ctx.emission_context.make_name("jl_covctr"));
+    counter->setAlignment(Align(8));
+    return counter;
+}
+
+// Images allocate no runtime slots: the image table records (file, line,
+// user code) for every counter and the loader registers them after relocation.
+static GlobalVariable *imageCoverageCounter(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
+{
+    auto &c = ctx.emission_context.image_coverage_counters[{filename.data(), line}];
+    if (!c.first)
+        c.first = newCoverageCounter(ctx);
+    // A sysimage records Base's own sources relative to the base directory, so
+    // such a location is never user code, whatever module the enclosing thunk
+    // happens to be compiled in (`sysimg.jl` evaluates into an anonymous
+    // module, for one). Package images only ever record absolute paths.
+    c.second |= is_user_code && jl_isabspath(filename.data());
+    return c.first;
+}
+
+// Record a line as instrumented without emitting a counter update, so that
+// unreached lines are still reported (with a zero count).
+static void coverageAllocLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
+{
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    visitLine(ctx, jl_coverage_data_pointer(filename.data(), line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
+    if (ctx.emission_context.imaging_mode) {
+        imageCoverageCounter(ctx, filename, line, is_user_code);
+        return;
+    }
+    jl_coverage_alloc_line(filename.data(), line);
+}
+
+static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
+{
+    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
+        return;
+    bool hit_only = jl_options.code_coverage_mode == JL_COVERAGE_MODE_HIT;
+    // Unlike an absolute runtime address, a module-local global is both
+    // visible to alias analysis and stable across processes.
+    GlobalVariable *counter;
+    if (ctx.emission_context.imaging_mode) {
+        counter = imageCoverageCounter(ctx, filename, line, is_user_code);
+    }
+    else {
+        // Allocating the runtime slot marks the line as instrumented, even if
+        // the generated module is never linked or run. The linker metadata
+        // maps the counter's final address back to `slot`.
+        _Atomic(uint64_t) *slot = jl_coverage_data_pointer(filename.data(), line);
+        GlobalVariable *&c = ctx.emission_context.coverage_counters[slot];
+        if (!c)
+            c = newCoverageCounter(ctx);
+        counter = c;
+    }
+    if (hit_only) {
+        // One store per block is enough to mark the line as reached.
+        if (!ctx.coverage_seen.insert({ctx.builder.GetInsertBlock(), (void*)counter}).second)
+            return;
+    }
+    visitLine(ctx, counter, ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt", hit_only);
 }
 
 // Memory allocation log (malloc_log)
@@ -3346,7 +3452,11 @@ static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Val
     Value *addend = sync
         ? ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync})
         : ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
-    visitLine(ctx, jl_malloc_data_pointer(filename.data(), line), addend, "bytecnt");
+    // Allocation tracking retains its existing process-local counters.
+    Value *pv = ConstantExpr::getIntToPtr(
+        ConstantInt::get(ctx.types().T_size, (uintptr_t)jl_malloc_data_pointer(filename.data(), line)),
+        getPointerTy(ctx.builder.getContext()));
+    visitLine(ctx, pv, addend, "bytecnt", false);
 }
 
 // --- constant determination ---
@@ -4671,6 +4781,43 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = mark_julia_type(ctx, r, true, jl_any_type);
             return true;
         }
+    }
+
+    else if ((f == BUILTIN(invokelatest) && nargs >= 1) ||
+             (f == BUILTIN(invoke_in_world) && nargs >= 2 &&
+              argv[1].typ == (jl_value_t*)jl_ulong_type)) {
+        // Equivalent to jl_f_invokelatest / jl_f_invoke_in_world, but emitted
+        // inline so that the call through the builtin fptr is avoided and the
+        // world argument (if any) does not need to be boxed:
+        //   size_t last_age = ct->world_age;
+        //   if (!ct->ptls->in_pure_callback) {
+        //       size_t world_counter = jl_atomic_load_acquire(&jl_world_counter);
+        //       // invokelatest has no world argument and always uses world_counter
+        //       ct->world_age = world < world_counter ? world : world_counter;
+        //   }
+        //   ret = jl_apply_generic(args[i], &args[i+1], nargs - i - 1);
+        //   ct->world_age = last_age;
+        // If the applied call throws, the world age is restored by
+        // jl_eh_restore_state at the enclosing catch, as for the builtins.
+        size_t fidx = (f == BUILTIN(invoke_in_world)) ? 2 : 1; // index of the applied function in argv
+        Instruction *last_age = emit_tls_world_age_load(ctx);
+        last_age->setName("last_age");
+        LoadInst *in_pure_callback = emit_in_pure_callback_load(ctx);
+        Value *not_pure = ctx.builder.CreateICmpEQ(in_pure_callback,
+                ConstantInt::get(in_pure_callback->getType(), 0));
+        LoadInst *world_counter = emit_world_counter_load(ctx);
+        Value *target_world = world_counter;
+        if (f == BUILTIN(invoke_in_world)) {
+            Value *world = emit_unbox(ctx, ctx.types().T_size, argv[1]);
+            target_world = ctx.builder.CreateSelect(
+                ctx.builder.CreateICmpULT(world, world_counter), world, world_counter);
+        }
+        Value *new_age = ctx.builder.CreateSelect(not_pure, target_world, last_age);
+        emit_tls_world_age_store(ctx, new_age);
+        Value *r = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv.drop_front(fidx), nargs - fidx + 1, julia_call);
+        emit_tls_world_age_store(ctx, last_age);
+        *ret = mark_julia_type(ctx, r, true, rt);
+        return true;
     }
 
     else if (f == BUILTIN(tuple)) {
@@ -6332,7 +6479,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 setName(ctx.emission_context, ssaslot, varslot->getName() + StringRef(".ssa"));
                 ssaslot->insertAfter(varslot);
                 if (vi.isVolatile) {
-                    Value *unbox = ctx.builder.CreateAlignedLoad(ssaslot->getAllocatedType(), varslot, varslot->getAlign(), true);
+                    Value *unbox = ctx.builder.CreateAlignedLoad(zext_struct_type(ssaslot->getAllocatedType()), varslot, varslot->getAlign(), true);
                     stack_ai.decorateInst(ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign()));
                 }
                 else {
@@ -7027,18 +7174,6 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     return std::make_pair(F, specF);
 }
 
-static void emit_latestworld(jl_codectx_t &ctx)
-{
-    auto world_age_field = get_tls_world_age_field(ctx);
-    LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-        prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr,
-        /*isVolatile*/false);
-    world->setOrdering(AtomicOrdering::Acquire);
-    StoreInst *store_world = ctx.builder.CreateAlignedStore(world, world_age_field,
-        ctx.types().alignof_ptr, /*isVolatile*/false);
-    (void)store_world;
-}
-
 // `expr` is not actually clobbered in JL_TRY
 JL_GCC_IGNORE_START("-Wclobbered")
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_0based)
@@ -7406,7 +7541,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         return jl_cgval_t((jl_value_t*)jl_nothing_type);
     }
     else if (head == jl_latestworld_sym && !jl_is_method(ctx.linfo->def.method)) {
-        emit_latestworld(ctx);
+        emit_tls_world_age_store(ctx, emit_world_counter_load(ctx));
         return jl_cgval_t((jl_value_t*)jl_nothing_type);
     }
     else {
@@ -7452,11 +7587,48 @@ static Value *get_current_ptls(jl_codectx_t &ctx)
     return get_current_ptls_from_task(ctx.builder, get_current_task(ctx), ctx.tbaa().tbaa_gcframe);
 }
 
-// Get the address of the world age of the current task
+// Load `ptls->in_pure_callback`
+static LoadInst *emit_in_pure_callback_load(jl_codectx_t &ctx)
+{
+    Type *T_int16 = getInt16Ty(ctx.builder.getContext());
+    Value *field_ptr = emit_ptrgep(ctx, get_current_ptls(ctx),
+            offsetof(jl_tls_states_t, in_pure_callback), "in_pure_callback_ptr");
+    jl_aliasinfo_t ai = ctx.alias().gcframe;
+    return cast<LoadInst>(ai.decorateInst(ctx.builder.CreateAlignedLoad(
+            T_int16, field_ptr, Align(sizeof(int16_t)), "in_pure_callback")));
+}
+
+// Get the address of the world age of the current task.
+// All memory accesses to this field must be tagged tbaa_gcframe (or left untagged).
 static Value *get_tls_world_age_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
     return emit_ptrgep(ctx, ct, offsetof(jl_task_t, world_age), "world_age");
+}
+
+// Load the world age of the current task at the current insert point.
+static LoadInst *emit_tls_world_age_load(jl_codectx_t &ctx)
+{
+    jl_aliasinfo_t ai = ctx.alias().gcframe;
+    return cast<LoadInst>(ai.decorateInst(ctx.builder.CreateAlignedLoad(
+            ctx.types().T_size, get_tls_world_age_field(ctx), ctx.types().alignof_ptr)));
+}
+
+// Store the world age of the current task at the current insert point.
+static StoreInst *emit_tls_world_age_store(jl_codectx_t &ctx, Value *world)
+{
+    jl_aliasinfo_t ai = ctx.alias().gcframe;
+    return cast<StoreInst>(ai.decorateInst(ctx.builder.CreateAlignedStore(
+            world, get_tls_world_age_field(ctx), ctx.types().alignof_ptr)));
+}
+
+// Load the global world counter `jl_world_counter` at the current insert point
+static LoadInst *emit_world_counter_load(jl_codectx_t &ctx, AtomicOrdering order)
+{
+    LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
+        prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
+    world->setOrdering(order);
+    return world;
 }
 
 // Get the value of the world age of the current task
@@ -7470,9 +7642,7 @@ static Value *get_tls_world_age(jl_codectx_t &ctx)
         ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
         ctx.builder.SetCurrentDebugLocation(ctx.topalloca->getStableDebugLoc());
     }
-    jl_aliasinfo_t ai = ctx.alias().gcframe;
-    auto *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_tls_world_age_field(ctx), ctx.types().alignof_ptr);
-    ai.decorateInst(world);
+    auto *world = emit_tls_world_age_load(ctx);
     if (!toplevel)
         ctx.world_age_at_entry = world;
     return world;
@@ -7974,7 +8144,7 @@ std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code
 // if (last_world_v != jl_world_counter)
 //   fptr = compute_new_fptr(&last_world_v)
 // return fptr()
-static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_t *sigt, ArrayRef<jl_cgval_t> inputargs, size_t nargs, Value *world_age_field) JL_CANSAFEPOINT
+static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_t *sigt, ArrayRef<jl_cgval_t> inputargs, size_t nargs) JL_CANSAFEPOINT
 {
     jl_cgval_t retval;
     if (sigt) {
@@ -8006,10 +8176,8 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         last_world_v->setOrdering(AtomicOrdering::Acquire);
         LoadInst *callee = ctx.builder.CreateAlignedLoad(T_ptr, cfuncdata, ctx.types().alignof_ptr);
         callee->setOrdering(AtomicOrdering::Acquire);
-        LoadInst *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-            prepare_global_in(M, jlgetworld_global), ctx.types().alignof_ptr);
-        world_v->setOrdering(AtomicOrdering::Monotonic);
-        ctx.builder.CreateStore(world_v, world_age_field);
+        LoadInst *world_v = emit_world_counter_load(ctx, AtomicOrdering::Monotonic);
+        emit_tls_world_age_store(ctx, world_v);
         Value *age_not_ok = ctx.builder.CreateICmpNE(last_world_v, world_v);
         Value *target = emit_guarded_test(ctx, age_not_ok, callee, [&] () {
                 Function *getcaller = prepare_call(jlgetabiconverter_func);
@@ -8135,10 +8303,7 @@ static Function *gen_cfun_wrapper(
     ctx.builder.SetCurrentDebugLocation(noDbg);
     allocate_gc_frame(ctx, b0, true);
 
-    auto world_age_field = get_tls_world_age_field(ctx);
-    jl_aliasinfo_t ai = ctx.alias().gcframe;
-    ctx.world_age_at_entry = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
+    ctx.world_age_at_entry = emit_tls_world_age_load(ctx);
 
     // first emit code to record the arguments
     Function::arg_iterator AI = cw->arg_begin();
@@ -8199,8 +8364,9 @@ static Function *gen_cfun_wrapper(
                     inputarg = ghostValue(ctx, jargty);
                 }
                 else {
-                    val = ctx.builder.CreateAlignedLoad(T, val, Align(1)); // make no alignment assumption about pointer from C
-                    inputarg = mark_julia_type(ctx, val, false, jargty);
+                    // make no alignment assumption about pointer from C
+                    val = ctx.builder.CreateAlignedLoad(zext_struct_type(T), val, Align(1));
+                    inputarg = mark_julia_type(ctx, trunc_struct_helper(ctx, val, T), false, jargty);
                 }
             }
             else if (static_at || (!jl_is_typevar(jargty) && (!jl_is_datatype(jargty) || jl_is_abstracttype(jargty) || jl_is_mutable_datatype(jargty)))) {
@@ -8263,7 +8429,9 @@ static Function *gen_cfun_wrapper(
                 // undo whatever we might have done to this poor argument
                 assert(jl_is_datatype(jargty));
                 if (sig.byRefList[i]) {
-                    val = ctx.builder.CreateAlignedLoad(sig.fargt[i], val, Align(1)); // unknown alignment from C
+                    // unknown alignment from C
+                    val = ctx.builder.CreateAlignedLoad(zext_struct_type(sig.fargt[i]), val, Align(1));
+                    val = trunc_struct_helper(ctx, val, sig.fargt[i]);
                 }
                 else {
                     bool issigned = jl_signed_type && jl_subtype(jargty_proper, (jl_value_t*)jl_signed_type);
@@ -8298,7 +8466,7 @@ static Function *gen_cfun_wrapper(
     assert(AI == cw->arg_end());
 
     // Create the call
-    jl_cgval_t retval = emit_abi_call(ctx, declrt, sigt, inputargs, nargs + 1, world_age_field);
+    jl_cgval_t retval = emit_abi_call(ctx, declrt, sigt, inputargs, nargs + 1);
     bool jlfunc_sret = retval.V && isa<AllocaInst>(retval.V) && !retval.TIndex && retval.inline_roots.empty();
 
     // Prepare the return value
@@ -8323,7 +8491,7 @@ static Function *gen_cfun_wrapper(
         Value *v = emit_unbox(ctx, sig.lrt, retval);
         r = llvm_type_rewrite(ctx, v, prt, issigned);
         if (sig.sret) {
-            ctx.builder.CreateStore(r, sretPtr);
+            ctx.builder.CreateStore(zext_struct(ctx, r), sretPtr);
             r = NULL;
         }
     }
@@ -8331,7 +8499,7 @@ static Function *gen_cfun_wrapper(
         r = NULL;
     }
 
-    ctx.builder.CreateStore(ctx.world_age_at_entry, world_age_field);
+    emit_tls_world_age_store(ctx, ctx.world_age_at_entry);
     ctx.builder.CreateRet(r);
 
     ctx.builder.SetCurrentDebugLocation(noDbg);
@@ -9004,6 +9172,19 @@ static jl_llvm_functions_t
         coverage_mode = JL_LOG_NONE;
     if (!JL_FEAT_TEST(ctx, track_allocations))
         malloc_log_mode = JL_LOG_NONE;
+    if (ctx.emission_context.imaging_mode) {
+        // An image is instrumented for every scope or not at all
+        // (jl_image_coverage_config); the loader applies the scope of the
+        // process that uses the image when it registers the counters.
+        if (jl_image_coverage_config() == 0)
+            coverage_mode = JL_LOG_NONE;
+        else if (coverage_mode != JL_LOG_NONE)
+            coverage_mode = JL_LOG_ALL;
+    }
+    else if (jl_generating_output()) {
+        // the generating process itself is not tracked
+        coverage_mode = JL_LOG_NONE;
+    }
 
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
@@ -9457,12 +9638,8 @@ static jl_llvm_functions_t
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
     Value *last_age = NULL;
-    Value *world_age_field = NULL;
     if (ctx.is_opaque_closure) {
-        world_age_field = get_tls_world_age_field(ctx);
-        jl_aliasinfo_t ai = ctx.alias().gcframe;
-        last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
-                   ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
+        last_age = emit_tls_world_age_load(ctx);
     }
 
     // step 7. allocate local variables slots
@@ -9660,7 +9837,7 @@ static jl_llvm_functions_t
                 jl_aliasinfo_t(), nullptr, false, AtomicOrdering::NotAtomic, false, alignof_ptr.value());
             assert(ctx.world_age_at_entry == nullptr);
             ctx.world_age_at_entry = closure_world.V; // The tls world in a OC is the world of the closure
-            emit_unbox_store(ctx, closure_world, world_age_field, ctx.alias().gcframe, alignof_ptr, alignof_ptr);
+            emit_unbox_store(ctx, closure_world, get_tls_world_age_field(ctx), ctx.alias().gcframe, alignof_ptr, alignof_ptr);
 
             if (s == jl_unused_sym || vi.value.constant)
                 continue;
@@ -9973,7 +10150,7 @@ static jl_llvm_functions_t
         if (seq_next >= 0 && (unsigned)seq_next < stmtslen) {
             workstack.push_back(seq_next);
         }
-        else if (ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
+        else if (ctx.builder.GetInsertBlock() && !getTerminatorOrNull(ctx.builder.GetInsertBlock())) {
             CreateTrap(ctx.builder, false);
         }
         while (!workstack.empty()) {
@@ -9985,13 +10162,13 @@ static jl_llvm_functions_t
                 cursor = item;
                 return;
             }
-            if (seq_next != -1 && ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
+            if (seq_next != -1 && ctx.builder.GetInsertBlock() && !getTerminatorOrNull(ctx.builder.GetInsertBlock())) {
                 come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
                 ctx.builder.CreateBr(nextbb->second);
             }
             seq_next = -1;
             // if this BB is non-empty, we've visited it before so skip it
-            if (!nextbb->second->getTerminator()) {
+            if (!getTerminatorOrNull(nextbb->second)) {
                 // New BB
                 ctx.builder.SetInsertPoint(nextbb->second);
                 cursor = item;
@@ -10002,13 +10179,9 @@ static jl_llvm_functions_t
         cursor = -1;
     };
 
-    // If a pkgimage or sysimage is being generated, disable tracking.
-    // This means sysimage build or pkgimage precompilation workloads aren't tracked.
-    auto do_coverage = [&] (bool in_user_code, bool is_tracked) {
-        return (jl_generating_output() == 0 &&
-                (coverage_mode == JL_LOG_ALL ||
-                (in_user_code && coverage_mode == JL_LOG_USER) ||
-                (is_tracked && coverage_mode == JL_LOG_PATH)));
+    auto do_coverage = [&] (bool in_user_code) {
+        return (coverage_mode == JL_LOG_ALL ||
+                (in_user_code && (coverage_mode == JL_LOG_USER || coverage_mode == JL_LOG_PATH)));
     };
     auto do_malloc_log = [&] (bool in_user_code, bool is_tracked) {
         return (jl_generating_output() == 0 &&
@@ -10026,11 +10199,10 @@ static jl_llvm_functions_t
         }
         for (; dbg < new_lineinfo.size(); dbg++) {
             const auto &newdbg = new_lineinfo[dbg];
-            bool is_tracked = in_tracked_path(newdbg.file);
-            if (do_coverage(newdbg.is_user_code, is_tracked)) {
+            if (do_coverage(newdbg.is_user_code)) {
                 if (newdbg.line0 != 0 && (dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid || newdbg.line0 != prev_lineinfo[dbg].line))
-                    coverageVisitLine(ctx, newdbg.file, newdbg.line0);
-                coverageVisitLine(ctx, newdbg.file, newdbg.line);
+                    coverageVisitLine(ctx, newdbg.file, newdbg.line0, newdbg.is_user_code);
+                coverageVisitLine(ctx, newdbg.file, newdbg.line, newdbg.is_user_code);
             }
         }
     };
@@ -10059,17 +10231,16 @@ static jl_llvm_functions_t
             if (file.empty())
                 file = "<missing>";
             bool is_user_code = frame_is_user_code(modu, file);
-            bool is_tracked = in_tracked_path(file);
-            if (do_coverage(is_user_code, is_tracked)) {
+            if (do_coverage(is_user_code)) {
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
-                    jl_coverage_alloc_line(file.data(), extraline);
+                    coverageAllocLine(ctx, file, extraline, is_user_code);
                 for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
                         break;
                     if (lineidx.loc > 0)
-                        jl_coverage_alloc_line(file.data(), lineidx.loc);
+                        coverageAllocLine(ctx, file, lineidx.loc, is_user_code);
                 }
             }
         };
@@ -10186,7 +10357,7 @@ static jl_llvm_functions_t
                 }
                 else if (retvalinfo.V) {
                     Align align(returninfo.union_align);
-                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(retvalinfo.V, sret, align));
+                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(zext_struct(ctx, retvalinfo.V), sret, align));
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
             }
@@ -10206,7 +10377,7 @@ static jl_llvm_functions_t
             // N.B.: For toplevel thunks, we expect world age restore to be handled
             // by the interpreter which invokes us.
             if (ctx.is_opaque_closure)
-                ctx.builder.CreateStore(last_age, world_age_field);
+                emit_tls_world_age_store(ctx, last_age);
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||
                 retval->getType() == ctx.f->getReturnType());
             ctx.builder.CreateRet(retval);
@@ -10339,7 +10510,7 @@ static jl_llvm_functions_t
 
     // Delete any unreachable blocks
     for (auto &item : BB) {
-        if (!item.second->getTerminator())
+        if (!getTerminatorOrNull(item.second))
             item.second->eraseFromParent();
     }
 

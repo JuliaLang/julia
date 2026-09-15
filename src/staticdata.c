@@ -198,6 +198,7 @@ typedef struct {
     void *relocs_base;       // reloc_t* for GC sweep
     jl_module_t *top_mod;    // owning top-level module
     size_t idx;              // range index in image_tree (for serialization)
+    int coverage_compatible; // counters support the requested coverage mode
 } image_metadata_t;
 
 void jl_init_staticdata(void)
@@ -268,6 +269,14 @@ JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
         return (jl_value_t*)meta->top_mod;
     // The object is runtime allocated
     return (jl_value_t*)jl_nothing;
+}
+
+// Whether this code instance's image has compatible coverage counters,
+// as determined at load time by jl_register_image_coverage.
+JL_DLLEXPORT int jl_codeinst_coverage_compatible(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    image_metadata_t *meta = external_blob_metadata((jl_value_t*)ci);
+    return meta != NULL && meta->coverage_compatible;
 }
 
 // hash of definitions for predefined function pointers
@@ -776,14 +785,21 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             for (size_t i = 0, n = ((jl_genericmemory_t*)allbackedges)->length; i < n; i += 2) {
                 jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
                 jl_queue_for_serialization(s, tn);
-                jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i + 1);
-                if (backedges && backedges != jl_nothing) {
-                    jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
-                    jl_queue_for_serialization(s, backedges);
-                    for (size_t i = 0, n = jl_array_nrows(backedges); i < n; i += 2) {
-                        jl_value_t *t = jl_array_ptr_ref(backedges, i);
+                jl_value_t *table = jl_genericmemory_ptr_ref(allbackedges, i + 1);
+                if (table && table != jl_nothing) {
+                    // per-typename eqtable of sig => callers
+                    jl_queue_for_serialization_(s, table, 0, 1);
+                    for (size_t j = 0, m = ((jl_genericmemory_t*)table)->length; j < m; j += 2) {
+                        jl_value_t *t = jl_genericmemory_ptr_ref(table, j);
+                        jl_value_t *callers = jl_genericmemory_ptr_ref(table, j + 1);
+                        if (callers == NULL)
+                            continue;
                         assert(!jl_is_code_instance(t));
                         jl_queue_for_serialization(s, t);
+                        // serialize the callers list without forcing the CodeInstances
+                        // in it to be serialized (unreachable ones are pruned later)
+                        jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)callers)->ref.mem, 0, 1);
+                        jl_queue_for_serialization(s, callers);
                     }
                 }
             }
@@ -889,7 +905,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
-        assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v));
+        assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v) ||
+               jl_is_module(v));
 
     if (layout->npointers == 0) {
         // bitstypes do not require recursion
@@ -2524,26 +2541,38 @@ static void jl_prune_mi_backedges(jl_array_t *backedges)
     jl_array_del_end(backedges, n - ins);
 }
 
-static void jl_prune_tn_backedges(jl_array_t *backedges)
+static void jl_prune_tn_backedges(jl_genericmemory_t *table)
 {
-    size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
-    for (i = 1; i < n; i += 2) {
-        jl_value_t *ci = jl_array_ptr_ref(backedges, i);
-        if (ptrhash_get(&serialization_order, ci) != HT_NOTFOUND) {
-            jl_array_ptr_set(backedges, ins++, jl_array_ptr_ref(backedges, i - 1));
-            jl_array_ptr_set(backedges, ins++, ci);
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)table->ptr;
+    for (size_t i = 0, n = table->length; i < n; i += 2) {
+        jl_value_t *callers = jl_atomic_load_relaxed(&tab[i + 1]);
+        if (callers == NULL)
+            continue; // empty or deleted slot
+        size_t j, ins = 0, l = jl_array_nrows(callers);
+        for (j = 0; j < l; j++) {
+            jl_value_t *ci = jl_array_ptr_ref(callers, j);
+            if (ptrhash_get(&serialization_order, ci) != HT_NOTFOUND)
+                jl_array_ptr_set((jl_array_t*)callers, ins++, ci);
+        }
+        // compact in place: the array was already queued for serialization, so
+        // pruned CodeInstances must not remain reachable from it
+        jl_array_del_end((jl_array_t*)callers, l - ins);
+        if (ins == 0) {
+            // no caller is being serialized: drop the entry (cf. `jl_eqtable_pop`)
+            jl_gc_wb(table, NULL);
+            jl_atomic_store_relaxed(&tab[i], jl_nothing); // clear the key
+            jl_atomic_store_relaxed(&tab[i + 1], NULL); // and the value
         }
     }
-    jl_array_del_end(backedges, n - ins);
 }
 
 static void jl_prune_mt_backedges(jl_genericmemory_t *allbackedges)
 {
     for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
         jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
-        jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i + 1);
-        if (tn && tn != jl_nothing && backedges)
-            jl_prune_tn_backedges((jl_array_t*)backedges);
+        jl_value_t *table = jl_genericmemory_ptr_ref(allbackedges, i + 1);
+        if (tn && tn != jl_nothing && table && table != jl_nothing)
+            jl_prune_tn_backedges((jl_genericmemory_t*)table);
     }
 }
 
@@ -3419,6 +3448,8 @@ static uint8_t jl_get_toplevel_syntax_version(void) JL_CANSAFEPOINT
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos) JL_CANSAFEPOINT
 {
     write_uint8(f, jl_cache_flags());
+    // coverage instrumentation of the image, part of the cache identity
+    write_uint8(f, jl_image_coverage_config());
     // write the syntax version marker. Note that unlike a VersionNumber, this is
     // private to the serialization format and only needs to be reloaded by the
     // same version of Julia that wrote it. As a result, we don't store the full
@@ -3618,6 +3649,8 @@ static void jl_image_load_metadata(void *handle, jl_image_buf_t *image)
     uint32_t *pchecksum;
     jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
     image->heap_checksum = *pchecksum;
+    // only present if the image was built with coverage counters
+    jl_dlsym(handle, "jl_image_coverage", (void **)&image->coverage, 0, 0);
 }
 
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
@@ -4515,6 +4548,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     meta->base = (uintptr_t)image_base;
     meta->relocs_base = (void*)relocs_base;
     meta->idx = n_linkage_blobs();
+    // adopt the image's coverage counters
+    meta->coverage_compatible = jl_register_image_coverage(image->coverage, !s.incremental);
     if (restored == NULL) {
         meta->top_mod = jl_top_module;
     } else {
@@ -4573,6 +4608,8 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
         // Syntax version mismatch is not fatal to load
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
+        if (!jl_match_cache_coverage(jl_image_coverage_config(), read_uint8(f)))
+            return jl_get_exceptionf(jl_errorexception_type, "Pkgimage coverage instrumentation mismatch");
 
         (void)read_uint8(f); // syntax_version
 

@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang -D__clang_safetyanalysis__ -Wthread-safety -Wthread-safety-negative -Xclang -verify -fsyntax-only -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -x c %s
+// RUN: clang -D__clang_safetyanalysis__ -Wthread-safety -Wthread-safety-negative -Xclang -verify -fsyntax-only -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{cppflags} %{cflags} -x c %s
 
 // Exercises the Clang Thread Safety Analysis ("capability") model of Julia
 // safepoints that -D__clang_safetyanalysis__ selects in analyzer_annotations.h.
