@@ -376,7 +376,8 @@ static void jl_fprint_sigill(ios_t *s, void *_ctx);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
     || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
     || (defined(_OS_LINUX_) && defined(_CPU_ARM_)) \
-    || (defined(_OS_LINUX_) && defined(_CPU_RISCV64_))
+    || (defined(_OS_LINUX_) && defined(_CPU_RISCV64_)) \
+    || (defined(_OS_LINUX_) && defined(_CPU_LOONG_))
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -862,6 +863,8 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
     return ((ucontext_t*)_ctx)->uc_mcontext.mc_gpregs.gp_elr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     return ((ucontext_t*)_ctx)->uc_mcontext.arm_pc;
+#elif defined(_OS_LINUX_) && defined(_CPU_LOONG_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.__gregs[32];
 #elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
     return ((ucontext_t*)_ctx)->uc_mcontext.__gregs[REG_PC];
 #else
@@ -940,6 +943,21 @@ static void jl_fprint_sigill(ios_t *s, void *_ctx)
         else {
             jl_safe_fprintf(s, "Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
         }
+    }
+#elif defined(_OS_LINUX_) && defined(_CPU_LOONG_)
+    uint32_t inst = 0;
+    size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
+    if (len < 4)
+        jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+    // LoongArch: break 0 -> 0x002a0000
+    // Also treat 0x00000000 as undefined (common convention)
+    // Some toolchains may emit 0x7c0000ff or similar as udf; but 0 is safest fallback.
+    if (inst == 0x002a0000 ||          // break 0
+        inst == 0x00000000) {          // null instruction / udf
+        jl_safe_printf("Unreachable reached at %p\n", pc);
+    }
+    else {
+        jl_safe_printf("Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
     uint32_t inst = 0;

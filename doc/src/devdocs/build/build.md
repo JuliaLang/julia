@@ -156,6 +156,7 @@ Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
 * [RISC-V](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/riscv.md)
+* [LOONGARCH](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/loongarch.md)
 
 ## Required Build Tools and External Libraries
 
