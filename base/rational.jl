@@ -247,8 +247,22 @@ BigInt
 function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     tol < 0 && throw(ArgumentError("Tolerance can not be negative. tol=$tol"))
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
-    isnan(x) && return T(x)//one(T)
+    (isnan(x) || iszero(x)) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
+
+    if iszero(tol) && isbits(x)
+        try
+            isinteger(x) && return T(x)//one(T)
+            fpart = x - trunc(x)
+            sbits = significand_bits(typeof(x))
+            n = reinterpret(uinttype(typeof(x)), fpart)
+            e = max(exponent(fpart), exponent_min(typeof(x)))
+            s = sbits - e - min(trailing_zeros(n), sbits)
+            return T(ldexp(x, s)) // checked_pow(T(2), s)
+        catch err
+            isa(err,InexactError) || isa(err,OverflowError) || rethrow()
+        end
+    end
 
     p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
     pp, qq = zero(T), one(T)
