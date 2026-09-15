@@ -309,6 +309,72 @@ end
     @test eval(Meta.parse(repr(p))) == p
 end
 
+@testset "Deterministic serialization" begin
+    function permutations(v::Vector)
+        length(v) <= 1 && return [v]
+        return [vcat(v[i], rest) for i in eachindex(v) for rest in permutations(deleteat!(copy(v), i))]
+    end
+
+    # These tag names are chosen such that some of them collide within a small `Dict`,
+    # so that insertion order affects iteration order.
+    extra_tags = ["tag1" => "a", "tag2" => "b", "tag8" => "c", "tag9" => "d", "cuda" => "10.1"]
+    base_tags = ["libgfortran_version" => "5.0.0", "cxxstring_abi" => "cxx11", "os_version" => "20"]
+
+    expected_triplet = "aarch64-apple-darwin20-libgfortran5-cxx11-cuda+10.1-tag1+a-tag2+b-tag8+c-tag9+d"
+    expected_show = "Platform(\"aarch64\", \"macos\"; cuda = \"10.1\", cxxlib = \"libstdcxx\", cxxstring_abi = \"cxx11\", " *
+                    "libgfortran_version = \"5.0.0\", os_version = \"20.0.0\", tag1 = \"a\", tag2 = \"b\", tag8 = \"c\", tag9 = \"d\")"
+    expected_plain = "macOS aarch64 {cuda=10.1, cxxlib=libstdcxx, cxxstring_abi=cxx11, libgfortran_version=5.0.0, " *
+                     "os_version=20.0.0, tag1=a, tag2=b, tag8=c, tag9=d}"
+
+    function check_serialization(p)
+        @test triplet(p) == expected_triplet
+        @test repr(p) == expected_show
+        @test sprint(show, p) == expected_show
+        @test string(p) == expected_show
+        @test sprint(show, MIME("text/plain"), p) == expected_plain
+        @test repr(MIME("text/plain"), p) == expected_plain
+    end
+
+    reference = Platform("aarch64", "macos", Dict{String,String}(vcat(base_tags, extra_tags)))
+    check_serialization(reference)
+    @test eval(Meta.parse(repr(reference))) == reference
+    @test parse(Platform, triplet(reference)) == reference
+
+    for (i, order) in enumerate(permutations(extra_tags))
+        all_tags = isodd(i) ? vcat(base_tags, order) : vcat(order, reverse(base_tags))
+
+        # `Dict` constructor, inserting in the given order
+        p = Platform("aarch64", "macos", Dict{String,String}(all_tags))
+        @test p == reference
+        check_serialization(p)
+
+        # Keyword constructor, passing in the given order
+        p = Platform("aarch64", "macos"; (Symbol(k) => v for (k, v) in all_tags)...)
+        @test p == reference
+        check_serialization(p)
+
+        # Dict-like mutation, setting tags in the given order
+        p = Platform("aarch64", "macos")
+        for (k, v) in all_tags
+            p[k] = v
+        end
+        @test p == reference
+        check_serialization(p)
+
+        # Parsing a triplet with the extended tags in the given order
+        p = parse(Platform, string("aarch64-apple-darwin20-libgfortran5-cxx11", (string("-", k, "+", v) for (k, v) in order)...))
+        @test p == reference
+        check_serialization(p)
+    end
+
+    # libcxx tags are always emitted in the same order
+    for kwargs in ((; cxxlib="libcxx", cxxlib_version=v"18"), (; cxxlib_version=v"18", cxxlib="libcxx"))
+        p = Platform("x86_64", "linux"; kwargs...)
+        @test triplet(p) == "x86_64-linux-gnu-cxxlib+libcxx-cxxlib_version+18.0.0"
+        @test repr(p) == "Platform(\"x86_64\", \"linux\"; cxxlib = \"libcxx\", cxxlib_version = \"18.0.0\", libc = \"glibc\")"
+    end
+end
+
 @testset "platforms_match()" begin
     # Just do a quick combinatorial sweep for completeness' sake for platform matching
     linux = P("x86_64", "linux")
