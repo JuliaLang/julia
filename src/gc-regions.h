@@ -91,11 +91,20 @@ JL_DLLEXPORT uint64_t jl_gc_region_unsafe_reset(int n);
 void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
 // Free region n on every heap at once, with the world stopped.
 JL_DLLEXPORT uint64_t jl_gc_region_reset_global(int n);
+// A census frees the dead objects of one region and keeps the live ones:
+// with the world stopped, or cooperatively with every other thread parked
+// GC-safe. The threshold is the page count of the open region past which
+// the allocator runs a census (0 = never).
+JL_DLLEXPORT int64_t jl_gc_region_collect(int n);
+JL_DLLEXPORT int64_t jl_gc_region_collect_coop(int n);
+JL_DLLEXPORT void jl_gc_region_census_threshold(int pages);
 // The region of an object.
 JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v);
 // The pages of a region on this heap; whether an escape quarantined a region.
 JL_DLLEXPORT int jl_gc_region_pages(int n);
 JL_DLLEXPORT int jl_gc_region_quarantined(int n);
+// A phase time or a count of the last census.
+JL_DLLEXPORT uint64_t jl_gc_region_stat(int i);
 // With debug on, a refused reset reports the execution roots that reference
 // the region. jl_gc_region_check runs the root check alone and returns the
 // count; jl_gc_region_verify checks the page chains of a region.
