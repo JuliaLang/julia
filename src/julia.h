@@ -529,7 +529,7 @@ typedef struct _jl_opaque_closure_t {
 // No lock is required to read these fields, which are set while we have
 // exclusive ownership of the CodeInstance:
 //   def, owner, rettype, exctype, rettype_const, analysis_results,
-//   time_infer_total, time_infer_self
+//   time_infer_total, time_infer_cache_saved, time_infer_self
 
 // flags bits for CodeInstance
 #define JL_CI_FLAGS_SPECPTR_SPECIALIZED      0b0001
