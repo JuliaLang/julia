@@ -951,19 +951,30 @@ end
     end
     foreach(wait, ts2)
 
-    # waitall re-arms the same registered entry across completions
+    # waitall reuses its entry and source registration across completions
+    src3 = CancellationTokenSource()
     c3 = Channel{Int}(0)
     ts3 = [@async take!(c3) for _ in 1:3]
-    wa3 = @async waitall(ts3)
+    wa3 = @async waitall(ts3; cancel=CancellationToken(src3))
     @test timedwait(() -> (x = @atomic wa3.waiting_on; x isa Base.WaitEntryN), 10.0) == :ok
     w3 = (@atomic wa3.waiting_on)::Base.WaitEntryN
-    for _ in 1:3
+    for n in 1:2
         put!(c3, 0)
+        @test timedwait(10.0) do
+            (@atomic wa3.waiting_on) === w3 &&
+                count(i -> Base._slot_owner(w3, i) isa Base.ThreadSynchronizer,
+                      1:Base._nslots(w3)) == 3 - n
+        end == :ok
+        @test registry_entries(src3) == [w3]
     end
+    put!(c3, 0)
     done3, remaining3 = fetch(wa3)
     @test length(done3) == 3 && isempty(remaining3)
     @test (@atomic wa3.waiting_on) === nothing
     @test count(i -> Base._slot_owner(w3, i) isa Base.ThreadSynchronizer, 1:Base._nslots(w3)) == 0
+    @test (@atomic :monotonic w3.task) === nothing
+    cancel!(src3)
+    @test isempty(registry_entries(src3))
 end
 
 @testset "level-triggered delivery and shielding" begin
