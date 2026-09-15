@@ -892,6 +892,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         if isempty(pkgs)
             return
         else
+            # a request for packages that are all in the sysimage has nothing to do
+            all(Base.in_sysimage, requested_pkgids) && return
             error("No direct dependencies outside of the sysimage found matching $(pkgs)")
         end
     end
