@@ -2098,7 +2098,8 @@ function compilecache_freshest_path(pkg::PkgId;
         # gets loaded without further validation (like the precompilation
         # driver) must keep them on, so that a corrupted cache is recompiled
         # rather than reported as loadable
-        verify_checksums::Bool=true)
+        verify_checksums::Bool=true,
+        reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
     isnothing(sourcespec) && error("Cannot locate source for $(repr("text/plain", pkg))")
     @lock require_lock begin
     set_cache = LOADING_CACHE[] === nothing
@@ -2116,7 +2117,7 @@ function compilecache_freshest_path(pkg::PkgId;
     end
     for build_id in try_build_ids
         @label next_path for path_to_try in cachepaths
-            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums)
+            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums, reasons)
             if staledeps === true
                 continue
             end
@@ -3050,7 +3051,7 @@ function __require_prelocked(pkg::PkgId, env)
                     m isa Module && return m
 
                     local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                    @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
+                    @logmsg verbosity "Precompiling $(pkg_log_name(pkg))$(list_reasons(reasons))"
 
                     unlock(require_lock)
                     try
@@ -4471,7 +4472,7 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :pkgimages_disabled      => :actionable  => "native code caching disabled",
     :cpu_target              => :actionable  => "different system or CPU target",
     :ocachefile_missing      => :actionable  => "native code cache file not found",
-    :dep_loaded_incompatible => :actionable  => "different version of dependency already loaded",
+    :dep_loaded_incompatible => :actionable  => "a dependency is already loaded at a different version",
     :dep_missing             => :actionable  => "dependency source file not found",
     :source_path_changed     => :actionable  => "different source file path",
     :dep_identity_changed    => :actionable  => "dependency identifier changed",
@@ -4486,13 +4487,28 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :dep_buildid_mismatch    => :internal    => "different dependency build identifier",
 )
 
+# `:dep_loaded_incompatible` is recorded with the dependency's name appended, so the
+# message can say which package is loaded at a different version than the cache expects.
+const DEP_LOADED_INCOMPATIBLE_PREFIX = "dep_loaded_incompatible:"
+
+function reject_reason(key::Symbol)
+    reason = get(CACHE_REJECT_REASONS, key, nothing)
+    reason === nothing || return reason
+    keystr = String(key)
+    if startswith(keystr, DEP_LOADED_INCOMPATIBLE_PREFIX)
+        name = keystr[length(DEP_LOADED_INCOMPATIBLE_PREFIX)+1:end]
+        return :actionable => "$name is already loaded at a different version"
+    end
+    return :actionable => keystr
+end
+
 function list_reasons(reasons::Dict{Symbol,Int}; full::Bool=false)
     isempty(reasons) && return ""
     actionable = String[]
     wrong_julia = false
     verbose = String[]
     for (key, count) in reasons
-        category, desc = get(CACHE_REJECT_REASONS, key, :actionable => String(key))
+        category, desc = reject_reason(key)
         push!(verbose, "$count for $desc")
         if category === :actionable
             push!(actionable, desc)
@@ -4511,6 +4527,30 @@ function list_reasons(reasons::Dict{Symbol,Int}; full::Bool=false)
     end
 end
 list_reasons(::Nothing; full::Bool=false) = ""
+
+# How a package is named in loading log messages: the bare name when the load path's
+# manifests map it to no other uuid, otherwise name and uuid. An extension is named
+# by its parent, as the precompile driver does.
+function pkg_log_name(pkg::PkgId)
+    triggers = get(EXT_PRIMED, pkg, nothing)
+    triggers === nothing || return pkg_log_name(pkg, triggers[1])
+    uuid = pkg.uuid
+    uuid === nothing && return pkg.name
+    @lock require_lock begin
+        for env in load_path()
+            project_file = env_project_file(env)
+            project_file isa String || continue
+            manifest_file = project_file_manifest_path(project_file)
+            manifest_file === nothing && continue
+            for entry in get(Vector{Any}, get_deps(parsed_toml(manifest_file)), pkg.name)
+                entry_uuid = get(entry::Dict{String, Any}, "uuid", nothing)::Union{String, Nothing}
+                entry_uuid === nothing || UUID(entry_uuid) == uuid || return repr("text/plain", pkg)
+            end
+        end
+    end
+    return pkg.name
+end
+pkg_log_name(ext::PkgId, parent::PkgId) = "$(pkg_log_name(parent)) → $(ext.name)"
 
 function in_package_store(path::String)
     for depot in DEPOT_PATH
@@ -4749,7 +4789,7 @@ end
                     # Used by Pkg.precompile given that there it's ok to precompile different versions of loaded packages
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
-                    record_reason(reasons, :dep_loaded_incompatible)
+                    record_reason(reasons, Symbol(DEP_LOADED_INCOMPATIBLE_PREFIX, req_key.name))
                     return true # Won't be able to fulfill dependency
                 end
             end

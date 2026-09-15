@@ -370,7 +370,7 @@ __repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_fi
 function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
     if !isexpr(ast, :toplevel)
         ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
-        check_for_missing_packages_and_run_hooks(ast)
+        check_for_missing_packages_and_run_hooks(mod, ast)
         return invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
     end
     local value=nothing
@@ -413,16 +413,20 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     nothing
 end
 
-function check_for_missing_packages_and_run_hooks(ast)
+function check_for_missing_packages_and_run_hooks(mod::Module, ast)
     isa(ast, Expr) || return
     mods = modules_to_be_loaded(ast)
-    filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
-    if !isempty(mods)
+    isempty(mods) && return
+    missing_mods = filter(m -> isnothing(Base.identify_package(String(m))), mods)
+    if !isempty(missing_mods)
         isempty(install_packages_hooks) && load_pkg()
         for f in install_packages_hooks
-            Base.invokelatest(f, mods) && return
+            Base.invokelatest(f, missing_mods) && break
         end
     end
+    # precompile everything the statement is about to load in one parallel session,
+    # rather than one session per package as the individual `require` calls would
+    Base.invokelatest(Base.Precompilation.precompile_for_loading, mod, mods)
 end
 
 function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
