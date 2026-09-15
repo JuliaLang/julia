@@ -242,6 +242,7 @@ AgentSkillDocs = generate_agent_skill_docs()
 Manual = [
     "manual/getting-started.md",
     "manual/installation.md",
+    "manual/juliaup.md",
     "manual/variables.md",
     "manual/integers-and-floating-point-numbers.md",
     "manual/mathematical-operations.md",
