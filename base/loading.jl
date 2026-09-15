@@ -3017,12 +3017,12 @@ function __require_prelocked(pkg::PkgId, env)
         end
     end
 
-    if JLOptions().use_compiled_modules == 3
-        error("Precompiled image $pkg not available with flags $(CacheFlags())$(list_reasons(reasons; full=true))")
-    end
-
     # if the module being required was supposed to have a particular version
-    # but it was not handled by the precompile loader, complain
+    # but it was not handled by the precompile loader, complain. This runs before
+    # the strict-mode check: the pinned build id is the one the parent session has
+    # loaded, and once its cache file is gone nothing a worker can do will produce
+    # it again, so the dependent has to be loaded from source in that session
+    # rather than reported as a precompilation failure.
     for (concrete_pkg, concrete_build_id) in _concrete_dependencies
         if pkg == concrete_pkg
             @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
@@ -3032,6 +3032,10 @@ function __require_prelocked(pkg::PkgId, env)
                 throw(PrecompilableError())
             end
         end
+    end
+
+    if JLOptions().use_compiled_modules == 3
+        error("Precompiled image $pkg not available with flags $(CacheFlags())$(list_reasons(reasons; full=true))")
     end
 
     if JLOptions().use_compiled_modules == 1
@@ -4764,20 +4768,20 @@ end
 
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
-        # or neither
-        if stalecheck
-            for (req_key, req_build_id) in _concrete_dependencies
-                build_id = get(modules, req_key, UInt64(0))
-                if build_id !== UInt64(0)
-                    build_id |= UInt128(checksum) << 64
-                    if build_id === req_build_id
-                        stalecheck = false
-                        break
-                    end
-                    @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
-                    record_reason(reasons, :dep_buildid_mismatch)
-                    return true # cachefile doesn't provide the required version of the dependency
+        # or neither. This is not skipped for a trusted (driver-validated) file:
+        # the driver only checks that the file is fresh, not that it carries the
+        # build id the parent session pinned.
+        for (req_key, req_build_id) in _concrete_dependencies
+            build_id = get(modules, req_key, UInt64(0))
+            if build_id !== UInt64(0)
+                build_id |= UInt128(checksum) << 64
+                if build_id === req_build_id
+                    stalecheck = false
+                    break
                 end
+                @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
+                record_reason(reasons, :dep_buildid_mismatch)
+                return true # cachefile doesn't provide the required version of the dependency
             end
         end
 
