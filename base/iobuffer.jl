@@ -542,7 +542,8 @@ function _resize!(io::GenericIOBuffer, new_size::Int, exact::Bool)
         used_span = get_used_span(io)
         deleted = first(used_span) - 1
         compacted = deleted - get_offset(io)
-        new_data = _similar_data(io, new_size)
+        # The new data replaces the data of the buffer: allocated where the buffer lives (gcregions.jl)
+        new_data = with_region_of(_similar_data, io, io, new_size)
         io.data = new_data
         iszero(new_size) && return io
         len_used = length(used_span)
@@ -568,7 +569,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if io.reinit
         # If reinit, we don't need to truncate anything but just reinitializes
         # the buffer with zeros. Mark, ptr and offset has already been reset.
-        io.data = fill!(_similar_data(io, n), 0x00)
+        io.data = fill!(with_region_of(_similar_data, io, io, n), 0x00)
         io.reinit = false
         io.size = n
     elseif n < current_size
@@ -617,7 +618,7 @@ end
 # Throw error (placed in this function to outline it) or reinit the buffer
 @noinline function ensureroom_reallocate(io::GenericIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
-    io.data = _similar_data(io, min(io.maxsize, nshort % Int))
+    io.data = with_region_of(_similar_data, io, io, min(io.maxsize, nshort % Int))
     io.reinit = false
     io.offset_or_compacted = -get_compacted(io)
     return io

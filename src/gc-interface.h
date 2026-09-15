@@ -315,6 +315,46 @@ JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEP
 // remembered set of the calling thread.
 JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
                                         struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
+#ifdef WITH_GC_REGIONS
+// The escape barrier of the GC regions (gc-regions.h): armed at the first
+// window, a comparison of the page tags of parent and child; disarmed, one
+// load and one branch per store. `ptr` may be NULL.
+extern JL_DLLIMPORT _Atomic(uint8_t) jl_gc_region_barrier_on;
+JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_gc_region_would_escape(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_region_wb_boxed(const void *parent, _Atomic(void*) *src, size_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_region_wb_inline(const void *parent, const char *src, size_t n,
+                                         size_t elsz, struct _jl_datatype_t *et) JL_NOTSAFEPOINT;
+#define jl_gc_region_wb_check(parent, ptr) do {                         \
+        if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on)) && (ptr) != NULL) \
+            jl_gc_region_wb((parent), (ptr));                           \
+    } while (0)
+// A bulk copy costs one check of the pair (parent, source): when it passes,
+// every element is legal, because the elements of a legal source are legal;
+// when it fails, the elements are checked one by one (gc-regions.c).
+#define jl_gc_region_wb_copy_boxed_check(parent, src, src_p, n) do {     \
+        if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on)) && \
+            __unlikely(jl_gc_region_would_escape((parent), (src))))     \
+            jl_gc_region_wb_boxed((parent), (src_p), (n));              \
+    } while (0)
+#define jl_gc_region_wb_copy_inline_check(parent, src, src_p, n, elsz, et) do { \
+        if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on)) && \
+            __unlikely(jl_gc_region_would_escape((parent), (src))))     \
+            jl_gc_region_wb_inline((parent), (src_p), (n), (elsz), (et)); \
+    } while (0)
+// The pointer fields of one inline value whose bytes are not a heap object
+// (a field, an element, a stack buffer): no pair check stands in for them.
+#define jl_gc_region_wb_inline_check(parent, src_p, et) do {             \
+        if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on))) \
+            jl_gc_region_wb_inline((parent), (const char*)(src_p), 1, 0, (et)); \
+    } while (0)
+#else
+#define jl_gc_region_wb_check(parent, ptr) do { } while (0)
+#define jl_gc_region_wb_copy_boxed_check(parent, src, src_p, n) do { } while (0)
+#define jl_gc_region_wb_copy_inline_check(parent, src, src_p, n, elsz, et) do { } while (0)
+#define jl_gc_region_wb_inline_check(parent, src_p, et) do { } while (0)
+#endif
+
 // If a generational collector is used, checks whether the function argument points to an
 // old object, and if so, calls the write barrier slow path above. In most cases, this
 // function is used when its caller has verified that there is a young reference in the
@@ -327,20 +367,30 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT;
 // second argument points to a young object), and if so, call the write barrier slow-path.
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
 // Freshly allocated objects are known to be in the young generation until the next safepoint,
-// so write barriers can be omitted until the next allocation. This function is a no-op that
-// can be used to annotate that a write barrier would be required were it not for this property
-// (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// so the generational barrier can be omitted until the next allocation. This function annotates
+// that a write barrier would be required were it not for this property (as opposed to somebody
+// just having forgotten to think about write barriers); the region barrier still checks the
+// store, because a fresh parent can hold a child of a younger region (gc-regions.h).
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{
+    jl_gc_region_wb_check(parent, ptr);
+}
 // As an optimization, the current_task is explicitly added to the remset while it is running.
 // Upon deschedule, we conservatively move the write barrier into the young generation.
-// This allows the omission of write barriers for all GC roots on the current task stack (JL_GC_PUSH_*),
-// as well as the Task's explicit fields (but only for the current task).
-// This function is a no-op that can be used to annotate that a write barrier would be required were
-// it not for this property (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
-// Used to annotate that a write barrier would be required, but may be omitted because `ptr`
-// is known to be an old object.
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// This allows the omission of the generational barrier for all GC roots on the current task
+// stack (JL_GC_PUSH_*), as well as the Task's explicit fields (but only for the current task).
+// This function annotates that a write barrier would be required were it not for this property;
+// the region barrier still checks the store.
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{
+    jl_gc_region_wb_check(parent, ptr);
+}
+// Used to annotate that a write barrier would be required, but the generational barrier may be
+// omitted because `ptr` is known to be an old object; the region barrier still checks the store.
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{
+    jl_gc_region_wb_check(parent, ptr);
+}
 // Write-barrier function that must be used after copying multiple fields of an object into
 // another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.
@@ -348,6 +398,20 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
 // Write-barrier function that must be used before draining the finalizer queue.
 STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue) JL_NOTSAFEPOINT;
+// The same as jl_gc_wb_fresh for the bytes of an inline value of type `dt` (a field, an element,
+// a stack buffer) copied into the freshly allocated object `parent`: the generational barrier
+// can be omitted, and the region barrier checks every pointer field of `dt`. Without the
+// regions it is a macro, so that none of its arguments is evaluated.
+#ifdef WITH_GC_REGIONS
+STATIC_INLINE void jl_gc_multi_wb_fresh(const void *parent, const void *data,
+                                        struct _jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    jl_gc_region_wb_inline_check(parent, data, dt);
+}
+#else
+#define jl_gc_multi_wb_fresh(parent, data, dt) ((void)0)
+#endif
+
 // Write-barrier function that must be used after copying fields of elements of genericmemory objects
 // into another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.

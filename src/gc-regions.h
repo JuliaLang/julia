@@ -1,0 +1,234 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+// ========================================================================= //
+// GC regions: the runtime interface
+// ========================================================================= //
+//
+// A region is a numbered set of pool pages with its own allocation cursors.
+// While a window on region n is open (jl_gc_region_set), the thread
+// allocates into region n; a reset frees every object of the region at once,
+// without a trace. doc/src/devdocs/gc-regions.md states the design and the
+// rules a program must keep. Every entry takes region numbers; their meaning
+// belongs to the program.
+//
+// The stock collector implements the regions (src/gc-regions.c) in a build
+// with WITH_GC_REGIONS. The rest of the runtime calls the hooks at the end
+// of this file; without the flag each hook expands to no code.
+
+#ifndef JL_GC_REGIONS_H
+#define JL_GC_REGIONS_H
+#ifdef WITH_GC_REGIONS
+
+#include "julia.h"
+#include "julia_internal.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// The refusal codes. An entry that returns a count returns the code cast
+// to its unsigned type: (uint64_t)-2 stands for -2.
+enum {
+    JL_GC_REGION_EINVAL = -1,       // a bad region number, a bad tree edge,
+                                    // or a build that cannot allocate in a region
+    JL_GC_REGION_EBUSY = -2,        // the region is current, a window is open,
+                                    // or this heap runs region finalizers now
+    JL_GC_REGION_ERACE = -3,        // lost the race for the safepoint; retry
+    JL_GC_REGION_EUNSAFE = -4,      // another thread runs managed code
+                                    // (cooperative census only)
+    JL_GC_REGION_EQUARANTINED = -5, // an escape quarantined the region, until
+                                    // the next stock collection
+    JL_GC_REGION_EFINALIZERS = -6,  // finalizers are pending; a cooperative
+                                    // census runs them first
+    JL_GC_REGION_ECHILD = -7,       // the region has a live child region
+    JL_GC_REGION_EROOT = -8,        // an execution root references the region
+};
+
+// The state of one region on one heap, allocated at the first use of the
+// region on that heap and kept for the life of the process; a reset parks
+// the pages for the next window. `regions[n]` of the heap points at it
+// (gc-tls-stock.h); region 0 has none, its pools are norm_pools.
+typedef struct _jl_gc_region_state_t {
+    jl_gc_pool_t pools[JL_GC_N_MAX_POOLS];
+    struct _jl_gc_pagemeta_t *pages;       // chained through region_next
+    struct _jl_gc_pagemeta_t *fresh_pages; // wholly dead pages, reused before new ones
+    struct _jl_gc_pagemeta_t *pages_tail;  // the last link of `pages`
+    uint32_t n_pages;                      // pages on `pages`
+    uint32_t n_fresh;                      // pages on `fresh_pages`
+    arraylist_t finalizers;                // (tagged object, function) pairs of the region
+    small_arraylist_t mallocarrays;        // memories with malloc'd data of the region
+} jl_gc_region_state_t;
+
+// --- the runtime's own allocations ------------------------------------------
+// What the runtime allocates on behalf of a task outlives any window of the
+// task: it belongs to region 0. A borrow installs region n for the next
+// allocations of the thread and changes no window state; a task must not
+// switch inside one. jl_gc_region_suspend is the borrow of region 0, for
+// the lazily initialized state of Base (lock.jl), whose slow path can park
+// the task: the window stays open, so the task stays on its thread. A zone
+// closes the window and reopens it, so the task may switch inside; the
+// runtime's own work (gf.c, jltypes.c) runs in a zone.
+JL_DLLEXPORT int jl_gc_region_suspend(void);
+JL_DLLEXPORT void jl_gc_region_resume(int parked);
+JL_DLLEXPORT int jl_gc_region_borrow(int n);
+JL_DLLEXPORT void jl_gc_region_unborrow(int lent);
+JL_DLLEXPORT int jl_gc_region_zone_enter(void);
+JL_DLLEXPORT void jl_gc_region_zone_leave(int saved);
+
+// --- the exported API ------------------------------------------------------
+// Open a window on region n (n = 0 closes it). Returns the region that was
+// current, or a refusal code.
+JL_DLLEXPORT int jl_gc_region_set(int n);
+JL_DLLEXPORT int jl_gc_region_current(void);
+// Free every object of region n on the calling thread's heap, after a check
+// that no execution root references into it. Returns the number of pages the
+// region held, or a refusal code.
+JL_DLLEXPORT uint64_t jl_gc_region_reset(int n);
+// The same, without the check and without its pause. A reference from a
+// stack slot, a register or a parked task's stack is left dangling.
+JL_DLLEXPORT uint64_t jl_gc_region_unsafe_reset(int n);
+// Close the window of a task that reaches its end (task.c).
+void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
+// Free region n on every heap at once, with the world stopped.
+JL_DLLEXPORT uint64_t jl_gc_region_reset_global(int n);
+// The region tree: declare the parent of a region before either is used.
+JL_DLLEXPORT int jl_gc_region_declare_parent(int child, int parent);
+JL_DLLEXPORT int jl_gc_region_parent_of(int child);
+// A census frees the dead objects of one region and keeps the live ones:
+// with the world stopped, or cooperatively with every other thread parked
+// GC-safe. The threshold is the page count of the open region past which
+// the allocator runs a census (0 = never).
+JL_DLLEXPORT int64_t jl_gc_region_collect(int n);
+JL_DLLEXPORT int64_t jl_gc_region_collect_coop(int n);
+JL_DLLEXPORT void jl_gc_region_census_threshold(int pages);
+// The region of an object.
+JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v);
+// The pages of a region on this heap; whether an escape quarantined a region.
+JL_DLLEXPORT int jl_gc_region_pages(int n);
+JL_DLLEXPORT int jl_gc_region_quarantined(int n);
+// A phase time or a count of the last census.
+JL_DLLEXPORT uint64_t jl_gc_region_stat(int i);
+// With debug on, a refused reset reports the execution roots that reference
+// the region. jl_gc_region_check runs the root check alone and returns the
+// count; jl_gc_region_verify checks the page chains of a region.
+JL_DLLEXPORT void jl_gc_region_set_debug(int on);
+JL_DLLEXPORT int64_t jl_gc_region_check(int n);
+JL_DLLEXPORT int jl_gc_region_verify(int n);
+// The escape barrier, called by the write barrier while a region is in use.
+JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
+
+// --- the hooks the rest of the runtime calls --------------------------------
+// The census filter: the region of the census that runs now, 0 otherwise.
+extern _Atomic(int) jl_gc_region_census_target;
+STATIC_INLINE int jl_gc_region_census_filter(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&jl_gc_region_census_target);
+}
+// Records a task the census reached outside the region; returns 1 the first
+// time, 0 afterwards.
+int jl_gc_region_census_claim_task(jl_value_t *task) JL_NOTSAFEPOINT;
+// Registers a finalizer of a region object on the list of its region;
+// returns 1 when v is a region object.
+int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f);
+// Tracks a memory with malloc'd data on the list of its region; returns 1
+// when m is a region object.
+int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
+// Install a task's parked region on a thread at a task switch.
+void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
+// Install a borrowed region on a thread (jl_gc_region_borrow); the region
+// becomes live on this heap.
+void jl_gc_region_install_borrow(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
+// The brackets of a stock collection: park every open window before it,
+// hand every quarantined region to the stock collector, and install the
+// windows again after it; after each pass, clear the marks the pass left on
+// region pages.
+void jl_gc_region_prepare_stock_collection(void) JL_NOTSAFEPOINT;
+void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT;
+void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT;
+// Mark every region finalizer list as a root of the stock collection.
+void jl_gc_region_mark_finalizer_lists(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
+// The census of the open region, run from the page claim past the threshold.
+int jl_gc_region_census_open(jl_ptls_t ptls);
+extern _Atomic(int) jl_gc_region_census_page_threshold;
+// Process and per-heap initialization.
+void jl_gc_region_init(void);
+void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
+
+// At a task switch: save the region of the leaving task, install the region
+// of the arriving one.
+STATIC_INLINE void jl_gc_region_task_switch(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t *t) JL_NOTSAFEPOINT
+{
+    lastt->region = ptls->gc_tls.heap.current_region;
+    if (t->region != lastt->region)
+        jl_gc_region_install_task(ptls, t->region);
+}
+
+// The brackets of a finalizer list: region 0 is installed while it runs, no
+// window opens on the thread, and no region entry runs. `begin` returns the
+// parked region for `end`; the depth is per thread, because a finalizer does
+// not switch tasks.
+STATIC_INLINE int jl_gc_region_finalizers_begin(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    int parked = heap->current_region;
+    if (parked != 0)
+        jl_gc_region_install_task(ptls, 0);
+    heap->finalizer_depth++;
+    return parked;
+}
+
+STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    heap->finalizer_depth--;
+    if (parked != 0)
+        jl_gc_region_install_task(ptls, parked);
+}
+
+// On the page claim of an open window: a census of the open region once its
+// page count passed the threshold. Inline, because the claim path is hot.
+STATIC_INLINE int jl_gc_region_maybe_census(jl_ptls_t ptls)
+{
+    int threshold = jl_atomic_load_relaxed(&jl_gc_region_census_page_threshold);
+    if (__likely(threshold <= 0))
+        return 0;
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    assert(heap->current_region != 0 && heap->regions[heap->current_region] != NULL);
+    if ((int)heap->regions[heap->current_region]->n_pages < threshold)
+        return 0;
+    return jl_gc_region_census_open(ptls);
+}
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#else // WITH_GC_REGIONS
+
+// Without the regions each hook expands to no code, and the runtime
+// compiles to the stock runtime.
+#define jl_gc_region_borrow(n) 0
+#define jl_gc_region_unborrow(lent) ((void)(lent))
+#define jl_gc_region_of(v) 0
+#define jl_gc_region_suspend() 0
+#define jl_gc_region_resume(parked) ((void)(parked))
+#define jl_gc_region_zone_enter() 0
+#define jl_gc_region_zone_leave(saved) ((void)(saved))
+#define jl_gc_region_current() 0
+#define jl_gc_region_close_window(ct) ((void)(ct))
+#define jl_gc_region_task_switch(ptls, lastt, t) ((void)0)
+#define jl_gc_region_finalizers_begin(ptls) 0
+#define jl_gc_region_finalizers_end(ptls, parked) ((void)(parked))
+#define jl_gc_region_add_finalizer(ptls, v, f) 0
+#define jl_gc_region_track_malloced(ptls, m, isaligned) 0
+#define jl_gc_region_census_filter() 0
+#define jl_gc_region_mark_finalizer_lists(mq) ((void)(mq))
+#define jl_gc_region_clear_stock_marks() ((void)0)
+#define jl_gc_region_prepare_stock_collection() ((void)0)
+#define jl_gc_region_finish_stock_collection() ((void)0)
+#define jl_gc_region_init() ((void)0)
+#define jl_gc_region_init_heap(heap) ((void)(heap))
+
+#endif // WITH_GC_REGIONS
+#endif // JL_GC_REGIONS_H

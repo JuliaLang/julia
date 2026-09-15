@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc-common.h"
+#include "gc-regions.h"
 #include "julia.h"
 #include "julia_atomics.h"
 #include "julia_gcext.h"
@@ -265,6 +266,8 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     jl_value_t *bound_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
     uint8_t bound_default = ct->bound_cancel_default;
     JL_GC_PUSH1(&bound_token);
+    // A finalizer runs in region 0: the window is parked until the list is done.
+    int parked_region = jl_gc_region_finalizers_begin(ct->ptls);
     // empty out the first two entries for the GC frame
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
@@ -279,6 +282,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     run_finalizer(ct, items[len-2], items[len-1]);
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
+    jl_gc_region_finalizers_end(ct->ptls, parked_region);
     ct->sticky = sticky;
     jl_atomic_store_relaxed(&ct->bound_cancel_token, bound_token);
     ct->bound_cancel_default = bound_default;
@@ -338,6 +342,28 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
 #endif
     errno = last_errno;
 }
+
+#ifdef WITH_GC_REGIONS
+// Run the pairs of `list` as run_finalizers runs the pending list; the
+// reset and the census of a region call it with a list nothing else reads.
+void jl_gc_run_finalizer_list(jl_task_t *ct, arraylist_t *list)
+{
+    if (list->len == 0)
+        return;
+    uint64_t save_rngState[JL_RNG_SIZE];
+    memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
+    jl_rng_split(ct->rngState, finalizer_rngState);
+
+    int8_t was_in_finalizer = ct->ptls->in_finalizer;
+    ct->ptls->in_finalizer = 1;
+    // This releases the finalizers lock.
+    JL_LOCK_NOGC(&finalizers_lock);
+    jl_gc_run_finalizers_in_list(ct, list);
+    ct->ptls->in_finalizer = was_in_finalizer;
+
+    memcpy(&ct->rngState[0], &save_rngState[0], sizeof(save_rngState));
+}
+#endif
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
 {
@@ -442,6 +468,9 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
 
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 {
+    // The finalizer of a region object goes to the list of its region (gc-regions.h).
+    if (jl_gc_region_add_finalizer(ptls, v, f))
+        return;
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE);
     arraylist_t *a = &ptls->finalizers;
     // This acquire load and the release store at the end are used to
@@ -739,6 +768,9 @@ size_t jl_genericmemory_nbytes(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 
 // tracking Memorys with malloc'd storage
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned){
+    // A memory allocated in a region goes to the list of its region (gc-regions.h).
+    if (jl_gc_region_track_malloced(ptls, m, isaligned))
+        return;
     // This is **NOT** a GC safe point.
     void *a = (void*)((uintptr_t)m | !!isaligned);
     small_arraylist_push(&ptls->gc_tls_common.heap.mallocarrays, a);

@@ -259,7 +259,12 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 assert(use->get() == I);
                 return true;
             }
+#ifdef WITH_GC_REGIONS
+            if (required.pass.write_barrier_func == callee ||
+                required.pass.region_write_barrier_func == callee)
+#else
             if (required.pass.write_barrier_func == callee)
+#endif
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
