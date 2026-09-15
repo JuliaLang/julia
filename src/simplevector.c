@@ -13,8 +13,11 @@ JL_DLLEXPORT jl_svec_t *(ijl_svec)(size_t n, ...) JL_ROOTED_VARARGS
     if (n == 0) return jl_emptysvec;
     va_start(args, n);
     jl_svec_t *jv = jl_alloc_svec_uninit(n);
-    for (size_t i = 0; i < n; i++)
-        jl_svecset(jv, i, va_arg(args, jl_value_t*));
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *v = va_arg(args, jl_value_t*);
+        jl_gc_wb_fresh(jv, v);
+        jl_svec_data(jv)[i] = v;
+    }
     va_end(args);
     return jv;
 }
