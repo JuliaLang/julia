@@ -2896,6 +2896,8 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     # Return early if no deps
     if isempty(graph.direct_deps)
         isempty(pkgs) && return
+        # a request for packages that are all in the sysimage has nothing to do
+        all(Base.in_sysimage, requested_pkgids) && return
         error("No direct dependencies outside of the sysimage found matching $(pkgs)")
     end
 
