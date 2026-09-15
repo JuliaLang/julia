@@ -44,6 +44,23 @@ else
     dirname(abspath(Libdl.dlpath("libjulia-internal")))
 end
 
+@test ccall(:jl_symbol_in_executable, Cint, (Ptr{Cvoid},), C_NULL) == 0
+@test ccall(:jl_symbol_in_executable, Cint, (Ptr{Cvoid},), cglobal(:ijl_load_dynamic_library)) == 0
+# An address that lives in the executable itself must be detected as such. On Unix the
+# loader executable exports `main`; Windows executables export nothing, so use the module
+# base address, which lies inside the executable's image.
+exe_addr = if Sys.iswindows()
+    ccall(:GetModuleHandleW, stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
+else
+    exe_handle = ccall(:jl_dlopen, Ptr{Cvoid}, (Ptr{Cvoid}, UInt32), C_NULL, UInt32(Libdl.RTLD_NOW | Libdl.RTLD_NOLOAD))
+    Libdl.dlsym(exe_handle, :main)
+end
+@test exe_addr != C_NULL
+@test ccall(:jl_symbol_in_executable, Cint, (Ptr{Cvoid},), exe_addr) == 1
+if !Base.DARWIN_FRAMEWORK
+    @test realpath(Base.Libc.Libdl.private_shlibdir()) == realpath(private_libdir)
+end
+
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))
 @test !isempty(Libdl.find_library("libccalltest", [private_libdir]))
 @test !isempty(Libdl.find_library(:libccalltest, [private_libdir]))
