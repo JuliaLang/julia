@@ -62,8 +62,8 @@ Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
 function _irrational_to_rational_at_current_precision(::Type{T}, x::AbstractIrrational) where {T <: Integer}
     bx = BigFloat(x)
-    r = rationalize(T, bx, tol = 0)
-    if abs(BigFloat(r) - bx) > eps(bx)
+    r = rationalize(T, bx, eps(x)/2)
+    if abs(BigFloat(r) - bx) > eps(x)
         r
     else
         nothing  # Error is too small, repeat with greater precision.
@@ -140,11 +140,31 @@ end
 <=(x::AbstractIrrational, y::AbstractFloat) = x < y
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
-# Irrational vs Rational
-function _rationalize_irrational(::Type{T}, x::AbstractIrrational, tol::Real) where {T<:Integer}
-    return rationalize(T, big(x), tol=tol)
+function _throw_rationalize_irrational_zero_tol_bigint()
+    throw(ArgumentError("Cannot rationalize an irrational using arbitrary precision (Bigint) and zero tolerance"))
 end
-function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where {T<:Integer}
+
+# Irrational vs Rational
+function _rationalize_irrational(::Type{T}, x::AbstractIrrational, tol::Nothing) where {T<:Integer}
+    return rationalize(T, big(x), eps(x)/2)
+end
+function _rationalize_irrational(::Type{T}, x::AbstractIrrational, tol::Real) where {T<:Integer}
+    if iszero(tol)
+        T === BigInt && _throw_rationalize_irrational_zero_tol_bigint()
+        return _irrational_to_rational(T, x)
+    end
+    tol ≥ eps(Float64, x) && return rationalize(T, Float64(x), tol/2)
+    tol ≥ eps(BigFloat, x)/2 && return rationalize(T, big(x), tol)
+    # need more precision
+    p = exponent(x) - exponent(tol)
+    setprecision(BigFloat, p) do
+        return rationalize(T, big(x), tol)
+    end
+end
+function rationalize(::Type{T}, x::AbstractIrrational; tol::Union{Nothing,Real}=nothing) where {T<:Integer}
+    return _rationalize_irrational(T, x, tol)
+end
+function rationalize(::Type{T}, x::AbstractIrrational, tol::Real) where {T<:Integer}
     return _rationalize_irrational(T, x, tol)
 end
 function _lessrational(rx::Rational, x::AbstractIrrational)
@@ -309,3 +329,8 @@ end
 
 # inv
 inv(x::AbstractIrrational) = 1/x
+
+eps(x::AbstractIrrational) = eps(BigFloat, x)
+function eps(::Type{T}, x::AbstractIrrational) where {T<:AbstractFloat}
+    return T(2)^(exponent(x) - precision(T) + 1)
+end
