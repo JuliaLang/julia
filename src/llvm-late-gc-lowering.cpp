@@ -1286,7 +1286,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                             callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
+#ifdef WITH_GC_REGIONS
+                            callee == write_barrier_func || callee == region_write_barrier_func ||
+                            callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
+#else
                             callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
+#endif
                             callee->getName() == "memcmp") {
                             continue;
                         }
@@ -1914,7 +1919,12 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             }
             Value *callee = CI->getCalledOperand();
 
+#ifdef WITH_GC_REGIONS
+            if ((write_barrier_func && callee == write_barrier_func) ||
+                (region_write_barrier_func && callee == region_write_barrier_func)) {
+#else
             if (write_barrier_func && callee == write_barrier_func) {
+#endif
                 assert(CI->arg_size() >= 1);
                 write_barriers.push_back(CI);
                 ChangesMade = true;

@@ -57,6 +57,9 @@ void JuliaPassContext::initFunctions(Module &M)
     typeof_func = M.getFunction("julia.typeof");
     blackbox_func = M.getFunction("julia.blackbox");
     write_barrier_func = M.getFunction("julia.write_barrier");
+#ifdef WITH_GC_REGIONS
+    region_write_barrier_func = M.getFunction("julia.region_write_barrier");
+#endif
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
     pop_handler_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
     call_func = M.getFunction("julia.call");
