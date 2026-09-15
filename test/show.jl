@@ -3040,3 +3040,14 @@ end
         @test !contains(str, "\e[93m")
     end
 end
+
+# issue #62897: `show` of `Type{v}` with a non-type parameter must not be memory-unsafe
+@testset "show Type{v} with value parameter" begin
+    @test repr(Type{setindex!}) == "Type{setindex!}"
+    @test repr(Type{1}) == "Type{1}"
+    @test repr(Type{:sym}) == "Type{:sym}"
+    @test repr(Type{(1, 2)}) == "Type{(1, 2)}"
+    @test sprint(show, Type{1}; context=:compact => false) == "TypeEq{1}"
+    @test repr("text/plain", Type{setindex!}) == "Type{setindex!}"
+    @test repr("text/plain", Type{1}) == "Type{1}"
+end
