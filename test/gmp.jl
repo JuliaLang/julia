@@ -453,10 +453,15 @@ end
 @testset "Base.GMP.MPZ.export!" begin
 
     function Base_GMP_MPZ_import!(x::BigInt, n::AbstractVector{T}; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
-        ccall((:__gmpz_import, Base.GMP.MPZ.libgmp),
-               Cvoid,
-               (Base.GMP.MPZ.mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}),
-               x, length(n), order, sizeof(T), endian, nails, n)
+        # mpz_import writes its mpz operand, so it cannot be handed a borrowed
+        # view of a BigInt's GC-managed limbs; it gets a GMP-owned mpz
+        # whose value `with_output` moves into `x`.
+        Base.GMP.MPZ.with_output(x) do s
+            ccall((:__gmpz_import, Base.GMP.MPZ.libgmp),
+                   Cvoid,
+                   (Base.GMP.MPZ.mpz_owned_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}),
+                   s, length(n), order, sizeof(T), endian, nails, n)
+        end
         return x
     end
     # test import
