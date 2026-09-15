@@ -44,6 +44,19 @@ void embedder_alias_is_tracked(void) {
                      // expected-note@-3{{Started tracking value here}}
 }
 
+// Where there is no tag, the annotation sits on a typedef, and is found
+// through an alias of that typedef too.
+typedef void EmbedderBuffer JL_GC_TRACKED_TYPE;
+typedef EmbedderBuffer EmbedderBufferAlias;
+extern EmbedderBufferAlias *buffer_alloc(void);
+extern void buffer_use(EmbedderBufferAlias *b);
+
+void embedder_typedef_alias_is_tracked(void) {
+    buffer_use(buffer_alloc()); // expected-warning{{Passing non-rooted value as argument to function that may GC}}
+                                // expected-note@-1{{Passing non-rooted value as argument to function}}
+                                // expected-note@-2{{Started tracking value here}}
+}
+
 void unannotated_type_is_not_tracked(void) {
     plain_use(plain_alloc()); // no-warning
 }

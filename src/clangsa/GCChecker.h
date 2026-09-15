@@ -179,8 +179,8 @@ private:
     return f(TD->getName());
   }
 
-  // True if the type is declared JL_GC_TRACKED_TYPE, on the typedef or on the
-  // tag it resolves to.
+  // True if the type is declared JL_GC_TRACKED_TYPE, on any typedef on the way
+  // to its tag or on the tag itself.
   static bool hasGCTrackedAnnotation(QualType QT);
   template <typename callback>
   static SymbolRef walkToRoot(callback f, const ProgramStateRef &State,
