@@ -214,12 +214,14 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
     }
     if (lt->isFloatingPointTy() || lt->isIntegerTy() || lt->isPointerTy()) {
         int nbytes = jl_datatype_size(bt);
-        APInt val(jl_datatype_nbits(bt), 0);
+        int nbits = jl_datatype_nbits(bt);
+        int used = (nbits + 7) / 8; // trailing bytes of nbytes are padding
+        APInt val(nbits, 0);
         void *bits = const_cast<uint64_t*>(val.getRawData());
         assert(sys::IsLittleEndianHost);
-        memcpy(bits, ptr, nbytes);
-        if (nbytes > 0)
-            ((uint8_t*)bits)[nbytes - 1] &= (uint8_t)(0xff >> jl_datatype_unusedbits(bt));
+        memcpy(bits, ptr, used);
+        if (used > 0)
+            ((uint8_t*)bits)[used - 1] &= (uint8_t)(0xff >> (used * 8 - nbits));
         if (lt->isFloatingPointTy()) {
             return ConstantFP::get(ctx.builder.getContext(),
                     APFloat(lt->getFltSemantics(), val));
@@ -524,7 +526,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
         ai = combined_ai;
     }
     assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
-    Instruction *load = ctx.builder.CreateAlignedLoad(zext_struct_type(to), p, alignment);
+    Instruction *load = ctx.builder.CreateAlignedLoad(julia_memory_access_type(to, x.typ), p, alignment);
     setName(ctx.emission_context, load, p->getName() + ".unbox");
     ai.decorateInst(load);
     return trunc_struct_helper(ctx, load, to);

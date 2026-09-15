@@ -841,8 +841,9 @@ sizeof(x) = Core.sizeof(x)
 Logical size, in bits, of the canonical binary representation of the given `DataType` `T`, if any.
 Or the logical size, in bits, of object `obj` if it is not a `DataType`.
 
-For primitive types, this may differ from `8*sizeof(T)` when the type uses byte-rounded storage
-with unused bits in the last byte.
+For primitive types, this may differ from `8*sizeof(T)`: `sizeof` rounds the value bytes up to
+a multiple of the type's alignment (see the manual section on primitive types), and the bits past
+the declared width are padding.
 
 # Examples
 ```jldoctest
