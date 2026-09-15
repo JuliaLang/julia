@@ -73,15 +73,20 @@ BOLT_ARGS += -reorder-functions=cdsort
 BOLT_ARGS += -split-functions
 # Split as many basic blocks as possible
 BOLT_ARGS += -split-all-cold
-# Move jump tables to a separate section
+# Move jump tables to a separate section (only supported on x86-64).
+ifeq ($(HOST_ARCH),x86_64)
 BOLT_ARGS += -jump-tables=move
+endif
 # Use regular size pages for code alignment
 BOLT_ARGS += -no-huge-pages
 # Preserve function addresses, including those obtained through dlsym.
 BOLT_ARGS += -icf=none
-# Split using best available strategy (three-way splitting, Cache-Directed Sort)
-# Disabled for libjulia-internal till https://github.com/llvm/llvm-project/issues/89508 is fixed
-# BOLT_ARGS += -split-strategy=cdsplit
+# Cache-directed splitting is incompatible with AArch64's default code model.
+# On x86-64, apply it below except for libjulia-internal until
+# https://github.com/llvm/llvm-project/issues/89508 is fixed.
+ifeq ($(HOST_ARCH),x86_64)
+BOLT_SPLIT_STRATEGY := -split-strategy=cdsplit
+endif
 # Update DWARF debug info in the final binary
 BOLT_ARGS += -update-debug-sections
 # Print optimization statistics
@@ -376,7 +381,7 @@ bolt: bolt-merge
 	for link in $(SYMLINKS_TO_OPTIMIZE); do \
 		file=$$(readlink $(STAGE2_BUILD)/usr/lib/$$link); \
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
-		if [ "$$link" = libjulia-internal.so ]; then extra_args=; else extra_args="--use-old-text -split-strategy=cdsplit"; fi; \
+		if [ "$$link" = libjulia-internal.so ]; then extra_args=; else extra_args="--use-old-text $(BOLT_SPLIT_STRATEGY)"; fi; \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$extra_args; \
 		touch -r "$$abs_file.original" $$abs_file; \
 	done
