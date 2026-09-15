@@ -3,6 +3,10 @@
 #include "llvm-version.h"
 #include "platform.h"
 
+#include <map>
+#include <set>
+#include <tuple>
+
 // target support
 #include <llvm/TargetParser/Triple.h>
 #include "llvm/Support/CodeGen.h"
@@ -922,6 +926,85 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
     }
 }
 
+// The library a foreign site refers to, as (package UUID text, library name):
+// both set for a library identified at the call site, only the name for the
+// runtime's own libraries and static library strings, neither for a symbol
+// looked up across the process (RTLD_DEFAULT).
+static std::pair<std::string, std::string> used_foreign_library(const jl_used_foreign_symbol_t &dep)
+{
+    if (dep.lib_id != nullptr) {
+        const jl_libraryid_t *lid = (const jl_libraryid_t *)jl_data_ptr(dep.lib_id);
+        char uuid[JL_UUID_STRING_LEN + 1];
+        jl_uuid_to_string(&lid->pkg, uuid);
+        return {uuid, std::string(jl_string_data(lid->name), jl_string_len(lid->name))};
+    }
+    if (dep.lib == nullptr)
+        return {"", ""};
+    if ((intptr_t)dep.lib == (intptr_t)JL_LIBJULIA_DL_LIBNAME)
+        return {"", "libjulia"};
+    if ((intptr_t)dep.lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return {"", "libjulia-internal"};
+    return {"", dep.lib};
+}
+
+// Write a JSON manifest of every ccall/cglobal usage site, grouped by library.
+// Each library record carries `package_uuid` if it is identified and `library`
+// if it has a name (`null` for symbols looked up across the process). Each
+// symbol entry records the kind of site and whether it was bound by a direct
+// external symbol reference (`native`) or left to runtime lookup (`lazy`).
+static void aot_export_used_foreign_symbols(jl_codegen_output_t &out, const char *path)
+{
+    std::map<std::pair<std::string, std::string>, SmallVector<const jl_used_foreign_symbol_t *, 0>> by_lib;
+    for (const auto &dep : out.used_foreign_symbols)
+        by_lib[used_foreign_library(dep)].push_back(&dep);
+
+    ios_t f;
+    if (ios_file(&f, path, 1, 1, 1, 1) == NULL) {
+        jl_safe_printf("WARNING: could not open used-foreign-symbols export path %s\n", path);
+        return;
+    }
+    auto json_string = [&f](const std::string &s) { jl_print_str_escape_json(&f, s.data(), s.size()); };
+    ios_printf(&f, "{\n  \"libraries\": [\n");
+    bool first_lib = true;
+    for (auto &[lib, sites] : by_lib) {
+        const auto &[package_uuid, library] = lib;
+        if (!first_lib)
+            ios_printf(&f, ",\n");
+        first_lib = false;
+        ios_printf(&f, "    {\n");
+        if (!package_uuid.empty())
+            ios_printf(&f, "      \"package_uuid\": \"%s\",\n", package_uuid.c_str());
+        ios_printf(&f, "      \"library\": ");
+        if (library.empty())
+            ios_printf(&f, "null");
+        else
+            json_string(library);
+        ios_printf(&f, ",\n");
+        ios_printf(&f, "      \"symbols\": [\n");
+        // One entry per distinct (symbol, kind, linkage); a symbol referenced
+        // from many call sites is a single dependency.
+        std::set<std::tuple<std::string, bool, bool>> seen;
+        bool first_sym = true;
+        for (auto *dep : sites) {
+            auto sym = std::make_tuple(std::string(dep->func ? dep->func : "<dynamic>"),
+                                       dep->is_cglobal, dep->native_linked);
+            if (!seen.insert(sym).second)
+                continue;
+            if (!first_sym)
+                ios_printf(&f, ",\n");
+            first_sym = false;
+            ios_printf(&f, "        {\"symbol\": ");
+            json_string(std::get<0>(sym));
+            ios_printf(&f, ", \"kind\": \"%s\", \"linkage\": \"%s\"}",
+                       dep->is_cglobal ? "cglobal" : "ccall",
+                       dep->native_linked ? "native" : "lazy");
+        }
+        ios_printf(&f, "\n      ]\n    }");
+    }
+    ios_printf(&f, "\n  ]\n}\n");
+    ios_close(&f);
+}
+
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
                                       jl_array_t *ci_order, const jl_cgparams_t *cgparams,
                                       int external_linkage) JL_CANSAFEPOINT
@@ -994,6 +1077,8 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     emit_always_inline(out,
                        [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
     emit_llvmcall_modules(out);
+    if (const char *used_foreign_symbols_path = jl_get_export_foreign_symbol_usage())
+        aot_export_used_foreign_symbols(out, used_foreign_symbols_path);
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
     // including generating cfunction thunks
