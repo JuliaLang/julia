@@ -604,6 +604,14 @@ end
     @test jl_eval(test_mod, lam) isa Core.CodeInfo
 end
 
+@testset "with-static-parameters" begin
+    lam = Expr(Symbol("with-static-parameters"),
+               Expr(:lambda, [Symbol("#self#"), :x],
+                    Expr(:block, Expr(:return, :T))), :T)
+    @test fl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+end
+
 # `x^n` is rewritten to `literal_pow(^, x, Val(n))` if n is an Int
 @testset "(AI) literal_pow" begin
     pow_mod = @newmod(:LiteralPowTest)

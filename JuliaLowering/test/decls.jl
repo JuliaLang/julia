@@ -917,6 +917,11 @@ end
         @test run(test_mod, Expr(:let, p_block,
                                  Expr(:block, Expr(:islocal, :_)))) == false
     end
+    # placeholder should still run rhs
+    @test run(test_mod, :(let v = Int[]
+                              let _ = push!(v, 1); end
+                              length(v)
+                          end)) == 1
 
     # assignment forms
     @test run(test_mod,
