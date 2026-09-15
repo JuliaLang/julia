@@ -31,6 +31,10 @@ function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
         eq = exs[1]
         @ast __context__ __context__.macrocall [K"meta"
             "nospecialize"::K"Identifier" [K"kw"(eq) children(eq)...]]
+    elseif length(exs) == 1 && kind(exs[1]) === K"tuple"
+        # @nospecialize(x,y,z) in function body
+        @ast __context__ __context__.macrocall [K"meta"
+            "nospecialize"::K"Identifier" children(exs[1])...]
     else
         @ast __context__ __context__.macrocall [K"meta"
             "nospecialize"::K"Identifier" exs...]
