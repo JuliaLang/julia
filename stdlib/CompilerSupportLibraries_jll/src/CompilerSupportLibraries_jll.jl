@@ -7,6 +7,9 @@ using Base, Libdl, Base.BinaryPlatforms
 
 export libgfortran, libstdcxx, libgomp, libatomic, libgcc_s
 
+# This package's UUID, as in its Project.toml; names this JLL in each library's identity
+const _pkg_uuid = Base.UUID("e66e0078-7015-5450-92f7-15fbd957f2ae")
+
 # These get calculated in __init__()
 const PATH = Ref("")
 const PATH_list = String[]
@@ -26,7 +29,8 @@ const libatomic = LazyLibrary(
         BundledLazyLibraryPath("libatomic.so.1")
     else
         error("CompilerSupportLibraries_jll: Library 'libatomic' is not available for $(Sys.KERNEL)")
-    end
+    end;
+    id = LibraryID(_pkg_uuid, "libatomic")
 )
 
 if Sys.iswindows() || Sys.isapple() || arch(HostPlatform()) ∈ ("x86_64", "i686")
@@ -40,7 +44,8 @@ if Sys.iswindows() || Sys.isapple() || arch(HostPlatform()) ∈ ("x86_64", "i686
             BundledLazyLibraryPath("libquadmath.so.0")
         else
             error("CompilerSupportLibraries_jll: Library 'libquadmath' is not available for $(Sys.KERNEL)")
-        end
+        end;
+        id = LibraryID(_pkg_uuid, "libquadmath")
     )
 end
 
@@ -62,7 +67,8 @@ const libgcc_s = LazyLibrary(
         BundledLazyLibraryPath("libgcc_s.so.1")
     else
         error("CompilerSupportLibraries_jll: Library 'libgcc_s' is not available for $(Sys.KERNEL)")
-    end
+    end;
+    id = LibraryID(_pkg_uuid, "libgcc_s")
 )
 
 libgfortran_path::String = ""
@@ -76,6 +82,7 @@ const libgfortran = LazyLibrary(
     else
         error("CompilerSupportLibraries_jll: Library 'libgfortran' is not available for $(Sys.KERNEL)")
     end;
+    id = LibraryID(_pkg_uuid, "libgfortran"),
     dependencies = @static if @isdefined(libquadmath)
         LazyLibrary[libgcc_s, libquadmath]
     else
@@ -94,6 +101,7 @@ const libstdcxx = LazyLibrary(
     else
         error("CompilerSupportLibraries_jll: Library 'libstdcxx' is not available for $(Sys.KERNEL)")
     end;
+    id = LibraryID(_pkg_uuid, "libstdcxx"),
     dependencies = LazyLibrary[libgcc_s]
 )
 
@@ -108,6 +116,7 @@ const libgomp = LazyLibrary(
     else
         error("CompilerSupportLibraries_jll: Library 'libgomp' is not available for $(Sys.KERNEL)")
     end;
+    id = LibraryID(_pkg_uuid, "libgomp"),
     dependencies = if Sys.iswindows()
         LazyLibrary[libgcc_s]
     else
@@ -127,7 +136,8 @@ let
         end
         if isfile(string(_libssp_path))
             global libssp_path::String = ""
-            @eval const libssp = LazyLibrary($(_libssp_path))
+            @eval const libssp = LazyLibrary($(_libssp_path);
+                                             id = LibraryID(_pkg_uuid, "libssp"))
         end
     end
 end
