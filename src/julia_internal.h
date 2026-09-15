@@ -1329,6 +1329,7 @@ STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t) JL_NOTSAFEPOIN
 void jl_init_types(void) JL_CANSAFEPOINT JL_GC_DISABLED;
 void jl_init_flisp(void) JL_NOTSAFEPOINT;
 void jl_init_common_symbols(void) JL_NOTSAFEPOINT;
+void jl_set_root_symbol(jl_sym_t *root) JL_NOTSAFEPOINT;
 void jl_init_primitives(void) JL_CANSAFEPOINT JL_GC_DISABLED;
 void jl_init_llvm(void) JL_CANSAFEPOINT;
 void jl_init_runtime_ccall(void) JL_NOTSAFEPOINT;
