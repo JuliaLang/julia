@@ -583,6 +583,12 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             break;
         }
     }
+    else if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION &&
+             jl_get_safe_restore()) {
+        // Also honor unwind recovery on unmanaged threads, such as the profiler.
+        jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
     ios_t full_error, summary;
     ios_mem(&full_error, 0);
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
@@ -684,6 +690,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     static int recursion = 0;
     if (recursion++)
         exit(1);
+    else if (ct == NULL)
+        // Avoid Julia teardown on an unmanaged thread: the profiler may have
+        // faulted with a thread suspended that the atexit hooks need to run.
+        jl_raise(SIGSEGV);
     else
         jl_exit(1);
 }
