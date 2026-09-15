@@ -84,6 +84,23 @@ end
 (-)(x::DateTime, y::Period) = return DateTime(UTM(value(x) - toms(y)))
 (+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
+# Fixed-duration arithmetic preserves resolution and wraps in units of P.
+function timestamp_period_ticks(::Type{P}, y::FixedPeriod) where {P}
+    unit, scale = tons(oneunit(y)), timestamp_scale(P)
+    unit >= scale && return value(y) * (unit ÷ scale)
+    ticks, remainder = divrem(value(y), scale ÷ unit)
+    iszero(remainder) || throw(InexactError(:convert, P, y))
+    return ticks
+end
+for op in (:+, :-)
+    @eval begin
+        ($op)(x::Timestamp{P}, y::Union{Year,Quarter,Month}) where {P} =
+            Timestamp{P}(UTInstant(P(((Int128(value(($op)(Date(x), y))) - UNIXEPOCHDAYS) *
+                timestamp_ticks_per_day(P) + nsofday(x) ÷ timestamp_scale(P)) % Int64)))
+        ($op)(x::Timestamp{P}, y::FixedPeriod) where {P} =
+            Timestamp{P}(UTInstant(P(($op)(value(x), timestamp_period_ticks(P, y)))))
+    end
+end
 (+)(y::Period, x::TimeType) = x + y
 
 # Missing support
