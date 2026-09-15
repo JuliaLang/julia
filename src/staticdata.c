@@ -1565,7 +1565,6 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             // Discard excess capacity for Memory with only a single,
             // zero-offset MemoryRef from an Array.
             if (owner != HT_NOTFOUND && owner != NULL && owner->ref.mem == m &&
-                jl_array_len(owner) > 0 &&
                 jl_genericmemory_how(m) <= JL_GENERICMEMORY_GCMANAGED &&
                 (layout->flags.arrayelem_isunion || layout->size == 0 ?
                     owner->ref.ptr_or_offset == NULL : owner->ref.ptr_or_offset == m->ptr)) {
