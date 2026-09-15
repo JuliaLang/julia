@@ -3277,6 +3277,23 @@ let X = Tuple{Vector{M62174{D,F,V,A}} where {D,F,V<:P62174{D},A<:P62174{F}}},
     @test p[4].ub.parameters[1] === p[2]
 end
 
+# Dependent static-parameter values must resolve method variables, including when substitution fails.
+@noinline function dependent_sparams(read::Bool, x::T, y::Union{Nothing,Ref{S}}) where {T,S>:T}
+    read ? (T, S) : ((@isdefined(T) ? T : :undefined), (@isdefined(S) ? S : :undefined))
+end
+struct DependentSparamBound{X<:Integer} end
+@noinline dependent_sparams_invalid(x::T, y::Ref{S}) where {T,S>:Tuple{DependentSparamBound{T}}} = S
+@noinline dependent_sparams_invalid_chain(::T, ::U, ::Ref{S}) where {T,U>:T,S>:Tuple{DependentSparamBound{U}}} = S
+@testset "dependent static parameters" begin
+    @test dependent_sparams(false, 1, Ref(1)) === (Int, Int)
+    @test dependent_sparams(true, 1, Ref{Integer}(1)) === (Int, Integer)
+    @test dependent_sparams_invalid("s", Ref{Tuple{Any}}((1,))) === Tuple{Any}
+    @test dependent_sparams_invalid_chain("s", "s", Ref{Tuple{Any}}((1,))) === Tuple{Any}
+    _, env = intersection_env(Tuple{Union{Int8,Int16},Ref{Integer},Ref{Real}},
+                             Tuple{T,Ref{S},Ref{U}} where {T,S>:T,U>:S})
+    @test (env[2], env[3]) === (Integer, Real)
+end
+
 # Hoisted union-split of a `∀` variable's upper bound: a left-side `where` var
 # with trivial lower bound, a union upper bound, and only covariant occurrences
 # in the body distributes over the arms of its bound.

@@ -3238,18 +3238,23 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     return t;
 }
 
-static jl_value_t *instantiate_with(jl_value_t *t, jl_value_t **env, size_t n, jl_typeenv_t *te) JL_CANSAFEPOINT
+static jl_value_t *instantiate_with(jl_value_t *t, jl_value_t **env, size_t n, jl_typeenv_t *te, int nothrow) JL_CANSAFEPOINT
 {
     if (n > 0) {
         jl_typeenv_t en = { (jl_tvar_t*)env[0], env[1], te };
-        return instantiate_with(t, &env[2], n-1, &en );
+        return instantiate_with(t, &env[2], n-1, &en, nothrow);
     }
-    return inst_type_w_(t, te, NULL, 1, 0, 0);
+    return inst_type_w_(t, te, NULL, 1, nothrow, 0);
 }
 
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
 {
-    return instantiate_with(t, env, n, NULL);
+    return instantiate_with(t, env, n, NULL, 0);
+}
+
+jl_value_t *jl_instantiate_type_with_nothrow(jl_value_t *t, jl_value_t **env, size_t n)
+{
+    return instantiate_with(t, env, n, NULL, 1);
 }
 
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack)

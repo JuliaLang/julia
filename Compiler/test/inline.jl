@@ -2497,4 +2497,23 @@ let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
     @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
 end
 
+# Dependent parameters must agree with inference on values and definedness, including after inlining and DCE.
+@noinline dependent_read(::Union{Nothing,T}, ::Ref{S}) where {T,S>:T} = S
+@inline dependent_lower(::T, ::Ref{S}) where {T>:Int,S>:T} = S
+dependent_lower_caller(r) = dependent_lower(1, r)
+@noinline dependent_leaf(::Union{Nothing,S}, ::Ref{T}) where {T,S>:Type{T}} = S
+dependent_leaf_catch(r) = try dependent_leaf(nothing, r); 1 catch err; err end
+@noinline dependent_open(::Type{T}, ::Type{S}) where {T,S>:T} = (T, S)
+dependent_open_catch(t, s) = try dependent_open(t, s) catch err; err end
+@noinline dependent_widen(::T, ::T, ::Ref{S}) where {T,S>:T} = S
+@testset "dependent static parameters" begin
+    @test dependent_read(nothing, Ref{Integer}(1)) === Integer
+    @test dependent_lower_caller(Ref{Integer}(1)) === Integer
+    @test dependent_leaf_catch(Ref(1)) isa UndefVarError
+    tv = TypeVar(:X)
+    open = Union{Int, tv}
+    @test dependent_open_catch(Int, open) === (Int, open)
+    @test (@inferred dependent_widen(Int, Int, Ref{Union{Int,Type{Int}}}(1))) === Union{Int,Type{Int}}
+end
+
 end # module inline_tests
