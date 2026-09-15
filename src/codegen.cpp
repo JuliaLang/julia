@@ -1688,6 +1688,77 @@ struct jl_aliasinfo_t {
     static jl_aliasinfo_t fromTBAA(jl_codectx_t &ctx, MDNode *tbaa);
 };
 
+static bool allpointers(jl_datatype_t *typ)
+{
+    return jl_datatype_size(typ) == typ->layout->npointers * sizeof(void*);
+}
+
+// A class to hold GC roots that can be either:
+// 1. Materialized: a SmallVector of Value* that have already been loaded
+// 2. Lazy: a pointer + count + tbaa that allows loading on demand
+// This allows deferring the load of GC roots until they are actually needed.
+struct jl_gc_roots_t {
+private:
+    // Materialized roots (when ptr is null)
+    SmallVector<Value*,0> roots;
+    // Lazy loading state (when ptr is non-null)
+    Value *ptr = nullptr;
+    size_t count = 0;
+    MDNode *tbaa = nullptr;
+
+public:
+    // Default constructor - empty roots
+    jl_gc_roots_t() = default;
+
+    // Constructor from ArrayRef
+    template <typename U>
+    explicit jl_gc_roots_t(ArrayRef<U*> roots) : roots(roots.begin(), roots.end()) {}
+
+    // Constructor from SmallVector (move)
+    explicit jl_gc_roots_t(SmallVector<Value*,0> &&values) : roots(std::move(values)) {}
+
+    // Constructor for lazy loading
+    jl_gc_roots_t(Value *ptr, size_t count, MDNode *tbaa)
+        : ptr(ptr), count(count), tbaa(tbaa) {}
+
+    // Copy constructor
+    jl_gc_roots_t(const jl_gc_roots_t &other) = default;
+
+    // Move constructor
+    jl_gc_roots_t(jl_gc_roots_t &&other) = default;
+
+    // Copy assignment
+    jl_gc_roots_t &operator=(const jl_gc_roots_t &other) = default;
+
+    // Move assignment
+    jl_gc_roots_t &operator=(jl_gc_roots_t &&other) = default;
+
+    // Get the number of roots
+    size_t size() const { return ptr ? count : roots.size(); }
+
+    // Check if empty
+    bool empty() const { return size() == 0; }
+
+    // Get a pointer to roots (tbaa_gcframe)
+    Value *get_ptr(jl_codectx_t &ctx) const;
+
+    // Get a single root at index i, loading lazily if needed
+    Value *get(jl_codectx_t &ctx, size_t i) const;
+
+    // Truncate to n roots
+    void truncate(size_t n) {
+        if (ptr) {
+            assert(n <= count);
+            count = n;
+        } else {
+            roots.truncate(n);
+        }
+    }
+
+    // Extract roots from [first, first+numel), lazily
+    jl_gc_roots_t slice(jl_codectx_t &ctx, size_t first, size_t numel) const;
+};
+
 // metadata tracking for a llvm Value* during codegen
 const uint8_t UNION_BOX_MARKER = 0x80;
 struct jl_cgval_t {
@@ -1709,7 +1780,7 @@ struct jl_cgval_t {
     Value *Vboxed;
 
     Value *TIndex; // if `V` is an unboxed (tagged) Union described by `typ`, this gives the DataType index (1-based, small int) as an i8
-    SmallVector<Value*,0> inline_roots; // if present, `V` is a pointer, but not in canonical layout
+    jl_gc_roots_t inline_roots; // if present, `V` is a pointer, but not in canonical layout
     jl_value_t *constant; // constant value (rooted in linfo.def.roots)
     jl_value_t *typ; // the original type of V, never nullptr
     bool isboxed; // whether this value is a jl_value_t* allocated on the heap with the right type tag
@@ -1744,11 +1815,11 @@ struct jl_cgval_t {
         assert(TIndex == nullptr || TIndex->getType() == getInt8Ty(TIndex->getContext()));
     }
     jl_cgval_t(Value *Vptr, bool isboxed, jl_value_t *typ, Value *tindex, MDNode *tbaa, Value* inline_roots) = delete;
-    jl_cgval_t(Value *Vptr, bool isboxed, jl_value_t *typ, Value *tindex, MDNode *tbaa, ArrayRef<Value*> inline_roots) : // general pointer constructor
+    jl_cgval_t(Value *Vptr, bool isboxed, jl_value_t *typ, Value *tindex, MDNode *tbaa, jl_gc_roots_t inline_roots) : // general pointer constructor
         V(Vptr),
         Vboxed(isboxed ? Vptr : nullptr),
         TIndex(tindex),
-        inline_roots(inline_roots),
+        inline_roots(std::move(inline_roots)),
         constant(nullptr),
         typ(typ),
         isboxed(isboxed),
@@ -2075,6 +2146,8 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 
 static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, size_t byte_offset, const Twine &Name="")
 {
+    if (byte_offset == 0)
+        return base;
     auto *gep = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), base, byte_offset);
     setName(ctx.emission_context, gep, Name);
     return gep;
@@ -2199,7 +2272,7 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
     if (jl_is_type_type(typ)) {
         assert(is_uniquerep_Type(typ));
         // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
-        jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
+        jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), jl_gc_roots_t());
         constant.constant = jl_tparam0(typ);
         if (typ == (jl_value_t*)jl_typeofbottom_type->super)
             constant.isghost = true;
@@ -2223,16 +2296,16 @@ static inline jl_cgval_t mark_julia_const(jl_codectx_t &ctx, jl_value_t *jv)
         if (jl_is_datatype_singleton((jl_datatype_t*)typ))
             return ghostValue(ctx, typ);
     }
-    jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
+    jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), jl_gc_roots_t());
     constant.constant = jv;
     return constant;
 }
 
 
-static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa, ArrayRef<Value*> inline_roots=None)
+static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa, jl_gc_roots_t &&inline_roots=jl_gc_roots_t())
 {
     // this enables lazy-copying of immutable values and stack or argument slots
-    jl_cgval_t tagval(v, false, typ, tindex, tbaa, inline_roots);
+    jl_cgval_t tagval(v, false, typ, tindex, tbaa, std::move(inline_roots));
     return tagval;
 }
 
@@ -2273,12 +2346,8 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
 static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v)
 {
     if (!v.inline_roots.empty()) {
-        //if (v.V == nullptr) {
-        //    AllocaInst *loc = emit_static_roots(ctx, v.inline_roots.size());
-        //    for (size_t i = 0; i < v.inline_roots.counts(); i++)
-        //        ctx.builder.CreateAlignedStore(v.inline_roots[i], emit_ptrgep(ctx, loc, i * sizeof(void*)), Align(sizeof(void*)));
-        //    return mark_julia_slot(loc, v.typ, v.TIndex, ctx.tbaa().tbaa_gcframe);
-        //}
+        if (allpointers((jl_datatype_t*)v.typ))
+            return mark_julia_slot(v.inline_roots.get_ptr(ctx), v.typ, v.TIndex, ctx.tbaa().tbaa_gcframe);
         Align align(julia_alignment(v.typ));
         Type *ty = julia_type_to_llvm(ctx, v.typ);
         AllocaInst *loc = emit_static_alloca(ctx, ty, align);
@@ -2327,7 +2396,7 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
             return value_to_pointer(ctx, v, typ, NULL);
     }
     if (isboxed)
-        return jl_cgval_t(v, isboxed, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
+        return jl_cgval_t(v, isboxed, typ, NULL, best_tbaa(ctx.tbaa(), typ), jl_gc_roots_t());
     return jl_cgval_t(v, typ, NULL);
 }
 
@@ -2386,6 +2455,41 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
 }
 
 static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ, Value **skip=nullptr);
+
+Value *jl_gc_roots_t::get(jl_codectx_t &ctx, size_t i) const
+{
+    if (ptr) {
+        // Lazy mode - load the root on demand
+        Type *T_prjlvalue = ctx.types().T_prjlvalue;
+        auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+        LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, emit_ptrgep(ctx, ptr, i * sizeof(jl_value_t*)), Align(sizeof(void*)));
+        roots_ai.decorateInst(load);
+        return load;
+    }
+    return roots[i];
+}
+
+Value *jl_gc_roots_t::get_ptr(jl_codectx_t &ctx) const
+{
+    if (ptr)
+        return ptr;
+    auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+    Value *copyptr = emit_static_roots(ctx, size());
+    for (size_t i = 0; i < size(); i++) {
+        StoreInst *SI = ctx.builder.CreateAlignedStore(get(ctx, i), emit_ptrgep(ctx, copyptr, i * sizeof(void*)), Align(sizeof(void*)));
+        roots_ai.decorateInst(SI);
+    }
+    return copyptr;
+}
+
+jl_gc_roots_t jl_gc_roots_t::slice(jl_codectx_t &ctx, size_t first, size_t numel) const {
+    if (numel == 0)
+        return jl_gc_roots_t();
+    else if (ptr)
+        return jl_gc_roots_t(emit_ptrgep(ctx, ptr, first * sizeof(void*)), numel, tbaa);
+    else
+        return jl_gc_roots_t(ArrayRef(roots).slice(first, numel));
+}
 
 // --- allocating local variables ---
 
@@ -2606,7 +2710,7 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
         }
     }
     else {
-        return jl_cgval_t(boxed(ctx, v), true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
+        return jl_cgval_t(boxed(ctx, v), true, typ, NULL, best_tbaa(ctx.tbaa(), typ), jl_gc_roots_t());
     }
     return jl_cgval_t(v, typ, new_tindex);
 }
@@ -4946,7 +5050,7 @@ isdefined_unknown_idx:
             if (!obj.inline_roots.empty()) {
                 auto offsets = split_value_field(stt, fieldidx);
                 assert(offsets.second >= 0);
-                fldv = obj.inline_roots[offsets.second];
+                fldv = obj.inline_roots.get(ctx, offsets.second);
             }
             else if (obj.ispointer()) {
                 auto tbaa = best_field_tbaa(ctx, obj, stt, fieldidx, offs);
@@ -5133,9 +5237,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
                 auto tracked = CountTrackedPointers(et);
                 if (tracked.count && !tracked.all) {
                     auto [val, roots, result_tbaa] = split_value(ctx, arg, Align(julia_alignment(jt)), /*copy_required*/false);
-                    AllocaInst *proots = emit_static_roots(ctx, roots.size());
-                    for (size_t i = 0; i < roots.size(); i++)
-                        ctx.builder.CreateAlignedStore(roots[i], emit_ptrgep(ctx, proots, i * sizeof(void*)), Align(sizeof(void*)));
+                    Value *proots = roots.get_ptr(ctx);
                     assert(val);
                     argvals[idx] = decay_derived(ctx, val);
                     argvals[++idx] = proots;
@@ -5174,7 +5276,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             break;
         case jl_returninfo_t::SRet:
             assert(result);
-            retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_gcframe, load_gc_roots(ctx, return_roots, returninfo.return_roots, ctx.tbaa().tbaa_gcframe));
+            retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_gcframe, make_lazy_gc_roots(return_roots, returninfo.return_roots, ctx.tbaa().tbaa_gcframe));
             break;
         case jl_returninfo_t::Union: {
             Value *box = ctx.builder.CreateExtractValue(call, 0);
@@ -5712,7 +5814,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             Value *tindex = NULL;
             if (vi.pTIndex)
                 tindex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(1), vi.isVolatile);
-            v = mark_julia_slot(ssaslot, vi.value.typ, tindex, ctx.tbaa().tbaa_stack, None);
+            v = mark_julia_slot(ssaslot, vi.value.typ, tindex, ctx.tbaa().tbaa_stack, jl_gc_roots_t());
         }
         if (vi.inline_roots) {
             AllocaInst *varslot = vi.inline_roots;
@@ -5723,7 +5825,13 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 T_prjlvalue = AT->getElementType();
             }
             assert(T_prjlvalue == ctx.types().T_prjlvalue);
-            v.inline_roots = load_gc_roots(ctx, varslot, nroots, ctx.tbaa().tbaa_gcframe, vi.isVolatile);
+            SmallVector<Value*,0> gcroots(nroots);
+            auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+            for (size_t i = 0; i < nroots; i++) {
+                Value *ptr = emit_ptrgep(ctx, varslot, i * sizeof(jl_value_t*));
+                gcroots[i] = roots_ai.decorateInst(ctx.builder.CreateAlignedLoad(T_prjlvalue, ptr, Align(sizeof(void*)), vi.isVolatile));
+            }
+            v.inline_roots = jl_gc_roots_t(std::move(gcroots));
         }
         if (vi.usedUndef) {
             assert(vi.defFlag);
@@ -5911,8 +6019,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             ctx.builder.CreateMemCpy(phi, align, dest, align, nb, false);
             ctx.builder.CreateLifetimeEnd(dest);
         }
-        slot = mark_julia_slot(phi, phiType, NULL, ctx.tbaa().tbaa_stack,
-                roots.empty() ? ArrayRef<Value*>() : ArrayRef((Value *const *)&roots.front(), roots.size()));
+        slot = mark_julia_slot(phi, phiType, NULL, ctx.tbaa().tbaa_stack, jl_gc_roots_t(ArrayRef(roots)));
     }
     else {
         value_phi = PHINode::Create(vtype, jl_array_nrows(edges), "value_phi");
@@ -6884,8 +6991,8 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
         ArgTy.push_back(rhs.Vboxed->getType());
     if (rhs.TIndex)
         ArgTy.push_back(rhs.TIndex->getType());
-    for (auto &root : rhs.inline_roots)
-        ArgTy.push_back(root->getType());
+    for (size_t i = 0; i < rhs.inline_roots.size(); i++)
+        ArgTy.push_back(rhs.inline_roots.get(ctx2, i)->getType());
     if (gcstack_arg)
         ArgTy.push_back(ctx.builder.getPtrTy());
     FunctionType *FT = FunctionType::get(elty, ArgTy, false);
@@ -6902,8 +7009,12 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
         rhs.Vboxed = &*AI++;
     if (rhs.TIndex)
         rhs.TIndex = &*AI++;
-    for (size_t i = 0; i < rhs.inline_roots.size(); i++)
-        rhs.inline_roots[i] = &*AI++;
+    if (!rhs.inline_roots.empty()) {
+        SmallVector<Value*,0> new_roots(rhs.inline_roots.size());
+        for (size_t i = 0; i < rhs.inline_roots.size(); i++)
+            new_roots[i] = &*AI++;
+        rhs.inline_roots = jl_gc_roots_t(std::move(new_roots));
+    }
     rhs.promotion_point = nullptr;
     rhs.promotion_ssa = -1;
     if (gcstack_arg) {
@@ -7056,12 +7167,12 @@ static void emit_specsig_to_specsig(
             ++AI;
             if (!isboxed && et->isAggregateType()) {
                 auto tracked = CountTrackedPointers(et);
-                SmallVector<Value*,0> roots;
+                jl_gc_roots_t roots;
                 if (tracked.count && !tracked.all) {
-                    roots = load_gc_roots(ctx, &*AI, tracked.count, ctx.tbaa().tbaa_const);
+                    roots = make_lazy_gc_roots(&*AI, tracked.count, ctx.tbaa().tbaa_const);
                     ++AI;
                 }
-                myargs[i] = mark_julia_slot(arg_v, jt, NULL, ctx.tbaa().tbaa_const, roots);
+                myargs[i] = mark_julia_slot(arg_v, jt, NULL, ctx.tbaa().tbaa_const, std::move(roots));
             }
             else {
                 assert(arg_v->getType() == et);
@@ -8791,7 +8902,7 @@ static jl_llvm_functions_t
             AllocaInst *roots = sizes.second > 0 ? emit_static_roots(ctx, sizes.second) : nullptr;
             if (bits) bits->setName(jl_symbol_name(s));
             if (roots) roots->setName(StringRef(".roots.") + jl_symbol_name(s));
-            varinfo.value = mark_julia_slot(bits, jt, NULL, ctx.tbaa().tbaa_stack, None);
+            varinfo.value = mark_julia_slot(bits, jt, NULL, ctx.tbaa().tbaa_stack, jl_gc_roots_t());
             varinfo.inline_roots = roots;
             alloc_def_flag(ctx, varinfo);
             if (debug_enabled && varinfo.dinfo) {
@@ -8890,11 +9001,11 @@ static jl_llvm_functions_t
         jl_cgval_t theArg;
         if (!isboxed && llvmArgType->isAggregateType()) {
             maybe_mark_argument_dereferenceable(param, argType);
-            SmallVector<Value*,0> roots;
+            jl_gc_roots_t roots;
             auto tracked = CountTrackedPointers(llvmArgType);
             if (tracked.count && !tracked.all) {
                 Argument *RootArg = &*AI;
-                roots = load_gc_roots(ctx, RootArg, tracked.count, ctx.tbaa().tbaa_const);
+                roots = make_lazy_gc_roots(RootArg, tracked.count, ctx.tbaa().tbaa_const);
                 AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
                 param.addAttribute(Attribute::NonNull);
                 param.addAttribute(Attribute::NoUndef);
@@ -8903,7 +9014,7 @@ static jl_llvm_functions_t
                 attrs[RootArg->getArgNo()] = AttributeSet::get(Arg->getContext(), param);
                 ++AI;
             }
-            theArg = mark_julia_slot(Arg, argType, NULL, ctx.tbaa().tbaa_const, roots); // this argument is by-pointer
+            theArg = mark_julia_slot(Arg, argType, NULL, ctx.tbaa().tbaa_const, std::move(roots)); // this argument is by-pointer
         }
         else {
             if (isboxed)
