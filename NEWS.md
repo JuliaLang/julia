@@ -217,7 +217,7 @@ Standard library changes
 
 ### Mmap
 
-* Refactored for consistent behavior between Windows, Linux, and iOS; also made more robust and avoids surfacing
+* Refactored for consistent behavior between Windows, Linux, and macOS; also made more robust and avoids surfacing
   system errors in favor of Julia exceptions, addressing several longstanding issues ([#60955]).
 * `Mmap.Anonymous` deprecated in favor of new `Mmap.SharedMemory`, which acts like an IO object abstracting over
   a named or anonymous shared memory segment supporting the `open`/`close` convention ([#60955]).
