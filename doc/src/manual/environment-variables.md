@@ -577,6 +577,21 @@ This allows developers to get detailed debugging information from CI runs withou
 Enable collecting of a heap snapshot during execution via the profiling peek mechanism.
 See [Triggered During Execution](@ref).
 
+### [`JULIA_PRECOMPILE_PROFILE`](@id JULIA_PRECOMPILE_PROFILE)
+
+If set to a directory, every package precompilation worker samples itself and writes its
+profile there. See [Profiling package precompilation](@ref).
+
+### [`JULIA_PRECOMPILE_PROFILE_DELAY`](@id JULIA_PRECOMPILE_PROFILE_DELAY)
+
+The sampling period in seconds used when `JULIA_PRECOMPILE_PROFILE` is set. Defaults to
+`0.001`.
+
+### [`JULIA_PRECOMPILE_PROFILE_NSAMPLES`](@id JULIA_PRECOMPILE_PROFILE_NSAMPLES)
+
+The size of each worker's profile buffer, in samples, used when
+`JULIA_PRECOMPILE_PROFILE` is set. Defaults to `10000000`.
+
 ### [`JULIA_TIMING_SUBSYSTEMS`](@id JULIA_TIMING_SUBSYSTEMS)
 
 Allows you to enable or disable zones for a specific Julia run.
