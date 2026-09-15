@@ -132,7 +132,8 @@ function Format(f::AbstractString)
     numarguments = 0
 
     b = 0x00
-    local last_percent_pos
+    # Initialization pleases JET.
+    last_percent_pos = 0
 
     # skip ahead to first format specifier
     while pos <= len
@@ -183,16 +184,17 @@ function Format(f::AbstractString)
         width = 0
         dynamic_width = false
         if b == UInt8('*')
+            pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, pos-1))
             dynamic_width = true
             numarguments += 1
             b = bytes[pos]
             pos += 1
         else
             while UInt8('0') <= b <= UInt8('9')
+                pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, pos-1))
                 width = 10 * width + (b - UInt8('0'))
                 b = bytes[pos]
                 pos += 1
-                pos > len && break
             end
         end
         # parse precision
@@ -204,20 +206,18 @@ function Format(f::AbstractString)
             parsedprecdigits = true
             b = bytes[pos]
             pos += 1
-            if pos <= len
-                if b == UInt8('*')
-                    dynamic_precision = true
-                    numarguments += 1
+            if b == UInt8('*')
+                pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, pos-1))
+                dynamic_precision = true
+                numarguments += 1
+                b = bytes[pos]
+                pos += 1
+            else
+                while UInt8('0') <= b <= UInt8('9')
+                    pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, pos-1))
+                    precision = 10precision + (b - UInt8('0'))
                     b = bytes[pos]
                     pos += 1
-                else
-                    precision = 0
-                    while UInt8('0') <= b <= UInt8('9')
-                        precision = 10precision + (b - UInt8('0'))
-                        b = bytes[pos]
-                        pos += 1
-                        pos > len && break
-                    end
                 end
             end
         end
