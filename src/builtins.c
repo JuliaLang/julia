@@ -2123,6 +2123,14 @@ JL_CALLABLE(jl_f_memoryrefget)
     return jl_memoryrefget(m, kind == (jl_value_t*)jl_atomic_sym);
 }
 
+// Same as `memoryrefget` at runtime. Codegen additionally tags loads emitted from this
+// builtin with the active `Expr(:aliasscope)` scope, i.e. it asserts that the loaded memory
+// is not modified by any store inside that scope (see `Base.Experimental.Const`).
+JL_CALLABLE(jl_f_const_memoryrefget)
+{
+    return jl_f_memoryrefget(F, args, nargs);
+}
+
 JL_CALLABLE(jl_f_memoryrefset)
 {
     enum jl_memory_order order = jl_memory_order_notatomic;

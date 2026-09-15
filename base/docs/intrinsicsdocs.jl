@@ -64,6 +64,19 @@ The memory ordering specified must be compatible with the `isatomic` parameter.
 Core.memoryrefget
 
 """
+    Core.const_memoryrefget(::GenericMemoryRef, ordering::Symbol, boundscheck::Bool)
+
+Same as [`Core.memoryrefget`](@ref), but additionally promises that the memory being read is
+not modified by any store inside the enclosing `Base.Experimental.@aliasscope` region.
+Used to implement indexing of `Base.Experimental.Const`. Loads emitted by plain
+[`Core.memoryrefget`](@ref) make no such promise.
+
+!!! compat "Julia 1.14"
+    This function requires Julia 1.14 or later.
+"""
+Core.const_memoryrefget
+
+"""
     Core.memoryrefset!(::GenericMemoryRef, value, ordering::Symbol, boundscheck::Bool)
 
 Store the value to the `MemoryRef`, throwing a `BoundsError` if the `Memory` is empty. See `ref[] = value`.

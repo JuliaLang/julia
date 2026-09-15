@@ -30,6 +30,7 @@ extern "C" {
     XX(apply_type,"apply_type") \
     XX(cancellation_point,"cancellation_point!") \
     XX(compilerbarrier,"compilerbarrier") \
+    XX(const_memoryrefget,"const_memoryrefget") \
     XX(current_scope,"current_scope") \
     XX(donotdelete,"donotdelete") \
     XX(fieldtype,"fieldtype") \

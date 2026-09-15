@@ -755,7 +755,7 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
         nargs = 4
     elseif f === memoryrefnew
         nargs= 3
-    elseif f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefget || f === Core.const_memoryrefget || f === memoryref_isassigned
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5
@@ -1443,7 +1443,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
+            elseif (f === Core.memoryrefget || f === Core.const_memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 1 : params.inline_nonleaf_penalty
             elseif f === Core.memoryrefset! && length(ex.args) >= 3
