@@ -109,7 +109,12 @@ function syntax_id(ex::SyntaxTree)
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo
-    id = x isa SyntaxTree ? syntax_id(x) : x
+    id = if x isa SyntaxTree
+        @jl_assert kind(x) === K"BindingId" x
+        syntax_id(x)
+    else
+        x
+    end
     bindings.info[id]
 end
 
@@ -158,6 +163,19 @@ end
 binding_ex(ctx, id::IdTag) = binding_ex(ctx, get_binding(ctx, id))
 binding_type_ex(ctx::AbstractLoweringContext, b::BindingInfo) =
     b.type
+
+"""
+Key to use when transforming names into bindings
+"""
+struct NameKey
+    name::String
+    layer::ScopeLayer
+end
+
+function NameKey(ex::SyntaxTree)
+    @jl_assert kind(ex) in KSet"Identifier symboliclabel symbolicgoto" ex
+    NameKey(syntax_name(ex), (ex.context::SyntaxContext).layer)
+end
 
 # One lambda's variables
 struct LambdaBindings

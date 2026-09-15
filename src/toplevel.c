@@ -819,6 +819,9 @@ JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, const char *fname) J
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
     jl_check_top_level_effect(m, "eval");
+    jl_value_t *julia_eval =
+        jl_get_global_value(jl_core_module, jl_symbol("_toplevel_eval"),
+                            jl_current_task->world_age);
     jl_value_t *v = NULL;
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     const char *last_filename = jl_atomic_load_relaxed(&jl_filename);
@@ -828,7 +831,17 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        v = jl_toplevel_eval(m, ex);
+        if (julia_eval && julia_eval != jl_nothing) {
+            jl_value_t **args;
+            JL_GC_PUSHARGS(args, 3);
+            args[0] = julia_eval;
+            args[1] = (jl_value_t*)m;
+            args[2] = ex;
+            v = jl_apply(args, 3);
+            JL_GC_POP();
+        } else {
+            v = jl_toplevel_eval(m, ex);
+        }
     }
     JL_CATCH {
         jl_atomic_store_relaxed(&jl_lineno, last_lineno);
@@ -862,7 +875,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     JL_GC_PUSH3(&ast, &result, &expression);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
-                              filename, 1, 0, (jl_value_t*)jl_all_sym, module), 0);
+                              filename, module), 0);
     if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != jl_toplevel_sym) {
         jl_errorf("jl_parse() must generate a top level expression");
     }
