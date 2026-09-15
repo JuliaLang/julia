@@ -80,10 +80,28 @@ JL_DLLEXPORT void jl_gc_region_zone_leave(int saved);
 // current, or a refusal code.
 JL_DLLEXPORT int jl_gc_region_set(int n);
 JL_DLLEXPORT int jl_gc_region_current(void);
+// Free every object of region n on the calling thread's heap, after a check
+// that no execution root references into it. Returns the number of pages the
+// region held, or a refusal code.
+JL_DLLEXPORT uint64_t jl_gc_region_reset(int n);
+// The same, without the check and without its pause. A reference from a
+// stack slot, a register or a parked task's stack is left dangling.
+JL_DLLEXPORT uint64_t jl_gc_region_unsafe_reset(int n);
 // Close the window of a task that reaches its end (task.c).
 void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
+// Free region n on every heap at once, with the world stopped.
+JL_DLLEXPORT uint64_t jl_gc_region_reset_global(int n);
 // The region of an object.
 JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v);
+// The pages of a region on this heap; whether an escape quarantined a region.
+JL_DLLEXPORT int jl_gc_region_pages(int n);
+JL_DLLEXPORT int jl_gc_region_quarantined(int n);
+// With debug on, a refused reset reports the execution roots that reference
+// the region. jl_gc_region_check runs the root check alone and returns the
+// count; jl_gc_region_verify checks the page chains of a region.
+JL_DLLEXPORT void jl_gc_region_set_debug(int on);
+JL_DLLEXPORT int64_t jl_gc_region_check(int n);
+JL_DLLEXPORT int jl_gc_region_verify(int n);
 // The escape barrier, called by the write barrier while a region is in use.
 JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
 
