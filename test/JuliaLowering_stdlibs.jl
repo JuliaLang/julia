@@ -1,7 +1,9 @@
 import Libdl
 
 # known precompilation failures under JL
-const INCOMPATIBLE_STDLIBS = String[]
+const INCOMPATIBLE_STDLIBS = String[
+    "InteractiveUtils", # uses `@__FUNCTION__` (remove when #61150 merged)
+]
 
 const JULIA_EXECUTABLE = Base.unsafe_string(Base.JLOptions().julia_bin)
 const JULIA_CPU_TARGET = get(ENV, "JULIA_CPU_TARGET", Base.unsafe_string(Base.JLOptions().cpu_target))
