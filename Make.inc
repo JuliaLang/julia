@@ -1686,6 +1686,9 @@ ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
+# When linking LTO bitcode, the debug map points dsymutil at the objects that ld64
+# compiled from it, which ld64 deletes unless told where to keep them.
+LTO_OBJECT_PATH = -Wl,-object_path_lto,$(1).lto
 endif
 
 ifeq ($(OS), WINNT)

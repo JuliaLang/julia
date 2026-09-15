@@ -79,8 +79,15 @@ AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for us
 	Note that running extensive scripts may result in counter overflows, which can be detected by running $\
 	`make top`. Afterwards run `make stage2`.'
 
+# The system image records the target triple of the compiler (Sys.MACHINE).
+# Use the one of the default compiler, which spells it differently than the
+# stage-0 clang, so that a plain `make binary-dist` of the optimized build does
+# not rebuild the system image.
+BUILD_MACHINE:=$(shell $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-BUILD_MACHINE | sed 's/^BUILD_MACHINE=//')
+
 TOOLCHAIN_FLAGS = $\
 	"CC=$(STAGE0_TOOLS)clang" $\
+	"BUILD_MACHINE=$(BUILD_MACHINE)" $\
 	"CXX=$(STAGE0_TOOLS)clang++" $\
 	"LD=$(STAGE0_TOOLS)ld.lld" $\
 	"AR=$(STAGE0_TOOLS)llvm-ar" $\
@@ -97,7 +104,7 @@ stage0: | $(STAGE0_BUILD)
 	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-BOLT
 	# Turn [cd]tors into init/fini_array sections in libclang_rt, since lld
 	# doesn't do that, and otherwise the profile constructor is not executed
-	find $< -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
+	find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
 	touch $@
 
 $(STAGE1_BUILD): stage0
@@ -106,6 +113,10 @@ stage1: PGO_CXXFLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR) -Xclang -mllvm -Xcla
 stage1: PGO_LDFLAGS:=-flto=thin -fprofile-generate=$(PGO_PROFILE_DIR)
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
+	# Building the dependencies runs instrumented build tools, e.g. llvm-tblgen,
+	# which share code with libLLVM but not Julia's workload. Keep their
+	# profiles out of the profile directory.
+	LLVM_PROFILE_FILE=$(STAGE1_BUILD)/deps-profiles/%m.profraw $(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) julia-deps
 	$(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS)
 	# Remove the empty profile emitted by the instrumented launcher.
 	rm -f $(JULIA_ROOT)/base/default.profraw

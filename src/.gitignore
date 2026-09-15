@@ -5,6 +5,7 @@
 /*.lib
 /*.pdb
 /*.exp
+/*.lto
 
 /boot.j.inc
 /julia_flisp.boot

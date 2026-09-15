@@ -597,7 +597,7 @@ $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/jul
 		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS) $(BOLT_LDFLAGS), \
 		$(WIN_LD_DLL_CRT_START) $(OBJS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(WIN_LD_CRT_END), \
 		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
-		$(OBJS) $(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT))))
+		$(OBJS) $(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
@@ -606,7 +606,7 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS), \
 		$(WIN_LD_DLL_CRT_START) $(DOBJS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(WIN_LD_CRT_END), \
 		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
-		$(DOBJS) $(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))))
+		$(DOBJS) $(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
@@ -640,7 +640,7 @@ $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/juli
 		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS) $(BOLT_LDFLAGS), \
 		$(WIN_LD_DLL_CRT_START) $(CODEGEN_OBJS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) $(WIN_LD_CRT_END), \
 		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
-		$(CODEGEN_OBJS) $(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))))
+		$(CODEGEN_OBJS) $(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-codegen.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-codegen.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
@@ -649,7 +649,7 @@ $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR
 		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS), \
 		$(WIN_LD_DLL_CRT_START) $(CODEGEN_DOBJS) $(JLIBLDFLAGS) $(CG_DEBUG_LIBS) $(WIN_LD_CRT_END), \
 		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
-		$(CODEGEN_DOBJS) $(JLDFLAGS) $(JLIBLDFLAGS) $(CG_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))))
+		$(CODEGEN_DOBJS) $(JLDFLAGS) $(JLIBLDFLAGS) $(CG_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-codegen-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
@@ -726,6 +726,7 @@ INCLUDED_CXX_FILES := \
 
 .PHONY: clean
 clean:
+	rm -rf $(BUILDDIR)/*.lto
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen*
 	-rm -rf $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest* $(build_shlibdir)/libccalllazyfoo* $(build_shlibdir)/libccalllazybar*
 	-rm -f $(BUILDDIR)/julia_flisp.boot* $(BUILDDIR)/julia_flisp.boot.inc* $(BUILDDIR)/jl_internal_funcs.inc* $(BUILDDIR)/jl_data_globals_defs.inc* $(BUILDDIR)/jl_codegen_hash.inc* $(BUILDDIR)/jl_static_codegen_fallbacks.inc*
