@@ -592,9 +592,10 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     else {
         // No sysimage provided, init a minimal environment
         jl_init_types();
-        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
-        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
     }
+
+    jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
 
     jl_init_flisp();
     jl_init_serializer();
