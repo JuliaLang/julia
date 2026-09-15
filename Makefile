@@ -274,59 +274,26 @@ ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libcholmod librbio libspqr libumfpack
 endif
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
-JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
-JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
-JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmpxx
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_NGHTTP2) += libnghttp2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENSSL) += libcrypto libssl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUV) += libuv
-ifeq ($(OS),WINNT)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += zlib
-else
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
-endif
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
 JL_PRIVATE_EXES += zstd$(EXE) zstdmt$(EXE)
-ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
-endif
 JL_PRIVATE_TOOLS += lld$(EXE) dsymutil$(EXE)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
-
-ifeq ($(USE_SYSTEM_LIBM),0)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
-endif
 
 JL_PRIVATE_LIBS-$(USE_SYSTEM_BLAS) += $(LIBBLASNAME)
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LAPACK) += $(LIBLAPACKNAME)
 endif
 
-JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libgfortran libquadmath libstdc++ libgcc_s libgomp libssp libatomic
 ifeq ($(OS),Darwin)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libc++
 endif
-ifeq ($(OS),WINNT)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libwinpthread
-else
+ifneq ($(OS),WINNT)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libpthread
 endif
-ifeq ($(SANITIZE),1)
-ifeq ($(USECLANG),1)
-JL_PRIVATE_LIBS-0 += libclang_rt.asan-*
-else
-JL_PRIVATE_LIBS-0 += libasan
-endif
-endif
-
-ifeq ($(WITH_TRACY),1)
-JL_PRIVATE_LIBS-0 += libTracyClient
-endif
-
 
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
@@ -336,9 +303,10 @@ endif
 endif
 endif
 
-ifeq (${USE_THIRD_PARTY_GC},mmtk)
-JL_PRIVATE_LIBS-0 += libmmtk_julia
-endif
+# the libraries the runtime itself depends on, declared in Make.inc so that `base/Makefile`
+# can generate `Base.RUNTIME_LIBRARY_NAMES` from the same list
+JL_PRIVATE_LIBS-0 += $(JL_RUNTIME_LIBS-0) $(JL_RUNTIME_CODEGEN_LIBS-0)
+JL_PRIVATE_LIBS-1 += $(JL_RUNTIME_LIBS-1) $(JL_RUNTIME_CODEGEN_LIBS-1)
 
 # Note that we disable MSYS2's path munging here, as otherwise
 # it replaces our `:`-separated list as a `;`-separated one.
