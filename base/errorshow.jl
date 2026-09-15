@@ -1195,7 +1195,7 @@ end
 
 function _backtrace_remove_kwcall_frames!(trace)
     todelete = findall(trace) do (frame, _)
-        code = frame.linfo
+        code = frame.linfo isa CodeInstance ? frame.linfo.def : frame.linfo
         if code isa MethodInstance
             def = code.def
             if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
