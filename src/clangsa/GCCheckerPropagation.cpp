@@ -352,7 +352,10 @@ bool GCChecker::hasGCTrackedAnnotation(QualType QT) {
         return true;
     return false;
   };
-  if (const TypedefType *TT = QT->getAs<TypedefType>())
+  // Check each typedef on the way to the tag, so that an annotated typedef is
+  // also found through a typedef of it.
+  for (const TypedefType *TT = QT->getAs<TypedefType>(); TT;
+       TT = TT->desugar()->getAs<TypedefType>())
     if (AnyRedeclAnnotated(TT->getDecl()))
       return true;
   return AnyRedeclAnnotated(

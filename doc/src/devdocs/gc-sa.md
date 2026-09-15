@@ -345,7 +345,7 @@ void example() {
 
 It applies equally to a C++ `class`. Where there is no tag to annotate -- for
 instance `jl_gc_tracked_buffer_t`, which is a typedef of `void` -- put it on the
-typedef instead.
+typedef instead, which then also covers every typedef of that typedef.
 
 ## Completeness of analysis
 
