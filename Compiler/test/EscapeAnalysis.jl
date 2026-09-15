@@ -1528,6 +1528,16 @@ end
 # interprocedural analysis
 # ========================
 
+# Treat invoke-apply operands conservatively instead of applying flattened alias indices.
+let args = ntuple(i -> Symbol(:x, i), 33)
+    @eval @noinline invoke_apply_escape_alias($(args...)) = ($(args[1]))[] = $(args[end])
+end
+@noinline invoke_apply_escape_wrapper(t::NTuple{33,Base.RefValue{Any}}) =
+    invoke_apply_escape_alias(t...)
+let result = code_escapes(invoke_apply_escape_wrapper, (NTuple{33,Base.RefValue{Any}},))
+    @test has_all_escape(result.state[Argument(2)])
+end
+
 # propagate escapes imposed on call arguments
 @noinline broadcast_noescape2(b) = broadcast(identity, b)
 let result = code_escapes() do
