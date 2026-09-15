@@ -527,6 +527,15 @@ function sizeof_nothrow(@nospecialize(x))
     return true
 end
 
+# `Core.bitsizeof` throws for a primitive type that has no layout yet, such as
+# `BitInt{N}` when the bit size `N` is still a free type parameter
+@nospecs function primitive_bitsize(ty)
+    isprimitivetype(ty) || return nothing
+    ty = unwrap_unionall(ty) # `isprimitivetype` looks through `UnionAll` too
+    ty.layout == C_NULL && return nothing
+    return Core.bitsizeof(ty)::Int
+end
+
 # f shall be Core.sizeof or Core.bitsizeof
 function _const_sizeof(@nospecialize(f), @nospecialize(x))
     # Constant GenericMemory does not have constant size
@@ -3286,7 +3295,8 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !isconcrete
             return Union{ErrorException, TypeError}
         end
-        if !(isprimitivetype(ty) && isprimitivetype(xty) && Core.bitsizeof(ty) === Core.bitsizeof(xty))
+        nb = primitive_bitsize(ty)
+        if nb === nothing || nb !== primitive_bitsize(xty)
             return ErrorException
         end
         return Union{}
@@ -3302,7 +3312,8 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return Union{ErrorException, TypeError}
         end
         xty = widenconst(argtypes[2])
-        if !(isprimitivetype(ty) && isprimitivetype(xty))
+        nbty, nbxty = primitive_bitsize(ty), primitive_bitsize(xty)
+        if nbty === nothing || nbxty === nothing
             return ErrorException
         end
 
@@ -3312,14 +3323,14 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
-        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(Core.bitsizeof(ty) > Core.bitsizeof(xty))
+        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(nbty > nbxty)
             return ErrorException
         end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
             return ErrorException
         end
-        if f === Intrinsics.trunc_int && !(Core.bitsizeof(ty) < Core.bitsizeof(xty))
+        if f === Intrinsics.trunc_int && !(nbty < nbxty)
             return ErrorException
         end
         if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)
@@ -3352,7 +3363,10 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
     isprimitivetype(argtype1) || return ErrorException
-    f === bswap_int && Core.bitsizeof(argtype1) % 16 != 0 && return ErrorException
+    if f === bswap_int
+        nb1 = primitive_bitsize(argtype1)
+        (nb1 === nothing || nb1 % 16 != 0) && return ErrorException
+    end
     if contains_is(_FLOAT_INTRINSICS, f)
         argtype1 <: CORE_FLOAT_TYPES || return ErrorException
     end

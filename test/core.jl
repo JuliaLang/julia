@@ -9407,3 +9407,70 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
 end
+
+# primitive types whose bit size is given by a type parameter
+primitive type PrimN{N} <: Signed N end
+primitive type PrimTN{T,N} <: Signed N end
+primitive type Prim21 <: Signed 21 end
+struct WrapPrim21
+    v::Prim21
+end
+struct WrapPrimN{N}
+    v::PrimN{N}
+end
+prim_nbits(::PrimN{N}) where {N} = N
+@testset "parametric primitive type sizes" begin
+    @test Core.bitsizeof(PrimN{21}) == 21
+    @test sizeof(PrimN{21}) == 3
+    @test Core.bitsizeof(PrimN{64}) == 64
+    @test sizeof(PrimN{64}) == 8
+    @test isbitstype(PrimN{21})
+    @test isconcretetype(PrimN{21})
+    @test PrimN{21} <: Signed
+    @test isprimitivetype(PrimN{21})
+
+    # the size parameter need not come first
+    @test Core.bitsizeof(PrimTN{Int,24}) == 24
+    @test sizeof(PrimTN{Int,24}) == 3
+
+    # without a concrete size there is no layout
+    @test !isconcretetype(PrimN)
+    @test !isbitstype(PrimN)
+    @test_throws ErrorException sizeof(PrimN)
+    @test_throws ErrorException Core.bitsizeof(PrimN)
+
+    # the size parameter must be a positive Int within range
+    @test_throws TypeError PrimN{Float64}
+    @test_throws TypeError PrimN{:x}
+    @test_throws ErrorException PrimN{0}
+    @test_throws ErrorException PrimN{-1}
+    @test_throws ErrorException PrimN{1 << 23}
+
+    # ... and it must name one of the type parameters
+    @test_throws ErrorException @eval primitive type PrimBad{N} <: Signed $(TypeVar(:M)) end
+
+    # values round-trip through the intrinsics
+    x = Core.Intrinsics.trunc_int(PrimN{21}, 0x123456)
+    y = Core.Intrinsics.trunc_int(Prim21, 0x123456)
+    @test Core.Intrinsics.zext_int(UInt32, x) == 0x123456 & 0x1fffff
+    @test typeof(x) === PrimN{21}
+    @test x === Core.Intrinsics.trunc_int(PrimN{21}, 0x123456)
+
+    # inference and codegen see through the parameter
+    @test @inferred(prim_nbits(x)) === 21
+    @test Base.return_types(prim_nbits, (PrimN{21},)) == [Int]
+
+    # they can be stored, unboxed, in other containers, laid out exactly as the
+    # equivalent fixed-size primitive type
+    a = [x, x]
+    @test sizeof(a) == sizeof([y, y])
+    @test a[1] === x
+    @test sizeof(WrapPrimN{21}) == sizeof(WrapPrim21)
+    @test isbitstype(WrapPrimN{21})
+    @test !isconcretetype(WrapPrimN)
+
+    # redefinition with the same declaration reuses the type
+    old = PrimN
+    @eval primitive type PrimN{N} <: Signed N end
+    @test old === PrimN
+end

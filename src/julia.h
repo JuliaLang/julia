@@ -644,7 +644,12 @@ typedef struct {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
-    uint8_t _unused:5;
+    // for a primitive type whose bit size is given by one of its type
+    // parameters, the 1-based index of that parameter; 0 if the size is fixed.
+    // e.g. `primitive type BitInt{N} <: Signed N end` records 1 here, so that
+    // `BitInt{21}` gets a 21-bit layout while `BitInt{N}` has none.
+    uint8_t nbits_param:4;
+    uint8_t _unused:1;
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
@@ -2076,6 +2081,11 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name,
                                                  jl_module_t *module,
                                                  jl_datatype_t *super,
                                                  jl_svec_t *parameters, size_t nbits) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype_paramsize(jl_value_t *name,
+                                                 jl_module_t *module,
+                                                 jl_datatype_t *super,
+                                                 jl_svec_t *parameters,
+                                                 uint32_t nbits_param) JL_CANSAFEPOINT;
 
 // constructors
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, const void *src) JL_CANSAFEPOINT;
