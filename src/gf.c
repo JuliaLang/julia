@@ -692,6 +692,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
             jl_code_instance_type);
     codeinst->def = (jl_value_t*)mi;
     codeinst->owner = owner;
+    codeinst->roots = NULL;
     jl_atomic_store_relaxed(&codeinst->edges, edges);
     jl_atomic_store_relaxed(&codeinst->min_world, min_world);
     jl_atomic_store_relaxed(&codeinst->max_world, max_world);

@@ -1049,7 +1049,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src) JL_C
     else {
         jl_gc_write(m, m->debuginfo, jl_debuginfo_t, src->debuginfo);
         jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
-        jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)jl_compress_ir(m, NULL));
+        jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)jl_compress_ir(m, NULL, NULL));
     }
     JL_GC_POP();
 }
@@ -1066,8 +1066,6 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->sig = jl_bottom_type;
     m->slot_syms = NULL;
     m->roots = NULL;
-    m->root_blocks = NULL;
-    m->nroots_sysimg = 0;
     m->ccallable = NULL;
     m->module = module;
     m->external_mt = NULL;
@@ -1389,153 +1387,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_POP();
 
     return m;
-}
-
-// root blocks
-
-// This section handles method roots. Roots are GC-preserved items needed to
-// represent lowered, type-inferred, and/or compiled code. These items are
-// stored in a flat list (`m.roots`), and during serialization and
-// deserialization of code we replace C-pointers to these items with a
-// relocatable reference. We use a bipartite reference, `(key, index)` pair,
-// where `key` identifies the module that added the root and `index` numbers
-// just those roots with the same `key`.
-//
-// During precompilation (serialization), we save roots that were added to
-// methods that are tagged with this package's module-key, even for "external"
-// methods not owned by a module currently being precompiled. During
-// deserialization, we load the new roots and append them to the method. When
-// code is deserialized (see ircode.c), we replace the bipartite reference with
-// the pointer to the memory address in the current session. The bipartite
-// reference allows us to cache both roots and references in precompilation .ji
-// files using a naming scheme that is independent of which packages are loaded
-// in arbitrary order.
-//
-// To track the module-of-origin for each root, methods also have a
-// `root_blocks` field that uses run-length encoding (RLE) storing `key` and the
-// (absolute) integer index within `roots` at which a block of roots with that
-// key begins. This makes it possible to look up an individual `(key, index)`
-// pair fairly efficiently. A given `key` may possess more than one block; the
-// `index` continues to increment regardless of block boundaries.
-//
-// Roots with `key = 0` are considered to be of unknown origin, and
-// CodeInstances referencing such roots will remain unserializable unless all
-// such roots were added at the time of system image creation. To track this
-// additional data, we use two fields:
-//
-// - methods have an `nroots_sysimg` field to count the number of roots defined
-//   at the time of writing the system image (such occur first in the list of
-//   roots). These are the cases with `key = 0` that do not prevent
-//   serialization.
-
-// Get the key of the current (final) block of roots
-static uint64_t current_root_id(jl_array_t *root_blocks)
-{
-    if (!root_blocks)
-        return 0;
-    assert(jl_is_array(root_blocks));
-    size_t nx2 = jl_array_nrows(root_blocks);
-    if (nx2 == 0)
-        return 0;
-    uint64_t *blocks = jl_array_data(root_blocks, uint64_t);
-    return blocks[nx2-2];
-}
-
-// Add a new block of `len` roots with key `modid` (module id)
-static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len) JL_CANSAFEPOINT
-{
-    assert(jl_is_array(root_blocks));
-    jl_array_grow_end(root_blocks, 2);
-    uint64_t *blocks = jl_array_data(root_blocks, uint64_t);
-    int nx2 = jl_array_nrows(root_blocks);
-    blocks[nx2-2] = modid;
-    blocks[nx2-1] = len;
-}
-
-// Allocate storage for roots
-static void prepare_method_for_roots(jl_method_t *m, uint64_t modid) JL_CANSAFEPOINT
-{
-    if (!m->roots) {
-        jl_gc_write(m, m->roots, jl_array_t, jl_alloc_vec_any(0));
-    }
-    if (!m->root_blocks && modid != 0) {
-        jl_gc_write(m, m->root_blocks, jl_array_t, jl_alloc_array_1d(jl_array_uint64_type, 0));
-    }
-}
-
-// Add a single root with owner `mod` to a method
-JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
-{
-    JL_GC_PUSH2(&m, &root);
-    uint64_t modid = 0;
-    if (mod) {
-        assert(jl_is_module(mod));
-        modid = mod->build_id.lo;
-    }
-    assert(jl_is_method(m));
-    prepare_method_for_roots(m, modid);
-    if (current_root_id(m->root_blocks) != modid)
-        add_root_block(m->root_blocks, modid, jl_array_nrows(m->roots));
-    jl_array_ptr_1d_push(m->roots, root);
-    JL_GC_POP();
-}
-
-// Add a list of roots with key `modid` to a method
-void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
-{
-    JL_GC_PUSH2(&m, &roots);
-    assert(jl_is_method(m));
-    assert(jl_is_array(roots));
-    prepare_method_for_roots(m, modid);
-    add_root_block(m->root_blocks, modid, jl_array_nrows(m->roots));
-    jl_array_ptr_1d_append(m->roots, roots);
-    JL_GC_POP();
-}
-
-// given the absolute index i of a root, retrieve its relocatable reference
-// returns 1 if the root is relocatable
-int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i)
-{
-    if (!m->root_blocks) {
-        rr->key = 0;
-        rr->index = i;
-        return i < m->nroots_sysimg;
-    }
-    rle_index_to_reference(rr, i, jl_array_data(m->root_blocks, uint64_t), jl_array_nrows(m->root_blocks), 0);
-    if (rr->key)
-        return 1;
-    return i < m->nroots_sysimg;
-}
-
-// get a root, given its key and index relative to the key
-// this is the relocatable way to get a root from m->roots
-jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
-{
-    if (!m->root_blocks) {
-        assert(key == 0);
-        return jl_array_ptr_ref(m->roots, index);
-    }
-    rle_reference rr = {key, index};
-    size_t i = rle_reference_to_index(&rr, jl_array_data(m->root_blocks, uint64_t), jl_array_nrows(m->root_blocks), 0);
-    return jl_array_ptr_ref(m->roots, i);
-}
-
-// Count the number of roots added by module with id `key`
-int nroots_with_key(jl_method_t *m, uint64_t key)
-{
-    size_t nroots = 0;
-    if (m->roots)
-        nroots = jl_array_nrows(m->roots);
-    if (!m->root_blocks)
-        return key == 0 ? nroots : 0;
-    uint64_t *rletable = jl_array_data(m->root_blocks, uint64_t);
-    size_t j, nblocks2 = jl_array_nrows(m->root_blocks);
-    int nwithkey = 0;
-    for (j = 0; j < nblocks2; j+=2) {
-        if (rletable[j] == key)
-            nwithkey += (j+3 < nblocks2 ? rletable[j+3] : nroots) - rletable[j+1];
-    }
-    return nwithkey;
 }
 
 #ifdef __cplusplus

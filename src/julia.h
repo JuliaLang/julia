@@ -407,7 +407,7 @@ typedef struct _jl_code_info_t {
 // shared by the specializations of a function.
 //
 // Reading or writing requires `writelock` or exclusive ownership:
-//   roots, root_blocks, nroots_sysimg, ccallable
+//   roots, ccallable
 // No lock is required to read these fields, set once on construction:
 //   all other fields
 typedef struct _jl_method_t {
@@ -433,11 +433,7 @@ typedef struct _jl_method_t {
     jl_debuginfo_t *debuginfo;  // fixed linetable from the source argument, null if not available
     _Atomic(jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
-    jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
-    // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
-    // May be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
-    jl_array_t *root_blocks;   // RLE (build_id.lo, offset) pairs (even/odd indexing)
-    int32_t nroots_sysimg;     // # of roots stored in the system image
+    jl_array_t *roots;  // literals referenced by compressed source, or null
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
     // cache of specializations of this method for invoke(), i.e.
@@ -595,6 +591,8 @@ typedef struct _jl_code_instance_t {
         _Atomic(jl_fptr_sparam_t) fptr3;
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
+    // Literals referenced by compressed inferred IR; protected by the method writelock.
+    jl_array_t *roots;
 } jl_code_instance_t;
 
 // May be used as the ->def field of a CodeInstance to override the ABI
@@ -2482,7 +2480,7 @@ JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *trace
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED) JL_CANSAFEPOINT;
 
 // IR representation
-JL_DLLEXPORT jl_value_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_compress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_code_info_t *code) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_value_t *data) JL_CANSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_value_t *data) JL_NOTSAFEPOINT;
