@@ -57,7 +57,7 @@ struct debug_link_info {
 };
 }  // anonymous namespace
 
-#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && (defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP))))
 extern "C" {
     JL_DLLIMPORT extern void __register_frame(void*) JL_NOTSAFEPOINT;
     JL_DLLIMPORT extern void __deregister_frame(void*) JL_NOTSAFEPOINT;
@@ -1352,7 +1352,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_instance_t *jl_gdblookupci(void *p) JL_N
     return getJITDebugRegistry().lookupCodeInstance((size_t)p);
 }
 
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+#if defined(_OS_DARWIN_) && (defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP))
 
 /*
  * We use a custom unwinder, so we need to make sure that when registering dynamic
