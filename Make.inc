@@ -659,6 +659,12 @@ else
 endif
 
 JLDFLAGS := $(RELRO_FLAG)
+JL_VISIBILITY_FLAGS := -fvisibility=hidden
+ifeq ($(OS),WINNT)
+# PE exports are selected by the linker. Clang turns hidden visibility into
+# exclusion directives that override even the export map's global patterns.
+JL_VISIBILITY_FLAGS :=
+endif
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
@@ -1746,8 +1752,14 @@ endif # $(OS) == WINNT
 #   4: non-Windows command before -o, 5: non-Windows inputs after output.
 ifeq ($(OS), WINNT)
 WIN_LD_LIBPATHS := -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir)
-link-dll = $(LD) $(WIN_LD_SHARED_FLAGS) $(2) -o $(1) $(3)
-link-exe = $(LD) $(WIN_LD_EXE_FLAGS) $(2) -o $(1) $(3)
+# lld's MinGW driver needs a COFF export definition instead of a version script.
+ifeq ($(WIN_LD_USE_DEF),1)
+WIN_LD = $(PYTHON) $(JULIAHOME)/contrib/windows/link_with_exports.py $(LD)
+else
+WIN_LD = $(LD)
+endif
+link-dll = $(WIN_LD) $(WIN_LD_SHARED_FLAGS) $(2) -o $(1) $(3)
+link-exe = $(WIN_LD) $(WIN_LD_EXE_FLAGS) $(2) -o $(1) $(3)
 else
 WIN_LD_LIBPATHS :=
 link-dll = $(4) -o $(1) $(5)

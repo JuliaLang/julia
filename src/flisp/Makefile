@@ -53,7 +53,7 @@ FLAGS_COMMON := -I$(LLTSRCDIR) $(HFILEDIRS:%=-I%) \
 ifneq ($(OS), emscripten)
 FLAGS_COMMON += -DUSE_COMPUTED_GOTO
 endif
-FLAGS_COMMON += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
+FLAGS_COMMON += -Wall -Wno-strict-aliasing $(JL_VISIBILITY_FLAGS) -Wpointer-arith -Wundef
 FLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 SHIPFLAGS_COMMON  += $(FLAGS_COMMON)

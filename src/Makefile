@@ -19,7 +19,7 @@ FLAGS_COMMON := \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(LIBUV_INC) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
-FLAGS_COMMON += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
+FLAGS_COMMON += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer $(JL_VISIBILITY_FLAGS) -fno-common \
 		 -Wno-comment -Wpointer-arith -Wundef
 
 # GCC-specific flags
