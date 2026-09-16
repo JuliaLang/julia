@@ -2847,6 +2847,41 @@ end
     end
 end
 
+# Requesting precompilation of a package that lives in the sysimage has nothing to do
+# and must not error, even when it is the only dependency of the environment (#63189)
+@testset "precompilepkgs on a sysimage package" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        sha_uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+        @test Base.in_sysimage(Base.PkgId(Base.UUID(sha_uuid), "SHA"))
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            SHA = "$sha_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.SHA]]
+            uuid = "$sha_uuid"
+            version = "1.0.0"
+            """)
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            io = IOBuffer()
+            @test Base.Precompilation.precompilepkgs(["SHA"]; io, fancyprint=false) === nothing
+            @test Base.Precompilation.precompilepkgs(; io, fancyprint=false) === nothing
+            @test isempty(takestring!(io))
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_path
     # Test that compile-time preferences invalidate, even when queried from a
     # "foreign" UUID / package namespace
