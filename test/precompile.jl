@@ -4037,7 +4037,9 @@ end
 # A package loaded in this session whose cache file has since been evicted (#63187):
 # a dependent or extension precompiled afterwards cannot be built against the loaded
 # build id, so it must be loaded from source in this session rather than fail.
+# Windows keeps a loaded package's .ji open, so the eviction cannot be staged there.
 @testset "loaded dependency with evicted cache" begin
+    Sys.iswindows() && return
     mkdepottempdir() do depot
         project_path = joinpath(depot, "testenv")
         mkpath(project_path)
@@ -4138,9 +4140,9 @@ end
 
         # Load the parent, then evict every cache file, as a concurrent process compiling
         # the same packages for other flags under JULIA_MAX_NUM_PRECOMPILE_FILES would.
-        # Only the .ji files go: a loaded native image cannot be deleted on Windows, and
-        # a missing .ji is enough for a cache miss. The dependent and the extension then
-        # have to be recompiled against a parent whose loaded build id is no longer on disk.
+        # Only the .ji files go; a missing .ji is enough for a cache miss. The dependent
+        # and the extension then have to be recompiled against a parent whose loaded build
+        # id is no longer on disk.
         preamble = """
             using EvictParent
             const parent = EvictParent
