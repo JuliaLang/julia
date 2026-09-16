@@ -311,6 +311,23 @@ end
                 @test filterchunkrev!(results, entries, spec2, seen) == 0
                 @test results == [entries[3]]
             end
+            # Ensure maxresults stops filtering when matches span multiple batches.
+            @testset "Maximum results" begin
+                batch_entries = [
+                    HistEntry(:julia, now(UTC), "foo $i", UInt32(i))
+                    for i in 1:25
+                ]
+                spec = FilterSpec(ConditionSet("foo"))
+                empty!(results)
+                seen = Set{Tuple{Symbol,String}}()
+                idx = filterchunkrev!(results, batch_entries, spec, seen; maxresults = 2)
+                @test idx == 23
+                @test results == batch_entries[24:25]
+                empty!(results)
+                empty!(seen)
+                @test filterchunkrev!(results, batch_entries, spec, seen; maxresults = 0) == 25
+                @test isempty(results)
+            end
             @testset "Negative" begin
                 empty!(results)
                 cset = ConditionSet("!hello ; !test;! cos")
