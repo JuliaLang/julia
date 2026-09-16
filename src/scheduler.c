@@ -551,12 +551,17 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     JL_UV_LOCK();
                 }
                 else {
-                    // Since we might have started some IO work, we might need
-                    // to ensure tid = 0 will go watch that new event source.
-                    // If trylock would have succeeded, that may have been our
-                    // responsibility, so need to make sure thread 0 will take care
-                    // of us.
-                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
+                    // Skip the wakeup only if we can verify that there is no IO work.
+                    // A busy lock may belong to a finalizer running after uv_run
+                    // returned no work, just before the IO thread goes to sleep.
+                    int wake_io = 1;
+                    if (jl_mutex_trylock_nogc(&jl_uv_mutex)) {
+                        wake_io = uv_loop_alive(jl_global_event_loop());
+                        // Do not run finalizers here: they could start new IO work
+                        // after we observed an empty loop.
+                        jl_mutex_unlock_nogc(&jl_uv_mutex);
+                    }
+                    if (wake_io)
                         jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
                 }
                 if (uvlock) {
