@@ -73,7 +73,7 @@ class FlowTests(unittest.TestCase):
         self.flow.mkdir(parents=True)
         shutil.copyfile(SOURCE, self.flow / 'Makefile')
         (self.root / 'helper.py').write_text(HELPER)
-        (self.root / 'Makefile').write_text('OS := Linux\nARCH := x86_64\nBUILD_MACHINE := test-triple\nprint-%:\n\t@echo "$*=$($*)"\nconfigure:\n\t@python3 helper.py configure $(O)\n')
+        (self.root / 'Makefile').write_text('OS := Linux\nARCH := x86_64\nBINARY := 64\nBUILD_MACHINE := test-triple\nprint-%:\n\t@echo "$*=$($*)"\nconfigure:\n\t@python3 helper.py configure $(O)\n')
         for name, mode in [('profdata', 'merge'), ('mergefdata', 'fdata'), ('bolt-tool', 'bolt')]:
             p = self.root / name
             # profdata already gets 'merge' as the first argument.
@@ -126,11 +126,14 @@ class FlowTests(unittest.TestCase):
                 self.assertEqual(len(self.events()), count)
 
     def test_override_and_dry_run(self):
-        target = '--eval=review:;@echo $(HOST_OS) $(HOST_ARCH) $(USE_BOLT) $(BUILD_MACHINE)'
-        for osname, arch, bolt in [('Linux','i686','0'), ('Linux','aarch64','1'), ('WINNT','x86_64','0'), ('Darwin','aarch64','0')]:
+        target = '--eval=review:;@echo $(HOST_OS) $(HOST_ARCH) $(USE_BOLT) $(BUILD_MACHINE) [$(LINK_ONLY_FLAGS)]'
+        for osname, arch, binary, bolt, jobs in [('Linux','i686','32','0','8'), ('Linux','aarch64','64','1',''), ('WINNT','x86_64','64','0',''), ('Darwin','aarch64','64','0','')]:
             for dry in [[], ['-n']]:
-                out = self.make(*dry, target, 'review', 'OS='+osname, 'ARCH='+arch, 'SDKROOT=/sdk', 'LINKER=/ld')
+                out = self.make(*dry, target, 'review', 'OS='+osname, 'ARCH='+arch, 'BINARY='+binary, 'SDKROOT=/sdk', 'LINKER=/ld')
                 self.assertIn(f'{osname} {arch} {bolt} test-triple', out)
+                self.assertEqual('--thinlto-jobs=' + jobs in out, jobs != '')
+        out = self.make(target, 'review', 'OS=Linux', 'ARCH=i686', 'BINARY=32', 'LTO_JOBS=', 'LINKER=/ld')
+        self.assertNotIn('--thinlto-jobs', out)
 
     def test_windows_stages(self):
         cygpath = self.root / 'cygpath'

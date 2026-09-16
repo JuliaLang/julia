@@ -31,9 +31,10 @@ STAGE1_CPU_TARGET ?= generic
 # and a plain `make binary-dist` of the optimized build would then consider
 # build_h.jl stale and rebuild the system image.
 # Preserve command-line variables, but omit flags such as -n from the probe.
-JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-EXE print-BUILD_MACHINE)
+JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-BINARY print-EXE print-BUILD_MACHINE)
 HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
 HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
+HOST_BINARY:=$(patsubst BINARY=%,%,$(filter BINARY=%,$(JULIA_BUILD_VARS)))
 EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
 BUILD_MACHINE:=$(patsubst BUILD_MACHINE=%,%,$(filter BUILD_MACHINE=%,$(JULIA_BUILD_VARS)))
 ifeq (,$(HOST_OS))
@@ -53,6 +54,14 @@ USE_BOLT ?= 1
 endif
 endif
 USE_BOLT ?= 0
+
+# Each concurrent ThinLTO backend holds a module and the PGO profile.
+# Limit their number on 32-bit targets so wide hosts do not exhaust the
+# linker's address space. Empty leaves the linker's default.
+ifeq ($(HOST_BINARY),32)
+LTO_JOBS ?= 8
+endif
+LTO_JOBS ?=
 
 # Settings taken from https://github.com/rust-lang/rust/blob/master/src/tools/opt-dist/src/bolt.rs
 BOLT_ARGS :=
@@ -218,6 +227,9 @@ LINKER:=$(STAGE0_TOOLS)ld.lld$(EXE)
 LINKER_FLAGS:=-fuse-ld=lld
 # Julia's version script names symbols that not every configuration defines.
 LINK_ONLY_FLAGS:=-Wl,--undefined-version
+ifneq (,$(LTO_JOBS))
+LINK_ONLY_FLAGS+=-Wl,--thinlto-jobs=$(LTO_JOBS)
+endif
 PLATFORM_FLAGS:=
 endif
 

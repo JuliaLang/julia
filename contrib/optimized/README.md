@@ -23,6 +23,7 @@ images against them, and rewrites the libraries using that profile.
 | `USE_BOLT` | 1 on Linux x86-64 and AArch64, else 0 | Run the BOLT stages |
 | `USE_PGO` | 1 | Build and profile stage 1, then optimize with it |
 | `USE_LTO` | 1 | Build stage 2 with ThinLTO |
+| `LTO_JOBS` | 8 on 32-bit targets, else the linker's default | ThinLTO backend threads per link (Linux only) |
 | `STAGE1_CPU_TARGET` | `generic` | CPU target of the instrumented build |
 | `STAGE0_BUILD` | `$(CURDIR)/toolchain` | Toolchain build directory |
 | `STAGE1_BUILD` | `$(CURDIR)/pgo-instrumented.build` | Instrumented build directory |
