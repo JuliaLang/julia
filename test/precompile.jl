@@ -4154,6 +4154,9 @@ end
             proc = run(pipeline(ignorestatus(`$julia -e $(preamble * body)`); stdout=outfile, stderr=errfile))
             out = read(outfile, String)
             err = read(errfile, String)
+            if !success(proc) || !occursin("evicted cache ok", out)
+                println(stderr, "evicted-cache $name run failed\nstdout:\n", out, "stderr:\n", err)
+            end
             @test success(proc)
             @test occursin("evicted cache ok", out)
             # the strict worker must not fail outright, and the session must not load a
