@@ -900,6 +900,42 @@ JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT
 #endif
 }
 
+// Returns 1 if `symbol` lies within the main executable's image, 0 otherwise
+JL_DLLEXPORT int jl_symbol_in_executable(void *symbol) JL_NOTSAFEPOINT
+{
+    if (!symbol)
+        return 0;
+#ifdef _OS_WINDOWS_
+    HMODULE handle;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)symbol, &handle))
+        return 0;
+    // GetModuleHandleW(NULL) is the module used to create the calling process.
+    return handle == GetModuleHandleW(NULL);
+#elif defined(__APPLE__)
+    // dyld guarantees that image index 0 is the main executable.
+    Dl_info info;
+    if (!dladdr(symbol, &info) || !info.dli_fbase)
+        return 0;
+    return info.dli_fbase == (const void *)_dyld_get_image_header(0);
+#elif defined(__GLIBC__)
+    // glibc: the main program's link_map has an empty `l_name`.
+    Dl_info info;
+    struct link_map *map = NULL;
+    if (!dladdr1(symbol, &info, (void **)&map, RTLD_DL_LINKMAP) || map == NULL)
+        return 0;
+    msan_unpoison(&map, sizeof(struct link_map *));
+    msan_unpoison(map, sizeof(struct link_map));
+    msan_unpoison_string(map->l_name);
+    return map->l_name[0] == '\0';
+#else
+    // Other libc: dl_iterate_phdr reports the main program first.
+    struct sym_phdr_query q = { (uintptr_t)symbol, NULL, 0, 0, 0 };
+    dl_iterate_phdr(&sym_phdr_helper, &q);
+    return q.found && q.is_main_exe;
+#endif
+}
+
 #ifdef _OS_WINDOWS_
 // Get a list of all the modules in this process.
 JL_DLLEXPORT int jl_dllist(jl_array_t *list)
