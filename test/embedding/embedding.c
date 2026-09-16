@@ -30,6 +30,77 @@ jl_value_t *checked_eval_string(const char* code)
     return result;
 }
 
+static volatile int tagged_root_fin_ran = 0;
+
+static void tagged_root_finalizer(void *o)
+{
+    (void)o;
+    tagged_root_fin_ran = 1;
+}
+
+// Tagged pointers -- immediate values stored in the low bits of a pointer,
+// e.g. introduced by a foreign runtime sharing Julia's GC -- may be stored
+// in JL_GC_PUSH*/JL_GC_PUSHARGS roots. The GC must skip them without
+// disturbing the marking of neighboring roots.
+//
+// Detection: a fresh object whose only reference is a frame slot next to a
+// tagged pointer. If marking mishandles the tagged pointer, the object is
+// swept and its finalizer runs while the frame is still pushed.
+static void test_tagged_pointer_roots(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    const uintptr_t large_imm = (uintptr_t)1 << 40;
+
+    // Direct-layout frame (JL_GC_PUSHARGS).
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 4);
+    args[0] = (jl_value_t *)0x5;
+    args[1] = jl_box_int64(42424242);
+    args[2] = (jl_value_t *)0x7;
+    args[3] = (jl_value_t *)(large_imm | 0x1);
+    jl_gc_add_ptr_finalizer(ptls, args[1], (void *)tagged_root_finalizer);
+    jl_gc_collect(JL_GC_FULL);
+    if (tagged_root_fin_ran) {
+        fprintf(stderr, "tagged pointer in JL_GC_PUSHARGS frame un-rooted its neighbor\n");
+        exit(1);
+    }
+
+    // Large tagged pointers in even slots must simply be skipped, not
+    // interpreted as object references.
+    args[0] = (jl_value_t *)(large_imm | 0x1);
+    args[2] = (jl_value_t *)(large_imm | 0x3);
+    jl_gc_collect(JL_GC_FULL);
+    JL_GC_POP();
+
+    jl_gc_collect(JL_GC_FULL);
+    if (!tagged_root_fin_ran) {
+        fprintf(stderr, "finalizer never ran after JL_GC_PUSHARGS frame was popped\n");
+        exit(1);
+    }
+    tagged_root_fin_ran = 0;
+
+    // Indirect-layout frame (JL_GC_PUSH2): locals holding tagged pointers.
+    jl_value_t *tagged = (jl_value_t *)0x5;
+    jl_value_t *obj = NULL;
+    JL_GC_PUSH2(&tagged, &obj);
+    obj = jl_box_int64(24242424);
+    jl_gc_add_ptr_finalizer(ptls, obj, (void *)tagged_root_finalizer);
+    jl_gc_collect(JL_GC_FULL);
+    if (tagged_root_fin_ran) {
+        fprintf(stderr, "tagged pointer in JL_GC_PUSH frame un-rooted its neighbor\n");
+        exit(1);
+    }
+    tagged = (jl_value_t *)(large_imm | 0x3);
+    jl_gc_collect(JL_GC_FULL);
+    JL_GC_POP();
+
+    jl_gc_collect(JL_GC_FULL);
+    if (!tagged_root_fin_ran) {
+        fprintf(stderr, "finalizer never ran after JL_GC_PUSH frame was popped\n");
+        exit(1);
+    }
+}
+
 int main()
 {
     // check that setting options works
@@ -204,6 +275,8 @@ int main()
     JL_CATCH {
         jl_printf(jl_stderr_stream(), "exception caught from C\n");
     }
+
+    test_tagged_pointer_roots();
 
     int ret = 0;
     jl_atexit_hook(ret);
