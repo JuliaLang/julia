@@ -279,7 +279,7 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
     auto info = std::make_unique<jl_linker_info_t>();
     auto intern = [&](StringRef name) JL_NOTSAFEPOINT {
         SmallString<128> buf;
-        Mangler::getNameWithPrefix(buf, name, DL);
+        llvm::Mangler::getNameWithPrefix(buf, name, DL);
         return SSP.intern(buf);
     };
 
@@ -2315,7 +2315,7 @@ const DataLayout& JuliaOJIT::getDataLayout() const
 std::string JuliaOJIT::getMangledName(StringRef Name)
 {
     SmallString<128> FullName;
-    Mangler::getNameWithPrefix(FullName, Name, DL);
+    llvm::Mangler::getNameWithPrefix(FullName, Name, DL);
     return FullName.str().str();
 }
 
