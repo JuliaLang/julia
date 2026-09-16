@@ -1204,7 +1204,7 @@ function _backtrace_remove_kwcall_frames!(trace)
                 # the argument list, since it has the right line number info)
                 return true
             end
-        else
+        else # this branch may not be needed, from before current keyword argument handling
             frame.func === :kwcall && return true
         end
         return false
