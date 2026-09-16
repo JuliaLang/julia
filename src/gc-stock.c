@@ -397,12 +397,6 @@ static void clear_weak_refs(void) JL_NOTSAFEPOINT
 // the unlink pass. Only touched by the serial parts of the sweep.
 static arraylist_t big_weak_corpses;
 
-// Does this (live or dead-this-cycle) cell hold a cancellation source?
-STATIC_INLINE int gc_is_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
-{
-    return (v->header & ~(uintptr_t)0xf) == (jl_cancel_source_tag << 4);
-}
-
 // Is `v` (a dead cell whose header is known valid) a cancellation source
 // that is still linked into some parent's child list?
 STATIC_INLINE int gc_is_dead_linked_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT

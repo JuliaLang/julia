@@ -516,6 +516,17 @@ JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
         if (osize <= sizeof(jl_taggedvalue_t) || !tag || gc_marked(tag->bits.gc))
             continue;
+        // Never scrub a cancellation source. A dead one is still linked into
+        // its parents' child lists (and a dead parent's `child_head` is still
+        // the back-pointer target of its children), and the collector walks
+        // those links after the sweep, in sweep_weak_processing. Overwriting
+        // the object would destroy the links, and marking it below would stop
+        // the sweep from ever queueing it for unlinking - leaving its
+        // neighbours' `pprev` dangling into this 0xff fill, which then
+        // corrupts the lists of still-live parents. These objects have their
+        // own use-after-free discipline; leave them to it.
+        if (gc_is_cancel_source(tag))
+            continue;
         jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
         pg->has_marked = 1;
