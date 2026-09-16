@@ -765,6 +765,94 @@ end
     @test io_thread_test()
 end
 
+# Lost wakeup of the io-loop thread (issue #63173): outside a threaded region,
+# only the io-loop thread runs libuv. When its uv_run finds no work and the
+# unlock afterwards runs a finalizer that takes the IO lock, a worker that
+# just armed a handle used to see the lock busy, skip waking the io-loop
+# thread, and park; the io-loop thread then slept forever with work pending.
+@testset "io-loop wakeup with finalizer holding the IO lock" begin
+    script = """
+    using Base.Threads
+    # The SIGINT listener keeps a ref'd AsyncCondition alive, which would keep
+    # uv_run from ever reporting an empty loop; close it to expose the race.
+    let hooks = filter(f -> hasproperty(f, :listeners) && hasproperty(f, :cond) &&
+                            getproperty(f, :cond) isa Base.AsyncCondition, Base.atexit_hooks)
+        length(hooks) == 1 || error("could not find the sigint listener handle")
+        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(getproperty(hooks[1], :cond))
+    end
+    const ready = Base.Event()
+    ready_cb(handle::Ptr{Cvoid}) = (notify(ready); nothing)
+    const phase = Atomic{Int}(0)
+    function fin(x)
+        phase[] = 1
+        while phase[] != 2 # the worker has armed its timer
+            GC.safepoint()
+        end
+        Base.iolock_begin()
+        phase[] = 3
+        # Hold the IO lock while the worker reaches the scheduler and decides
+        # whether to wake the io-loop thread. Only the chance of exposing the
+        # bug depends on this delay; the fixed code passes regardless.
+        Base.Libc.systemsleep(0.5)
+        Base.iolock_end()
+        phase[] = 4
+        nothing
+    end
+    @noinline garbage() = (finalizer(fin, Ref(1)); nothing)
+    function timer_cb(handle::Ptr{Cvoid})
+        garbage()
+        GC.gc(true) # the finalizer is deferred until uv_run's caller unlocks
+        nothing
+    end
+    function arm_timer(cb, ms)
+        h = Base.Libc.calloc(1, Base._sizeof_uv_timer)
+        Base.iolock_begin()
+        @assert ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), Base.eventloop(), h) == 0
+        @assert ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64), h, cb, ms, 0) == 0
+        Base.iolock_end()
+    end
+    function worker()
+        phase[] = -1
+        while phase[] != 1 # the finalizer is running on the io-loop thread
+            GC.safepoint()
+        end
+        # bare libuv timer: no Julia task wakeup can rescue the io-loop thread
+        arm_timer(@cfunction(ready_cb, Cvoid, (Ptr{Cvoid},)), 10)
+        phase[] = 2
+        while phase[] != 3 # the finalizer holds the IO lock
+            GC.safepoint()
+        end
+        wait(ready)
+    end
+    precompile(fin, (Base.RefValue{Int},))
+    precompile(timer_cb, (Ptr{Cvoid},))
+    precompile(worker, ())
+    t = Threads.@spawn worker()
+    while phase[] != -1
+        GC.safepoint()
+    end
+    # one-shot timer: after it fires, uv_run returns with no work left
+    arm_timer(@cfunction(timer_cb, Cvoid, (Ptr{Cvoid},)), 200)
+    wait(t)
+    phase[] == 4 || error("finalizer did not complete")
+    """
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=1,1 -e $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    timeout = false
+    timer = Timer(60) do _
+        timeout = true
+        kill(proc)
+    end
+    try
+        wait(proc)
+    finally
+        close(timer)
+    end
+    @test !timeout
+    @test success(proc)
+end
+
 # Make sure default number of BLAS threads respects CPU affinity: issue #55572.
 @testset "LinearAlgebra number of default threads" begin
     if AFFINITY_SUPPORTED
