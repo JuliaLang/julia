@@ -1440,6 +1440,17 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
+# The C library of the target. This only matters on Linux, where it is either glibc
+# (`*-linux-gnu*`) or musl (`*-linux-musl*`) as recorded in the normalized triplet;
+# it is left empty elsewhere.
+ifeq ($(OS),Linux)
+ifneq (,$(findstring musl,$(BB_TRIPLET)))
+LIBC := musl
+else
+LIBC := glibc
+endif
+endif
+
 # CSL_NEXT_GLIBCXX_VERSION is a triple of the symbols representing support for whatever
 # the next libstdc++ version would be. This is used for two things.
 # 1. Whether the system libraries are new enough, if we need to use the libs bundled with CSL

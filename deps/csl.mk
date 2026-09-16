@@ -80,6 +80,7 @@ $(eval $(call copy_csl,$(call versioned_libname,libgfortran,5)))
 $(eval $(call copy_csl,$(call versioned_libname,libquadmath,0)))
 $(eval $(call copy_csl,$(call versioned_libname,libstdc++,6)))
 $(eval $(call copy_csl,$(call versioned_libname,libatomic,1)))
+$(eval $(call copy_csl,libatomic.$(SHLIB_EXT)))
 $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
 # Configurable either a static or dynamic library depending on the system
@@ -146,7 +147,7 @@ $(eval $(call copy_csl_static,crti.o))
 $(eval $(call copy_csl_static,crtn.o))
 $(eval $(call copy_csl_static,crtbeginS.o))
 $(eval $(call copy_csl_static,crtendS.o))
-ifeq ($(OS),Linux) # glibc-specific
+ifeq ($(LIBC),glibc)
 $(eval $(call copy_csl_static,libc_nonshared.a))
 endif
 endif
@@ -216,7 +217,7 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtbeginS.o $(build_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtendS.o $(build_libdir)/
 	ln -sf $(call versioned_libname,libgcc_s,1) $(build_shlibdir)/libgcc_s.$(SHLIB_EXT)
-ifeq ($(OS),Linux)
+ifeq ($(LIBC),glibc)
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libc_nonshared.a $(build_libdir)/
 endif
 endif
