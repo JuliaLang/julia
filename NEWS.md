@@ -202,6 +202,9 @@ Standard library changes
 
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
+* The `Precompiling` messages printed while loading name packages without their uuid when the
+  name is unambiguous in the environment, name extensions by their parent package, and say which
+  dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
 
 #### JuliaSyntaxHighlighting
 
@@ -222,6 +225,9 @@ Standard library changes
 #### REPL
 
 * The Julia REPL now emits OSC 133 semantic prompt markers for terminal integration.
+* A `using`/`import` statement that loads several packages, such as `using A, B, C`, now precompiles
+  all of them (and the extensions they make loadable) in a single parallel session, rather than one
+  session per package ([#63185]).
 
 #### Sockets
 
