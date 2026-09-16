@@ -15,11 +15,11 @@ extern "C" {
 #endif
 
 struct _jl_tls_states_t;
-struct _jl_task_t;
-struct _jl_value_t;
+struct JL_GC_TRACKED_TYPE _jl_task_t;
+struct JL_GC_TRACKED_TYPE _jl_value_t;
 struct _jl_weakref_t;
-struct _jl_datatype_t;
-struct _jl_genericmemory_t;
+struct JL_GC_TRACKED_TYPE _jl_datatype_t;
+struct JL_GC_TRACKED_TYPE _jl_genericmemory_t;
 
 // ========================================================================= //
 // GC Metrics
