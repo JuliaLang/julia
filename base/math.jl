@@ -5,7 +5,7 @@ module Math
 export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
-       sinpi, cospi, sincospi, tanpi, sinc, cosc,
+       sinpi, cospi, sincospi, tanpi, asinpi, acospi, atanpi, sinc, cosc,
        cosd, cotd, cscd, secd, sind, tand, sincosd,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
@@ -23,7 +23,7 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_raw_max, clamp, clamp!, two_mul
+            exponent_raw_max, clamp, clamp!, two_mul, two_sqrt
 
 using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
@@ -1305,12 +1305,14 @@ end
 
 
 atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
+atanpi(a::Float16,b::Float16) = Float16(atanpi(Float32(a),Float32(b)))
 sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
           :exp, :exp2, :exp10, :expm1, :log, :log2, :log10, :log1p,
-          :exponent, :sqrt, :cbrt, :sinpi, :cospi, :sincospi, :tanpi)
+          :exponent, :sqrt, :cbrt,
+          :sinpi, :cospi, :sincospi, :tanpi, :asinpi, :acospi, :atanpi)
     @eval function ($f)(x::Real)
         xf = float(x)
         xf isa typeof(x) && throw(MethodError($f, (x,)))
@@ -1319,7 +1321,7 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
     @eval $(f)(::Missing) = missing
 end
 
-for f in (:atan, :hypot, :log)
+for f in (:atan, :atanpi, :hypot, :log)
     @eval $(f)(::Missing, ::Missing) = missing
     @eval $(f)(::Number, ::Missing) = missing
     @eval $(f)(::Missing, ::Number) = missing
