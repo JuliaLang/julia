@@ -359,16 +359,25 @@ $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_COMPILERRT_BUILDDIR)/build-comp
 endif
 endif
 
+# CMake runs on the build host, even when targeting Windows from Unix.
+# MSYS2 excludes CMAKE_INSTALL_PREFIX from conversion; LLVM's prefix is absolute.
+ifeq ($(BUILD_OS),WINNT)
+LLVM_INSTALL_PREFIX = $(call cygpath_w,$1)
+else
+LLVM_INSTALL_PREFIX = $1
+endif
+
 LLVM_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir)/lit && \
 	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.py $2$$(build_depsbindir)/lit/ && \
 	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.toml $2$$(build_depsbindir)/lit/ && \
 	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/lit $2$$(build_depsbindir)/lit/ && \
-	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$$(call LLVM_INSTALL_PREFIX,$2$$(build_prefix))" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
 # CMAKE_INSTALL_BINDIR puts the DLL in build_depsbindir alongside the tools,
-# but Julia loads it out of build_shlibdir, so it has to be in both places
-LLVM_INSTALL += && cp $2$$(build_depsbindir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_shlibdir)
+# but Julia loads it out of build_shlibdir, so it has to be in both places.
+# Staged installs have no directory there yet, and cp would make the DLL one.
+LLVM_INSTALL += && mkdir -p $2$$(build_shlibdir) && cp $2$$(build_depsbindir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_shlibdir)
 endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
