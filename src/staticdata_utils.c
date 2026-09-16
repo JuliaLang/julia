@@ -83,18 +83,6 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
     return 0;
 }
 
-static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
-{
-    assert(jl_is_array(worklist));
-    size_t len = jl_array_nrows(worklist);
-    if (len > 0) {
-        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(worklist, len-1);
-        assert(jl_is_module(topmod));
-        return topmod->build_id.lo;
-    }
-    return 0;
-}
-
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
@@ -718,7 +706,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 16;
+static const int JI_FORMAT_VERSION = 17;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
@@ -962,33 +950,6 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             //jl_printf(JL_STDERR, "\n");
         }
     }
-}
-
-static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key) JL_CANSAFEPOINT
-{
-    size_t i, l = jl_array_nrows(method_roots_list);
-    int failed = 0;
-    for (i = 0; i < l; i+=2) {
-        jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(method_roots_list, i);
-        jl_array_t *roots = (jl_array_t*)jl_array_ptr_ref(method_roots_list, i+1);
-        if (roots) {
-            assert(jl_is_array(roots));
-            if (m->root_blocks) {
-                // check for key collision
-                uint64_t *blocks = jl_array_data(m->root_blocks, uint64_t);
-                size_t nx2 = jl_array_nrows(m->root_blocks);
-                for (size_t i = 0; i < nx2; i+=2) {
-                    if (blocks[i] == key) {
-                        // found duplicate block
-                        failed = -1;
-                    }
-                }
-            }
-
-            jl_append_method_roots(m, key, roots);
-        }
-    }
-    return failed;
 }
 
 static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAFEPOINT

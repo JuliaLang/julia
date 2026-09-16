@@ -23,54 +23,91 @@ using .ConflictingBindings
     @test Base.object_build_id(Base) == Base.module_build_id(Base)
 end
 
-# method root provenance
-
-rootid(m::Module) = Base.module_build_id(Base.parentmodule(m)) % UInt64
-rootid(m::Method) = rootid(m.module)
-
-function root_provenance(m::Method, i::Int)
-    mid = rootid(m)
-    isdefined(m, :root_blocks) || return mid
-    idxs = view(m.root_blocks, 2:2:length(m.root_blocks))
-    j = searchsortedfirst(idxs, i) - 1   # RLE roots are 0-indexed
-    j == 0 && return mid
-    return m.root_blocks[2*j-1]
-end
-
-struct RLEIterator{T}   # for method roots, T = UInt64 (even on 32-bit)
-    items::Vector{Any}
-    blocks::Vector{T}
-    defaultid::T
-end
-function RLEIterator(roots, blocks, defaultid)
-    T = promote_type(eltype(blocks), typeof(defaultid))
-    return RLEIterator{T}(convert(Vector{Any}, roots), blocks, defaultid)
-end
-RLEIterator(m::Method) = RLEIterator(m.roots, m.root_blocks, rootid(m))
-Base.iterate(iter::RLEIterator) = iterate(iter, (0, 0, iter.defaultid))
-function Base.iterate(iter::RLEIterator, (i, j, cid))
-    i += 1
-    i > length(iter.items) && return nothing
-    r = iter.items[i]
-    while (j + 1 < length(iter.blocks) && i > iter.blocks[j+2])
-        cid = iter.blocks[j+1]
-        j += 2
+# Inferred IR owns its literals independently of the method's lowered source.
+function code_roots(m::Method)
+    roots = Any[]
+    for mi in Base.specializations(m)
+        ci = isdefined(mi, :cache) ? mi.cache : nothing
+        while ci isa Core.CodeInstance
+            isdefined(ci, :roots) && append!(roots, ci.roots)
+            ci = isdefined(ci, :next) ? ci.next : nothing
+        end
     end
-    return cid => r, (i, j, cid)
+    return roots
 end
 
-function group_roots(m::Method)
-    mid = rootid(m)
-    isdefined(m, :root_blocks) || return Dict(mid => m.roots)
-    group_roots(RLEIterator(m.roots, m.root_blocks, mid))
-end
-function group_roots(iter::RLEIterator)
-    rootsby = Dict{typeof(iter.defaultid),Vector{Any}}()
-    for (id, r) in iter
-        list = get!(valtype(rootsby), rootsby, id)
-        push!(list, r)
+@testset "CodeInstance literal tables" begin
+    literal_table_source() = ["lowered-source"]
+    m = which(literal_table_source, ())
+    mi = Base.method_instance(literal_table_source, Tuple{})
+    source_roots = copy(m.roots)
+    instances = Core.CodeInstance[]
+    literals = Any[["first body"], ["second body"]]
+    for literal in literals
+        src = Base.uncompressed_ir(m)
+        src.code = Any[Core.ReturnNode(QuoteNode(literal))]
+        src.ssavaluetypes = Any[Any]
+        src.ssaflags = UInt32[0]
+        src.debuginfo = Core.DebugInfo(:none)
+        ci = Core.CodeInstance(mi, nothing, Any, Any, nothing, nothing, Int32(0),
+            UInt(1), typemax(UInt), UInt32(0), nothing, src.debuginfo, Core.svec())
+        compressed = ccall(:jl_compress_ir, String, (Any, Any, Any), m, ci, src)
+        @atomic ci.inferred = compressed
+        push!(instances, ci)
     end
-    return rootsby
+    @test instances[1].def === instances[2].def
+    @test instances[1].roots !== instances[2].roots
+    @test m.roots == source_roots
+    GC.gc()
+    for (ci, literal) in zip(instances, literals)
+        decoded = Base._uncompressed_ir(ci, ci.inferred)
+        @test decoded.code[1].val.value === literal
+        @test ci.roots == [literal]
+    end
+end
+
+precompile_test_harness("literal tables for a shared MethodInstance") do dir
+    packages = (:LiteralTableA, :LiteralTableB)
+    for name in packages
+        write(joinpath(dir, "$name.jl"), """
+            module $name
+                const literal = [$(repr(string(name)))]
+                const mi = Base.method_instance(identity, Tuple{Any})
+                const ci = let
+                    src = Base.uncompressed_ir(mi.def)
+                    src.code = Any[Core.ReturnNode(QuoteNode(literal))]
+                    src.ssavaluetypes = Any[Any]
+                    src.ssaflags = UInt32[0]
+                    src.debuginfo = Core.DebugInfo(:none)
+                    ci = Core.CodeInstance(mi, :literal_table_test, Any, Any, nothing, nothing,
+                        Int32(0), UInt(1), typemax(UInt), UInt32(0), nothing,
+                        src.debuginfo, Core.svec())
+                    compressed = ccall(:jl_compress_ir, String, (Any, Any, Any), mi.def, ci, src)
+                    @atomic ci.inferred = compressed
+                    ci
+                end
+            end
+            """)
+        Base.compilecache(Base.PkgId(string(name)))
+    end
+    for order in (packages, reverse(packages))
+        script = """
+            using Test
+            empty!(DEPOT_PATH); append!(DEPOT_PATH, $(repr(DEPOT_PATH)))
+            empty!(LOAD_PATH); append!(LOAD_PATH, $(repr(LOAD_PATH)))
+            using $(order[1]), $(order[2])
+            @test LiteralTableA.mi === LiteralTableB.mi
+            @test LiteralTableA.ci.roots !== LiteralTableB.ci.roots
+            GC.gc()
+            for pkg in (LiteralTableA, LiteralTableB)
+                ci = pkg.ci
+                decoded = Base._uncompressed_ir(ci, ci.inferred)
+                @test decoded.code[1].val.value === pkg.literal
+                @test ci.roots == [pkg.literal]
+            end
+            """
+        @test success(`$(Base.julia_cmd()) --startup-file=no --compiled-modules=existing -e $script`)
+    end
 end
 
 precompile_test_harness("basic precompile functionality") do dir2
@@ -761,10 +798,9 @@ precompile_test_harness(false) do dir
 end
 end
 
-# method root provenance & external code caching
+# CodeInstance literals & external code caching
 precompile_test_harness("code caching") do dir
     Cache_module = :Cacheb8321416e8a3e2f1
-    # Note: calling setindex!(::Dict{K,V}, ::Any, ::K) adds both compression and codegen roots
     write(joinpath(dir, "$Cache_module.jl"),
           """
           module $Cache_module
@@ -796,13 +832,12 @@ precompile_test_harness("code caching") do dir
     @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
     M = invokelatest(getglobal, @__MODULE__, Cache_module)
-    Mid = rootid(M)
     invokelatest() do
-        # Test that this cache file "owns" all the roots
+        # Lowered source still decodes using the method's own literals
         for name in (:f, :fpush, :callboth)
             func = getglobal(M, name)
             m = only(collect(methods(func)))
-            @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
+            @test Base.uncompressed_ir(m) isa Core.CodeInfo
         end
         # Check that we can cache external CodeInstances:
         # length(::Vector) has an inferred specialization for `Vector{X}`
@@ -824,9 +859,9 @@ precompile_test_harness("code caching") do dir
         mi = minternal.specializations::Core.MethodInstance
         @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
         ci = mi.cache
-        @test (codeunits(ci.inferred::String)[end]) === 0x01
+        @test Base._uncompressed_ir(ci, ci.inferred::String) isa Core.CodeInfo
         @test ci.inferred !== nothing
-        # ...and that we can add "untracked" roots & non-relocatable CodeInstances to them too
+        # New runtime specializations also decode without root-provenance tracking
         Base.invokelatest() do
             M.getelsize(M.X2[])
         end
@@ -835,9 +870,9 @@ precompile_test_harness("code caching") do dir
         mi = mispecs[2]::Core.MethodInstance
         mi.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
         ci = mi.cache
-        @test (codeunits(ci.inferred::String)[end]) == 0x00
+        @test Base._uncompressed_ir(ci, ci.inferred::String) isa Core.CodeInfo
     end
-    # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
+    # PkgA loads PkgB; both cache inferred bodies for the same `push!` method
     Cache_module2 = :Cachea1544c83560f0c99
     write(joinpath(dir, "$Cache_module2.jl"),
           """
@@ -857,7 +892,6 @@ precompile_test_harness("code caching") do dir
     @eval using $Cache_module2
     invokelatest() do
         M2 = getfield(@__MODULE__, Cache_module2)
-        M2id = rootid(M2)
         dest = []
         Base.invokelatest() do  # use invokelatest to see the results of loading the compile
             M2.f(dest)
@@ -869,11 +903,10 @@ precompile_test_harness("code caching") do dir
             @test M.fpush(M.X[]) == [M.X()]
         end
         mT = which(push!, (Vector{T} where T, Any))
-        groups = group_roots(mT)
-        @test Memory{M2.Y} ∈ groups[M2id]
-        @test Memory{M2.Z} ∈ groups[M2id]
-        @test Memory{M.X} ∈ groups[Mid]
-        @test Memory{M.X} ∉ groups[M2id]
+        roots = code_roots(mT)
+        @test Memory{M2.Y} ∈ roots
+        @test Memory{M2.Z} ∈ roots
+        @test Memory{M.X} ∈ roots
     end
     # backedges of external MethodInstances
     # Root gets used by RootA and RootB, and both consumers end up inferring the same MethodInstance from Root
@@ -2062,7 +2095,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, internal_methods, extext_methods, new_method_roots, cache_sizes = sv
+    modules, init_order, internal_methods, extext_methods, cache_sizes = sv
     for m in internal_methods::Vector{Any}
         m isa Core.MethodInstance || continue
         m = m.func::Method
