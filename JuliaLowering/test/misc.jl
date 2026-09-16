@@ -979,3 +979,163 @@ JuliaLowering.include_string(@__MODULE__, """
    end
 end
 """)
+
+@testset "Base.@kwdef" for expr_compat_mode in (true, false)
+    local test_mod = @newmod()
+    @eval test_mod using Test
+
+    JuliaLowering.include_string(test_mod, """
+    @kwdef struct Test27970Typed
+        a::Int
+        b::String = "hi"
+    end
+    @kwdef struct Test27970Untyped
+        a
+    end
+    @kwdef struct Test27970Empty end
+    """; expr_compat_mode)
+
+    @eval test_mod @testset "No default values" begin
+        @test Test27970Typed(a=1) == Test27970Typed(1, "hi")
+        # Implicit type conversion (no assertion on kwarg)
+        @test Test27970Typed(a=0x03) == Test27970Typed(3, "hi")
+        @test_throws UndefKeywordError Test27970Typed()
+
+        @test Test27970Untyped(a=1) == Test27970Untyped(1)
+        @test_throws UndefKeywordError Test27970Untyped()
+
+        # Just checking that this doesn't stack overflow on construction
+        @test Test27970Empty() == Test27970Empty()
+    end
+
+    JuliaLowering.include_string(test_mod, """
+    abstract type AbstractTest29307 end
+    @kwdef struct Test29307{T<:Integer} <: AbstractTest29307
+        a::T=2
+    end
+    """; expr_compat_mode)
+
+    @eval test_mod @testset "subtyped" begin
+        @test Test29307() == Test29307{Int}(2)
+        @test Test29307(a=0x03) == Test29307{UInt8}(0x03)
+        @test Test29307{UInt32}() == Test29307{UInt32}(2)
+        @test Test29307{UInt32}(a=0x03) == Test29307{UInt32}(0x03)
+    end
+    JuliaLowering.include_string(test_mod, """
+    @kwdef struct TestInnerConstructor
+        a = 1
+        TestInnerConstructor(a::Int) = (@assert a>0; new(a))
+        function TestInnerConstructor(a::String)
+            @assert length(a) > 0
+            new(a)
+        end
+    end
+    """; expr_compat_mode)
+
+    @eval test_mod @testset "inner constructor" begin
+        @test TestInnerConstructor() == TestInnerConstructor(1)
+        @test TestInnerConstructor(a=2) == TestInnerConstructor(2)
+        @test_throws AssertionError TestInnerConstructor(a=0)
+        @test TestInnerConstructor(a="2") == TestInnerConstructor("2")
+        @test_throws AssertionError TestInnerConstructor(a="")
+    end
+
+    JuliaLowering.include_string(test_mod, """
+    const outsidevar = 7
+    @kwdef struct TestOutsideVar
+        a::Int=outsidevar
+    end
+    """; expr_compat_mode)
+    @eval test_mod @test TestOutsideVar() == TestOutsideVar(7)
+
+    JuliaLowering.include_string(test_mod, """
+    @kwdef mutable struct Test_kwdef_const_atomic
+        a
+        b::Int
+        c::Int = 1
+        const d
+        const e::Int
+        const f = 1
+        const g::Int = 1
+        @atomic h::Int
+    end
+    """; expr_compat_mode)
+
+    @eval test_mod @testset "const and @atomic fields" begin
+        x = Test_kwdef_const_atomic(a = 1, b = 1, d = 1, e = 1, h = 1)
+        for f in fieldnames(Test_kwdef_const_atomic)
+            @test getfield(x, f) == 1
+        end
+        @testset "const fields" begin
+            @test_throws ErrorException x.d = 2
+            @test_throws ErrorException x.e = 2
+            @test_throws MethodError x.e = "2"
+            @test_throws ErrorException x.f = 2
+            @test_throws ErrorException x.g = 2
+        end
+        @testset "atomic fields" begin
+            @test_throws ConcurrencyViolationError x.h = 1
+            @atomic x.h = 1
+            @test @atomic(x.h) == 1
+            @atomic x.h = 2
+            @test @atomic(x.h) == 2
+        end
+    end
+
+    JuliaLowering.include_string(test_mod, """
+    module KwdefWithEsc
+        const Int1 = Int
+        const val1 = 42
+        macro define_struct()
+            quote
+                @kwdef struct $(esc(:Struct))
+                    a
+                    b = val1
+                    c::Int1
+                    d::Int1 = val1
+
+                    $(esc(quote
+                        e
+                        f = val2
+                        g::Bool1
+                        h::Bool1 = val2
+                    end))
+
+                    $(esc(:(i = val2)))
+                    $(esc(:(j::Bool1)))
+                    $(esc(:(k::Bool1 = val2)))
+
+                    l::$(esc(:Bool1))
+                    m::$(esc(:Bool1)) = $(esc(:val2))
+
+                    n = $(esc(:val2))
+                    o::Int1 = $(esc(:val2))
+
+                    $(esc(:p))
+                    $(esc(:q)) = val1
+                    $(esc(:s))::Int1
+                    $(esc(:t))::Int1 = val1
+                end
+            end
+        end
+    end
+    """; expr_compat_mode=true)
+
+    JuliaLowering.include_string(test_mod, """
+    module KwdefWithEsc_TestModule
+        using ..KwdefWithEsc
+        const Bool1 = Bool
+        const val2 = true
+        KwdefWithEsc.@define_struct()
+    end
+    """; expr_compat_mode)
+
+    @eval test_mod @test isdefined(KwdefWithEsc_TestModule, :Struct)
+    @eval test_mod @test fieldnames(KwdefWithEsc_TestModule.Struct) ==
+        (:a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o, :p, :q, :s, :t)
+    @eval test_mod @test fieldtypes(KwdefWithEsc_TestModule.Struct) ==
+        (Any, Any, Int, Int, Any, Any, Bool, Bool, Any, Bool, Bool, Bool, Bool, Any,
+         Int, Any, Any, Int, Int)
+    @eval test_mod @test KwdefWithEsc_TestModule.Struct(
+        ; a='a',c=0,e='e',g=true,j=true,l=true,p='p',s=0) isa KwdefWithEsc_TestModule.Struct
+end
