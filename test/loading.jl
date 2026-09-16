@@ -1464,7 +1464,7 @@ end
                 mkdepottempdir() do depot
                     nENV = copy(ENV)
                     nENV["JULIA_LOAD_PATH"] = join([proj, "@stdlib"], sep) # the REPL must be loadable
-                    nENV["JULIA_DEPOT_PATH"] = depot * Base.Filesystem.pathsep()
+                    nENV["JULIA_DEPOT_PATH"] = depot * sep # trailing separator appends the default depots
                     nENV["TERM"] = "dumb"
                     Main.FakePTYs.with_fake_pty() do pts, ptm
                         # `--compiled-modules=yes` so an inherited `=no` cannot skip the look-ahead
