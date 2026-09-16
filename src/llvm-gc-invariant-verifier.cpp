@@ -162,6 +162,17 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
     Function *Callee = CI.getCalledFunction();
+    // The field write barrier promises exactly one written field. A null slot is not a
+    // degraded field barrier: the caller must demote explicitly, by emitting
+    // `julia.object_write_barrier` instead. (The name match covers every `.pN`
+    // monomorphization; see codegen.cpp.)
+    if (Callee && Callee->getName().starts_with("julia.field_write_barrier")) {
+        Check(CI.arg_size() >= 3 && CI.arg_size() % 2 == 1,
+              "Field write barrier must be (parent, slot, child) plus (slot, child) pairs", &CI);
+        for (unsigned i = 1; i + 1 < CI.arg_size(); i += 2)
+            Check(!isa<ConstantPointerNull>(CI.getArgOperand(i)->stripPointerCasts()),
+                  "Field write barrier requires non-null slots; demote explicitly to julia.object_write_barrier", &CI);
+    }
     if (Callee && (Callee->getName() == "julia.call" ||
                    Callee->getName() == "julia.call2" ||
                    Callee->getName() == "julia.call3")) {

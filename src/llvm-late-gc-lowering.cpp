@@ -1286,7 +1286,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                             callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                            callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
+                            isWriteBarrierFunc(callee) || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
                             callee->getName() == "memcmp") {
                             continue;
                         }
@@ -1797,7 +1797,7 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     return {Colors, PreAssignedColors};
 }
 
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+#ifndef MMTK_SNAPSHOT_BARRIER
 static SmallVector<int, 1> *FindRefinements(Value *V, State *S)
 {
     if (!S)
@@ -1841,11 +1841,20 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
     for (auto CI : WriteBarriers) {
         auto parent = CI->getArgOperand(0);
         // Insertion-barrier optimization: elide the barrier when every child is the
-        // parent or perm-rooted. Invalid under SATB (ConcurrentImmix), which must
-        // snapshot the parent's old fields regardless of the child.
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
-        if (std::all_of(CI->op_begin() + 1, CI->op_end(),
-                    [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
+        // parent or perm-rooted. Invalid for plans that must observe the parent's old
+        // fields regardless of the child (MMTK_SNAPSHOT_BARRIER).
+#ifndef MMTK_SNAPSHOT_BARRIER
+        auto callee = CI->getCalledOperand();
+        bool AllElidable = true;
+        unsigned stride = isFieldWriteBarrier(callee) ? 2 : 1;
+        for (unsigned i = writeBarrierFirstChildArg(callee); i < CI->arg_size(); i += stride) {
+            Value *child = CI->getArgOperand(i);
+            if (parent != child && !IsPermRooted(child, S)) {
+                AllElidable = false;
+                break;
+            }
+        }
+        if (AllElidable) {
             CI->eraseFromParent();
             continue;
         }
@@ -1914,7 +1923,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             }
             Value *callee = CI->getCalledOperand();
 
-            if (write_barrier_func && callee == write_barrier_func) {
+            if (isWriteBarrierFunc(callee)) {
                 assert(CI->arg_size() >= 1);
                 write_barriers.push_back(CI);
                 ChangesMade = true;

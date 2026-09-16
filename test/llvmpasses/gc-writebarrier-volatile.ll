@@ -9,7 +9,7 @@
 
 @tag = external addrspace(10) global {}, align 16
 
-declare void @julia.write_barrier({} addrspace(10)*, {} addrspace(10)*)
+declare void @julia.object_write_barrier({} addrspace(10)*, ...)
 declare {}*** @julia.get_pgcstack()
 declare {} addrspace(10)* @julia.gc_alloc_obj({}**, i64, {} addrspace(10)*)
 
@@ -21,7 +21,7 @@ top:
   %current_task = bitcast {}*** %pgcstack to {}**
   %parent = call {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
   %child = call {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
-  call void @julia.write_barrier({} addrspace(10)* %parent, {} addrspace(10)* %child)
+  call void ({} addrspace(10)*, ...) @julia.object_write_barrier({} addrspace(10)* %parent, {} addrspace(10)* %child)
   ret {} addrspace(10)* %parent
 
 ; The critical test: GC tag loads must be volatile to prevent constant folding

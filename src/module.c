@@ -218,7 +218,7 @@ retry:
                         if (next_max_world >= expected_prev_min_world-1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
                             if (jl_atomic_cmpswap(&prev->min_world, &expected_prev_min_world, next_min_world)) {
                                 jl_binding_partition_t *nextnext = jl_atomic_load_relaxed(&next->next);
-                                jl_gc_wb(prev, nextnext);
+                                jl_gc_wb(prev, (void*)&prev->next, nextnext);
                                 if (!jl_atomic_cmpswap(&prev->next, &next, nextnext)) {
                                     // `next` may have been merged into its subsequent partition - we need to retry
                                     assert(is_some_partition(next));
@@ -258,7 +258,7 @@ retry:
         jl_atomic_store_relaxed(&new_bpart->next, next);
     // else `new_bpart` is the last in the chain, so leave its `next` as the
     // owning-binding backreference set by `new_binding_partition`.
-    jl_gc_wb(gap.parent, new_bpart);
+    jl_gc_wb(gap.parent, (void*)gap.insert, new_bpart);
     if (!jl_atomic_cmpswap(gap.insert, &gap.replace, new_bpart))
         return NULL;
     return new_bpart;
@@ -787,7 +787,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                 if (!is_some_partition(prev_bpart))
                     break;
                 jl_binding_partition_t *next_prev_bpart = new_binding_partition(b);
-                jl_gc_wb(backdate_bpart, next_prev_bpart);
+                jl_gc_wb(backdate_bpart, (void*)&backdate_bpart->next, next_prev_bpart);
                 jl_atomic_store_relaxed(&backdate_bpart->next, next_prev_bpart);
                 backdate_bpart = next_prev_bpart;
             }
@@ -1544,7 +1544,7 @@ void jl_module_initial_using(jl_module_t *to, jl_module_t *from)
         .max_world = ~(size_t)0,
         .flags = 0
     };
-    jl_gc_wb(to, from);
+    jl_gc_wb_module_usings(to, from);
     arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
     memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
     jl_add_usings_backedge(from, to);
@@ -1577,7 +1577,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t fla
             .max_world = ~(size_t)0,
             .flags = flags
         };
-        jl_gc_wb(to, from);
+        jl_gc_wb_module_usings(to, from);
         arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
         memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
     } else {
@@ -2192,7 +2192,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
 JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
     jl_check_binding_assign_value(b, mod, var, rhs, "swapglobal!");
-    jl_gc_wb(b, rhs);
+    jl_gc_wb(b, (void*)&b->value, rhs);
     jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     if (__unlikely(old == NULL))
         jl_undefined_var_error(var, (jl_value_t*)mod);
@@ -2222,7 +2222,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod
 {
     jl_check_binding_assign_value(b, mod, var, rhs, "setglobalonce!");
     jl_value_t *old = NULL;
-    jl_gc_wb(b, rhs);
+    jl_gc_wb(b, (void*)&b->value, rhs);
     jl_atomic_cmpswap(&b->value, &old, rhs);
     return old;
 }

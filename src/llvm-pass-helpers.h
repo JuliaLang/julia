@@ -60,12 +60,43 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *blackbox_func;
-    llvm::Function *write_barrier_func;
+    llvm::Function *object_write_barrier_func;
+    llvm::Function *field_write_barrier_p11_func;
+    llvm::Function *field_write_barrier_p13_func;
     llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
     llvm::Function *call3_func;
     llvm::Function *cancel_point_func;
+
+    // Operand indices of the write barrier intrinsics; see their declarations in
+    // codegen.cpp for what each operand means. The `.pN` suffix on the field and region
+    // barriers is monomorphization mangling over the location operand's address space;
+    // all monomorphizations of a barrier are semantically identical, and no consumer may
+    // distinguish them.
+    // julia.object_write_barrier(parent, children...):
+    static constexpr unsigned object_wb_first_child_arg = 1;
+    // julia.field_write_barrier.pN(parent, slot, child):
+    static constexpr unsigned field_wb_slot_arg = 1;
+    static constexpr unsigned field_wb_child_arg = 2;
+
+    // Whether `callee` is a monomorphization of the field write barrier.
+    bool isFieldWriteBarrier(const llvm::Value *callee) const {
+        return callee && (callee == field_write_barrier_p11_func ||
+                          callee == field_write_barrier_p13_func);
+    }
+
+    // Whether `callee` is one of the write barrier intrinsics above.
+    bool isWriteBarrierFunc(llvm::Value *callee) const {
+        return callee && (callee == object_write_barrier_func ||
+                          isFieldWriteBarrier(callee));
+    }
+
+    // Index of the first child operand of the write barrier whose callee is `callee`.
+    unsigned writeBarrierFirstChildArg(const llvm::Value *callee) const {
+        return isFieldWriteBarrier(callee) ? field_wb_child_arg
+                                           : object_wb_first_child_arg;
+    }
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -132,6 +163,14 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // The write barrier intrinsics; see the declarations in codegen.cpp for their
+    // semantics and for the `.pN` monomorphization mangling. Only the object barrier is
+    // ever materialized by a pass (transformations can only forget which location was
+    // written, never invent one).
+    extern const IntrinsicDescription objectWriteBarrier;
+    extern const IntrinsicDescription fieldWriteBarrierP11;
+    extern const IntrinsicDescription fieldWriteBarrierP13;
 
     // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
     extern const IntrinsicDescription safepoint;

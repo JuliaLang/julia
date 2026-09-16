@@ -418,7 +418,8 @@ private:
     // Lowers a `julia.safepoint` intrinsic.
     void lowerSafepoint(CallInst *target, Function &F);
 
-    // Lowers a `julia.write_barrier` function.
+    // Lowers a write barrier intrinsic (`julia.object_write_barrier` or a
+    // `julia.field_write_barrier.pN` monomorphization).
     void lowerWriteBarrier(CallInst *target, Function &F);
 
     // Check if the pass should be run
