@@ -169,8 +169,9 @@ ifeq ($(JULIACODEGEN),LLVM)
 ifneq ($(USE_SYSTEM_LLVM),0)
 # USE_SYSTEM_LLVM != 0
 CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
+# LLVM 24 no longer exports llvm::Any::TypeId; use another LLVM export.
 LLVM_SHLIB_SYMBOL_VERSION := $(shell readelf -W --dyn-syms $(shell $(LLVM_CONFIG_HOST) --libfiles --link-shared | awk '{print $1; exit}') | \
-                               grep _ZN4llvm3Any6TypeId | head -n 1 | sed -ne 's/.*@//p')
+                               sed -ne 's/.* _ZN4llvm[^ @]*@@\([^ ]*\).*/\1/p' | head -n 1)
 CG_LLVMLINK += -lz -lzstd
 
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
