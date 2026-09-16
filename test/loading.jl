@@ -1451,6 +1451,124 @@ end
             run(cmd_proj_ext)
         end
 
+        # Look-ahead for `using A, B` in the REPL (#63185): the packages of the statement
+        # and the extensions they make loadable (including via already loaded triggers)
+        # are precompiled in one session, rather than one per package and extension.
+        # The REPL only runs on a tty, so drive a child on a fake pty.
+        if !Sys.iswindows()
+            isdefined(Main, :FakePTYs) || @eval Main include(joinpath(@__DIR__, "testhelpers", "FakePTYs.jl"))
+            proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+            # run `lines` in a REPL child with an empty depot and return the transcript
+            function repl_transcript(lines)
+                output = ""
+                mkdepottempdir() do depot
+                    nENV = copy(ENV)
+                    nENV["JULIA_LOAD_PATH"] = join([proj, "@stdlib"], sep) # the REPL must be loadable
+                    nENV["JULIA_DEPOT_PATH"] = depot * sep # trailing separator appends the default depots
+                    nENV["TERM"] = "dumb"
+                    Main.FakePTYs.with_fake_pty() do pts, ptm
+                        # `--compiled-modules=yes` so an inherited `=no` cannot skip the look-ahead
+                        p = run(detach(setenv(`$(Base.julia_cmd()) --startup-file=no --color=no --compiled-modules=yes -q`, nENV)), pts, pts, pts, wait=false)
+                        Base.close_stdio(pts)
+                        readuntil(ptm, "julia> ", keep=true)
+                        for line in lines
+                            write(ptm, line, "\n")
+                            output *= readuntil(ptm, "julia> ", keep=true)
+                        end
+                        write(ptm, "exit()\n")
+                        try
+                            output *= read(ptm, String)
+                        catch ex
+                            # some platforms (such as linux) report EIO instead of EOF
+                            (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
+                        end
+                        wait(p)
+                        @test success(p)
+                    end
+                end
+                return output
+            end
+            check_exts = "println(all(e -> Base.get_extension(HasExtensions, e) isa Module, (:Extension, :ExtensionDep, :ExtensionFolder)) ? \"lookahead ok\" : \"lookahead missing ext\")"
+
+            # a trigger is already loaded: `ExtensionFolder` needs `ExtDep2`
+            output = repl_transcript((
+                "Base.disable_parallel_precompile = false",
+                "using ExtDep2",
+                "using HasExtensions, ExtDep",
+                "using ExtDep3", # ExtensionDep was precompiled above; loads now with no new session
+                check_exts,
+            ))
+            @test occursin("lookahead ok", output)
+            precompiling = filter(l -> occursin("Info: Precompiling", l), split(output, '\n'))
+            # once for `using ExtDep2`, once for everything `using HasExtensions, ExtDep` loads,
+            # each a single parallel session
+            @test length(precompiling) == 2
+            @test count("successfully precompiled", output) == 2
+            if length(precompiling) == 2
+                # names are unique in this environment, so no uuids are shown
+                @test endswith(strip(precompiling[1]), "Precompiling ExtDep2")
+                @test !occursin("]", precompiling[2])
+                for name in ("HasExtensions", "ExtDep", "HasExtensions → Extension",
+                             "HasExtensions → ExtensionDep", "HasExtensions → ExtensionFolder")
+                    @test occursin(name, precompiling[2])
+                end
+            end
+
+            # the parent is already loaded: its extensions are batched with the triggers being loaded
+            output = repl_transcript((
+                "Base.disable_parallel_precompile = false",
+                "using HasExtensions",
+                "using ExtDep, ExtDep2",
+                "using ExtDep3",
+                check_exts,
+            ))
+            @test occursin("lookahead ok", output)
+            precompiling = filter(l -> occursin("Info: Precompiling", l), split(output, '\n'))
+            @test length(precompiling) == 2
+            @test count("successfully precompiled", output) == 2
+            if length(precompiling) == 2
+                @test occursin("Precompiling HasExtensions", precompiling[1])
+                @test !occursin("]", precompiling[2])
+                for name in ("ExtDep", "ExtDep2", "HasExtensions → Extension", "HasExtensions → ExtensionFolder")
+                    @test occursin(name, precompiling[2])
+                end
+            end
+        end
+
+        # a name shared by two uuids in the load path keeps the uuid in loading messages
+        mktempdir() do dir
+            write(joinpath(dir, "Project.toml"), """
+            [deps]
+            Foo = "11111111-1111-1111-1111-111111111111"
+            """)
+            write(joinpath(dir, "Manifest.toml"), """
+            julia_version = "1.14.0-DEV"
+            manifest_format = "2.0"
+
+            [[deps.Foo]]
+            uuid = "11111111-1111-1111-1111-111111111111"
+            version = "1.0.0"
+            [[deps.Foo]]
+            uuid = "22222222-2222-2222-2222-222222222222"
+            version = "1.0.0"
+            [[deps.Bar]]
+            uuid = "33333333-3333-3333-3333-333333333333"
+            version = "1.0.0"
+            """)
+            old_load_path = copy(LOAD_PATH)
+            try
+                copy!(LOAD_PATH, [dir])
+                foo = Base.PkgId(Base.UUID("11111111-1111-1111-1111-111111111111"), "Foo")
+                @test Base.pkg_log_name(foo) == "Foo [11111111-1111-1111-1111-111111111111]"
+                @test Base.pkg_log_name(Base.PkgId(Base.UUID("33333333-3333-3333-3333-333333333333"), "Bar")) == "Bar"
+                @test Base.pkg_log_name(Base.PkgId(nothing, "Baz")) == "Baz"
+                @test Base.pkg_log_name(Base.PkgId(Base.uuid5(foo.uuid, "FooExt"), "FooExt"), foo) ==
+                    "Foo [11111111-1111-1111-1111-111111111111] → FooExt"
+            finally
+                copy!(LOAD_PATH, old_load_path)
+            end
+        end
+
         # Extensions in implicit environments
         old_load_path = copy(LOAD_PATH)
         try

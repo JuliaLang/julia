@@ -3736,6 +3736,10 @@ precompile_test_harness("cache rejection reasons") do dir
     Base.record_reason(reasons, :incompatible_header)
     @test Base.list_reasons(reasons) == msg
 
+    # a dependency loaded at a different version is reported by name
+    @test Base.list_reasons(Dict(Symbol("dep_loaded_incompatible:Foo") => 1)) ==
+        " (cache not reused: Foo is already loaded at a different version)"
+
     # rejections of caches that weren't the ones searched for are never reported
     @test Base.list_reasons(Dict(:buildid_mismatch => 2)) == ""
     @test Base.list_reasons(nothing) == ""
