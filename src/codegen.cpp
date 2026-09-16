@@ -9952,8 +9952,13 @@ static jl_llvm_functions_t
                                             topdebugloc, ctx.builder.GetInsertBlock());
                 }
                 else {
+#if JL_LLVM_VERSION >= 240000
+                    dbuilder.insertDbgValue(theArg.V, vi.dinfo, dbuilder.createExpression(),
+                                            topdebugloc, ctx.builder.GetInsertBlock());
+#else
                     dbuilder.insertDbgValueIntrinsic(theArg.V, vi.dinfo, dbuilder.createExpression(),
                                                         topdebugloc, ctx.builder.GetInsertBlock());
+#endif
                 }
             }
         }

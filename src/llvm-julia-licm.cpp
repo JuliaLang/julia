@@ -297,7 +297,13 @@ struct JuliaLICM : public JuliaPassContext {
                     jl_alloc::AllocUseInfo use_info;
                     jl_alloc::CheckInst::Stack check_stack;
                     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
-                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()).with_optimization_remark_emitter(&ORE));
+#if JL_LLVM_VERSION >= 240000
+                    SmallPtrSet<const BasicBlock*, 32> loop_blocks(L->block_begin(), L->block_end());
+                    const auto *valid_set = &loop_blocks;
+#else
+                    const auto *valid_set = &L->getBlocksSet();
+#endif
+                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(valid_set).with_optimization_remark_emitter(&ORE));
                     REMARK([&](){
                         std::string suse_info;
                         llvm::raw_string_ostream osuse_info(suse_info);

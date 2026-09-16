@@ -1359,7 +1359,7 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
     }
     for (uint32_t i = 0; i < fvars_size; i++) {
         if (fvars_partition[i] == 0) {
-            auto gv = find_if(fvars.begin(), fvars.end(), [i](auto var) { return var.second == i; });
+            auto gv = llvm::find_if(fvars, [i](auto var) { return var.second == i; });
             bad = true;
             dbgs() << "fvar " << gv->first->getName() << " at " << i << " not in any partition\n";
         }
