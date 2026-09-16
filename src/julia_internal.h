@@ -159,8 +159,11 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #if defined(_CPU_X86_64_)
     // install the unhandled exception handler at the top of our stack
     // to call directly into our personality handler
+// N.B. do not switch sections here: with function sections, which LTO turns on,
+// the rest of the function would be emitted away from its own section, leaving
+// the entry point running off the end of a prologue.
 #define CFI_NORETURN \
-    asm volatile ("\t.seh_handler __julia_personality, @except\n\t.text");
+    asm volatile ("\t.seh_handler __julia_personality, @except");
 #else
 #define CFI_NORETURN
 #endif
