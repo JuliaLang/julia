@@ -73,6 +73,24 @@ end
     @test length(kids) == 2 # kept + escaped; the dead child was spliced out
     @test kept in kids && escaped_tok.source in kids
 
+    # Dead promoted children must be unlinked even if their pages have no young
+    # allocations, before a cancellation walk can reach their freed walk locks.
+    @noinline function make_promoted_children(root, n)
+        promoted = [CancellationTokenSource(CancellationToken(root)) for _ in 1:n]
+        GC.gc(false) # promote the children before allocating their walk locks
+        foreach(cancel!, promoted)
+        return nothing
+    end
+    for _ in 1:20
+        root3 = CancellationTokenSource()
+        kept3 = CancellationTokenSource(CancellationToken(root3))
+        make_promoted_children(root3, 200)
+        GC.gc(false)
+        @test cancel!(root3)
+        # MMTk may retain promoted children until a full collection.
+        @test live_children(root3) == [kept3] skip=!Base.USING_STOCK_GC
+    end
+
     # linked sources: a source with several parents is cancelled by any of
     # them (the graph is a DAG, not just a tree)
     la = CancellationTokenSource()

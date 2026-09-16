@@ -1103,8 +1103,12 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
         goto done;
     }
     // For quick sweep, we might be able to skip the page if the page doesn't
-    // have any young live cell before marking.
-    if (!current_sweep_full && !pg->has_young) {
+    // have any young live cell before marking. Weak-processing pages must
+    // still be scanned: dead promoted cancellation sources must be unlinked
+    // in the same collection that frees their young referents. Otherwise a
+    // cancellation walk can reach a dead source with dangling fields.
+    if (!current_sweep_full && !pg->has_young &&
+            !jl_atomic_load_relaxed(&pg->has_weak_processing)) {
         assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
         if (!prev_sweep_full || pg->prev_nold == pg->nold) {
             freedall = 0;
@@ -1355,7 +1359,9 @@ static int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_al
             if (!pg->has_marked) {
                 should_scan = 0;
             }
-            if (!current_sweep_full && !pg->has_young) {
+            // Keep the quick-sweep condition in sync with gc_sweep_page.
+            if (!current_sweep_full && !pg->has_young &&
+                    !jl_atomic_load_relaxed(&pg->has_weak_processing)) {
                 assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
                 if (!prev_sweep_full || pg->prev_nold == pg->nold) {
                     should_scan = 0;
