@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Base.ScopedValues
+
+Module implementing [`ScopedValue`](@ref) and associated types and functions.
+"""
 module ScopedValues
 
 export ScopedValue, LazyScopedValue, with, @with, ScopedThunk
