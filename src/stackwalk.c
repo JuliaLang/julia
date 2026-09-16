@@ -655,11 +655,17 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_sign
     cursor->stackframe.AddrStack.Mode = AddrModeFlat;
     cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
     cursor->context = *Context;
+    // StackWalk64 can call jl_getUnwindInfo, which takes the profile lock.
+    // Match jl_unw_stepn's lock order before entering the stack-walk mutex;
+    // otherwise a concurrent unwind and thread exit can deadlock here.
+    if (!jl_trylock_profile())
+        return 0;
     uv_mutex_lock(&jl_in_stackwalk);
     result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
             &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
             JuliaGetModuleBase64, NULL);
     uv_mutex_unlock(&jl_in_stackwalk);
+    jl_unlock_profile();
 #else
     *cursor = *Context;
     result = 1;

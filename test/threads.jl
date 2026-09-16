@@ -719,6 +719,60 @@ end
     end
 end
 
+# Closing a foreign thread's channel must not invert the Windows backtrace locks.
+@testset "foreign-thread channel close" begin
+    if Sys.iswindows() && Sys.WORD_SIZE == 32
+        cmd = raw"""
+        const entered = Threads.Atomic{Int}(0)
+        const completed = Threads.Atomic{Int}(0)
+        function callback(arg::Ptr{Cvoid})::Cvoid
+            queue = unsafe_pointer_to_objref(arg)::Channel{Int}
+            Threads.atomic_add!(entered, 1)
+            for _ in queue
+            end
+            Threads.atomic_add!(completed, 1)
+            return nothing
+        end
+        const entry = @cfunction(callback, Cvoid, (Ptr{Cvoid},))
+        function run_close_probe()
+            for iteration in 1:100
+                queue = Channel{Int}(64)
+                handles = [Ref{UInt}(0) for _ in 1:4]
+                GC.@preserve queue begin
+                    for handle in handles
+                        arg = pointer_from_objref(queue)
+                        ret = @ccall uv_thread_create(handle::Ref{UInt}, entry::Ptr{Cvoid}, arg::Ptr{Cvoid})::Cint
+                        ret == 0 || Base.uv_error("uv_thread_create", ret)
+                    end
+                    while entered[] < 4 * iteration
+                        yield()
+                    end
+                    close(queue)
+                    for handle in handles
+                        ret = @ccall gc_safe=true uv_thread_join(handle::Ref{UInt})::Cint
+                        ret == 0 || Base.uv_error("uv_thread_join", ret)
+                    end
+                end
+                GC.gc()
+            end
+            @assert completed[] == 400
+        end
+        run_close_probe()
+        """
+        with_output_on_failure() do output
+            proc = run(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $cmd`; stdout=output, stderr=output); wait=false)
+            timer = Timer(60) do _
+                kill(proc)
+            end
+            try
+                @test success(proc)
+            finally
+                close(timer)
+            end
+        end
+    end
+end
+
 @testset "io_thread" begin
     function io_thread_test()
         # This test creates a thread that does IO and then blocks the main julia thread
