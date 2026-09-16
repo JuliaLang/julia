@@ -1488,7 +1488,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
@@ -1504,7 +1504,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
@@ -1521,7 +1521,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
         end
@@ -1537,7 +1537,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
         end
@@ -1556,7 +1556,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello parent!", String(read(cmd)))
         end
@@ -1571,7 +1571,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello parent!", String(read(cmd)))
         end
@@ -1782,7 +1782,7 @@ end
         badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
-            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+            "JULIA_DEPOT_PATH" => depot * s,
         ))
     end
     mktempdir() do depot
@@ -1791,7 +1791,7 @@ end
         badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
-            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+            "JULIA_DEPOT_PATH" => depot * s,
         ))
     end
     mkdepottempdir() do depot
@@ -1808,7 +1808,7 @@ end
         cp(joinpath(Sys.STDLIB, "LibGit2_jll"), jll_copy)
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir3 --startup-file=no -e 'using LibGit2'`,
-            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+            "JULIA_DEPOT_PATH" => depot * s,
         ))
     end
     mkdepottempdir() do depot
@@ -1836,7 +1836,7 @@ end
         badmanifest_test_dir4 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps4")
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir4 --startup-file=no -e 'using Statistics, SparseArrays; exit(Base.get_extension(Statistics, :SparseArraysExt) === nothing ? 1 : 0)'`,
-            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+            "JULIA_DEPOT_PATH" => depot * s,
         ))
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir4 --startup-file=no -e 'Base.Precompilation.precompilepkgs(; io=devnull)'`,
