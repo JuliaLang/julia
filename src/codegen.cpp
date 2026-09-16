@@ -7757,8 +7757,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, j
 {
     ++EmittedToJLInvokes;
     jl_codectx_t ctx(out, codeinst);
-    std::string name;
-    raw_string_ostream(name) << "tojlinvoke" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+    std::string name = out.make_name("tojlinvoke");
     Function *f = Function::Create(ctx.types().T_jlfunc,
             GlobalVariable::InternalLinkage,
             name, out.get_module());
@@ -8227,8 +8226,7 @@ static Function *gen_cfun_wrapper(
     const char *name = aliasname ? aliasname : "cfunction";
     bool nest = (!ff || unionall_env);
 
-    std::string funcName;
-    raw_string_ostream(funcName) << JL_SYM_CFUNCTION << name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+    std::string funcName = out.make_name(JL_SYM_CFUNCTION, name);
 
     Module *M = into; // Safe because ctx lock is held by params
     AttributeList attributes = sig.attributes;
@@ -8287,7 +8285,7 @@ static Function *gen_cfun_wrapper(
         functype = sig.functype(M->getContext());
     }
     Function *cw = Function::Create(functype,
-            GlobalVariable::ExternalLinkage,
+            out.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
             funcName, M);
     jl_init_function(cw, out);
     cw->setAttributes(AttributeList::get(M->getContext(), {attributes, cw->getAttributes()}));
@@ -8509,7 +8507,7 @@ static Function *gen_cfun_wrapper(
         funcName += "make";
         Function *cw_make = Function::Create(
                 FunctionType::get(getPointerTy(ctx.builder.getContext()), { getPointerTy(ctx.builder.getContext()), ctx.types().T_ppjlvalue }, false),
-                GlobalVariable::ExternalLinkage,
+                out.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
                 funcName, M);
         jl_init_function(cw_make, ctx.emission_context);
         cw_make->getArg(0)->setName("wrapper");
@@ -10893,7 +10891,7 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(jl_codegen_output_t &out, jl_metho
         Module *M = &out.get_module();
         jl_codectx_t ctx(out, 0, 0);
         ctx.name = M->getModuleIdentifier().data();
-        std::string funcName = get_function_name(true, false, ctx.name, ctx.emission_context.TargetTriple);
+        std::string funcName = out.make_name(JL_SYMBOL_SPECPTR_DEF, JL_INVOKE_SPECSIG, ctx.name);
         jl_returninfo_t returninfo = get_specsig_function(out, M, NULL, funcName, mi->specTypes, rettype, true);
         Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
         jl_init_function(gf_thunk, ctx.emission_context);
