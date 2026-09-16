@@ -68,8 +68,8 @@ BOLT_ARGS += -split-all-cold
 BOLT_ARGS += -jump-tables=move
 # Use regular size pages for code alignment
 BOLT_ARGS += -no-huge-pages
-# Fold functions with identical code
-BOLT_ARGS += -icf=all
+# Preserve function addresses, including those obtained through dlsym.
+BOLT_ARGS += -icf=none
 # Split using best available strategy (three-way splitting, Cache-Directed Sort)
 # Disabled for libjulia-internal till https://github.com/llvm/llvm-project/issues/89508 is fixed
 # BOLT_ARGS += -split-strategy=cdsplit
@@ -167,7 +167,6 @@ export SDKROOT ?= $(shell xcrun --show-sdk-path)
 LINKER:=$(shell xcrun --find ld)
 LINKER_FLAGS:=--ld-path=$(LINKER) -Wl,-lto_library,$(STAGE0_BUILD)/usr/lib/libLTO.dylib
 LINK_ONLY_FLAGS:=
-STAGE2_LINK_ONLY_FLAGS:=
 # For the same reason, LLVM's static libraries cannot be created with Xcode's
 # libtool, which does not index the stage-0 bitcode.
 PLATFORM_FLAGS:="LLVM_LIBTOOL=$(STAGE0_TOOLS)llvm-libtool-darwin"
@@ -176,14 +175,12 @@ else ifeq ($(HOST_OS),WINNT)
 LINKER:=$(STAGE0_TOOLS)lld$(EXE)
 LINKER_FLAGS:=-fuse-ld=lld
 LINK_ONLY_FLAGS:=
-STAGE2_LINK_ONLY_FLAGS:=
 PLATFORM_FLAGS:=
 else
 LINKER:=$(STAGE0_TOOLS)ld.lld$(EXE)
 LINKER_FLAGS:=-fuse-ld=lld
 # Julia's version script names symbols that not every configuration defines.
 LINK_ONLY_FLAGS:=-Wl,--undefined-version
-STAGE2_LINK_ONLY_FLAGS:=-Wl,--icf=safe
 PLATFORM_FLAGS:=
 endif
 
@@ -272,7 +269,7 @@ top: $(PGO_PROFILE_FILE)
 # which would silently disable PIC and break the libLLVM link).
 stage2 bolt-train: STAGE_CFLAGS:=$(PGO_USE_FLAGS) $(PGO_WARNING_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
 stage2 bolt-train: STAGE_CXXFLAGS:=$(PGO_USE_FLAGS) $(PGO_WARNING_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
-stage2 bolt-train: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_USE_FLAGS) $(STAGE2_LINK_ONLY_FLAGS)
+stage2 bolt-train: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_USE_FLAGS)
 stage2 bolt-train: export USE_BINARYBUILDER_LLVM=0
 ifeq ($(USE_PGO),1)
 stage2: $(PGO_PROFILE_FILE)
