@@ -6,7 +6,7 @@ include $(JULIAHOME)/Make.inc
 JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
 JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
 JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
-JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
+JLDFLAGS += $(LINK_LDFLAGS) $(JL_LDFLAGS)
 
 SRCS := hashing timefuncs ptrhash strhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod rle eytzinger

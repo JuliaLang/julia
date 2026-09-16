@@ -8,7 +8,7 @@ include $(JULIAHOME)/deps/llvm-ver.make
 JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
 JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
 JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
-JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
+JLDFLAGS += $(LINK_LDFLAGS) $(JL_LDFLAGS)
 
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
 #  for gcc/clang, suggested content is:

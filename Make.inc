@@ -659,6 +659,8 @@ else
 endif
 
 JLDFLAGS := $(RELRO_FLAG)
+# Flags passed to Julia's link rules; Windows invokes the linker directly.
+LINK_LDFLAGS = $(LDFLAGS)
 JL_VISIBILITY_FLAGS := -fvisibility=hidden
 ifeq ($(OS),WINNT)
 # PE exports are selected by the linker. Clang turns hidden visibility into
@@ -1727,7 +1729,11 @@ DLLTOOL_MACHINE := i386:x86-64
 else
 DLLTOOL_MACHINE := i386
 endif
-WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32
+# Julia links its Windows libraries by calling the linker directly, so whatever
+# the compiler driver would have added has to be named here instead, such as the
+# profile runtime of an instrumented build.
+WIN_LD_EXTRA_LIBS ?=
+WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 $(WIN_LD_EXTRA_LIBS)
 OSLIBS += --export-all-symbols --version-script=$(BUILDROOT)/src/julia.expmap \
 	--no-whole-archive $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS)
 # N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under

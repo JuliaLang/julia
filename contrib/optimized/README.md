@@ -75,10 +75,19 @@ or rewriting again then requires rebuilding the libraries.
 
 ## Platforms
 
-The flow carries the macOS PGO+LTO toolchain settings, including Xcode's linker
-and SDK. BOLT defaults to Linux x86-64 and AArch64, where it can rewrite ELF
-libraries. The Windows linker settings are preparatory; they do not establish
-Windows build support. A default or an explicit optimization setting does not
+The flow supports PGO+ThinLTO on macOS and Windows x86-64. On Windows it uses
+BinaryBuilder's Clang and lld's MinGW driver with an MSYS2 mingw64 sysroot.
+Stage 0 places the matching support DLLs beside the tools; the instrumented
+stage supplies Clang's profile runtime to Julia's direct linker invocations.
+The runtime export map is applied through a COFF export definition. A discovery
+link identifies exports from the objects and archive members actually used;
+the final link exports the matching names and explicitly exported symbols.
+
+Windows i686 optimized builds are not supported. Its native BinaryBuilder
+toolchain is 32-bit, making address space a constraint for ThinLTO links of
+libLLVM; supporting it would require a separate cross-toolchain setup.
+BOLT defaults to Linux x86-64 and AArch64, where it can rewrite ELF libraries.
+It cannot rewrite Windows PE/COFF binaries. An optimization setting does not
 replace validation on the target platform.
 
 Do not strip shared libraries rewritten by BOLT; see

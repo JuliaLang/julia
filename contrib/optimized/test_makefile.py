@@ -17,6 +17,8 @@ HELPER = r'''
 import json, os, pathlib, sys
 root = pathlib.Path(__file__).parent
 args = sys.argv[1:]
+if args[0] == 'build':
+    args.append({k: os.getenv(k) for k in ['PATH', 'LLVM_PROFILE_FILE']})
 with (root / 'events').open('a') as f:
     f.write(json.dumps([pathlib.Path.cwd().name, args]) + '\n')
 if args[0] == 'configure':
@@ -24,9 +26,17 @@ if args[0] == 'configure':
     if p.exists():
         sys.exit('configure called on existing directory')
     (p / 'deps').mkdir(parents=True)
-    recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)"\n'
+    recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)" "$(LD)" "$(WIN_LD_USE_DEF)" "$(WIN_LD_EXTRA_LIBS)" "$(LINK_LDFLAGS)"\n'
     (p / 'Makefile').write_text(recipe)
-    (p / 'deps/Makefile').write_text('%:\n\t@python3 ' + str(root / 'helper.py') + ' install $@ "$(USE_BINARYBUILDER_LLVM)"\n')
+    (p / 'deps/Makefile').write_text('%:\n\t@python3 ' + str(root / 'helper.py') + ' install $@ "$(USE_BINARYBUILDER_LLVM)" "$(OS)" "$(USE_BINARYBUILDER_CSL)"\n')
+elif args[0] == 'install' and args[3] == 'WINNT':
+    stage = pathlib.Path.cwd().parent
+    (stage / 'usr/bin').mkdir(parents=True, exist_ok=True)
+    (stage / 'usr/tools').mkdir(parents=True, exist_ok=True)
+    (stage / 'usr/bin/support.dll').write_text('support')
+    runtime = stage / 'usr/lib/clang/22/lib/windows'
+    runtime.mkdir(parents=True, exist_ok=True)
+    (runtime / 'libclang_rt.profile-x86_64.a').write_text('runtime')
 elif args[0] == 'build':
     p = pathlib.Path.cwd()
     if p.name == 'pgo-instrumented.build' and args[1] == 'all':
@@ -121,6 +131,40 @@ class FlowTests(unittest.TestCase):
             for dry in [[], ['-n']]:
                 out = self.make(*dry, target, 'review', 'OS='+osname, 'ARCH='+arch, 'SDKROOT=/sdk', 'LINKER=/ld')
                 self.assertIn(f'{osname} {arch} {bolt} test-triple', out)
+
+    def test_windows_stages(self):
+        cygpath = self.root / 'cygpath'
+        cygpath.write_text('#!/bin/sh\n[ "$1" = -m ] || exit 1\nprintf "C:%s\\n" "$2"\n')
+        cygpath.chmod(0o755)
+        env = dict(os.environ, PATH=str(self.root) + os.pathsep + os.environ['PATH'])
+        self.make('all', 'OS=WINNT', 'EXE=.exe', 'LDFLAGS=--no-insert-timestamp', env=env)
+        events = self.events()
+        installs = [a for d, a in events if a[0] == 'install']
+        self.assertTrue({'install-csl', 'install-zlib', 'install-zstd'} <= {a[1] for a in installs})
+        self.assertTrue(all(a[4] == '1' for a in installs))
+        self.assertFalse(any(a[1] == 'install-BOLT' for a in installs))
+        stage0 = self.flow / 'toolchain'
+        self.assertEqual((stage0 / 'usr/tools/support.dll').read_text(), 'support')
+        for directory, args in events:
+            if args[0] != 'build':
+                continue
+            self.assertEqual(args[6], str(stage0 / 'usr/tools/ld.lld.exe'))
+            self.assertEqual(args[7], '1')
+            self.assertEqual(args[9], '--no-insert-timestamp')
+            self.assertIn('-pthread', args[3])
+            self.assertNotIn('--undefined-version', args[3])
+            self.assertNotIn('--emit-relocs', args[3])
+            self.assertEqual(args[-1]['PATH'], env['PATH'] + ':' + str(self.flow / directory / 'usr/bin'))
+            if directory == 'pgo-instrumented.build':
+                self.assertEqual(args[8], str(stage0 / 'usr/lib/clang/22/lib/windows/libclang_rt.profile-x86_64.a'))
+                self.assertNotIn('-flto', args[2])
+                if args[1] == 'julia-deps':
+                    self.assertEqual(args[-1]['LLVM_PROFILE_FILE'], 'C:' + str(self.flow / directory / 'deps-profiles/%m.profraw'))
+            else:
+                self.assertEqual(args[8], '')
+                self.assertNotIn('-gline-tables-only', args[2])
+                self.assertIn('-flto=thin', args[2])
+                self.assertIn('-fprofile-use=', args[2])
 
     def test_custom_bolt_profiles(self):
         self.make('bolt-train')
