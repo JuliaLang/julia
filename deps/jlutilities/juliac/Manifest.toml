@@ -58,7 +58,7 @@ version = "1.11.0"
 
 [[deps.Glob]]
 git-tree-sha1 = "246c628cec062230b7d183aab88841fa94fcabe9"
-registries = ["General", "General"]
+registries = "General"
 uuid = "c27321d9-0574-5035-807b-f59d2c89b15c"
 version = "1.5.0"
 
@@ -68,7 +68,7 @@ version = "1.5.0"
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
 git-tree-sha1 = "7204148362dafe5fe6a273f855b8ccbe4df8173e"
-registries = ["General", "General"]
+registries = "General"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
 version = "1.8.0"
 
@@ -123,7 +123,7 @@ version = "1.0.0"
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "Zlib_jll", "Zstd_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.21.0+0"
+version = "8.22.0+0"
 
     [deps.LibCURL_jll.syntax]
     julia_version = "1.11.0"
@@ -199,7 +199,7 @@ version = "1.3.0"
 [[deps.ObjectFile]]
 deps = ["Reexport", "StructIO"]
 git-tree-sha1 = "22faba70c22d2f03e60fbc61da99c4ebfc3eb9ba"
-registries = ["General", "General"]
+registries = "General"
 uuid = "d8793406-e978-5875-9003-1fc021f44a92"
 version = "0.5.0"
 
@@ -225,7 +225,7 @@ version = "10.48.0+0"
 [[deps.PackageCompiler]]
 deps = ["Artifacts", "Glob", "LazyArtifacts", "Libdl", "Pkg", "Printf", "RelocatableFolders", "TOML", "UUIDs", "p7zip_jll"]
 git-tree-sha1 = "513193b976208b1b646ad4303323153e8bff0997"
-registries = ["General", "General"]
+registries = "General"
 uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
 version = "2.4.0"
 
@@ -249,7 +249,7 @@ version = "1.14.0"
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "8b770b60760d4451834fe79dd483e318eee709c4"
-registries = ["General", "General"]
+registries = "General"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.5.2"
 
@@ -274,7 +274,7 @@ version = "1.11.0"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
-registries = ["General", "General"]
+registries = "General"
 uuid = "189a3867-3050-52da-a836-e630ba90ab69"
 version = "1.2.2"
 
@@ -284,7 +284,7 @@ version = "1.2.2"
 [[deps.RelocatableFolders]]
 deps = ["SHA", "Scratch"]
 git-tree-sha1 = "ffdaf70d81cf6ff22c2b6e733c900c3321cab864"
-registries = ["General", "General"]
+registries = "General"
 uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
 version = "1.0.1"
 
@@ -301,7 +301,7 @@ version = "1.13.0"
 [[deps.Scratch]]
 deps = ["Dates"]
 git-tree-sha1 = "9b81b8393e50b7d4e6d0a9f14e192294d3b7c109"
-registries = ["General", "General"]
+registries = "General"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
 version = "1.3.0"
 
@@ -317,7 +317,7 @@ version = "1.11.0"
 
 [[deps.StructIO]]
 git-tree-sha1 = "c581be48ae1cbf83e899b14c07a807e1787512cc"
-registries = ["General", "General"]
+registries = "General"
 uuid = "53d494c1-5632-5724-8f4c-31dff12d585f"
 version = "0.3.1"
 
