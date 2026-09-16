@@ -627,6 +627,30 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
 }
 
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+// Remove the named features, whether enabled or disabled, from an LLVM
+// feature string. `names` is terminated by a null pointer.
+static void remove_features(std::string &features, const char *const *names) JL_NOTSAFEPOINT
+{
+    std::string out;
+    size_t pos = 0;
+    do {
+        size_t end = features.find(',', pos);
+        if (end == std::string::npos)
+            end = features.size();
+        std::string tok = features.substr(pos, end - pos);
+        bool skip = tok.size() < 2;
+        for (const char *const *name = names; !skip && *name; name++)
+            skip = tok.compare(1, std::string::npos, *name) == 0;
+        if (!skip) {
+            if (!out.empty())
+                out += ',';
+            out += tok;
+        }
+        pos = end + 1;
+    } while (pos <= features.size());
+    features = std::move(out);
+}
+
 // LLVM selects vcvtneps2bf16 for f32-to-bf16 conversions despite the
 // instruction unconditionally flushing subnormal inputs. Until LLVM provides
 // a narrower workaround (llvm/llvm-project#221052), disable the feature groups
@@ -636,32 +660,14 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
 // because the CPU name otherwise enables the features again.
 static void disable_native_bf16_codegen(std::string &features) JL_NOTSAFEPOINT
 {
-    static const char *const names[] = {"avx512bf16", "avxneconvert"};
-    std::string out;
-    size_t pos = 0;
-    do {
-        size_t end = features.find(',', pos);
-        if (end == std::string::npos)
-            end = features.size();
-        std::string tok = features.substr(pos, end - pos);
-        bool skip = tok.size() < 2;
-        for (auto name : names)
-            if (!skip && tok.compare(1, std::string::npos, name) == 0)
-                skip = true;
-        if (!skip) {
-            if (!out.empty())
-                out += ',';
-            out += tok;
-        }
-        pos = end + 1;
-    } while (pos <= features.size());
-    for (auto name : names) {
-        if (!out.empty())
-            out += ',';
-        out += '-';
-        out += name;
+    static const char *const names[] = {"avx512bf16", "avxneconvert", nullptr};
+    remove_features(features, names);
+    for (const char *const *name = names; *name; name++) {
+        if (!features.empty())
+            features += ',';
+        features += '-';
+        features += *name;
     }
-    features = std::move(out);
 }
 #else
 static void disable_native_bf16_codegen(std::string &) JL_NOTSAFEPOINT {}

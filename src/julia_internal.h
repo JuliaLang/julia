@@ -110,8 +110,8 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
         #define MAX_ALIGN 8
-    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (JL_LLVM_VERSION >= 200000 && defined(_CPU_PPC64_)))
-    // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18 and on ppc64 with LLVM >= 20
+    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_PPC64_)
+    // int128 is 16 bytes aligned on aarch64, riscv, x86 and ppc64
         #define MAX_ALIGN 16
     #elif defined(_P64)
     // Generically we assume MAX_ALIGN is sizeof(void*)
@@ -120,11 +120,7 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
         #define MAX_ALIGN 4
     #endif
 #else
-    #if JL_LLVM_VERSION >= 180000
         #define MAX_ALIGN 16
-    #else
-        #define MAX_ALIGN 8
-    #endif
 #endif
 
 #ifndef alignof
