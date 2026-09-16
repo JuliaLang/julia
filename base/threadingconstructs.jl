@@ -177,6 +177,12 @@ struct _ThreadsFun
     fun
 end
 
+# The one dynamic dispatch of a threaded region. `--trim` resolves it by contract with the
+# compiler: every `threading_run(fun, _)` call site compiles `fun(::Int)`
+# (`Compiler.collectinvokes!`), and the trim verifier accepts this call on that basis
+# (`Compiler.verify_codeinstance!`). Kept out of line so the verifier can recognize it.
+@noinline _threads_call(tfun::_ThreadsFun, i::Int) = tfun.fun(i)
+
 Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
     tfun = _ThreadsFun(fun)
     if static && ccall(:jl_in_threaded_region, Cint, ()) != 0
@@ -195,7 +201,7 @@ Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
     try
         Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
             for i = 1:n
-                t = Task(() -> tfun.fun(i)) # pass in tid
+                t = Task(() -> _threads_call(tfun, i)) # pass in tid
                 t.sticky = static
                 if static
                     ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)

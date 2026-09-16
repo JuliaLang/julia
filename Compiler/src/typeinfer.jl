@@ -1893,6 +1893,30 @@ function has_valid_abi_sparams(mi::MethodInstance)
     return true
 end
 
+# `Base.Threads.threading_run(fun, static)` is not specialized on `fun`; its tasks reach
+# `fun(::Int)` through the dynamic dispatch in `Base.Threads._threads_call`. Under `--trim`
+# that call is resolved by contract: every `threading_run` invoke enqueues `fun(::Int)` in
+# `collectinvokes!`, and `verify_codeinstance!` checks each such site and accepts
+# `_threads_call` on that basis.
+function threads_deferred_call_type(stmt::Expr, ci::CodeInfo, sptypes::Vector{VarState})
+    length(stmt.args) == 4 || return nothing
+    edge = stmt.args[1]
+    def = edge isa CodeInstance ? get_ci_mi(edge).def : edge isa MethodInstance ? edge.def : nothing
+    def isa Method || return nothing
+    is_base_threads_method(def, :threading_run) || return nothing
+    ft = argextype(stmt.args[3], ci, sptypes)
+    return argtypes_to_type(Any[ft, Int])
+end
+
+# Identified by name rather than through the `Base.Threads` binding, which does not exist
+# in the world this code is compiled in.
+function is_base_threads_method(def::Method, name::Symbol)
+    m = def.module
+    return def.name === name && nameof(m) === :Threads && parentmodule(m) === Base
+end
+
+is_threads_call_def(@nospecialize def) = def isa Method && is_base_threads_method(def, :_threads_call)
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
@@ -1927,6 +1951,13 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 push!(workqueue, edge)
             elseif enqueue_unprepared_invokes && edge isa MethodInstance && has_valid_abi_sparams(edge)
                 push!(workqueue, edge)
+            end
+        end
+        if invokelatest_queue !== nothing && isexpr(stmt, :invoke)
+            atype = threads_deferred_call_type(stmt, ci, sptypes)
+            if atype !== nothing
+                mi = compileable_specialization_for_call(invokelatest_queue.interp, atype)
+                mi === nothing || push!(invokelatest_queue, mi)
             end
         end
 
