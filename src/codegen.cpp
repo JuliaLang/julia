@@ -11371,6 +11371,14 @@ extern "C" void jl_init_llvm(void)
 #endif
     }
 
+#if JL_LLVM_VERSION >= 230000
+    // LLVM 23 enabled at-point dereferenceability (llvm/llvm-project#204795).
+    // Keep the previous behavior until LLVM can account for Julia's GC lifetimes.
+    clopt = llvmopts.lookup("use-dereferenceable-at-point-semantics");
+    if (clopt && clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "0", 1);
+#endif
+
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
         jl_is_timing_passes = 1;
