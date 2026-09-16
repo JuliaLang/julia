@@ -174,6 +174,12 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #else
 // wipe out the call-stack unwind capability beyond this function
 // (we are noreturn, so it is not a total lie)
+// N.B. these directives apply to whichever function the code ends up in, so
+// every function using CFI_NORETURN must be NOINLINE: inlined into a caller,
+// `.cfi_return_column` rebinds the caller's whole FDE to a CIE whose return
+// address register is undefined, and unwinding through any suspended task
+// switch stops there (the PGO+ThinLTO macOS aarch64 build inlined
+// jl_start_fiber_set into ctx_switch and jl_start_fiber_swap).
 #if defined(_CPU_X86_64_)
 // per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
 // so we do all 3, to be extra certain of it
