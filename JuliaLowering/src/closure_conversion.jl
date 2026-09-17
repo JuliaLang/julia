@@ -120,16 +120,12 @@ function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
 end
 
 # TODO: Avoid producing redundant calls to declare_global
-# When `value` is supplied (the `x::T = v` form), the type declaration and the value are
-# installed together as a single atomic `declare_global` (#62154). `nothing` children are
-# dropped by `@ast`, so an absent `type`/`value` simply shortens the call.
-function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing, value=nothing)
+function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
     decl = @ast ctx src_ex [K"block"
         [K"call"
             "declare_global"::K"core"
             mod::K"Value" name::K"Symbol" strong::K"Bool"
             type
-            value
         ]
         (::K"latestworld")
         (::K"nothing")
@@ -143,13 +139,26 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing, val
     end
 end
 
-function convert_global_assignment(ctx, ex, var, rhs0)
+# For `x::T = rhs` (`type` given, already closure-converted), the declaration and the
+# value are installed together by one `declare_global` call, so the new type is never
+# visible with a stale (or no) value. The type is evaluated once, before the rhs, and
+# checked to be a type before the rhs runs, as a separate `decl` would be.
+function convert_global_assignment(ctx, ex, var, rhs0, type=nothing)
     binfo = get_binding(ctx, var)
     @jl_assert binfo.kind == :global ex var
     stmts = SyntaxList()
-    decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
-    if kind(decl) !== K"TOMBSTONE"
-        push!(stmts, decl)
+    if isnothing(type)
+        decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
+        if kind(decl) !== K"TOMBSTONE"
+            push!(stmts, decl)
+        end
+    else
+        if !is_simple_atom(ctx, type)
+            ttmp = ssavar(ctx, type, "T")
+            push!(stmts, @ast ctx ex [K"=" ttmp type])
+            type = ttmp
+        end
+        push!(stmts, @ast ctx ex [K"call" "isa"::K"core" (::K"nothing") type])
     end
     rhs1 = if is_simple_atom(ctx, rhs0)
         rhs0
@@ -158,7 +167,10 @@ function convert_global_assignment(ctx, ex, var, rhs0)
         push!(stmts, @ast ctx rhs0 [K"=" tmp rhs0])
         tmp
     end
-    rhs = if binfo.is_const && isnothing(binfo.type)
+    rhs = if !isnothing(type)
+        do_typeassert = false # Global assignment type checking is done by the runtime
+        convert_for_type_decl(ctx, ex, rhs1, type, do_typeassert)
+    elseif binfo.is_const && isnothing(binfo.type)
         # const global assignments without a type declaration don't need us to
         # deal with the binding type at all.
         rhs1
@@ -175,7 +187,14 @@ function convert_global_assignment(ctx, ex, var, rhs0)
         do_typeassert = false # Global assignment type checking is done by the runtime
         convert_for_type_decl(ctx, ex, rhs1, type_var, do_typeassert)
     end
-    push!(stmts, @ast ctx ex [K"=" var rhs])
+    if isnothing(type)
+        push!(stmts, @ast ctx ex [K"=" var rhs])
+    else
+        push!(stmts, @ast ctx ex [K"call"
+            "declare_global"::K"core"
+            binfo.mod::K"Value" binfo.name::K"Symbol" true::K"Bool" type rhs])
+        push!(stmts, @ast ctx ex (::K"latestworld"))
+    end
     @ast ctx ex [K"block"
         stmts...
         rhs1
@@ -187,7 +206,9 @@ end
 #
 # When doing this, the original value needs to be preserved, to ensure the
 # expression `a=b` always returns exactly `b`.
-function convert_assignment(ctx, ex)
+#
+# `type` is the (converted) declared type of a global `x::T = rhs`.
+function convert_assignment(ctx, ex, type=nothing)
     var = ex[1]
     rhs0 = _convert_closures(ctx, ex[2])
     if kind(var) == K"Placeholder"
@@ -196,7 +217,7 @@ function convert_assignment(ctx, ex)
     @jl_assert kind(var) == K"BindingId" ex
     binfo = get_binding(ctx, var)
     if binfo.kind == :global
-        convert_global_assignment(ctx, ex, var, rhs0)
+        convert_global_assignment(ctx, ex, var, rhs0, type)
     else
         @jl_assert binfo.kind in (:local, :argument, :typevar) ex
         boxed = is_boxed(binfo)
@@ -438,56 +459,16 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"decl"
         @jl_assert kind(ex[1]) == K"BindingId" ex
         binfo = get_binding(ctx, ex[1])
-        # A three-child `[K"decl" x T v]` is the joint form of `x::T = v` (#62154).
-        has_value = numchildren(ex) == 3
-        if binfo.kind == :global
+        if numchildren(ex) == 3
+            # `x::T = v`: a global takes `T` from here; a local takes it from
+            # its binding, where scope analysis recorded it.
+            type = binfo.kind == :global ? _convert_closures(ctx, ex[2]) : nothing
+            assignment = @ast ctx ex [K"=" ex[1] ex[3]]
+            convert_assignment(ctx, assignment, type)
+        elseif binfo.kind == :global
             # flisp has this, but our K"assert" handling is in a previous pass
             # [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-            # (The top-level-only requirement is enforced during scope analysis.)
-            type0 = _convert_closures(ctx, ex[2])
-            if has_value && !ctx.toplevel_pure
-                # `x::T = v`: install the type and value together as a single atomic
-                # `declare_global`, emitted in place so the value may reference surrounding
-                # locals. The type is evaluated exactly once, *before* the value (matching
-                # the evaluation order of the old split `decl` + assignment form and the
-                # visit order in `du_visit!`), and the same result is used both for the
-                # conversion and the declaration. The block evaluates to the original
-                # right-hand side.
-                stmts = SyntaxList()
-                type = if is_simple_atom(ctx, type0)
-                    type0
-                else
-                    ttmp = ssavar(ctx, type0, "T")
-                    push!(stmts, @ast ctx ex [K"=" ttmp type0])
-                    ttmp
-                end
-                # Validate the captured declaration type before evaluating the RHS.
-                # Core.isa performs the required Type check without publishing or
-                # otherwise mutating the binding.
-                push!(stmts, @ast ctx ex [K"call"
-                    "isa"::K"core" (::K"nothing") type])
-                rhs0 = _convert_closures(ctx, ex[3])
-                rhs1 = if is_simple_atom(ctx, rhs0)
-                    rhs0
-                else
-                    tmp = ssavar(ctx, rhs0)
-                    push!(stmts, @ast ctx ex [K"=" tmp rhs0])
-                    tmp
-                end
-                conv = ssavar(ctx, ex, "conv")
-                push!(stmts, @ast ctx ex [K"=" conv convert_for_type_decl(ctx, ex, rhs1, type, false)])
-                push!(stmts, @ast ctx ex [K"call"
-                    "declare_global"::K"core"
-                    binfo.mod::K"Value" binfo.name::K"Symbol" true::K"Bool" type conv])
-                push!(stmts, @ast ctx ex (::K"latestworld"))
-                @ast ctx ex [K"block" stmts... rhs1]
-            else
-                make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, type0)
-            end
-        elseif has_value
-            # `x::T = v` (local): an ordinary typed assignment. The declared type was
-            # recorded during scope analysis, so `convert_assignment` applies it.
-            convert_assignment(ctx, @ast ctx ex [K"=" ex[1] ex[3]])
+            make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))
         else
             newleaf(ex, K"TOMBSTONE")
         end

@@ -1385,11 +1385,12 @@ function expand_assignment(ctx, ex, is_const=false)
                         convert_for_type_decl(ctx, ex, rhs, T, true)
                  ]])
         elseif is_identifier_like(x)
-            # Identifier in lhs[1] is a variable type declaration, eg `x::T = rhs`.
-            # Keep the type and value together as a single `[K"decl" x T rhs]` node so that
-            # a typed *global* lowers to one atomic `declare_global` (type + value) rather
-            # than a separate declaration followed by an assignment (#62154); a typed local
-            # is an ordinary typed assignment. A placeholder target has no declaration.
+            # Identifier in lhs[1] is a variable type declaration, eg
+            # x::T = rhs
+            # Keep it joint as `[K"decl" x T rhs]` rather than splitting it into a
+            # `decl` and an assignment: closure conversion turns it into either a
+            # typed local assignment or a single `declare_global` installing type
+            # and value. A placeholder target has no declaration.
             if kind(x) === K"Placeholder"
                 @ast ctx ex [K"=" x rhs]
             else
@@ -2243,7 +2244,6 @@ function expand_decls(ctx, ex)
     stmts = SyntaxList()
     val_nothing = !(numchildren(ex) == 1 && is_leaf(children(ex)[1]))
     for c in children(ex)
-        type_capture = nothing
         simple = kind(c) in KSet"Identifier :: Placeholder"
         val_nothing &= simple
         if declkind === K"global"
@@ -2256,17 +2256,6 @@ function expand_decls(ctx, ex)
             @isdefined(relayered) && for x in relayered
                 push!(stmts, @ast ctx x [K"relayered_global" x])
             end
-            if kind(c) === K"=" && kind(c[1]) === K"::" &&
-                    is_identifier_like(c[1][1]) && kind(c[1][1]) !== K"Placeholder"
-                # Explicit global declarations are emitted before the assignments in
-                # this block. Capture the declared type there too, so a chained RHS
-                # cannot run before it. The joint assignment validates this captured
-                # type before it evaluates the RHS.
-                typed_lhs = c[1]
-                type = ssavar(ctx, typed_lhs[2], "T")
-                type_capture = @ast ctx typed_lhs [K"=" type expand_forms_2(ctx, typed_lhs[2])]
-                c = @ast ctx c [K"=" [K"::" typed_lhs[1] type] c[2]]
-            end
         end
         lhs = @stm c begin
             (_, when=simple) -> c
@@ -2278,7 +2267,6 @@ function expand_decls(ctx, ex)
         end
         # type decls are handled elsewhere unless simple
         make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
-        !isnothing(type_capture) && push!(stmts, type_capture)
         simple || push!(stmts, expand_forms_2(ctx, c))
     end
     # flisp quirk: if not a plain `global x` or `local x`, value is readable

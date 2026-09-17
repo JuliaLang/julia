@@ -1881,8 +1881,7 @@ JL_CALLABLE(jl_f_depwarn_partition)
 }
 
 // declare_global(module::Module, name::Symbol, [strong::Bool=false, [ty::Type, [value::Any]]])
-// When `value` is supplied (the `global x::T = v` form), the type declaration and the value
-// assignment are installed together as a single atomic step (#62154).
+// With `value` (the `x::T = v` form), the type and the value are installed together.
 JL_CALLABLE(jl_f_declare_global)
 {
     JL_NARGS(declare_global, 3, 5);
