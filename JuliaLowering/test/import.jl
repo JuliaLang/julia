@@ -75,10 +75,10 @@ import .H.I, .I.J
 @test test_mod.J === H.I.J
 @test test_mod.G_global === "exported from G"
 
-@testset "(AI) from macro expansion" for expr_compat_mode in (true, false)
+@testset "(AI) from macro expansion" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
     macrocall_mod = Module()
     @eval macrocall_mod import JuliaLowering, JuliaLowering.@legacy_quote_to_syntax
-    JuliaLowering.include_string(macrocall_mod, raw"""
+    jl_eval(macrocall_mod, raw"""
     module Exporter
         export val
         val = [123]
@@ -90,20 +90,20 @@ import .H.I, .I.J
     macro use_target()
         @legacy_quote_to_syntax :(using .Exporter)
     end
-    """; expr_compat_mode)
+    """; edition)
     Core.@latestworld
-    JuliaLowering.include_string(macrocall_mod, "@imp_names"; expr_compat_mode)
-    JuliaLowering.include_string(macrocall_mod, "@use_target"; expr_compat_mode)
+    jl_eval(macrocall_mod, "@imp_names"; edition)
+    jl_eval(macrocall_mod, "@use_target"; edition)
     Core.@latestworld
     @test macrocall_mod.val === macrocall_mod.Exporter.val
     @test macrocall_mod.o === macrocall_mod.Exporter.other
     @test !isdefined(macrocall_mod, :other)  # imported only under the name `o`
 end
 
-@testset "Imported macrocalls" for expr_compat_mode in (true, false)
+@testset "Imported macrocalls" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
     # Test importing macros by their @-name
     macname_mod = Module()
-    JuliaLowering.include_string(macname_mod, raw"""
+    jl_eval(macname_mod, raw"""
     module Macros
         macro mac1(); "mac1"; end
         macro mac2(); "mac2"; end
@@ -112,8 +112,8 @@ end
             macro mac4(); "mac4"; end
         end
     end
-    """; expr_compat_mode)
-    JuliaLowering.include_string(macname_mod, raw"""
+    """; edition)
+    jl_eval(macname_mod, raw"""
     module UseMacros
         import ..Macros:
             @mac1,
@@ -121,16 +121,16 @@ end
             Inner.@mac3,
             Inner.@mac4 as @mac4_renamed
     end
-    """; expr_compat_mode)
+    """; edition)
     Core.@latestworld
-    @test JuliaLowering.include_string(macname_mod.UseMacros,
-                                       "@mac1()"; expr_compat_mode) == "mac1"
-    @test JuliaLowering.include_string(macname_mod.UseMacros,
-                                       "@mac2_renamed()"; expr_compat_mode) == "mac2"
-    @test JuliaLowering.include_string(macname_mod.UseMacros,
-                                       "@mac3()"; expr_compat_mode) == "mac3"
-    @test JuliaLowering.include_string(macname_mod.UseMacros,
-                                       "@mac4_renamed()"; expr_compat_mode) == "mac4"
+    @test jl_eval(macname_mod.UseMacros,
+                                       "@mac1()"; edition) == "mac1"
+    @test jl_eval(macname_mod.UseMacros,
+                                       "@mac2_renamed()"; edition) == "mac2"
+    @test jl_eval(macname_mod.UseMacros,
+                                       "@mac3()"; edition) == "mac3"
+    @test jl_eval(macname_mod.UseMacros,
+                                       "@mac4_renamed()"; edition) == "mac4"
 end
 
 fl_eval(test_mod, :(
@@ -142,12 +142,12 @@ fl_eval(test_mod, :(
     neither_var = 3
     end))
 @testset "colon followed by only from-path" begin
-    jl_eval(test_mod, Expr(:import, Expr(:(:), Expr(:., :., :mod_p_e_n))))
+    jl_eval(test_mod, Expr(:import, Expr(:(:), Expr(:., :., :mod_p_e_n))); edition=JL_NEW_EDITION)
     @test !isdefined(test_mod, :public_var)
     @test !isdefined(test_mod, :exported_var)
     @test !isdefined(test_mod, :neither_var)
     @test test_mod.mod_p_e_n isa Module
-    jl_eval(test_mod, Expr(:using, Expr(:(:), Expr(:., :., :mod_p_e_n))))
+    jl_eval(test_mod, Expr(:using, Expr(:(:), Expr(:., :., :mod_p_e_n))); edition=JL_NEW_EDITION)
     @test !isdefined(test_mod, :public_var)
     @test !isdefined(test_mod, :exported_var)
     @test !isdefined(test_mod, :neither_var)
@@ -156,8 +156,8 @@ end
 
 @testset "(AI) public/export module resolution from macros" for (is_new, run) in [
     (false, (mod, x)->fl_eval(mod,JuliaSyntax.parsestmt(Expr, x))),
-    (true, (mod, x)->JuliaLowering.include_string(mod, x; expr_compat_mode=true)),
-    (true, (mod, x)->JuliaLowering.include_string(mod, x; expr_compat_mode=false))
+    (true, (mod, x)->jl_eval(mod, x; edition=JL_OLD_EDITION)),
+    (true, (mod, x)->jl_eval(mod, x; edition=JL_NEW_EDITION))
     ]
 
     defs_mod = Module(:Defs)
@@ -174,11 +174,11 @@ end
     fl_eval(defs_mod, :(macro old_exp_arg(name); Expr(:export, esc(name)); end))
 
     # new-style macros: hygienic name (from syntaxquote) vs argument
-    JuliaLowering.include_string(defs_mod, raw"""
+    jl_eval(defs_mod, raw"""
         macro new_exp_plain(); @legacy_quote_to_syntax quote export ne_hyg end; end
         macro new_pub_arg(name); @ast __context__ __context__.macrocall [K"public" name]; end
         macro new_exp_arg(name); @ast __context__ __context__.macrocall [K"export" name]; end
-    """)
+    """; edition=JL_NEW_EDITION)
     Core.@latestworld
 
     # Define the names being marked so `isexported`/`ispublic` are meaningful.
@@ -221,8 +221,8 @@ end
 
 @testset "(AI) using/import module resolution from macros" for (is_new, run) in [
     (false, (mod, x)->fl_eval(mod, JuliaSyntax.parsestmt(Expr, x))),
-    (true, (mod, x)->JuliaLowering.include_string(mod, x; expr_compat_mode=true)),
-    (true, (mod, x)->JuliaLowering.include_string(mod, x; expr_compat_mode=false))
+    (true, (mod, x)->jl_eval(mod, x; edition=JL_OLD_EDITION)),
+    (true, (mod, x)->jl_eval(mod, x; edition=JL_NEW_EDITION))
     ]
 
     # Unlike `public`/`export`, `using`/`import` are never hygienic
@@ -256,11 +256,11 @@ end
     fl_eval(defs_mod, :(macro old_imp();  :(import .Exporter: other as o); end))
     fl_eval(defs_mod, :(macro old_priv(); :(using .OnlyInDefs); end))
 
-    JuliaLowering.include_string(defs_mod, raw"""
+    jl_eval(defs_mod, raw"""
         macro new_use();  @legacy_quote_to_syntax quote using .Exporter end; end
         macro new_imp();  @legacy_quote_to_syntax quote import .Exporter: other as o end; end
         macro new_priv(); @legacy_quote_to_syntax quote using .OnlyInDefs end; end
-    """)
+    """; edition=JL_NEW_EDITION)
     Core.@latestworld
 
     # `using .Exporter` -> exported `val` becomes visible in call_mod, resolved

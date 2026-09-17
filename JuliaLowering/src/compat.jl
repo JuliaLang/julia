@@ -71,8 +71,12 @@ function is_expr_value(st::SyntaxTree)
     return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
-function expr_to_est(@nospecialize(e), src::SourceAttrType=scavenge_lnn(e))
-    _expr_to_est(e, src, false)[1]
+function expr_to_est(@nospecialize(e), src::Union{LineNumberNode, SourceRef}=scavenge_lnn(e),
+                     context=SyntaxContext(nothing, nothing, JL_OLD_EDITION, false))
+    _expr_to_est(e, context, src, false)[1]
+end
+function expr_to_est(@nospecialize(e), src::SyntaxTree)
+    _expr_to_est(e, src.context, src, false)[1]
 end
 
 # Adding more cases to this function is almost certainly wrong, since this
@@ -82,12 +86,13 @@ end
 # unquoted, then removed in certain forms.  If `src` is not an linenode, it is
 # assumed to be a better provenance source, so linenodes in `e` are not used for
 # provenance (but still removed).
-function _expr_to_est(@nospecialize(e), src::SourceAttrType, quoted::Bool)
+function _expr_to_est(@nospecialize(e), context::SyntaxContext,
+                      src::SourceAttrType, quoted::Bool)
     st = if e isa Symbol
-        newleaf(src, K"Identifier", String(e))
+        @mknode(;kind=K"Identifier", value=String(e), source=src, context)
     elseif e isa QuoteNode
-        cid, _ = _expr_to_est(e.value, src, true)
-        newnode(src, K"inert", SyntaxList(cid))
+        cid, _ = _expr_to_est(e.value, context, src, true)
+        @mknode(;kind=K"inert", source=src, children=SyntaxList(cid), context)
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)
@@ -100,20 +105,20 @@ function _expr_to_est(@nospecialize(e), src::SourceAttrType, quoted::Bool)
                                 lnn isa LineNumberNode)
                 src isa LineNumberNode && (src = lnn)
             else
-                cid, src = _expr_to_est(arg, src, quoted)
+                cid, src = _expr_to_est(arg, context, src, quoted)
                 push!(cs, cid)
             end
         end
         if isnothing(st_k)
             @mknode(;kind=K"unknown_head", value=head_s, source=old_src,
-                    children=cs, context=nothing)
+                    children=cs, context)
         else
-            @mknode(;kind=st_k, source=old_src, children=cs, context=nothing)
+            @mknode(;kind=st_k, source=old_src, children=cs, context)
         end
     elseif e isa GlobalRef
         # Represent globalref as K"Identifier" with :mod attribute
         @mknode(;kind=K"Identifier", source=src, value=string(e.name),
-                mod=e.mod, context=nothing)
+                mod=e.mod, context)
     else
         # We may want additional special cases for other types where
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
@@ -122,7 +127,7 @@ function _expr_to_est(@nospecialize(e), src::SourceAttrType, quoted::Bool)
             # linenode outside of block or toplevel
             src = e
         end
-        newleaf(src, K"Value", e)
+        @mknode(;kind=K"Value", value=e, source=src, context)
     end
     @jl_assert isa_lowering_ast_node(e) || is_expr_value(st) st
 
@@ -473,7 +478,7 @@ function apply_32026_hack(st, orig)
     is_flisp_compat(st) || return st
     getmeta(orig, :resolved_global_function_name, false) || return st
     @jl_assert is_flisp_compat(orig) orig
-    _apply_32026_hack(st, orig.context::SyntaxContext)
+    _apply_32026_hack(st, orig.context)
 end
 
 function collect_body_meta(st)
@@ -731,7 +736,7 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         # flisp macro expansion treated const as local, so names got mangled
         # throughout the thunk.  JL uses locals for this, so strip const.
         ([K"const" [K"=" l r]], when=ctx.toplevel && is_flisp_compat(l) &&
-            !is_base_layer(l.context::SyntaxContext)) ->
+            !is_base_layer(l.context)) ->
             @ast _ st [K"=" rec(l) rec(r)]
 
         #-----------------------------------------------------------------------
@@ -789,7 +794,7 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
             # treating this as a binding is better for e.g. JETLS.
             out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
                     kind(fptr[1]) == K"Identifier"
-                sc = fptr[1].context::SyntaxContext
+                sc = fptr[1].context
                 ident = @mknode(fptr[1]; mod=base_layer(sc).mod)
                 @ast _ fptr [K"static_eval"(fptr) ident]
             else

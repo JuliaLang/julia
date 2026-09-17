@@ -5,8 +5,8 @@ test_mod = @newmod(quoting)
 
     @testset for run in [
         (x::String)->fl_eval(test_mod, Expr(:block, JuliaSyntax.parsestmt(Expr, x))),
-        (x::String)->jl_eval(test_mod, JuliaSyntax.parsestmt(SyntaxTree, x); expr_compat_mode=true),
-        (x::String)->jl_eval(test_mod, JuliaSyntax.parsestmt(SyntaxTree, x); expr_compat_mode=false),
+        (x::String)->jl_eval(test_mod, JuliaSyntax.parsestmt(SyntaxTree, x); edition=JL_OLD_EDITION),
+        (x::String)->jl_eval(test_mod, JuliaSyntax.parsestmt(SyntaxTree, x); edition=JL_NEW_EDITION),
         ]
         @test run(raw":x") == :x
         @test run(raw":(:x)") == QuoteNode(:x)
@@ -36,23 +36,23 @@ end
     quoted in [Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
 
     @test fl_eval(test_mod, Expr(:block, quoted)) == form
-    @test jl_eval(test_mod, Expr(:block, quoted); expr_compat_mode=true) == form
-    @test jl_eval(test_mod, Expr(:block, quoted); expr_compat_mode=false) == form
+    @test jl_eval(test_mod, Expr(:block, quoted); edition=JL_OLD_EDITION) == form
+    @test jl_eval(test_mod, Expr(:block, quoted); edition=JL_NEW_EDITION) == form
 end
 @testset "self-quoting forms, interpolated into quote" for
     form in [1, true, "string", [], nothing,],
     quoted in [form, Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
 
     @test fl_eval(test_mod, Expr(:quote, Expr(:$, quoted))) == form
-    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=true) == form
-    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=false) == form
+    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); edition=JL_OLD_EDITION) == form
+    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); edition=JL_NEW_EDITION) == form
 end
 
 @eval test_mod global quotesplatvar = [1,[2,[3,[4]]]]
 @testset "unquote-splicing `...`" for run in [
     (x)->fl_eval(test_mod, x),
-    (x)->jl_eval(test_mod, x; expr_compat_mode=true),
-    (x)->jl_eval(test_mod, x; expr_compat_mode=false),
+    (x)->jl_eval(test_mod, x; edition=JL_OLD_EDITION),
+    (x)->jl_eval(test_mod, x; edition=JL_NEW_EDITION),
     ]
     @test expr_structure_eq(
         run(
@@ -92,25 +92,25 @@ end
 end
 
 @testset "@legacy_quote_to_syntax" begin
-    @test JuliaLowering.include_string(
-        test_mod, raw"@legacy_quote_to_syntax :x") isa SyntaxTree
-    @test JuliaLowering.include_string(
-        test_mod, raw"@legacy_quote_to_syntax :x") |> kind === K"Identifier"
-    @test JuliaLowering.include_string(
-        test_mod, raw"@legacy_quote_to_syntax :($1)") isa SyntaxTree
-    @test JuliaLowering.include_string(
-        test_mod, raw"@legacy_quote_to_syntax :($1)") |> kind === K"Value"
+    @test jl_eval(
+        test_mod, raw"@legacy_quote_to_syntax :x"; edition=JL_NEW_EDITION) isa SyntaxTree
+    @test jl_eval(
+        test_mod, raw"@legacy_quote_to_syntax :x"; edition=JL_NEW_EDITION) |> kind === K"Identifier"
+    @test jl_eval(
+        test_mod, raw"@legacy_quote_to_syntax :($1)"; edition=JL_NEW_EDITION) isa SyntaxTree
+    @test jl_eval(
+        test_mod, raw"@legacy_quote_to_syntax :($1)"; edition=JL_NEW_EDITION) |> kind === K"Value"
 
-    @test JuliaLowering.include_string(
-        test_mod, raw"@legacy_quote_to_syntax :(x+1)") isa SyntaxTree
-    @test JuliaLowering.include_string(
-        test_mod, raw"@legacy_quote_to_syntax :(x+1)") |> kind === K"call"
+    @test jl_eval(
+        test_mod, raw"@legacy_quote_to_syntax :(x+1)"; edition=JL_NEW_EDITION) isa SyntaxTree
+    @test jl_eval(
+        test_mod, raw"@legacy_quote_to_syntax :(x+1)"; edition=JL_NEW_EDITION) |> kind === K"call"
 
     # compat mode makes standard quote
-    @test JuliaLowering.include_string(
-        test_mod, raw"@legacy_quote_to_syntax :x"; expr_compat_mode=true) == :x
-    @test JuliaLowering.include_string(
-        test_mod, raw"@legacy_quote_to_syntax :(x+1)"; expr_compat_mode=true) ==
+    @test jl_eval(
+        test_mod, raw"@legacy_quote_to_syntax :x"; edition=JL_OLD_EDITION) == :x
+    @test jl_eval(
+        test_mod, raw"@legacy_quote_to_syntax :(x+1)"; edition=JL_OLD_EDITION) ==
             Expr(:call, :+, :x, 1)
 
     # syntaxunquote does not support the equivalent of Expr(:$, :a, :b), but
@@ -125,7 +125,7 @@ end
                       Expr(:quote,
                            Expr(:call, Base.vect,
                                 Expr(:$, :a, :b)))))
-            ; expr_compat_mode=true),
+            ; edition=JL_OLD_EDITION),
         Expr(:call, Base.vect, 1, [2, [3, [4]]]))
     # splat :b
     @test expr_structure_eq(
@@ -138,7 +138,7 @@ end
                       Expr(:quote,
                            Expr(:call, Base.vect,
                                 Expr(:$, :a, Expr(:..., :b))))))
-            ; expr_compat_mode=true),
+            ; edition=JL_OLD_EDITION),
         Expr(:call, Base.vect, 1, 2, [3, [4]]))
     # double-splat :b
     @test expr_structure_eq(
@@ -151,7 +151,7 @@ end
                       Expr(:quote,
                            Expr(:call, Base.vect,
                                 Expr(:$, :a, Expr(:..., Expr(:..., :b)))))))
-            ; expr_compat_mode=true),
+            ; edition=JL_OLD_EDITION),
         Expr(:call, Base.vect, 1, 2, 3, [4]))
 
     # with compat=false
@@ -164,7 +164,7 @@ end
                   Expr(:quote,
                        Expr(:call, Base.vect,
                             Expr(:$, :a, :b)))))
-        ; expr_compat_mode=false)
+        ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
     @test JuliaSyntax.numchildren(st) == 3
     st = jl_eval(
@@ -176,7 +176,7 @@ end
                   Expr(:quote,
                        Expr(:call, Base.vect,
                             Expr(:$, :a, Expr(:..., :b))))))
-        ; expr_compat_mode=false)
+        ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
     @test JuliaSyntax.numchildren(st) == 4
     st = jl_eval(
@@ -188,12 +188,12 @@ end
                   Expr(:quote,
                        Expr(:call, Base.vect,
                             Expr(:$, :a, Expr(:..., Expr(:..., :b)))))))
-        ; expr_compat_mode=false)
+        ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
     @test JuliaSyntax.numchildren(st) == 5
 end
 
-ex = JuliaLowering.include_string(test_mod, """
+ex = jl_eval(test_mod, """
 begin
     x = 10
     y = @legacy_quote_to_syntax :(g(z))
@@ -201,7 +201,7 @@ begin
         f(\$(x+1), \$y)
     end
 end
-""")
+"""; edition=JL_NEW_EDITION)
 @test ex ≈ @ast_ [K"block"
     [K"call"
         "f"::K"Identifier"
@@ -217,18 +217,18 @@ end
 
 # Test that interpolation with field access works
 # (the field name can be interpolated after the dot).
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 let
     field_name = @legacy_quote_to_syntax :(a)
     @legacy_quote_to_syntax :(x.\$field_name)
 end
-""") ≈ @ast_ [K"." "x"::K"Identifier" [K"inert" "a"::K"Identifier"]]
-@test JuliaLowering.include_string(test_mod, """
+"""; edition=JL_NEW_EDITION) ≈ @ast_ [K"." "x"::K"Identifier" [K"inert" "a"::K"Identifier"]]
+@test jl_eval(test_mod, """
 let
     field_name = @legacy_quote_to_syntax :(a)
     @legacy_quote_to_syntax :(x.\$field_name)
 end
-"""; expr_compat_mode=true) == Expr(:., :x, QuoteNode(:a))
+"""; edition=JL_OLD_EDITION) == Expr(:., :x, QuoteNode(:a))
 
 # Test quoted property access syntax like `Core.:(foo)` and `Core.:(!==)`
 @test JuliaLowering.include_string(test_mod, """
@@ -307,7 +307,7 @@ end
 @test contains(err, raw"More than one value in bare `$` expression")
 
 err = try
-    JuliaLowering.eval(test_mod, multi_interp_ex, expr_compat_mode=true)
+    jl_eval(test_mod, multi_interp_ex; edition=JL_OLD_EDITION)
     nothing
 catch exc
     @test exc isa LoweringError
@@ -317,13 +317,13 @@ end
 
 # Symbol should be interpolated (converted from expr)
 @eval test_mod using JuliaLowering
-symbol_interp = JuliaLowering.include_string(test_mod, """
+symbol_interp = jl_eval(test_mod, """
 let
     x = :xx
     y = @legacy_quote_to_syntax :yy
     @legacy_quote_to_syntax :(f(\$x, \$y, z))
 end
-""")
+"""; edition=JL_NEW_EDITION)
 @test symbol_interp ≈ @ast_ [K"call"
     "f"::K"Identifier"
     "xx"::K"Identifier"
@@ -342,38 +342,38 @@ end
 """) broken=true
 
 @testset "Interpolation in Expr compat mode" begin
-    expr_interp = JuliaLowering.include_string(test_mod, raw"""
+    expr_interp = jl_eval(test_mod, raw"""
     let
         x = :xx
         :(f($x, z))
     end
-    """, expr_compat_mode=true)
+    """, edition=JL_OLD_EDITION)
     @test expr_interp == Expr(:call, :f, :xx, :z)
 
-    double_interp_expr = JuliaLowering.include_string(test_mod, raw"""
+    double_interp_expr = jl_eval(test_mod, raw"""
     let
         x = :xx
         :(:(f($$x, $y)))
     end
-    """, expr_compat_mode=true)
+    """, edition=JL_OLD_EDITION)
     @test double_interp_expr == Expr(:quote, Expr(:call, :f, Expr(:$, :xx), Expr(:$, :y)))
 
     # Test that ASTs are copied before they're seen by the user
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     exs = []
     for i = 1:2
         push!(exs, :(f(x,y)))
         push!(exs[end].args, :z)
     end
     exs
-    """, expr_compat_mode=true) == Any[Expr(:call, :f, :x, :y, :z), Expr(:call, :f, :x, :y, :z)]
+    """, edition=JL_OLD_EDITION) == Any[Expr(:call, :f, :x, :y, :z), Expr(:call, :f, :x, :y, :z)]
 
     # Test interpolation into QuoteNode
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     let x = :push!
         @eval Base.$x
     end
-    """; expr_compat_mode=true) == Base.push!
+    """; edition=JL_OLD_EDITION) == Base.push!
 end
 
 # (. l r) should pass lowering only when r is one of:
@@ -397,16 +397,16 @@ end
     x->Expr(:quote, Expr(:$, x)),
     x->Expr(:quote, Expr(:$, Expr(:quote, Expr(:$, x))))]
 
-    @testset "arg2 unquoted identifier" for expr_compat_mode in [true, false]
+    @testset "arg2 unquoted identifier" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
         local field = :outer_field
 
         @test fl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field))) ==
             ("got", :gs_field)
         @test jl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field));
-                      expr_compat_mode) ==
+                      edition) ==
             ("got", :gs_field)
     end
-    @testset "arg2 quoted identifier" for expr_compat_mode in [true, false],
+    @testset "arg2 quoted identifier" for edition in [JL_OLD_EDITION, JL_NEW_EDITION],
         field in [Expr(:quote, :gs_field),
                   Expr(:inert, :gs_field),
                   QuoteNode(:gs_field)]
@@ -414,10 +414,10 @@ end
         @test fl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field))) ==
             ("got", :gs_field)
         @test jl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field));
-                      expr_compat_mode) ==
+                      edition) ==
             ("got", :gs_field)
     end
-    @testset "arg2 maybe-quoted non-identifier atom" for expr_compat_mode in [true, false],
+    @testset "arg2 maybe-quoted non-identifier atom" for edition in [JL_OLD_EDITION, JL_NEW_EDITION],
         field_atom in ["str", 1],
         field in [field_atom,
                   Expr(:quote, field_atom),
@@ -427,11 +427,11 @@ end
         @test fl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field))) ==
             ("got", field_atom)
         @test jl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field));
-                      expr_compat_mode) ==
+                      edition) ==
             ("got", field_atom)
     end
 
-    @testset "arg2 inert AST" for expr_compat_mode in [true, false],
+    @testset "arg2 inert AST" for edition in [JL_OLD_EDITION, JL_NEW_EDITION],
         # oddly, bool and nothing don't work unquoted in flisp
         field_inner in [true,
                         nothing,
@@ -444,11 +444,11 @@ end
         @test fl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field))) ==
             ("got", field_inner)
         @test jl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field));
-                      expr_compat_mode) ==
+                      edition) ==
             ("got", field_inner)
     end
 
-    @testset "arg2 non-inert non-atom should throw" for expr_compat_mode in [true, false],
+    @testset "arg2 non-inert non-atom should throw" for edition in [JL_OLD_EDITION, JL_NEW_EDITION],
         field in [Expr(:string, "s", "tr"),
                   Expr(:string, "s", Expr(:call, string, :tr)),
                   Expr(:quote, Expr(:string, "s", "tr")),
@@ -457,14 +457,14 @@ end
         @test_throws "invalid syntax" fl_eval(
             test_mod, Expr(:block, Expr(:., test_mod.gs, field)))
         @test_throws LoweringError jl_eval(
-            test_mod, Expr(:block, Expr(:., test_mod.gs, field)))
+            test_mod, Expr(:block, Expr(:., test_mod.gs, field)); edition=JL_NEW_EDITION)
     end
 end
 
 @testset "syntax context in macro body should be discarded" begin
     # Both `x`s should have argument context in the macrocall, not new-syntax
     # context (resulting in (99, 2))
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
         macro set_value(name, body)
             @legacy_quote_to_syntax(quote
                 $name = 1
@@ -476,9 +476,9 @@ end
             r = @set_value x x + 1
             (x, r)
         end)()
-   """) == (1,2)
+   """; edition=JL_NEW_EDITION) == (1,2)
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro addone_value(name, body)
         @legacy_quote_to_syntax(quote
             x = 99 # hygienic
@@ -494,9 +494,9 @@ end
          push!(out, (x, @addone_value x x + 1))
          out
      end)()
-    """) == [(0, 2), (1, 3), (2, 4)]
+    """; edition=JL_NEW_EDITION) == [(0, 2), (1, 3), (2, 4)]
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro addone_value_quote2(name, body)
         @legacy_quote_to_syntax(quote
             x = 99 # hygienic
@@ -512,5 +512,5 @@ end
          push!(out, (x, @addone_value_quote2 x x + 1))
          out
      end)()
-    """) == [(0, 2), (1, 3), (2, 4)]
+    """; edition=JL_NEW_EDITION) == [(0, 2), (1, 3), (2, 4)]
 end

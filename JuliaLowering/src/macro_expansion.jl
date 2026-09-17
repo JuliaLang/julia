@@ -7,7 +7,7 @@ struct MacroExpansionContext <: AbstractLoweringContext
 end
 
 function MacroExpansionContext(st, world, recursive)
-    sc = st.context::SyntaxContext
+    sc = st.context
     MacroExpansionContext(
         sc, Dict{ScopeLayer, Bool}(base_layer(sc)=>true),
         world, recursive)
@@ -212,7 +212,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     @jl_assert kind(st) === K"macrocall" st
     numchildren(st) >= 2 || throw(LoweringError(
         st, "`macrocall` requires a macro name and source location"))
-    sc_in = st.context::SyntaxContext
+    sc_in = st.context
     macname = st[1]
     mctx = MacroContext(st)
     macfunc = eval_macro_name(ctx, mctx, macname)
@@ -236,7 +236,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         st_out = if expanded isa SyntaxTree
             expanded
         else
-            expanded isa Expr && throw(LoweringError(
+            (expanded isa Expr || expanded isa Symbol) && throw(LoweringError(
                 st, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
             expr_to_est(expanded, st)
         end
@@ -270,7 +270,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     mod_for_ast = macro_mi !== nothing ? macro_mi.def.module : parentmodule(macfunc)
     sc2 = SyntaxContext(
         ScopeLayer(mod_for_ast, sc_in.layer), st,
-        (has_new_macro ? JL_NEW_SYNTAX_VERSION : JL_OLD_SYNTAX_VERSION), false)
+        (has_new_macro ? JL_NEW_EDITION : JL_OLD_EDITION), false)
     st_out2 = apply_expansion_layer(ctx, st_out, sc2, true, 0, 0)
     st_out3 = !ctx.recursive ? st_out2 : expand_forms_1(ctx, st_out2)
     has_new_macro || _note_32026_hack!(st_out3, sc2)
@@ -314,7 +314,7 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
                                qdepth, sqdepth)
     @jl_assert known_layer(ctx, base_layer(sc_in)) st
     sc0 = st.context
-    sc = (isnothing(sc0) || !known_layer(ctx, sc0.layer)) ? sc_in : sc0
+    sc = sc0.layer === nothing || !known_layer(ctx, sc0.layer) ? sc_in : sc0
     k = kind(st)
     absorb_esc = done && qdepth == 0 && sqdepth == 0
     out = if is_leaf(st)
@@ -327,7 +327,7 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
         elseif !is_flisp_compat(sc)
             throw(LoweringError(st, "new macros should not use `escape`"))
         end
-        st1 = isnothing(sc0) ? st[1] : remove_context(st[1])
+        st1 = isnothing(sc0.layer) ? st[1] : remove_scope(st[1])
         apply_expansion_layer(
             ctx, st1, escape_layer(sc, false), true, qdepth, sqdepth)
     elseif k === K"hygienic-scope" && absorb_esc
@@ -339,8 +339,8 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
             throw(LoweringError(st, "new macros should not use `hygienic-scope`"))
         end
         new_sl = ScopeLayer(st[2].value::Module, sc.layer)
-        st1 = isnothing(sc0) ? st[1] : remove_context(st[1])
-        sc2 = SyntaxContext(new_sl, sc.unexpanded, sc.version, sc.internal)
+        st1 = isnothing(sc0.layer) ? st[1] : remove_scope(st[1])
+        sc2 = SyntaxContext(new_sl, sc.unexpanded, sc.edition, sc.internal)
         apply_expansion_layer(ctx, st1, sc2, true, qdepth, sqdepth)
     else
         done2 = done && !(k in KSet"macrocall inert syntaxinert")
@@ -385,16 +385,15 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
         expand_forms_1(ctx, expand_syntaxquote(ctx, st[1]))
     elseif k === K"escape" || k === K"hygienic-scope"
         expand_forms_1(
-            ctx, apply_expansion_layer(
-                ctx, st, st.context::SyntaxContext, true, 0, 0))
+            ctx, apply_expansion_layer(ctx, st, st.context, true, 0, 0))
     else
         mapchildren(c->expand_forms_1(ctx, c), st)
     end
 end
 
-function assert_expandable(st, l=base_layer(st.context::SyntaxContext))
-    @jl_assert st.context isa SyntaxContext (st, "expected syntax context")
-    @jl_assert base_layer(st.context::SyntaxContext) == l (st, "expected consistent layer")
+function assert_expandable(st, l=base_layer(st.context))
+    @jl_assert st.context.layer isa ScopeLayer (st, "expected a scope layer")
+    @jl_assert base_layer(st.context) == l (st, "expected consistent layer")
     !is_leaf(st) && for c in children(st)
         assert_expandable(c, l)
     end

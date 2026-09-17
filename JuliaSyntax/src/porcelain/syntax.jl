@@ -6,7 +6,7 @@ mutable struct ScopeLayer
 end
 
 """
-Each node has a SyntaxContext describing its macro expansion and syntax version.
+Each node has a SyntaxContext describing its macro expansion and edition.
 `SyntaxContext` is shared between all nodes of a single macro expansion, and is
 one-to-one with ScopeLayer, with a few exceptions (contexts sharing same layer):
 - `escape` and adopt_scope
@@ -17,10 +17,10 @@ rebase_layer operations, but assuming mostly hygienic macros and few
 scope-changing functions, this is most compact.
 """
 mutable struct SyntaxContext
-    const layer::ScopeLayer
+    const layer::Union{Nothing, ScopeLayer}
     # For provenance; is not affected by escaping
     const unexpanded::Any # Union{SyntaxTree, Nothing}
-    const version::VersionNumber
+    const edition::Tuple{Int, Int}
     const internal::Bool
 end
 
@@ -37,7 +37,7 @@ mutable struct SyntaxTree
     children::Union{Nothing, Vector{SyntaxTree}}
     value::Any
     source::Union{SyntaxTree,SourceRef,LineNumberNode}
-    context::Union{Nothing, SyntaxContext}
+    const context::SyntaxContext
     jl_source::Union{Nothing, LineNumberNode}
     meta::Union{Nothing, Base.ImmutableDict{Symbol,Any}}
     # TODO: this is rarely used, and should just be part of context
@@ -50,6 +50,11 @@ end
 function SyntaxTree(kind::Kind, children, @nospecialize(value), source, context)
     SyntaxTree(kind, children, value, source, context,
                nothing, nothing, nothing, UInt16(0))
+end
+
+function with_context(st, sc)
+    SyntaxTree(st.kind, st.children, st.value, st.source, sc,
+               st.jl_source, st.meta, st.mod, st.syntax_flags)
 end
 
 const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
@@ -172,21 +177,20 @@ function flags(ex::SyntaxTree)
 end
 
 # A default context corresponding to no expansion
-function SyntaxContext(mod::Module, version::VersionNumber)
-    SyntaxContext(ScopeLayer(mod, nothing), nothing, version, false)
+function SyntaxContext(mod::Module, edition::Tuple{Int, Int})
+    SyntaxContext(ScopeLayer(mod, nothing), nothing, edition, false)
 end
 
-# TODO: switch from bool-based `expr_compat_mode` to `version`
-const JL_NEW_SYNTAX_VERSION = v"1.14"
-const JL_OLD_SYNTAX_VERSION = v"1.13"
+const JL_NEW_EDITION = (1, 15)
+const JL_OLD_EDITION = (1, 14)
 
-is_base_layer(sc::SyntaxContext) = sc.layer.escaped === nothing
+is_base_layer(sc::SyntaxContext) = (sc.layer::ScopeLayer).escaped === nothing
 
 # The scope corresponding to no macro expansion.  Use with caution: macros may
 # expand to top-level forms, so "base layer" !== "this top-level thunk's
-# pre-expansion context" (usually ctx.syntax_context)
+# pre-expansion context" (usually ctx.syntax_context).  Throws with no layer.
 function base_layer(sc::SyntaxContext)
-    l = sc.layer
+    l = sc.layer::ScopeLayer
     while l.escaped !== nothing
         l = l.escaped
     end
@@ -194,64 +198,65 @@ function base_layer(sc::SyntaxContext)
 end
 
 function escape_layer(sc::SyntaxContext, recursive::Bool)
-    l2 = recursive ? base_layer(sc) : sc.layer.escaped
-    SyntaxContext(l2, sc.unexpanded, sc.version, sc.internal)
+    l2 = recursive ? base_layer(sc) : (sc.layer::ScopeLayer).escaped
+    SyntaxContext(l2, sc.unexpanded, sc.edition, sc.internal)
 end
 
-syntax_module(sc::SyntaxContext) = sc.layer.mod
+syntax_module(sc::SyntaxContext) = (sc.layer::ScopeLayer).mod
 function syntax_module(st::SyntaxTree)
     st_mod = st.mod
     st_mod === nothing || return st_mod::Module
-    syntax_module(st.context::SyntaxContext)
+    syntax_module(st.context)
 end
 
-is_flisp_compat(sc::SyntaxContext) = sc.version < JL_NEW_SYNTAX_VERSION
+edition(st::SyntaxTree) = st.context.edition
+edition(@nospecialize(st)) = JL_OLD_EDITION
+
+is_flisp_compat(sc::SyntaxContext) = sc.edition < JL_NEW_EDITION
 is_flisp_compat(st::SyntaxTree) = is_flisp_compat(st.context)
 
 # Unconditional; tramples existing scope, and includes quoted forms.  Only
 # changes layer where it needs changing.
 function adopt_scope(sc_in::SyntaxContext, st::SyntaxTree, scmap)
     st_sc = st.context
-    sc2 = st_sc isa SyntaxContext ? get(scmap, st_sc, nothing) : nothing
-    if isnothing(sc2) && st_sc isa SyntaxContext
+    sc2 = get(scmap, st_sc, nothing)
+    if isnothing(sc2)
         sc2 = scmap[st_sc] = st_sc.layer === sc_in.layer ? st_sc :
             SyntaxContext(
-                sc_in.layer, st_sc.unexpanded, st_sc.version, st_sc.internal)
-    elseif isnothing(sc2)
-        sc2 = sc_in
+                sc_in.layer, st_sc.unexpanded, st_sc.edition, st_sc.internal)
     end
     if is_leaf(st) || numchildren(st) == 0
-        sc2 === st_sc ? st : _setattr(st, :context, sc2)
+        sc2 === st_sc ? st : with_context(st, sc2)
     else
-        out = mapchildren(c->adopt_scope(sc_in, c, scmap), st)
-        sc2 === st_sc ? out :
-            out !== st ? _setattr!(out, :context, sc2) :
-            _setattr(out, :context, sc2)
+        mapchildren(c->adopt_scope(sc_in, c, scmap),
+                    sc2 === st_sc ? st : with_context(st, sc2))
     end
 end
 function adopt_scope(reference::SyntaxTree, st::SyntaxTree)
-    adopt_scope(reference.context::SyntaxContext, st,
-                Dict{SyntaxContext, SyntaxContext}())
+    adopt_scope(reference.context, st, Dict{SyntaxContext, SyntaxContext}())
 end
 
-function fill_context!(st::SyntaxTree, sc::SyntaxContext)
-    _setattr!(st, :context, sc)
-    !is_leaf(st) && for c in children(st)
-        fill_context!(c, sc)
-    end
-    st
+function fill_context(st::SyntaxTree, sc::SyntaxContext)
+    mapchildren(c->fill_context(c, sc),
+                sc === st.context ? st : with_context(st, sc))
 end
-fill_context(st, sc) = fill_context!(mktree(st), sc)
 
-function remove_context!(st::SyntaxTree)
-    sc = st.context
-    isnothing(sc) || _setattr!(st, :context, nothing)
-    for c in children(st)
-        remove_context!(c)
+function remove_scope(st::SyntaxTree, scmap)
+    st_sc = st.context
+    sc2 = get(scmap, st.context, nothing)
+    if isnothing(sc2)
+        sc2 = scmap[st_sc] = st_sc.layer === nothing ? st_sc :
+            SyntaxContext(nothing, st_sc.unexpanded, st_sc.edition, st_sc.internal)
     end
-    st
+    if is_leaf(st) || numchildren(st) == 0
+        sc2 === st_sc ? st : with_context(st, sc2)
+    else
+        mapchildren(c->remove_scope(c, scmap),
+                    sc2 === st_sc ? st : with_context(st, sc2))
+    end
 end
-remove_context(st) = remove_context!(mktree(st))
+remove_scope(st::SyntaxTree) =
+    remove_scope(st, Dict{SyntaxContext, SyntaxContext}())
 
 function Base.show(io::IO, ::MIME"text/plain", sl::ScopeLayer)
     color = isnothing(sl.escaped) ? :normal : :cyan
@@ -267,9 +272,9 @@ Base.show(io::IO, sl::ScopeLayer) = Base.show(io::IO, MIME"text/plain"(), sl)
 
 function Base.show(io::IO, ::MIME"text/plain", sc::SyntaxContext)
     color = sc.internal ? :light_black :
-        sc.version == JL_NEW_SYNTAX_VERSION ? :normal : :blue
+        sc.edition == JL_NEW_EDITION ? :normal : :blue
     printstyled(io, "["; color)
-    if sc.version != JL_NEW_SYNTAX_VERSION
+    if sc.edition != JL_NEW_EDITION
         printstyled(io, "old,"; color)
     end
     if sc.internal
@@ -365,9 +370,7 @@ end
 
 "The last macro expansion `st` was involved in, or nothing"
 function macro_prov(st::SyntaxTree)
-    sc = st.context
-    isnothing(sc) && return nothing
-    msrc = (sc::SyntaxContext).unexpanded
+    msrc = st.context.unexpanded
     isnothing(msrc) ? nothing : msrc::typeof(st)
 end
 
@@ -449,17 +452,15 @@ end
 # AST creation utilities
 
 """
-    newnode(prov::SourceAttrType, k::Kind, children)
+    newnode(prov::SyntaxTree, k::Kind, children)
 
 Create a new node with reference to parsed source text `prov`.
 """
-function newnode(prov::SourceAttrType, k::Kind, children)
-    context = prov isa SyntaxTree ? prov.context : nothing
-    SyntaxTree(k, children, nothing, prov, context)
+function newnode(prov::SyntaxTree, k::Kind, children)
+    SyntaxTree(k, children, nothing, prov, prov.context)
 end
-function newleaf(prov::SourceAttrType, k::Kind)
-    context = prov isa SyntaxTree ? prov.context : nothing
-    SyntaxTree(k, nothing, nothing, prov, context)
+function newleaf(prov::SyntaxTree, k::Kind)
+    SyntaxTree(k, nothing, nothing, prov, prov.context)
 end
 
 function mknode(old::SyntaxTree, children)
@@ -884,21 +885,22 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     sf = Ref(SourceFile(stream; filename, first_line))
     source = SourceRef(sf, first_byte(stream), last_byte(stream))
     cs = SyntaxList()
+    context = SyntaxContext(nothing, nothing, stream.version, false)
     for c in reverse_toplevel_siblings(cursor)
         is_trivia(c) && !is_error(c) && continue
-        push!(cs, SyntaxTree(sf, c))
+        push!(cs, SyntaxTree(sf, c, context))
     end
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
-    id = SyntaxTree(K"wrapper", reverse(cs), nothing, source, nothing)
+    id = SyntaxTree(K"wrapper", reverse(cs), nothing, source, context)
     return id
 end
 
-function SyntaxTree(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor)
+function SyntaxTree(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor, context)
     green_id = GC.@preserve sf begin
         raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
         offset = raw_offset - sf[].byte_offset
-        _insert_green(sf, txtbuf, offset, cursor)
+        _insert_green(sf, txtbuf, offset, cursor, context)
     end
     gst = green_id
     out = _green_to_est(gst, 0, gst)
@@ -908,16 +910,16 @@ end
 
 function _insert_green(sf::Base.RefValue{SourceFile},
                        txtbuf::Vector{UInt8}, offset::Int,
-                       cursor::RedTreeCursor)
+                       cursor::RedTreeCursor, context::SyntaxContext)
     source = SourceRef(sf, first_byte(cursor), last_byte(cursor))
-    id = SyntaxTree(kind(cursor), nothing, nothing, source, nothing)
+    id = SyntaxTree(kind(cursor), nothing, nothing, source, context)
     let f = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
         f != 0 && _setattr!(id, :syntax_flags, f)
     end
     if !is_leaf(cursor)
         cs = SyntaxList()
         for c in reverse(cursor)
-            push!(cs, _insert_green(sf, txtbuf, offset, c))
+            push!(cs, _insert_green(sf, txtbuf, offset, c, context))
         end
         setchildren!(id, reverse!(cs))
     else

@@ -673,13 +673,14 @@ end
     @testset for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
         arg1 in [arg0, Expr(:..., arg0)],
         arg2 in [arg1, Expr(:kw, arg1, :Int)],
-        expander in [fl_macroexpand, jl_macroexpand]
+        expander in [fl_macroexpand,
+                     (m, x)->jl_macroexpand(m, x; edition=JL_NEW_EDITION)]
 
         @testset let expanded = expander(
             test_mod, :(function (specialized, @nospecialize($arg2))
                             specialized
                         end))
-            f = jl_eval(test_mod, expanded)
+            f = jl_eval(test_mod, expanded; edition=JL_NEW_EDITION)
             test_arg_specialized(f, 1)
             test_arg_unspecialized(f, 2)
         end
@@ -688,7 +689,7 @@ end
             test_mod, :(function ($arg2,)
                             @nospecialize
                         end))
-            f = jl_eval(test_mod, expanded)
+            f = jl_eval(test_mod, expanded; edition=JL_NEW_EDITION)
             test_arg_unspecialized(f, 1)
         end
     end
@@ -698,12 +699,12 @@ end
         test_mod,
         :(let bad(@nospecialize(x) = 1) = x
               (bad(0), bad())
-          end)) == (0, 1)
+          end); edition=JL_NEW_EDITION) == (0, 1)
     @test jl_eval(
         test_mod,
         :(let bad(@nospecialize(x::Int) = 1) = x
               (bad(0), bad())
-          end)) == (0, 1)
+          end); edition=JL_NEW_EDITION) == (0, 1)
 
     @testset "kwargs" for expander in [fl_macroexpand, (_,x)->x]
         local f
@@ -712,7 +713,7 @@ end
                 function (@nospecialize(a); kw=1)
                     (a, kw)
                 end
-            end))) isa Function
+            end); edition=JL_NEW_EDITION)) isa Function
         Core.@latestworld
         @test f(1, kw=2) == (1,2) && f(3) == (3,1)
         test_arg_unspecialized(f, 1)
@@ -725,7 +726,7 @@ end
                     @nospecialize a
                     (a, kw)
                 end
-            end))) isa Function
+            end); edition=JL_NEW_EDITION)) isa Function
         Core.@latestworld
         @test f(1, kw=2) == (1,2) && f(3) == (3,1)
         test_arg_unspecialized(f, 1)
@@ -738,7 +739,7 @@ end
                 function (a; @nospecialize(kw=1))
                     (a, kw)
                 end
-            end))) isa Function
+            end); edition=JL_NEW_EDITION)) isa Function
         Core.@latestworld
         @test f(1, kw=2) == (1,2) && f(3) == (3,1)
         test_arg_specialized(f, 1)
@@ -749,7 +750,7 @@ end
                 function (a; @nospecialize(kw...))
                     (a, kw...)
                 end
-            end))) isa Function
+            end); edition=JL_NEW_EDITION)) isa Function
         Core.@latestworld
         @test f(1, kw=2, a=3) == (1,:kw=>2,:a=>3)
         test_arg_specialized(f, 1)
@@ -758,34 +759,34 @@ end
     # macros already mark all non-internal args nospecialize
     @testset "macro definitions" begin
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x)); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x)); end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x::Int)); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x::Int)); end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x=1)); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x=1)); end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x::Int=1)); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x::Int=1)); end); edition=JL_NEW_EDITION) isa Function
 
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(x); @nospecialize(); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(x); @nospecialize(); end); edition=JL_NEW_EDITION) isa Function
 
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(x); @nospecialize(x); x; end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(x); @nospecialize(x); x; end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(x::Int); @nospecialize(x); x; end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(x::Int); @nospecialize(x); x; end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(x=1); @nospecialize(x); x; end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(x=1); @nospecialize(x); x; end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(x::Int=1); @nospecialize(x); x; end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(x::Int=1); @nospecialize(x); x; end); edition=JL_NEW_EDITION) isa Function
 
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_)); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_)); end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_::Int)); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_::Int)); end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_=1)); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_=1)); end); edition=JL_NEW_EDITION) isa Function
         @gensym sym
-        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_::Int=1)); end)) isa Function
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_::Int=1)); end); edition=JL_NEW_EDITION) isa Function
     end
 end
 
@@ -1415,7 +1416,7 @@ end
 
             local func_ref, func_test
             @test ((func_ref = fl_eval(test_mod, f_expr)) isa Function)
-            @test ((func_test = jl_eval(test_mod, f_st)) isa Function)
+            @test ((func_test = jl_eval(test_mod, f_st; edition=JL_NEW_EDITION)) isa Function)
             Core.@latestworld
             @test func_ref(args_i...) == func_test(args_i...)
         end
@@ -1431,7 +1432,7 @@ end
 
             local func_ref, func_test
             @test ((func_ref = fl_eval(test_mod, f_expr)) isa Function)
-            @test ((func_test = jl_eval(test_mod, f_st)) isa Function)
+            @test ((func_test = jl_eval(test_mod, f_st; edition=JL_NEW_EDITION)) isa Function)
             Core.@latestworld
             @test func_ref(args_i...) == func_test(args_i...)
             @test func_ref() == func_test()
@@ -1564,11 +1565,10 @@ end
     @test JL.include_string(test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)") == 42
     @test JL.include_string(
         test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)") == (1.5, Float64)
+    @test_throws LoweringError jl_eval(
+        test_mod, "f_anon_sp3(x) where {_, _} = x"; edition=JL_OLD_EDITION)
     @test_throws LoweringError JL.include_string(
-        test_mod, "f_anon_sp3(x) where {_, _} = x"; expr_compat_mode=true)
-    # Currently allowed (like arguments).  Could error like flisp.
-    @test_throws LoweringError JL.include_string(
-        test_mod, "f_anon_sp3(x) where {_, _} = x") broken=true
+        test_mod, "f_anon_sp3(x) where {_, _} = x")
 end
 
 @testset "first arg `where`" begin
@@ -1674,7 +1674,7 @@ end
                   Expr(:call,
                        Expr(:function, Expr(:where, Expr(:where, Expr(:..., :a))),
                             Expr(:block, Expr(:tuple, Expr(:..., :a)))),
-                       1,2,3)) == (1,2,3)
+                       1,2,3); edition=JL_NEW_EDITION) == (1,2,3)
     @test JL.include_string(test_mod, "(function (a::T) where T<:U where U<:Any; a; end)(1)") == 1
     @test JL.include_string(test_mod, "(function (a::T...) where T<:U where U<:Any; a; end)(1,2,3)") == (1,2,3)
 end
@@ -1685,14 +1685,14 @@ end
                   Expr(:call,
                        Expr(:function, Expr(:kw, :a, 1),
                             Expr(:block, Expr(:tuple, :a))),
-                       )) == (1,)
+                       ); edition=JL_NEW_EDITION) == (1,)
 
     # empty block
     @test jl_eval(test_mod,
                   Expr(:call,
                        Expr(:function, Expr(:block),
                             Expr(:block, Expr(:tuple))),
-                       )) == ()
+                       ); edition=JL_NEW_EDITION) == ()
 
     # unwrapped or block-wrapped arg
     @testset for a1 in [:a, Expr(:(::), :a, :Int)],
@@ -1703,12 +1703,12 @@ end
                       Expr(:call,
                            Expr(:function, wrap_where(a2),
                                 Expr(:block, Expr(:tuple, :a))),
-                           1)) == (1,)
+                           1); edition=JL_NEW_EDITION) == (1,)
         @test jl_eval(test_mod,
                       Expr(:call,
                            Expr(:function, wrap_where(Expr(:block, a2)),
                                 Expr(:block, Expr(:tuple, :a))),
-                           1)) == (1,)
+                           1); edition=JL_NEW_EDITION) == (1,)
     end
 
     # two-arg block
@@ -1716,7 +1716,7 @@ end
                   Expr(:call,
                        Expr(:function, Expr(:block, :a, :b),
                             Expr(:block, Expr(:tuple, :a, :b))),
-                       1, Expr(:kw, :b, 2))) == (1,2)
+                       1, Expr(:kw, :b, 2)); edition=JL_NEW_EDITION) == (1,2)
 end
 
 @testset "assignment to where-wrapped-tuple" begin
@@ -1751,7 +1751,7 @@ end
         Expr(:call,
              Expr(:(=), Expr(:where, Expr(:where, Expr(:..., :a))),
                   Expr(:block, Expr(:tuple, Expr(:..., :a)))),
-             1,2,3)) == (1,2,3)
+             1,2,3); edition=JL_NEW_EDITION) == (1,2,3)
 end
 
 @testset "Assigned-to arguments" begin
@@ -1760,15 +1760,15 @@ end
     # functions essentially always pass through SSA conversion on the way to the
     # optimizer, erasing these slots (potentially hiding bugs in slot handling)
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro m_assigned_args_1(x)
         x = x + 1
         return x
     end
     var"@m_assigned_args_1"(LineNumberNode(0, nothing), Main, 2)
-    """; expr_compat_mode=true) == 3
+    """; edition=JL_OLD_EDITION) == 3
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro m_assigned_args_2(x, y = 1)
         (y, x) = (x + 1, y + 1)
         return y - x
@@ -1777,75 +1777,75 @@ end
         var"@m_assigned_args_2"(LineNumberNode(0, nothing), Main, 2),
         var"@m_assigned_args_2"(LineNumberNode(0, nothing), Main, 1, 2),
     )
-    """; expr_compat_mode=true) == (1, -1)
+    """; edition=JL_OLD_EDITION) == (1, -1)
 
-    for expr_compat_mode in (false, true)
-        @test JuliaLowering.include_string(test_mod, raw"""
+    for edition in (JL_NEW_EDITION, JL_OLD_EDITION)
+        @test jl_eval(test_mod, raw"""
         macro m_assigned_args(ex)
             ex = Base.remove_linenums!(ex)
             return ex
         end
         ((@m_assigned_args 1 + 1), @m_assigned_args 1)
-        """; expr_compat_mode) == (2, 1)
+        """; edition) == (2, 1)
     end
 end
 
-@testset "Generated functions" begin; for expr_compat_mode in (false, true)
+@testset "Generated functions" begin; for edition in (JL_NEW_EDITION, JL_OLD_EDITION)
     local genfunc_s, genfunc_f
     @eval test_mod import JuliaLowering.@legacy_quote_to_syntax
 
     @testset "returning special syntax forms" begin
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_nothing() = nothing
             f_gen_nothing()
         end
-        """; expr_compat_mode) == nothing
+        """; edition) == nothing
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotenothing() = :(nothing)
             f_gen_quotenothing()
         end
-        """; expr_compat_mode) == nothing
+        """; edition) == nothing
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotenodenothing() = QuoteNode(nothing)
             f_gen_quotenodenothing()
         end
-        """; expr_compat_mode) == nothing
+        """; edition) == nothing
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotenodeexpr() = QuoteNode(Expr(:begin, nothing))
             f_gen_quotenodeexpr()
         end
-        """; expr_compat_mode) == Expr(:begin, nothing)
+        """; edition) == Expr(:begin, nothing)
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_gr_nothing() = GlobalRef(Core, :nothing)
             f_gen_gr_nothing()
         end
-        """; expr_compat_mode) == nothing
+        """; edition) == nothing
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotegr_nothing() = :(GlobalRef(Core, :nothing))
             f_gen_quotegr_nothing()
         end
-        """; expr_compat_mode) == GlobalRef(Core, :nothing)
+        """; edition) == GlobalRef(Core, :nothing)
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotenodegr_nothing() = QuoteNode(GlobalRef(Core, :nothing))
             f_gen_quotenodegr_nothing()
         end
-        """; expr_compat_mode) == GlobalRef(Core, :nothing)
+        """; edition) == GlobalRef(Core, :nothing)
     end
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen_trivial(x)
             x
@@ -1853,9 +1853,9 @@ end
 
         f_gen_trivial(1), f_gen_trivial(Int[1])
     end
-    """; expr_compat_mode) == (Int, Vector{Int})
+    """; edition) == (Int, Vector{Int})
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         function f_gen_trivial_if(x)
             if @generated
@@ -1867,21 +1867,21 @@ end
 
         f_gen_trivial_if(1), f_gen_trivial_if(Int[1])
     end
-    """; expr_compat_mode) == (Int, Vector{Int})
+    """; edition) == (Int, Vector{Int})
 
     @testset "anonymous forms" begin
-        @test JuliaLowering.include_string(test_mod, """
+        @test jl_eval(test_mod, """
         let
             f = @generated function (x); x; end
             f(1), f(Int[1])
         end
-        """; expr_compat_mode) == (Int, Vector{Int})
-        @test JuliaLowering.include_string(test_mod, """
+        """; edition) == (Int, Vector{Int})
+        @test jl_eval(test_mod, """
         let
             f = (x)->(if @generated(); x; else; "nongen"; end)
             f(1), f(Int[1])
         end
-        """; expr_compat_mode) == (Int, Vector{Int})
+        """; edition) == (Int, Vector{Int})
     end
 
     @testset "destructured args" begin
@@ -1894,7 +1894,7 @@ end
             end
         end
         """
-        @test (genfunc_f = JL.include_string(test_mod, genfunc_s; expr_compat_mode)) isa Function
+        @test (genfunc_f = jl_eval(test_mod, genfunc_s; edition)) isa Function
         @test genfunc_f((1,2)) == (Tuple{Int, Int}, "gen")
     end
 
@@ -1908,7 +1908,7 @@ end
             end
         end
         """
-        @test (genfunc_f = JL.include_string(test_mod, genfunc_s; expr_compat_mode)) isa Function
+        @test (genfunc_f = jl_eval(test_mod, genfunc_s; edition)) isa Function
         @test genfunc_f((1,2)) == (1, 2, Tuple{Int, Int}, "gen")
     end
 
@@ -1916,44 +1916,44 @@ end
         # A destructured-tuple argument in a fully-`@generated` function whose
         # body is a `quote`/`Expr(:block)` (not a bare single expression): the
         # implicit `(names...) = <arg>` prologue must reach the generated code.
-        @test JL.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
             @generated function fds_named(x, (a, b)); quote a + b end; end
             fds_named(1, (2, 3))
-        """; expr_compat_mode) == 5
+        """; edition) == 5
         # Same, with the generated body built as an explicit `Expr(:block, ...)`.
-        @test JL.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
             @generated function fds_exprblock(x, (a, b)); Expr(:block, :(a + b)); end
             fds_exprblock(1, (2, 3))
-        """; expr_compat_mode) == 5
+        """; edition) == 5
         # Nested destructuring.
-        @test JL.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
             @generated function fds_nested(x, (a, (b, c))); quote a + b + c end; end
             fds_nested(1, (2, (3, 4)))
-        """; expr_compat_mode) == 9
+        """; edition) == 9
         # Destructured first argument.
-        @test JL.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
             @generated function fds_first((a, b)); quote a + b end; end
             fds_first((2, 3))
-        """; expr_compat_mode) == 5
+        """; edition) == 5
         # Positional vararg after a destructured argument.
-        @test JL.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
             @generated function fds_va((a, b), xs...); quote a + b + length(xs) end; end
             fds_va((2, 3), 10, 20)
-        """; expr_compat_mode) == 7
+        """; edition) == 7
         # Destructured argument alongside keyword arguments.
-        @test JL.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
             @generated function fds_kw((a, b); k=0); quote a + b + k end; end
             fds_kw((2, 3); k=10)
-        """; expr_compat_mode) == 15
+        """; edition) == 15
         # Multiple destructured args
-        @test JL.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
             @generated function fds_multi((a, b), (c, d)); quote a + b + c + d end; end
             fds_multi((1, 2), (3, 4))
-        """; expr_compat_mode) == 10
+        """; edition) == 10
     end
 
     @testset "keyword args" begin
-        genfunc_f = JL.include_string(test_mod, raw"""
+        genfunc_f = jl_eval(test_mod, raw"""
         function (parg::Tuple{T}; kw) where {T}
             if @generated
                 :($parg, $T, $kw, "gen")
@@ -1961,13 +1961,13 @@ end
                 :($parg, $T, $kw, "nongen")
             end
         end
-        """; expr_compat_mode)
+        """; edition)
 
         @test genfunc_f((1,); kw=1) ==
                 (Tuple{Int}, Int, Int, "gen")
         @test_throws UndefKeywordError genfunc_f((1,))
 
-        genfunc_f = JL.include_string(test_mod, raw"""
+        genfunc_f = jl_eval(test_mod, raw"""
         function (parg::Tuple{T}; kw::Vector{T}) where {T}
             if @generated
                 :($parg, $T, $kw, "gen")
@@ -1975,13 +1975,13 @@ end
                 :($parg, $T, $kw, "nongen")
             end
         end
-        """; expr_compat_mode)
+        """; edition)
 
         @test genfunc_f((1,); kw=[1]) == (Tuple{Int}, Int, Vector{Int}, "gen")
         @test_throws UndefKeywordError genfunc_f((1,))
         @test_throws TypeError genfunc_f((1,); kw=1)
 
-        genfunc_f = JL.include_string(test_mod, raw"""
+        genfunc_f = jl_eval(test_mod, raw"""
         function (; kw::T, rkw...) where {T}
             if @generated
                 :($T, $kw, $rkw, "gen")
@@ -1989,7 +1989,7 @@ end
                 :($T, $kw, $rkw, "nongen")
             end
         end
-        """; expr_compat_mode)
+        """; edition)
 
         @test genfunc_f(; kw=1) ==
             (Int, Int, Base.Pairs{Symbol, Union{}, Nothing, @NamedTuple{}}, "gen")
@@ -1998,7 +1998,7 @@ end
         @test_throws UndefKeywordError genfunc_f()
     end
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen(x::NTuple{N,T}) where {N,T}
             quote
@@ -2008,9 +2008,9 @@ end
 
         f_gen((1,2,3,4,5))
     end
-    """; expr_compat_mode) == (NTuple{5,Int}, 5, Int)
+    """; edition) == (NTuple{5,Int}, 5, Int)
 
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
     begin
         @generated function f_gen_unnamed_args(::Type{T}, y, ::Type{U}) where {T, U}
             return (T, y, U)
@@ -2018,9 +2018,9 @@ end
 
         f_gen_unnamed_args(Int, UInt8(3), Float64)
     end
-    """; expr_compat_mode) == (Int, UInt8, Float64)
+    """; edition) == (Int, UInt8, Float64)
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         function f_partially_gen(x::NTuple{N,T}) where {N,T}
             shared = :shared_stuff
@@ -2039,11 +2039,11 @@ end
 
         (f_partially_gen((1,2)), f_partially_gen((1,2,3,4,5)))
     end
-    """; expr_compat_mode) ==
+    """; edition) ==
         ((:shared_stuff, (:nongen, (NTuple{2,Int}, 2, Int))),
          (:shared_stuff, (:gen, (NTuple{5,Int}, 5, Int))))
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen_calls_macros(x::T) where {T}
             s = @raw_str "foo"
@@ -2051,8 +2051,8 @@ end
         end
         f_gen_calls_macros(1)
     end
-    """; expr_compat_mode) === "foo"
-    @test JuliaLowering.include_string(test_mod, raw"""begin
+    """; edition) === "foo"
+    @test jl_eval(test_mod, raw"""begin
         @generated function calls_versioned_macro(::Type{T}, ::Val{i}) where {T, i}
             i isa Integer || @goto err
             return i
@@ -2061,19 +2061,19 @@ end
         end
 
         calls_versioned_macro(Tuple{Int}, Val(1))
-    end """; expr_compat_mode) == 1
+    end """; edition) == 1
 
     # (AI) pkgeval reduction: `(. value macroname)` should work
     @test (let m = Module()
-               jl_eval(m, :(module RM5b; macro mm(ex); esc(ex); end; end); expr_compat_mode=true)
+               jl_eval(m, :(module RM5b; macro mm(ex); esc(ex); end; end); edition=JL_OLD_EDITION)
                rm = Core.eval(m, :RM5b)
                jl_eval(m, quote
                            @generated function fr5b(x)
                                Expr(:macrocall, Expr(:., $rm, QuoteNode(Symbol("@mm"))),
                                     LineNumberNode(1), :(x[1]))
                            end
-                       end; expr_compat_mode=true)
-               jl_eval(m, :(fr5b([7, 8])); expr_compat_mode=true)
+                       end; edition=JL_OLD_EDITION)
+               jl_eval(m, :(fr5b([7, 8])); edition=JL_OLD_EDITION)
            end) == 7
 
     @testset "(AI) anonymous args promoted by optional/keyword args" begin
@@ -2082,7 +2082,7 @@ end
         # method also has an optional positional or keyword arg used to fail at
         # first call with "function argument name not unique".
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated function g_anon_opt(x,
                                            ::Val{A}=Val(false),
@@ -2091,67 +2091,67 @@ end
             end
             g_anon_opt(1)
         end
-        """; expr_compat_mode) === (1, false, false)
+        """; edition) === (1, false, false)
 
         # calling the same function at two different type instantiations
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
             (g_anon_opt(1, Val(:a), Val(:b)), g_anon_opt(2.0, Val(3)))
-        """; expr_compat_mode) === ((1, :a, :b), (2.0, 3, false))
+        """; edition) === ((1, :a, :b), (2.0, 3, false))
 
         # 2 anonymous required args forced by an unrelated keyword arg
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated function g_anon_kw(::Val{A}, ::Val{B}; kw=1) where {A,B}
                 :( (A, B, kw) )
             end
             g_anon_kw(Val(1), Val(2))
         end
-        """; expr_compat_mode) === (1, 2, 1)
-        @test JuliaLowering.include_string(test_mod,
-            "g_anon_kw(Val(1), Val(2); kw=5)"; expr_compat_mode) === (1, 2, 5)
+        """; edition) === (1, 2, 1)
+        @test jl_eval(test_mod,
+            "g_anon_kw(Val(1), Val(2); kw=5)"; edition) === (1, 2, 5)
 
         # underscore args (also anonymous), forced by a default
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated function g_anon_underscore(_, _, z=10)
                 :( z )
             end
             g_anon_underscore(:a, :b)
         end
-        """; expr_compat_mode) === 10
+        """; edition) === 10
 
         # named + anonymous mix, with the body reading the named arg while the
         # generator also uses the where-params
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated function g_named_anon(a, ::Val{A}, ::Val{B}=Val(0); k=7) where {A,B}
                 :( (a, A, B, k) )
             end
             g_named_anon("hi", Val(1))
         end
-        """; expr_compat_mode) === ("hi", 1, 0, 7)
+        """; edition) === ("hi", 1, 0, 7)
 
         # single anonymous arg (no collision possible) still works with a kwarg
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated function g_one_anon(x, ::Val{A}; k=3) where {A}
                 :( (x, A, k) )
             end
             g_one_anon(1, Val(2))
         end
-        """; expr_compat_mode) === (1, 2, 3)
+        """; edition) === (1, 2, 3)
 
         # Pathological: a user arg literally named `#arg#` (the promotion name)
         # must remain a real, body-referenceable slot -- the discriminator is a
         # metadata tag on promoted anonymous args, not a name match.
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated function g_user_hasharg(var"#arg#", ::Val{A}=Val(0)) where {A}
                 :( (var"#arg#", A) )
             end
             g_user_hasharg(5)
         end
-        """; expr_compat_mode) === (5, 0)
+        """; edition) === (5, 0)
     end
 
     @testset "hygiene in generated functions" begin
@@ -2163,7 +2163,7 @@ end
         # synthesized argument/sparam names of the staged method must live in
         # that same layer -- otherwise they resolve as bogus module globals
         # (`UndefVarError`).
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated function find_first_eq(x, itr::I) where {
                     N, I <: Tuple{Vararg{Any, N}}
@@ -2171,13 +2171,13 @@ end
                 return :(Base.Cartesian.@nif $(N + 1) d -> (x == getfield(itr, d)) d -> (d) d -> (nothing))
             end
             (find_first_eq(20, (10, 20, 30)), find_first_eq(99, (10, 20, 30)))
-        end"""; expr_compat_mode) === (2, nothing)
-        @test JuliaLowering.include_string(test_mod, raw"""begin
+        end"""; edition) === (2, nothing)
+        @test jl_eval(test_mod, raw"""begin
             @generated function nif_uses_sparam(x, ::Type{T}) where {T}
                 return :(Base.Cartesian.@nif 2 d -> (x isa T) d -> (T) d -> (nothing))
             end
             nif_uses_sparam(1, Int)
-        end"""; expr_compat_mode) === Int
+        end"""; edition) === Int
     end
 end
 
@@ -2194,10 +2194,10 @@ end
         f_gen_quote_1((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x1,first)
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x1,first)
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
             @ast_ [K"tuple" [K"inert" "x1"::K"Identifier"] "first"::K"Identifier"]
 
     genfunc_quote_s = """
@@ -2215,10 +2215,10 @@ end
         f_gen_quote_2((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x2,generated)
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x2,generated)
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
             @ast_ [K"tuple" [K"inert" "x2"::K"Identifier"] "generated"::K"Identifier"]
 
     genfunc_quote_s = """
@@ -2233,10 +2233,10 @@ end
         f_gen_quote_3((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x4,after)
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x4,after)
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
             @ast_ [K"tuple" [K"inert" "x4"::K"Identifier"] "after"::K"Identifier"]
 
     genfunc_quote_s = raw"""
@@ -2254,10 +2254,10 @@ end
         f_gen_interpolate((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) == :((:x1,first),nongen)
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :((:x1,first),nongen)
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
             @ast_ [K"tuple" [K"tuple"
                              [K"inert" "x1"::K"Identifier"]
                              "first"::K"Identifier"]
@@ -2275,11 +2275,11 @@ end
         f_gen_eval_quote_1((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) ==
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) ==
             :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ==
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ==
             :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
 
     # Test generated function edges to bindings
@@ -2294,12 +2294,12 @@ end
 end
 
 @testset "pre-desugared meta-generated" begin
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     @eval function meta_generated_form()
         $(Expr(:meta, :generated, Base.identity))
         $(Expr(:meta, :generated_only))
     end
-    """, expr_compat_mode=true) isa Function
+    """, edition=JL_OLD_EDITION) isa Function
 end
 
 @testset "Broadcast" begin

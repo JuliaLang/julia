@@ -50,6 +50,6 @@
         _precompile_usemac(3)
         _precompile_genf(1.0)
         """
-        include_string(@__MODULE__, workload, @__FILE__; expr_compat_mode=true)
+        include_string(@__MODULE__, workload, @__FILE__)
     end
 end
