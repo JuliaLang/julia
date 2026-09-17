@@ -16,7 +16,7 @@ end
 
 @trigger '_' ->
 function underscore_italic(stream::IO, md::MD)
-    result = parse_inline_wrapper(stream, "_")
+    result = parse_inline_wrapper(stream, "_"; intraword = false)
     return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
@@ -32,7 +32,7 @@ end
 
 @trigger '_' ->
 function underscore_bold(stream::IO, md::MD)
-    result = parse_inline_wrapper(stream, "__")
+    result = parse_inline_wrapper(stream, "__"; intraword = false)
     return result === nothing ? nothing : Bold(parseinline(result, md))
 end
 
