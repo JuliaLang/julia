@@ -112,6 +112,29 @@ function scan_new_code!(internal_methods::Vector{Any}, workspace::VerifyMethodWo
     end
 end
 
+# An edge whose call signature has no method contributor outside the loading
+# image's dependency closure (see jl_edge_sig_replayable) matches exactly the
+# methods its precompile worker matched, so the worker's verdict is replayed
+# instead of matching again. Invalidation debugging wants every edge matched.
+@inline function edge_replayable(@nospecialize(sig))
+    _jl_debug_method_invalidation[] === nothing || return false
+    return ccall(:jl_edge_sig_replayable, Cint, (Any,), sig) != 0
+end
+
+# the min world of a replayed call edge: its recorded match set (targets
+# i:i+n-1 of the edge list) became available in this session at those methods'
+# activation worlds, as verify_call reports for an unchanged match set
+function replayed_minworld(expecteds::Core.SimpleVector, i::Int, n::Int)
+    minworld = get_require_world()
+    for k = i:i+n-1
+        pw = get_method_from_edge(expecteds[k]).primary_world
+        if minworld < pw
+            minworld = pw
+        end
+    end
+    return minworld
+end
+
 function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
     @assert isempty(workspace.stack) "workspace corrupted"
     @assert isempty(workspace.visiting) "workspace corrupted"
@@ -255,13 +278,21 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, matches)
+                        if edge_replayable(sig)
+                            min_valid2, max_valid2 = replayed_minworld(initial.callees, j, 1), validation_world
+                        else
+                            min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, matches)
+                        end
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches)
+                        if edge_replayable(sig)
+                            min_valid2, max_valid2 = replayed_minworld(initial.callees, j+2, nmatches), validation_world
+                        else
+                            min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches)
+                        end
                         j += 2 + nmatches
                         edge = sig
                     elseif edge isa Core.Binding
@@ -291,7 +322,12 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         else
                             meth = callee::Method
                         end
-                        min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
+                        # contributors are tracked for the global method table only
+                        if get_methodtable(meth) === Core.methodtable && edge_replayable(edge)
+                            min_valid2, max_valid2 = max(get_require_world(), meth.primary_world), validation_world
+                        else
+                            min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
+                        end
                         j += 2
                     end
 
