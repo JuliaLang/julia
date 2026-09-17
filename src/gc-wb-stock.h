@@ -14,6 +14,7 @@ extern "C" {
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent isa jl_value_t* and ptr isa jl_value_t* or NULL
+    jl_gc_region_wb_check(parent, ptr);
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */)) // parent is old and not in remset
         jl_gc_wb_cold(parent, ptr);
 }
@@ -34,6 +35,8 @@ STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue JL_UNUSED) JL_NOT
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     // ptr is an immutable object
+    jl_gc_region_wb_copy_inline_check(parent, (const void*)ptr, (const char*)ptr, 1, 0,
+                                      (jl_datatype_t*)jl_typeof(ptr));
     if (__likely(jl_astaggedvalue(parent)->bits.gc != 3 /* GC_OLD_MARKED */))
         return; // parent is young or in remset
     if (__unlikely(jl_astaggedvalue(parent)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
@@ -53,6 +56,7 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owne
                                           jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
                                           size_t* n) JL_NOTSAFEPOINT
 {
+    jl_gc_region_wb_copy_boxed_check(dest_owner, src, *src_pp, *n);
     if (__unlikely(jl_astaggedvalue(dest_owner)->bits.gc == 3 /* GC_OLD_MARKED */ )) {
         jl_value_t *src_owner = jl_genericmemory_owner(src);
         size_t done = 0;
@@ -101,6 +105,8 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owne
 STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
                                           size_t n, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
+    jl_gc_region_wb_copy_inline_check(owner, src, src_p, n, dt->layout->size,
+                                      (jl_datatype_t*)jl_tparam1(dt));
     if (__unlikely(jl_astaggedvalue(owner)->bits.gc == 3 /* GC_OLD_MARKED */)) {
         if (__unlikely(jl_astaggedvalue(owner)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
             // GC_MARKED optimizations are invalid for generations >= 2

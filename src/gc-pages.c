@@ -181,6 +181,15 @@ exit:
 NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     void *p = pg->data;
+#ifdef WITH_GC_REGIONS
+    // A region owns its pages, and only its reset or census frees them: a
+    // tagged page is kept here and reported.
+    if (pg->region_n != 0) {
+        jl_safe_printf("FREEPAGE-TAGGED page %p region %d - a tagged page must never free; "
+                       "the page is kept\n", p, (int)pg->region_n);
+        return;
+    }
+#endif
     gc_alloc_map_set((char*)p, GC_PAGE_FREED);
     // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;

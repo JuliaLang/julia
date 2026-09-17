@@ -549,6 +549,13 @@ typedef struct _jl_task_t {
     _Atomic(int16_t) tid;
     // threadpool id
     int8_t threadpoolid;
+#ifdef WITH_GC_REGIONS
+    // The GC region of this task's open window (0 = none) and the stickiness
+    // to restore when it closes; the window is saved and restored with the
+    // task (gc-regions.h).
+    uint8_t region;
+    uint8_t sticky_before_region;
+#endif
     // Reentrancy bits
     // Bit 0: 1 if we are currently running inference/codegen
     // Bit 1-2: 0-3 counter of how many times we've reentered inference

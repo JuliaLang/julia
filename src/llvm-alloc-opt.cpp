@@ -808,7 +808,11 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 }
                 return;
             }
+#ifdef WITH_GC_REGIONS
+            if (pass.write_barrier_func == callee || pass.region_write_barrier_func == callee) {
+#else
             if (pass.write_barrier_func == callee) {
+#endif
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -914,7 +918,11 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
+#ifdef WITH_GC_REGIONS
+            if (pass.write_barrier_func == callee || pass.region_write_barrier_func == callee) {
+#else
             if (pass.write_barrier_func == callee) {
+#endif
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -1239,7 +1247,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
+#ifdef WITH_GC_REGIONS
+            if (pass.write_barrier_func == callee || pass.region_write_barrier_func == callee) {
+#else
             if (pass.write_barrier_func == callee) {
+#endif
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;

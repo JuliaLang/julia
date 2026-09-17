@@ -27,6 +27,7 @@
 #include "builtin_proto.h"
 #include "intrinsics.h"
 #include "julia_assert.h"
+#include "gc-regions.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -2195,6 +2196,9 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
     tv->name = name;
     tv->lb = lb;
     tv->ub = ub;
+    // A bound built inside a GC region window, under a TypeVar made after it
+    jl_gc_wb_fresh(tv, lb);
+    jl_gc_wb_fresh(tv, ub);
     return tv;
 }
 
@@ -2997,6 +3001,9 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Nothing", (jl_value_t*)jl_nothing_type);
     add_builtin("nothing", (jl_value_t*)jl_nothing);
+#ifdef WITH_GC_REGIONS
+    add_builtin("GC_REGIONS", (jl_value_t*)jl_true); // Base gates its region hooks on it (gcregions.jl)
+#endif
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);

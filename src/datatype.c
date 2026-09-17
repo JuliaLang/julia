@@ -1200,6 +1200,7 @@ JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, const void *data)
         jl_set_typetagof(v, bt->smalltag, 0);
     // TODO: make this a memmove_refs if relevant
     memcpy(jl_assume_aligned(v, sizeof(void*)), data, nb);
+    jl_gc_multi_wb_fresh(v, v, bt);
     return v;
 }
 
@@ -1252,6 +1253,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *data)
 #endif
     else
         abort();
+    jl_gc_multi_wb_fresh(v, v, bt);
     return v;
 }
 
@@ -1326,6 +1328,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl
 #endif
     else
         abort();
+    jl_gc_multi_wb_fresh(v, v, bt);
     return v;
 }
 
@@ -1896,6 +1899,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
         jl_lock_value((jl_mutex_t*)v);
         memcpy((char*)r, (char*)v + offs, fsz);
         jl_unlock_value((jl_mutex_t*)v);
+        jl_gc_multi_wb_fresh(r, r, (jl_datatype_t*)ty);
     }
     else {
         // TODO: a finalizer here could make the isunion case not quite right
@@ -2003,6 +2007,7 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
                 jl_gc_multi_wb(parent, rhs); // rhs is immutable
             memcpy(px, (char*)rhs, fsz);
             unlock(v, parent, needlock, isatomic);
+            jl_gc_multi_wb_fresh(r, r, (jl_datatype_t*)ty);
         }
         else {
             r = jl_new_bits(isunion ? normalize_typeofbottom_layout_alias(jl_nth_union_component(ty, *psel)) : layout_ty, v);
@@ -2113,6 +2118,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
             char *px = lock(p, parent, needlock, isatomic);
             memcpy((char*)r, px, fsz);
             unlock(p, parent, needlock, isatomic);
+            jl_gc_multi_wb_fresh(r, r, (jl_datatype_t*)rty);
         }
         else {
             r = jl_new_bits(rty, p);
@@ -2282,6 +2288,10 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
         }
         unlock(p, parent, needlock, isatomic);
     }
+#ifdef WITH_GC_REGIONS
+    if (hasptr)
+        jl_gc_multi_wb_fresh(r, r, (jl_datatype_t*)ty); // the old value is field 0 of r, at offset 0
+#endif
     if (!isunion) {
         r = undefref_check((jl_datatype_t*)rty, r);
         if (__unlikely(r == NULL))

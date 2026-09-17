@@ -1134,6 +1134,10 @@ end
 
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
+# The new memory replaces the memory of the array, so it is allocated in the
+# GC region of the array, not in the region of an open window (gcregions.jl).
+array_new_memory_for(a::Array, mem::Memory, newlen::Int) = with_region_of(array_new_memory, a, mem, newlen)
+
 function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     @_terminates_locally_meta
     ref = a.ref
@@ -1160,7 +1164,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
             @inbounds unsetindex!(mem, j)
         end
     else
-        newmem = array_new_memory(mem, newmemlen)
+        newmem = array_new_memory_for(a, mem, newmemlen)
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
     end
     if ref !== a.ref
@@ -1212,7 +1216,7 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
         # or exactly the requested size, whichever is larger
         # TODO we should possibly increase the offset if the current offset is nonzero.
         newmemlen2 = max(overallocation(memlen), newmemlen)
-        newmem = array_new_memory(mem, newmemlen2)
+        newmem = array_new_memory_for(a, mem, newmemlen2)
         newoffset = offset
     end
     newref = @inbounds memoryref(newmem, newoffset)
@@ -1280,7 +1284,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         # the +1 is because I didn't want to have an off by 1 error.
         newmemlen = max(overallocation(memlen), checked_add(len, checked_mul(2, delta), 1))
         newoffset = (newmemlen - newlen) ÷ 2 + 1
-        newmem = array_new_memory(mem, newmemlen)
+        newmem = array_new_memory_for(a, mem, newmemlen)
         newref = @inbounds memoryref(newmem, newoffset)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
@@ -1629,7 +1633,7 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
         if !shrink || memlen - sz <= div(memlen, 8)
             return a
         end
-        newmem = array_new_memory(mem, sz)
+        newmem = array_new_memory_for(a, mem, sz)
         if first
             newref = memoryref(newmem, inc + 1)
         else
