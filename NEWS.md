@@ -233,6 +233,7 @@ Standard library changes
 
 #### REPL
 
+* Tab completion now supports `\escape` for `⎋` and `\xmark` for `✗`.
 * The Julia REPL now emits OSC 133 semantic prompt markers for terminal integration.
 * A `using`/`import` statement that loads several packages, such as `using A, B, C`, now precompiles
   all of them (and the extensions they make loadable) in a single parallel session, rather than one
