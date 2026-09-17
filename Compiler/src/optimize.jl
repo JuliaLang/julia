@@ -1143,10 +1143,17 @@ function optional_order_arg(stmt::Expr, i::Int, ir::IRCode)
     return o === nothing ? QuoteNode(nothing) : o
 end
 
+# A description of a recognized read or definedness query on a global binding.
+struct GlobalReadInfo
+    g::GlobalRef
+    order::Any
+    allow_import::Bool # always `true` for a read: `getglobal` follows imports
+end
+
 # Recognize a statement that reads a global binding value.
 function recognize_global_read(@nospecialize(stmt), ir::IRCode)
     if isa(stmt, GlobalRef)
-        return Pair{GlobalRef,Any}(stmt, QuoteNode(:unordered))
+        return GlobalReadInfo(stmt, QuoteNode(:unordered), true)
     end
     isa(stmt, Expr) && stmt.head === :call || return nothing
     na = length(stmt.args)
@@ -1157,13 +1164,13 @@ function recognize_global_read(@nospecialize(stmt), ir::IRCode)
         s = _global_call_singleton(stmt.args[3], ir)
         if isa(M, Module) && isa(s, Symbol)
             order = na == 4 ? order_arg(stmt, 4, ir) : QuoteNode(:monotonic)
-            return Pair{GlobalRef,Any}(GlobalRef(M, s), order)
+            return GlobalReadInfo(GlobalRef(M, s), order, true)
         end
     elseif f === Core.getfield && na == 3
         M = _global_call_singleton(stmt.args[2], ir)
         s = _global_call_singleton(stmt.args[3], ir)
         if isa(M, Module) && isa(s, Symbol)
-            return Pair{GlobalRef,Any}(GlobalRef(M, s), QuoteNode(:unordered))
+            return GlobalReadInfo(GlobalRef(M, s), QuoteNode(:unordered), true)
         end
     end
     return nothing
@@ -1256,10 +1263,8 @@ function recognize_global_write(@nospecialize(stmt), ir::IRCode)
     return nothing
 end
 
-# Recognize a definedness query on a global binding:
+# Recognize a statement that queries the definedness of a global binding:
 # `isdefinedglobal(M, s[, allow_import[, order]])` or `isdefined(M::Module, s)`.
-# Only an `allow_import === true` query reformulates (it walks imports to the leaf, matching the resolution below).
-# An `allow_import === false` query is left on the runtime path (if not already folded by inference), which is conservatively correct.
 function recognize_global_isdefined(@nospecialize(stmt), ir::IRCode)
     isa(stmt, Expr) && stmt.head === :call || return nothing
     na = length(stmt.args)
@@ -1268,16 +1273,15 @@ function recognize_global_isdefined(@nospecialize(stmt), ir::IRCode)
         M = _global_call_singleton(stmt.args[2], ir)
         s = _global_call_singleton(stmt.args[3], ir)
         (isa(M, Module) && isa(s, Symbol)) || return nothing
-        if na >= 4
-            _global_call_singleton(stmt.args[4], ir) === true || return nothing
-        end
+        allow_import = na >= 4 ? _global_call_singleton(stmt.args[4], ir) : true
+        isa(allow_import, Bool) || return nothing
         order = na == 5 ? order_arg(stmt, 5, ir) : QuoteNode(:unordered)
-        return Pair{GlobalRef,Any}(GlobalRef(M, s), order)
+        return GlobalReadInfo(GlobalRef(M, s), order, allow_import)
     elseif f === Core.isdefined && na == 3
         M = _global_call_singleton(stmt.args[2], ir)
         s = _global_call_singleton(stmt.args[3], ir)
         (isa(M, Module) && isa(s, Symbol)) || return nothing
-        return Pair{GlobalRef,Any}(GlobalRef(M, s), QuoteNode(:unordered))
+        return GlobalReadInfo(GlobalRef(M, s), QuoteNode(:unordered), true)
     end
     return nothing
 end
@@ -1298,10 +1302,14 @@ function narrow_valid_worlds!(sv::OptimizationState, world::UInt, valid_worlds::
 end
 
 # Resolve a read of `g` to a leaf `Core.BindingPartition` that fully captures the behavior.
-# Return the leaf partition to use, the leaf binding it belongs to, whether `getglobal` would
-# deprecation-warn for this access, and whether the walk crossed an import (determining the
-# name to use for errors).
-const ResolvedRead = Tuple{Core.BindingPartition,Core.Binding,Bool,Bool}
+struct ResolvedRead
+    partition::Core.BindingPartition # the leaf partition to use
+    binding::Core.Binding # the leaf binding it belongs to
+    depwarn::Bool # whether `getglobal` would deprecation-warn for this access
+    # whether the walk crossed an import (which decides the name to use for errors, and
+    # whether a query that does not follow imports names the same access)
+    imported::Bool
+end
 
 function reformulate_read(g::GlobalRef, sv::OptimizationState, world::UInt, edges::Vector{Any},
                           cache::IdDict{Core.Binding,Union{ResolvedRead,Nothing}})
@@ -1335,9 +1343,8 @@ function resolve_read(g::GlobalRef, binding::Core.Binding, world::UInt)
         return nothing
     end
     # `leaf_binding !== binding` means the walk crossed an import, so the leaf no longer names
-    # the access the source asked for in UndefVarError. That only matters for a leaf that can
-    # actually be undefined (not a constant).
-    return (leaf, leaf_binding, depwarn, kind === PARTITION_KIND_GLOBAL && leaf_binding !== binding)
+    # the access the source asked for.
+    return ResolvedRead(leaf, leaf_binding, depwarn, leaf_binding !== binding)
 end
 
 # The store counterpart of `reformulate_read`.
@@ -1374,26 +1381,33 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
         stmt = inst[:stmt]
         r = recognize_global_read(stmt, ir)
         if r !== nothing
-            rr = reformulate_read(r.first, opt, world, edges, read_cache)
+            rr = reformulate_read(r.g, opt, world, edges, read_cache)
             if rr !== nothing
-                (p, leaf_binding, depwarn, imported) = rr
-                depwarn && emit_depwarn_binding!(ir, idx, leaf_binding)
-                # Decide if simple `p` has the right semantics, or needs the full `getglobal_partition` call to preserve semantics.
-                stmt = (r.second !== QuoteNode(:unordered) || imported) ?
+                p = rr.partition
+                rr.depwarn && emit_depwarn_binding!(ir, idx, rr.binding)
+                # Decide if simple `p` has the right semantics, or needs the full `getglobal_partition` call to preserve semantics:
+                # an explicit order, or an import of a leaf that can be undefined (the
+                # UndefVarError must name the binding the source asked for, not the leaf).
+                stmt = (r.order !== QuoteNode(:unordered) ||
+                        (rr.imported && binding_kind(p) === PARTITION_KIND_GLOBAL)) ?
                     Expr(:call, GlobalRef(Core, :getglobal_partition),
-                         QuoteNode(r.first), QuoteNode(p), r.second) : p
+                         QuoteNode(r.g), QuoteNode(p), r.order) : p
                 inst[:stmt] = stmt
-                r.second isa QuoteNode && continue # optimize the loop in the common case
+                r.order isa QuoteNode && continue # optimize the loop in the common case
             end
             # fall through: a read call may still contain nested `GlobalRef` operands worth rewriting (including for `order`).
         end
         d = recognize_global_isdefined(stmt, ir)
         if d !== nothing
-            rr = reformulate_read(d.first, opt, world, edges, read_cache)
-            if rr !== nothing
-                stmt = Expr(:call, GlobalRef(Core, :isdefinedglobal_partition), QuoteNode(rr[1]), d.second)
+            rr = reformulate_read(d.g, opt, world, edges, read_cache)
+            # A query that does not follow imports (`allow_import=false`) names the same
+            # access as one that does when the walk crossed none, so it freezes the same
+            # leaf; when it did, inference folds the answer to `false` (see
+            # `abstract_eval_isdefinedglobal`), so leave what reaches here to the runtime.
+            if rr !== nothing && (d.allow_import || !rr.imported)
+                stmt = Expr(:call, GlobalRef(Core, :isdefinedglobal_partition), QuoteNode(rr.partition), d.order)
                 inst[:stmt] = stmt
-                d.second isa QuoteNode && continue # optimize the loop in the common case
+                d.order isa QuoteNode && continue # optimize the loop in the common case
             end
             # fall through: as for a read, a non-constant `order` operand may still be a `GlobalRef` worth rewriting.
         end
@@ -1426,12 +1440,11 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
                     isa(use, GlobalRef) || continue
                     rr = reformulate_read(use, opt, world, edges, read_cache)
                     rr === nothing && continue
-                    (p, _, depwarn, _) = rr
-                    depwarn && continue # skip optimizing since we don't have a good place to put the depwarn node -- this should end up on a cold branch in codegen anyways
+                    rr.depwarn && continue # skip optimizing since we don't have a good place to put the depwarn node -- this should end up on a cold branch in codegen anyways
                     if newargs === nothing
                         newargs = copy(target.args)
                     end
-                    newargs[i] = p
+                    newargs[i] = rr.partition
                 end
                 if newargs !== nothing
                     newtarget = Expr(:tuple)
@@ -1450,8 +1463,7 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
             if isa(use, GlobalRef)
                 rr = reformulate_read(use, opt, world, edges, read_cache)
                 if rr !== nothing
-                    (p, _, _) = rr
-                    ur[] = p
+                    ur[] = rr.partition
                     changed = true
                 end
             end

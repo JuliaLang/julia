@@ -886,3 +886,28 @@ module CompiledStoreTypeError
     end
     @test T.ix === 11
 end
+
+# A definedness query that does not follow imports (`isdefinedglobal(m, s, false)`) freezes the
+# same leaf as the `allow_import=true` form when the binding is not an import, and stays with
+# the runtime (or is folded) when it is.
+module IsdefinedNoImport
+    using Test
+    global x::Int = 1
+    global y::Int
+    module Src; export imp; global imp::Int = 3; end
+    using .Src
+    fx() = isdefinedglobal(@__MODULE__, :x, false)
+    fy() = isdefinedglobal(@__MODULE__, :y, false)
+    fimp() = isdefinedglobal(@__MODULE__, :imp, false)
+    iscall_gr(x, s) = Meta.isexpr(x, :call) && x.args[1] == GlobalRef(Core, s)
+    for f in (fx, fy)
+        ci = code_typed(f, ())[1][1]
+        @test any(x -> iscall_gr(x, :isdefinedglobal_partition), ci.code)
+    end
+    @test fx() && !fy() && !fimp()
+    let ci = code_typed(fimp, ())[1][1]
+        @test !any(x -> iscall_gr(x, :isdefinedglobal_partition), ci.code)
+    end
+    global y = 2
+    @test fy()
+end
