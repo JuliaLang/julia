@@ -135,6 +135,15 @@ function replayed_minworld(expecteds::Core.SimpleVector, i::Int, n::Int)
     return minworld
 end
 
+# contributors are tracked for the global method table only, so an edge whose
+# recorded targets (i:i+n-1) include a method of another table is matched live
+function edge_targets_global(expecteds::Core.SimpleVector, i::Int, n::Int)
+    for k = i:i+n-1
+        get_methodtable(get_method_from_edge(expecteds[k])) === Core.methodtable || return false
+    end
+    return true
+end
+
 function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
     @assert isempty(workspace.stack) "workspace corrupted"
     @assert isempty(workspace.visiting) "workspace corrupted"
@@ -278,7 +287,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        if edge_replayable(sig)
+                        if edge_targets_global(initial.callees, j, 1) && edge_replayable(sig)
                             min_valid2, max_valid2 = replayed_minworld(initial.callees, j, 1), validation_world
                         else
                             min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, matches)
@@ -288,7 +297,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         sig = initial.callees[j+1]
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        if edge_replayable(sig)
+                        if edge_targets_global(initial.callees, j+2, nmatches) && edge_replayable(sig)
                             min_valid2, max_valid2 = replayed_minworld(initial.callees, j+2, nmatches), validation_world
                         else
                             min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches)
@@ -322,7 +331,6 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         else
                             meth = callee::Method
                         end
-                        # contributors are tracked for the global method table only
                         if get_methodtable(meth) === Core.methodtable && edge_replayable(edge)
                             min_valid2, max_valid2 = max(get_require_world(), meth.primary_world), validation_world
                         else
