@@ -228,6 +228,11 @@ Standard library changes
 * The `Precompiling` messages printed while loading name packages without their uuid when the
   name is unambiguous in the environment, name extensions by their parent package, and say which
   dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
+  That log message is now at debug level, with the full list of reasons a cache was not reused, and the
+  precompilation output itself explains the reasons a user can act on: a dependency loaded at a different
+  version than in the manifest, with how to get the manifest version instead, a package from an environment
+  later in the load path whose dependencies have other versions in the active environment, and compilation
+  options that differ from the existing caches'.
 * Precompile cache file names now also include the `environment_id` that Pkg records in the manifest
   (the project uuid, or a generated one), so containers sharing a depot with different projects mounted
   at the same path keep their caches from overwriting each other. Loading is unaffected, as it checks
