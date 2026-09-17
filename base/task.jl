@@ -646,14 +646,10 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    # Park on all remaining tasks at once through a single multi-slot wait
-    # entry - one flat waitable per pending task (duplicates share a slot)
-    # plus the governing cancellation source. Each completion notify claims
-    # the entry through the standard wake-claim protocol; the registrations
-    # stay in place across re-parks, so the loop re-arms (`repark!`)
-    # instead of re-registering after every completion, and the driver's
-    # membership-qualified rechecks make the arm-then-suspend sound while
-    # this bookkeeping runs unarmed.
+    # Re-run `park!` for pending tasks after each wake: the previous park
+    # may have stopped at a completed task, and notifications while unarmed
+    # can consume registrations. Keep registrations for pending tasks, but
+    # synchronize with completed tasks' notifiers before reusing their slots.
     ct = current_task()
     src = cancel_source(tok)
     src === nothing || checkcancel(src)
@@ -663,12 +659,10 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
     end
     src === nothing || push!(ws, SourceWait(src, 0x00))
     w = acquire_wait_entry!(ct, ws)
-    parked = park!(ws, w, false)
     while true
-        # suspend only when the park armed (a `false` park/re-park means a
-        # waitable fired - a completion, or the source - and the driver
-        # already dequeued the fired slot)
-        parked && wait_safe_interrupt(ws, w)
+        # suspend only when the park armed (a `false` park means a waitable
+        # fired - a completion, or the source - and the self-claim won)
+        park!(ws, w, false) && wait_safe_interrupt(ws, w)
         # the fired-source outcome (and, level-triggered, any cancelled
         # state) delivers here: withdraw and throw
         if src !== nothing && iscancelled(src)
@@ -681,6 +675,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
             done && continue
             t = tasks[i]
             if istaskdone(t)
+                wait_dequeue!(DoneWait(t), w, WAKE_WITHDRAWN)
                 done_mask[i] = true
                 exception |= istaskfailed(t)
                 nremaining -= 1
@@ -689,7 +684,11 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         if nremaining == 0 || (!all && any(done_mask)) || (exception && failfast)
             break
         end
-        parked = repark!(ws, w)
+        empty!(ws)
+        for (i, done) in enumerate(done_mask)
+            done || push!(ws, DoneWait(tasks[i]))
+        end
+        src === nothing || push!(ws, SourceWait(src, 0x00))
     end
     withdraw!(ws, w)
 

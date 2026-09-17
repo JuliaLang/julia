@@ -233,6 +233,9 @@ precompile_test_harness(false) do dir
               const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
               const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
 
+              const gr54932 = GlobalRef(Base, gensym(:hash54932))
+              const dict54932 = Dict(gr54932 => :found)
+
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
                               missing, missing, missing,
@@ -346,6 +349,13 @@ precompile_test_harness(false) do dir
 
         @test Foo.d29936a === Dict
         @test Foo.d29936b === Dict{K,V} where {V,K}
+
+        gr = Foo.gr54932
+        fresh = GlobalRef(gr.mod, gr.name)
+        @test isequal(gr, fresh)
+        @test hash(gr) == hash(fresh)
+        @test Foo.dict54932[gr] === :found
+        @test Foo.dict54932[fresh] === :found
 
         @test Foo.x28998[end] == 6
 
@@ -2276,19 +2286,10 @@ precompile_test_harness("Test flags") do load_path
           end
           """)
 
-    current_flags = Base.CacheFlags()
-    modified_flags = Base.CacheFlags(
-        current_flags.use_pkgimages,
-        current_flags.debug_level,
-        2,
-        current_flags.inline,
-        3
-    )
     ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
-        _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
-        cacheflags = Base.CacheFlags(flags)
+        _, _, _, _, _, _, cacheflags = Base.parse_cache_header(io, ji)
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
@@ -2856,6 +2857,41 @@ end
     end
 end
 
+# Requesting precompilation of a package that lives in the sysimage has nothing to do
+# and must not error, even when it is the only dependency of the environment (#63189)
+@testset "precompilepkgs on a sysimage package" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        sha_uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+        @test Base.in_sysimage(Base.PkgId(Base.UUID(sha_uuid), "SHA"))
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            SHA = "$sha_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.SHA]]
+            uuid = "$sha_uuid"
+            version = "1.0.0"
+            """)
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            io = IOBuffer()
+            @test Base.Precompilation.precompilepkgs(["SHA"]; io, fancyprint=false) === nothing
+            @test Base.Precompilation.precompilepkgs(; io, fancyprint=false) === nothing
+            @test isempty(takestring!(io))
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_path
     # Test that compile-time preferences invalidate, even when queried from a
     # "foreign" UUID / package namespace
@@ -3059,6 +3095,34 @@ end
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+# Full workspace precompilation should find the root and recursively include member packages.
+@testset "full workspace precompilation" begin
+    workspace_path = joinpath(@__DIR__, "project", "Workspaces", "PrecompileExt")
+    nested_member_path = joinpath(workspace_path, "Nested", "Baz")
+    for active_project in (workspace_path, nested_member_path)
+        mkdepottempdir() do depot
+            original_depot_path = copy(Base.DEPOT_PATH)
+            old_proj = Base.active_project()
+            try
+                push!(empty!(DEPOT_PATH), depot)
+                Base.set_active_project(active_project)
+
+                io = IOBuffer()
+                ioc = IOContext(io, :color => false)
+                Base.Precompilation.precompilepkgs(; io=ioc, fancyprint=false, manifest=true)
+                output = String(take!(io))
+
+                @test occursin("Foo", output)
+                @test occursin("Bar", output)
+                @test occursin("Baz", output)
+            finally
+                Base.set_active_project(old_proj)
+                append!(empty!(DEPOT_PATH), original_depot_path)
+            end
         end
     end
 end
@@ -3461,6 +3525,104 @@ end
     end end
 end
 
+# Test that precompilepkgs recompiles a cached dependent of a loaded package when the
+# environment now resolves a different version of that package. The dependent's cache is
+# built against the loaded version, so a check that trusts loaded modules considers it fresh.
+@testset "precompilepkgs recompiles dependents of a loaded package at another version" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        for (dirname, marker, version) in (("LoadedDepOld", 1, "0.1.0"), ("LoadedDepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "LoadedDep"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "LoadedDep.jl"),
+                  """
+                  module LoadedDep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+        for (project, loaded_dep_dir, version) in (("old_project", "LoadedDepOld", "0.1.0"), ("new_project", "LoadedDepNew", "0.2.0"))
+            project_path = joinpath(dir, project)
+            mkpath(project_path)
+            write(joinpath(project_path, "Project.toml"),
+                  """
+                  [deps]
+                  DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+                  LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+                  """)
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  manifest_format = "2.0"
+
+                  [[deps.DepUser]]
+                  deps = ["LoadedDep"]
+                  path = "../dev/DepUser/"
+                  uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+                  version = "0.1.0"
+
+                  [[deps.LoadedDep]]
+                  path = "../dev/$loaded_dep_dir/"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+        end
+        old_project_path = joinpath(dir, "old_project")
+        new_project_path = joinpath(dir, "new_project")
+
+        # Cache DepUser against the old LoadedDep
+        @test success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e 'using DepUser'`,
+                             "JULIA_DEPOT_PATH" => depot))
+
+        # Load the old LoadedDep, switch to the project that resolves the new one, and precompile.
+        # DepUser has to be rebuilt against the new LoadedDep although the loaded one still matches
+        # its existing cache. Report which LoadedDep build the freshest DepUser cache requires.
+        script = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.Precompilation.precompilepkgs(; fancyprint=false)
+            dep = Base.identify_package("LoadedDep")
+            depuser = Base.identify_package("DepUser")
+            new_dep_build, _ = Base.parse_cache_buildid(Base.compilecache_freshest_path(dep; ignore_loaded=true))
+            depuser_cache = Base.compilecache_freshest_path(depuser; ignore_loaded=true)
+            io = open(depuser_cache)
+            Base.isvalid_cache_header(io)
+            required_modules = Base.parse_cache_header(io, depuser_cache)[3]
+            close(io)
+            required_dep_build = only(build_id for (pkg, build_id) in required_modules if pkg == dep)
+            println("DEPUSER_REBUILT_AGAINST_NEW_DEP=", required_dep_build == new_dep_build)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        logfile = joinpath(dir, "precompile.log")
+        proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+        output = read(logfile, String)
+        @test success(proc) || (println(output); false)
+        @test occursin("DEPUSER_REBUILT_AGAINST_NEW_DEP=true", output)
+    end end
+end
+
 # Test that warn_loaded does not warn when the loaded dep is already at the correct version
 @testset "warn_loaded does not warn when loaded dep matches env version" begin
     mkdepottempdir() do depot; mktempdir() do dir
@@ -3611,6 +3773,10 @@ precompile_test_harness("cache rejection reasons") do dir
     # actionable reasons are reported over rejections of other-version caches
     Base.record_reason(reasons, :incompatible_header)
     @test Base.list_reasons(reasons) == msg
+
+    # a dependency loaded at a different version is reported by name
+    @test Base.list_reasons(Dict(Symbol("dep_loaded_incompatible:Foo") => 1)) ==
+        " (cache not reused: Foo is already loaded at a different version)"
 
     # rejections of caches that weren't the ones searched for are never reported
     @test Base.list_reasons(Dict(:buildid_mismatch => 2)) == ""
