@@ -555,11 +555,16 @@ precompile(Tuple{typeof(redeliver!), CancellationTokenSource})
 
 function start_sigint_listener()
     cond = AsyncCondition()
-    # N.B.: The condition is deliberately kept ref'd: pending async events on
-    # unreferenced handles are not dispatched once the loop has no live
-    # handles left (as in a headless script), which would make the ^C
-    # notification undeliverable exactly when it matters. The atexit hook
-    # below closes the handle before the event loop is drained for exit.
+    # N.B.: The condition is unref'd so that it does not keep the event loop
+    # alive: a ref'd handle keeps the io-loop thread blocked inside `uv_run`
+    # holding the IO lock whenever it is idle, which makes every `iolock_begin`
+    # from another thread take the contended path (#63231). Delivery does not
+    # depend on this handle when the loop has no live handles (e.g. a headless
+    # script): the signal thread sets `jl_sigint_dispatch_pending` and wakes
+    # every scheduler thread, which runs `maybe_dispatch_sigint` inline from
+    # `jl_task_get_next`. This handle only wakes the listener tasks when the
+    # loop is running anyway.
+    uv_unref(cond.handle)
     listeners = Task[]
     Threads.threadpoolsize(:interactive) > 0 &&
         push!(listeners, errormonitor(Threads.@spawn :interactive sigint_listener(cond)))

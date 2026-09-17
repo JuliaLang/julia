@@ -53,6 +53,16 @@ _Atomic(int) n_threads_running = 0;
 //   * 2a: store `2` to `handle->pending` in `uv_async_send` (via `JL_UV_LOCK` in `jl_task_get_next`)
 //   * 2b: `jl_atomic_load_relaxed(jl_uv_n_waiters)` in `jl_task_get_next` returns `0`
 // i.e., the dequeuer misses the `n_waiters` is set and enqueuer misses the `uv_stop` flag (in `signal_async`) transition to cleared
+// [^store_buffering_3]: and also, for ^C delivery
+// * Dequeuer:
+//   * 1: `jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping)` in `jl_task_get_next`
+//   * 2: `jl_atomic_load_relaxed(&jl_sigint_dispatch_pending)` in `jl_task_get_next` returns `0`
+// * Enqueuer (signal listener thread, `deliver_sigint_notification`):
+//   * 3: `jl_atomic_store_release(&jl_sigint_dispatch_pending, 1)`
+//   * 4: `jl_atomic_load_relaxed(&ptls->sleep_check_state)` in `jl_wakeup_thread_from_foreign` returns `not_sleeping`
+// i.e., the dequeuer parks with a ^C pending that nobody will wake it for. The
+// sigint listener's `AsyncCondition` is unref'd, so when no other handles keep
+// the event loop alive, `uv_run` returns without polling and cannot rescue it.
 
 JULIA_DEBUG_SLEEPWAKE(
 uint64_t wakeup_enter;
@@ -508,6 +518,12 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 if (set_not_sleeping(ptls)) {
                     JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
                 }
+                continue;
+            }
+            if (jl_atomic_load_relaxed(&jl_sigint_dispatch_pending)) { // [^store_buffering_3]
+                // a ^C arrived after the check at the top of the loop: go back
+                // and run the dispatch pass instead of parking
+                set_not_sleeping(ptls);
                 continue;
             }
             volatile int isrunning = 1;

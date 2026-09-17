@@ -2300,14 +2300,14 @@ Sys.isunix() && @testset "^C" begin
     # semantics, not the flag matrix.
     exe = joinpath(Sys.BINDIR, Base.julia_exename())
     function run_with_sigint(code::String, delays;
-                             open_stdin::Bool=false, threads::Int=0)
+                             open_stdin::Bool=false, threads::Union{Int,String}=0)
         # A readiness marker printed from user code proves the runtime is up
         # (signal handling armed, the script started) before any SIGINT is
         # sent - on a loaded machine startup alone can outlast the first delay
         # and an early SIGINT kills the child with no output at all.
         code = "println(\"CHILD-READY\")\n" * code
         out = Pipe()
-        cmd = threads > 0 ?
+        cmd = threads != 0 ?
             `$exe --startup-file=no --threads=$threads -e $code` :
             `$exe --startup-file=no -e $code`
         inpipe = open_stdin ? Pipe() : devnull
@@ -2345,6 +2345,18 @@ Sys.isunix() && @testset "^C" begin
     @test occursin("caught: Base.CancellationRequest", output)
     @test occursin("continued", output)
     @test p.exitcode == 0
+
+    # ^C reaches a headless script whose event loop has no live handles (the
+    # main task is parked on an `Event`, not a `Timer`), including with a
+    # single scheduler thread, where no other thread can pick up the dispatch
+    # pass. The sigint listener's handle is unref'd (#63231), so this depends
+    # on the scheduler's inline dispatch, not on the event loop (#62655).
+    for threads in ("1,0", "2,1")
+        output, p = run_with_sigint("wait(Base.Event())", [1.0]; threads)
+        @test occursin("CancellationRequest", output)
+        @test !occursin("fatal", output)
+        @test p.exitcode == 1
+    end
 
     # Uncaught ^C produces a proper error report
     output, p = run_with_sigint("sleep(100)", [1.0])
@@ -2467,6 +2479,21 @@ Sys.isunix() && @testset "^C" begin
     @test occursin("HANDLER-RAN Base.CancellationRequest", output)
     @test occursin("DONE", output)
     @test p.exitcode == 0
+end
+
+
+# The sigint listener must not keep the event loop alive: a ref'd handle
+# parks the idle io-loop thread inside `uv_run` holding the IO lock, making
+# every `iolock_begin` from another thread contended (#63231).
+@testset "sigint listener does not keep the event loop alive" begin
+    exe = joinpath(Sys.BINDIR, Base.julia_exename())
+    code = """
+        Base.iolock_begin()
+        alive = ccall(:uv_loop_alive, Cint, (Ptr{Cvoid},), Base.eventloop())
+        Base.iolock_end()
+        print(alive)
+    """
+    @test read(`$exe --startup-file=no --threads=2 -e $code`, String) == "0"
 end
 
 
