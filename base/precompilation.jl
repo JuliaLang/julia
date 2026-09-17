@@ -12,7 +12,7 @@ struct ExplicitEnv
     project_weakdeps::Dict{String, UUID} # [weakdeps] in the active project's Project.toml
     project_extras::Dict{String, UUID}   # [extras] in the active project's Project.toml
     project_extensions::Dict{String, Vector{UUID}} # [extensions] in the active project's Project.toml
-    workspace_deps::Dict{String, UUID}   # union of [deps] from all workspace member Project.tomls
+    workspace_deps::Dict{UUID, String}   # packages and [deps] from all workspace member Project.tomls
     deps::Dict{UUID, Vector{UUID}}       # full dependency graph from Manifest.toml
     weakdeps::Dict{UUID, Vector{UUID}}   # full weak dependency graph from Manifest.toml
     extensions::Dict{UUID, Dict{String, Vector{UUID}}}
@@ -34,7 +34,7 @@ function ExplicitEnv(::Nothing, envpath::String="")
         Dict{String, UUID}(),     # project_weakdeps
         Dict{String, UUID}(),     # project_extras
         Dict{String, Vector{UUID}}(), # project_extensions
-        Dict{String, UUID}(),     # workspace_deps
+        Dict{UUID, String}(),     # workspace_deps
         Dict{UUID, Vector{UUID}}(),   # deps
         Dict{UUID, Vector{UUID}}(),   # weakdeps
         Dict{UUID, Dict{String, Vector{UUID}}}(), # extensions
@@ -264,39 +264,52 @@ function ExplicitEnv(envpath::String)
     end
     =#
 
-    # Collect the union of [deps] from all workspace member projects.
-    # For non-workspace projects, this is the same as project_deps.
-    workspace_deps = copy(project_deps)
-    base = base_project(envpath)
-    if base !== nothing
-        base_d = parsed_toml(base)
-        # Add deps from the workspace root project
-        for (name, _uuid) in get(Dict{String, Any}, base_d, "deps")::Dict{String, Any}
-            workspace_deps[name] = UUID(_uuid::String)
-        end
-        # Add deps from each workspace member project
-        ws = get(base_d, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
-        if ws !== nothing
-            ws_projects = get(ws, "projects", nothing)::Union{Vector{String}, Nothing, String}
-            if ws_projects isa Vector
-                ws_root = dirname(base)
-                for ws_proj in ws_projects
-                    ws_proj_dir = joinpath(ws_root, ws_proj)
-                    ws_proj_file = Base.env_project_file(ws_proj_dir)
-                    ws_proj_file isa String || continue
-                    ws_d = parsed_toml(ws_proj_file)
-                    for (name, _uuid) in get(Dict{String, Any}, ws_d, "deps")::Dict{String, Any}
-                        workspace_deps[name] = UUID(_uuid::String)
-                    end
-                end
-            end
-        end
-    end
+    workspace_deps = collect_workspace_deps(envpath)
 
     return ExplicitEnv(envpath, project_deps, project_weakdeps, project_extras,
                        project_extensions, workspace_deps,
                        deps_expanded, weakdeps_expanded, extensions_expanded,
                        names, lookup_strategy, #=prefs, local_prefs=#)
+end
+
+function collect_workspace_deps(project_file::String)
+    while true
+        base = base_project(project_file)
+        base === nothing && break
+        project_file = base
+    end
+
+    workspace_deps = Dict{UUID, String}()
+    collect_workspace_deps!(workspace_deps, Set{String}(), project_file)
+    return workspace_deps
+end
+
+function collect_workspace_deps!(workspace_deps::Dict{UUID, String}, seen::Set{String}, project_file::String)
+    project_file = abspath(project_file)
+    project_file in seen && return
+    push!(seen, project_file)
+
+    project = parsed_toml(project_file)
+    for (name, _uuid) in get(Dict{String, Any}, project, "deps")::Dict{String, Any}
+        workspace_deps[UUID(_uuid::String)] = name
+    end
+
+    name = get(project, "name", nothing)::Union{String, Nothing}
+    _uuid = get(project, "uuid", nothing)::Union{String, Nothing}
+    if name !== nothing && _uuid !== nothing
+        workspace_deps[UUID(_uuid)] = name
+    end
+
+    workspace = get(project, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
+    workspace === nothing && return
+    projects = get(workspace, "projects", nothing)::Union{Vector{String}, Nothing, String}
+    projects isa Vector || return
+    for member in projects
+        member_file = Base.env_project_file(joinpath(dirname(project_file), member))
+        member_file isa String || continue
+        collect_workspace_deps!(workspace_deps, seen, member_file)
+    end
+    return
 end
 
 # A manifest resolved by a different Julia version can record stale information for
@@ -770,9 +783,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # Determine which packages to consider for precompilation by walking
     # transitive dependencies from the appropriate roots.
     # `manifest` controls the scope: workspace_deps (all members) vs project_deps (current project).
-    roots = manifest ? env.workspace_deps : env.project_deps
+    root_uuids = manifest ? keys(env.workspace_deps) : values(env.project_deps)
     pkg_uuids = Set{UUID}()
-    for (_, uuid) in roots
+    for uuid in root_uuids
         _collect_reachable!(pkg_uuids, env.deps, uuid)
     end
 
@@ -809,13 +822,19 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
     end
 
-    project_deps = [
-        Base.PkgId(uuid, name)
-        for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
-    ]
-
+    project_deps = Base.PkgId[]
+    if manifest
+        for (uuid, name) in env.workspace_deps
+            push!(project_deps, Base.PkgId(uuid, name))
+        end
+    else
+        for (name, uuid) in env.project_deps
+            push!(project_deps, Base.PkgId(uuid, name))
+        end
+    end
+    filter!(!Base.in_sysimage, project_deps)
     # consider exts of project deps to be project deps so that errors are reported
-    append!(project_deps, keys(filter(d->last(d).name in keys(env.project_deps), ext_to_parent)))
+    append!(project_deps, keys(filter(d -> last(d) in project_deps, ext_to_parent)))
 
     # An extension effectively depends on another extension if it has a strict superset of its triggers
     for ext_a in keys(ext_to_parent)

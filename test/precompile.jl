@@ -3475,6 +3475,34 @@ end
     end
 end
 
+# Full workspace precompilation should find the root and recursively include member packages.
+@testset "full workspace precompilation" begin
+    workspace_path = joinpath(@__DIR__, "project", "Workspaces", "PrecompileExt")
+    nested_member_path = joinpath(workspace_path, "Nested", "Baz")
+    for active_project in (workspace_path, nested_member_path)
+        mkdepottempdir() do depot
+            original_depot_path = copy(Base.DEPOT_PATH)
+            old_proj = Base.active_project()
+            try
+                push!(empty!(DEPOT_PATH), depot)
+                Base.set_active_project(active_project)
+
+                io = IOBuffer()
+                ioc = IOContext(io, :color => false)
+                Base.Precompilation.precompilepkgs(; io=ioc, fancyprint=false, manifest=true)
+                output = String(take!(io))
+
+                @test occursin("Foo", output)
+                @test occursin("Bar", output)
+                @test occursin("Baz", output)
+            finally
+                Base.set_active_project(old_proj)
+                append!(empty!(DEPOT_PATH), original_depot_path)
+            end
+        end
+    end
+end
+
 # Test that warn_loaded names loaded packages and counts affected dependents
 @testset "warn_loaded names packages and counts dependents" begin
     mkdepottempdir() do depot; mktempdir() do dir
