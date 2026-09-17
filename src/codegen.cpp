@@ -3970,11 +3970,9 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_binding_t *bnd, jl_binding
             if (rval.typ == jl_bottom_type)
                 return jl_cgval_t();
         }
-        bool isboxed = true;
-        bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL; // XXX: this appear to be a bug not to be simply `true`?
         return typed_store(ctx, julia_binding_pvalue(ctx, bp), rval, cmp, ty,
-                           ctx.alias().binding, nullptr, bp, isboxed,
-                           Order, FailOrder, 0, nullptr, op, maybe_null,
+                           ctx.alias().binding, nullptr, bp, /*isboxed*/true,
+                           Order, FailOrder, 0, nullptr, op, /*maybe_null*/true,
                            modifyop, fname, mod, sym);
     }
     Value *r = emit_globalop_runtime_call(ctx, op, bp, bpart, mod, sym, rval, cmp);
