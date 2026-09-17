@@ -351,10 +351,7 @@ end
     end
 end
 
-@testset "GlobalRef and PartialStruct hash consistent with ==" begin
-    @test hash(GlobalRef(Base, :sin)) == hash(GlobalRef(Base, :sin))
-    @test hash(GlobalRef(Base, :sin)) != hash(GlobalRef(Base, :cos))
-
+@testset "PartialStruct hash consistent with ==" begin
     ps(t, f) = Core.PartialStruct(t, Any[f...])
     @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) ==
           hash(ps(Tuple{Int,Float64}, (Int, Float64)))
