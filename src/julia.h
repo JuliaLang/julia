@@ -1385,6 +1385,7 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT;
 
 // this is a version of memcpy that preserves atomic memory ordering
 // which makes it safe to use for objects that can contain memory references
