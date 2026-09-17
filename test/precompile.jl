@@ -233,6 +233,9 @@ precompile_test_harness(false) do dir
               const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
               const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
 
+              const gr54932 = GlobalRef(Base, gensym(:hash54932))
+              const dict54932 = Dict(gr54932 => :found)
+
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
                               missing, missing, missing,
@@ -346,6 +349,13 @@ precompile_test_harness(false) do dir
 
         @test Foo.d29936a === Dict
         @test Foo.d29936b === Dict{K,V} where {V,K}
+
+        gr = Foo.gr54932
+        fresh = GlobalRef(gr.mod, gr.name)
+        @test isequal(gr, fresh)
+        @test hash(gr) == hash(fresh)
+        @test Foo.dict54932[gr] === :found
+        @test Foo.dict54932[fresh] === :found
 
         @test Foo.x28998[end] == 6
 
