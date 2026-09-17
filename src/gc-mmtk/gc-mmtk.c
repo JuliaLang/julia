@@ -741,6 +741,7 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
         add_node_to_roots_buffer(closure, &buf, &len, v);
     }
     add_node_to_roots_buffer(closure, &buf, &len, _jl_debug_method_invalidation);
+    add_node_to_roots_buffer(closure, &buf, &len, jl_method_contributors);
 
     // constants
     add_node_to_roots_buffer(closure, &buf, &len, jl_emptytuple_type);

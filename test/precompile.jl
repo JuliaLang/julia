@@ -2231,6 +2231,173 @@ precompile_test_harness("Issue #48391") do load_path
     @test_throws ErrorException isless(x, x)
 end
 
+# Edge replay: a package image's call edges whose method-match set provably
+# equals the one its precompile worker saw are not matched again at load. Every
+# scenario below loads in a fresh process so each load order starts from the
+# images alone.
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    global function edge_replay_test_output(load_path, depot, body)
+        code = """
+            insert!(LOAD_PATH, 1, $(repr(load_path)))
+            insert!(DEPOT_PATH, 1, $(repr(depot)))
+            $body
+            """
+        return readchomp(`$exename -e $code`)
+    end
+end
+
+precompile_test_harness("edge replay: load order") do load_path
+    write(joinpath(load_path, "EdgeReplayDep.jl"),
+        """
+        module EdgeReplayDep
+        f(x) = :dep
+        end
+        """)
+    # two extenders of EdgeReplayDep.f, each precompiled without knowledge of the
+    # other; their callers are inferred against their own method only
+    write(joinpath(load_path, "EdgeReplayExtA.jl"),
+        """
+        module EdgeReplayExtA
+        using EdgeReplayDep
+        EdgeReplayDep.f(::Integer) = :a
+        callf() = EdgeReplayDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    write(joinpath(load_path, "EdgeReplayExtB.jl"),
+        """
+        module EdgeReplayExtB
+        using EdgeReplayDep
+        EdgeReplayDep.f(::Signed) = :b
+        callf() = EdgeReplayDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    Base.compilecache(Base.PkgId("EdgeReplayDep"))
+    Base.compilecache(Base.PkgId("EdgeReplayExtA"))
+    Base.compilecache(Base.PkgId("EdgeReplayExtB"))
+    depot = DEPOT_PATH[1]
+    # whichever loads second, the more specific method wins everywhere: A's caller
+    # is invalidated by B's activation, or verified against B's method (a
+    # contributor outside A's dependency closure) at A's load
+    for order in (("EdgeReplayExtA", "EdgeReplayExtB"), ("EdgeReplayExtB", "EdgeReplayExtA"))
+        out = edge_replay_test_output(load_path, depot, """
+            using EdgeReplayDep, $(order[1]), $(order[2])
+            print(Base.invokelatest(EdgeReplayExtA.callf), " ", Base.invokelatest(EdgeReplayExtB.callf), " ",
+                  Base.invokelatest(EdgeReplayDep.f, 1))
+            """)
+        @test out == "b b b"
+    end
+    # a method defined in the session before loading is foreign to the image's
+    # dependency closure and must be matched live
+    out = edge_replay_test_output(load_path, depot, """
+        using EdgeReplayDep
+        EdgeReplayDep.f(::Int) = :session
+        using EdgeReplayExtA
+        print(Base.invokelatest(EdgeReplayExtA.callf), " ", Base.invokelatest(EdgeReplayDep.f, 1))
+        """)
+    @test out == "session session"
+    # a deletion in the session leaves no method behind but marks the function,
+    # so the image's edges to it are matched live
+    out = edge_replay_test_output(load_path, depot, """
+        using EdgeReplayDep
+        EdgeReplayDep.f(::Int) = :session
+        Base.delete_method(which(EdgeReplayDep.f, (Int,)))
+        using EdgeReplayExtA
+        print(Base.invokelatest(EdgeReplayExtA.callf), " ", Base.invokelatest(EdgeReplayDep.f, 1))
+        """)
+    @test out == "a a"
+end
+
+precompile_test_harness("edge replay: extension activation") do load_path
+    host_uuid = "0f0f2a5c-6c6d-4b1e-9d2a-2e7d5b7a1c01"
+    trig_uuid = "9b4b1d2e-7a3f-4c0e-8f6b-5a2c1d3e4f02"
+    mkpath(joinpath(load_path, "EdgeReplayHost", "src")); mkpath(joinpath(load_path, "EdgeReplayHost", "ext"))
+    mkpath(joinpath(load_path, "EdgeReplayTrig", "src"))
+    write(joinpath(load_path, "Project.toml"),
+        """
+        [deps]
+        EdgeReplayHost = "$host_uuid"
+        EdgeReplayTrig = "$trig_uuid"
+        """)
+    write(joinpath(load_path, "Manifest.toml"),
+        """
+        julia_version = "$(VERSION)"
+        manifest_format = "2.0"
+
+        [[deps.EdgeReplayHost]]
+        path = "EdgeReplayHost"
+        uuid = "$host_uuid"
+        version = "0.1.0"
+        weakdeps = ["EdgeReplayTrig"]
+
+            [deps.EdgeReplayHost.extensions]
+            EdgeReplayHostExt = "EdgeReplayTrig"
+
+        [[deps.EdgeReplayTrig]]
+        path = "EdgeReplayTrig"
+        uuid = "$trig_uuid"
+        version = "0.1.0"
+        """)
+    write(joinpath(load_path, "EdgeReplayHost", "Project.toml"),
+        """
+        name = "EdgeReplayHost"
+        uuid = "$host_uuid"
+        version = "0.1.0"
+
+        [weakdeps]
+        EdgeReplayTrig = "$trig_uuid"
+
+        [extensions]
+        EdgeReplayHostExt = "EdgeReplayTrig"
+        """)
+    write(joinpath(load_path, "EdgeReplayHost", "src", "EdgeReplayHost.jl"),
+        """
+        module EdgeReplayHost
+        h(x) = :host
+        callh() = h(1)
+        precompile(callh, ())
+        end
+        """)
+    write(joinpath(load_path, "EdgeReplayHost", "ext", "EdgeReplayHostExt.jl"),
+        """
+        module EdgeReplayHostExt
+        using EdgeReplayHost, EdgeReplayTrig
+        EdgeReplayHost.h(::Int) = :ext
+        end
+        """)
+    write(joinpath(load_path, "EdgeReplayTrig", "Project.toml"),
+        """
+        name = "EdgeReplayTrig"
+        uuid = "$trig_uuid"
+        version = "0.1.0"
+        """)
+    write(joinpath(load_path, "EdgeReplayTrig", "src", "EdgeReplayTrig.jl"),
+        """
+        module EdgeReplayTrig
+        end
+        """)
+    Base.compilecache(Base.PkgId(Base.UUID(host_uuid), "EdgeReplayHost"))
+    Base.compilecache(Base.PkgId(Base.UUID(trig_uuid), "EdgeReplayTrig"))
+    depot = DEPOT_PATH[1]
+    # the host's replayed caller keeps its backedges, so the extension's method
+    # invalidates it when the trigger loads later
+    out = edge_replay_test_output(load_path, depot, """
+        using EdgeReplayHost
+        before = Base.invokelatest(EdgeReplayHost.callh)
+        using EdgeReplayTrig
+        print(before, " ", Base.invokelatest(EdgeReplayHost.callh))
+        """)
+    @test out == "host ext"
+    # the other order: the extension activates as soon as the host arrives
+    out = edge_replay_test_output(load_path, depot, """
+        using EdgeReplayTrig
+        using EdgeReplayHost
+        print(Base.invokelatest(EdgeReplayHost.callh))
+        """)
+    @test out == "ext"
+end
+
 precompile_test_harness("Generator nospecialize") do load_path
     write(joinpath(load_path, "GenNoSpec.jl"),
         """
