@@ -404,7 +404,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
                 }
             }
             else {
-                if ((jl_value_t*)jl_get_ci_mi(last_ci) == mi && jl_atomic_load_relaxed(&last_ci->max_world) >= world) { // same dispatch and source
+                if ((jl_value_t*)jl_get_ci_mi(last_ci) == mi && jl_world_at_most(world, jl_atomic_load_relaxed(&last_ci->max_world))) { // same dispatch and source
                     jl_atomic_store_release(&cfuncdata->last_world, world);
                     JL_UNLOCK(&cfun_lock);
                     return f;
