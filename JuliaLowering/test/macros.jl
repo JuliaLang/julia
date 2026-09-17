@@ -1,4 +1,4 @@
-test_mod = @newmod(macro_test)
+test_mod = @newmod(macro_test, Main, JL_NEW_EDITION)
 @eval test_mod import JuliaLowering
 Base.eval(test_mod, :(const var"@ast" = $(JuliaLowering.var"@ast")))
 
@@ -12,31 +12,31 @@ fl_eval(test_mod, :(macro old_h(x); x; end))
 JuliaLowering.include_string(test_mod, "macro new_m(x); x; end")
 fl_eval(test_mod, :(global mvar = "global mvar"))
 
-@testset "syntax versioning sanity-check" begin
+@testset "edition sanity-check" begin
     @test JuliaLowering.include_string(
-        test_mod, "JuliaLowering.@syntax_version") ==
-        JuliaSyntax.JL_NEW_SYNTAX_VERSION
-    @test JuliaLowering.include_string(
-        test_mod, "JuliaLowering.@syntax_version"; expr_compat_mode=false) ==
-        JuliaSyntax.JL_NEW_SYNTAX_VERSION
-    @test JuliaLowering.include_string(
-        test_mod, "JuliaLowering.@syntax_version"; expr_compat_mode=true) ==
-        JuliaSyntax.JL_OLD_SYNTAX_VERSION
+        test_mod, "JuliaLowering.@edition") ==
+        JuliaSyntax.JL_NEW_EDITION
+    @test jl_eval(
+        test_mod, "JuliaLowering.@edition"; edition=JL_NEW_EDITION) ==
+        JuliaSyntax.JL_NEW_EDITION
+    @test jl_eval(
+        test_mod, "JuliaLowering.@edition"; edition=JL_OLD_EDITION) ==
+        JuliaSyntax.JL_OLD_EDITION
 
-    # TODO: test the version of returned syntax
-    @test JuliaLowering.include_string(@newmod(), """
-    JuliaLowering.@syntax_version JuliaSyntax.JL_NEW_SYNTAX_VERSION macro m(); end
-    """; expr_compat_mode=false) isa Function
-    @test JuliaLowering.include_string(@newmod(), """
-    JuliaLowering.@syntax_version JuliaSyntax.JL_NEW_SYNTAX_VERSION macro m(); end
-    """; expr_compat_mode=true) isa Function
+    # TODO: test the edition of returned syntax
+    @test jl_eval(@newmod(), """
+    JuliaLowering.@edition JuliaSyntax.JL_NEW_EDITION macro m(); end
+    """; edition=JL_NEW_EDITION) isa Function
+    @test jl_eval(@newmod(), """
+    JuliaLowering.@edition JuliaSyntax.JL_NEW_EDITION macro m(); end
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(@newmod(), """
-    JuliaLowering.@syntax_version JuliaSyntax.JL_OLD_SYNTAX_VERSION macro m(); end
-    """; expr_compat_mode=false) isa Function
-    @test JuliaLowering.include_string(@newmod(), """
-    JuliaLowering.@syntax_version JuliaSyntax.JL_OLD_SYNTAX_VERSION macro m(); end
-    """; expr_compat_mode=true) isa Function
+    @test jl_eval(@newmod(), """
+    JuliaLowering.@edition JuliaSyntax.JL_OLD_EDITION macro m(); end
+    """; edition=JL_NEW_EDITION) isa Function
+    @test jl_eval(@newmod(), """
+    JuliaLowering.@edition JuliaSyntax.JL_OLD_EDITION macro m(); end
+    """; edition=JL_OLD_EDITION) isa Function
 end
 
 # Basic checks that arbitrary nesting of transparent macros (no new syntax in new
@@ -44,10 +44,10 @@ end
 @testset "basic transparent macros: old macros" for run in [
     (x::String)->Base.include_string(
         test_mod, "#=FLISP SANITY-CHECK=# "*x),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+    (x::String)->jl_eval(
+        test_mod, "#=JL COMPAT=# "*x; edition=JL_OLD_EDITION),
+    (x::String)->jl_eval(
+        test_mod, "#=JL=# "*x; edition=JL_NEW_EDITION)]
 
     @test run("@old_e let mvar = 0; mvar; end") == 0
     @test run("@old_e let @old_e(mvar = 0); mvar; end") == 0
@@ -76,8 +76,8 @@ end
     @test run("@old_h @old_h let mvar = 0; @old_e(@old_e(mvar)); end") == 0
     @test run("@old_h @old_h let @old_e(@old_e(mvar) = 0); @old_e(mvar); end") == 0
 end
-@testset "basic transparent macros: new macros only" for expr_compat_mode in [true, false]
-    local run = (x::String)->JuliaLowering.include_string(test_mod, x; expr_compat_mode)
+@testset "basic transparent macros: new macros only" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
+    local run = (x::String)->jl_eval(test_mod, x; edition)
 
     @test run("@new_m let mvar = 0; mvar; end") == 0
     @test run("@new_m let @new_m(mvar = 0); mvar; end") == 0
@@ -88,11 +88,11 @@ end
     @test run("@new_m let mvar = 0; @new_m(@new_m(mvar)); end") == 0
     @test run("@new_m let @new_m(@new_m(mvar) = 0); @new_m(mvar); end") == 0
 end
-@testset "basic transparent macros: new+old interop" for expr_compat_mode in [true, false],
+@testset "basic transparent macros: new+old interop" for edition in [JL_OLD_EDITION, JL_NEW_EDITION],
     mcall in ["@old_e ", "@new_m ", "@old_e @new_m ", "@new_m @old_e "],
     old_h in ["", "@old_h "]
 
-    local run = (x::String)->JuliaLowering.include_string(test_mod, x; expr_compat_mode)
+    local run = (x::String)->jl_eval(test_mod, x; edition)
 
     @test run(old_h*mcall*"let mvar = 0; mvar; end") == 0
     @test run(old_h*"let ("*mcall*"mvar = 0); mvar; end") == 0
@@ -130,10 +130,10 @@ JuliaLowering.include_string(test_mod, raw"""
 """)
 @testset "basic hygiene: check that name resolution fails where it should (flisp)"  for run in [
     (x::String)->fl_eval(test_mod,JuliaSyntax.parsestmt(Expr, "#=FLISP SANITY-CHECK=# "*x)),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+    (x::String)->jl_eval(
+        test_mod, "#=JL COMPAT=# "*x; edition=JL_OLD_EDITION),
+    (x::String)->jl_eval(
+        test_mod, "#=JL=# "*x; edition=JL_NEW_EDITION)]
     @test_throws UndefVarError run("@old_read_x()")
     @test_throws UndefVarError run("let x = 0; @old_read_x(); end")
     @test_throws UndefVarError run("@old_suggest_x(x)")
@@ -143,10 +143,10 @@ JuliaLowering.include_string(test_mod, raw"""
     @test_throws UndefVarError run("@old_suggest_x(let x = 1; @old_read_x(); end)") == 1
 end
 @testset "basic hygiene: check that name resolution fails where it should (new)" for run in [
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+    (x::String)->jl_eval(
+        test_mod, "#=JL COMPAT=# "*x; edition=JL_OLD_EDITION),
+    (x::String)->jl_eval(
+        test_mod, "#=JL=# "*x; edition=JL_NEW_EDITION)]
 
     @test_throws UndefVarError run("@new_read_x()")
     @test_throws UndefVarError run("let x = 0; @new_read_x(); end")
@@ -172,10 +172,10 @@ end
 @newmod(EvalMod, test_mod)
 @testset "@eval" for run in [
     (x::String)->fl_eval(test_mod,JuliaSyntax.parsestmt(Expr, "#=FLISP SANITY-CHECK=# "*x)),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+    (x::String)->jl_eval(
+        test_mod, "#=JL COMPAT=# "*x; edition=JL_OLD_EDITION),
+    (x::String)->jl_eval(
+        test_mod, "#=JL=# "*x; edition=JL_NEW_EDITION)]
 
     has_syntax = run(raw"@legacy_quote_to_syntax :x") isa SyntaxTree
     treetype = has_syntax ? SyntaxTree : Expr
@@ -187,7 +187,7 @@ end
     @test run(raw"@eval QuoteNode(:sym)") == QuoteNode(:sym)
     @test run(raw"@eval Expr(:call, :identity, 1)") == Expr(:call, :identity, 1)
     @test run(raw"@eval :(identity(1))") == Expr(:call, :identity, 1)
-    # syntax version of the caller should be propagated to JL.eval
+    # syntax edition of the caller should be propagated to JL.eval
     @test run(raw"@eval @legacy_quote_to_syntax(:sym)") isa symtype
     @test run(raw"@eval @legacy_quote_to_syntax(:(identity(1)))") isa treetype
     @test run(raw"@eval @eval @legacy_quote_to_syntax(:(identity(1)))") isa treetype
@@ -275,9 +275,9 @@ end
     # hygiene
     run("let eval_result = 0; @eval 1+1; eval_result; end") == 0
 
-    @testset "(AI) single-arg @eval does not over-preserve hygiene" for expr_compat_mode in (true, false)
+    @testset "(AI) single-arg @eval does not over-preserve hygiene" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
         root = @newmod(root)
-        JuliaLowering.include_string(root, raw"""
+        jl_eval(root, raw"""
         module MacB
             import JuliaLowering.@legacy_quote_to_syntax
             macro do_eval()
@@ -344,10 +344,10 @@ end
         module Sub
             import ..MacA
         end
-        """; expr_compat_mode)
+        """; edition)
         Core.@latestworld
 
-        run(str) = JuliaLowering.include_string(root, str; expr_compat_mode)
+        run(str) = jl_eval(root, str; edition)
 
         # `@eval` inside another macro's unescaped expansion evaluates in the
         # caller's module, not the macro's
@@ -362,15 +362,15 @@ end
         # macro-generated closure: `@eval` binds the definition-time module
         @test Base.invokelatest(run("MacA.@wrap_fn()")) === root
         # the same macro evaluated into a different module follows the live module
-        @test JuliaLowering.include_string(
-            root.Sub, "MacA.@wrap()"; expr_compat_mode) === root.Sub
+        @test jl_eval(
+            root.Sub, "MacA.@wrap()"; edition) === root.Sub
 
         # Caller-provided payloads evaluate in the caller's module
         @test run("MacA.@wrap_arg(arg_marker = (@__MODULE__))") === root
-        if !expr_compat_mode
+        if edition == JL_NEW_EDITION
             # With SyntaxTree-passed arguments the payload keeps the caller's
             # hygiene: the global lands in `root` and is visible there. (In
-            # expr_compat_mode the old-style Expr round-trip re-layers the payload
+            # the old syntax edition the old-style Expr round-trip re-layers the payload
             # with the macro's hygiene and the assignment becomes a hygienic
             # toplevel local -- a pre-existing divergence from flisp tracked by
             # the "hygienic toplevel assignments" TODO in scope_analysis.jl.)
@@ -392,9 +392,9 @@ end
         @test parentmodule(m2) === root
         @test Base.invokelatest(getfield, m2, :user_marker) === m2
 
-        if expr_compat_mode
+        if edition == JL_OLD_EDITION
             # Escaped expansions (old-style macros only): same dynamic target
-            JuliaLowering.include_string(root, raw"""
+            jl_eval(root, raw"""
         module MacEsc
             macro wrap_esc()
                 esc(quote
@@ -402,7 +402,7 @@ end
                 end)
             end
         end
-        """; expr_compat_mode)
+        """; edition)
             Core.@latestworld
             @test run("MacEsc.@wrap_esc()") === root
             @test Base.invokelatest(isdefined, root, :esc_marker)
@@ -431,11 +431,11 @@ end
         Core.eval(test_mod, :(MacHome2.@make_const()))
         @test isdefined(test_mod, :CMARKER)
 
-        JuliaLowering.eval(test_mod, :(module MacHome2
+        jl_eval(test_mod, :(module MacHome2
                        macro make_const()
                            :( @eval const CMARKER = 42 )
                        end
-                       end); expr_compat_mode=true)
+                       end); edition=JL_OLD_EDITION)
         JuliaLowering.eval(test_mod, :(MacHome2.@make_const()))
         @test isdefined(test_mod, :CMARKER)
     end
@@ -445,34 +445,34 @@ end
 @eval test_mod module nothing_mod; end
 @eval test_mod global hscope_g = 234
 @testset "hygienic scope should be usable without macros" begin
-    @test JuliaLowering.eval(
+    @test jl_eval(
         test_mod, Expr(
             Symbol("hygienic-scope"),
-            1, test_mod); expr_compat_mode=true) == 1
-    @test JuliaLowering.eval(
+            1, test_mod); edition=JL_OLD_EDITION) == 1
+    @test jl_eval(
         test_mod, Expr(
             Symbol("hygienic-scope"),
             :hscope_g,
-            test_mod.hscope_mod); expr_compat_mode=true) == 123
-    @test JuliaLowering.eval(
+            test_mod.hscope_mod); edition=JL_OLD_EDITION) == 123
+    @test jl_eval(
         test_mod, Expr(
             Symbol("hygienic-scope"),
             Expr(:escape, :hscope_g),
-            test_mod.nothing_mod); expr_compat_mode=true) == 234
-    @test JuliaLowering.eval(
+            test_mod.nothing_mod); edition=JL_OLD_EDITION) == 234
+    @test jl_eval(
         test_mod, Expr(
             Symbol("hygienic-scope"), Expr(
                 Symbol("hygienic-scope"),
                 Expr(:escape, Expr(:escape, :hscope_g)),
                 test_mod.nothing_mod),
-            test_mod.nothing_mod); expr_compat_mode=true) == 234
-    @test JuliaLowering.eval(
+            test_mod.nothing_mod); edition=JL_OLD_EDITION) == 234
+    @test jl_eval(
         test_mod, Expr(
             Symbol("hygienic-scope"), Expr(
                 Symbol("hygienic-scope"),
                 Expr(:escape, :hscope_g),
                 test_mod.nothing_mod),
-            test_mod.hscope_mod); expr_compat_mode=true) == 123
+            test_mod.hscope_mod); edition=JL_OLD_EDITION) == 123
 end
 
 Base.eval(test_mod, :(
@@ -488,10 +488,10 @@ Base.eval(test_mod, :(
 @testset "escape and hygienic-scope forms" for run in [
     (x::String)->Base.include_string(
         test_mod, "#=FLISP SANITY-CHECK=# "*x),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
-    (x::String)->JuliaLowering.include_string(
-        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+    (x::String)->jl_eval(
+        test_mod, "#=JL COMPAT=# "*x; edition=JL_OLD_EDITION),
+    (x::String)->jl_eval(
+        test_mod, "#=JL=# "*x; edition=JL_NEW_EDITION)]
 
     @test run(raw"""
     let (x, y) = (0, 0); @oldstyle_silly_scopes(x, y); (x, y); end
@@ -504,7 +504,7 @@ Base.eval(test_mod, :(
 end
 
 @testset "apply_expansion_layer mutation testing" begin
-    local test_mod = @newmod(apply_expansion_layer)
+    local test_mod = @newmod(apply_expansion_layer, Main, JL_NEW_EDITION)
     # recursion can't stop at module/toplevel/inert without tweaks, because a
     # macro can pull random stuff out of it.  This also tests calling into macro
     # expansion from macros, mostly because re-using macros I've already written
@@ -561,22 +561,22 @@ end
     """) == 1
 
     # escape should obey quote/unquote
-    JuliaLowering.include_string(test_mod, raw"""
+    jl_eval(test_mod, raw"""
     macro esc_in_quote(); Expr(:quote, Expr(:escape, :x)); end
-    """; expr_compat_mode=true)
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_OLD_EDITION)
+    @test jl_eval(test_mod, raw"""
     @esc_in_quote
-    """; expr_compat_mode=true) == Expr(:escape, :x)
+    """; edition=JL_OLD_EDITION) == Expr(:escape, :x)
     @test JuliaLowering.include_string(test_mod, raw"""
     @esc_in_quote
     """) == Expr(:escape, :x)
 
-    JuliaLowering.include_string(test_mod, raw"""
+    jl_eval(test_mod, raw"""
     macro esc_in_unquote(); Expr(:quote, Expr(:$, Expr(:escape, :x))); end
-    """; expr_compat_mode=true)
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_OLD_EDITION)
+    @test jl_eval(test_mod, raw"""
     let x = 1; @esc_in_unquote(); end
-    """; expr_compat_mode=true) == 1
+    """; edition=JL_OLD_EDITION) == 1
     @test JuliaLowering.include_string(test_mod, raw"""
     let x = 1; @esc_in_unquote(); end
     """) == 1
@@ -696,38 +696,38 @@ expanded = JuliaLowering.macroexpand(test_mod, ex)
     "(y, z)"
 ]
 
-@testset "expansion special case: macrocall in do expression" for expr_compat_mode in [true, false]
-    @test JuliaLowering.include_string(test_mod, raw"""
+@testset "expansion special case: macrocall in do expression" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
+    @test jl_eval(test_mod, raw"""
     macro mac_called_in_do_expression(dofunc, arg)
         @legacy_quote_to_syntax :($dofunc($arg))
     end
-    """; expr_compat_mode) isa Function
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition) isa Function
+    @test jl_eval(test_mod, raw"""
     @mac_called_in_do_expression(9) do x
         x * 10
     end
-    """; expr_compat_mode) == 90
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition) == 90
+    @test jl_eval(test_mod, raw"""
     let fp = @cfunction(Cint, (Cint,)) do x
             x + Cint(1)
         end
         ccall(fp isa Ptr ? fp : fp.ptr, Cint, (Cint,), 2)
     end
-    """; expr_compat_mode) == 3
+    """; edition) == 3
 end
 
 @test JuliaLowering.include_string(test_mod, raw"""
 v"1.14"
 """) isa VersionNumber
-@test JuliaLowering.include_string(test_mod, raw"""
+@test jl_eval(test_mod, raw"""
 v"1.14"
-""";expr_compat_mode=true) isa VersionNumber
+""";edition=JL_OLD_EDITION) isa VersionNumber
 @test JuliaLowering.include_string(test_mod, raw"""
 Base.Experimental.@VERSION
 """) isa NamedTuple
-@test JuliaLowering.include_string(test_mod, raw"""
+@test jl_eval(test_mod, raw"""
 Base.Experimental.@VERSION
-""";expr_compat_mode=true) isa NamedTuple
+""";edition=JL_OLD_EDITION) isa NamedTuple
 
 # World age support for macro expansion
 JuliaLowering.include_string(test_mod, raw"""
@@ -743,7 +743,7 @@ end
 """)
 world2 = Base.get_world_counter()
 
-call_world_arg_test = JuliaLowering.rebase_layers(JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()"), test_mod, JuliaSyntax.JL_NEW_SYNTAX_VERSION)
+call_world_arg_test = JuliaLowering.rebase_layers(JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()"), test_mod)
     @test JuliaLowering.expand_forms_1(call_world_arg_test, world1, true) ≈
         @ast_ 1::K"Value"
     @test JuliaLowering.expand_forms_1(call_world_arg_test, world2, true) ≈
@@ -807,19 +807,19 @@ end
     end)
 
     # New-style expansions: caller-supplied identifier keeps the caller's layer
-    JuliaLowering.include_string(def, raw"""
+    jl_eval(def, raw"""
     macro outer_new_hyg();     @legacy_quote_to_syntax(:(@inner())); end
     macro outer_new_hyg_dot(); @legacy_quote_to_syntax(:(N.@inner())); end
     macro outer_new_dot(m);    @legacy_quote_to_syntax(:($m.@inner())); end
-    """)
+    """; edition=JL_NEW_EDITION)
     fl_eval(use, :(import ..macname_def: @outer_esc, @outer_esc_missing,
                    @outer_hyg, @outer_esc_dot, @outer_escl_dot, @outer_hyg_dot,
                    @outer_mc, @outer_mc_esc, @outer_hs, @outer_gr, @outer_val,
                    @outer_new_hyg, @outer_new_hyg_dot, @outer_new_dot))
     Core.@latestworld
 
-    for expr_compat_mode in (true, false)
-        jl(ex) = jl_eval(use, ex; expr_compat_mode)
+    for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
+        jl(ex) = jl_eval(use, ex; edition)
         @test jl(:(@outer_esc())) === :use_inner
         err = try jl(:(@outer_esc_missing())); nothing; catch e; e; end
         @test err isa MacroExpansionError
@@ -1013,72 +1013,72 @@ end
     MethodError: no method matching var"@sig_mismatch"(""")
 end
 
-@testset "old macros producing exotic expr heads (or are otherwise complex)" for expr_compat_mode in [true, false]
-    @test JuliaLowering.include_string(test_mod, """
+@testset "old macros producing exotic expr heads (or are otherwise complex)" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
+    @test jl_eval(test_mod, """
     let # example from @preserve docstring
         x = Ref{Int}(101)
         p = Base.unsafe_convert(Ptr{Int}, x)
         GC.@preserve x unsafe_load(p)
-    end"""; expr_compat_mode) === 101 # Expr(:gc_preserve)
+    end"""; edition) === 101 # Expr(:gc_preserve)
 
     # JuliaLowering.jl/issues/121
     @test JuliaLowering.include_string(test_mod, """
     GC.@preserve @static if true @__MODULE__ else end
     """) isa Module
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
     GC.@preserve @static if true v"1.14" else end
-    """; expr_compat_mode) isa VersionNumber
+    """; edition) isa VersionNumber
 
     # JuliaLowering.jl/issues/144
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
     f_preserve144() = let
         val = Any[]
         GC.@preserve val begin; end
     end
     f_preserve144()
-    """; expr_compat_mode) == nothing
+    """; edition) == nothing
 
     # JuliaLowering.jl/issues/145
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
     f_preserve145() = let
         debug_buffer = IOBuffer()
         # inside function to force compilation
         GC.@preserve debug_buffer 1
     end
     f_preserve145()
-    """; expr_compat_mode) == 1
+    """; edition) == 1
 
     # only invokelatest produces :isglobal now, so MWE here
     Base.eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
     some_global = 1
     function isglobal_chk(some_arg)
        local some_local = 1
        (@isglobal(some_undefined), @isglobal(some_global), @isglobal(some_arg), @isglobal(some_local))
     end
     isglobal_chk(1)
-    """; expr_compat_mode) === (true, true, false, false)
+    """; edition) === (true, true, false, false)
     # with K"Placeholder"s
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
     __ = 1
     function isglobal_chk(___)
        local ____ = 1
        (@isglobal(_), @isglobal(__), @isglobal(___), @isglobal(____))
     end
     isglobal_chk(1)
-    """; expr_compat_mode) === (false, false, false, false)
+    """; edition) === (false, false, false, false)
 
     # @test appears to be the only macro in base to use :inert
-    test_result = JuliaLowering.include_string(test_mod, """
+    test_result = jl_eval(test_mod, """
     using Test
     @test identity(123) === 123
-    """; expr_compat_mode)
+    """; edition)
     @test test_result.value === true
 
     # @enum produces Expr(:toplevel)
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     @enum SOME_ENUM X1 X2 X3
-    """; expr_compat_mode)
+    """; edition)
     Core.@latestworld
     @test test_mod.SOME_ENUM <: Enum
     @test test_mod.X1 isa Enum
@@ -1086,12 +1086,12 @@ end
     # @deprecate also produces Expr(:toplevel), and :public with expression
     # hygiene different from the contained names.
     @testset "@deprecate" begin
-        @test JuliaLowering.include_string(test_mod, """
+        @test jl_eval(test_mod, """
         module DeprecateMod
             d2(x) = x+1
             @deprecate d1(x) d2(0)
         end
-        """; expr_compat_mode) isa Module
+        """; edition) isa Module
         Core.@latestworld
         @test isdefined(test_mod.DeprecateMod, :d2)
         @test isdefined(test_mod.DeprecateMod, :d1)
@@ -1102,11 +1102,11 @@ end
     # @testset produces :tryfinally with secret third arg
     @eval test_mod :(using Test)
     @test JuliaLowering.include_string(test_mod, "@test true") isa Test.Pass
-    @testset let jltestset = JuliaLowering.include_string(test_mod, """
+    @testset let jltestset = jl_eval(test_mod, """
     @testset begin
         @test true
     end
-    """; expr_compat_mode)
+    """; edition)
         @test jltestset isa Test.AbstractTestSet
         @test jltestset.n_passed == 1
     end
@@ -1119,12 +1119,12 @@ end
                   A[I] = Base.Experimental.Const(B)[I]
               end
               return 0
-          end); expr_compat_mode) isa Function
+          end); edition) isa Function
     @test jl_eval(
         test_mod,
         :(let A = [1,2,3], B = [4,5,6]
               simple_aliasscope(A,B), A, B
-          end); expr_compat_mode) == (0, [4,5,6], [4,5,6])
+          end); edition) == (0, [4,5,6], [4,5,6])
 
     @test JuliaLowering.include_string(test_mod, """@fastmath 1 <= 2 <= 3""")
 
@@ -1144,14 +1144,14 @@ end
     @test fl_eval(test_mod, Expr(:call,
                                  Expr(:function, Expr(:call, :func_empty_meta),
                                       Expr(:block, Expr(:meta))))) == nothing
-    @test jl_eval(test_mod, Expr(:meta)) == nothing
-    @test jl_eval(test_mod, Expr(:block, Expr(:meta))) == nothing
+    @test jl_eval(test_mod, Expr(:meta); edition=JL_NEW_EDITION) == nothing
+    @test jl_eval(test_mod, Expr(:block, Expr(:meta)); edition=JL_NEW_EDITION) == nothing
     @test jl_eval(test_mod, Expr(:call,
                                  Expr(:function, Expr(:call, :func_empty_meta),
-                                      Expr(:block, Expr(:meta))))) == nothing
+                                      Expr(:block, Expr(:meta)))); edition=JL_NEW_EDITION) == nothing
 end
 
-@testset "macros producing meta forms" for expr_compat_mode in [true, false]
+@testset "macros producing meta forms" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
     function find_method_ci(thunk)
         ci = thunk.args[1]::Core.CodeInfo
         m = findfirst(ci.code) do x
@@ -1161,10 +1161,10 @@ end
         ci.code[m].args[5]
     end
     jlower_e(s) = JuliaLowering.to_lowered_expr(
-        JuliaLowering.lower(
+        jl_lower(
             test_mod, JuliaLowering.parsestmt(
                 JuliaLowering.SyntaxTree, s);
-            expr_compat_mode))
+            edition))
 
     prog = "Base.@assume_effects :foldable function foo(); end"
     ref = Meta.lower(test_mod, Meta.parse(prog))
@@ -1216,31 +1216,31 @@ end
     # TODO: no api for option retrieval, just check that it compiles
     let options_mod = Module()
         @test fl_eval(options_mod, :(Base.Experimental.@optlevel 1)) == nothing
-        @test jl_eval(options_mod, :(Base.Experimental.@optlevel 1)) == nothing
+        @test jl_eval(options_mod, :(Base.Experimental.@optlevel 1); edition=JL_NEW_EDITION) == nothing
         @test fl_eval(options_mod, :(Base.Experimental.@max_methods 1)) == nothing
-        @test jl_eval(options_mod, :(Base.Experimental.@max_methods 1)) == nothing
+        @test jl_eval(options_mod, :(Base.Experimental.@max_methods 1); edition=JL_NEW_EDITION) == nothing
     end
 end
 
 # partially robot-generated
-@testset "meta-like forms not using the `meta` expression" for expr_compat_mode in (true,false)
+@testset "meta-like forms not using the `meta` expression" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
     @testset "in value position" begin
         @test fl_eval(test_mod, Expr(:boundscheck)) isa Bool
-        @test jl_eval(test_mod, Expr(:boundscheck); expr_compat_mode) isa Bool
+        @test jl_eval(test_mod, Expr(:boundscheck); edition) isa Bool
 
         @test fl_eval(test_mod, Expr(:inbounds, true)) === nothing
         @test fl_eval(test_mod, Expr(:inbounds, false)) === nothing
         @test fl_eval(test_mod, Expr(:inbounds, :pop)) === nothing
-        @test jl_eval(test_mod, Expr(:inbounds, true); expr_compat_mode) === nothing
-        @test jl_eval(test_mod, Expr(:inbounds, false); expr_compat_mode) === nothing
-        @test jl_eval(test_mod, Expr(:inbounds, :pop); expr_compat_mode) === nothing
+        @test jl_eval(test_mod, Expr(:inbounds, true); edition) === nothing
+        @test jl_eval(test_mod, Expr(:inbounds, false); edition) === nothing
+        @test jl_eval(test_mod, Expr(:inbounds, :pop); edition) === nothing
 
         @testset for inline in (:inline, :noinline)
             @testset let ex = Expr(:block,
                                    Expr(inline, true),
                                    Expr(inline, false))
                 @test fl_eval(test_mod, ex) === nothing
-                @test jl_eval(test_mod, ex; expr_compat_mode) === nothing
+                @test jl_eval(test_mod, ex; edition) === nothing
             end
             @testset let ex = Expr(:function, Expr(:tuple),
                                    Expr(:block,
@@ -1251,7 +1251,7 @@ end
                 Core.@latestworld
                 @test f() === nothing
 
-                f = jl_eval(test_mod, ex; expr_compat_mode)
+                f = jl_eval(test_mod, ex; edition)
                 Core.@latestworld
                 @test f() === nothing
             end
@@ -1267,10 +1267,10 @@ end
         ci.code[m].args[5]
     end
     jlower_e(s) = JuliaLowering.to_lowered_expr(
-        JuliaLowering.lower(
+        jl_lower(
             test_mod, JuliaLowering.parsestmt(
                 JuliaLowering.SyntaxTree, s);
-            expr_compat_mode))
+            edition))
     our_ssaflags(prog) = find_method_ci(jlower_e(prog)).ssaflags
 
     local INBOUNDS = Core.Compiler.IR_FLAG_INBOUNDS
@@ -1286,12 +1286,12 @@ end
     has_none(prog, flags) = all(f -> (f & flags) == 0,    our_ssaflags(prog))
 
     @testset "boundscheck" begin
-        JuliaLowering.include_string(test_mod, """
+        jl_eval(test_mod, """
         @inline function g_boundscheck(A, i)
             @boundscheck checkbounds(A, i)
             return A[i]
         end
-        """; expr_compat_mode)
+        """; edition)
         @test test_mod.g_boundscheck(1:2, 2) == 2
         @test_throws BoundsError test_mod.g_boundscheck(1:2, 3)
 
@@ -1308,7 +1308,7 @@ end
     end
 
     @testset "inbounds" begin
-        JuliaLowering.include_string(test_mod, """
+        jl_eval(test_mod, """
         function sum_inbounds(A::AbstractArray)
             r = zero(eltype(A))
             for i in eachindex(A)
@@ -1316,7 +1316,7 @@ end
             end
             return r
         end
-        """; expr_compat_mode)
+        """; edition)
         @test test_mod.sum_inbounds([1,2,3]) == 6
 
         @test has_none("function f(A,i); A[i]; end", INBOUNDS)
@@ -1349,21 +1349,21 @@ end
 
         # Bare `@inline` inside a function body (1.8+) emits
         # `Expr(:meta, :inline)`; no statement gets a call-site IR_FLAG_INLINE.
-        JuliaLowering.include_string(test_mod, """
+        jl_eval(test_mod, """
         function bare_inline(x)
             @inline
             x * 2
         end
-        """; expr_compat_mode)
+        """; edition)
         @test test_mod.bare_inline(3) == 6
         @test has_none("function f(x); @inline; x * 2; end", INLINE)
 
         # `@inline` on a definition is handled by the meta-expression path
         # (covered in "macros producing meta forms"); confirm it still runs
         # and that no call-site INLINE bit leaks into the body.
-        JuliaLowering.include_string(test_mod, """
+        jl_eval(test_mod, """
         @inline f_inline_def(x) = x + 1
-        """; expr_compat_mode)
+        """; edition)
         @test test_mod.f_inline_def(2) == 3
         @test has_none("@inline f(x) = x + 1", INLINE)
     end
@@ -1375,18 +1375,18 @@ end
         @test has_none("function f(g,x); @noinline g(x); end", INLINE)
         @test has_any("function f(g,x); @noinline g(x) + g(x); end", NOINLINE)
 
-        JuliaLowering.include_string(test_mod, """
+        jl_eval(test_mod, """
         function bare_noinline(x)
             @noinline
             x * 2
         end
-        """; expr_compat_mode)
+        """; edition)
         @test test_mod.bare_noinline(3) == 6
         @test has_none("function f(x); @noinline; x * 2; end", NOINLINE)
 
-        JuliaLowering.include_string(test_mod, """
+        jl_eval(test_mod, """
         @noinline f_noinline_def(x) = x + 1
-        """; expr_compat_mode)
+        """; edition)
         @test test_mod.f_noinline_def(2) == 3
 
         # Innermost annotation wins when @inline / @noinline nest: the inner
@@ -1421,9 +1421,9 @@ end
             purity_mask(Base.EffectsOverride(consistent=true, effect_free=true)))
 
         # Function form goes through a different path: `(meta (purity args...))`
-        JuliaLowering.include_string(test_mod, """
+        jl_eval(test_mod, """
         Base.@assume_effects :total f_assume_def(x) = x
-        """; expr_compat_mode)
+        """; edition)
         @test test_mod.f_assume_def(5) == 5
         prog_def = "Base.@assume_effects :total function f_assume_total(x); x; end"
         ref_ci = find_method_ci(Meta.lower(test_mod, Meta.parse(prog_def)))
@@ -1458,7 +1458,7 @@ end
         @legacy_quote_to_syntax :(module $x end)
     end
     """) ≈ @ast_ [K"module"
-        v"1.14.0"::K"Value"
+        JL_NEW_EDITION::K"Value"
         true::K"Value"
         "AA"::K"Identifier"
         [K"block"]
@@ -1467,33 +1467,33 @@ end
     # In macro expansion, require that expressions passed in as macro
     # *arguments* get the lexical scope of the calling context, even for the
     # `x` in `M.$x` where the right hand side of `.` is normally quoted.
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
         let x = @legacy_quote_to_syntax :(someglobal)
             @eval M.$x
         end
-    """; expr_compat_mode=false) == "global in module M"
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_NEW_EDITION) == "global in module M"
+    @test jl_eval(test_mod, raw"""
         let x = @legacy_quote_to_syntax :(someglobal)
             @eval M.$x
         end
-    """; expr_compat_mode=true) == "global in module M"
+    """; edition=JL_OLD_EDITION) == "global in module M"
 
     # @eval quoting should embed the value, not the syntax
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
         let some_local = 101
             @eval module AA
                 x = $some_local
             end
         end
-    """; expr_compat_mode=false) isa Module
+    """; edition=JL_NEW_EDITION) isa Module
     @test test_mod.AA.x == 101
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
         let some_local = 101
             @eval module AA
                 x = $some_local
             end
         end
-    """; expr_compat_mode=true) isa Module
+    """; edition=JL_OLD_EDITION) isa Module
     @test test_mod.AA.x == 101
 
     # "Deferred hygiene" in macros which emit quoted code.  OK to break
@@ -1597,9 +1597,9 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
                                Expr(:module, false, name,
                                     Expr(:block, Expr(:const, Expr(:(=), :c, 1))))))))
         end
-        end); expr_compat_mode=true)
+        end); edition=JL_OLD_EDITION)
 
-    @testset for expr_compat_mode in [true, false]
+    @testset for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
         @test JuliaLowering.include_string(
             test_mod, "MacMod.@makemod(newmod)") isa Module
         Core.@latestworld
@@ -1620,9 +1620,9 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
                       Expr(:block,
                            Expr(:const, Expr(:(=), esc(:c), 1)))))
         end
-        end); expr_compat_mode=true)
+        end); edition=JL_OLD_EDITION)
 
-    @testset for expr_compat_mode in [true, false]
+    @testset for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
         @test JuliaLowering.include_string(
             test_mod, "MacMod.@makemod(newmod)") isa Module
         Core.@latestworld
@@ -1657,18 +1657,18 @@ end
              esc(:(@from_toplevel_expansion())))
     end
 
-    @test JuliaLowering.include_string(
-        test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=true) === 123
+    @test jl_eval(
+        test_mod, "@make_and_use_macro_toplevel()"; edition=JL_OLD_EDITION) === 123
 
     if isdefined(test_mod, Symbol("@from_toplevel_expansion"))
         Base.delete_binding(test_mod, Symbol("@from_toplevel_expansion"))
     end
 
-    @test JuliaLowering.include_string(
-        test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=false) === 123
+    @test jl_eval(
+        test_mod, "@make_and_use_macro_toplevel()"; edition=JL_NEW_EDITION) === 123
 
     # unescaped top-level macro should be visible in the old system
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     module MacrosDefiningMacros
     macro make_old_unescaped_macro(name)
         :(macro $name(x)
@@ -1681,22 +1681,22 @@ end
         end)
     end
     end
-    """; expr_compat_mode=true) isa Module
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_OLD_EDITION) isa Module
+    @test jl_eval(test_mod, raw"""
     MacrosDefiningMacros.@make_old_unescaped_macro make_old_unescaped_macro_out
-    """; expr_compat_mode=true) isa Function
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_OLD_EDITION) isa Function
+    @test jl_eval(test_mod, raw"""
     MacrosDefiningMacros.@make_old_escaped_macro make_old_escaped_macro_out
-    """; expr_compat_mode=true) isa Function
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_OLD_EDITION) isa Function
+    @test jl_eval(test_mod, raw"""
     MacrosDefiningMacros.@make_old_unescaped_macro_out 1
-    """; expr_compat_mode=true) == 1
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_OLD_EDITION) == 1
+    @test jl_eval(test_mod, raw"""
     @make_old_escaped_macro_out 1
-    """; expr_compat_mode=true) == 1
+    """; edition=JL_OLD_EDITION) == 1
 
     # standard scope-layer-carrying macro arg `name` should work in new system
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro make_new_nameprovided_macro(name)
         @legacy_quote_to_syntax :(macro $name(x)
             x
@@ -1704,23 +1704,23 @@ end
     end
     @make_new_nameprovided_macro make_new_nameprovided_macro_out
     @make_new_nameprovided_macro_out 1
-    """; expr_compat_mode=false) == 1
+    """; edition=JL_NEW_EDITION) == 1
 
     # unhygienic new macro def shouldn't be visible (may change)
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro make_new_anaphoric_macro_fail()
         @legacy_quote_to_syntax :(macro make_new_anaphoric_macro_fail_out(x)
             x
         end)
     end
     @make_new_anaphoric_macro_fail
-    """; expr_compat_mode=false) isa Function
-    @test_throws MacroExpansionError JuliaLowering.include_string(
-        test_mod, "@make_new_anaphoric_macro_fail_out"; expr_compat_mode=false)
+    """; edition=JL_NEW_EDITION) isa Function
+    @test_throws MacroExpansionError jl_eval(
+        test_mod, "@make_new_anaphoric_macro_fail_out"; edition=JL_NEW_EDITION)
 end
 
 @testset "SIMD loopinfo" begin
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     @eval let
         n = 10
         x = zeros(n)
@@ -1732,9 +1732,9 @@ end
         end
         sum(x)
     end
-    """; expr_compat_mode=true) == 10.0
+    """; edition=JL_OLD_EDITION) == 10.0
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     @eval let
         n = 10
         x = zeros(n)
@@ -1746,7 +1746,7 @@ end
         end
         sum(x)
     end
-    """; expr_compat_mode=true) == 10.0
+    """; edition=JL_OLD_EDITION) == 10.0
 
     JuliaLowering.include_string(test_mod, """
     @noinline function inner(x, y)
@@ -1775,53 +1775,53 @@ end
 @testset "@__FUNCTION__ and Expr(:thisfunction)" begin
     @testset "Basic usage" begin
         # @__FUNCTION__ in regular functions
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         test_function_basic() = @__FUNCTION__
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         @test test_mod.test_function_basic() === test_mod.test_function_basic
 
         # Expr(:thisfunction) in regular functions
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
             @eval regular_func() = @__FUNCTION__
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         @test test_mod.regular_func() === test_mod.regular_func
     end
 
     @testset "Recursion" begin
         # Factorial with @__FUNCTION__
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         factorial_function(n) = n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1)
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         @test test_mod.factorial_function(5) == 120
 
         # Fibonacci with Expr(:thisfunction)
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         struct RecursiveCallableStruct; end
         (::RecursiveCallableStruct)(n) = n <= 1 ? n : @__FUNCTION__()(n-1) + @__FUNCTION__()(n-2)
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         @test test_mod.RecursiveCallableStruct()(10) === 55
 
         # Anonymous function recursion
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1))(5)
-        """; expr_compat_mode=true) == 120
+        """; edition=JL_OLD_EDITION) == 120
     end
 
     @testset "Closures and nested functions" begin
         # Prevents boxed closures
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         function make_closure()
             fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
             return fib
         end
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         Test.@inferred test_mod.make_closure()
         closure = test_mod.make_closure()
         @test closure(5) == 8
         Test.@inferred closure(5)
 
         # Complex closure of closures
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         function f1()
             function f2()
                 function f3()
@@ -1831,7 +1831,7 @@ end
             end
             return (@__FUNCTION__), f2()...
         end
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         Test.@inferred test_mod.f1()
         @test test_mod.f1()[1] === test_mod.f1
         @test test_mod.f1()[2] !== test_mod.f1
@@ -1842,11 +1842,11 @@ end
 
     @testset "Do blocks" begin
         function test_do_block()
-            result = JuliaLowering.include_string(test_mod, raw"""
+            result = jl_eval(test_mod, raw"""
             map([1, 2, 3]) do x
                 return (@__FUNCTION__, x)
             end
-            """; expr_compat_mode=true)
+            """; edition=JL_OLD_EDITION)
             # All should refer to the same do-block function
             @test all(r -> r[1] === result[1][1], result)
             # Values should be different
@@ -1859,36 +1859,36 @@ end
 
     @testset "Keyword arguments" begin
         # @__FUNCTION__ with kwargs
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         f_thisfunction_kw(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         @test test_mod.f_thisfunction_kw(n = 5) == 120
 
         # Expr(:thisfunction) with kwargs
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         f_thisfunction_kw2(; n=1) = n <= 1 ? n : n * @__FUNCTION__()(; n=n-1)
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         result = test_mod.f_thisfunction_kw2(n=5)
         @test result == 120
     end
 
     @testset "Callable structs" begin
         # @__FUNCTION__ in callable structs
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         module A
             struct CallableStruct{T}; val::T; end
             (c::CallableStruct)() = @__FUNCTION__
         end
-        """; expr_compat_mode=true)
-        JuliaLowering.include_string(test_mod, raw"""
+        """; edition=JL_OLD_EDITION)
+        jl_eval(test_mod, raw"""
         using .A: CallableStruct
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         c = test_mod.CallableStruct(5)
         @test c() === c
 
         # In closures, var"#self#" should refer to the enclosing function,
         # NOT the enclosing struct instance
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         struct CallableStruct2; end
         @eval function (obj::CallableStruct2)()
             function inner_func()
@@ -1896,7 +1896,7 @@ end
             end
             inner_func
         end
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
 
         let cs = test_mod.CallableStruct2()
             @test cs()() === cs()
@@ -1904,13 +1904,13 @@ end
         end
 
         # Accessing values via self-reference
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         struct CallableStruct3
             value::Int
         end
         (obj::CallableStruct3)() = @__FUNCTION__()
         (obj::CallableStruct3)(x) = @__FUNCTION__().value + x
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
 
         let cs = test_mod.CallableStruct3(42)
             @test cs() === cs
@@ -1918,13 +1918,13 @@ end
         end
 
         # Callable struct with args and kwargs
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         struct CallableStruct4
         end
         @eval function (obj::CallableStruct4)(x, args...; y=2, kws...)
             return (; func=(@__FUNCTION__), x, args, y, kws)
         end
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         c = test_mod.CallableStruct4()
         @test c(1).func === c
         @test c(2, 3).args == (3,)
@@ -1934,42 +1934,42 @@ end
 
     @testset "Special cases" begin
         # Generated functions
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
         let
             @generated foo2() = @__FUNCTION__
             foo2() === foo2
         end
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
 
         # Struct constructors
         let
-            JuliaLowering.include_string(test_mod, raw"""
+            jl_eval(test_mod, raw"""
             struct Cols{T<:Tuple}
                 cols::T
                 operator
                 Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string(@__FUNCTION__))
             end
-            """; expr_compat_mode=true)
+            """; edition=JL_OLD_EDITION)
             result = @invokelatest test_mod.Cols(1, 2, 3)
             @test occursin("Cols", result)
         end
 
         # Should not access arg-map for local variables
         # TODO: worth the special case?
-        JuliaLowering.include_string(test_mod, raw"""
+        jl_eval(test_mod, raw"""
             function f_thisfunction_argmap end
             function (f_thisfunction_argmap::typeof(f_thisfunction_argmap))()
                 f_thisfunction_argmap = 1
                 @__FUNCTION__
             end
-        """; expr_compat_mode=true)
+        """; edition=JL_OLD_EDITION)
         @test_broken test_mod.f_thisfunction_argmap() ===
             test_mod.f_thisfunction_argmap
     end
 
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
         @eval let f=[ ()->$(Expr(:thisfunction)) for i = 1:1 ][1]; f() === f; end
-    """; expr_compat_mode=true)
+    """; edition=JL_OLD_EDITION)
 end
 
 @testset "macro source LineNumberNode" begin
@@ -2009,27 +2009,25 @@ end
                   out = @invokelatest(invokelatest_target(1, 2))
                   Base.delete_binding(@__MODULE__, :invokelatest_target)
                   out
-              end))
+              end); edition=JL_NEW_EDITION)
     # the following test needs to define this to be effective
     @test_throws UndefVarError JuliaLowering.include_string(test_mod, "invokelatest_target(1,2)")
     @test JuliaLowering.include_string(test_mod, "test_invokelatest()") === 3
 
-    for expr_compat_mode in (false, true),
-        version in (v"1.13", v"1.14")
-
-        _version = JuliaLowering.include_string(test_mod,
+    for edition in (OLDEST_EDITION, JL_OLD_EDITION)
+        _version = jl_eval(test_mod,
             "Base.Experimental.@VERSION";
-            expr_compat_mode, version
+            edition
         )
         @test _version isa NamedTuple
-        @test _version.syntax == version
+        @test _version.syntax == edition
     end
 end
 
 # produces import/using in module that is `@eval`ed.
 @testset "safetestset" begin
     macro_mod = @newmod(macro_mod, test_mod)
-    JuliaLowering.include_string(macro_mod, raw"""
+    jl_eval(macro_mod, raw"""
     macro safetestset(testname, expr)
         quote
             @eval module $(gensym("safetestset_mod"))
@@ -2039,14 +2037,14 @@ end
             nothing
         end
     end
-    """; expr_compat_mode=true)
+    """; edition=JL_OLD_EDITION)
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     macro_mod.@safetestset "Tests" begin
         a = 1; b = 2; c = a + b; @test c == 3
         @isdefined(a) == true
     end
-    """; expr_compat_mode=true)
+    """; edition=JL_OLD_EDITION)
     @test !isdefined(test_mod, :a)
     @test !isdefined(macro_mod, :a)
 end
