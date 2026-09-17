@@ -1041,14 +1041,15 @@ void jl_cache_type_if_absent(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz) JL_CANSAFEPOINT;
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
 jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
-jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
+jl_value_t *jl_apply_modifyop(jl_value_t *op, jl_value_t **args, jl_value_t *op_target) JL_CANSAFEPOINT;
 jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *expected, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t *parent, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
 jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
-jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
-jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
+jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
+jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
 int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) JL_CANSAFEPOINT;
 jl_value_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world) JL_CANSAFEPOINT;
@@ -1126,7 +1127,8 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_t *mt, size_t world, size_t *min_world, size_t *max_world);
-
+jl_value_t *jl_invoke_target(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *target) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_invoke_modify(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *op_target) JL_CANSAFEPOINT;
 
 jl_datatype_t *jl_nth_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT;
 jl_typename_t *jl_nth_argument_datatypename(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT;
@@ -1808,6 +1810,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order) 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order);
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify_invoke(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order, jl_value_t *op_target) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *x, jl_value_t *expected, jl_value_t *success_order, jl_value_t *failure_order) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) JL_CANSAFEPOINT; // deprecated
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) JL_CANSAFEPOINT; // deprecated
@@ -1895,7 +1898,18 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy(jl_genericmemory_t *mem) JL_CANSAFEPOINT;
+jl_genericmemory_t *jl_genericmemory_copy(jl_genericmemory_t *mem) JL_CANSAFEPOINT;
+jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len) JL_CANSAFEPOINT;
+jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem, void *data) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic) JL_GLOBALLY_ROOTED;
+jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx) JL_NOTSAFEPOINT;
+void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *v JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED, int isatomic) JL_CANSAFEPOINT;
+void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic);
+jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value_t *v, int isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
@@ -2151,7 +2165,6 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 // This prevents `ct` from returning via error handlers or other unintentional
 // means by destroying some old state before we start destroying that state in atexit hooks.
 void post_boot_hooks(void) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len) JL_CANSAFEPOINT;
 int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFEPOINT;
 JL_CALLABLE(jl_f_opaque_closure_call) JL_CANSAFEPOINT;
 uint_t bindingkey_hash(size_t idx, jl_value_t *data);

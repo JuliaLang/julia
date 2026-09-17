@@ -885,7 +885,7 @@ static const auto jlcheckmodify_func = new JuliaFunction<>{
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, T_pjlvalue, T_prjlvalue, T_prjlvalue}, false); },
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue, T_pjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); },
     nullptr,
 };
 static const auto jlcheckswap_func = new JuliaFunction<>{
@@ -1001,6 +1001,11 @@ static const auto jlapplygeneric_func = new JuliaFunction<>{
 };
 static const auto jlinvoke_func = new JuliaFunction<>{
     XSTR(jl_invoke),
+    get_func2_sig,
+    get_func_attrs,
+};
+static const auto jlinvokemodify_func = new JuliaFunction<>{
+    XSTR(jl_invoke_modify),
     get_func2_sig,
     get_func_attrs,
 };
@@ -3880,17 +3885,19 @@ static jl_cgval_t emit_globalref_partition(jl_codectx_t &ctx, jl_binding_partiti
 }
 
 // Emit the out-of-line store path for a global: check that the binding is currently
-// writable and perform `op` with full runtime semantics. `bpart` is the partition the
-// store was resolved against (see `emit_globalop`), or NULL: the runtime validates the
-// stored value against, and raises errors from, that partition, or resolves the binding
+// writable and perform `op`.
+// `bpart` is the partition the store was resolved against, or NULL: the runtime validates
+// the stored value against, and raises errors from, that partition, or resolves the binding
 // at the current world age when given NULL.
-// Returns the operation's language-level result (converting runtime protocols as
-// needed): boxed, except for StoreKind::SetOnce, which is an i1, or NULL for
-// StoreKind::Set.
+// `modifyop` is the reduce function's code instance for a StoreKind::Modify that came from
+// an `:invoke_modify`, or NULL.
+// Returns the operation's language-level result (converting runtime protocols as needed):
+// boxed, except for StoreKind::SetOnce, which is an i1, or NULL for StoreKind::Set.
 static Value *emit_globalop_runtime_call(jl_codectx_t &ctx, StoreKind op, Value *bp,
                                          jl_binding_partition_t *bpart,
                                          jl_module_t *mod, jl_sym_t *sym,
-                                         const jl_cgval_t &rval, const jl_cgval_t &cmp) JL_CANSAFEPOINT
+                                         const jl_cgval_t &rval, const jl_cgval_t &cmp,
+                                         const jl_cgval_t *modifyop) JL_CANSAFEPOINT
 {
     Value *m = literal_pointer_val(ctx, (jl_value_t*)mod);
     Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
@@ -3912,11 +3919,11 @@ static Value *emit_globalop_runtime_call(jl_codectx_t &ctx, StoreKind op, Value 
     case StoreKind::Swap:
         return ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
                 { bp, part, m, s, boxed(ctx, rval) });
-    case StoreKind::Modify:
-        // FIXME: `modifyop` has no use on this path: the runtime helper applies the reduce function
-        // by generic dispatch, so the code instance an `:invoke_modify` is lost.
+    case StoreKind::Modify: {
+        Value *target = modifyop ? boxed(ctx, *modifyop) : Constant::getNullValue(ctx.types().T_prjlvalue);
         return ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
-                { bp, part, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
+                { bp, part, m, s, boxed(ctx, cmp), boxed(ctx, rval), target });
+    }
     case StoreKind::SetOnce: {
         Value *old = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
                 { bp, part, m, s, boxed(ctx, rval) });
@@ -3975,7 +3982,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_binding_t *bnd, jl_binding
                            Order, FailOrder, 0, nullptr, op, /*maybe_null*/true,
                            modifyop, fname, mod, sym);
     }
-    Value *r = emit_globalop_runtime_call(ctx, op, bp, bpart, mod, sym, rval, cmp);
+    Value *r = emit_globalop_runtime_call(ctx, op, bp, bpart, mod, sym, rval, cmp, modifyop);
     switch (op) {
     case StoreKind::Set:
         return rval;
@@ -6371,39 +6378,28 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
     const jl_cgval_t &f = argv[0];
     if (f.constant) {
         jl_cgval_t ret;
-        auto it = builtin_func_map().end();
         if (f.constant == BUILTIN(modifyfield)) {
             if (emit_f_opfield(ctx, &ret, BUILTIN(modifyfield), argv, nargs - 1, &lival))
                 return ret;
-            it = builtin_func_map().find(f.constant);
-            assert(it != builtin_func_map().end());
         }
         else if (f.constant == BUILTIN(modifyglobal) || f.constant == BUILTIN(modifyglobal_partition)) {
             if (emit_f_opglobal(ctx, &ret, f.constant, argv, nargs - 1, &lival))
                 return ret;
-            it = builtin_func_map().find(f.constant);
-            assert(it != builtin_func_map().end());
         }
         else if (f.constant == BUILTIN(memoryrefmodify)) {
             if (emit_f_opmemory(ctx, &ret, BUILTIN(memoryrefmodify), argv, nargs - 1, &lival))
                 return ret;
-            it = builtin_func_map().find(f.constant);
-            assert(it != builtin_func_map().end());
         }
         else if (jl_is_intrinsic(f.constant)) {
             JL_I::intrinsic fi = (intrinsic)*(uint32_t*)jl_data_ptr(f.constant);
-            if (fi == JL_I::atomic_pointermodify && jl_intrinsic_nargs((int)fi) == nargs - 1)
-                return emit_atomic_pointerop(ctx, fi, ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, &lival);
-        }
-
-        if (it != builtin_func_map().end()) {
-            Value *oldnew = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
-            return mark_julia_type(ctx, oldnew, true, rt);
+            if (fi == JL_I::atomic_pointermodify && jl_intrinsic_nargs((int)fi) == nargs - 1) {
+                if (emit_atomic_pointerop(ctx, &ret, fi, ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, &lival))
+                    return ret;
+            }
         }
     }
-    // emit function and arguments
-    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
-    return mark_julia_type(ctx, callval, true, rt);
+    Value *oldnew = emit_jlcall(ctx, jlinvokemodify_func, boxed(ctx, lival), argv, nargs, julia_call2);
+    return mark_julia_type(ctx, oldnew, true, rt);
 }
 
 static jl_cgval_t emit_specsig_oc_call(jl_codectx_t &ctx, jl_value_t *oc_type, jl_value_t *sigtype, MutableArrayRef<jl_cgval_t> argv /*n.b. this mutation is unusual */, size_t nargs) JL_CANSAFEPOINT
@@ -11271,6 +11267,7 @@ static void init_jit_functions(void)
         add_named_global(jl_builtin_f_names[i], jl_builtin_f_addrs[i]);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
+    add_named_global(jlinvokemodify_func, &jl_invoke_modify);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);

@@ -1043,7 +1043,8 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
 // e[i] <= x (swap)
 // e[i] y => x (replace)
 // x(e[i], y) (modify)
-static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef<jl_cgval_t> argv, int nargs, const jl_cgval_t *modifyop) JL_CANSAFEPOINT
+// Returns false when the operation is left to the runtime.
+static bool emit_atomic_pointerop(jl_codectx_t &ctx, jl_cgval_t *ret, intrinsic f, ArrayRef<jl_cgval_t> argv, int nargs, const jl_cgval_t *modifyop) JL_CANSAFEPOINT
 {
     StoreKind op;
     if (f == atomic_pointerset)
@@ -1066,19 +1067,20 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
 
     jl_value_t *aty = e.typ;
     if (!jl_is_cpointer_type(aty) || !ord.constant || !jl_is_symbol(ord.constant))
-        return emit_runtime_call(ctx, f, argv, nargs);
+        return false;
     if (op == StoreKind::Replace) {
         if (!failord.constant || !jl_is_symbol(failord.constant))
-            return emit_runtime_call(ctx, f, argv, nargs);
+            return false;
     }
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
-        return emit_runtime_call(ctx, f, argv, nargs);
+        return false;
     enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
     enum jl_memory_order failorder = op == StoreKind::Replace ? jl_get_atomic_order((jl_sym_t*)failord.constant, true, false) : order;
     if (order == jl_memory_order_invalid || failorder == jl_memory_order_invalid || failorder > order) {
         emit_atomic_error(ctx, "invalid atomic ordering");
-        return jl_cgval_t(); // unreachable
+        *ret = jl_cgval_t(); // unreachable
+        return true;
     }
     AtomicOrdering llvm_order = get_llvm_atomic_order(order);
     AtomicOrdering llvm_failorder = get_llvm_atomic_order(failorder);
@@ -1088,24 +1090,27 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
         // n.b.: the expected value (y) must be rooted, but not the others
         Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e);
         bool isboxed = true;
-        jl_cgval_t ret = typed_store(ctx, thePtr, x, y, ety, ctx.alias().data, nullptr, nullptr, isboxed,
+        *ret = typed_store(ctx, thePtr, x, y, ety, ctx.alias().data, nullptr, nullptr, isboxed,
                     llvm_order, llvm_failorder, sizeof(jl_value_t*), nullptr, op, false, modifyop, "atomic_pointermodify", nullptr, nullptr);
         if (op == StoreKind::Set)
-            ret = e;
-        return ret;
+            *ret = e;
+        return true;
     }
 
     if (!is_valid_intrinsic_elptr(ety)) {
         std::string msg(StringRef(jl_intrinsic_name((int)f)));
         msg += ": invalid pointer type";
         emit_error(ctx, msg);
-        return jl_cgval_t();
+        *ret = jl_cgval_t();
+        return true;
     }
     if (op != StoreKind::Modify) {
         emit_typecheck(ctx, x, ety, std::string(jl_intrinsic_name((int)f)));
         x = update_julia_type(ctx, x, ety);
-        if (x.typ == jl_bottom_type)
-            return jl_cgval_t();
+        if (x.typ == jl_bottom_type) {
+            *ret = jl_cgval_t();
+            return true;
+        }
     }
 
     size_t nb = jl_datatype_size(ety);
@@ -1113,14 +1118,15 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
         std::string msg(StringRef(jl_intrinsic_name((int)f)));
         msg += ": invalid pointer for atomic operation";
         emit_error(ctx, msg);
-        return jl_cgval_t();
+        *ret = jl_cgval_t();
+        return true;
     }
 
     if (!jl_isbits(ety)) {
         //if (!deserves_stack(ety))
         //Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e);
         //uint64_t size = jl_datatype_size(ety);
-        return emit_runtime_call(ctx, f, argv, nargs); // TODO: optimizations
+        return false; // TODO: optimizations
     }
     else {
         bool isboxed;
@@ -1131,11 +1137,11 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
             thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e);
         else
             thePtr = nullptr; // could use any value here, since typed_store will not use it
-        jl_cgval_t ret = typed_store(ctx, thePtr, x, y, ety, ctx.alias().data, nullptr, nullptr, isboxed,
+        *ret = typed_store(ctx, thePtr, x, y, ety, ctx.alias().data, nullptr, nullptr, isboxed,
                     llvm_order, llvm_failorder, nb, nullptr, op, false, modifyop, "atomic_pointermodify", nullptr, nullptr);
         if (op == StoreKind::Set)
-            ret = e;
-        return ret;
+            *ret = e;
+        return true;
     }
 }
 
@@ -1419,8 +1425,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     case atomic_pointerswap:
     case atomic_pointermodify:
     case atomic_pointerreplace:
+    {
         ++Emitted_atomic_pointerop;
-        return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
+        jl_cgval_t ret;
+        if (emit_atomic_pointerop(ctx, &ret, f, argv, nargs, nullptr))
+            return ret;
+        return emit_runtime_call(ctx, f, argv, nargs);
+    }
     case bitcast:
         ++Emitted_bitcast;
         assert(nargs == 2);
