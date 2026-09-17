@@ -1250,11 +1250,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
                         HasDefBefore = true;
-                        auto allocas = FindAllocaBases((CI->arg_begin()[0])->stripInBoundsOffsets());
+                        Value *SRetBase = (CI->arg_begin()[0])->stripInBoundsOffsets();
+                        auto allocas = FindAllocaBases(SRetBase);
                         // We know that with the right optimizations we can forward a sret directly from an argument
                         // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
                         // If they are tracked.all we can just pass through but if they have a roots bundle it's possible we need to emit some copies ¯\_(ツ)_/¯
-                        if (allocas.size() == 0) {
+                        // The exception are trampolines that forward their own sret argument (and the
+                        // return roots buffer with it): the buffer belongs to the caller's frame, which
+                        // is responsible for rooting it, so there is nothing to do here.
+                        auto *SRetArg = dyn_cast<Argument>(SRetBase);
+                        if (allocas.size() == 0 && !(SRetArg && SRetArg->hasStructRetAttr())) {
                             llvm_dump(&F);
                             abort();
                         }
