@@ -217,6 +217,7 @@ struct PrecompileRequest
     warn_loaded::Bool
     timing::Bool
     _from_loading::Bool
+    reasons::Dict{Symbol,Int}
     configs::Vector{Config}
     io::IOContext
     fancyprint::Bool
@@ -246,6 +247,9 @@ Base.@kwdef mutable struct PrecompileSession
     skip_dependents::Bool
     force::Bool
     force_stdlibs::Bool
+    reasons::Dict{Symbol,Int} = Dict{Symbol,Int}() # why loading is precompiling, from its cache checks
+    reasons_explained::Bool = false
+    explained_conflicts::Vector{String} = String[]
     time_start::UInt64
     print_lock::ReentrantLock
     parallel_limiter::WorkerLimiter
@@ -1237,6 +1241,10 @@ precompiles only the given packages and their dependencies (unless
   be added as serial precompilation jobs; skips LOADING_CACHE initialization;
   and changes cachefile locking behavior.
 
+- `_reasons::Dict{Symbol,Int}`: Internal, with `_from_loading`: why the loader rejected
+  the requested packages' caches (see `Base.list_reasons`). The reasons a user can act
+  on are explained at the start of the session.
+
 - `configs::Union{Config,Vector{Config}}`: Compilation configurations to use. Each Config
   is a `Pair{Cmd, Base.CacheFlags}` specifying command flags and cache flags. When
   multiple configs are provided, each package is precompiled for each configuration.
@@ -1317,6 +1325,7 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         timing::Bool = false,
                         verbose::Bool = false,
                         _from_loading::Bool=false,
+                        _reasons::Dict{Symbol,Int}=Dict{Symbol,Int}(),
                         configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
                         io::IO=stderr,
                         # asking for timing disables fancy mode, as timing is shown in non-fancy mode;
@@ -1336,7 +1345,7 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
     force_stdlibs && (force = true)
     @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable skip_dependents force force_stdlibs
     # monomorphize this to avoid latency problems
-    _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, verbose, _from_loading,
+    _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, verbose, _from_loading, _reasons,
                    configs isa Vector{Config} ? configs : [configs],
                    unstable_iocontext(io), fancyprint, manifest, ignore_loaded, detachable,
                    skip_dependents, force, force_stdlibs)
@@ -1420,11 +1429,12 @@ function _precompile_for_loading(into::Module, names::Vector{Symbol})
     end
     isempty(stale) && return
 
-    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+    # the driver explains the actionable reasons to the user; this is the full record
     label(pkg) = haskey(ext_parents, pkg) ? Base.pkg_log_name(pkg, ext_parents[pkg]) : Base.pkg_log_name(pkg)
-    Base.@logmsg verbosity "Precompiling $(join((label(pkg) for pkg in stale), ", "))$(Base.list_reasons(reasons))"
+    @debug "Precompiling $(join((label(pkg) for pkg in stale), ", "))$(Base.list_reasons(reasons; full=true))"
     # `@invokelatest` for the same reason as in `Base.__require_prelocked`, see #60223
-    @invokelatest precompilepkgs(pkgs; _from_loading=true, ignore_loaded=false)
+    @invokelatest precompilepkgs(pkgs; _from_loading=true, ignore_loaded=false,
+                                 _reasons=reasons)
     return
 end
 
@@ -1812,6 +1822,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                                        timing::Bool,
                                        verbose::Bool,
                                        _from_loading::Bool,
+                                       _reasons::Dict{Symbol,Int},
                                        configs::Vector{Config},
                                        io::IOContext,
                                        fancyprint::Bool,
@@ -1861,7 +1872,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
         BG.task = Threads.@spawn :samepool begin
             try
                 # pass the ids through: an extension has no name resolvable from `Main`
-                ret = do_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
+                ret = do_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading, _reasons,
                                     configs, io, fancyprint, manifest, ignore_loaded, detachable,
                                     skip_dependents, force, force_stdlibs, wc)
 
@@ -1872,6 +1883,8 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                 @lock BG begin
                     if BG.interrupt_requested || BG.cancel_requested
                         BG.result = "Background precompilation was interrupted"
+                        # loading must stop rather than compile the package again serially
+                        _from_loading && (BG.exception = e)
                     else
                         BG.exception = e
                         BG.result = "Background precompilation failed: $(sprint(showerror, e))"
@@ -1921,6 +1934,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          timing::Bool,
                          verbose::Bool,
                          _from_loading::Bool,
+                         _reasons::Dict{Symbol,Int},
                          configs::Vector{Config},
                          io::IOContext,
                          fancyprint′::Bool,
@@ -1937,7 +1951,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         did_inject = @lock BG begin
             if BG.task !== nothing && !istaskdone(BG.task) &&
                     isopen(BG.work_channel)
-                req = PrecompileRequest(copy(pkgs), internal_call, strict, warn_loaded, timing, _from_loading,
+                req = PrecompileRequest(copy(pkgs), internal_call, strict, warn_loaded, timing, _from_loading, _reasons,
                                         configs, io, fancyprint′, manifest, ignore_loaded, detachable,
                                         skip_dependents, force, force_stdlibs, Channel{Any}(1))
                 try
@@ -1955,7 +1969,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             end
         end
         if !did_inject
-            launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, verbose, _from_loading,
+            launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, verbose, _from_loading, _reasons,
                                          configs, io, fancyprint′, manifest, ignore_loaded, detachable,
                                          skip_dependents, force, force_stdlibs)
         end
@@ -2154,6 +2168,81 @@ function describe_pkg(s::PrecompileSession, pkg::PkgId, is_project_dep::Bool, is
     return name
 end
 
+# Up to five names, then how many more, as in "A, B, C, D, E, and 3 more".
+function format_names_list(names::Vector{String}; max_names::Int=5)
+    if length(names) > max_names
+        return string(join(first(names, max_names), ", "), ", and ", length(names) - max_names, " more")
+    end
+    return join(names, ", ", " and ")
+end
+
+function print_header(s::PrecompileSession)
+    printpkgstyle(s.logio, :Precompiling, s.target)
+    explain_reasons!(s)
+    BG.verbose && println(s.logio, format_verbose_timing_header())
+end
+
+# Explain, under the header, the reasons for precompiling during loading that a user
+# can act on: a dependency loaded at another version, and compilation options that
+# differ from the caches'. Printed once, so it is seen while the session runs and can
+# still be canceled. Everything else is only in the loader's debug log.
+function explain_reasons!(s::PrecompileSession)
+    (s._from_loading && !s.reasons_explained) || return
+    s.reasons_explained = true
+    conflicts = loaded_version_conflicts(s)
+    if !isempty(conflicts)
+        println(s.logio, loaded_conflicts_message(conflicts, s.hascolor; ongoing=true, cancelable=stdin isa Base.TTY))
+        append!(s.explained_conflicts, conflicts)
+    end
+    if only_flags_mismatch(s.reasons)
+        println(s.logio, "  The existing caches were built with ",
+            color_string("different compilation options", Base.warn_color(), s.hascolor),
+            " (such as `--check-bounds` or `-O`), so packages are being precompiled for this session's options.")
+    end
+end
+
+# Whether `pkg` is loaded at a different version than the active environment gives it.
+function loaded_version_differs(pkg::PkgId)
+    m = @lock Base.require_lock get(Base.loaded_modules, pkg, nothing)
+    m === nothing && return false
+    path = Base.locate_package(pkg)
+    path === nothing && return false
+    loaded_version = Base.pkgversion(m)
+    env_version = Base.get_pkgversion_from_path(dirname(dirname(path)))
+    return loaded_version !== nothing && env_version !== nothing && loaded_version != env_version
+end
+
+# The loaded dependencies of the requested packages whose version differs from the
+# environment's. The loader's cache rejections cannot show this: an old cache built against
+# another build of the same version is rejected too, and on first use there is no cache.
+function loaded_version_conflicts(s::PrecompileSession)
+    deps = Set{PkgId}()
+    for pkg in s.requested_pkgids
+        haskey(s.direct_deps, pkg) && collect_all_deps(s.direct_deps, pkg, deps)
+    end
+    conflicts = PkgId[pkg for pkg in deps if pkg in s.start_loaded_modules && loaded_version_differs(pkg)]
+    return sort!([full_name(s.ext_to_parent, pkg) for pkg in conflicts])
+end
+
+# A cache left with other flags, such as one from `Pkg.test`, is also rejected when the
+# real cause is something else, such as an edited source file, so require it to be alone.
+function only_flags_mismatch(reasons::Dict{Symbol,Int})
+    haskey(reasons, :flags_mismatch) || return false
+    return all(k -> k === :flags_mismatch || first(Base.reject_reason(k)) !== :actionable, keys(reasons))
+end
+
+# Three lines: the cause, the risk of mixing versions, and how to get the manifest
+# versions instead (cancel with `c` while the session is still running).
+function loaded_conflicts_message(names::Vector{String}, hascolor::Bool; ongoing::Bool, cancelable::Bool)
+    one = length(names) == 1
+    string("  ", format_names_list(names), " ",
+        color_string(one ? "is loaded at a different version" : "are loaded at different versions", Base.warn_color(), hascolor),
+        " than in the manifest, so ", one ? "its" : "their", " dependents ", ongoing ? "are being" : "were", " precompiled.\n",
+        "  Mixing versions may violate compat requirements and cause unexpected errors.\n",
+        "  To use the manifest version", one ? "" : "s", " and ", one ? "its" : "their", " existing caches instead, ",
+        cancelable && ongoing ? "press `c` to cancel then " : "", "restart julia with `--project` set.")
+end
+
 function spawn_print_loop!(s::PrecompileSession)
     Threads.@spawn :samepool begin
         cursor_disabled = false
@@ -2162,10 +2251,7 @@ function spawn_print_loop!(s::PrecompileSession)
             wait(s.first_started)
             (isempty(s.pkg_queue) || s.interrupted_or_done) && return
             @lock s.print_lock begin
-                if BG.monitoring
-                    printpkgstyle(s.logio, :Precompiling, s.target)
-                    BG.verbose && println(s.logio, format_verbose_timing_header())
-                end
+                BG.monitoring && print_header(s)
             end
             t = Timer(0; interval=1/10)
             anim_chars = ["◐","◓","◑","◒"]
@@ -2545,9 +2631,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         (is_ext || !is_project_dep) && return
                         name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                         @lock s.print_lock begin
-                            if !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring
-                                printpkgstyle(s.logio, :Precompiling, s.target)
-                            end
+                            !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring && print_header(s)
                             push!(s.pkg_queue, pkg_config)
                             !s.fancyprint && BG.monitoring && println(s.logio, " "^12,
                                 color_string("  ✗ ", Base.error_color(), s.hascolor), name,
@@ -2564,10 +2648,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                     try
                         @lock s.print_lock begin
-                            if !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring
-                                printpkgstyle(s.logio, :Precompiling, s.target)
-                                BG.verbose && println(s.logio, format_verbose_timing_header())
-                            end
+                            !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring && print_header(s)
                             push!(s.pkg_queue, pkg_config)
                         end
                         mark_started!(job)
@@ -2743,6 +2824,7 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                     union!(s.project_deps, new_graph.project_deps)
                     union!(s.serial_deps, new_graph.serial_deps)
                     union!(s.requested_pkgids, effective_pkgids)
+                    mergewith!(+, s.reasons, request.reasons)
                 end
                 new_pkg_names = String[pkg isa PkgId ? pkg.name : pkg for pkg in request.pkgs]
                 new_dd = new_graph.direct_deps
@@ -2836,6 +2918,8 @@ function report_precompile_results!(s::PrecompileSession)
         end
     end
     notify(s.first_started) # in cases of no-op or !fancyprint
+    # a cancel that lands while the last job runs is not seen by the job loop
+    should_stop(s)
 
     quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), s.tasks) || s.interrupted || s.canceled
     seconds_elapsed = round(Int, (s.time_start > 0 ? (time_ns() -% s.time_start) : 0) / 1e9)
@@ -2890,56 +2974,57 @@ function report_precompile_results!(s::PrecompileSession)
                     print(iostr, ".")
                 end
                 if s.n_loaded > 0
-                    plural1 = length(s.configs) > 1 ? "dependency configurations" : s.n_loaded == 1 ? "dependency" : "dependencies"
-                    plural2 = s.n_loaded == 1 ? "a different version is" : "different versions are"
-                    plural3 = s.n_loaded == 1 ? "" : "s"
                     loaded_names_vec = sort!([full_name(s.ext_to_parent, p) for p in s.loaded_pkgs])
-                    max_loaded_names = 5
-                    if length(loaded_names_vec) > max_loaded_names
-                        loaded_names = string(
-                            join(first(loaded_names_vec, max_loaded_names), ", ", " and "),
-                            ", and ",
-                            length(loaded_names_vec) - max_loaded_names,
-                            " more"
-                        )
-                    else
-                        loaded_names = join(loaded_names_vec, ", ", " and ")
-                    end
-                    # compute how many precompiled packages transitively depend on the loaded packages
-                    loaded_set = Set{PkgId}(s.loaded_pkgs)
-                    n_affected = let reverse_deps = Dict{PkgId, Vector{PkgId}}()
-                        for (p, deps) in s.direct_deps
-                            for d in deps
-                                push!(get!(Vector{PkgId}, reverse_deps, d), p)
-                            end
+                    if s._from_loading && !s.ignore_loaded
+                        # loading compiles dependents for the loaded version, so the loaded
+                        # package is the reason for this session rather than its result;
+                        # say so here for those not already explained under the header
+                        differing = sort!([full_name(s.ext_to_parent, p) for p in s.loaded_pkgs if loaded_version_differs(p)])
+                        unexplained = setdiff(differing, s.explained_conflicts)
+                        if !isempty(unexplained)
+                            print(iostr, "\n", loaded_conflicts_message(unexplained, s.hascolor; ongoing=false, cancelable=false))
                         end
-                        affected = Set{PkgId}()
-                        frontier = PkgId[p for p in loaded_set]
-                        while !isempty(frontier)
-                            p = pop!(frontier)
-                            for rdep in get(reverse_deps, p, PkgId[])
-                                if rdep ∉ affected && rdep ∉ loaded_set
-                                    push!(affected, rdep)
-                                    push!(frontier, rdep)
+                    else
+                        plural1 = length(s.configs) > 1 ? "dependency configurations" : s.n_loaded == 1 ? "dependency" : "dependencies"
+                        plural2 = s.n_loaded == 1 ? "a different version is" : "different versions are"
+                        plural3 = s.n_loaded == 1 ? "" : "s"
+                        loaded_names = format_names_list(loaded_names_vec)
+                        # compute how many precompiled packages transitively depend on the loaded packages
+                        loaded_set = Set{PkgId}(s.loaded_pkgs)
+                        n_affected = let reverse_deps = Dict{PkgId, Vector{PkgId}}()
+                            for (p, deps) in s.direct_deps
+                                for d in deps
+                                    push!(get!(Vector{PkgId}, reverse_deps, d), p)
                                 end
                             end
+                            affected = Set{PkgId}()
+                            frontier = PkgId[p for p in loaded_set]
+                            while !isempty(frontier)
+                                p = pop!(frontier)
+                                for rdep in get(reverse_deps, p, PkgId[])
+                                    if rdep ∉ affected && rdep ∉ loaded_set
+                                        push!(affected, rdep)
+                                        push!(frontier, rdep)
+                                    end
+                                end
+                            end
+                            length(affected)
                         end
-                        length(affected)
-                    end
-                    print(iostr, "\n  ",
-                        color_string(string(s.n_loaded), Base.warn_color(), s.hascolor),
-                        " $(plural1) precompiled but ",
-                        color_string("$(plural2) currently loaded", Base.warn_color(), s.hascolor),
-                        " (", loaded_names, ")",
-                        ". Restart julia to access the new version$(plural3)."
-                    )
-                    if n_affected > 0
-                        affected_plural = length(s.configs) > 1 ? "dependency configurations" : n_affected == 1 ? "dependent" : "dependents"
-                        print(iostr,
-                            " Otherwise, $(n_affected) $(affected_plural) of ",
-                            s.n_loaded == 1 ? "this package" : "these packages",
-                            " may trigger further precompilation to work with the unexpected version$(plural3)."
+                        print(iostr, "\n  ",
+                            color_string(string(s.n_loaded), Base.warn_color(), s.hascolor),
+                            " $(plural1) precompiled but ",
+                            color_string("$(plural2) currently loaded", Base.warn_color(), s.hascolor),
+                            " (", loaded_names, ")",
+                            ". Restart julia to access the new version$(plural3)."
                         )
+                        if n_affected > 0
+                            affected_plural = length(s.configs) > 1 ? "dependency configurations" : n_affected == 1 ? "dependent" : "dependents"
+                            print(iostr,
+                                " Otherwise, $(n_affected) $(affected_plural) of ",
+                                s.n_loaded == 1 ? "this package" : "these packages",
+                                " may trigger further precompilation to work with the unexpected version$(plural3)."
+                            )
+                        end
                     end
                 end
                 n_soft_errors = count(j -> is_soft_error(j), values(s.jobs))
@@ -3044,6 +3129,10 @@ function report_precompile_results!(s::PrecompileSession)
     if s.interrupted
         throw(InterruptException())
     end
+    if s.canceled && s._from_loading
+        # otherwise the loader would load the package from source without a cache
+        throw(PkgPrecompileError("Precompilation was canceled, so the package was not loaded."))
+    end
     return @lock s.cache_lock collect(String, Iterators.flatten((v for (pkgid, v) in s.cachepath_cache if pkgid in s.requested_pkgids)))
 end
 
@@ -3054,6 +3143,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
                         warn_loaded::Bool,
                         timing::Bool,
                         _from_loading::Bool,
+                        _reasons::Dict{Symbol,Int},
                         configs::Vector{Config},
                         io::IOContext,
                         fancyprint′::Bool,
@@ -3172,6 +3262,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         configs, io, logio, logcalls, fancyprint, hascolor,
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
         skip_dependents, force, force_stdlibs,
+        reasons=copy(_reasons),
         time_start, print_lock,
         parallel_limiter=WorkerLimiter(num_tasks, precompile_jobserver !== :none), num_tasks,
         start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids, requested_all,

@@ -3056,9 +3056,6 @@ function __require_prelocked(pkg::PkgId, env)
                     m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
                     m isa Module && return m
 
-                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                    @logmsg verbosity "Precompiling $(pkg_log_name(pkg))$(list_reasons(reasons))"
-
                     unlock(require_lock)
                     try
                         # a cache-fetch hook gets one chance to materialize a
@@ -3070,10 +3067,14 @@ function __require_prelocked(pkg::PkgId, env)
                         end
                         if !generating_output() && !parallel_precompile_attempted[] && !disable_parallel_precompile && @isdefined(Precompilation)
                             parallel_precompile_attempted[] = true
+                            # the precompile driver explains the actionable reasons to the user;
+                            # this is the full record for `JULIA_DEBUG=loading`
+                            @debug "Precompiling $(pkg_log_name(pkg))$(list_reasons(reasons; full=true))"
                             # Note that we use @invokelatest here to avoid world
                             # age issues when printing, see:
                             # https://github.com/JuliaLang/julia/issues/60223
-                            precompiled = @invokelatest Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
+                            precompiled = @invokelatest Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false,
+                                                                                         _reasons=reasons)
                             # precompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
                             # or an empty set of entries (indicating the precompile should be skipped)
@@ -3097,6 +3098,9 @@ function __require_prelocked(pkg::PkgId, env)
                                 end
                             end
                         end
+                        # no precompile session will report this build, so announce it here
+                        local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                        @logmsg verbosity "Precompiling $(pkg_log_name(pkg))$(list_reasons(reasons))"
                         return compilecache(pkg, spec; loadable_exts)
                     finally
                         lock(require_lock)
