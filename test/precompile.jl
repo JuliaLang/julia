@@ -3645,12 +3645,14 @@ end
 
         # Loading DepUser with the old LoadedDep still loaded rejects the cache just built
         # and recompiles for the loaded version; the summary should explain that cause.
-        # `-i` so the loading-time precompile output is not suppressed.
+        # `-i` so the loading-time precompile output is not suppressed; `exit()` so the
+        # fallback REPL never starts on the non-tty stdin afterwards (EPIPE on CI).
         script = """
             using LoadedDep
             Base.set_active_project($(repr(new_project_path)))
             Base.disable_parallel_precompile = false
             using DepUser
+            exit()
             """
         cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -i --project=$(old_project_path) -e $script`,
                      "JULIA_DEPOT_PATH" => depot)
