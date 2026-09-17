@@ -3054,8 +3054,9 @@ function __require_prelocked(pkg::PkgId, env)
                     m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
                     m isa Module && return m
 
-                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                    @logmsg verbosity "Precompiling $(pkg_log_name(pkg))$(list_reasons(reasons))"
+                    # the precompile driver explains the actionable reasons to the user;
+                    # this is the full record for `JULIA_DEBUG=loading`
+                    @debug "Precompiling $(pkg_log_name(pkg))$(list_reasons(reasons; full=true))"
 
                     unlock(require_lock)
                     try
@@ -3071,7 +3072,8 @@ function __require_prelocked(pkg::PkgId, env)
                             # Note that we use @invokelatest here to avoid world
                             # age issues when printing, see:
                             # https://github.com/JuliaLang/julia/issues/60223
-                            precompiled = @invokelatest Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
+                            precompiled = @invokelatest Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false,
+                                                                                         _reasons=reasons)
                             # precompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
                             # or an empty set of entries (indicating the precompile should be skipped)
@@ -4555,6 +4557,19 @@ function pkg_log_name(pkg::PkgId)
     return pkg.name
 end
 pkg_log_name(ext::PkgId, parent::PkgId) = "$(pkg_log_name(parent)) → $(ext.name)"
+
+# Names of the dependencies whose loaded version caused cache rejections, for the
+# precompile driver to explain why loading is precompiling.
+function loaded_version_conflicts(reasons::Union{Dict{Symbol,Int},Nothing})
+    names = String[]
+    reasons === nothing && return names
+    for key in keys(reasons)
+        keystr = String(key)
+        startswith(keystr, DEP_LOADED_INCOMPATIBLE_PREFIX) || continue
+        push!(names, keystr[length(DEP_LOADED_INCOMPATIBLE_PREFIX)+1:end])
+    end
+    return sort!(unique!(names))
+end
 
 function in_package_store(path::String)
     for depot in DEPOT_PATH
