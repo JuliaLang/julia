@@ -488,8 +488,14 @@ function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int
     flatcand = replace(highlightcand(cand), r"\r?\n\s*" => NEWLINE_MARKER)
     candstr = focus_matches(search, flatcand, width - decorationlen)
     if hover
+        # `:region` only sets a background, leaving the terminal-default
+        # foreground in place (unreadable dark-on-dark on light terminals).
+        # Adding `:inverse` flips the foreground with the background, so the
+        # hovered row contrasts on both light and dark backgrounds.
         face!(candstr, :region)
+        face!(candstr, :inverse)
         face!(agedec, :region)
+        face!(agedec, :inverse)
     end
     println(io, candstr, modehint, agedec, ' ')
 end
@@ -699,7 +705,13 @@ function redisplay_preview(io::IO, oldstate::SelectorState, oldrows::Int, newsta
         for idx in getselidxs(newstate)
             entry = getcand(newstate, idx)
             content = highlightcand(entry)
-            ishover(newstate, idx) && face!(content, :region)
+            if ishover(newstate, idx)
+                # As above: `:region` alone keeps the terminal-default
+                # foreground, so pair it with `:inverse` for readability on
+                # light as well as dark terminal backgrounds.
+                face!(content, :region)
+                face!(content, :inverse)
+            end
             push!(seltexts, content)
         end
         linecount = sum(t -> 1 + count('\n', String(t)), seltexts, init=0)
