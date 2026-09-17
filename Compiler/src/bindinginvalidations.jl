@@ -91,13 +91,13 @@ export_affecting_partition_flags(bpart::Core.BindingPartition) =
 function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt)
     gr = b.globalref
 
-    (_, (ib, ibpart)) = walk_binding_partition(b, invalidated_bpart, new_max_world, false)
-    (_, (nb, nbpart)) = walk_binding_partition(b, new_bpart, new_max_world+1, false)
+    (_, ileaf) = walk_binding_partition(b, invalidated_bpart, new_max_world, false)
+    (_, nleaf) = walk_binding_partition(b, new_bpart, new_max_world+1, false)
 
     # `binding_access_key` captures everything inference/codegen accesses about a binding partition.
     # If this information does not change, we do not need to invalidate any code that inference created
     # because we know that the result will not change.
-    need_to_invalidate_code = binding_access_key(ib, ibpart) !== binding_access_key(nb, nbpart)
+    need_to_invalidate_code = binding_access_key(ileaf) !== binding_access_key(nleaf)
 
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)

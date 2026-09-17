@@ -1657,7 +1657,7 @@ let 𝕃 = Compiler.SimpleInferenceLattice.instance,
                      convert(Core.Binding, GlobalRef(PartitionEffects, name)))
     for f in (Core.getglobal_partition, Core.setglobal_partition, Core.swapglobal_partition,
               Core.replaceglobal_partition, Core.setglobalonce_partition,
-              Core.isdefinedglobal_partition, Core.depwarn_partition)
+              Core.isdefinedglobal_partition, Core.depwarn_binding)
         @test f in Compiler._EFFECTS_KNOWN_BUILTINS
     end
 

@@ -2928,7 +2928,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     apply_type,
     compilerbarrier,
     Core.current_scope,
-    Core.depwarn_partition,
+    Core.depwarn_binding,
     donotdelete,
     Core.finalizer,
     Core.get_binding_type,
@@ -3034,7 +3034,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     elseif f === Core.isdefinedglobal_partition
         length(argtypes) == 2 || return EFFECTS_THROWS
         return generic_isdefinedglobal_effects
-    elseif f === Core.depwarn_partition
+    elseif f === Core.depwarn_binding
         length(argtypes) == 1 || return EFFECTS_THROWS
         # A deprecation warning is an observable side effect (printing to stderr, and
         # throwing under `--depwarn=error`), so this call must never be removed as unused.
@@ -3722,7 +3722,7 @@ add_tfunc(Core.swapglobal_partition, 2, 3, @nospecs((𝕃::AbstractLattice, args
 add_tfunc(Core.replaceglobal_partition, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(Core.setglobalonce_partition, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
 add_tfunc(Core.isdefinedglobal_partition, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Bool), 1)
-add_tfunc(Core.depwarn_partition, 1, 1, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 1)
+add_tfunc(Core.depwarn_binding, 1, 1, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 1)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
 
 @nospecs function task_result_type_tfunc(𝕃::AbstractLattice, T)

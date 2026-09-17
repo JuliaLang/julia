@@ -32,7 +32,7 @@ extern "C" {
     XX(compilerbarrier,"compilerbarrier") \
     XX(const_memoryrefget,"const_memoryrefget") \
     XX(current_scope,"current_scope") \
-    XX(depwarn_partition,"depwarn_partition") \
+    XX(depwarn_binding,"depwarn_binding") \
     XX(donotdelete,"donotdelete") \
     XX(fieldtype,"fieldtype") \
     XX(finalizer,"finalizer") \
