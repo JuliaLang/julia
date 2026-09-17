@@ -33,12 +33,11 @@
 #endif
 #define JL_STATIC_ALIAS(name) \
     __asm__(".globl " JL_ASM_SYM(#name) "\n.set " JL_ASM_SYM(#name) ", " JL_ASM_SYM("i" #name));
+// (JL_RUNTIME_EXPORTED_FUNCS_WIN is not aliased here: ijl_setjmp is defined in
+// assembly, support/_setjmp.win*.S, which defines jl_setjmp alongside it.)
 #if defined(JL_LIBRARY_EXPORTS_INTERNAL) && !defined(_OS_DARWIN_)
 #include "jl_exported_funcs.inc"
 JL_RUNTIME_EXPORTED_FUNCS(JL_STATIC_ALIAS)
-#ifdef _OS_WINDOWS_
-JL_RUNTIME_EXPORTED_FUNCS_WIN(JL_STATIC_ALIAS)
-#endif
 #endif
 #endif
 #include <stdint.h>
@@ -2428,8 +2427,6 @@ JL_DLLEXPORT void jl_init(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
                                           const char *image_path) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_init_with_image_handle(void *handle) JL_CANSAFEPOINT_ENTER;
-// Initialize Julia from a statically linked runtime + system image
-JL_DLLEXPORT void jl_init_static(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_initialized(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_atexit_hook(int status) JL_CANSAFEPOINT_LEAVE; // also should be JL_NOTSAFEPOINT_ENTER
