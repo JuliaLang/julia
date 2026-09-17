@@ -447,10 +447,13 @@ JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
     uv_mutex_unlock(&sigint_state_lock);
 }
 
-// Set while a ^C notification has been posted to the event loop but not yet
-// picked up by the julia-side sigint listener. While set, idle threads take
-// over running the event loop if its owning thread cannot (e.g. it is blocked
-// in a long-running foreign call) - see jl_task_get_next.
+// Set while a ^C notification has been posted but not yet claimed by a
+// dispatch pass. Every scheduler thread checks it on each pass through
+// jl_task_get_next and runs the pass inline (jl_dispatch_sigint_inline), and
+// re-checks it after publishing that it is going to sleep, so a parked thread
+// cannot miss a press (see [^store_buffering_3] in scheduler.c). The event
+// loop is not on the delivery path: the sigint listener's AsyncCondition is
+// unref'd and only serves threads that are already inside uv_run.
 _Atomic(int) jl_sigint_dispatch_pending = 0;
 
 // Atomically claim a pending ^C notification: the sigint listener (one per
@@ -469,7 +472,9 @@ static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
     if (cond != NULL) {
         jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
         uv_async_send(cond);
-        // Wake every thread: a parked thread's scheduler loop performs the
+        // Wake every thread (after the store above, which pairs with the
+        // post-sleep re-check in jl_task_get_next, see [^store_buffering_3]
+        // in scheduler.c): a parked thread's scheduler loop performs the
         // dispatch pass inline on waking (see jl_dispatch_sigint_inline),
         // so delivery does not depend on any particular thread - in
         // particular not on the loop-owning thread, which may be stuck in
@@ -653,7 +658,7 @@ static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
     // fields - no weakly-reachable source pointers.
     if (src != NULL) {
         // Mark the dispatch pending BEFORE the per-thread sends (idle
-        // threads keep the event loop moving until the listener claims it).
+        // threads refuse to park while it is set, until a pass claims it).
         // Skipped when no listener is registered (e.g. a trimmed binary that
         // stubs it out): nothing would ever claim the flag, and the
         // scheduler's stay-awake gate would keep idle threads polling
