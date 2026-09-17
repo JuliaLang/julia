@@ -3,6 +3,8 @@
 using Test
 using REPL
 using Dates
+using StyledStrings: @styled_str, Face, SimpleColor, withfaces, getface
+using REPL.History: region_highlight, highlightcand
 
 using REPL.History
 using REPL.History: HistoryFile, HistEntry, update!,
@@ -460,6 +462,45 @@ end
             multiline = join(["line$i" for i in 1:20], '\n')
             state = SelectorState((30, 80), "", FilterSpec(), [HistEntry(:julia, now(UTC), multiline, 1)], 0, (active = [1], gathered = HistEntry[]), 1)
             @test componentrows(state) == (candidates = 7, preview = 12)
+        end
+    end
+    # The fallback must not override syntax colors or customized region faces.
+    @testset "Hovered content contrast" begin
+        mergedface(str) = getface([ann.value for ann in annotations(str, 1) if ann.label == :face])
+        withfaces(:region => Face(background = 0x636363, inverse = false)) do
+            f = mergedface(region_highlight(styled"plain"))
+            @test f.foreground == SimpleColor(0xffffff)
+            @test f.background == SimpleColor(0x636363)
+            @test f.inverse === false
+        end
+        withfaces(:region => Face(background = 0xeeeeee, inverse = false)) do
+            f = mergedface(region_highlight(styled"plain"))
+            @test f.foreground == SimpleColor(0x000000)
+            @test f.background == SimpleColor(0xeeeeee)
+            @test f.inverse === false
+        end
+        withfaces(:region => Face(foreground = 0x123456, background = 0xeeeeee, inverse = false)) do
+            f = mergedface(region_highlight(styled"plain"))
+            @test f.foreground == SimpleColor(0x123456)
+            @test f.background == SimpleColor(0xeeeeee)
+            @test f.inverse === false
+        end
+        withfaces(:region => Face(background = 0x636363, inverse = false)) do
+            syntax = highlightcand(HistEntry(:julia, now(UTC), "function f() end", 1))
+            foreground = mergedface(syntax).foreground
+            f = mergedface(region_highlight(syntax))
+            @test f.foreground == foreground
+            @test f.inverse === false
+            entry = HistEntry(:julia, now(UTC), "plain_history_entry", 1)
+            rendered = sprint(; context = :color => true) do io
+                REPL.History.print_candidate(io, FilterSpec(), entry, 80; selected = true, hover = true)
+            end
+            @test occursin("\e[38;2;255;255;255m", rendered)
+            @test occursin("\e[48;2;99;99;99m", rendered)
+            @test !occursin("\e[7m", rendered)
+        end
+        withfaces(:region => Face(background = 0x636363, inverse = true)) do
+            @test mergedface(region_highlight(styled"plain")).inverse === true
         end
     end
     @testset "countlines_selected" begin

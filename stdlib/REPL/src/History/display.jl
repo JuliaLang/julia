@@ -488,16 +488,24 @@ function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int
     flatcand = replace(highlightcand(cand), r"\r?\n\s*" => NEWLINE_MARKER)
     candstr = focus_matches(search, flatcand, width - decorationlen)
     if hover
-        # `:region` only sets a background, leaving the terminal-default
-        # foreground in place (unreadable dark-on-dark on light terminals).
-        # Adding `:inverse` flips the foreground with the background, so the
-        # hovered row contrasts on both light and dark backgrounds.
-        face!(candstr, :region)
-        face!(candstr, :inverse)
-        face!(agedec, :region)
-        face!(agedec, :inverse)
+        candstr = region_highlight(candstr)
+        agedec = region_highlight(agedec)
     end
     println(io, candstr, modehint, agedec, ' ')
+end
+
+function region_highlight(content::AnnotatedString)
+    region = getface(:region)
+    if !isnothing(region.background)
+        rgb = rgbcolor(region.background)
+        linear(c) = (c /= 255; c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055)^2.4)
+        luminance = 0.2126 * linear(rgb.r) + 0.7152 * linear(rgb.g) + 0.0722 * linear(rgb.b)
+        fallback = Face(foreground = luminance > 0.179 ? 0x000000 : 0xffffff)
+        # Syntax faces and an explicit region foreground take precedence over the fallback.
+        content = S"{$fallback:$content}"
+    end
+    face!(content, :region)
+    content
 end
 
 """
@@ -706,11 +714,7 @@ function redisplay_preview(io::IO, oldstate::SelectorState, oldrows::Int, newsta
             entry = getcand(newstate, idx)
             content = highlightcand(entry)
             if ishover(newstate, idx)
-                # As above: `:region` alone keeps the terminal-default
-                # foreground, so pair it with `:inverse` for readability on
-                # light as well as dark terminal backgrounds.
-                face!(content, :region)
-                face!(content, :inverse)
+                content = region_highlight(content)
             end
             push!(seltexts, content)
         end
