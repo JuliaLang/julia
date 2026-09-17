@@ -15,14 +15,17 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, sourcetext, SyntaxList
+using .JuliaSyntax: SourceAttrType, sourcetext, SyntaxList,
+    JL_OLD_EDITION, JL_NEW_EDITION
+using Base: OLDEST_EDITION
 
 using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError,
     ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,
     is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
 
 function _source_node(src)
-    SyntaxTree(K"TOMBSTONE", nothing, nothing, src, nothing)
+    SyntaxTree(K"TOMBSTONE", nothing, nothing, src,
+               JuliaSyntax.SyntaxContext(JuliaLowering, JL_NEW_EDITION))
 end
 
 macro ast_(tree)
@@ -121,6 +124,7 @@ end
 
 function setup_ir_test_module(preamble)
     test_mod = Module(:TestMod)
+    Base.set_syntax_version(test_mod, JL_NEW_EDITION)
     Base.eval(test_mod, :(const JuliaLowering = $JuliaLowering))
     Base.eval(test_mod, :(const var"@ast_" = $(var"@ast_")))
     JuliaLowering.include_string(test_mod, preamble)
@@ -129,7 +133,7 @@ end
 
 function format_ir_for_test(mod, case)
     @assert !case.is_broken
-    ex = parsestmt(SyntaxTree, case.input)
+    ex = parsestmt(SyntaxTree, case.input; version=JL_NEW_EDITION)
     try
         if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
             syntax_name(ex[1]) == "@ast_")
@@ -233,7 +237,7 @@ function watch_ir_tests(dir, delay=0.5)
 end
 
 function lower_str(mod::Module, s::AbstractString)
-    ex = parsestmt(JuliaLowering.SyntaxTree, s)
+    ex = parsestmt(JuliaLowering.SyntaxTree, s; version=JL_NEW_EDITION)
     return JuliaLowering.to_lowered_expr(JuliaLowering.lower(mod, ex))
 end
 
@@ -328,7 +332,7 @@ end
 # test case.
 function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_eval::Bool=false)
     text = read(filename, String)
-    ex0 = parseall(SyntaxTree, text; filename)
+    ex0 = parseall(SyntaxTree, text; filename, version=JL_NEW_EDITION)
     for ex in children(ex0)
         try
             ex_compiled = JuliaLowering.lower(mod, ex)
@@ -366,7 +370,8 @@ function expr_structure_eq(e1,e2)
     true
 end
 
-macro newmod(name="newmod_$(string(__source__))", parentmod=__module__, body...)
+macro newmod(name="newmod_$(string(__source__))", parentmod=__module__,
+              edition=VERSION, body...)
     mod_ex = :(
         module $(Symbol(name))
         const JuliaLowering = $(JuliaLowering)
@@ -377,6 +382,7 @@ macro newmod(name="newmod_$(string(__source__))", parentmod=__module__, body...)
         end)
     Expr(:block,
          :(mod = $(Expr(:escape, :(Core.eval($parentmod, $(QuoteNode(mod_ex))))))),
+         :(Base.set_syntax_version(mod, $(esc(edition)))),
          Expr(Symbol("latestworld-if-toplevel")), :mod)
 end
 
@@ -392,18 +398,37 @@ function fl_eval(mod::Module, x::Expr)
     Core.eval(mod, fl_lower(mod, x))
 end
 
-function jl_macroexpand(mod::Module, x::SyntaxTree; expr_compat_mode=false)
-    JuliaLowering.macroexpand(mod, x; expr_compat_mode)
+function _force_syntax(x, edition::VersionNumber)
+    if x isa SyntaxTree
+        x
+    elseif x isa AbstractString
+        # note macroexpand/lower aren't particularly useful with parseall
+        JuliaSyntax.parseall(SyntaxTree, x; version=edition, ignore_warnings=true)
+    elseif x isa Expr
+        JuliaLowering.expr_to_est(x)
+    else
+        error("expected string or AST, got $x")
+    end
 end
 
-function jl_lower(mod::Module, st::SyntaxTree; expr_compat_mode=false)
-    JuliaLowering.lower(mod, st; expr_compat_mode)
+function jl_macroexpand(mod::Module, st::SyntaxTree; edition=JL_NEW_EDITION)
+    JuliaLowering.macroexpand(mod, JuliaLowering._ensure_edition(st, edition))
 end
 
-function jl_eval(mod::Module, st::SyntaxTree; expr_compat_mode=false)
-    JuliaLowering.eval(mod, st; expr_compat_mode)
+function jl_lower(mod::Module, st::SyntaxTree; edition=JL_NEW_EDITION)
+    JuliaLowering.lower(mod, JuliaLowering._ensure_edition(st, edition))
 end
 
+function jl_eval(mod::Module, st::SyntaxTree; edition=JL_NEW_EDITION)
+    JuliaLowering.eval(mod, JuliaLowering._ensure_edition(st, edition))
+end
+
+jl_macroexpand(mod::Module, x; edition=JL_NEW_EDITION) =
+    jl_macroexpand(mod, _force_syntax(x, edition); edition)
+jl_lower(mod::Module, x; edition=JL_NEW_EDITION) =
+    jl_lower(mod, _force_syntax(x, edition); edition)
+jl_eval(mod::Module, x; edition=JL_NEW_EDITION) =
+    jl_eval(mod, _force_syntax(x, edition); edition)
 
 fl_macroexpand(mod::Module, st::SyntaxTree; kws...) =
     fl_macroexpand(mod, JuliaLowering.est_to_expr(st); kws...)
@@ -411,10 +436,3 @@ fl_lower(mod::Module, st::SyntaxTree; kws...) =
     fl_lower(mod, JuliaLowering.est_to_expr(st); kws...)
 fl_eval(mod::Module, st::SyntaxTree; kws...) =
     fl_eval(mod, JuliaLowering.est_to_expr(st); kws...)
-
-jl_macroexpand(mod::Module, ex::Expr; kws...) =
-    jl_macroexpand(mod, JuliaLowering.expr_to_est(ex); kws...)
-jl_lower(mod::Module, ex::Expr; kws...) =
-    jl_lower(mod, JuliaLowering.expr_to_est(ex); kws...)
-jl_eval(mod::Module, ex::Expr; kws...) =
-    jl_eval(mod, JuliaLowering.expr_to_est(ex); kws...)
