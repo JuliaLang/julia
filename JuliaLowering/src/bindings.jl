@@ -174,7 +174,7 @@ end
 
 function NameKey(ex::SyntaxTree)
     @jl_assert kind(ex) in KSet"Identifier symboliclabel symbolicgoto" ex
-    NameKey(syntax_name(ex), (ex.context::SyntaxContext).layer)
+    NameKey(syntax_name(ex), (ex.context.layer)::ScopeLayer)
 end
 
 # One lambda's variables

@@ -1557,7 +1557,7 @@ end
         A([2])
     end)
     @test fl_eval(Module(), ex_local_alias) == 1
-    @test jl_eval(Module(), ex_local_alias) == 1
+    @test jl_eval(Module(), ex_local_alias; edition=JL_NEW_EDITION) == 1
 
     ex_alias_semantics = :(let
         A{T} = Vector{T}
@@ -1566,7 +1566,7 @@ end
         (A([2]), r2, A isa Function)
     end)
     @test fl_eval(Module(), ex_alias_semantics) == (1, :MethodError, true)
-    @test jl_eval(Module(), ex_alias_semantics) == (1, :MethodError, true)
+    @test jl_eval(Module(), ex_alias_semantics; edition=JL_NEW_EDITION) == (1, :MethodError, true)
 
     ex_typeof_value_sig = :(let
         f = 2
@@ -1574,7 +1574,7 @@ end
         f(2)
     end)
     @test fl_eval(Module(), ex_typeof_value_sig) == 1
-    @test jl_eval(Module(), ex_typeof_value_sig) == 1
+    @test jl_eval(Module(), ex_typeof_value_sig; edition=JL_NEW_EDITION) == 1
 
     ex_isdefined_sig = :(let
         r = try
@@ -1586,7 +1586,7 @@ end
         r
     end)
     @test fl_eval(Module(), ex_isdefined_sig) == :MethodError
-    @test jl_eval(Module(), ex_isdefined_sig) == :MethodError
+    @test jl_eval(Module(), ex_isdefined_sig; edition=JL_NEW_EDITION) == :MethodError
 
     ex_where_self = :(let
         r = try
@@ -1598,7 +1598,7 @@ end
         r
     end)
     @test fl_eval(Module(), ex_where_self) == :UndefVarError
-    @test jl_eval(Module(), ex_where_self) == :UndefVarError
+    @test jl_eval(Module(), ex_where_self; edition=JL_NEW_EDITION) == :UndefVarError
 
     ex_kwarg_self = :(let
         r = try
@@ -1611,7 +1611,7 @@ end
         r
     end)
     @test fl_eval(Module(), ex_kwarg_self) == :TypeError
-    @test jl_eval(Module(), ex_kwarg_self) == :TypeError
+    @test jl_eval(Module(), ex_kwarg_self; edition=JL_NEW_EDITION) == :TypeError
 
     ex_error_leaves_name = :(let
         A = Vector
@@ -1624,7 +1624,7 @@ end
         (ok, A === Vector, A isa Function)
     end)
     @test fl_eval(Module(), ex_error_leaves_name) == (:ArgumentError, true, false)
-    @test jl_eval(Module(), ex_error_leaves_name) == (:ArgumentError, true, false)
+    @test jl_eval(Module(), ex_error_leaves_name; edition=JL_NEW_EDITION) == (:ArgumentError, true, false)
 
     ex_sig_assigns_capture = :(let
         local y
@@ -1632,7 +1632,7 @@ end
         f(1)
     end)
     @test fl_eval(Module(), ex_sig_assigns_capture) == 3
-    @test jl_eval(Module(), ex_sig_assigns_capture) == 3
+    @test jl_eval(Module(), ex_sig_assigns_capture; edition=JL_NEW_EDITION) == 3
 
     # broken in the same way for both, but shouldn't crash
     ex_undef_inner = :(function f()
@@ -1655,5 +1655,5 @@ end
         g()
     end; f())
     @test fl_eval(Module(), ex_undef_inner_short) == 2
-    @test_broken jl_eval(Module(), ex_undef_inner_short) == 2
+    @test_broken jl_eval(Module(), ex_undef_inner_short; edition=JL_NEW_EDITION) == 2
 end

@@ -49,7 +49,7 @@ let
     @eval EvalTest $x + _some_var
 end
 """) == 11
-@test JuliaLowering.include_string(test_mod, raw"""
+@test jl_eval(test_mod, raw"""
 module EvalTest2
     _some_var = 2
 end
@@ -57,7 +57,7 @@ let
     x = 10
     @eval EvalTest2 $x + _some_var
 end
-"""; expr_compat_mode=true) == 12
+"""; edition=JL_OLD_EDITION) == 12
 
 @test JuliaLowering.include_string(test_mod, """
 let x=11
@@ -66,19 +66,19 @@ end
 """) == 220
 
 @testset "syntactic --> <: >:" begin
-    @test jl_eval(test_mod, Expr(:<:, Int, Number))
-    @test jl_eval(test_mod, Expr(:<:, Expr(:..., Expr(:tuple, Int, Number))))
-    @test jl_eval(test_mod, Expr(:>:, Number, Int))
-    @test jl_eval(test_mod, Expr(:>:, Expr(:..., Expr(:tuple, Number, Int))))
+    @test jl_eval(test_mod, Expr(:<:, Int, Number); edition=JL_NEW_EDITION)
+    @test jl_eval(test_mod, Expr(:<:, Expr(:..., Expr(:tuple, Int, Number))); edition=JL_NEW_EDITION)
+    @test jl_eval(test_mod, Expr(:>:, Number, Int); edition=JL_NEW_EDITION)
+    @test jl_eval(test_mod, Expr(:>:, Expr(:..., Expr(:tuple, Number, Int))); edition=JL_NEW_EDITION)
 
     JuliaLowering.include_string(test_mod, """
     function var"-->"(args...; kws...)
         (args, values(kws))
     end
     """)
-    @test jl_eval(test_mod, Expr(:-->, 1, 2)) == ((1,2),(;))
-    @test jl_eval(test_mod, Expr(:-->, 1, Expr(:kw, :foo, 2))) == ((1,),(;foo=2))
-    @test jl_eval(test_mod, Expr(:-->, Expr(:..., (1,)))) == ((1,),(;))
+    @test jl_eval(test_mod, Expr(:-->, 1, 2); edition=JL_NEW_EDITION) == ((1,2),(;))
+    @test jl_eval(test_mod, Expr(:-->, 1, Expr(:kw, :foo, 2)); edition=JL_NEW_EDITION) == ((1,),(;foo=2))
+    @test jl_eval(test_mod, Expr(:-->, Expr(:..., (1,))); edition=JL_NEW_EDITION) == ((1,),(;))
 end
 
 @testset "empty symbol" begin
@@ -92,7 +92,7 @@ end
                      Expr(:block,
                           Expr(:function, Expr(:call, Symbol(""), :x),
                                Expr(:block, :x)),
-                          Expr(:call, Symbol(""), 1)))) == 1
+                          Expr(:call, Symbol(""), 1))); edition=JL_NEW_EDITION) == 1
 
     # function arg
     @test jl_eval(test_mod,
@@ -100,52 +100,52 @@ end
                      Expr(:block,
                           Expr(:function, Expr(:call, :func, Symbol("")),
                                Expr(:block, Symbol(""))),
-                          Expr(:call, :func, 2)))) == 2
+                          Expr(:call, :func, 2))); edition=JL_NEW_EDITION) == 2
     # kwarg
     @test jl_eval(test_mod,
                 Expr(:let, Expr(:block),
                      Expr(:block,
                           Expr(:function, Expr(:call, :func, Expr(:parameters, Symbol(""))),
                                Expr(:block, Symbol(""))),
-                          Expr(:call, :func, Expr(:kw, Symbol(""), 2))))) == 2
+                          Expr(:call, :func, Expr(:kw, Symbol(""), 2)))); edition=JL_NEW_EDITION) == 2
 
     # empty label
     @test jl_eval(test_mod,
                 Expr(:symbolicblock, Symbol(""),
-                     Expr(:break, Symbol(""), 1))) == 1
+                     Expr(:break, Symbol(""), 1)); edition=JL_NEW_EDITION) == 1
 
     # read empty local
     @test jl_eval(test_mod,
                 Expr(:let, Expr(:block),
                      Expr(:block, Expr(:local, Symbol("")),
                           Expr(:(=), Symbol(""), 17),
-                          Symbol("")))) == 17
+                          Symbol(""))); edition=JL_NEW_EDITION) == 17
 
     # read empty global
     @test jl_eval(test_mod,
                 Expr(:block, Expr(:global, Symbol("")),
                      Expr(:(=), Symbol(""), 7),
-                     Symbol(""))) == 7
+                     Symbol("")); edition=JL_NEW_EDITION) == 7
 
     # typed read of empty
     @test jl_eval(test_mod,
                 Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 5)),
-                     Expr(:block, Expr(:(::), Symbol(""), :Int)))) == 5
+                     Expr(:block, Expr(:(::), Symbol(""), :Int))); edition=JL_NEW_EDITION) == 5
 
     # empty in curly (read position)
     @test jl_eval(test_mod,
                 Expr(:let, Expr(:block, Expr(:(=), Symbol(""), Int)),
-                     Expr(:block, Expr(:curly, :Vector, Symbol(""))))) == Vector{Int}
+                     Expr(:block, Expr(:curly, :Vector, Symbol("")))); edition=JL_NEW_EDITION) == Vector{Int}
 
     # empty in tuple (read position)
     @test jl_eval(test_mod,
                 Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 99)),
-                     Expr(:block, Expr(:tuple, Symbol(""))))) == (99,)
+                     Expr(:block, Expr(:tuple, Symbol("")))); edition=JL_NEW_EDITION) == (99,)
 
     # isdefined on empty
     @test jl_eval(test_mod,
                 Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 1)),
-                     Expr(:block, Expr(:isdefined, Symbol("")))))
+                     Expr(:block, Expr(:isdefined, Symbol("")))); edition=JL_NEW_EDITION)
 
     # for-loop empty iter var referenced in body
     @test jl_eval(test_mod,
@@ -153,18 +153,18 @@ end
                      Expr(:block,
                           Expr(:for, Expr(:(=), Symbol(""), Expr(:tuple, 10, 20, 30)),
                                Expr(:block, Expr(:(=), :s, Expr(:call, :+, :s, Symbol(""))))),
-                          :s))) == 60
+                          :s)); edition=JL_NEW_EDITION) == 60
 
     # tuple destructure with empty lhs
     @test jl_eval(test_mod,
                 Expr(:let, Expr(:block),
                      Expr(:block, Expr(:local, Symbol("")), Expr(:local, :a),
                           Expr(:(=), Expr(:tuple, Symbol(""), :a), Expr(:tuple, 1, 2)),
-                          Expr(:tuple, Symbol(""), :a)))) == (1, 2)
+                          Expr(:tuple, Symbol(""), :a))); edition=JL_NEW_EDITION) == (1, 2)
 
     # quote of empty
     @test jl_eval(test_mod, Expr(:quote, Symbol(""));
-                  expr_compat_mode=true) === Symbol("")
+                  edition=JL_OLD_EDITION) === Symbol("")
 end
 
 @eval test_mod libccalltest_var = "libccalltest"
@@ -261,20 +261,20 @@ end
     ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
 """) === 11 + 18im
 
-@testset "(robot-generated) ccall (sym, lib) tuple: globals and hygiene" for expr_compat_mode in [true, false]
+@testset "(robot-generated) ccall (sym, lib) tuple: globals and hygiene" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
     # library is a module-qualified global
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     module CCallLibMod
         const the_lib = "libccalltest"
     end
-    """; expr_compat_mode)
+    """; edition)
     Core.@latestworld
     @test JuliaLowering.include_string(test_mod, """
         ccall((:ctest, CCallLibMod.the_lib), Complex{Int}, (Complex{Int},), 10 + 20im)
     """) === 11 + 18im
 
     # macro in a nested module produces ccall with lib from that module (hygiene)
-    JuliaLowering.include_string(test_mod, raw"""
+    jl_eval(test_mod, raw"""
     module CCallHygieneMod
         const mylib = "libccalltest"
         import ..JuliaLowering.@legacy_quote_to_syntax
@@ -283,7 +283,7 @@ end
                 :(ccall((:ctest, mylib), Complex{Int}, (Complex{Int},), 10 + 20im)))
         end
     end
-    """; expr_compat_mode)
+    """; edition)
     Core.@latestworld
     @test JuliaLowering.include_string(test_mod, """
         CCallHygieneMod.@do_ccall()
@@ -291,13 +291,13 @@ end
 
     # hygiene: `mylib` in the macro body should resolve in CCallHygieneMod, not
     # the caller, even when the caller defines a different `mylib`
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
         mylib = "this_lib_does_not_exist"
         CCallHygieneMod.@do_ccall()
-    """; expr_compat_mode) === 11 + 18im
+    """; edition) === 11 + 18im
 
     # macro that interpolates the lib value at expansion time
-    JuliaLowering.include_string(test_mod, raw"""
+    jl_eval(test_mod, raw"""
     module CCallHygieneMod2
         import ..JuliaLowering.@legacy_quote_to_syntax
         const mylib2 = "libccalltest"
@@ -307,36 +307,36 @@ end
                 :(ccall((:ctest, $lib), Complex{Int}, (Complex{Int},), 10 + 20im)))
         end
     end
-    """; expr_compat_mode)
+    """; edition)
     Core.@latestworld
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
         CCallHygieneMod2.@do_ccall_interp()
-    """; expr_compat_mode) === 11 + 18im
+    """; edition) === 11 + 18im
 
     # ccall with plain symbol name still works inside a function
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
         function ccall_plain_sym()
             ccall(:strlen, Csize_t, (Cstring,), "abc")
         end
-    """; expr_compat_mode) isa Function
+    """; edition) isa Function
     Core.@latestworld
     @test test_mod.ccall_plain_sym() == 3
 
     # ccall with (sym, lib) tuple where lib is a global, inside a function
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
         function ccall_global_lib()
             ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
         end
-    """; expr_compat_mode) isa Function
+    """; edition) isa Function
     Core.@latestworld
     @test test_mod.ccall_global_lib() === 11 + 18im
 
     # ccall with module-qualified lib inside a function
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
         function ccall_qualified_lib()
             ccall((:ctest, CCallLibMod.the_lib), Complex{Int}, (Complex{Int},), 10 + 20im)
         end
-    """; expr_compat_mode) isa Function
+    """; edition) isa Function
     Core.@latestworld
     @test test_mod.ccall_qualified_lib() === 11 + 18im
 end
@@ -668,7 +668,7 @@ macro doc(x, y);      error("baremod macro; expected call to Core macro"); end
 global nothing = "baremod.nothing; expected core nothing"
 end
 @testset "globalrefs inserted by parsing" begin
-    local jl_s_eval = x->JuliaLowering.include_string(baremod, x; expr_compat_mode=true)
+    local jl_s_eval = x->jl_eval(baremod, x; edition=JL_OLD_EDITION)
     local fl_s_eval = x->fl_eval(baremod, JuliaSyntax.parsestmt(Expr, x; filename="file"))
 
     let s = "100000000000000000000000000000"
@@ -712,7 +712,7 @@ end
 end
 
 @testset "docstrings: doc-only expressions" begin
-    local jeval(mod, str) = JuliaLowering.include_string(mod, str; expr_compat_mode=true)
+    local jeval(mod, str) = jl_eval(mod, str; edition=JL_OLD_EDITION)
     jeval(test_mod, "function fun_exists(x); x; end")
     jeval(test_mod, "module M end; module M2 end")
     # TODO: return values are to be determined, currently Base.Docs.Binding for
@@ -767,17 +767,17 @@ end
     """) isa Expr
 end
 
-# SyntaxTree @eval should pass along expr_compat_mode
-@test JuliaLowering.include_string(test_mod, raw"""
+# SyntaxTree @eval should pass along the syntax edition
+@test jl_eval(test_mod, raw"""
     let T = gensym("documented_sym_no_logspam")
         @eval @doc $"This is a $T" $T = 1
     end
-"""; expr_compat_mode=true) === 1
-@test JuliaLowering.include_string(test_mod, raw"""
+"""; edition=JL_OLD_EDITION) === 1
+@test jl_eval(test_mod, raw"""
     let T = gensym("documented_sym_no_logspam")
         @eval @doc $"This is a $T" $T = 1
     end
-"""; expr_compat_mode=false) === 1
+"""; edition=JL_NEW_EDITION) === 1
 
 @testset "tryfinally with scopedvalues" begin
     @eval test_mod scopedval = Base.ScopedValues.ScopedValue(1)
@@ -787,7 +787,7 @@ end
               :(push!(val_history, scopedval[])),
               :(Base.ScopedValues.Scope(Core.current_scope(),
                                         $test_mod.scopedval => 2)))
-    JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(ex); expr_compat_mode=true)
+    jl_eval(test_mod, ex; edition=JL_OLD_EDITION)
     # try block uses "inner" dynamic scope, finally does not
     @test test_mod.val_history == [2, 1]
     JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(ex))
@@ -872,8 +872,8 @@ end
 let op_mod = Module(:opmod, false)
     @testset "operators" for run in [
             s->fl_eval(op_mod, JuliaSyntax.parseall(Expr, s)),
-            s->JuliaLowering.include_string(op_mod, s; expr_compat_mode=true),
-            s->JuliaLowering.include_string(op_mod, s; expr_compat_mode=false)]
+            s->jl_eval(op_mod, s; edition=JL_OLD_EDITION),
+            s->jl_eval(op_mod, s; edition=JL_NEW_EDITION)]
 
         @testset "unary prefix (no parens needed)" for op in String["⋆", "±", "∓", "~", "!", "¬", "√", "∛", "∜"]
             @test run("$(op)x = (x,)") isa Function
@@ -955,11 +955,11 @@ end
               :T),
               Expr(:block, Expr(:return, Expr(:static_parameter, 1))))
     local f
-    @test (f = jl_eval(test_mod, ex)) isa Function
+    @test (f = jl_eval(test_mod, ex; edition=JL_NEW_EDITION)) isa Function
     @test f(String) == String
-    @test (f = jl_eval(test_mod, ex; expr_compat_mode=true)) isa Function
+    @test (f = jl_eval(test_mod, ex; edition=JL_OLD_EDITION)) isa Function
     @test f(String) == String
-    @test (f = jl_eval(test_mod, ex; expr_compat_mode=false)) isa Function
+    @test (f = jl_eval(test_mod, ex; edition=JL_NEW_EDITION)) isa Function
     @test f(String) == String
 
     # function (x::T, y::U) where {T, U}; (x, y, (sp 1), (sp 2)); end
@@ -972,11 +972,11 @@ end
                         Expr(:tuple, :x, :y,
                              Expr(:static_parameter, 1),
                              Expr(:static_parameter, 2)))))
-    @test (f = jl_eval(test_mod, ex)) isa Function
+    @test (f = jl_eval(test_mod, ex; edition=JL_NEW_EDITION)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
-    @test (f = jl_eval(test_mod, ex; expr_compat_mode=true)) isa Function
+    @test (f = jl_eval(test_mod, ex; edition=JL_OLD_EDITION)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
-    @test (f = jl_eval(test_mod, ex; expr_compat_mode=false)) isa Function
+    @test (f = jl_eval(test_mod, ex; edition=JL_NEW_EDITION)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
 
     ex = Expr(:function,
@@ -985,7 +985,7 @@ end
               :T),
               Expr(:block, Expr(:isdefined, Expr(:static_parameter, 1))))
 
-    @test (f = jl_eval(test_mod, ex)) isa Function
+    @test (f = jl_eval(test_mod, ex; edition=JL_NEW_EDITION)) isa Function
     @test f(String) == true
 end
 
@@ -1004,11 +1004,11 @@ JuliaLowering.include_string(@__MODULE__, """
 end
 """)
 
-@testset "Base.@kwdef" for expr_compat_mode in (true, false)
+@testset "Base.@kwdef" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
     local test_mod = @newmod()
     @eval test_mod using Test
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     @kwdef struct Test27970Typed
         a::Int
         b::String = "hi"
@@ -1017,7 +1017,7 @@ end
         a
     end
     @kwdef struct Test27970Empty end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @testset "No default values" begin
         @test Test27970Typed(a=1) == Test27970Typed(1, "hi")
@@ -1032,12 +1032,12 @@ end
         @test Test27970Empty() == Test27970Empty()
     end
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     abstract type AbstractTest29307 end
     @kwdef struct Test29307{T<:Integer} <: AbstractTest29307
         a::T=2
     end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @testset "subtyped" begin
         @test Test29307() == Test29307{Int}(2)
@@ -1045,7 +1045,7 @@ end
         @test Test29307{UInt32}() == Test29307{UInt32}(2)
         @test Test29307{UInt32}(a=0x03) == Test29307{UInt32}(0x03)
     end
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     @kwdef struct TestInnerConstructor
         a = 1
         TestInnerConstructor(a::Int) = (@assert a>0; new(a))
@@ -1054,7 +1054,7 @@ end
             new(a)
         end
     end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @testset "inner constructor" begin
         @test TestInnerConstructor() == TestInnerConstructor(1)
@@ -1064,15 +1064,15 @@ end
         @test_throws AssertionError TestInnerConstructor(a="")
     end
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     const outsidevar = 7
     @kwdef struct TestOutsideVar
         a::Int=outsidevar
     end
-    """; expr_compat_mode)
+    """; edition)
     @eval test_mod @test TestOutsideVar() == TestOutsideVar(7)
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     @kwdef mutable struct Test_kwdef_const_atomic
         a
         b::Int
@@ -1083,7 +1083,7 @@ end
         const g::Int = 1
         @atomic h::Int
     end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @testset "const and @atomic fields" begin
         x = Test_kwdef_const_atomic(a = 1, b = 1, d = 1, e = 1, h = 1)
@@ -1106,7 +1106,7 @@ end
         end
     end
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     module KwdefWithEsc
         const Int1 = Int
         const val1 = 42
@@ -1143,16 +1143,16 @@ end
             end
         end
     end
-    """; expr_compat_mode=true)
+    """; edition=JL_OLD_EDITION)
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     module KwdefWithEsc_TestModule
         using ..KwdefWithEsc
         const Bool1 = Bool
         const val2 = true
         KwdefWithEsc.@define_struct()
     end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @test isdefined(KwdefWithEsc_TestModule, :Struct)
     @eval test_mod @test fieldnames(KwdefWithEsc_TestModule.Struct) ==

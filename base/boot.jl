@@ -1227,7 +1227,7 @@ end
 # Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
 # Core._parse and Core._lower respectively (if they are not `nothing`.)
 
-#    Core._parse(text, filename, lineno, offset, options, version)
+#    Core._parse(text, filename, lineno, offset, options, edition)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
 # it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
@@ -1318,6 +1318,10 @@ typename(union::UnionAll) = typename(union.body)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
+
+const OLDEST_EDITION = (1, 13)
+const VERSION_EDITION =
+    (Int(ccall(:jl_ver_major, Int32, ())), Int(ccall(:jl_ver_minor, Int32, ())))
 
 # Used only by the magic @VERSION macro
 struct MacroSource

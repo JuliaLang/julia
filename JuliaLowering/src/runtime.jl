@@ -321,7 +321,7 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
     if !(ex0 isa SyntaxTree)
         ex0 isa Expr && throw(LoweringError(
             ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
-        ex0 = expr_to_est(ex0, g.srcref)
+        ex0 = expr_to_est(ex0, g.srcref, sc)
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0

@@ -1,7 +1,3 @@
-let node = JS.newleaf(LineNumberNode(1), K"Value", nothing)
-    @test node.value === nothing
-end
-
 @testset "assert_syntaxtree" begin
     st = parsestmt(SyntaxTree, "function foo end")
     @test JuliaLowering.assert_syntaxtree(st) === nothing

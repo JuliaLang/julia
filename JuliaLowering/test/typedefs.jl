@@ -117,10 +117,10 @@ end
                   @const y::Bool
               end
               $S(true,false).x
-          end)) == true
+          end); edition=JL_NEW_EDITION) == true
     @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
     @test_throws "cannot be changed" jl_eval(
-        test_mod, :($S(true,false).y = true))
+        test_mod, :($S(true,false).y = true); edition=JL_NEW_EDITION)
 
     @gensym S
     @test jl_eval(
@@ -139,10 +139,10 @@ end
                   end
               end
               $S(true,false).x
-          end)) == true
+          end); edition=JL_NEW_EDITION) == true
     @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
     @test_throws "cannot be changed" jl_eval(
-        test_mod, :($S(true,false).y = true))
+        test_mod, :($S(true,false).y = true); edition=JL_NEW_EDITION)
 
     @gensym S
     @test jl_eval(
@@ -161,9 +161,9 @@ end
                   end
               end
               $S(true,false).x
-          end)) == true
+          end); edition=JL_NEW_EDITION) == true
     @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
-    @test_throws "cannot be changed" jl_eval(test_mod, :($S(true,false).y = true))
+    @test_throws "cannot be changed" jl_eval(test_mod, :($S(true,false).y = true); edition=JL_NEW_EDITION)
 end
 
 @testset "placeholder fields" begin
@@ -325,7 +325,7 @@ end
         :(begin
               struct jl_DefaultInnerCtorWorld; x::Int; end
               jl_DefaultInnerCtorWorld(1)
-          end)).x == 1
+          end); edition=JL_NEW_EDITION).x == 1
     @test fl_eval(
         test_mod,
         :(begin
@@ -337,7 +337,7 @@ end
         :(begin
               struct jl_InnerCtorWorld; x::Int; jl_InnerCtorWorld() = new(1); end
               jl_InnerCtorWorld()
-          end)).x == 1
+          end); edition=JL_NEW_EDITION).x == 1
 end
 
 # Likely not set in stone (the behaviour is odd here), but test to detect changes
@@ -457,7 +457,7 @@ end
 end
 
 # User defined inner constructors and helper functions for structs without type params
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 "struct docs"
 struct S6
     x
@@ -467,7 +467,7 @@ struct S6
     S6() = S6_f()
     S6(x) = new(x)
 end
-"""; expr_compat_mode=true) === nothing
+"""; edition=JL_OLD_EDITION) === nothing
 let s = test_mod.S6()
     @test s isa test_mod.S6
     @test s.x === 42
@@ -558,14 +558,14 @@ let s = test_mod.S_empty_new()
 end
 
 # flisp doesn't error with kwargs after `;` in `new`
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 struct S_new_kwargs1
     x
     y
     S_new_kwargs1(args...; kwargs...) = new(args...; kwargs...)
 end
 S_new_kwargs1(1,2).x
-"""; expr_compat_mode=true) == 1
+"""; edition=JL_OLD_EDITION) == 1
 
 # new() with splats and untyped fields
 @test JuliaLowering.include_string(test_mod, """
@@ -737,7 +737,7 @@ let s = test_mod.CheckConfig(0,0;kw1=100)
 end
 
 # typegroup: basic mutual recursion
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 typegroup
     struct TG_Node
         edges::Vector{TG_Edge}
@@ -747,7 +747,7 @@ typegroup
         to::TG_Node
     end
 end
-"""; version=v"1.14") === nothing
+"""; edition=JL_OLD_EDITION) === nothing
 @test fieldtype(test_mod.TG_Node, :edges) == Vector{test_mod.TG_Edge}
 @test fieldtype(test_mod.TG_Edge, :from) == test_mod.TG_Node
 @test fieldtype(test_mod.TG_Edge, :to) == test_mod.TG_Node
@@ -759,7 +759,7 @@ let n1 = test_mod.TG_Node(test_mod.TG_Edge[]),
 end
 
 # typegroup: parametric mutual recursion
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 typegroup
     struct TG_PNode{T}
         data::T
@@ -770,12 +770,12 @@ typegroup
         to::TG_PNode{T}
     end
 end
-"""; version=v"1.14") === nothing
+"""; edition=JL_OLD_EDITION) === nothing
 @test fieldtype(test_mod.TG_PNode{Int}, :edges) == Vector{test_mod.TG_PEdge{Int}}
 @test fieldtype(test_mod.TG_PEdge{String}, :from) == test_mod.TG_PNode{String}
 
 # typegroup: mutable structs
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 typegroup
     mutable struct TG_MNode
         edges::Vector{TG_MEdge}
@@ -785,12 +785,12 @@ typegroup
         to::TG_MNode
     end
 end
-"""; version=v"1.14") === nothing
+"""; edition=JL_OLD_EDITION) === nothing
 @test ismutabletype(test_mod.TG_MNode)
 @test ismutabletype(test_mod.TG_MEdge)
 
 # typegroup: supertype referencing incomplete type
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 typegroup
     struct TG_SuperA <: AbstractVector{TG_SuperB}
         data::Vector{TG_SuperB}
@@ -799,7 +799,7 @@ typegroup
         a::TG_SuperA
     end
 end
-"""; version=v"1.14") === nothing
+"""; edition=JL_OLD_EDITION) === nothing
 @test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}
 
 # bad test: flisp will scan the struct for assigned fields to throw errors, but
@@ -815,7 +815,7 @@ end
                 Expr(:call, :struct_doc_test, Expr(:(::), :status, :Integer),
                      Expr(:kw, :headers, Expr(:vect))),
                 Expr(:block, Expr(:call, :new, :status)))))),
-    Expr(:., Expr(:call, :struct_doc_test, 5), QuoteNode(:status)))) == 5
+    Expr(:., Expr(:call, :struct_doc_test, 5), QuoteNode(:status))); edition=JL_NEW_EDITION) == 5
 
 # bad test: flisp does not continue scanning past anything it doesn't recognize
 # as a field
@@ -829,7 +829,7 @@ end
               struct_eq_assigns_test() = new(default)
           end
           (struct_eq_assigns_test(5).x, struct_eq_assigns_test().x)
-      end)) == (5, 1)
+      end); edition=JL_NEW_EDITION) == (5, 1)
 
 @testset "(AI) inner ctor with return-type annotation and `where`" begin
     # Regression: an inner constructor with BOTH an explicit return-type
@@ -934,49 +934,49 @@ end
 
 # A global should be declared in scope.  the local name should not be
 # user-visible (the user may use it in a function arg type)
-@testset "struct def in local scope" for expr_compat_mode in (true, false)
-    @test JuliaLowering.include_string(@newmod(), """
+@testset "struct def in local scope" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
+    @test jl_eval(@newmod(), """
     let
         struct S; x::Int; end
         Core.isdefinedglobal(@__MODULE__, :S)
     end
-    """; expr_compat_mode) == true
+    """; edition) == true
 
-    @test JuliaLowering.include_string(@newmod(), """
+    @test jl_eval(@newmod(), """
     let
         struct S; x::Int; end
         S(y::UInt) = S(-1)
         S(UInt(1)).x
     end
-    """; expr_compat_mode) == -1
+    """; edition) == -1
 
-    @test JuliaLowering.include_string(@newmod(), """
+    @test jl_eval(@newmod(), """
     let
         struct S; x::Int; end
         S(y::UInt) = S(-1)
         f(arg::S) = arg.x # S should be the global
         f(S(UInt(1)))
     end
-    """; expr_compat_mode) == -1
+    """; edition) == -1
 
-    @test JuliaLowering.include_string(@newmod(), """
+    @test jl_eval(@newmod(), """
     let
         struct S{T}; x::T; end
         S(;y=0) = S{typeof(y)}(y)
         f(::Type{<:S}) = 1
         (f(S{Int}), fieldcount(S{Int}), nameof(typeof(S(;y=2))))
     end
-    """; expr_compat_mode) == (1, 1, :S)
+    """; edition) == (1, 1, :S)
 
     # local captures
-    @test JuliaLowering.include_string(@newmod(), """
+    @test jl_eval(@newmod(), """
     let loc = 1
         struct S; x::Int; end
         S(y::Float64) = S(loc += 1)
         S(1).x, S(1.0).x, S(2).x, S(2.0).x, S(3).x, S(3.0).x
     end
-    """; expr_compat_mode) == (1, 2, 2, 3, 3, 4)
-    @test JuliaLowering.include_string(@newmod(), """
+    """; edition) == (1, 2, 2, 3, 3, 4)
+    @test jl_eval(@newmod(), """
     let loc = 1
         struct S
             x::Int
@@ -984,26 +984,26 @@ end
         end
         S(1.0).x, S(2.0).x, S(3.0).x
     end
-    """; expr_compat_mode) == (2, 3, 4)
+    """; edition) == (2, 3, 4)
 end
-@testset "nonstruct type def in local scope" for expr_compat_mode in (true, false)
-    @test JuliaLowering.include_string(test_mod, """
+@testset "nonstruct type def in local scope" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
+    @test jl_eval(test_mod, """
     let
         abstract type AbstractTypeInLocalScope end
         Core.isdefinedglobal(@__MODULE__, :AbstractTypeInLocalScope)
     end
-    """; expr_compat_mode) == true
+    """; edition) == true
 
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
     let
         primitive type PrimitiveTypeInLocalScope 8 end
         Core.isdefinedglobal(@__MODULE__, :PrimitiveTypeInLocalScope)
     end
-    """; expr_compat_mode) == true
+    """; edition) == true
 end
 
-@testset "(AI) typegroup def in local scope" for expr_compat_mode in (true, false)
-    @test JuliaLowering.include_string(@newmod(), """
+@testset "(AI) typegroup def in local scope" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
+    @test jl_eval(@newmod(), """
     let
         typegroup
             struct N; x::Int; end
@@ -1011,10 +1011,10 @@ end
         end
         Core.isdefinedglobal(@__MODULE__, :N)
     end
-    """; expr_compat_mode, version=v"1.14") == true
+    """; edition) == true
 
     # A later method whose body refers to the type name.
-    @test JuliaLowering.include_string(@newmod(), """
+    @test jl_eval(@newmod(), """
     let
         typegroup
             struct N; x::Int; end
@@ -1023,10 +1023,10 @@ end
         N(y::UInt) = N(-1)
         N(UInt(1)).x
     end
-    """; expr_compat_mode, version=v"1.14") == -1
+    """; edition) == -1
 
     # A later method whose signature refers to the type name.
-    @test JuliaLowering.include_string(@newmod(), """
+    @test jl_eval(@newmod(), """
     let
         typegroup
             struct N; x::Int; end
@@ -1036,10 +1036,10 @@ end
         f(arg::N) = arg.x
         f(N(UInt(1)))
     end
-    """; expr_compat_mode, version=v"1.14") == -1
+    """; edition) == -1
 end
 
-@testset "(AI) type def in local scope: name conflicts" for expr_compat_mode in (true, false)
+@testset "(AI) type def in local scope: name conflicts" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
     for src in ("""let S = 1
                     struct S; x::Int; end
                 end
@@ -1058,17 +1058,17 @@ end
                         struct E; f::N; end
                     end
                 end""")
-        @test_throws JuliaLowering.LoweringError JuliaLowering.include_string(
-            test_mod, src; expr_compat_mode, version=v"1.14")
+        @test_throws JuliaLowering.LoweringError jl_eval(
+            test_mod, src; edition)
     end
 
     # shadowing is OK
-    @test JuliaLowering.include_string(@newmod(), """
+    @test jl_eval(@newmod(), """
     let S = 1
         let
             struct S; x::Int; end
         end
         S
     end
-    """; expr_compat_mode) == 1
+    """; edition) == 1
 end

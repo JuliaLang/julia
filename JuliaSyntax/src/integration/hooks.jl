@@ -3,7 +3,12 @@
 
 const _has_v1_6_hooks  = VERSION >= v"1.6"
 const _has_v1_10_hooks = isdefined(Core, :_setparser!)
-const _has_v1_14_version_hooks = isdefined(Base, :fl_parse_bootstrap)
+const _has_v1_14_version_hooks = isdefined(Base, :VERSION_EDITION)
+const VERSION_EDITION = @static if _has_v1_14_version_hooks
+    Base.VERSION_EDITION
+else
+    (Int(VERSION.major), Int(VERSION.minor))
+end
 
 struct ErrorSpec
     child_idx::Int
@@ -165,7 +170,7 @@ end
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
 function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
-                          options::Symbol, version::VersionNumber)
+                          options::Symbol, edition::Tuple{Int, Int})
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -187,7 +192,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
             write(_debug_log[], code)
         end
 
-        stream = ParseStream(code, offset+1; version=version)
+        stream = ParseStream(code, offset+1; version=VersionNumber(edition))
         if options === :statement || options === :atom
             # To copy the flisp parser driver:
             # * Parsing atoms      consumes leading trivia
@@ -308,7 +313,7 @@ function core_parser_hook(code, filename, offset, options)
     core_parser_hook(code, filename, 1, offset, options)
 end
 function core_parser_hook(code, filename, lineno, offset, options)
-    core_parser_hook(code, filename, lineno, offset, options, VERSION)
+    core_parser_hook(code, filename, lineno, offset, options, VERSION_EDITION)
 end
 
 if _has_v1_10_hooks
@@ -357,7 +362,7 @@ end
 # Call the flisp parser
 function _fl_parse_hook(code, filename, lineno, offset, options)
     @static if _has_v1_14_version_hooks
-        Base.fl_parse(code, filename, lineno, offset, options, nothing)
+        Base.fl_parse(code, filename, lineno, offset, options, VERSION_EDITION)
     elseif VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
         return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
     elseif _has_v1_6_hooks

@@ -216,17 +216,17 @@ end
 end
 
 @testset "elseif is valid outside of if" begin
-    @test jl_eval(test_mod, Expr(:elseif, true, 1)) == 1
-    @test jl_eval(test_mod, Expr(:elseif, false, 1)) == nothing
-    @test jl_eval(test_mod, Expr(:elseif, true, 1, 2)) == 1
-    @test jl_eval(test_mod, Expr(:elseif, false, 1, 2)) == 2
+    @test jl_eval(test_mod, Expr(:elseif, true, 1); edition=JL_NEW_EDITION) == 1
+    @test jl_eval(test_mod, Expr(:elseif, false, 1); edition=JL_NEW_EDITION) == nothing
+    @test jl_eval(test_mod, Expr(:elseif, true, 1, 2); edition=JL_NEW_EDITION) == 1
+    @test jl_eval(test_mod, Expr(:elseif, false, 1, 2); edition=JL_NEW_EDITION) == 2
 end
 
 @testset "comparison" begin
     @test jl_eval(
         test_mod,
         Expr(:comparison, 1, :(Base.FastMath.le_fast), 2,
-             :(Base.FastMath.le_fast), 3))
+             :(Base.FastMath.le_fast), 3); edition=JL_NEW_EDITION)
 end
 
 #-------------------------------------------------------------------------------
@@ -243,8 +243,8 @@ end
     # An empty block as a condition evaluates to `nothing` and must throw a
     # runtime TypeError (as the flisp lowering does for `if begin end`), not
     # crash lowering.
-    @test_throws TypeError jl_eval(test_mod, Expr(:if, Expr(:block), 1, 2))
-    @test_throws TypeError jl_eval(test_mod, Expr(:while, Expr(:block), 1))
+    @test_throws TypeError jl_eval(test_mod, Expr(:if, Expr(:block), 1, 2); edition=JL_NEW_EDITION)
+    @test_throws TypeError jl_eval(test_mod, Expr(:while, Expr(:block), 1); edition=JL_NEW_EDITION)
     @test_throws TypeError JuliaLowering.include_string(test_mod, """
     (begin end) ? 1 : 2
     """)
@@ -327,8 +327,8 @@ end
 
     # Degenerate 0-arg `&&`/`||` as the final statement of a multi-statement
     # block condition
-    @test jl_eval(test_mod, Expr(:if, Expr(:block, :(1 + 1), Expr(:&&)), 1, 2)) === 1
-    @test jl_eval(test_mod, Expr(:if, Expr(:block, :(1 + 1), Expr(:||)), 1, 2)) === 2
+    @test jl_eval(test_mod, Expr(:if, Expr(:block, :(1 + 1), Expr(:&&)), 1, 2); edition=JL_NEW_EDITION) === 1
+    @test jl_eval(test_mod, Expr(:if, Expr(:block, :(1 + 1), Expr(:||)), 1, 2); edition=JL_NEW_EDITION) === 2
 
     @test JuliaLowering.include_string(test_mod, """
     if begin begin true end end
@@ -343,36 +343,36 @@ end
 @testset "`&&` and `||` chains" begin
 
 # 0-1 arguments
-@test jl_eval(test_mod, Expr(:&&)) == true
-@test jl_eval(test_mod, Expr(:&&, true)) == true
-@test jl_eval(test_mod, Expr(:&&, false)) == false
-@test jl_eval(test_mod, Expr(:||)) == false
-@test jl_eval(test_mod, Expr(:||, true)) == true
-@test jl_eval(test_mod, Expr(:||, false)) == false
+@test jl_eval(test_mod, Expr(:&&); edition=JL_NEW_EDITION) == true
+@test jl_eval(test_mod, Expr(:&&, true); edition=JL_NEW_EDITION) == true
+@test jl_eval(test_mod, Expr(:&&, false); edition=JL_NEW_EDITION) == false
+@test jl_eval(test_mod, Expr(:||); edition=JL_NEW_EDITION) == false
+@test jl_eval(test_mod, Expr(:||, true); edition=JL_NEW_EDITION) == true
+@test jl_eval(test_mod, Expr(:||, false); edition=JL_NEW_EDITION) == false
 
 # 0-1 arguments in condition position (`expand_condition`, used by `if`/`while`)
 # have their own desugaring path separate from the value-position case above.
-@test jl_eval(test_mod, Expr(:if, Expr(:&&), 1, 2)) == 1
-@test jl_eval(test_mod, Expr(:if, Expr(:&&, true), 1, 2)) == 1
-@test jl_eval(test_mod, Expr(:if, Expr(:&&, false), 1, 2)) == 2
-@test jl_eval(test_mod, Expr(:if, Expr(:||), 1, 2)) == 2
-@test jl_eval(test_mod, Expr(:if, Expr(:||, true), 1, 2)) == 1
-@test jl_eval(test_mod, Expr(:if, Expr(:||, false), 1, 2)) == 2
+@test jl_eval(test_mod, Expr(:if, Expr(:&&), 1, 2); edition=JL_NEW_EDITION) == 1
+@test jl_eval(test_mod, Expr(:if, Expr(:&&, true), 1, 2); edition=JL_NEW_EDITION) == 1
+@test jl_eval(test_mod, Expr(:if, Expr(:&&, false), 1, 2); edition=JL_NEW_EDITION) == 2
+@test jl_eval(test_mod, Expr(:if, Expr(:||), 1, 2); edition=JL_NEW_EDITION) == 2
+@test jl_eval(test_mod, Expr(:if, Expr(:||, true), 1, 2); edition=JL_NEW_EDITION) == 1
+@test jl_eval(test_mod, Expr(:if, Expr(:||, false), 1, 2); edition=JL_NEW_EDITION) == 2
 
 # Same, but with the condition inside a block (the `isblock` branch of
 # `expand_condition`)
-@test jl_eval(test_mod, Expr(:if, Expr(:block, Expr(:&&, true)), 1, 2)) == 1
-@test jl_eval(test_mod, Expr(:if, Expr(:block, Expr(:||, false)), 1, 2)) == 2
-@test jl_eval(test_mod, Expr(:if, Expr(:block, Expr(:&&)), 1, 2)) == 1
+@test jl_eval(test_mod, Expr(:if, Expr(:block, Expr(:&&, true)), 1, 2); edition=JL_NEW_EDITION) == 1
+@test jl_eval(test_mod, Expr(:if, Expr(:block, Expr(:||, false)), 1, 2); edition=JL_NEW_EDITION) == 2
+@test jl_eval(test_mod, Expr(:if, Expr(:block, Expr(:&&)), 1, 2); edition=JL_NEW_EDITION) == 1
 
 # Degenerate arities nested inside another `&&`/`||` (flattened away by
 # `expand_cond_children`)
-@test jl_eval(test_mod, Expr(:if, Expr(:&&, Expr(:&&)), 1, 2)) == 1
-@test jl_eval(test_mod, Expr(:if, Expr(:&&, Expr(:&&, false), true), 1, 2)) == 2
+@test jl_eval(test_mod, Expr(:if, Expr(:&&, Expr(:&&)), 1, 2); edition=JL_NEW_EDITION) == 1
+@test jl_eval(test_mod, Expr(:if, Expr(:&&, Expr(:&&, false), true), 1, 2); edition=JL_NEW_EDITION) == 2
 
 # `while` conditions share `expand_condition` with `if`
-@test jl_eval(test_mod, Expr(:while, Expr(:||), 1)) === nothing
-@test jl_eval(test_mod, Expr(:while, Expr(:&&), Expr(:break))) === nothing
+@test jl_eval(test_mod, Expr(:while, Expr(:||), 1); edition=JL_NEW_EDITION) === nothing
+@test jl_eval(test_mod, Expr(:while, Expr(:&&), Expr(:break)); edition=JL_NEW_EDITION) === nothing
 
 @test JuliaLowering.include_string(test_mod, """
 true && "hi"

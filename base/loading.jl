@@ -261,7 +261,7 @@ and wherefrom to load a julia package.
 """
 struct PkgLoadSpec
     path::String
-    julia_syntax_version::VersionNumber
+    julia_edition::Tuple{Int, Int}
 end
 
 struct LoadingCache
@@ -920,7 +920,7 @@ function project_file_ext_load_spec(project_file::String, ext::PkgId)
     if exts !== nothing
         if ext.name in keys(exts) && ext.uuid == uuid5(UUID(d["uuid"]::String), ext.name)
             # Syntax version of the main package applies to its extensions
-            return PkgLoadSpec(find_ext_path(p, ext.name), project_get_syntax_version(d))
+            return PkgLoadSpec(find_ext_path(p, ext.name), project_get_edition(d))
         end
     end
     return nothing
@@ -935,9 +935,7 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     return PkgId(uuid, name)
 end
 
-const NON_VERSIONED_SYNTAX = v"1.13"
-
-function project_get_syntax_version(d::Dict)
+function project_get_edition(d::Dict)
     # Syntax Evolution. First check syntax.julia_version entry
     sv = nothing
     ds = get(d, "syntax", nothing)
@@ -957,14 +955,16 @@ function project_get_syntax_version(d::Dict)
     # Finally, if neither of those are set, default to the current Julia version.
     # N.B.: This choice is less "compatible" than defaulting to a fixed older version.
     # However, it avoids surprises from moving over scripts and REPL code to packages
-    if sv === nothing
-        sv = VERSION
-    elseif sv <= NON_VERSIONED_SYNTAX
+    ed = if sv === nothing
+        VERSION_EDITION
+    elseif sv <= VersionNumber(OLDEST_EDITION)
         # Syntax versioning was first introduced in Julia 1.14 - we do not support
         # going back to versions before syntax version 1.13.
-        sv = NON_VERSIONED_SYNTAX
+        OLDEST_EDITION
+    else
+        EditionNumber(sv::VersionNumber)
     end
-    return sv
+    return ed
 end
 
 function project_file_load_spec(project_file::String, name::String)
@@ -974,7 +974,7 @@ function project_file_load_spec(project_file::String, name::String)
     if entryfile === nothing
         entryfile = get(d, "entryfile", nothing)::Union{String, Nothing}
     end
-    sv = project_get_syntax_version(d)
+    sv = project_get_edition(d)
     return PkgLoadSpec(entry_path(dirname(project_file), name, entryfile), sv)
 end
 
@@ -986,26 +986,12 @@ function workspace_manifest(project_file)
     return nothing
 end
 
-struct VersionedParse
-    ver::VersionNumber
-end
-
-function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    pm = parentmodule(Core._parse)
-    # hack to support old copies of JuliaSyntax
-    if !isdefined(pm, :_has_v1_14_version_hooks) && isdefined(pm, :_has_v1_10_hooks)
-        invokelatest(Core._parse, code, filename, lineno, offset, options)
-    else
-        invokelatest(Core._parse, code, filename, lineno, offset, options, vp.ver)
-    end
-end
-
 function parser_for_active_project()
     project = active_project()
-    sv = VERSION
+    sv = VERSION_EDITION
     if project !== nothing && isfile(project)
         try
-            sv = project_get_syntax_version(parsed_toml(project))
+            sv = project_get_edition(parsed_toml(project))
         catch e
             @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
         end
@@ -1263,7 +1249,7 @@ function explicit_manifest_uuid_load_spec(project_file::String, pkg::PkgId)::Uni
                 end
                 parent_path = parent_load_spec.path
                 p = normpath(dirname(parent_path), "..")
-                return PkgLoadSpec(find_ext_path(p, pkg.name), parent_load_spec.julia_syntax_version)
+                return PkgLoadSpec(find_ext_path(p, pkg.name), parent_load_spec.julia_edition)
             end
         end
     end
@@ -1276,13 +1262,14 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     # manifest was created by an older version of julia that did not support syntax versioning.
     # Newer versions of Pkg will provide syntax version information in the manifest,
     # even if absent from the project file.
-    syntax_version = NON_VERSIONED_SYNTAX
+    edition = OLDEST_EDITION
     syntax_table = get(entry, "syntax", nothing)
     if syntax_table !== nothing
-        syntax_version = VersionNumber(get(syntax_table, "julia_version", nothing))
+        edition = EditionNumber(
+            VersionNumber(get(syntax_table, "julia_version", nothing)))
         # Clamp to minimum supported syntax version
-        if syntax_version <= NON_VERSIONED_SYNTAX
-            syntax_version = NON_VERSIONED_SYNTAX
+        if VersionNumber(edition) <= VersionNumber(OLDEST_EDITION)
+            edition = OLDEST_EDITION
         end
     end
 
@@ -1291,7 +1278,7 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     entryfile = get(entry, "entryfile", nothing)::Union{Nothing, String}
     if path !== nothing
         path = entry_path(normpath(abspath(dirname(manifest_file), path)), pkg.name, entryfile)
-        return PkgLoadSpec(path, syntax_version)
+        return PkgLoadSpec(path, edition)
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
     if hash === nothing
@@ -1310,7 +1297,7 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
             path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), syntax_version)
+            ispath(path) && return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), edition)
         end
     end
     # no depot contains the package, return missing to stop looking
@@ -1347,11 +1334,11 @@ function implicit_manifest_uuid_load_spec(dir::String, pkg::PkgId)::Union{Nothin
     if project_file === nothing
         pkg.uuid === nothing || return nothing
         # Without a project file, treat as empty - which defaults to VERSION
-        return PkgLoadSpec(path, VERSION)
+        return PkgLoadSpec(path, VERSION_EDITION)
     end
     proj = project_file_name_uuid(project_file, pkg.name)
     proj == pkg || return nothing
-    return PkgLoadSpec(path, project_get_syntax_version(parsed_toml(project_file)))
+    return PkgLoadSpec(path, project_get_edition(parsed_toml(project_file)))
 end
 
 ## other code loading functionality ##
@@ -2946,8 +2933,7 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Base.VersionedParse(VERSION)
-global _internal_julia_lower = Core._lower
+global var"#_internal_julia_parse" = Base.VersionedParse(Base.VERSION_EDITION)
 
 # Used for version checking of precompiled cache files only
 global _internal_syntax_version::UInt8 = 0
@@ -3137,13 +3123,13 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_syntax_version)
+    __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_edition)
     unlock(require_lock)
     try
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION)
+        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION_EDITION)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3250,7 +3236,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -3454,7 +3440,7 @@ end
 const newly_inferred = []
 
 # this is called in the external process that generates precompiled package files
-function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
+function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{Int, Int}, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String},
                                     preresolved::Vector{Pair{PkgId,String}}=Pair{PkgId,String}[])
 
@@ -3490,9 +3476,9 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
+    __toplevel__.var"#_internal_julia_parse" = VersionedParse(edition)
     # This one is the compatibility marker for cache loading
-    __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
+    __toplevel__._internal_syntax_version = cache_edition(edition)
     cumulative_compile_timing(true)
     _precompile_dep_load_ns[] = 0
     _precompile_dep_load_depth[] = 0
@@ -3620,7 +3606,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         Base.track_nested_precomp($(_pkg_str(vcat(Base.precompilation_stack, pkg))))
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
-        Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_syntax_version)), $(repr(depot_path)), $(repr(dl_load_path)),
+        Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_edition)), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))), $(_pkg_str(preresolved)))
         """)
     close(io.in)
@@ -4623,8 +4609,8 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
     return false
 end
 
-function cache_syntax_version(ver::VersionNumber)
-    UInt8(clamp(ver.minor - 13, 0, 255))
+function cache_edition(ver::Tuple{Int, Int})
+    UInt8(clamp(ver[2] - 13, 0, 255))
 end
 
 # This custom equality predicate is analogous to `===`, except that it also
@@ -4678,7 +4664,7 @@ end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
-    return stale_cachefile(PkgLoadSpec(modpath, VERSION), cachefile; kwargs...)
+    return stale_cachefile(PkgLoadSpec(modpath, VERSION_EDITION), cachefile; kwargs...)
 end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
@@ -4716,7 +4702,7 @@ end
             record_reason(reasons, :flags_mismatch)
             return true
         end
-        if stalecheck && syntax_version != cache_syntax_version(modspec.julia_syntax_version)
+        if stalecheck && syntax_version != cache_edition(modspec.julia_edition)
             @debug "Rejecting cache file $cachefile for $modkey since it was parsed for a different Julia syntax version"
             record_reason(reasons, :syntax_version)
             return true

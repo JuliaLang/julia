@@ -392,8 +392,10 @@ vst1_toplevel_only(vcx, st) = @stm st begin
     [K"public" xs...] -> all(vst1_ident, vcx, xs)
     [K"export" xs...] -> all(vst1_ident, vcx, xs)
     [K"latestworld"] -> pass()
-    [K"typegroup" [K"block" xs...]] ->
-        all(vst1, vcx, xs)
+    [K"typegroup" [K"block" xs...]] -> all(vst1, vcx, xs) &
+        # mostly to catch compiler bugs; semantically it would be fine to allow.
+        (edition(st) >= JL_OLD_EDITION ?
+            pass() : @fail(st, "typegroup not supported in this edition"))
     _ -> unknown()
 end
 
@@ -1227,8 +1229,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree}, vr)
     # form cycles with child edges)
     st.source === st && (vr &= @fail(st, ".source equal to self ID"))
     sc = st.context
-    sc isa SyntaxContext &&
-        sc.unexpanded === st && (vr &= @fail(st, "unexpanded equal to self"))
+    sc.unexpanded === st && (vr &= @fail(st, "unexpanded equal to self"))
 
     push!(parents, st)
     is_leaf(st) || for c in children(st)
