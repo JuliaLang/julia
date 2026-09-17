@@ -699,6 +699,9 @@ end
         @test Base.top_set_bit(big(2)^100 + 1) == 101
         @test_throws DomainError Base.top_set_bit(big(-1))
     end
+
+    @test @inferred(exponent(true)) === 0
+    @test_throws DomainError exponent(false)
 end
 
 @testset "issue #4884" begin
