@@ -3926,7 +3926,7 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
 {
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
-    size_t raw_kind = bpart->kind;
+    uint16_t raw_kind = bpart->kind;
     enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & PARTITION_MASK_KIND);
     if (!unchanged_implicit && jl_bkind_is_some_implicit(kind)) {
         // TODO: Should we actually update this in place or delete it from the partitions list

@@ -388,7 +388,12 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
 
     // Install the new semantic partition only after every operation that can reject
     // the declaration has succeeded. A fresh partition starts with clear re-type
-    // flags, so code compiled against the new declared type runs unguarded.
+    // flags, so code compiled against the new declared type runs unguarded. The
+    // in-place update must clear them explicitly: `jl_retype_flag_partitions` walks
+    // the whole chain, including this not-yet-published partition, and may have just
+    // flagged it (or a rejected declaration in the same world may have). As the latest
+    // declaration it has nothing to guard against, and nothing was compiled against or
+    // validated against it while unpublished.
     if (update_partition) {
         if (update_in_place) {
             bpart->kind = new_kind | jl_carried_binding_flags(bpart);

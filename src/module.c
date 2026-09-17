@@ -126,11 +126,11 @@ static const size_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_D
 // Flags to carry over when replacing a partition. Deprecation set by implicit resolution
 // belongs to the imported binding, so it does not survive replacement; explicitly set
 // deprecation does.
-size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
+uint16_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
 {
-    size_t flags = bpart->kind & PARTITION_MASK_FLAG;
+    uint16_t flags = bpart->kind & PARTITION_MASK_FLAG;
     if (flags & PARTITION_FLAG_IMPLICITLY_DEPRECATED)
-        flags &= ~DEPWARN_FLAGS;
+        flags &= (uint16_t)~DEPWARN_FLAGS;
     return flags;
 }
 
@@ -696,6 +696,9 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
         }
         if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
             bpart->kind = constant_kind | jl_carried_binding_flags(bpart);
+            // A rejected re-declaration in this unpublished world may have left guard
+            // bits on the partition; as the latest declaration it has none to carry.
+            jl_atomic_store_relaxed(&bpart->retype_flags, 0);
             jl_gc_write(bpart, bpart->restriction, jl_value_t, val);
             new_bpart = bpart;
         } else {
@@ -1959,13 +1962,13 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world)
 {
     // Copy flags from old bpart
-    return jl_replace_binding_locked2(b, old_bpart, restriction_val, (size_t)kind | jl_carried_binding_flags(old_bpart),
+    return jl_replace_binding_locked2(b, old_bpart, restriction_val, (uint16_t)kind | jl_carried_binding_flags(old_bpart),
         new_world);
 }
 
 extern JL_DLLEXPORT _Atomic(size_t) jl_first_image_replacement_world;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
-    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world)
+    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, uint16_t kind, size_t new_world)
 {
     check_safe_newbinding(b->globalref->mod, b->globalref->name);
 

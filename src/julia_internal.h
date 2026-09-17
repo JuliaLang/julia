@@ -1238,7 +1238,7 @@ JL_DLLEXPORT void jl_binding_deprecation_check(jl_binding_partition_t *bpart) JL
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
-    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, uint16_t kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
@@ -1304,7 +1304,7 @@ STATIC_INLINE int jl_bpart_is_exported(size_t flags) JL_NOTSAFEPOINT {
     return (flags & (PARTITION_FLAG_EXPORTED | PARTITION_FLAG_IMPLICITLY_EXPORTED)) != 0;
 }
 
-size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
+uint16_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *previous_part, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;

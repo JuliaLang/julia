@@ -57,7 +57,8 @@ for (T, c) in (
 end
 
 # Binding partition kinds are immutable metadata, while the separate re-type guard
-# word requires explicit atomic access. Both narrow fields fit into existing padding.
+# word requires explicit atomic access. Narrowing `kind` to 16 bits makes room for
+# the guard word, so the partition keeps its size.
 let p = convert(Core.Binding, GlobalRef(@__MODULE__, :Bottom)).partitions
     flags = @atomic :monotonic p.retype_flags
     @test fieldtype(Core.BindingPartition, :kind) === UInt16
