@@ -60,9 +60,8 @@ Recipe:
    piping the whole thing into context wastes tokens.
 
 4. List and download a job's artifacts. The same frontend serves the artifact
-   list as JSON, and each artifact's bare URL redirects (302) to a signed S3
-   URL that is valid for ten minutes, so `curl -L` downloads it. Appending
-   `/download` returns 404.
+   list as JSON, and each artifact's URL redirects to a signed S3 URL that is
+   valid for ten minutes, so `curl -L` downloads it.
 
    ```sh
    curl -sS -H "Accept: application/json" \
@@ -81,32 +80,11 @@ summary in the log — search the log for `---- Task`, `Waiting for`, and
 
 ## TTFX benchmark jobs
 
-A macOS job in the `TTFX` group runs the
-[Julia-TTFX-Snippets](https://github.com/tecosaur/Julia-TTFX-Snippets) tasks:
-package precompile from a cleared cache, then the task script's load and run
-time in fresh processes. Pull requests compare the PR build (`head`) with the
-master build of the merge-base (`base`), interleaved; the `TTFX` commit status
-links the job. Master builds are measured alone and feed
-<https://perf.julialang.org/?tab=ci-ttfx>, whose data file
-(`data/ttfx_summary.json.gz`) carries each build's `job_id`. The driver and its
-artifacts are documented in JuliaCI/julia-buildkite under
+The `TTFX` group's macOS job runs the
+[Julia-TTFX-Snippets](https://github.com/tecosaur/Julia-TTFX-Snippets) tasks
+against the build: on pull requests compared with the master build of the
+merge-base, on master builds alone (the data behind
+<https://perf.julialang.org/?tab=ci-ttfx>). Its results, report and
+trace-compile logs are job artifacts (step 4). What they contain and how the
+comparison is judged is documented with the driver in JuliaCI/julia-buildkite,
 `utilities/ttfx/README.md`.
-
-The artifacts (step 4) include per-repeat results as JSON and a tarball of
-`--trace-compile --trace-compile-timing` logs from an untimed extra run per task
-and arm. Reading them:
-
-- The first repeat is the cold number, but check all repeats: bimodal repeats
-  mean a cost that moves between processes, not a slowdown. Each repeat's
-  `load_stats` and `run_stats` carry `@time`'s breakdown (gc time and pauses,
-  allocation, compile and recompile time), so a run-time jump with matching gc
-  time is a GC pause landing in the timed window. Compare the recorded package
-  hash between builds before blaming julia.
-- Trace logs list only the compiled entry points with wall time each; callee
-  inference, pkgimage validation and GC hide inside the root's time. Diff
-  per-statement times between arms and sum each log: a chunk that moves between
-  roots with the totals conserved is one-time work. Exit-time compiles from
-  atexit hooks fall outside the timed window.
-- The JIT object cache (`DEPOT_PATH[1]/cache/`; `JULIA_OBJCACHE=0` disables it,
-  `JULIA_OBJCACHE_LOG=<file>` logs hits and misses) is cleared once per sample,
-  so later repeats and the trace run may be cache-warm.
