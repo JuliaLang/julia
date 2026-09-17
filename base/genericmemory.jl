@@ -491,3 +491,82 @@ function replaceindex_atomic!(
         @_boundscheck,
     )
 end
+
+# AtomicMemoryRefs may only be accessed through the atomic indexing operations.
+setindex!(ref::AtomicMemoryRef, x) = throw(CanonicalIndexError("setindex!", typeof(ref)))
+
+# The following methods support using an AtomicMemoryRef as the indexed operand
+# of the low-level atomic indexing operations.
+function getindex_atomic(ref::AtomicMemoryRef, order::Symbol)
+    @_propagate_inbounds_meta
+    return memoryrefget(ref, order, @_boundscheck)
+end
+
+function setindex_atomic!(ref::AtomicMemoryRef{T}, order::Symbol, value::T) where {T}
+    @_propagate_inbounds_meta
+    return memoryrefset!(ref, value, order, @_boundscheck)
+end
+
+function setindex_atomic!(ref::AtomicMemoryRef{T}, order::Symbol, value) where {T}
+    @_propagate_inbounds_meta
+    return setindex_atomic!(ref, order, convert(T, value)::T)
+end
+
+function setindexonce_atomic!(
+    ref::AtomicMemoryRef{T},
+    success_order::Symbol,
+    fail_order::Symbol,
+    value::T,
+) where {T}
+    @_propagate_inbounds_meta
+    return Core.memoryrefsetonce!(ref, value, success_order, fail_order, @_boundscheck)
+end
+
+function setindexonce_atomic!(
+    ref::AtomicMemoryRef{T},
+    success_order::Symbol,
+    fail_order::Symbol,
+    value,
+) where {T}
+    @_propagate_inbounds_meta
+    return setindexonce_atomic!(ref, success_order, fail_order, convert(T, value)::T)
+end
+
+function swapindex_atomic!(ref::AtomicMemoryRef{T}, order::Symbol, value::T) where {T}
+    @_propagate_inbounds_meta
+    return Core.memoryrefswap!(ref, value, order, @_boundscheck)
+end
+
+function swapindex_atomic!(ref::AtomicMemoryRef{T}, order::Symbol, value) where {T}
+    @_propagate_inbounds_meta
+    return swapindex_atomic!(ref, order, convert(T, value)::T)
+end
+
+function replaceindex_atomic!(
+    ref::AtomicMemoryRef{T},
+    success_order::Symbol,
+    fail_order::Symbol,
+    expected,
+    desired::T,
+) where {T}
+    @_propagate_inbounds_meta
+    return Core.memoryrefreplace!(
+        ref,
+        expected,
+        desired,
+        success_order,
+        fail_order,
+        @_boundscheck,
+    )
+end
+
+function replaceindex_atomic!(
+    ref::AtomicMemoryRef{T},
+    success_order::Symbol,
+    fail_order::Symbol,
+    expected,
+    desired,
+) where {T}
+    @_propagate_inbounds_meta
+    return replaceindex_atomic!(ref, success_order, fail_order, expected, convert(T, desired)::T)
+end
