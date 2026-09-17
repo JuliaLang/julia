@@ -2244,6 +2244,7 @@ function expand_decls(ctx, ex)
     stmts = SyntaxList()
     val_nothing = !(numchildren(ex) == 1 && is_leaf(children(ex)[1]))
     for c in children(ex)
+        type_capture = nothing
         simple = kind(c) in KSet"Identifier :: Placeholder"
         val_nothing &= simple
         if declkind === K"global"
@@ -2256,6 +2257,14 @@ function expand_decls(ctx, ex)
             @isdefined(relayered) && for x in relayered
                 push!(stmts, @ast ctx x [K"relayered_global" x])
             end
+            if kind(c) === K"=" && kind(c[1]) === K"::" &&
+                    is_identifier_like(c[1][1]) && kind(c[1][1]) !== K"Placeholder"
+                # `global x::T = y = v` used to hoist `T` with the declaration,
+                # ahead of the chain; keep that order by capturing `T` here
+                type = ssavar(ctx, c[1][2], "T")
+                type_capture = @ast ctx c[1] [K"=" type expand_forms_2(ctx, c[1][2])]
+                c = @ast ctx c [K"=" [K"::" c[1][1] type] c[2]]
+            end
         end
         lhs = @stm c begin
             (_, when=simple) -> c
@@ -2267,6 +2276,7 @@ function expand_decls(ctx, ex)
         end
         # type decls are handled elsewhere unless simple
         make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
+        !isnothing(type_capture) && push!(stmts, type_capture)
         simple || push!(stmts, expand_forms_2(ctx, c))
     end
     # flisp quirk: if not a plain `global x` or `local x`, value is readable

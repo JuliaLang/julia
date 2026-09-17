@@ -3622,13 +3622,13 @@ end
     @test !m.invalid_type_rhs_ran
     @test !Base.isdefinedglobal(m, :invalid_type_global)
 
-    # an assignment chain runs before the declared type, with or without
-    # an explicit `global`
+    # An explicit `global` around a chained assignment still evaluates the
+    # outer declaration's type before any assignment on the RHS.
     m = Module()
     @eval m explicit_global_order = Symbol[]
     @eval m global chain_outer::(push!(explicit_global_order, :T); Int) =
         chain_inner = (push!(explicit_global_order, :rhs); 1)
-    @test m.explicit_global_order == [:rhs, :T]
+    @test m.explicit_global_order == [:T, :rhs]
     @test m.chain_outer === m.chain_inner === 1
     @test Core.get_binding_type(m, :chain_outer) == Int
 

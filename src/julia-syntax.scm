@@ -1642,9 +1642,15 @@
                  ;; so only the scope of `x` is declared here, not its type
                  (let* ((joint? (and (eq? (car x) '=) (decl? (cadr x))))
                         (new-vars (lhs-decls (assigned-name (cadr x))))
-                        (new-vars (if joint? (map decl-var new-vars) new-vars)))
+                        (new-vars (if joint? (map decl-var new-vars) new-vars))
+                        ;; `global x::T = y = v` used to hoist `T` with the declaration,
+                        ;; ahead of the chain; keep that order by capturing `T` here
+                        (T1 (and joint? (eq? what 'global) (make-ssavalue)))
+                        (x  (if T1 `(= (|::| ,(decl-var (cadr x)) ,T1) ,(caddr x)) x)))
                   (loop (cdr b)
-                       (append (map (lambda (x) `(,what ,x)) new-vars) decls)
+                       (append (if T1 `((= ,T1 ,(caddr (cadr (car b))))) '())
+                               (map (lambda (x) `(,what ,x)) new-vars)
+                               decls)
                        (cons (if joint?
                                  x
                                  `(,(car x) ,(all-decl-vars (cadr x)) ,(caddr x)))

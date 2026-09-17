@@ -169,13 +169,13 @@ global invalid_type_global::1 = (invalid_type_rhs_ran = true; 2)
 @test !test_mod.invalid_type_rhs_ran
 @test !Base.isdefinedglobal(test_mod, :invalid_type_global)
 
-# An assignment chain runs before the declared type, with or without `global`.
+# An explicit `global` preserves type-before-RHS order through an assignment chain.
 @test JuliaLowering.include_string(test_mod, "explicit_global_order = Symbol[]") == Symbol[]
 @test JuliaLowering.include_string(test_mod, """
 global chain_outer::(push!(explicit_global_order, :T); Int) =
     chain_inner = (push!(explicit_global_order, :rhs); 1)
 """) === 1
-@test test_mod.explicit_global_order == [:rhs, :T]
+@test test_mod.explicit_global_order == [:T, :rhs]
 @test test_mod.chain_outer === test_mod.chain_inner === 1
 @test Core.get_binding_type(test_mod, :chain_outer) === Int
 
