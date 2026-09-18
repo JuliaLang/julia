@@ -2202,21 +2202,59 @@ JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_binding_partition_t
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs)
 {
     jl_value_t *ty = jl_check_binding_assign_value(b, bpart, mod, var, rhs, "replaceglobal!");
-    return replace_value(ty, &b->value, (jl_value_t*)b, expected, rhs, 1, mod, var);
+    jl_value_t *r = expected;
+    JL_GC_PUSH1(&r);
+    int success;
+    while (1) {
+        jl_gc_wb(b, rhs);
+        success = jl_atomic_cmpswap(&b->value, &r, rhs);
+        if (__unlikely(r == NULL))
+            jl_undefined_var_error(var, (jl_value_t*)mod);
+        if (success || !jl_egal(r, expected))
+            break;
+    }
+    jl_datatype_t *rettyp = jl_apply_cmpswap_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    r = jl_new_struct(rettyp, r, success ? jl_true : jl_false);
+    JL_GC_POP();
+    return r;
 }
 
 JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs)
 {
-    if (bpart == NULL)
-        bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    jl_binding_partition_t *cur_bpart = bpart;
+    if (cur_bpart == NULL)
+        cur_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    enum jl_partition_kind kind = jl_binding_kind(cur_bpart);
     assert(!jl_bkind_is_some_guard(kind) && !jl_bkind_is_some_import(kind));
     if (jl_bkind_is_some_constant(kind))
         jl_errorf("invalid assignment to constant %s.%s",
                   jl_symbol_name(mod->name), jl_symbol_name(var));
-    jl_value_t *ty = kind == PARTITION_KIND_DECLARED ? (jl_value_t*)jl_any_type : bpart->restriction;
+    jl_value_t *ty = NULL;
+    jl_value_t *r = jl_atomic_load(&b->value);
+    if (__unlikely(r == NULL))
+        jl_undefined_var_error(var, (jl_value_t*)mod);
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2);
+    args[0] = r;
+    while (1) {
+        args[1] = rhs;
+        jl_value_t *y = jl_apply_generic(op, args, 2);
+        args[1] = y;
+        ty = jl_check_binding_assign_value(b, cur_bpart, mod, var, y, "modifyglobal!");
+        jl_gc_wb(b, y);
+        if (jl_atomic_cmpswap(&b->value, &r, y))
+            break;
+        args[0] = r;
+        jl_gc_safepoint();
+    }
+    // args[0] == r (old), args[1] == y (new)
     JL_GC_PROMISE_ROOTED(ty);
-    return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, b, bpart, mod, var);
+    jl_datatype_t *rettyp = jl_apply_modify_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    args[0] = jl_new_struct(rettyp, args[0], args[1]);
+    JL_GC_POP();
+    return args[0];
 }
 
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
