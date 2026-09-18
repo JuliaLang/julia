@@ -3834,6 +3834,56 @@ static jl_cgval_t emit_globalref_partition(jl_codectx_t &ctx, jl_binding_partiti
     return update_julia_type(ctx, emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.alias().binding, order), ty);
 }
 
+// Emit the out-of-line store path for a global: check that the binding is currently
+// writable and perform `op` with full runtime semantics. `bpart` is the partition the
+// store was resolved against (see `emit_globalop`), or NULL: the runtime validates the
+// stored value against, and raises errors from, that partition, or resolves the binding
+// at the current world age when given NULL.
+// Returns the operation's language-level result (converting runtime protocols as
+// needed): boxed, except for StoreKind::SetOnce, which is an i1, or NULL for
+// StoreKind::Set.
+static Value *emit_globalop_runtime_call(jl_codectx_t &ctx, StoreKind op, Value *bp,
+                                         jl_binding_partition_t *bpart,
+                                         jl_module_t *mod, jl_sym_t *sym,
+                                         const jl_cgval_t &rval, const jl_cgval_t &cmp) JL_CANSAFEPOINT
+{
+    Value *m = literal_pointer_val(ctx, (jl_value_t*)mod);
+    Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
+    Value *part;
+    if (bpart)
+        part = literal_pointer_val(ctx, (jl_value_t*)bpart);
+    else
+        part = Constant::getNullValue(ctx.types().T_pjlvalue);
+    ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
+        { bp, part, m, s });
+    switch (op) {
+    case StoreKind::Set:
+        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
+                { bp, part, m, s, boxed(ctx, rval) });
+        return nullptr;
+    case StoreKind::Replace:
+        return ctx.builder.CreateCall(prepare_call(jlcheckreplace_func),
+                { bp, part, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
+    case StoreKind::Swap:
+        return ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
+                { bp, part, m, s, boxed(ctx, rval) });
+    case StoreKind::Modify:
+        // FIXME: `modifyop` has no use on this path: the runtime helper applies the reduce function
+        // by generic dispatch, so the code instance an `:invoke_modify` is lost.
+        return ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
+                { bp, part, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
+    case StoreKind::SetOnce: {
+        Value *old = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
+                { bp, part, m, s, boxed(ctx, rval) });
+        // jl_checked_assignonce returns the previous value, or NULL when the store succeeds.
+        return ctx.builder.CreateIsNull(old);
+    }
+    case StoreKind::Unset:
+        break; // Unset is not a valid operation for globals
+    }
+    abort(); // unreachable
+}
+
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order) JL_CANSAFEPOINT
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
@@ -3866,9 +3916,9 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_binding_t *bnd, jl_binding
     jl_module_t *mod = bnd->globalref->mod;
     jl_sym_t *sym = bnd->globalref->name;
     Value *bp = julia_binding_gv(ctx, bnd);
+    const char *fname = store_kind_name(op, "global");
     if (bpart && jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL && bpart->restriction) {
         jl_value_t *ty = bpart->restriction;
-        const char *fname = store_kind_name(op, "global");
         if (op != StoreKind::Modify) {
             emit_typecheck(ctx, rval, ty, fname);
             rval = update_julia_type(ctx, rval, ty);
@@ -3882,44 +3932,16 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_binding_t *bnd, jl_binding
                            Order, FailOrder, 0, nullptr, op, maybe_null,
                            modifyop, fname, mod, sym);
     }
-    Value *m = literal_pointer_val(ctx, (jl_value_t*)mod);
-    Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
-    Value *part;
-    if (bpart)
-        part = literal_pointer_val(ctx, (jl_value_t*)bpart);
-    else
-        part = Constant::getNullValue(ctx.types().T_pjlvalue);
-    ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
-        { bp, part, m, s });
+    Value *r = emit_globalop_runtime_call(ctx, op, bp, bpart, mod, sym, rval, cmp);
     switch (op) {
     case StoreKind::Set:
-        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
-                { bp, part, m, s, boxed(ctx, rval) });
         return rval;
-    case StoreKind::Replace: {
-        Value *r = ctx.builder.CreateCall(prepare_call(jlcheckreplace_func),
-                { bp, part, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
+    case StoreKind::Replace:
+    case StoreKind::Swap:
+    case StoreKind::Modify:
         return mark_julia_type(ctx, r, true, jl_any_type);
-    }
-    case StoreKind::Swap: {
-        Value *r = ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
-                { bp, part, m, s, boxed(ctx, rval) });
-        return mark_julia_type(ctx, r, true, jl_any_type);
-    }
-    case StoreKind::Modify: {
-        // FIXME: `modifyop` has no use on this path: the runtime helper applies the reduce function
-        // by generic dispatch, so the code instance an `:invoke_modify` is lost.
-        Value *r = ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
-                { bp, part, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
-        return mark_julia_type(ctx, r, true, jl_any_type);
-    }
-    case StoreKind::SetOnce: {
-        Value *old = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
-                { bp, part, m, s, boxed(ctx, rval) });
-        // jl_checked_assignonce returns the previous value, or NULL when the store succeeds.
-        Value *r = ctx.builder.CreateIsNull(old);
+    case StoreKind::SetOnce:
         return mark_julia_type(ctx, r, false, jl_bool_type);
-    }
     case StoreKind::Unset:
         abort(); // Unset is not a valid operation for globals
     }
