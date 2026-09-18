@@ -160,6 +160,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `Base.decompose(x::Real)` has been made `public` (but not exported); it is the point
+  where rational-valued `Real` subtypes that support hashing hook into the hashing protocol ([#XXXXX]).
 * `tap(f)` creates a function that calls `f(x)` for side effects and returns `x` ([#61340]).
 * `unsplat(f)` creates a function that bundles its arguments into a tuple and passes them to `f`;
   it is the inverse of `splat` ([#62714]).
