@@ -23,11 +23,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Passes/PassBuilder.h>
-#if JL_LLVM_VERSION >= 220000
 #  include <llvm/Plugins/PassPlugin.h>
-#else
-#  include <llvm/Passes/PassPlugin.h>
-#endif
 
 // NewPM needs to manually include all the pass headers
 #include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
@@ -259,11 +255,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeEarlySimplificationCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O);
-#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeCGSCCCallbacks(CGSCCPassManager &CGPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -275,11 +267,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerEarlyCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokeOptimizerEarlyEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokeOptimizerEarlyEPCallbacks(MPM, O);
-#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeLateLoopOptimizationCallbacks(LoopPassManager &LPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -309,11 +297,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerLastCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokeOptimizerLastEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokeOptimizerLastEPCallbacks(MPM, O);
-#endif
     }
 
     // Fallbacks
@@ -842,15 +826,22 @@ AnalysisManagers::AnalysisManagers(PassBuilder &PB) : LAM(), FAM(), CGAM(), MAM(
 
 AnalysisManagers::~AnalysisManagers() = default;
 
-// Helper to unwrap IR from Any to a specific type
+#if JL_LLVM_VERSION >= 240000
+using JLIRUnit = IRUnitRef;
+template <typename IRType>
+static const IRType *unwrapIR(IRUnitRef IR) JL_NOTSAFEPOINT {
+    return dyn_cast<IRType>(IR);
+}
+#else
+using JLIRUnit = Any;
 template <typename IRType>
 static const IRType *unwrapIR(Any IR) JL_NOTSAFEPOINT {
     const IRType *const *IRPtr = llvm::any_cast<const IRType *>(&IR);
     return IRPtr ? *IRPtr : nullptr;
 }
+#endif
 
-// Helper to print IR from Any
-static void printIR(raw_ostream &OS, Any IR) JL_NOTSAFEPOINT {
+static void printIR(raw_ostream &OS, JLIRUnit IR) JL_NOTSAFEPOINT {
     if (const auto *M = unwrapIR<Module>(IR)) {
         M->print(OS, nullptr);
     } else if (const auto *F = unwrapIR<Function>(IR)) {
@@ -902,7 +893,7 @@ void NewPM::run(Module &M) {
     if (should_print) {
         if (print_options.print_before_all || !print_options.print_before.empty()) {
             PIC.registerBeforeNonSkippedPassCallback(
-                [this, &OS, &M, &matchesAny](StringRef PassID, Any IR) {
+                [this, &OS, &M, &matchesAny](StringRef PassID, JLIRUnit IR) {
                     bool should_print_pass = print_options.print_before_all ||
                         matchesAny(PassID, print_options.print_before);
                     if (!should_print_pass)
@@ -939,7 +930,7 @@ void NewPM::run(Module &M) {
 
         if (print_options.print_after_all || !print_options.print_after.empty()) {
             PIC.registerAfterPassCallback(
-                [this, &OS, &M, &matchesAny](StringRef PassID, Any IR, const PreservedAnalyses &) {
+                [this, &OS, &M, &matchesAny](StringRef PassID, JLIRUnit IR, const PreservedAnalyses &) {
                     bool should_print_pass = print_options.print_after_all ||
                         matchesAny(PassID, print_options.print_after);
                     if (!should_print_pass)

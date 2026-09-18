@@ -59,11 +59,7 @@ static void moveInstructionBefore(Instruction &I, Instruction &Dest,
                                   MemorySSAUpdater &MSSAU,
                                   ScalarEvolution *SE,
                                   MemorySSA::InsertionPlace Place = MemorySSA::BeforeTerminator) {
-#if JL_LLVM_VERSION >= 200000
   I.moveBefore(Dest.getIterator());
-#else
-  I.moveBefore(&Dest);
-#endif
   if (MSSAU.getMemorySSA())
     if (MemoryUseOrDef *OldMemAcc = cast_or_null<MemoryUseOrDef>(
             MSSAU.getMemorySSA()->getMemoryAccess(&I)))
@@ -246,11 +242,7 @@ struct JuliaLICM : public JuliaPassContext {
                     });
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
-#if JL_LLVM_VERSION >= 200000
                         auto CI = CallInst::Create(call, {}, exit_pts[i]->getIterator());
-#else
-                        auto CI = CallInst::Create(call, {}, exit_pts[i]);
-#endif
                         createNewInstruction(CI, call, MSSAU);
                         LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");
                         REMARK([&](){
@@ -305,7 +297,13 @@ struct JuliaLICM : public JuliaPassContext {
                     jl_alloc::AllocUseInfo use_info;
                     jl_alloc::CheckInst::Stack check_stack;
                     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
-                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()).with_optimization_remark_emitter(&ORE));
+#if JL_LLVM_VERSION >= 240000
+                    SmallPtrSet<const BasicBlock*, 32> loop_blocks(L->block_begin(), L->block_end());
+                    const auto *valid_set = &loop_blocks;
+#else
+                    const auto *valid_set = &L->getBlocksSet();
+#endif
+                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(valid_set).with_optimization_remark_emitter(&ORE));
                     REMARK([&](){
                         std::string suse_info;
                         llvm::raw_string_ostream osuse_info(suse_info);
