@@ -53,10 +53,6 @@ function core_lowering_hook(@nospecialize(code), mod::Module, file::String="none
     end
 end
 
-# TODO: Write a parser hook here.  The input to `core_lowering_hook` should
-# eventually be a (convertible to) SyntaxTree, but we need to make updates to
-# the parsing API to include a parameter for AST type.
-
 const _has_v1_13_hooks = isdefined(Core, :_lower)
 
 function activate!(enable=true)
@@ -66,9 +62,11 @@ function activate!(enable=true)
 
     if enable
         Core._setlowerer!(core_lowering_hook)
+        Core._set_toplevel_eval!(JuliaLowering.eval)
         ccall(:jl_set_lowering_world, Cvoid, (Csize_t,), Base.get_world_counter())
     else
         Core._setlowerer!(Base.fl_lower)
+        Core._set_toplevel_eval!(nothing)
         # Unlike JL, `jl_lower` dispatches the flisp wrapper at the latest world
         ccall(:jl_set_lowering_world, Cvoid, (Csize_t,), 0)
     end

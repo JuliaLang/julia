@@ -46,8 +46,6 @@ function _register_kinds()
             "symboliclabel"
             # Goto named label
             "symbolicgoto"
-            # Goto named label (old syntax version, no try/finally check)
-            "oldsymbolicgoto"
             # Labeled block for `@label name expr` (block break)
             "symbolicblock"
             # Internal initializer for struct types, for inner constructors/functions
@@ -132,6 +130,9 @@ function _register_kinds()
             # reference inside a lambda should resolve to the lambda's sparam
             # shadowing it.
             "method_defs"
+            # from `function f end`, tells closure conversion to give f its value
+            # (usually done with method_defs)
+            "no_method_defs"
             # [K"typevar" name rhs] appears only in method_defs and gets special
             # scope resolution: a sequence of K"sparam"s are similar to nested
             # let-blocks, but without introducing a local scope.
@@ -176,6 +177,7 @@ function _register_kinds()
             # requires scope resolution and special conversion to Expr.
             "foreignsymbol"
             "thunk"
+            "with-static-parameters"
             # Options specific to K"lambda"
             "generated_lambda"
             "toplevel_lambda"
