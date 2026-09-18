@@ -152,7 +152,6 @@ Core.tuple
 Base.ntuple
 Base.objectid
 Base.hash
-Base.decompose
 Base.finalizer
 Base.finalize
 Base.copy
