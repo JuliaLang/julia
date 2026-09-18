@@ -319,6 +319,9 @@ typedef struct {
     jl_array_t *link_ids_external_fnvars;
     jl_array_t *method_roots_list;
     htable_t method_roots_index;
+    // Maps each Memory to its sole owner, if there is one (multiply-referenced
+    // Memory has a NULL owner).
+    htable_t memory_owners;
     uint64_t worklist_key;
     jl_query_cache *query_cache;
     jl_ptls_t ptls;
@@ -577,6 +580,7 @@ static int effects_foldable(uint32_t effects)
 // `jl_queue_for_serialization` adds items to `serialization_order`
 #define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_CANSAFEPOINT JL_GC_DISABLED;
+static void jl_queue_for_serialization_impl(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate, jl_array_t *memory_owner) JL_CANSAFEPOINT JL_GC_DISABLED;
 
 static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_t *m) JL_CANSAFEPOINT JL_GC_DISABLED
 {
@@ -721,7 +725,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
         if (backedges) {
             assert(!jl_options.trim && !jl_options.strip_ir);
-            jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
+            jl_queue_for_serialization_impl(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1, (jl_array_t*)backedges);
             size_t i = 0, n = jl_array_nrows(backedges);
             while (i < n) {
                 jl_value_t *invokeTypes;
@@ -746,7 +750,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // don't recurse into all backedges memory (yet)
             jl_value_t *backedges = get_replaceable_field((jl_value_t**)&b->backedges, 1);
             if (backedges) {
-                jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
+                jl_queue_for_serialization_impl(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1, (jl_array_t*)backedges);
                 for (size_t i = 0, n = jl_array_nrows(backedges); i < n; i++) {
                     jl_value_t *b = jl_array_ptr_ref(backedges, i);
                     if (!jl_is_code_instance(b) && !jl_is_method_instance(b) && !jl_is_method(b)) // otherwise usually a Binding?
@@ -798,7 +802,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                         jl_queue_for_serialization(s, t);
                         // serialize the callers list without forcing the CodeInstances
                         // in it to be serialized (unreachable ones are pruned later)
-                        jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)callers)->ref.mem, 0, 1);
+                        jl_queue_for_serialization_impl(s, (jl_value_t*)((jl_array_t*)callers)->ref.mem, 0, 1, (jl_array_t*)callers);
                         jl_queue_for_serialization(s, callers);
                     }
                 }
@@ -921,7 +925,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         jl_value_t *mem = get_replaceable_field((jl_value_t**)&ar->ref.mem, 1);
-        jl_queue_for_serialization_(s, mem, 1, immediate);
+        jl_queue_for_serialization_impl(s, mem, 1, immediate, ar);
     }
     else if (jl_is_genericmemory(v)) {
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
@@ -1051,8 +1055,21 @@ done_fields: ;
 
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
 {
+    jl_queue_for_serialization_impl(s, v, recursive, immediate, NULL);
+}
+
+static void jl_queue_for_serialization_impl(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate, jl_array_t *memory_owner) JL_GC_DISABLED
+{
     if (!jl_needs_serialization(s, v))
         return;
+
+    if (jl_is_genericmemory(v)) {
+        void **owner = ptrhash_bp(&s->memory_owners, v);
+        if (*owner == HT_NOTFOUND)
+            *owner = memory_owner;
+        else if (*owner != memory_owner)
+            *owner = NULL;
+    }
 
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     // check early from errors, so we have a little bit of contextual state for debugging them
@@ -1544,6 +1561,16 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             jl_genericmemory_t *m = (jl_genericmemory_t*)v;
             const jl_datatype_layout_t *layout = t->layout;
             size_t len = m->length;
+            jl_array_t *owner = (jl_array_t*)ptrhash_get(&s->memory_owners, m);
+            // Discard excess capacity for Memory with only a single,
+            // zero-offset MemoryRef from an Array.
+            if (owner != HT_NOTFOUND && owner != NULL && owner->ref.mem == m &&
+                jl_genericmemory_how(m) <= JL_GENERICMEMORY_GCMANAGED &&
+                (layout->flags.arrayelem_isunion || layout->size == 0 ?
+                    owner->ref.ptr_or_offset == NULL : owner->ref.ptr_or_offset == m->ptr)) {
+                assert(jl_array_len(owner) <= len);
+                len = jl_array_len(owner);
+            }
             // if (jl_genericmemory_how(m) == JL_GENERICMEMORY_STRINGOWNED) {
             //     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
             //     write_uint(f, len);
@@ -1563,6 +1590,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 size_t headersize = sizeof(jl_genericmemory_t);
                 // copy header
                 ios_write(f, (char*)v, headersize);
+                ((jl_genericmemory_t*)&f->buf[reloc_offset])->length = len;
                 // write data
                 if (!layout->flags.arrayelem_isboxed && layout->first_ptr < 0) {
                     // set owner to NULL
@@ -3142,6 +3170,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.method_roots_list = NULL;
     htable_new(&s.method_roots_index, 0);
+    htable_new(&s.memory_owners, 0);
     jl_value_t **_tags[NUM_TAGS];
     jl_value_t ***tags = s.incremental ? NULL : _tags;
     if (worklist) {
@@ -3405,6 +3434,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     assert(deferred_supers.len == 0);
     arraylist_free(&deferred_supers);
     arraylist_free(&serialization_queue);
+    htable_free(&s.memory_owners);
     arraylist_free(&layout_table);
     arraylist_free(&s.uniquing_types);
     arraylist_free(&s.uniquing_super);
