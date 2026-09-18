@@ -795,6 +795,8 @@ elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 checkbounds(::Type{Bool}, s::CodeUnits, i::Integer) = checkbounds(Bool, s.s, i)
 
+dataids(s::CodeUnits) = dataids(s.s)
+
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 

@@ -1746,7 +1746,7 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v` is
+When calling `sort` on the [`keys`](@ref) or [`values`](@ref) of a dictionary, `v` is
 collected and then sorted.
 
 !!! compat "Julia 1.12"
@@ -2452,6 +2452,7 @@ function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
 end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
+    checkbounds(v, lo:hi)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -2473,6 +2474,7 @@ sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Orderi
     invoke(sort!, Tuple{typeof.((v, lo, hi, a, o))..., AbstractVector{T}}, v, lo, hi, a, o, t0) # For disambiguation
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
         t0::Union{AbstractVector{T}, Nothing}=nothing) where T
+    checkbounds(v, lo:hi)
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
@@ -2515,6 +2517,7 @@ end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering)
+    checkbounds(v, lo:hi)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -2544,11 +2547,13 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
+    checkbounds(v, lo:hi)
     _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
+    checkbounds(v, lo:hi)
     _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end

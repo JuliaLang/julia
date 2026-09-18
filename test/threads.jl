@@ -4,12 +4,25 @@ using Test
 
 using Base.Threads
 
+function with_output_on_failure(f)
+    mktemp() do _, output
+        try
+            return f(output)
+        catch
+            seekstart(output)
+            write(stderr, read(output))
+            rethrow()
+        end
+    end
+end
+
 include("print_process_affinity.jl") # import `uv_thread_getaffinity`
 
 # whether `t` currently has an armed wait registration on `waitee`
 function parked_on(t::Task, @nospecialize(waitee))
     w = @atomic t.waiting_on
-    return w isa Base.WaitEntry && w.queue === waitee
+    waitee isa Task && (waitee = waitee.donenotify)
+    return w isa Base.WaitEntry && Base._find_slot(w, waitee) != 0
 end
 
 # simple sanity tests for locks under cooperative concurrent access
@@ -47,10 +60,10 @@ end
         lock(c1)
         lock(c2)
         try
-            w = Base._wait2(c1, t)
-            @test_throws ConcurrencyViolationError Base._wait2(c2, t)
+            w = Base.schedule_on_notify!(c1, t)
+            @test_throws ConcurrencyViolationError Base.schedule_on_notify!(c2, t)
             @test (@atomic t.waiting_on) === w
-            @test length(c1.waitq) == 1
+            @test length(Base.waitqueue(c1)) == 1
             @test isempty(c2.waitq)
             @test notify(c1) == 1
             @test notify(c2) == 0
@@ -64,11 +77,11 @@ end
         target1 = @task nothing
         target2 = @task nothing
         waiter = @task nothing
-        Base._wait2(target1, waiter)
+        Base.schedule_on_notify!(target1, waiter)
         w = @atomic waiter.waiting_on
-        @test_throws ConcurrencyViolationError Base._wait2(target2, waiter)
+        @test_throws ConcurrencyViolationError Base.schedule_on_notify!(target2, waiter)
         @test (@atomic waiter.waiting_on) === w
-        @test length((target1.donenotify::Base.ThreadSynchronizer).waitq) == 1
+        @test length(Base.waitqueue(target1)) == 1
         donenotify2 = target2.donenotify::Base.ThreadSynchronizer
         @test isempty(donenotify2.waitq)
         gotlock = trylock(donenotify2)
@@ -88,12 +101,12 @@ end
         live = @task nothing
         lock(cond)
         try
-            w_stale = Base._wait2(cond, stale)
+            w_stale = Base.schedule_on_notify!(cond, stale)
             @test !isempty(cond)
             @test Base.claim_wait(stale, w_stale)
             @test !isempty(cond.waitq)
             @test isempty(cond)
-            w_live = Base._wait2(cond, live)
+            w_live = Base.schedule_on_notify!(cond, live)
             @test !isempty(cond)
             @test Base.claim_wait(live, w_live)
             @test isempty(cond)
@@ -125,7 +138,7 @@ end
         # eager unlink: entry gone before t even runs
         @test !parked_on(t, cond)
         @test isempty(cond.waitq)
-        @test (w::Base.WaitEntry).queue === nothing # freed for reuse
+        @test Base._slot_owner(w::Base.WaitEntry, 1) === nothing # freed for reuse
         lock(cond)
         @test notify(cond) == 0
         unlock(cond)
@@ -221,7 +234,7 @@ end
             # stays linked for us (the "notifier") to pop
             wait(@async schedule(t, ErrorException("interrupt"), error=true))
             @test popfirst!(Base.waitqueue(cond)) === w
-            @test (w::Base.WaitEntry).queue === nothing
+            @test Base._slot_owner(w::Base.WaitEntry, 1) === nothing
             for _ in 1:1000
                 parked_on(t, cond.lock.cond_wait) && break
                 yield()
@@ -264,8 +277,12 @@ end
 # the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
 # the same entry object is recycled across parks, and nothing on the park or
 # notify path allocates (in particular, the queue-identity witness must be a
-# mutable object - storing an immutable waitee would re-box it every park)
+# mutable object - storing an immutable waitee would re-box it every park).
+# Shielded: a script session runs under the ambient ^C episode token, which
+# would route every park through the cancellable arm - the cancellable
+# steady state is measured separately below.
 @testset "wait registration recycling is allocation-free" begin
+ Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
     ping = Event(true)
     pong = Event(true)
     n = 500
@@ -289,10 +306,45 @@ end
     # the cached entries were recycled, not replaced
     @test t.cached_wait_entry === w_spawned
     @test current_task().cached_wait_entry === w_driver
-    @test (w_driver::Base.WaitEntry).queue === nothing # free between parks
+    @test Base._slot_owner(w_driver::Base.WaitEntry, 1) === nothing # free between parks
     if Base.JLOptions().code_coverage == 0
         @test allocated == 0
     end
+ end
+end
+
+# ... and the same holds for the cancellable park of a task governed by a
+# token (the default inside a ^C episode, i.e. every interactive or script
+# session): the cached cancel entry recycles with its sticky source
+# registration, and the per-waitable phases stay unboxed (the park driver's
+# tuple recursion; a dynamic tuple iteration would re-box the SourceWait
+# every park)
+@testset "cancellable park recycling is allocation-free" begin
+ src = Base.CancellationTokenSource()
+ Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.CancellationToken(src)) do
+    ping = Event(true)
+    pong = Event(true)
+    n = 500
+    t = Threads.@spawn for i in 1:(n + 20)
+        wait(ping)
+        notify(pong)
+    end
+    driver() = (notify(ping); wait(pong))
+    for i in 1:20 # warmup: compile and populate both tasks' cached entries
+        driver()
+    end
+    w_driver = current_task().cached_cancel_entry
+    @test w_driver isa Base.WaitEntry
+    measure() = @allocated for i in 1:n
+        driver()
+    end
+    allocated = measure()
+    wait(t)
+    @test current_task().cached_cancel_entry === w_driver
+    if Base.JLOptions().code_coverage == 0
+        @test allocated == 0
+    end
+ end
 end
 
 @testset "unbuffered channel: interrupted taker is skipped" begin
@@ -353,7 +405,13 @@ let e = Event(true), started1 = Event(true), started2 = Event(true), done = Even
 end
 
 
-let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`,
+# Wrap the include in the testset rather than the file body (see threads_exec.jl).
+let program = """
+        using Test
+        @testset "threads_exec.jl with JULIA_NUM_THREADS == \$(ENV["JULIA_NUM_THREADS"])" begin
+            include("threads_exec.jl")
+        end""",
+    cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -e $program`,
     cmd2 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -e 'print(Threads.threadpoolsize(:default), ",", Threads.threadpoolsize(:interactive))'`
     for (test_nthreads, test_nthreadsi) in (
             (1, 0),
@@ -364,8 +422,11 @@ let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no th
             (4, 0)) # try a couple times to trigger bad races
         new_env = copy(ENV)
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
-        run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr))
         threads_config = "$test_nthreads,$test_nthreadsi"
+        with_output_on_failure() do output
+            run(pipeline(setenv(cmd1, new_env); stdout=output, stderr=output))
+        end
+        println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config passed")
         # threads set via env var
         @test chomp(read(setenv(cmd2, new_env), String)) == threads_config
         # threads set via -t

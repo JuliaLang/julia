@@ -414,6 +414,13 @@ static size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         self_size = sizeof(jl_cancel_source_t) +
                     ((jl_cancel_source_t*)a)->nparents * sizeof(jl_cancel_parent_link_t);
     }
+    else if (jl_is_wait_entry(a)) {
+        // variable-sized: one wait slot per waitable follows the fixed fields
+        node_type = "jl_wait_entry_t";
+        name = "WaitEntryN";
+        self_size = sizeof(jl_wait_entry_t) +
+                    ((jl_wait_entry_t*)a)->nslots * sizeof(jl_wait_slot_t);
+    }
     else if (jl_is_datatype(a)) {
         ios_need_close = 1;
         ios_mem(&str_, 0);

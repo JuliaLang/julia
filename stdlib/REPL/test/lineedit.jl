@@ -20,6 +20,72 @@ function new_state()
     LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
 end
 
+# Normal and prefix history search prompts emit one marker pair without changing their width.
+@testset "semantic prompt rendering" begin
+    for markers in (REPL.OSC_133_MARKERS, REPL.OSC_633_MARKERS),
+            enabled in (false, true), color in (false, true)
+        output = IOBuffer()
+        term = FakeTerminal(IOBuffer(), output, IOBuffer(), color)
+        repl = REPL.LineEditREPL(term, color)
+        repl.semantic_prompt_markers = markers
+        repl.options.semantic_prompts = enabled
+        prompt = LineEdit.Prompt("julia> "; repl)
+        prefix_prompt = LineEdit.PrefixHistoryPrompt(prompt.hist, prompt)
+        rendered = color ? Base.text_colors[:bold] * "julia> " * Base.text_colors[:normal] : "julia> "
+        expected = enabled ? markers.prompt_start * rendered * markers.prompt_end : rendered
+        for state in (prompt, LineEdit.init_state(term, prompt), LineEdit.init_state(term, prefix_prompt))
+            @test LineEdit.write_prompt(term, state, color) == 7
+            @test String(take!(output)) == expected
+        end
+        prompt.repl = nothing
+        @test LineEdit.write_prompt(term, prompt, color) == 7
+        @test String(take!(output)) == rendered
+    end
+end
+
+# History search initializes prompt modes added after MIState creation (#61584).
+module HistorySearchDynamicMode
+
+using Test
+using REPL
+import REPL.LineEdit
+import ..FakeTerminals: FakeTerminal
+
+struct MockHistoryFile end
+
+mutable struct MockHistoryProvider <: LineEdit.HistoryProvider
+    history::MockHistoryFile
+    last_buffer::IOBuffer
+    last_mode::Union{Nothing,LineEdit.Prompt}
+    mode_mapping::Dict{Symbol,LineEdit.Prompt}
+end
+
+REPL.histsearch(::MockHistoryFile, args...) = (mode = :pkg, text = "status")
+
+@testset "history search initializes dynamic modes" begin
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    main_mode = LineEdit.Prompt("julia> ")
+    dummy_pkg_mode = LineEdit.Prompt("pkg> ")
+    history = MockHistoryProvider(MockHistoryFile(), IOBuffer(), nothing,
+                                  Dict(:julia => main_mode, :pkg => dummy_pkg_mode))
+    main_mode.hist = dummy_pkg_mode.hist = history
+    interface = LineEdit.ModalInterface(LineEdit.TextInterface[main_mode, dummy_pkg_mode])
+    mistate = LineEdit.init_state(term, interface)
+    mistate.terminal_properties.da1 = Int[]
+
+    pkg_mode = LineEdit.Prompt("(project) pkg> ")
+    pkg_mode.hist = history
+    history.mode_mapping[:pkg] = pkg_mode
+    push!(interface.modes, pkg_mode)
+    @test !haskey(mistate.mode_state, pkg_mode)
+
+    LineEdit.history_search(mistate)
+    @test mistate.current_mode === pkg_mode
+    @test String(take!(copy(LineEdit.buffer(mistate)))) == "status"
+end
+
+end # module HistorySearchDynamicMode
+
 charseek(buf, i) = seek(buf, nextind(content(buf), 0, i+1)-1)
 charpos(buf, pos=position(buf)) = length(content(buf), 1, pos)
 
@@ -1248,6 +1314,10 @@ end
 end
 
 # Test OSC colour response parsing (see `query_colors`)
+# The sentinel reply applies the palette to StyledStrings' global colour state, which other
+# tests on the same worker would otherwise see, so restore it afterwards.
+osc_saved_colors = copy(REPL.StyledStrings.FACES.basecolors)
+osc_saved_faces = copy(REPL.StyledStrings.FACES.current[])
 @testset "OSC colour responses" begin
     RGB(r, g, b) = (; r=UInt8(r), g=UInt8(g), b=UInt8(b))
     # `awaiting` mirrors a pending `query_colors`, so the sentinel applies the palette.
@@ -1319,3 +1389,5 @@ end
         @test isempty(props.colors)
     end
 end
+merge!(empty!(REPL.StyledStrings.FACES.basecolors), osc_saved_colors)
+merge!(empty!(REPL.StyledStrings.FACES.current[]), osc_saved_faces)

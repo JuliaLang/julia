@@ -76,7 +76,16 @@ The mutability property of a value can be queried for with:
 int jl_is_mutable(jl_value_t *v);
 ```
 
-If the object being stored is a `jl_value_t`, the Julia garbage collector must be notified also:
+If the object being stored is a `jl_value_t`, the Julia garbage collector must be notified also.
+The preferred form performs the store and the write barrier together, in the correct order:
+
+```c
+jl_gc_write(parent, field, type, val);
+jl_gc_write_atomic(parent, field, type, val, order); // for an _Atomic field
+```
+
+For updates that are not a single assignment, the barrier can be issued on its own, but must
+run *before* the store it guards:
 
 ```c
 void jl_gc_wb(jl_value_t *parent, jl_value_t *ptr);

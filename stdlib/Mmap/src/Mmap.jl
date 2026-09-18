@@ -548,7 +548,8 @@ This creates a 25-by-30000 `BitArray`, linked to the file associated with stream
 """
 function mmap(io::IO, ::Type{<:BitArray}, dims::NTuple{N,Integer},
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where N
-    n = prod(dims)
+    dims = map(Int, dims)
+    n = Core.checked_dims(dims...)
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
     if !isreadonly(io)
@@ -584,8 +585,10 @@ function mmap(::Type{Array{T, N}}, dims::NTuple{N, Integer}; kwargs...) where {T
     open(io -> mmap(io, Array{T, N}, dims; kwargs...), SharedMemory, "", size; readonly = false, create = true)
 end
 function mmap(::Type{BitArray{N}}, dims::NTuple{N, Integer}; kwargs...) where {N}
-    prod(dims) == 0 && return BitArray{N}(undef, dims)
-    size = checked_bytesize((Base.num_bit_chunks(prod(dims)),), sizeof(UInt64))
+    dims = map(Int, dims)
+    n = Core.checked_dims(dims...)
+    n == 0 && return BitArray{N}(undef, dims)
+    size = checked_bytesize((Base.num_bit_chunks(n),), sizeof(UInt64))
     open(io -> mmap(io, BitArray{N}, dims; kwargs...), SharedMemory, "", size; readonly = false, create = true)
 end
 

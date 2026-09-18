@@ -27,6 +27,572 @@ end
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 
+# Local-cache entries contain reusable source plus a proof, while executable targets
+# remain exclusively in the global CodeInstance cache.
+local_wrapper62338(x::Int) = x + 1
+let
+    precompile(local_wrapper62338, (Int,))
+    interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    mi = Base.method_instance(local_wrapper62338, (Int,))
+    ci = get(Compiler.code_cache(interp), mi, nothing)
+    @test ci isa Core.CodeInstance
+
+    pending = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+    pending.ci = ci
+    push!(Compiler.get_inference_cache(interp), pending)
+    @test get(Compiler.code_cache(interp), mi, nothing) === ci
+
+    artifact = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+    artifact.result = Int
+    artifact.exc_result = Any
+    artifact.src = Compiler.retrieve_code_info(mi, Base.get_world_counter())
+    artifact.ci = ci
+    artifact.valid_worlds = Compiler.WorldRange(ci.min_world, Base.get_world_counter())
+    proof = Compiler.LocalInferenceProof(artifact.valid_worlds, Core.svec())
+    local_result = Compiler.LocalInferenceResult(artifact, proof, Base.get_world_counter())
+    push!(Compiler.get_inference_cache(interp), local_result)
+    got = Compiler.lookup_local_inference_result(interp, mi)
+    @test got === local_result
+    @test got.proof === proof
+    @test got.result.ci === ci
+    @test get(Compiler.code_cache(interp), mi, nothing) === ci
+    @test_throws AssertionError push!(Compiler.get_inference_cache(interp), artifact)
+end
+
+# A nested inference session can publish a global CI while an outer SCC member is still
+# in progress. No provisional CI that is later kept local may escape into a published
+# caller, and every exact CI used by a published SCC edge must itself be published.
+wrapper62338_bump() = 0
+wrapper62338_a(x::Int) = x <= 0 ? wrapper62338_bump() : wrapper62338_req(x - 1)
+wrapper62338_req(x::Int) = x <= 0 ? 1 : wrapper62338_v(x - 1) + 1
+wrapper62338_v(x::Int) = x <= 0 ? 2 : wrapper62338_w(x - 1) + 2
+wrapper62338_trigger(x::Int) = wrapper62338_v(x)
+@generated function wrapper62338_gencache(x)
+    precompile(wrapper62338_trigger, (Int,))
+    return :(x)
+end
+wrapper62338_w(x::Int) = x <= 0 ? 3 : (r = wrapper62338_a(x - 1); wrapper62338_gencache(x); r + 3)
+wrapper62338_root(x::Int) = wrapper62338_a(x) + wrapper62338_v(x)
+wrapper62338_bump() = 1
+let interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    @test code_typed(wrapper62338_root, (Int,); interp) isa Vector
+    cycle_methods = (which(wrapper62338_a, (Int,)), which(wrapper62338_req, (Int,)),
+        which(wrapper62338_v, (Int,)), which(wrapper62338_w, (Int,)))
+    cache_entries = Compiler.get_inference_cache(interp).results
+    local_cycle_entries = [
+        entry for entry in cache_entries
+        if entry isa Compiler.LocalInferenceResult && entry.result.linfo.def in cycle_methods
+    ]
+    local_cycle_results = map(entry -> entry.result, local_cycle_entries)
+    @test !isempty(local_cycle_results)
+    @test any(result -> result.replacement_ci !== nothing, local_cycle_results)
+    @test all(result -> result.replacement_ci === nothing ||
+                        isdefined(result.replacement_ci, :inferred), local_cycle_results)
+
+    published = Core.CodeInstance[]
+    for f in (wrapper62338_a, wrapper62338_req, wrapper62338_v, wrapper62338_w,
+              wrapper62338_root)
+        mi = Base.method_instance(f, (Int,))
+        ci = get(Compiler.code_cache(interp), mi, nothing)
+        if ci isa Core.CodeInstance
+            push!(published, ci)
+        end
+        live_cis = Core.CodeInstance[]
+        if isdefined(mi, :cache)
+            cached_ci = mi.cache
+            while cached_ci isa Core.CodeInstance
+                if cached_ci.owner === Compiler.cache_owner(interp) &&
+                        cached_ci.min_world <= interp.world <= cached_ci.max_world
+                    push!(live_cis, cached_ci)
+                end
+                isdefined(cached_ci, :next) || break
+                cached_ci = cached_ci.next
+            end
+        end
+        @test length(live_cis) <= 1
+    end
+    @test !isempty(published)
+    bump_method = which(wrapper62338_bump, ())
+    @test all(local_cycle_entries) do entry
+        edges = Compiler.materialize_inference_edges(entry.proof.edges)
+        any(edges) do edge
+            edge === bump_method ||
+                (edge isa Core.MethodInstance && edge.def === bump_method) ||
+                (edge isa Core.CodeInstance && edge.def.def === bump_method)
+        end
+    end
+    for caller in published, edge in caller.edges
+        if edge isa Core.CodeInstance
+            @test !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), edge.def, edge))
+        end
+    end
+    for result in local_cycle_results
+        isdefined(result, :ci) || continue
+        if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), result.linfo, result.ci))
+            @test all(caller -> all(edge -> edge !== result.ci, caller.edges), published)
+        end
+    end
+end
+
+# A limited source may still return clean facts. Its scheduled consumer must retain the
+# dependency proof even though the tombstoned source itself is not reusable.
+module LimitedSrcTombstoneProof62338
+    const FLAG = true
+    callee() = FLAG ? 1 : 2
+    bystander() = 3
+    entry() = 1
+end
+
+# A deferred mutual-SCC edge may consume provisional facts even when the original
+# recursion heuristic did not mark the call as an edge cycle. Preserve that as an
+# independent invalidation requirement.
+let
+    interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    outer_mi = Base.method_instance(LimitedSrcTombstoneProof62338.entry, ())
+    outer_result = Compiler.InferenceResult(outer_mi, Compiler.typeinf_lattice(interp))
+    outer = Compiler.InferenceState(outer_result, Compiler.CACHE_MODE_LOCAL, interp)
+
+    child_mi = Base.method_instance(LimitedSrcTombstoneProof62338.callee, ())
+    child_result = Compiler.InferenceResult(child_mi, Compiler.typeinf_lattice(interp))
+    child = Compiler.InferenceState(child_result, Compiler.CACHE_MODE_LOCAL, interp)
+    Compiler.assign_parentchild!(child, outer)
+
+    mresult = Compiler._schedule_edge_infer_task!(
+        outer, child, child.result, child_mi.def, nothing, false, false)
+    @test Compiler.doworkloop(interp, outer)
+    @test isready(mresult)
+    scheduled = mresult[]
+    @test !scheduled.edgecycle
+    @test scheduled.needs_mi_edge
+end
+
+let
+    world = Base.get_world_counter()
+    inf_params = Compiler.InferenceParams(; cache_owner=LimitedSrcTombstoneProof62338)
+    interp = Compiler.NativeInterpreter(world; inf_params)
+    binding = convert(Core.Binding, GlobalRef(LimitedSrcTombstoneProof62338, :FLAG))
+
+    outer_mi = Base.method_instance(LimitedSrcTombstoneProof62338.entry, ())
+    outer_result = Compiler.InferenceResult(outer_mi, Compiler.typeinf_lattice(interp))
+    outer_result.ci = Compiler.engine_reserve(interp, outer_mi)
+    outer = Compiler.InferenceState(outer_result, Compiler.CACHE_MODE_GLOBAL, interp)
+
+    child_mi = Base.method_instance(LimitedSrcTombstoneProof62338.callee, ())
+    child_result = Compiler.InferenceResult(child_mi, Compiler.typeinf_lattice(interp))
+    child = Compiler.InferenceState(child_result, Compiler.CACHE_MODE_LOCAL, interp)
+    Compiler.assign_parentchild!(child, outer)
+
+    bystander_mi = Base.method_instance(LimitedSrcTombstoneProof62338.bystander, ())
+    bystander_result = Compiler.InferenceResult(
+        bystander_mi, Compiler.typeinf_lattice(interp))
+    bystander = Compiler.InferenceState(
+        bystander_result, Compiler.CACHE_MODE_GLOBAL, interp)
+    Compiler.assign_parentchild!(bystander, child)
+
+    # Model a clean return with a limited intermediate statement, then finalize it
+    # through the ordinary tombstone path.
+    empty!(child.ip)
+    fill!(child.ssavaluetypes, Any)
+    causes = Compiler.IdSet{Compiler.InferenceState}()
+    push!(causes, outer)
+    child.ssavaluetypes[1] = Compiler.LimitedAccuracy(Int, causes)
+    child.bestguess = Core.Const(1)
+    child.exc_bestguess = Union{}
+    child.ipo_effects = Compiler.EFFECTS_TOTAL
+    push!(child.edges, binding)
+    Compiler.finishinfer!(child, interp, child.cycleid,
+        IdDict{Core.MethodInstance,Core.CodeInstance}())
+
+    @test child.result.tombstone
+    @test child.ssavaluetypes[1] isa Compiler.LimitedAccuracy
+    @test child.result.result === Core.Const(1)
+    @test child.result.src === nothing
+
+    # Model the direct, already-in-progress SCC edge. Unlike the deferred task
+    # below, this path consumed the child's clean facts before its tombstone was
+    # known and therefore needs proof propagation when the SCC is finalized.
+    Compiler.add_cycle_backedge!(outer, child)
+    cycle_worlds = child.valid_worlds
+    Compiler.propagate_unpublished_cycle_proof!(
+        child.callstack, 2, world, cycle_worlds)
+    cycle_proofs = filter(edge -> edge isa Compiler.LocalInferenceProof, outer.edges)
+    @test length(cycle_proofs) == 1
+    @test any(edge -> edge === binding,
+        Compiler.materialize_inference_edges(only(cycle_proofs).edges))
+    @test !any(edge -> edge isa Compiler.LocalInferenceProof, bystander.edges)
+
+    resize!(outer.callstack, 1)
+    mresult = Compiler._schedule_edge_infer_task!(
+        outer, child, child.result, child_mi.def, nothing, false, false)
+
+    @test Compiler.typeinf(interp, outer)
+    @test isready(mresult)
+    @test mresult[].needs_mi_edge
+    ci = outer.result.ci
+    @test get(Compiler.code_cache(interp), outer_mi, nothing) === ci
+    @test ci.rettype_const === 1
+    @test any(edge -> edge === binding, ci.edges)
+end
+
+# Local constant inference keeps its dependency proof separate from the executable target.
+module LocalProofConstpropCache
+    const SINK = Ref{Any}()
+    const VALUE = "v1"
+
+    @noinline Base.@constprop :aggressive function readglobal(M::Module, s::Symbol)
+        SINK[] = s
+        return getglobal(M, s)
+    end
+
+    probe_twice() = (
+        readglobal(LocalProofConstpropCache, :VALUE)::String,
+        readglobal(LocalProofConstpropCache, :VALUE)::String,
+    )
+    probe_once() = readglobal(LocalProofConstpropCache, :VALUE)::String
+end
+
+let interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    mi = Base.method_instance(LocalProofConstpropCache.probe_twice, ())
+    frame = Compiler.typeinf_frame(interp, mi, false)
+    infos = [info for info in frame.stmt_info if info isa Compiler.MethodMatchInfo]
+    @test length(infos) == 2
+
+    results = [only(info.call_results) for info in infos]
+    targets = [only(info.edges) for info in infos]
+    callee_mi = Base.method_instance(LocalProofConstpropCache.readglobal, (Module, Symbol))
+    cache_entries = Compiler.get_inference_cache(interp).results
+    cached = [
+        entry for entry in cache_entries
+        if entry isa Compiler.LocalInferenceResult &&
+           entry.result.linfo === callee_mi &&
+           entry.result.overridden_by_const !== nothing
+    ]
+    @test length(cached) == 1
+    @test cached[1] === results[1] === results[2]
+    @test targets[1] === targets[2]
+    @test targets[1] === get(Compiler.code_cache(interp), callee_mi, nothing)
+    @test all(i -> Compiler.getedge(infos[i], 1) === targets[i], eachindex(infos))
+
+    proofs = map(Compiler.inference_proof, results)
+    binding = convert(Core.Binding, GlobalRef(LocalProofConstpropCache, :VALUE))
+    @test all(proof -> proof isa Compiler.LocalInferenceProof, proofs)
+    @test all(proofs) do proof
+        edges = Compiler.materialize_inference_edges(proof.edges)
+        any(edge -> edge === binding, edges)
+    end
+    callee_edges = [
+        edge for edge in frame.edges
+        if edge isa Core.CodeInstance && edge.def === callee_mi
+    ]
+    @test only(callee_edges) === targets[1]
+end
+
+let interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    callee_mi = Base.method_instance(LocalProofConstpropCache.readglobal, (Module, Symbol))
+    caller_mi = Base.method_instance(LocalProofConstpropCache.probe_once, ())
+    frame = Compiler.typeinf_frame(interp, caller_mi, true)
+    src = frame.src
+    invokes = [stmt for stmt in src.code if stmt isa Expr && stmt.head === :invoke]
+    @test length(invokes) == 1
+    target = only(invokes).args[1]
+    @test target === get(Compiler.code_cache(interp), callee_mi, nothing)
+
+    binding = convert(Core.Binding, GlobalRef(LocalProofConstpropCache, :VALUE))
+    @test any(edge -> edge === binding, src.edges)
+    callee_edges = [
+        edge for edge in src.edges
+        if edge isa Core.CodeInstance && edge.def === callee_mi
+    ]
+    @test only(callee_edges) === target
+end
+
+stmtinfo_edge_target(x::Int) = x
+function stmtinfo_codeinstance(mi::Core.MethodInstance, owner,
+                               edges::Core.SimpleVector=Core.svec())
+    return Core.CodeInstance(mi, owner, Any, Any, nothing, nothing, zero(Int32),
+        typemin(UInt), typemax(UInt), zero(UInt32), nothing, nothing, edges)
+end
+
+@testset "inference proof edge materialization" begin
+    world = Base.get_world_counter()
+    atype = Tuple{typeof(stmtinfo_edge_target),Int}
+    match = only(Base._methods_by_ftype(atype, -1, world))
+    mi = Compiler.specialize_method(match)
+    interp = Compiler.NativeInterpreter(world)
+    owner = Compiler.cache_owner(interp)
+    ci1 = stmtinfo_codeinstance(mi, owner)
+    ci2 = stmtinfo_codeinstance(mi, owner)
+    @test_throws AssertionError Compiler.LocalInferenceProof(
+        Compiler.WorldRange(world, world + 1), Core.svec())
+
+    @testset "constprop cache worlds" begin
+        lattice = Compiler.typeinf_lattice(interp)
+        argtypes = Compiler.matching_cache_argtypes(lattice, mi)
+        argtypes[2] = Compiler.Const(1)
+        overridden = falses(length(argtypes))
+        overridden[2] = true
+
+        result = Compiler.InferenceResult(mi, copy(argtypes), overridden)
+        result.result = Int
+        result.valid_worlds = Compiler.WorldRange(UInt(1), UInt(3))
+        proof = Compiler.LocalInferenceProof(result.valid_worlds, Core.svec())
+        local_result = Compiler.LocalInferenceResult(result, proof, UInt(2))
+        cache = Compiler.InferenceCache()
+        push!(cache, local_result)
+        @test Compiler.constprop_cache_lookup(
+            lattice, mi, argtypes, cache, UInt(2)) === local_result
+        @test Compiler.constprop_cache_lookup(
+            lattice, mi, argtypes, cache, UInt(3)) === nothing
+
+        tombstone = Compiler.InferenceResult(mi, copy(argtypes), overridden)
+        tombstone.result = Int
+        tombstone.tombstone = true
+        tombstone.cache_world = UInt(2)
+        tombstone.valid_worlds = Compiler.WorldRange(UInt(1), UInt(3))
+        cache = Compiler.InferenceCache()
+        push!(cache, tombstone)
+        @test ismissing(Compiler.constprop_cache_lookup(
+            lattice, mi, argtypes, cache, UInt(2)))
+        @test Compiler.constprop_cache_lookup(
+            lattice, mi, argtypes, cache, UInt(3)) === nothing
+    end
+
+    @testset "proof streams and paired edges" begin
+        plain_edges = Core.svec(ci1, ci2)
+        @test Compiler.materialize_inference_edges(plain_edges) === plain_edges
+
+        edges = Any[]
+        Compiler.add_inference_proof!(edges, ci1, ci1)
+        @test isempty(edges)
+        Compiler.add_inference_proof!(edges, ci2, ci1)
+        @test edges == Any[match.method.sig, ci2]
+
+        encoded = Core.svec(-1, atype, ci1, atype, mi)
+        proof = Compiler.LocalInferenceProof(Compiler.WorldRange(UInt(1), UInt(2)), encoded)
+        Compiler.add_inference_proof!(edges, proof, ci1)
+        @test edges[end] === proof
+        flat = Compiler.materialize_inference_edges(edges)
+        @test length(flat) == 2 + length(encoded)
+        @test all(i -> flat[i + 2] === encoded[i], eachindex(encoded))
+
+        leaf = Compiler.LocalInferenceProof(Compiler.WorldRange(world), Core.svec(ci2))
+        root = Compiler.LocalInferenceProof(Compiler.WorldRange(world), Core.svec(leaf, leaf))
+        internal_edges = Any[]
+        Compiler.add_inference_proof!(internal_edges, root)
+        Compiler.add_inference_proof!(internal_edges, root)
+        @test internal_edges == Any[root]
+        @test Compiler.materialize_inference_edges(internal_edges) == Core.svec(ci2)
+
+        duplicate_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(ci2))
+        duplicate_root = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(leaf, duplicate_leaf))
+        @test Compiler.materialize_inference_edges(duplicate_root.edges) ==
+            Core.svec(ci2)
+
+        invoke_leaf1 = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(atype, ci1))
+        invoke_leaf2 = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(atype, ci1))
+        invoke_root = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(invoke_leaf1, invoke_leaf2))
+        @test Compiler.materialize_inference_edges(invoke_root.edges) ==
+            Core.svec(atype, ci1)
+
+        encoded_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(1, atype, ci1))
+        standalone_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(ci1))
+        encoded_root = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(encoded_leaf, standalone_leaf))
+        @test Compiler.materialize_inference_edges(encoded_root.edges) ==
+            Core.svec(1, atype, ci1)
+
+        regular_inf = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+        regular_inf.result = Int
+        regular_inf.valid_worlds = Compiler.WorldRange(world - 2, world)
+        regular_proof = Compiler.LocalInferenceProof(
+            regular_inf.valid_worlds, Core.svec(ci2))
+        regular_result = Compiler.LocalInferenceResult(regular_inf, regular_proof, world)
+        frame_result = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+        frame = Compiler.InferenceState(frame_result, Compiler.CACHE_MODE_LOCAL, interp)
+        push!(frame.edges, ci1)
+        method_result = Compiler.MethodCallResult(
+            Int, Any, Compiler.Effects(), ci1, false, false, regular_result)
+        concrete_proof = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world - 1, world), Core.svec(match.method))
+        concrete_result = Compiler.ConcreteResult(
+            ci1, Compiler.Effects(); proof=concrete_proof)
+        concrete_call = Compiler.ConstCallResult(
+            Int, Any, concrete_result, Compiler.Effects())
+        composite = Compiler.const_prop_inference_proof(
+            frame, method_result, concrete_call)
+        @test composite.valid_worlds == Compiler.WorldRange(world - 1, world)
+        @test Compiler.materialize_inference_edges(composite.edges) ==
+            Core.svec(ci2, match.method, ci1)
+
+        concrete = Compiler.ConcreteResult(ci1, Compiler.Effects(); proof)
+        @test Compiler.inference_proof(concrete) === proof
+        @test !isdefined(concrete, :result)
+        concrete_with_value = Compiler.ConcreteResult(ci1, Compiler.Effects(), 1; proof)
+        @test concrete_with_value.result === 1
+    end
+
+    @testset "lookup edges precede their proofs" begin
+        results = Compiler.MethodLookupResult(Any[match],
+            Compiler.WorldRange(typemin(UInt), typemax(UInt)), false)
+        singleton = Compiler.MethodMatchInfo(results, Core.methodtable, atype, true)
+        singleton.edges[1] = ci1
+        singleton.call_results[1] = Compiler.ConcreteResult(ci2, Compiler.Effects())
+        edges = Any[]
+        Compiler.add_edges!(edges, singleton)
+        @test edges == Any[ci1, match.method.sig, ci2]
+
+        singleton.call_results[1] = Compiler.ConcreteResult(ci1, Compiler.Effects())
+        empty!(edges)
+        Compiler.add_edges!(edges, singleton)
+        @test edges == Any[ci1]
+
+        flat_stream = Core.svec(1, atype, ci2)
+        flat = Compiler.LocalInferenceProof(Compiler.WorldRange(world), flat_stream)
+        singleton.call_results[1] = Compiler.ConcreteResult(ci1, Compiler.Effects(); proof=flat)
+        empty!(edges)
+        Compiler.add_edges!(edges, singleton)
+        @test edges == Any[ci1, flat]
+        materialized = Compiler.materialize_inference_edges(edges)
+        @test materialized[1] === ci1
+        @test all(i -> materialized[i + 1] === flat_stream[i], eachindex(flat_stream))
+
+        invoke = Compiler.InvokeCallInfo(ci1, match,
+            Compiler.ConcreteResult(ci2, Compiler.Effects()), atype)
+        empty!(edges)
+        Compiler.add_edges!(edges, invoke)
+        @test edges == Any[atype, ci1, match.method.sig, ci2]
+
+        local_inf = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+        local_inf.result = Int
+        local_inf.valid_worlds = Compiler.WorldRange(world)
+        local_proof = Compiler.LocalInferenceProof(local_inf.valid_worlds, Core.svec())
+        local_result = Compiler.LocalInferenceResult(local_inf, local_proof, world)
+
+        multi_results = Compiler.MethodLookupResult(
+            Any[match, match], Compiler.WorldRange(), false)
+        multi = Compiler.MethodMatchInfo(multi_results, Core.methodtable, atype, true)
+        multi.call_results[1] = local_result
+        empty!(edges)
+        Compiler.add_edges!(edges, multi)
+        @test edges[3] === mi
+        has_mi_backedge = false
+        flat_edges = Compiler.materialize_inference_edges(edges)
+        for (_, edge) in Compiler.ForwardToBackedgeIterator(flat_edges)
+            has_mi_backedge |= edge === mi
+        end
+        @test has_mi_backedge
+
+        multi.call_results[1] = nothing
+        multi.needs_mi_edges[1] = true
+        empty!(edges)
+        Compiler.add_edges!(edges, multi)
+        @test edges[3] === mi
+        flat_edges = Compiler.materialize_inference_edges(edges)
+        @test any(Compiler.ForwardToBackedgeIterator(flat_edges)) do (_, edge)
+            edge === mi
+        end
+        multi.needs_mi_edges[1] = false
+
+        # Each CallInfo type implements the targetless-facts upgrade separately;
+        # cover both triggers (attached result, needs-mi-edge bit) per type, and
+        # every result representation (local, targetless concrete) at least once.
+        targetless_concrete = Compiler.ConcreteResult(
+            nothing, Compiler.Effects(); proof=local_proof)
+
+        invoke_concrete = Compiler.InvokeCallInfo(
+            nothing, match, targetless_concrete, atype)
+        empty!(edges)
+        Compiler.add_edges!(edges, invoke_concrete)
+        @test edges[2] === mi
+        flat_edges = Compiler.materialize_inference_edges(edges)
+        @test any(Compiler.ForwardToBackedgeIterator(flat_edges)) do (_, edge)
+            edge === mi
+        end
+
+        invoke_provisional = Compiler.InvokeCallInfo(
+            nothing, match, nothing, atype, true)
+        empty!(edges)
+        Compiler.add_edges!(edges, invoke_provisional)
+        @test edges[2] === mi
+
+        opaque_local = Compiler.OpaqueClosureCallInfo(nothing, match, local_result)
+        empty!(edges)
+        Compiler.add_edges!(edges, opaque_local)
+        @test first(edges) === mi
+
+        opaque_provisional = Compiler.OpaqueClosureCallInfo(
+            nothing, match, nothing, true)
+        empty!(edges)
+        Compiler.add_edges!(edges, opaque_provisional)
+        @test first(edges) === mi
+    end
+
+    @testset "lookup identity and edge access" begin
+        results = Compiler.MethodLookupResult(Any[match], Compiler.WorldRange(), false)
+        info1 = Compiler.MethodMatchInfo(results, Core.methodtable, atype, false)
+        info1.edges[1] = ci1
+        info2 = Compiler.MethodMatchInfo(results, Core.methodtable, atype, false)
+        info2.edges[1] = ci2
+
+        edges = Any[]
+        Compiler.add_edges!(edges, info1)
+        Compiler.add_edges!(edges, info1)
+        @test count(edge -> edge isa Int, edges) == 1
+        Compiler.add_edges!(edges, info2)
+        @test count(edge -> edge isa Int, edges) == 2
+        starts = findall(edge -> edge isa Int, edges)
+        @test edges[starts[1] + 2] === ci1
+        @test edges[starts[2] + 2] === ci2
+
+        @test Compiler.getedge(info1, 1) === ci1
+        split = Compiler.UnionSplitInfo([info1, info2])
+        @test Compiler.getedge(split, 1) === ci1
+        @test Compiler.getedge(split, 2) === ci2
+        @test Compiler.getedge(Compiler.InvokeCallInfo(ci1, match, nothing, atype), 1) === ci1
+        @test Compiler.getedge(Compiler.OpaqueClosureCallInfo(ci2, match, nothing), 1) === ci2
+        @test Compiler.getedge(Compiler.VirtualMethodMatchInfo(split), 2) === ci2
+    end
+
+    @testset "encoded groups are immutable units" begin
+        encoded = Any[1, atype, mi]
+        Compiler.add_one_edge!(encoded, ci1)
+        Compiler.add_one_edge!(encoded, ci2)
+        Compiler.add_one_edge!(encoded, ci1)
+        @test encoded == Any[1, atype, mi, ci1, ci2]
+
+        invoke_edges = Any[1, atype, mi]
+        Compiler.add_invoke_edge!(invoke_edges, atype, ci1)
+        Compiler.add_invoke_edge!(invoke_edges, atype, ci2)
+        Compiler.add_invoke_edge!(invoke_edges, atype, ci1)
+        @test invoke_edges == Any[1, atype, mi, atype, ci1, atype, ci2]
+
+        inline_edges = Any[1, atype, mi]
+        Compiler.add_inlining_edge!(inline_edges, ci1)
+        Compiler.add_inlining_edge!(inline_edges, ci2)
+        Compiler.add_inlining_edge!(inline_edges, ci1)
+        @test inline_edges[3] === mi
+        @test inline_edges[5] === ci1
+        @test inline_edges[7] === ci2
+
+        upgraded = Any[mi]
+        Compiler.add_one_edge!(upgraded, ci1)
+        @test only(upgraded) === ci1
+        invoke_upgraded = Any[atype, mi]
+        Compiler.add_invoke_edge!(invoke_upgraded, atype, ci1)
+        @test invoke_upgraded[2] === ci1
+        inline_upgraded = Any[match.method]
+        Compiler.add_inlining_edge!(inline_upgraded, ci1)
+        @test only(inline_upgraded) === ci1
+    end
+end
+
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
@@ -1430,6 +1996,8 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                 end
             elseif isa(farg, Core.SSAValue)
                 farg = Compiler.widenconst(code.ssavaluetypes[farg.id])
+            elseif isa(farg, Core.BindingPartition)
+                farg = typeof(Base.partition_restriction(farg))
             else
                 farg = typeof(farg)
             end
@@ -4214,7 +4782,8 @@ end
 for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     local badf
     local code = code_typed(badf, Tuple{})[1].first.code
-    @test Meta.isexpr(code[1], :call)
+    # the invalid `getfield` call is not constant-folded away
+    @test any(x -> Meta.isexpr(x, :call), code)
     @test code[end] === Core.ReturnNode()
     @test_throws TypeError badf()
 end
@@ -4872,9 +5441,10 @@ function call_func_itr(func, itr)
 end
 
 global inline_checker = c -> c # untyped global, a call of this func will prevent inlining
-# if `f` is inlined, `GlobalRef(m, :inline_checker)` should appear within the body of `invokef`
+# if `f` is inlined, a read of `inline_checker` should appear within the body of `invokef`
 function is_inline_checker(@nospecialize stmt)
-    isa(stmt, GlobalRef) && stmt.name === :inline_checker
+    (isa(stmt, GlobalRef) && stmt.name === :inline_checker) ||
+        (isa(stmt, Core.BindingPartition) && Base.partition_owner(stmt).globalref.name === :inline_checker)
 end
 
 function func_nospecialized(@nospecialize a)
@@ -6663,7 +7233,8 @@ function test_func_cached_conditional(y)
 end;
 let interp = CachedConditionalInterp();
     @test Base.infer_return_type(test_func_cached_conditional, (Any,); interp) == Tuple{Float64, Float64}
-    @test count(interp.inf_cache) do result
+    @test count(interp.inf_cache) do entry
+        result = entry isa Compiler.LocalInferenceResult ? entry.result : entry
         result.linfo.def.name === :func_cached_conditional
     end == 1
 end
@@ -6980,6 +7551,44 @@ end === Int
 @test Base.infer_return_type((String,)) do x
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
+# a swap does both a load and store, so its order is validated once for both
+@test Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :swapglobal!_xxx, x, :unordered)
+end >: ConcurrencyViolationError
+@test !(Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :swapglobal!_xxx, x, :acquire_release)
+end >: ConcurrencyViolationError)
+
+# `replaceglobal!` reads the binding it writes, so it can throw `UndefVarError`
+@test Base.infer_exception_type((Module,)) do m
+    replaceglobal!(m, :swapglobal!_xxx, 1, 2)
+end >: UndefVarError
+# the `desired` value is type-checked before the comparison, so a bad store never returns
+@test Base.infer_return_type((String,)) do x
+    replaceglobal!(@__MODULE__, :swapglobal!_xxx, 1, x)
+end === Union{}
+@test Base.infer_return_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :swapglobal!_xxx, 1, x)
+end === ccall(:jl_apply_cmpswap_type, Any, (Any,), Int)
+# a store through an import throws before anything is read, so no old value is returned
+module RMWGlobalImportSource
+    global rmwglobal_imported::Int = 1
+    global rmwglobal_used::Int = 2
+end
+import .RMWGlobalImportSource: rmwglobal_imported
+using .RMWGlobalImportSource: rmwglobal_used
+@test Base.infer_return_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :rmwglobal_imported, 1, x)
+end === Union{}
+@test Base.infer_exception_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :rmwglobal_imported, 1, x)
+end >: ErrorException
+@test Base.infer_return_type((Int,)) do x
+    swapglobal!(@__MODULE__, :rmwglobal_used, x)
+end === Union{}
+@test Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :rmwglobal_used, x)
+end >: ErrorException
 
 @newinterp AssumeBindingsStaticInterp
 Compiler.InferenceParams(::AssumeBindingsStaticInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
@@ -7079,6 +7688,290 @@ A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
 Base.invoke_in_world(A58257.B58257.age, getglobal, A58257, :get!) # Expands binding partition in A through <N
 @test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
 
+# Tests for `reformulate_globals_pass!`.
+module ReformGlobals
+    global g::Int = 0
+    getg() = g
+    setg!(v) = setglobal!(ReformGlobals, :g, v)
+end
+let readcode = code_typed(ReformGlobals.getg, ())[1][1].code,
+    writecode = code_typed(ReformGlobals.setg!, (Int,))[1][1].code
+    # the read is reformulated to a bare partition, with no `GlobalRef` left over
+    @test any(x -> isa(x, Core.BindingPartition), readcode)
+    @test !any(x -> isa(x, GlobalRef), readcode)
+    # the store reformulates to `BindingPartition = value`, even though `global g::Int`
+    # creates a one-world `PARTITION_KIND_DECLARED` partition just before the `= 0`
+    # assignment: the write must resolve the typed-global partition.
+    @test any(x -> Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition), writecode)
+end
+# The `load_consistent` bound must still span flag-only (`public`/`export`) partition
+# changes, so adding an `export` does not needlessly invalidate the store.
+module ReformGlobalsExport
+    global g::Int = 0
+    getg() = g
+    setg!(v) = setglobal!(ReformGlobalsExport, :g, v)
+    export g
+end
+let setg! = ReformGlobalsExport.setg!
+    b = convert(Core.Binding, GlobalRef(ReformGlobalsExport, :g))
+    exported_min = Base.lookup_binding_partition(Base.get_world_counter(), b).min_world
+    writeci = code_typed(setg!, (Int,))[1][1]
+    # store still reformulates
+    @test any(x -> Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition), writeci.code)
+    # and its validity spans back across the `export` flag-only partition boundary
+    @test writeci.min_world < exported_min
+end
+# A user-inserted `BindingPartition` should get handled the same as `GlobalRef` in IR.
+module ReformGlobalsSplice
+    global gdecl::Int # declared but unassigned: reading it throws UndefVarError
+end
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsSplice, :gdecl)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    readpart = @eval function ()
+        v = $(part)
+        return v
+    end
+    effects = Base.infer_effects(readpart, ())
+    @test !Compiler.is_consistent(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Base.infer_return_type(readpart, ()) == Int
+    @test Base.infer_exception_type(readpart, ()) == UndefVarError
+    @test_throws UndefVarError readpart()
+end
+# The partition queries may be handed a non-leaf (import) partition, whose restriction is
+# another binding rather than a value or a declared type: the `Core.*_partition` builtins are
+# ordinary functions, and a `Core.BindingPartition` can be spliced into hand-built code. Such
+# an access is resolved by an import walk at the calling world, and inference has no edge to
+# cover that walk, so it answers conservatively -- exactly as for an unresolved global read.
+module ReformGlobalsImport
+    module Inner
+        export gi
+        global gi::Int = 5
+        const ci = identity
+    end
+    using .Inner
+    import .Inner: ci
+end
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsImport, :gi)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    readpart = @eval function ()
+        v = $(part)
+        return v
+    end
+    @test !Compiler.is_leaf_partition(part)
+    @test Compiler.partition_singleton(part) === nothing
+    @test Compiler.partition_rt(part) === Any
+    @test Compiler.partition_rt_widened(part) === Any
+    @test Base.infer_return_type(readpart, ()) === Any
+    @test Base.infer_exception_type(readpart, ()) === UndefVarError
+    @test !Compiler.is_nothrow(Base.infer_effects(readpart, ()))
+    @test readpart() === 5
+end
+# Inference does not walk an imported partition in value position -- it has no edge to
+# cover the world-dependent walk -- so the callee stays dynamic even though the import
+# currently resolves to a constant. It must still run.
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsImport, :ci)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    callpart = @eval function (x)
+        f = $(part)
+        return f(x)
+    end
+    @test !Compiler.is_leaf_partition(part)
+    @test Compiler.partition_singleton(part) === nothing
+    @test callpart(42) === 42
+end
+
+# A read through an import still freezes its leaf, but as the call form carrying the source
+# `GlobalRef`: a bare partition would name the module the binding was imported from in the
+# `UndefVarError`, not the one the source asked for.
+module ReformGlobalsImportName
+    module Inner
+        export gu
+        global gu::Int          # declared, never assigned
+    end
+    using .Inner
+    getgu() = gu
+end
+let code = code_typed(ReformGlobalsImportName.getgu, ())[1][1].code
+    @test !any(x -> isa(x, Core.BindingPartition), code)
+    @test any(code) do x
+        Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition) &&
+            x.args[2] === QuoteNode(GlobalRef(ReformGlobalsImportName, :gu)) &&
+            isa(x.args[3], QuoteNode) && isa(x.args[3].value, Core.BindingPartition)
+    end
+    # the frozen partition is still the leaf, so no import walk happens at run time
+    part = only(x.args[3].value for x in code
+                if Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition))
+    @test Compiler.is_leaf_partition(part)
+    @test Base.partition_owner(part) === convert(Core.Binding, GlobalRef(ReformGlobalsImportName.Inner, :gu))
+    # and the error names the module the source asked for, as the unoptimized read does
+    err = try; ReformGlobalsImportName.getgu(); catch e; e; end
+    @test err isa UndefVarError && err.var === :gu && err.scope === ReformGlobalsImportName
+    err2 = try; getglobal(ReformGlobalsImportName, :gu); catch e; e; end
+    @test err2 isa UndefVarError && err2.var === :gu && err2.scope === ReformGlobalsImportName
+end
+# The same read in operand position: an operand slot cannot hold a call, so the call form is
+# inserted as its own statement and its value used, keeping the partition frozen.
+module ReformGlobalsImportOperand
+    module Inner
+        export go
+        global go::Int          # declared, never assigned
+    end
+    using .Inner
+    useo() = identity(go)
+end
+let code = code_typed(ReformGlobalsImportOperand.useo, ())[1][1].code
+    @test any(code) do x
+        Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition) &&
+            x.args[2] === QuoteNode(GlobalRef(ReformGlobalsImportOperand, :go)) &&
+            isa(x.args[3], QuoteNode) && isa(x.args[3].value, Core.BindingPartition)
+    end
+    err = try; ReformGlobalsImportOperand.useo(); catch e; e; end
+    @test err isa UndefVarError && err.var === :go && err.scope === ReformGlobalsImportOperand
+end
+# An imported *constant* is always defined, so it has no error to misname and keeps the
+# bare-partition form.
+module ReformGlobalsImportConst
+    module Inner
+        export cu
+        const cu = 42
+    end
+    using .Inner
+    getcu() = cu
+end
+@test ReformGlobalsImportConst.getcu() === 42
+
+# An atomic order inference cannot prove constant does not keep an access on the runtime
+# path: it rides along on the reformulated node as an ordinary operand, which the
+# `Core.*_partition` builtin validates exactly as the access it replaces would. Only the
+# inlined access is given up (codegen falls back to a generic builtin call), not the frozen
+# partition or its invalidation edge.
+module ReformGlobalsOrder
+    global g::Int = 0
+    getg(o) = getglobal(ReformGlobalsOrder, :g, o)
+    setg!(v, o) = setglobal!(ReformGlobalsOrder, :g, v, o)
+    swapg!(v, o) = swapglobal!(ReformGlobalsOrder, :g, v, o)
+    replaceg!(c, v, o, fo) = replaceglobal!(ReformGlobalsOrder, :g, c, v, o, fo)
+    onceg!(v, o) = setglobalonce!(ReformGlobalsOrder, :g, v, o)
+    definedg(o) = isdefinedglobal(ReformGlobalsOrder, :g, true, o)
+    # a literal `nothing` operand: an invalid order, not an absent one
+    @eval setgnothing!(v) = setglobal!(ReformGlobalsOrder, :g, v, $(nothing))
+end
+# the sole reformulated `Core.<name>` call in the optimized code of `f(tt...)`
+function only_partition_call(@nospecialize(f), @nospecialize(tt::Tuple), name::Symbol)
+    code = code_typed(f, tt)[1][1].code
+    return only(x for x in code
+                if Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, name))
+end
+is_frozen_partition(@nospecialize x) = isa(x, QuoteNode) && isa(x.value, Core.BindingPartition)
+let M = ReformGlobalsOrder
+    # every access still freezes its partition, with the unproven order as an operand
+    read = only_partition_call(M.getg, (Symbol,), :getglobal_partition)
+    @test is_frozen_partition(read.args[3]) && read.args[4] === Core.Argument(2)
+    store = only_partition_call(M.setg!, (Int,Symbol), :setglobal_partition)
+    @test is_frozen_partition(store.args[2]) && store.args[4] === Core.Argument(3)
+    swap = only_partition_call(M.swapg!, (Int,Symbol), :swapglobal_partition)
+    @test is_frozen_partition(swap.args[2]) && swap.args[4] === Core.Argument(3)
+    repl = only_partition_call(M.replaceg!, (Int,Int,Symbol,Symbol), :replaceglobal_partition)
+    @test is_frozen_partition(repl.args[2]) && repl.args[5] === Core.Argument(4) &&
+        repl.args[6] === Core.Argument(5)
+    once = only_partition_call(M.onceg!, (Int,Symbol), :setglobalonce_partition)
+    @test is_frozen_partition(once.args[2]) && once.args[4] === Core.Argument(3)
+    defined = only_partition_call(M.definedg, (Symbol,), :isdefinedglobal_partition)
+    @test is_frozen_partition(defined.args[2]) && defined.args[3] === Core.Argument(2)
+    # a `nothing` order is carried as an order, not mistaken for an absent argument
+    setnothing = only_partition_call(M.setgnothing!, (Int,), :setglobal_partition)
+    @test is_frozen_partition(setnothing.args[2]) && setnothing.args[4] === QuoteNode(nothing)
+    # and every forwarded order is validated as the access it replaced would validate it
+    @test M.getg(:acquire) === 0
+    @test_throws ConcurrencyViolationError M.getg(:not_atomic)
+    @test_throws TypeError M.getg(1)
+    @test M.setg!(3, :release) === 3
+    @test M.getg(:monotonic) === 3
+    @test_throws ConcurrencyViolationError M.setg!(4, :acquire)
+    @test_throws TypeError M.setg!(4, 1)
+    @test_throws TypeError M.setgnothing!(4)
+    @test M.swapg!(4, :acquire_release) === 3
+    @test M.replaceg!(4, 5, :acquire_release, :monotonic) === (old = 4, success = true)
+    @test !M.onceg!(6, :release)
+    @test M.definedg(:acquire)
+    @test_throws ConcurrencyViolationError M.definedg(:not_atomic)
+    @test M.getg(:acquire) === 5
+end
+
+# `modifyglobal!` reformulates like the other stores, in both the plain call form and the
+# `:invoke_modify` form the inliner gives it: the module and name become the frozen partition,
+# and an `:invoke_modify` keeps the reduce function's code instance so codegen still calls the
+# specialized op. A store that does not resolve names no partition, so it is left alone.
+module ReformGlobalsModify
+    module Inner
+        export mi
+        global mi::Int = 0
+    end
+    using .Inner                # a store to `mi` is an error, so it never resolves
+    global g::Int = 0
+    addg!(v) = modifyglobal!(ReformGlobalsModify, :g, +, v)
+    addmi!(v) = modifyglobal!(ReformGlobalsModify, :mi, +, v)
+    addgop!(op, v) = modifyglobal!(ReformGlobalsModify, :g, op, v)
+end
+# the callee is the `GlobalRef` the reformulation writes, or the builtin itself for a call
+# whose callee inlining already resolved
+is_modify_partition_callee(@nospecialize callee) =
+    callee === GlobalRef(Core, :modifyglobal_partition) || callee === Core.modifyglobal_partition
+is_modify_partition_call(@nospecialize x) =
+    iscall(is_modify_partition_callee, x) ||
+    (Meta.isexpr(x, :invoke_modify) && is_modify_partition_callee(x.args[2]))
+# the sole reformulated modify statement in the optimized code of `f(tt...)`
+only_modify_call(@nospecialize(f), @nospecialize(tt::Tuple)) =
+    only(x for x in code_typed(f, tt)[1][1].code if is_modify_partition_call(x))
+let M = ReformGlobalsModify
+    # a constant reduce function is statically dispatched, so the node keeps its code
+    # instance, and the resolved store names the frozen partition
+    inv = only_modify_call(M.addg!, (Int,))
+    @test Meta.isexpr(inv, :invoke_modify) && isa(inv.args[1], Core.CodeInstance)
+    @test is_frozen_partition(inv.args[3]) && inv.args[5] === Core.Argument(2)
+    # a store that does not resolve is left on the runtime path, code instance and all
+    unrescode = code_typed(M.addmi!, (Int,))[1][1].code
+    unres = only(x for x in unrescode if Meta.isexpr(x, :invoke_modify))
+    @test !any(is_modify_partition_call, unrescode)
+    @test isa(unres.args[1], Core.CodeInstance)
+    # a reduce function that is not statically dispatched has no code instance, so the store
+    # reformulates as a plain call
+    dyn = only_modify_call(M.addgop!, (Any,Int))
+    @test Meta.isexpr(dyn, :call) && is_frozen_partition(dyn.args[2])
+    # and each form runs, enforcing the declared type as `modifyglobal!` does
+    @test Base.infer_return_type(M.addg!, (Int,)) === Pair{Int,Int}
+    @test M.addg!(2) === (0 => 2)
+    # the resolved store records exactly one edge to the binding it froze
+    b = convert(Core.Binding, GlobalRef(M, :g))
+    @test count(==(b), collect(Base.method_instance(M.addg!, (Int,)).cache.edges)) == 1
+    @test M.addgop!(+, 5) === (2 => 7)
+    @test M.addgop!(-, 7) === (7 => 0)
+    @test_throws TypeError M.addgop!((_, _) -> 1.5, 1)
+    @test_throws "cannot assign a value to imported variable" M.addmi!(1)
+    @test M.Inner.mi === 0
+    # the builtin is modeled by `abstract_modifyop!`, like `modifyglobal!`: it takes the
+    # declared type from the frozen partition, and its reduce function is inlined the same
+    # way (so a hand-written call becomes an `:invoke_modify` too)
+    callpart = @eval v -> Core.modifyglobal_partition($(QuoteNode(inv.args[3].value)), +, v)
+    @test Base.infer_return_type(callpart, (Int,)) === Pair{Int,Int}
+    @test Meta.isexpr(only_modify_call(callpart, (Int,)), :invoke_modify)
+    @test callpart(3) === (0 => 3)
+    @test M.g === 3
+end
+
+# There should be exactly one edge to `g`, even though it is referenced twice.
+module ReformGlobalsEdges
+    global g::Int = 0
+    getgg() = g + g
+end
+let f = ReformGlobalsEdges.getgg
+    @test f() === 0
+    ci = Base.method_instance(f, ()).cache
+    b = convert(Core.Binding, GlobalRef(ReformGlobalsEdges, :g))
+    @test count(==(b), collect(ci.edges)) == 1
+end
+
 function tt57873(a::Vector{String}, pref)
     ret = String[]
     for j in a
@@ -7086,7 +7979,7 @@ function tt57873(a::Vector{String}, pref)
     end
     return ret
 end
-let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO)[1]
+let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO, false)[1]
     @test !isempty(code)
     ## If we were to run trim here, we should fail with:
     #    Verifier error #1: unresolved invoke from statement tt57873(::Vector{String}, ::Tuple{String, String})::Vector{String}
@@ -7257,6 +8150,15 @@ end == Type{<:Real}
 @test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},Real},)) do oc
     Compiler.return_type(oc, Tuple{String})
 end == Type{Union{}}
+
+# `return_type_tfunc` should bail out (rather than crash inference) when the queried
+# signature has no function type to model
+@test Base.infer_return_type() do
+    Compiler.return_type(Tuple{Vararg{Any}})
+end == Type
+@test Base.infer_return_type() do
+    Compiler.return_type(Tuple)
+end == Type
 
 @test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
 task_returner() = Task(() -> "hello")

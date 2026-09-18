@@ -218,7 +218,7 @@ version = "1.11.0"
 [[deps.MPFR_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "GMP_jll", "Libdl"]
 uuid = "3a97d323-0669-5f0c-9066-3539efd106a3"
-version = "4.2.2+0"
+version = "4.2.2+1"
 
     [deps.MPFR_jll.syntax]
     julia_version = "1.6.0"
@@ -397,7 +397,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.10.1+0"
+version = "7.14.0+1"
 
     [deps.SuiteSparse_jll.syntax]
     julia_version = "1.13.0"
@@ -492,7 +492,7 @@ version = "1.69.0+0"
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.8.0+0"
+version = "17.8.2+0"
 
     [deps.p7zip_jll.syntax]
     julia_version = "1.6.0"

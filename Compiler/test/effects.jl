@@ -1497,7 +1497,7 @@ let effects = Base.infer_effects(Core.Intrinsics.atomic_pointermodify, Tuple{Var
 end
 
 # JuliaLang/julia#57780
-let effects = Base.infer_effects(Base._unsetindex!, (MemoryRef{String},))
+let effects = Base.infer_effects(Base.unsetindex!, (MemoryRef{String},))
     @test !Compiler.is_effect_free(effects)
 end
 
@@ -1630,4 +1630,44 @@ let effects = Base.infer_effects(Core._task, (Function, Int))
     @test Compiler.is_terminates(effects)
     @test !Compiler.is_notaskstate(effects)
     @test Compiler.is_noub(effects)
+end
+
+# Every `*_partition` builtin the reformulation pass emits must have its effects modeled by
+# `builtin_effects`, so that re-deriving the flags of a reformulated statement is no more
+# pessimistic than the `getglobal`/`setglobal!` it replaced.
+module PartitionEffects
+    const c = 42
+    global g::Int = 1
+end
+let 𝕃 = Compiler.SimpleInferenceLattice.instance,
+    Const = Compiler.Const,
+    part(name) = Base.lookup_binding_partition(Base.get_world_counter(),
+                     convert(Core.Binding, GlobalRef(PartitionEffects, name)))
+    for f in (Core.getglobal_partition, Core.setglobal_partition, Core.swapglobal_partition,
+              Core.replaceglobal_partition, Core.setglobalonce_partition,
+              Core.isdefinedglobal_partition, Core.depwarn_partition)
+        @test f in Compiler._EFFECTS_KNOWN_BUILTINS
+    end
+
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :c)), Const(part(:c)), Const(:monotonic)], Int)
+    @test Compiler.is_effect_free(effects)
+    @test Compiler.is_consistent(effects)
+    @test !Compiler.is_nothrow(effects) # the memory order argument may be invalid
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :g)), Const(part(:g)), Const(:monotonic)], Int)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_consistent(effects)
+    # Only a plain store is `:consistent`; the read-modify-write forms return the old value.
+    for f in (Core.setglobal_partition, Core.swapglobal_partition, Core.replaceglobal_partition,
+              Core.setglobalonce_partition)
+        effects = Compiler.builtin_effects(𝕃, f, Any[Const(part(:g)), Int], Int)
+        @test !Compiler.is_effect_free(effects)
+        @test Compiler.is_consistent(effects) === (f === Core.setglobal_partition)
+    end
+    Base.deprecate(PartitionEffects, :c)
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :c)), Const(part(:c)), Const(:monotonic)], Int)
+    @test !Compiler.is_effect_free(effects)
+    Base.deprecate(PartitionEffects, :c, 0)
 end

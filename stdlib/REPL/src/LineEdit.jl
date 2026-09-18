@@ -330,6 +330,9 @@ options(s::PromptState) =
         REPL.GlobalOptions::Options
     end
 
+semantic_prompt_markers(p::Prompt) =
+    isdefined(p, :repl) && p.repl !== nothing ? REPL.semantic_prompt_markers(p.repl) : nothing
+
 function setmark(s::MIState, guess_region_active::Bool=true)
     refresh = set_action!(s, :setmark)
     s.current_action === :setmark && s.key_repeats > 0 && activate_region(s, :mark)
@@ -1904,6 +1907,12 @@ default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
+    markers = semantic_prompt_markers(p)
+    # Prompt rendering runs on every line refresh. Re-emitting these markers keeps
+    # the redrawn prompt bracketed and matches established shell integrations.
+    if markers !== nothing
+        write(terminal, markers.prompt_start)
+    end
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
     write(terminal, prefix)
@@ -1911,6 +1920,9 @@ function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     width = write_prompt(terminal, p.prompt, color)
     color && write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
+    if markers !== nothing
+        write(terminal, markers.prompt_end)
+    end
     return width
 end
 
@@ -2848,9 +2860,31 @@ AnyDict(
         catch
         end
         cancel_beep(s)
-        move_input_end(s)
-        refresh_line(s)
-        print(terminal(s), "^C\n\n")
+        if buffer(s).size == 0 && !Base.generating_output()
+            # ^C at an empty prompt: nothing to clear, so the press reaches
+            # for still-running work from earlier evaluations. Two presses
+            # in a row sweep it (with an announce in between) - which also
+            # makes hammering ^C at spewing background output do what the
+            # user means, even though the prompt already returned. The arm
+            # survives exactly one keystroke (`last_action`), so any other
+            # key stands it down.
+            if s.last_action === :cancel_session_arm
+                set_action!(s, :cancel_session)
+                print(terminal(s), "^C\n")
+                if Base.cancel_session_work!()
+                    print(terminal(s), "Cancelled all in-flight work.\n\n")
+                else
+                    print(terminal(s), "\n")
+                end
+            else
+                set_action!(s, :cancel_session_arm)
+                print(terminal(s), "^C  (press ^C again to cancel all in-flight work)\n\n")
+            end
+        else
+            move_input_end(s)
+            refresh_line(s)
+            print(terminal(s), "^C\n\n")
+        end
         transition(s, :reset)
         refresh_line(s)
     end,
@@ -2929,6 +2963,9 @@ function history_search(mistate::MIState)
         get(mistate.interface.modes[1].hist.mode_mapping,
             result.mode,
             mistate.current_mode)
+    end
+    if !haskey(mistate.mode_state, mimode)
+        mistate.mode_state[mimode] = init_state(term, mimode)
     end
     pstate = mistate.mode_state[mimode]
     raw!(term, true)
@@ -3111,6 +3148,11 @@ function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=ini
                 move_input_end(s)
                 refresh_line(s)
                 print(terminal(s), "^C\n\n")
+                current_mode = mode(s)
+                markers = current_mode isa Prompt ? semantic_prompt_markers(current_mode) : nothing
+                if markers !== nothing
+                    write(terminal(s), markers.command_finish)
+                end
                 transition(s, :reset)
                 refresh_line(s)
             catch
@@ -3209,7 +3251,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
             notify(s.prompt_ready_event)
         end
         old_state = mode(s)
-        # spawn this because the main repl task is sticky (due to use of @async and _wait2)
+        # spawn this because the main repl task is sticky (due to use of @async and schedule_on_notify!)
         # and we want to not block typing when the repl task thread is busy
         t2 = Threads.@spawn :interactive while true
             eof(term) || peek(term) # wait before locking but don't consume

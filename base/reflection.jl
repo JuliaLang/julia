@@ -868,7 +868,7 @@ Return the possible computation effects of the function call specified by `f` an
 julia> f1(x) = x * 2;
 
 julia> Base.infer_effects(f1, (Int,))
-(+c,+e,+n,+t,+s,+m,+i)
+(+c,+e,+re,+n,+t,+s,+m,+u,+o,+r)
 ```
 
 This function will return an `Effects` object with information about the computational
@@ -878,7 +878,7 @@ effects of the function `f1` when called with an `Int` argument.
 julia> f2(x::Int) = x * 2;
 
 julia> Base.infer_effects(f2, (Integer,))
-(+c,+e,!n,+t,+s,+m,+i)
+(+c,+e,+re,!n,+t,+s,+m,+u,+o,+r)
 ```
 
 This case is pretty much the same as with `f1`, but there's a key difference to note. For

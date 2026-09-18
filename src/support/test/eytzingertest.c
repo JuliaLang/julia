@@ -1,8 +1,10 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Regression tests for the Eytzinger address-range tree (see eytzinger.h).
-// Covers the half-open [start, end) semantics and abutting ranges that were
-// mishandled in https://github.com/JuliaLang/julia/issues/61385.
+// Covers the object-pointer (start, end] containment convention (a blob's
+// base is a tag word, never an object; a trailing zero-size singleton's value
+// pointer equals the blob's end — issue #62521) and the abutting ranges that
+// were mishandled in issue #61385.
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,7 +18,7 @@ static void *find(eyt_tree_t *t, uintptr_t a) { return eyt_tree_find_data(t, a);
 typedef struct { uintptr_t s, e; void *d; } rng_t;
 static void *ref_find(rng_t *ranges, int nr, uintptr_t a) {
     for (int i = 0; i < nr; i++)
-        if (a >= ranges[i].s && a < ranges[i].e)
+        if (a > ranges[i].s && a <= ranges[i].e)
             return ranges[i].d;
     return EYT_NOTFOUND;
 }
@@ -36,14 +38,14 @@ int main(void)
         eyt_tree_t t; eyt_tree_init(&t);
         eyt_tree_add_range(&t, 100, 200, (void*)0x10);
         assert(!in_range(&t, 96));   // before
-        assert(in_range(&t, 100));   // start (inclusive)
+        assert(!in_range(&t, 100));  // start (exclusive: blob base is a tag word)
         assert(in_range(&t, 104));
         assert(in_range(&t, 196));   // last element
-        assert(!in_range(&t, 200));  // end (exclusive)
+        assert(in_range(&t, 200));   // end (inclusive: trailing zero-size singleton)
         assert(!in_range(&t, 204));  // after
-        assert(find(&t, 100) == (void*)0x10);
+        assert(find(&t, 100) == EYT_NOTFOUND);
         assert(find(&t, 196) == (void*)0x10);
-        assert(find(&t, 200) == EYT_NOTFOUND);
+        assert(find(&t, 200) == (void*)0x10);
     }
 
     // Two disjoint ranges [100, 200) and [300, 400).
@@ -51,26 +53,30 @@ int main(void)
         eyt_tree_t t; eyt_tree_init(&t);
         eyt_tree_add_range(&t, 100, 200, (void*)0x10);
         eyt_tree_add_range(&t, 300, 400, (void*)0x20);
-        assert(in_range(&t, 100) && find(&t, 100) == (void*)0x10);
-        assert(!in_range(&t, 200));
+        assert(!in_range(&t, 100));
+        assert(in_range(&t, 104) && find(&t, 104) == (void*)0x10);
+        assert(in_range(&t, 200) && find(&t, 200) == (void*)0x10);
         assert(!in_range(&t, 252));  // gap
-        assert(in_range(&t, 300) && find(&t, 300) == (void*)0x20);
+        assert(!in_range(&t, 300));
+        assert(in_range(&t, 304) && find(&t, 304) == (void*)0x20);
         assert(in_range(&t, 396));
-        assert(!in_range(&t, 400));
+        assert(in_range(&t, 400) && find(&t, 400) == (void*)0x20);
+        assert(!in_range(&t, 404));
     }
 
-    // Abutting ranges [100, 200) and [200, 300): the shared boundary belongs
-    // to the second range.
+    // Abutting ranges (100, 200] and (200, 300]: the shared boundary belongs
+    // to the *first* range (a trailing zero-size singleton of blob 1, never an
+    // object of blob 2, whose base is its first object's tag word).
     {
         eyt_tree_t t; eyt_tree_init(&t);
         eyt_tree_add_range(&t, 100, 200, (void*)0x10);
         eyt_tree_add_range(&t, 200, 300, (void*)0x20);
-        assert(in_range(&t, 100) && find(&t, 100) == (void*)0x10);
+        assert(!in_range(&t, 100));
         assert(in_range(&t, 196) && find(&t, 196) == (void*)0x10);
-        assert(in_range(&t, 200) && find(&t, 200) == (void*)0x20);
-        for (uintptr_t a = 204; a < 300; a += 4)
+        assert(in_range(&t, 200) && find(&t, 200) == (void*)0x10);
+        for (uintptr_t a = 204; a <= 300; a += 4)
             assert(in_range(&t, a) && find(&t, a) == (void*)0x20);
-        assert(!in_range(&t, 300));
+        assert(!in_range(&t, 304));
     }
 
     // Ranges added out of address order are still handled correctly.
@@ -79,11 +85,12 @@ int main(void)
         eyt_tree_add_range(&t, 300, 400, (void*)0x20);
         eyt_tree_add_range(&t, 100, 200, (void*)0x10);
         eyt_tree_add_range(&t, 200, 300, (void*)0x30);  // abuts both neighbors
-        assert(find(&t, 100) == (void*)0x10);
-        assert(find(&t, 200) == (void*)0x30);
-        assert(find(&t, 300) == (void*)0x20);
-        assert(!in_range(&t, 400));
-        assert(!in_range(&t, 96));
+        assert(find(&t, 104) == (void*)0x10);
+        assert(find(&t, 200) == (void*)0x10);
+        assert(find(&t, 300) == (void*)0x30);
+        assert(find(&t, 400) == (void*)0x20);
+        assert(!in_range(&t, 404));
+        assert(!in_range(&t, 100));
     }
 
     // Deterministic fuzz: random non-overlapping ranges (some abutting), added

@@ -376,6 +376,8 @@ static Value *emit_plt(
 
 class AbiLayout {
 public:
+    // True while classifying variadic arguments.
+    bool varargs = false;
     virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) JL_CANSAFEPOINT = 0;
     virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) JL_CANSAFEPOINT = 0;
@@ -398,6 +400,21 @@ static bool is_native_simd_type(jl_datatype_t *dt) JL_CANSAFEPOINT {
             // Not homogeneous
             return false;
     // Type is homogeneous.  Check if it maps to LLVM vector.
+    return jl_special_vector_alignment(n, ft0) != 0;
+}
+
+// Match the `VecElement` tuples lowered as LLVM vectors.
+static bool is_vector_type(jl_datatype_t *dt) JL_CANSAFEPOINT
+{
+    if (!jl_is_tuple_type(dt))
+        return false;
+    uint32_t n = jl_datatype_nfields(dt);
+    if (n == 0)
+        return false;
+    jl_value_t *ft0 = jl_field_type(dt, 0);
+    for (uint32_t i = 1; i < n; ++i)
+        if (jl_field_type(dt, i) != ft0)
+            return false;
     return jl_special_vector_alignment(n, ft0) != 0;
 }
 
@@ -539,7 +556,7 @@ static jl_cgval_t drop_inline_roots(const jl_cgval_t &x)
         // a ghost-like union with all of its data in the roots: there is no
         // inline data to unbox, so this is unreachable (emit_unbox will trap)
         return jl_cgval_t();
-    return mark_julia_slot(x.V, x.typ, x.TIndex, x.tbaa);
+    return mark_julia_slot(x.V, x.typ, x.TIndex, x.aliasinfo);
 }
 
 // bitcast whatever Ptr kind x might be (even if it is part of a union) into Ptr{Cvoid},
@@ -547,6 +564,8 @@ static jl_cgval_t drop_inline_roots(const jl_cgval_t &x)
 // pointer, so that the conversion is guaranteed to be valid on this runtime branch
 static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x, const Twine &msg) JL_CANSAFEPOINT
 {
+    if (x.typ == jl_bottom_type)
+        return x;
     if (x.typ == (jl_value_t*)jl_voidpointer_type)
         return x;
     if (!jl_is_cpointer_type(x.typ))
@@ -622,7 +641,7 @@ static Value *julia_to_native(
     Align align(julia_alignment(jlto));
     Value *slot = emit_static_alloca(ctx, to, align);
     setName(ctx.emission_context, slot, "native_convert_buffer");
-    emit_unbox_store(ctx, jvinfo, slot, ctx.tbaa().tbaa_stack, align, align);
+    emit_unbox_store(ctx, jvinfo, slot, ctx.alias().stack, align, align);
     return slot;
 }
 
@@ -739,6 +758,35 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
 }
 
 // --- code generator for llvmcall ---
+
+// Intrinsics that belong to a different target cannot be selected by the back-end for
+// the current one, which LLVM reports as a fatal error (`Cannot select: intrinsic ...`),
+// aborting the process. Reject them during codegen instead, so that the failure is an
+// ordinary Julia error. This also keeps ahead-of-time compilation from aborting on
+// methods that are only valid on another target (e.g. GPU kernels), which `--output-o`
+// compiles whether or not they are ever called.
+//
+// The check is against the triple of the module being emitted, so external users of
+// codegen that target another architecture (such as GPUCompiler.jl, which sets the
+// module's triple before emitting into it) can still use that target's intrinsics.
+static bool is_foreign_target_intrinsic(jl_codectx_t &ctx, Intrinsic::ID ID, StringRef name, std::string &msg)
+{
+    if (ID == Intrinsic::not_intrinsic || !Intrinsic::isTargetIntrinsic(ID))
+        return false;
+    const Triple &TT = ctx.emission_context.TargetTriple;
+    StringRef host = Triple::getArchTypePrefix(TT.getArch());
+    if (host.empty())
+        return false;
+    // intrinsic names are `llvm.<target prefix>.<name>`
+    StringRef target = name;
+    target.consume_front("llvm.");
+    target = target.split('.').first;
+    if (target == host)
+        return false;
+    msg = "llvmcall: intrinsic " + name.str() + " is not available on the " + host.str() +
+          " target (it belongs to the " + target.str() + " target)";
+    return true;
+}
 
 static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
@@ -989,6 +1037,15 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             Mod = std::move(ModuleOrErr.get());
         }
 
+        for (Function &F : *Mod) {
+            std::string msg;
+            if (F.isIntrinsic() && is_foreign_target_intrinsic(ctx, F.getIntrinsicID(), F.getName(), msg)) {
+                emit_error(ctx, msg);
+                JL_GC_POP();
+                return jl_cgval_t();
+            }
+        }
+
         f = Mod->getFunction(jl_string_data(entry));
         if (!f) {
             emit_error(ctx, "Module IR does not contain specified entry function");
@@ -1134,10 +1191,10 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     unsigned nb = DL.getTypeStoreSize(result->getType());
     unsigned align = sizeof(void*); // Allocations are at least pointer aligned
-    MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
+    jl_aliasinfo_t ai = jl_is_mutable(rt) ? ctx.alias().mutab : ctx.alias().immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
     setName(ctx.emission_context, strct, "ccall_result_box");
-    init_bits_value(ctx, strct, result, tbaa);
+    init_bits_value(ctx, strct, result, ai);
     return strct;
 }
 
@@ -1199,7 +1256,9 @@ public:
             const native_sym_arg_t &symarg,
             jl_cgval_t *argv,
             SmallVectorImpl<Value*> &gc_uses,
-            bool static_rt) const JL_CANSAFEPOINT;
+            bool static_rt,
+            const jl_cgval_t *cancel_guard, // NULL, or (fn, state)
+            bool reset_safe_call) const JL_CANSAFEPOINT;
 
 private:
 std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
@@ -1267,11 +1326,16 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                if (jl_datatype_size(bt) < 4) {
+                size_t sz = jl_datatype_size(bt);
+                if (sz < 4) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
                         ab.addAttribute(Attribute::ZExt);
+                }
+                else if (sz == 4 && ctx->TargetTriple.isRISCV64()) {
+                    // RISC-V sign-extends all 32-bit arguments to XLEN.
+                    ab.addAttribute(Attribute::SExt);
                 }
             }
         }
@@ -1284,6 +1348,8 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
 
         // Whether or not LLVM wants us to emit a pointer to the data
         assert(t && "LLVM type should not be null");
+        if (nreqargs > 0 && i == nreqargs)
+            abi->varargs = true;
         bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, LLVMCtx, t);
 
         if (jl_is_cpointer_type(tti)) {
@@ -1305,10 +1371,16 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
             if (!llvmcall && cc == CallingConv::C) {
                 if (pat->isIntegerTy() && pat->getPrimitiveSizeInBits() < sizeof(int) * 8)
                     pat = getInt32Ty(lrt->getContext());
-                if (pat->isFloatingPointTy() && pat->getPrimitiveSizeInBits() < sizeof(double) * 8)
+                // Default argument promotion does not widen `_Float16` or `__bf16`.
+                if (pat->isFloatTy())
                     pat = getDoubleTy(lrt->getContext());
                 ab.removeAttribute(Attribute::SExt);
                 ab.removeAttribute(Attribute::ZExt);
+                if (ctx->TargetTriple.isRISCV64() && pat->isIntegerTy() &&
+                        pat->getPrimitiveSizeInBits() <= 32) {
+                    // RISC-V applies the same XLEN extension to variadic integers.
+                    ab.addAttribute(Attribute::SExt);
+                }
             }
         }
 
@@ -1324,6 +1396,18 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
     // If return value is boxed it must be non-null.
     if (retboxed)
         RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::NonNull);
+    else if (ctx->TargetTriple.isRISCV64() && rt != jl_bottom_type &&
+             jl_is_primitivetype(rt) && lrt->isIntegerTy()) {
+        // RISC-V returns integers as if passed as the first named argument.
+        size_t sz = jl_datatype_size(rt);
+        if (sz < 4) {
+            bool issigned = jl_signed_type && jl_subtype(rt, (jl_value_t*)jl_signed_type);
+            RetAttrs = RetAttrs.addAttribute(LLVMCtx, issigned ? Attribute::SExt : Attribute::ZExt);
+        }
+        else if (sz == 4) {
+            RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::SExt);
+        }
+    }
     if (rt == jl_bottom_type)
         FnAttrs = FnAttrs.addAttribute(LLVMCtx, Attribute::NoReturn);
 
@@ -1444,7 +1528,11 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
 
 const int fc_args_start = 6;
 
-// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, gc_safe, [cconv | (cconv, effects)], args..., roots...)
+// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq,
+//      [cconv | (cconv, effects, gc_safe[, cancel_guard])], args..., roots...)
+// With cancel_guard set, the first two args are (handler_fn::Ptr{Cvoid},
+// state::Ptr{Cvoid}) - the cancellation guard published around the call -
+// and are not passed to the C function (see `@ccall cancel_handler=`).
 static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
     JL_NARGSV(ccall, 5);
@@ -1457,12 +1545,18 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     jl_value_t *jlcc = jl_quotenode_value(args[5]);
     jl_sym_t *cc_sym = NULL;
     bool gc_safe = false;
+    bool cancel_guard = false;
+    bool reset_safe_call = false;
     if (jl_is_symbol(jlcc)) {
         cc_sym = (jl_sym_t*)jlcc;
     }
     else if (jl_is_tuple(jlcc)) {
         cc_sym = (jl_sym_t*)jl_get_nth_field_noalloc(jlcc, 0);
         gc_safe = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 2));
+        if (jl_nfields(jlcc) > 3)
+            cancel_guard = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 3));
+        if (jl_nfields(jlcc) > 4)
+            reset_safe_call = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 4));
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
@@ -1518,6 +1612,31 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
         gc_uses.append(get_gc_roots_for(ctx, arg_root));
+    }
+
+    // Peel the cancellation-guard operands (handler_fn, state) prepended
+    // by `@ccall cancel_handler=(fn, state)`: they parameterize the guard
+    // context published around the call and are not passed to the C
+    // function.
+    SmallVector<jl_cgval_t, 2> cancel_guard_args;
+    if (cancel_guard) {
+        if (nccallargs < 2) {
+            emit_error(ctx, "ccall: malformed cancellation handler annotation");
+            JL_GC_POP();
+            return jl_cgval_t();
+        }
+        cancel_guard_args.append(argv.begin(), argv.begin() + 2);
+        argv.erase(argv.begin(), argv.begin() + 2);
+        nccallargs -= 2;
+        if (nreqargs > 0)
+            nreqargs -= 2;
+        jl_svec_t *at_peeled = jl_alloc_svec(nccallargs);
+        JL_GC_PUSH1(&at_peeled);
+        for (size_t i = 0; i < nccallargs; i++)
+            jl_svecset(at_peeled, i, jl_svecref(at, i + 2));
+        jl_temporary_root(ctx, (jl_value_t*)at_peeled);
+        JL_GC_POP();
+        at = (jl_value_t*)at_peeled;
     }
 
     jl_unionall_t *unionall = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
@@ -1696,7 +1815,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         setName(ctx.emission_context, ptid, "thread_id_ptr");
         LoadInst *tid = ctx.builder.CreateAlignedLoad(getInt16Ty(ctx.builder.getContext()), ptid, Align(sizeof(int16_t)));
         setName(ctx.emission_context, tid, "thread_id");
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        jl_aliasinfo_t ai = ctx.alias().gcframe;
         ai.decorateInst(tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
     }
@@ -1711,7 +1830,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
         LoadInst *rng_value = ctx.builder.CreateAlignedLoad(getInt64Ty(ctx.builder.getContext()), rng_ptr, Align(sizeof(void*)));
         setName(ctx.emission_context, rng_value, "rngseed");
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        jl_aliasinfo_t ai = ctx.alias().gcframe;
         ai.decorateInst(rng_value);
         return mark_or_box_ccall_result(ctx, rng_value, retboxed, rt, unionall, static_rt);
     }
@@ -1726,7 +1845,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
         Value *val64 = emit_unbox(ctx, getInt64Ty(ctx.builder.getContext()), drop_inline_roots(argv[0]));
         auto store = ctx.builder.CreateAlignedStore(val64, rng_ptr, Align(sizeof(void*)));
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        jl_aliasinfo_t ai = ctx.alias().gcframe;
         ai.decorateInst(store);
         return ghostValue(ctx, jl_nothing_type);
     }
@@ -1743,22 +1862,16 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == ctx.types().T_size);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
 
         // jl_task_t *ct = jl_current_task;
         // if (ct->ptls->in_pure_callback)
         //     return ~(size_t)0;
         // return jl_atomic_load_acquire(&jl_world_counter);
-        Type *T_int16 = getInt16Ty(ctx.builder.getContext());
-        Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_tls_states_t, in_pure_callback) / sizeof(int16_t));
-        Value *field_ptr = ctx.builder.CreateInBoundsGEP(T_int16, get_current_ptls(ctx), offset);
-        Instruction *in_pure_callback = ai.decorateInst(ctx.builder.CreateAlignedLoad(T_int16,
-            field_ptr, Align(sizeof(int16_t)), "in_pure_callback"));
-        Value *cond = ctx.builder.CreateICmpEQ(in_pure_callback, ConstantInt::get(T_int16, 0));
+        LoadInst *in_pure_callback = emit_in_pure_callback_load(ctx);
+        Value *cond = ctx.builder.CreateICmpEQ(in_pure_callback,
+            ConstantInt::get(in_pure_callback->getType(), 0));
 
-        Value *world_counter = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
-        cast<LoadInst>(world_counter)->setOrdering(AtomicOrdering::Acquire);
+        Value *world_counter = emit_world_counter_load(ctx);
         Value *ret = ctx.builder.CreateSelect(cond, world_counter, ConstantInt::get(ctx.types().T_size, ~(size_t)0));
         return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
     }
@@ -1958,7 +2071,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             setName(ctx.emission_context, ph2, "object_id_ptr");
             LoadInst *hashval = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ph2, ctx.types().alignof_ptr);
             setName(ctx.emission_context, hashval, "object_id");
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+            jl_aliasinfo_t ai = ctx.alias().constant;
             ai.decorateInst(hashval);
             return mark_or_box_ccall_result(ctx, hashval, retboxed, rt, unionall, static_rt);
         }
@@ -1985,7 +2098,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             symarg,
             argv.data(),
             gc_uses,
-            static_rt);
+            static_rt,
+            cancel_guard ? cancel_guard_args.data() : NULL,
+            reset_safe_call);
     JL_GC_POP();
     return retval;
 }
@@ -1997,7 +2112,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         const native_sym_arg_t &symarg,
         jl_cgval_t *argv,
         SmallVectorImpl<Value*> &gc_uses,
-        bool static_rt) const
+        bool static_rt,
+        const jl_cgval_t *cancel_guard,
+        bool reset_safe_call) const
 {
     ++EmittedCCalls;
     if (!err_msg.empty()) {
@@ -2101,9 +2218,16 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = f_name.consume_front("extern ");
             llvmf = NULL;
             if (f_extern) {
-                llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
-                if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
-                    llvmf = NULL;
+                // An "extern" name is never allowed to be an intrinsic. Check that
+                // before creating the declaration: `getOrInsertFunction` on an
+                // overloaded intrinsic's base name would leave an ill-formed
+                // (unmangled) intrinsic declaration behind in the module even
+                // though we go on to reject the call.
+                if (!f_name.starts_with("llvm.")) {
+                    llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
+                    if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
+                        llvmf = NULL;
+                }
             }
             else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
@@ -2112,10 +2236,19 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 #else
                 auto ID = Function::lookupIntrinsicID(f_name);
 #endif
+                std::string foreign_msg;
+                if (is_foreign_target_intrinsic(ctx, ID, f_name, foreign_msg)) {
+                    emit_error(ctx, foreign_msg);
+                    return jl_cgval_t();
+                }
                 if (ID != Intrinsic::not_intrinsic) {
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
                     SmallVector<Type*, 4> overloadTys;
+#if JL_LLVM_VERSION >= 230000
+                    if (Intrinsic::isSignatureValid(ID, functype, overloadTys)) {
+                        {
+#else
                     SmallVector<Intrinsic::IITDescriptor, 8> Table;
                     getIntrinsicInfoTableEntries(ID, Table);
                     ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
@@ -2123,6 +2256,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     if (res == Intrinsic::MatchIntrinsicTypes_Match) {
                         bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
                         if (matchvararg) {
+#endif
 #if JL_LLVM_VERSION >= 200000
                             Function *intrinsic = Intrinsic::getOrInsertDeclaration(jl_Module, ID, overloadTys);
 #else
@@ -2167,6 +2301,67 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             llvmf = emit_plt(ctx, functype, attributes, cc, symarg);
     }
 
+    // Cancellation guard (`@ccall cancel_handler=(fn, state)`): fill a
+    // jl_cancel_handler_ctx_t and publish it in task->cancel_handler_ctx
+    // around the call, so that a cancellation of the governing token
+    // delivered while the call runs invokes fn(state, sev) on this thread
+    // (see the usr2_handler request-5 dispatch in signals-unix.c), instead
+    // of waiting for the next cancellation point. The handler slot is
+    // separate from (and may be active at the same time as) a compiled
+    // reset region's task->reset_ctx, and takes delivery priority while
+    // published.
+    Value *guard_ctx_ptr = NULL;
+    Value *guard_null = NULL;
+    MDNode *reset_safe_md = NULL;
+    if (cancel_guard) {
+        Type *T_size = ctx.types().T_size;
+        // The guard stores are bookkeeping of the cancellation machinery
+        // itself: mark them reset_safe so the cancellation-lowering pass
+        // does not treat them as points that tear down an enclosing reset
+        // region (they may sit between a cancellation point and a
+        // reset-safe foreign call the region is meant to span).
+        reset_safe_md = MDNode::get(ctx.builder.getContext(), {});
+        // No lifetime markers: the buffer is observed asynchronously (by
+        // the signal-delivery path) while published, not only at its
+        // direct uses.
+        AllocaInst *guard_buf = emit_static_alloca(ctx, ArrayType::get(T_size, 2),
+                                                   Align(alignof(jl_cancel_handler_ctx_t)),
+                                                   /*mark_lifetime*/false);
+        setName(ctx.emission_context, guard_buf, "cancel_guard");
+        auto unbox_ptr_arg = [&] (jl_cgval_t v, const char *msg) JL_CANSAFEPOINT {
+            if (!jl_subtype(v.typ, (jl_value_t*)jl_voidpointer_type)) {
+                emit_typecheck(ctx, v, (jl_value_t*)jl_voidpointer_type, msg);
+                v = update_julia_type(ctx, v, (jl_value_t*)jl_voidpointer_type);
+            }
+            return emit_unbox(ctx, T_size, v);
+        };
+        Value *fnv = unbox_ptr_arg(cancel_guard[0], "ccall cancellation handler");
+        Value *statev = unbox_ptr_arg(cancel_guard[1], "ccall cancellation handler state");
+        // The jl_cancel_handler_ctx_t layout: {fn, state}.
+        auto store_slot = [&] (Value *v, size_t slot) {
+            Value *p = slot == 0 ? (Value*)guard_buf :
+                emit_ptrgep(ctx, guard_buf, slot * sizeof(void*));
+            StoreInst *st = ctx.builder.CreateAlignedStore(v, p, Align(sizeof(void*)));
+            st->setOrdering(AtomicOrdering::Monotonic);
+            st->setMetadata("julia.reset_safe", reset_safe_md);
+        };
+        store_slot(fnv, 0);
+        store_slot(statev, 1);
+        // Publish (release: the guard contents must be visible before the
+        // pointer). No cancellation point is implied here: delivery is
+        // gated on the task's bound token source, which is whatever the
+        // caller's most recent cancellation point bound, and a cancellation
+        // already pending when the call starts is the caller's to observe
+        // (a pre-call check, or a post-call re-check after the handler
+        // aborts the operation).
+        Value *task = get_current_task(ctx);
+        guard_ctx_ptr = emit_ptrgep(ctx, task, offsetof(jl_task_t, cancel_handler_ctx), "cancel_handler_ctx_ptr");
+        StoreInst *pub = ctx.builder.CreateAlignedStore(guard_buf, guard_ctx_ptr, ctx.types().alignof_ptr);
+        pub->setOrdering(AtomicOrdering::Release);
+        pub->setMetadata("julia.reset_safe", reset_safe_md);
+        guard_null = ConstantPointerNull::get(cast<PointerType>(guard_buf->getType()));
+    }
+
     // Potentially we could add gc_uses to `gc-transition`, instead of emitting them separately as jl_roots
     SmallVector<OperandBundleDef, 2> bundles;
     if (!gc_uses.empty())
@@ -2178,6 +2373,20 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             argvals,
             bundles);
     ((CallInst*)ret)->setAttributes(attributes);
+
+    if (reset_safe_call) {
+        // A reset_safe annotation is just propagated to the LLVM pass
+        ret->setMetadata("julia.reset_safe", MDNode::get(ctx.builder.getContext(), {}));
+    }
+
+    if (cancel_guard) {
+        // Unpublish the handler slot. N.B.: The cancellation LLVM pass does not know or care about the
+        // handler at all (although it must know that this store doesn't invalidate the
+        // reset region).
+        StoreInst *unpub = ctx.builder.CreateAlignedStore(guard_null, guard_ctx_ptr, ctx.types().alignof_ptr);
+        unpub->setOrdering(AtomicOrdering::Release);
+        unpub->setMetadata("julia.reset_safe", reset_safe_md);
+    }
 
     if (cc != CallingConv::C)
         ((CallInst*)ret)->setCallingConv(cc);
@@ -2207,10 +2416,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (!jlretboxed) {
             // something alloca'd above is SSA
             if (static_rt)
-                return mark_julia_slot(result, rt, NULL, ctx.tbaa().tbaa_stack);
+                return mark_julia_slot(result, rt, NULL, ctx.alias().stack);
             ++SRetCCalls;
-            result = ctx.builder.CreateLoad(sretty, result);
+            result = ctx.builder.CreateLoad(zext_struct_type(sretty), result);
             setName(ctx.emission_context, result, "returned");
+            result = trunc_struct_helper(ctx, result, sretty);
         }
     }
     else {
@@ -2226,7 +2436,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             if (static_rt) {
                 Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt, true);
                 setName(ctx.emission_context, strct, "ccall_ret_box");
-                MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
+                jl_aliasinfo_t ai = jl_is_mutable(rt) ? ctx.alias().mutab : ctx.alias().immut;
                 Align boxalign(julia_alignment(rt));
                 // copy the data from the return value to the new struct
                 const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
@@ -2238,11 +2448,10 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     auto slot = emit_static_alloca(ctx, resultTy, boxalign);
                     setName(ctx.emission_context, slot, "type_pun_slot");
                     ctx.builder.CreateAlignedStore(result, slot, boxalign);
-                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
                     emit_memcpy(ctx, strct, ai, slot, ai, rtsz, boxalign, boxalign);
                 }
                 else {
-                    init_bits_value(ctx, strct, result, tbaa, boxalign);
+                    init_bits_value(ctx, strct, result, ai, boxalign);
                 }
                 return mark_julia_type(ctx, strct, true, rt);
             }

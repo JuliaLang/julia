@@ -10,6 +10,7 @@ use libc::c_char;
 use log::*;
 use mmtk::memory_manager;
 use mmtk::scheduler::GCWorker;
+use mmtk::util::alloc::AllocationOptions;
 use mmtk::util::api_util::NullableObjectReference;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference, OpaquePointer};
@@ -24,6 +25,7 @@ pub extern "C" fn mmtk_gc_init(
     min_heap_size: usize,
     max_heap_size: usize,
     n_gcthreads: usize,
+    n_concurrent_gcthreads: usize,
     header_size: usize,
     buffer_tag: usize,
 ) {
@@ -31,6 +33,9 @@ pub extern "C" fn mmtk_gc_init(
         crate::JULIA_HEADER_SIZE = header_size;
         crate::JULIA_BUFF_TAG = buffer_tag;
     };
+
+    // We don't need the env var, as we will overwrite the plan with the defined feature.
+    std::env::remove_var("MMTK_PLAN");
 
     {
         let mut builder = BUILDER.lock().unwrap();
@@ -45,6 +50,8 @@ pub extern "C" fn mmtk_gc_init(
             Some(PlanSelector::Immix)
         } else if cfg!(feature = "stickyimmix") {
             Some(PlanSelector::StickyImmix)
+        } else if cfg!(feature = "concurrentimmix") {
+            Some(PlanSelector::ConcurrentImmix)
         } else {
             None
         };
@@ -97,6 +104,16 @@ pub extern "C" fn mmtk_gc_init(
         if n_gcthreads > 0 {
             let success = builder.options.threads.set(n_gcthreads);
             assert!(success, "Failed to set GC threads to {}", n_gcthreads);
+        }
+
+        // Set concurrent GC threads
+        if n_concurrent_gcthreads > 0 {
+            let success = builder.options.concurrent_threads.set(n_concurrent_gcthreads);
+            assert!(
+                success,
+                "Failed to set concurrent GC threads to {}",
+                n_concurrent_gcthreads
+            );
         }
     }
 
@@ -177,6 +194,30 @@ pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<JuliaVM>) {
 }
 
 #[no_mangle]
+pub extern "C" fn mmtk_notify_task_resume(
+    mutator: *mut Mutator<JuliaVM>,
+    task: *const crate::julia_types::_jl_task_t,
+) {
+    #[cfg(feature = "concurrentimmix")]
+    {
+        if !crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst)
+            || task.is_null()
+            || mutator.is_null()
+        {
+            return;
+        }
+
+        crate::scanning::GC_STACK_SNAPSHOTS.resume_barrier_scan_task(task);
+    }
+
+    #[cfg(not(feature = "concurrentimmix"))]
+    {
+        let _ = (mutator, task);
+        panic!("mmtk_notify_task_resume should not be called for non-concurrent plans");
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_alloc(
     mutator: *mut Mutator<JuliaVM>,
     size: usize,
@@ -193,6 +234,37 @@ pub extern "C" fn mmtk_alloc(
         size
     );
     memory_manager::alloc::<JuliaVM>(unsafe { &mut *mutator }, size, align, offset, semantics)
+}
+
+/// Like [`mmtk_alloc`], but allows the caller to change the default allocation behavior.
+///
+/// This is used for allocation sites that cannot block for a GC, such as Julia's permanent
+/// (immortal) allocation, which is annotated `JL_NOTSAFEPOINT`.
+#[no_mangle]
+pub extern "C" fn mmtk_alloc_with_options(
+    mutator: *mut Mutator<JuliaVM>,
+    size: usize,
+    align: usize,
+    offset: usize,
+    semantics: AllocationSemantics,
+    options: AllocationOptions,
+) -> Address {
+    debug_assert!(
+        mmtk::util::conversions::raw_is_aligned(
+            size,
+            <JuliaVM as mmtk::vm::VMBinding>::MIN_ALIGNMENT
+        ),
+        "Alloc size {} is not aligned to min alignment",
+        size
+    );
+    memory_manager::alloc_with_options::<JuliaVM>(
+        unsafe { &mut *mutator },
+        size,
+        align,
+        offset,
+        semantics,
+        options,
+    )
 }
 
 #[no_mangle]
@@ -288,7 +360,7 @@ pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, coll
     // See jl_gc_collection_t
     match collection {
         // auto
-        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls),
+        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls, false),
         // full
         1 => SINGLETON.handle_user_collection_request(tls, true, true),
         // incremental
@@ -491,6 +563,21 @@ fn set_side_log_bit_for_region(start: Address, size: usize) {
 }
 
 #[no_mangle]
+pub extern "C" fn mmtk_object_reference_write_pre(
+    mutator: *mut Mutator<JuliaVM>,
+    src: ObjectReference,
+    target: NullableObjectReference,
+) {
+    let mutator = unsafe { &mut *mutator };
+    memory_manager::object_reference_write_pre(
+        mutator,
+        src,
+        crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(Address::ZERO)),
+        target.into(),
+    )
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_object_reference_write_post(
     mutator: *mut Mutator<JuliaVM>,
     src: ObjectReference,
@@ -503,6 +590,14 @@ pub extern "C" fn mmtk_object_reference_write_post(
         crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(Address::ZERO)),
         target.into(),
     )
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_gc_wb_finalizer_queue(
+    mutator: &'static mut Mutator<JuliaVM>,
+    queue: *const libc::c_void,
+) {
+    crate::julia_finalizer::wb_finalizer_queue(mutator, queue);
 }
 
 #[no_mangle]
@@ -607,6 +702,26 @@ pub extern "C" fn mmtk_unpin_object(_object: ObjectReference) -> bool {
 #[no_mangle]
 pub extern "C" fn mmtk_is_pinned(_object: ObjectReference) -> bool {
     false
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_set_concurrent_marking_enabled(enabled: bool) {
+    #[cfg(feature = "concurrentimmix")]
+    {
+        let mut builder = BUILDER.lock().unwrap();
+        let success = builder
+            .options
+            .concurrent_immix_disable_concurrent_marking
+            .set(!enabled);
+        assert!(
+            success,
+            "Failed to set concurrent_immix_disable_concurrent_marking"
+        );
+    }
+    #[cfg(not(feature = "concurrentimmix"))]
+    {
+        let _ = enabled;
+    }
 }
 
 #[no_mangle]

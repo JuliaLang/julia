@@ -254,12 +254,15 @@ end
         ver = read(buf, String)
         @test startswith(ver, "Julia Version $VERSION")
         @test occursin("Environment:", ver)
-    end
-    let exename = `$(Base.julia_cmd()) --startup-file=no`
-        @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String[]), String))
-        @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String["JULIA_CPU_THREADS=1"]), String))
+
+        let exename = `$(Base.julia_cmd()) --startup-file=no`,
+            home = Sys.iswindows() ? "USERPROFILE=$dir" : "HOME=$dir"
+            @test !occursin("Environment:", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`, [home]), String))
+            @test occursin("Environment:", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`,
+                [home, "JULIA_CPU_THREADS=1"]), String))
+        end
     end
 end
 

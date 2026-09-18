@@ -609,6 +609,29 @@ function deserialize(s::AbstractSerializer, ::Type{Core.CancellationTokenSource}
     return src
 end
 
+# Core.WaitEntryN has a hidden variable-length slot tail that the generic
+# deserializer - which allocates only the fixed datatype size - cannot
+# reproduce (the GC would then scan a nonexistent tail). Its contents are
+# transient wait-registration state that does not round-trip: only the slot
+# count is written (plus a `nothing` task), and deserialization
+# reconstructs through the runtime allocator with fresh, free slots.
+function serialize(s::AbstractSerializer, w::Core.WaitEntryN)
+    serialize_cycle_header(s, w) && return
+    serialize(s, nothing)  # task: transient, never round-trips
+    serialize(s, Int64(w.nslots))
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.WaitEntryN})
+    task = deserialize(s)::Union{Task, Nothing}
+    ns = Int(deserialize(s)::Int64)
+    0 <= ns <= typemax(UInt32) ||
+        throw(ArgumentError("invalid slot count $ns in serialized WaitEntryN"))
+    w = Base.WaitEntryN(task, ns)
+    deserialize_cycle(s, w)
+    return w
+end
+
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return

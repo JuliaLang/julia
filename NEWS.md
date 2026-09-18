@@ -18,11 +18,45 @@ New language features
   `continue name` to continue a labeled loop ([#60481]).
 * `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
   field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+* A macrocall directly inside parens — e.g.  `(@info "msg" x=1)` — may now
+  continue its arguments on subsequent lines, so each argument of a long macro
+  call can be placed on its own line without switching to the comma separated
+  call syntax ([#60181]).
 * Primitive types with non-byte-multiple logical widths can now be defined ([#61359]).
 * Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
   that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
   operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
   in the default operators ([#50790]).
+
+* `@sync`, `Threads.@threads` and `Experimental.@sync` blocks now scope a cancellation source
+  (see `Base.CancellationTokenSource`) over their children, so cancelling an enclosing scope
+  reaches everything spawned within, and the blocks' teardown awaits internal tasks per the
+  requested cancellation severity ([#60281]).
+* Task cancellation is now supported, organized around cancellation tokens:
+  `Base.CancellationTokenSource` is a level-triggered, tree-structured cancellation scope
+  (cancelling a source cancels its whole subtree, at monotonically escalating severities), and
+  `Base.CancellationToken` is its observe/wait view. The token governing a computation is carried
+  as a scoped value (`Base.CANCEL_TOKEN`, established with the standard `ScopedValues` API) that
+  propagates to child tasks; blocking operations
+  (`wait`, `lock`, Channel operations, `sleep`, stream and command I/O, Sockets, FileWatching,
+  ...) accept a `cancel` keyword argument defaulting to the scoped token and throw a
+  `Base.CancellationRequest` while it is cancelled. Cancellation is uniformly level-triggered:
+  cleanup code that must block under a cancelled scope shields itself with `cancel = nothing`
+  (or by scoping `Base.CANCEL_TOKEN => nothing` over a whole block). Compute-bound code can opt into cancellation with the
+  `Base.@cancel_check` cancellation point.
+  A long-running foreign call can be made cancellable with
+  `@ccall cancel_handler=(fn, state) ...`: cancelling the governing token runs the
+  C-callable `fn(state, severity)` on the thread executing the call, signal-handler-style,
+  so it can tell the library to return early (the pending cancellation is then thrown at
+  the next cancellation point). Calls into libraries audited for asynchronous unwinding
+  can be annotated `@ccall reset_safe=true ...` instead, letting a cancellation unwind
+  the foreign computation at an arbitrary instruction; `BigInt` (GMP) arithmetic uses
+  this, so checkless bignum loops now cancel cleanly at the first ^C.
+  In interactive sessions, ^C now cancels the current evaluation's cancellation scope
+  (instead of throwing an `InterruptException` into whatever code happened to be running),
+  and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
+  cancellation continues under the cancelled scope unless it re-arms one itself
+  (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
 
 Language changes
 ----------------
@@ -47,15 +81,55 @@ Compiler/Runtime improvements
   (e.g. `val = x.field; if !isnothing(val) ... end`) ([#41199], [#47574]).
 * Stack traces now show full method signatures with argument types for inlined frames, matching the display
   of non-inlined frames ([#53925]).
+* Stack traces of errors raised while loading code no longer show the internals of the
+  code loading machinery, which are collapsed to the single frame that entered loading.
+  Frames for user code that runs during loading are unaffected. Set the
+  `JULIA_STACKTRACE_FULL_LOADING` environment variable to `true` to show them ([#52988]).
 * Parallel package precompilation now coordinates CPU usage across both the precompile worker processes and
   the LLVM threads each spawns to compile its native image, sharing a single thread budget so idle cores are
   filled during the long tail without oversubscribing the machine when many packages compile at once. The total
   budget can be set with the new `JULIA_PRECOMPILE_THREADS` environment variable ([#61958]).
+* Parallel package precompilation no longer attempts packages whose dependencies failed to precompile;
+  they are reported as skipped instead, and extensions of a failed package are dropped silently. Pass
+  `skip_dependents=false` to `Base.Precompilation.precompilepkgs` to attempt the packages anyway. A new `force`
+  keyword recompiles packages whose cache files are already fresh ([#63122]).
+* Coverage reports now include code executed by the interpreter, such as top-level statements and method
+  bodies run with `--compile=min`. Consequently, LCOV output and `.cov` files may contain source lines that
+  were absent in earlier releases ([#62514]).
+* Coverage and allocation tracking use separate unordered atomic loads and stores. This avoids the atomic
+  read-modify-write overhead reported in [#62424] while keeping concurrent accesses well-defined; execution
+  counts may still be inaccurate when the same source line runs on multiple threads ([#62724]).
+* `--code-coverage=user` no longer includes inlined Base methods whose module cannot be recovered from debug
+  information. This prevents coverage from writing `.cov` files for Base sources into the Julia installation
+  ([#62514]).
+* Coverage now records only whether each source line ran by default, and reports a count of 1 for executed
+  lines in `.cov` files and LCOV tracefiles. Use `--code-coverage-mode=count` to collect execution counts
+  instead. The default `hit` mode avoids the load and increment at each instrumentation point ([#62724]).
+* Coverage runs can reuse instrumented package images across processes. The counter mode is part of
+  the cache identity; `user`, `all`, and `@path` select the same image variants and filter the counters
+  reported. Count images can also serve hit requests ([#62724]).
+* `--code-coverage=all` no longer invalidates system-image code at startup. To collect coverage from
+  that code, build Julia with `JULIA_COVERAGE_IMAGES=1`, which instruments the system image and bundled
+  package images in hit mode. `@path` instruments newly compiled and interpreted code like `user`,
+  while also reporting compatible image counters under the selected path ([#62724]).
+* Resolved global variable accesses now carry the binding partition they act on through lowered code, instead
+  of code generation re-deriving it by scanning a binding's partitions. After optimization, an access that
+  previously appeared as a `GlobalRef`, `getglobal` or `setglobal!` may instead appear as a
+  `Core.BindingPartition`, as the left-hand side of an assignment to one, or as a call to one of the new
+  `Core.getglobal_partition`, `Core.setglobal_partition`, `Core.swapglobal_partition`,
+  `Core.modifyglobal_partition`, `Core.replaceglobal_partition`, `Core.setglobalonce_partition`,
+  `Core.isdefinedglobal_partition` or `Core.depwarn_partition` builtin function. This does not change the
+  meaning of the program, but packages that inspect optimized IR (e.g. from `code_typed`) will encounter
+  these new forms. See the "Lowered form" section of the developer documentation for their semantics ([#62452]).
 
 Command-line option changes
 ---------------------------
 
 * `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
+* `--code-coverage=@<path>` and `--track-allocation=@<path>` now restrict tracking to the specified file or
+  directory tree. For example, `@/src/Foo` tracks `/src/Foo/x.jl`, but not `/src/Foobar/x.jl`. Specifying the
+  filesystem root as `@/` tracks every absolute path. `Base.is_file_tracked` now returns `false` when Julia was
+  not started with either `@<path>` option ([#62514]).
 
 Multi-threading changes
 -----------------------
@@ -91,10 +165,14 @@ New library functions
 ---------------------
 
 * `tap(f)` creates a function that calls `f(x)` for side effects and returns `x` ([#61340]).
+* `unsplat(f)` creates a function that bundles its arguments into a tuple and passes them to `f`;
+  it is the inverse of `splat` ([#62714]).
 * `Base.set_binding_visibility!` sets the declared visibility (`:none`, `:public`, or `:export`) of a name
   in a module, allowing an `export` or `public` declaration to be retracted programmatically ([#62131]).
 * `Base.generating_output()` has been made `public` (but not exported) to allow checking whether the current
   process is performing compilation for a pkgimage/sysimage ([#61224]).
+* `Base.isfieldatomic(t, s)` has been made `public` (but not exported); it reports whether a field `s` of a
+  type `t` is declared `@atomic`.
 * `Base.raw_substring` is an unexported, public constructor to build a `SubString` without checking for
   valid string indices.
 * `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string of the input string.
@@ -122,15 +200,24 @@ New library features
   along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
   etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
+* New public but unexported function `Base.unsetindex!` unsets the reference from an array
+  or a `MemoryRef` to its value, making it as if it was uninitialized.
+* Calls to `wait` on one-shot `Timer`s that have already triggered no longer throw `EOFError`. Previously
+  only the first `wait` returned and subsequent `wait` calls would throw ([#62539])
 * When the display height is too small to show any array entries, the `text/plain` array display
   (used e.g. by the REPL and when logging values with `@info` etc.) now shows as many entries as
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
+* The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
+  heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
 
 Standard library changes
 ------------------------
 
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
+* The `Precompiling` messages printed while loading name packages without their uuid when the
+  name is unambiguous in the environment, name extensions by their parent package, and say which
+  dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
 
 #### JuliaSyntaxHighlighting
 
@@ -150,6 +237,27 @@ Standard library changes
 
 #### REPL
 
+* The Julia REPL now emits OSC 133 semantic prompt markers for terminal integration.
+* A `using`/`import` statement that loads several packages, such as `using A, B, C`, now precompiles
+  all of them (and the extensions they make loadable) in a single parallel session, rather than one
+  session per package ([#63185]).
+
+#### Sockets
+
+* `getsockname` now also accepts a `UDPSocket`, returning the address and port it is bound to ([#63091]).
+
+#### SharedArrays
+
+* `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the
+  array on all processes, e.g. so the file backing a file-backed `SharedArray` can be deleted
+  immediately ([#62488]).
+
+#### Test
+* Pressing `^C` twice at an empty `julia>` prompt now cancels all still-running
+  work started by earlier evaluations (e.g. a runaway `@async` task spewing
+  output): each REPL evaluation runs under its own cancellation source, linked
+  under one session-level source that the repeated press cancels ([#47839]).
+
 #### Test
 
 * `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument that provides
@@ -159,6 +267,16 @@ Standard library changes
   `broken` and `skip` keyword arguments for consistency with `@test` ([#60543]).
 * New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that allocate `Core.Box`
   in their lowered code, which can indicate performance issues from captured variables in closures ([#60478]).
+
+* `detect_unbound_args` now uses a conservative rule derived from how subtyping assigns values
+  to static parameters, instead of older heuristics. It detects previously missed
+  possibly-unbound parameters (such as `f(::Type{<:T}) where {T}`, which leaves `T`
+  unbound when called with `Union{}`, or `f(::Vector{<:T}) where {T}` with a
+  `Vector{Union{}}` argument), and no longer reports methods whose problematic calls are
+  all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback), or
+  whose lowered bodies never read the possibly-unbound parameters. Parameters left
+  unbound only by calls with `Union{}` type parameters are reported only with the new
+  `ambiguous_bottom=true` keyword argument, as for `detect_ambiguities` ([#62405]).
 
 #### Dates
 
@@ -171,6 +289,13 @@ Standard library changes
   the given arguments, e.g. `@methods isvalid('a', 1)` or `@methods isvalid(::AbstractChar, ::Integer)` ([#62311]).
 
 #### Dates
+
+#### TOML
+
+* The parsing functions (`TOML.parsefile`, `TOML.parse`, and their `try` variants) can now capture
+  the comments of a document into a `TOML.Comments` object via the new `comments` keyword argument,
+  and `TOML.print` can write them back out via its new `comments` keyword argument. This allows
+  modifying a TOML file without losing its comments ([#62672]).
 
 External dependencies
 ---------------------

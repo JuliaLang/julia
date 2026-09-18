@@ -17,16 +17,15 @@ Base.div
 Base.div(::Any, ::Any, ::RoundingMode)
 Base.fld
 Base.cld
-Base.mod
 Base.rem
 Base.rem(::Any, ::Any, ::RoundingMode)
 Base.rem2pi
+Base.mod
 Base.Math.mod2pi
+Base.mod1
 Base.divrem
 Base.fldmod
-Base.fld1
-Base.mod1
-Base.fldmod1
+Base.cldmod1
 Base.:(//)
 Base.rationalize
 Base.numerator

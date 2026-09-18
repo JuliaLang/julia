@@ -1120,3 +1120,5 @@ end
         @test Base.cconvert(Ref{BigFloat}, x) isa Base.MPFR.BigFloatData
     end
 end
+
+@test_throws FieldError BigFloat(1).notfield = 1

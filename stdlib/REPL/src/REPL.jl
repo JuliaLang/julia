@@ -70,6 +70,60 @@ include("options.jl")
 include("StylingPasses.jl")
 using .StylingPasses
 
+# OSC 133/633 lifecycle markers:
+# A: prompt starts; B: prompt ends and command input starts;
+# C: command execution/output starts; D: command finishes, optionally with an exit status
+# (0 for success, 1 for an error; no status for input cancelled or left empty).
+# VS Code's OSC 633 also supports E to report the explicit command line.
+struct SemanticPromptMarkers
+    prompt_start::String
+    prompt_end::String
+    command_start::String
+    command_finish::String
+    command_finish_ok::String
+    command_finish_error::String
+    command_line::Union{Nothing,String}
+end
+
+# FinalTerm semantic prompt protocol:
+# https://iterm2.com/documentation-escape-codes.html
+const OSC_133_MARKERS = SemanticPromptMarkers(
+    "\e]133;A\a", "\e]133;B\a", "\e]133;C\a", "\e]133;D\a",
+    "\e]133;D;0\a", "\e]133;D;1\a", nothing,
+)
+# VS Code shell integration protocol:
+# https://code.visualstudio.com/docs/terminal/shell-integration#_supported-escape-sequences
+const OSC_633_MARKERS = SemanticPromptMarkers(
+    "\e]633;A\a", "\e]633;B\a", "\e]633;C\a", "\e]633;D\a",
+    "\e]633;D;0\a", "\e]633;D;1\a", "\e]633;E;",
+)
+
+semantic_prompt_markers(::AbstractREPL) = nothing
+default_semantic_prompt_markers() =
+    get(ENV, "TERM_PROGRAM", "") == "vscode" ? OSC_633_MARKERS : OSC_133_MARKERS
+
+function serialize_vscode_osc_message(message::AbstractString)
+    io = IOBuffer()
+    for byte in codeunits(message)
+        if byte == UInt8('\\')
+            write(io, "\\\\")
+        elseif byte == UInt8(';') || byte <= 0x20
+            write(io, "\\x", string(byte, base=16, pad=2))
+        else
+            write(io, byte)
+        end
+    end
+    return String(take!(io))
+end
+
+function write_semantic_command_line(
+    repl::AbstractREPL, markers::SemanticPromptMarkers, line::AbstractString,
+)
+    markers.command_line === nothing && return
+    write(terminal(repl), markers.command_line, serialize_vscode_osc_message(line), '\a')
+    return
+end
+
 function histsearch end # To work around circular dependency
 
 include("LineEdit.jl")
@@ -308,15 +362,15 @@ const install_packages_hooks = Any[]
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
 # We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
 # code to run (and error).
-__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
-    Core._lower(ast, mod, toplevel_file[], toplevel_line[])[1]
-__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
-    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Csize_t}), mod, ast, 1, 1, toplevel_file, toplevel_line)
+__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
+    Core._lower(ast, mod, unsafe_string(toplevel_file[]), Int(toplevel_line[]))[1]
+__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
+    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
 
-function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Csize_t}(1))
+function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
     if !isexpr(ast, :toplevel)
         ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
-        check_for_missing_packages_and_run_hooks(ast)
+        check_for_missing_packages_and_run_hooks(mod, ast)
         return invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
     end
     local value=nothing
@@ -333,7 +387,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
         try
             Base.sigatomic_end()
             if lasterr !== nothing
-                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
+                # REPL machinery: reporting the result must work even when
+                # the evaluation's epoch was cancelled
+                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true); cancel=nothing)
             else
                 backend.in_eval = true
                 for xf in backend.ast_transforms
@@ -342,7 +398,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
-                put!(backend.response_channel, Pair{Any, Bool}(value, false))
+                put!(backend.response_channel, Pair{Any, Bool}(value, false); cancel=nothing)
             end
             break
         catch err
@@ -357,16 +413,20 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     nothing
 end
 
-function check_for_missing_packages_and_run_hooks(ast)
+function check_for_missing_packages_and_run_hooks(mod::Module, ast)
     isa(ast, Expr) || return
     mods = modules_to_be_loaded(ast)
-    filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
-    if !isempty(mods)
+    isempty(mods) && return
+    missing_mods = filter(m -> isnothing(Base.identify_package(String(m))), mods)
+    if !isempty(missing_mods)
         isempty(install_packages_hooks) && load_pkg()
         for f in install_packages_hooks
-            Base.invokelatest(f, mods) && return
+            Base.invokelatest(f, missing_mods) && break
         end
     end
+    # precompile everything the statement is about to load in one parallel session,
+    # rather than one session per package as the individual `require` calls would
+    Base.invokelatest(Base.Precompilation.precompile_for_loading, mod, mods)
 end
 
 function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
@@ -446,45 +506,63 @@ function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x ->
 end
 
 function repl_backend_loop(backend::REPLBackend, get_module::Function)
-    # include looks at this to determine the relative include path
-    # nothing means cwd
-    while true
-        tls = task_local_storage()
-        tls[:SOURCE_PATH] = nothing
-        # Fetch without consuming, then retry removal so an interrupt cannot lose
-        # or duplicate a request.
-        request = try
-            fetch(backend.repl_channel)
-        catch e
-            e isa InterruptException && continue
-            rethrow()
-        end
-        while isready(backend.repl_channel)
-            try
-                take!(backend.repl_channel)
+    try
+        # include looks at this to determine the relative include path
+        # nothing means cwd
+        while true
+            tls = task_local_storage()
+            tls[:SOURCE_PATH] = nothing
+            # Control is back with the REPL: close the previous work item's ^C
+            # episode, making a ^C at the idle prompt (or one that raced the end
+            # of the previous evaluation, issue #58689) a no-op. The idle wait
+            # itself is not cancellable.
+            Base.sigint_close_episode!()
+            ast_or_func, show_value = try
+                take!(backend.repl_channel; cancel=nothing)
             catch e
-                e isa InterruptException || rethrow()
+                # ^C never lands here as an exception (the idle wait is not
+                # cancellable), but a stray InterruptException injected into the
+                # backend task by a package or user code must not tear down the
+                # REPL session.
+                e isa InterruptException && continue
+                rethrow()
+            end
+            if show_value == -1
+                # exit flag
+                break
+            end
+            # Re-arm ^C: install a fresh episode source (detaching any work
+            # still unwinding from the previous epoch) and run this request in
+            # its scope, so that ^C cancels exactly this epoch and everything it
+            # spawns. The episode source is an *evaluation* source - a child of
+            # the session source (see the session tree in base/client.jl) - so
+            # the double-^C prompt gesture can sweep evaluation leftovers by
+            # cancelling the session source.
+            tok = Base.sigint_new_episode!(Base.new_evaluation_cancel_source!())
+            # Mark this task as the foreground task while running user work, so that
+            # components like the precompile keyboard menu know who owns interactive stdin.
+            Base.ScopedValues.@with Base.CANCEL_TOKEN => tok begin
+                Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
+                    f = ast_or_func
+                    try
+                        ret = f()
+                        # REPL machinery: reporting the result must work even
+                        # when the evaluation's epoch was cancelled
+                        put!(backend.response_channel, Pair{Any, Bool}(ret, false); cancel=nothing)
+                    catch
+                        put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true); cancel=nothing)
+                    end
+                else
+                    ast = ast_or_func
+                    eval_user_input(ast, backend, get_module())
+                end
             end
         end
-        ast_or_func, show_value = request
-        if show_value == -1
-            # exit flag
-            break
-        end
-        # Mark this task as the foreground task while running user work, so that
-        # components like the precompile keyboard menu know who owns interactive stdin.
-        Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
-            f = ast_or_func
-            try
-                ret = f()
-                put!(backend.response_channel, Pair{Any, Bool}(ret, false))
-            catch
-                put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
-            end
-        else
-            ast = ast_or_func
-            eval_user_input(ast, backend, get_module())
-        end
+    finally
+        # A throwing evaluation hook or response write must not leave a
+        # stale episode installed (with the C mirror pointing at dead
+        # work); closing an already-closed episode is a no-op.
+        Base.sigint_close_episode!()
     end
     return nothing
 end
@@ -659,9 +737,19 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
         while true
             try
                 Base.sigatomic_end() # allow stacktrace printing to be interrupted
-                val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                __repl_entry_display_error(errio, val)
+                # The frontend renders the error outside the (already closed)
+                # evaluation epoch - run it in a display epoch of its own so a
+                # blocking or looping `showerror` can still be ^C'd.
+                tok = Base.sigint_new_episode!(Base.new_evaluation_cancel_source!())
+                try
+                    Base.ScopedValues.@with Base.CANCEL_TOKEN => tok begin
+                        val = Base.scrub_repl_backtrace(val)
+                        Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
+                        __repl_entry_display_error(errio, val)
+                    end
+                finally
+                    Base.sigint_close_episode!()
+                end
                 break
             catch ex
                 println(errio) # an error during printing is likely to leave us mid-line
@@ -694,24 +782,27 @@ end
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
     get_module = () -> Base.active_module(repl)
-    cleanup_task(backend_ref, t) = @task try
+    # REPL teardown is cleanup: shield it from any scope cancellation
+    cleanup_task(backend_ref, t) = Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+        @task try
             destroy(backend_ref, t)
         catch e
             Core.print(Core.stderr, "\nINTERNAL ERROR: ")
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
+    end
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
-        Base._wait2(t, cleanup)
+        Base.schedule_on_notify!(t, cleanup)
         start_repl_backend(backend, consumer; get_module)
     else
         t = @async start_repl_backend(backend, consumer; get_module)
         cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
-        Base._wait2(t, cleanup)
+        Base.schedule_on_notify!(t, cleanup)
         run_frontend(repl, backend_ref)
     end
     return backend
@@ -800,6 +891,7 @@ mutable struct LineEditREPL <: AbstractREPL
     options::Options
     mistate::Union{MIState,Nothing}
     last_shown_line_infos::Vector{Tuple{String,Int}}
+    semantic_prompt_markers::SemanticPromptMarkers
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
@@ -812,7 +904,7 @@ mutable struct LineEditREPL <: AbstractREPL
             opts.beep_colors = [""]
         end
         r = new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[], default_semantic_prompt_markers())
         r.prompt_ready_event = nothing
         r
     end
@@ -822,6 +914,8 @@ specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 hascolor(r::LineEditREPL) = r.hascolor
+semantic_prompt_markers(r::LineEditREPL) =
+    r.options.semantic_prompts ? r.semantic_prompt_markers : nothing
 
 LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     LineEditREPL(t, hascolor,
@@ -913,7 +1007,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     mode_mapping::Dict{Symbol,Prompt}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(HistoryFile(), 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(HistoryFile(), 1, 1, -1, IOBuffer(),
                         nothing, mode_mapping)
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
@@ -1034,7 +1128,7 @@ end
 
 history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_prev(s, hist, hist.cur_idx - 1 -
-                 (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
+                 (hist.cur_idx > hist.start_idx ? hist.start_idx-1 : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_next(s, hist, length(update!(hist.history)) - hist.cur_idx + 1)
@@ -1210,12 +1304,20 @@ end
 
 function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon::Bool = true)
     return function do_respond(s::MIState, buf, ok::Bool)
+        current_mode = LineEdit.mode(s)
+        markers = current_mode isa Prompt ? LineEdit.semantic_prompt_markers(current_mode) : nothing
         if !ok
+            if markers !== nothing
+                write(terminal(repl), markers.command_finish)
+            end
             return transition(s, :abort)
         end
         line = String(take!(buf)::Vector{UInt8})
         if !isempty(line) || pass_empty
             reset(repl)
+            if markers !== nothing
+                write(terminal(repl), markers.command_start)
+            end
             local response
             try
                 ast = Base.invokelatest(f, line)
@@ -1224,7 +1326,22 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
                 response = Pair{Any, Bool}(current_exceptions(), true)
             end
             hide_output = suppress_on_semicolon && ends_with_semicolon(line)
-            print_response(repl, response, !hide_output, hascolor(repl))
+            try
+                print_response(repl, response, !hide_output, hascolor(repl))
+            finally
+                if markers !== nothing
+                    # VS Code documents E between B and C, but without its nonce an
+                    # untrusted command-line report gets replaced when execution starts.
+                    # Send E just before D instead, relying on VS Code's implementation:
+                    # setCommandLine updates the current command, which
+                    # handleCommandFinished then promotes to a completed command.
+                    write_semantic_command_line(repl, markers, line)
+                    marker = response[2] ? markers.command_finish_error : markers.command_finish_ok
+                    write(terminal(repl), marker)
+                end
+            end
+        elseif markers !== nothing
+            write(terminal(repl), markers.command_finish)
         end
         prepare_next(repl)
         reset_state(s)
@@ -1269,7 +1386,7 @@ function mode_keymap(julia_prompt::Prompt)
     end)
 end
 
-repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx, 1))]"
+repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx+1, 1))]"
 repl_filename(repl, hp) = "REPL"
 
 const JL_PROMPT_PASTE = Ref(true)
@@ -1901,7 +2018,7 @@ using ..REPL
 __current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
 function repl_eval_counter(hp)
-    return length(hp.history) - hp.start_idx
+    return length(hp.history) - hp.start_idx + 1
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})

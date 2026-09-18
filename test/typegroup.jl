@@ -681,7 +681,9 @@ using Test
                 end
                 end
                 """)
-                @test_throws Exception Base.require(Main, :TG_PrecompIncomplete)
+                redirect_stderr(devnull) do
+                    @test_throws Exception Base.require(Main, :TG_PrecompIncomplete)
+                end
             finally
                 filter!((≠)(dir), LOAD_PATH)
                 filter!((≠)(depot), DEPOT_PATH)

@@ -233,6 +233,9 @@ precompile_test_harness(false) do dir
               const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
               const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
 
+              const gr54932 = GlobalRef(Base, gensym(:hash54932))
+              const dict54932 = Dict(gr54932 => :found)
+
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
                               missing, missing, missing,
@@ -346,6 +349,13 @@ precompile_test_harness(false) do dir
 
         @test Foo.d29936a === Dict
         @test Foo.d29936b === Dict{K,V} where {V,K}
+
+        gr = Foo.gr54932
+        fresh = GlobalRef(gr.mod, gr.name)
+        @test isequal(gr, fresh)
+        @test hash(gr) == hash(fresh)
+        @test Foo.dict54932[gr] === :found
+        @test Foo.dict54932[fresh] === :found
 
         @test Foo.x28998[end] == 6
 
@@ -697,7 +707,9 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
+    redirect_stderr(devnull) do
+        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
+    end
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
@@ -711,8 +723,20 @@ precompile_test_harness(false) do dir
         $code
         end
         """)
-        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
+        redirect_stderr(devnull) do
+            @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
+        end
     end
+
+    # Declaring an already-existing generic function of a closed module is a
+    # no-op and must not error during precompilation
+    FooBar3b_file = joinpath(dir, "FooBar3b.jl")
+    write(FooBar3b_file, """
+    module FooBar3b
+    Core.eval(Main, Expr(:function, GlobalRef(Base, :length)))
+    end
+    """)
+    @test Base.require(Main, :FooBar3b) isa Module
 
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")
@@ -907,25 +931,35 @@ precompile_test_harness("code caching") do dir
         MA = getfield(@__MODULE__, RootA)
         MB = getfield(@__MODULE__, RootB)
         M = getfield(MA, RootModule)
+        function backedge_callers(mi::Core.MethodInstance)
+            callers = Any[]
+            i = 1
+            while i <= length(mi.backedges)
+                mi.backedges[i] isa Type && (i += 1)
+                caller = mi.backedges[i]
+                @assert caller isa Union{Core.MethodInstance,Core.CodeInstance}
+                push!(callers, caller)
+                i += 1
+            end
+            return callers
+        end
+        caller_method(caller::Core.MethodInstance) = caller.def::Method
+        caller_method(caller::Core.CodeInstance) = caller_method(caller.def)
         m = which(M.f, (Any,))
         for mi in Base.specializations(m)
             mi === nothing && continue
             mi = mi::Core.MethodInstance
             if mi.specTypes.parameters[2] === Int8
                 # external callers
-                mods = Module[]
-                for be in mi.backedges
-                    push!(mods, ((be.def::Core.MethodInstance).def::Method).module) # XXX
-                end
+                mods = Set(caller_method(caller).module
+                    for caller in backedge_callers(mi))
                 @test MA ∈ mods
                 @test MB ∈ mods
                 @test length(mods) == 2
             elseif mi.specTypes.parameters[2] === Int16
                 # internal callers
-                meths = Method[]
-                for be in mi.backedges
-                    push!(meths, (be.def::Method).def) # XXX
-                end
+                meths = Set(caller_method(caller)
+                    for caller in backedge_callers(mi))
                 @test which(M.g1, ()) ∈ meths
                 @test which(M.g2, ()) ∈ meths
                 @test length(meths) == 2
@@ -1117,13 +1151,19 @@ precompile_test_harness("code caching") do dir
 
         idxb = findfirst(x -> x isa Core.Binding, invalidations)
         @test invalidations[idxb+1] == "insert_backedges_callee"
-        idxv = findnext(==("verify_methods"), invalidations, idxb)
-        if invalidations[idxv-1].def.def.name === :getproperty
-            idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        # Proof flattening may change the path from the binding to `flbi`, but the
+        # downstream `useflbi` invalidation must still identify `flbi` as its cause.
+        useflbi_method = only(methods(MB.useflbi))
+        flbi_method = only(methods(MA.flbi))
+        idxv = findfirst(eachindex(invalidations)) do i
+            1 < i < length(invalidations) || return false
+            invalidations[i] == "verify_methods" || return false
+            caller = invalidations[i-1]
+            cause = invalidations[i+1]
+            return caller isa Core.CodeInstance && cause isa Core.CodeInstance &&
+                caller.def.def === useflbi_method && cause.def.def === flbi_method
         end
-        idxv = findnext(==(invalidations[idxv-1]), invalidations, idxv+1)
-        @test invalidations[idxv-1] == "verify_methods"
-        @test invalidations[idxv-2].def.def.name === :useflbi
+        @test idxv !== nothing
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -1166,6 +1206,38 @@ precompile_test_harness("precompiletools") do dir
             success += sig.parameters[3] === Vector{M.MyType}
         end
         @test success == 1
+    end
+end
+
+precompile_test_harness("dispatch edge") do dir
+    KindDispatch = :KindDispatch_0x5e0bd2a4c1f7
+    write(joinpath(dir, "$KindDispatch.jl"),
+        """
+        module $KindDispatch
+            # Inference through a kind (`Type{T}`) reaches calls that match several
+            # methods, and no cached source is available for them, so the optimizer has to
+            # synthesize the call target. The dispatch edge recorded for it must not claim
+            # that the target's signature has a single fully-covering match: nothing about
+            # dispatch changes between precompiling this and loading it, so `f` must stay
+            # valid.
+            f(v::Vector{Any}) = Base.aligned_sizeof(v[1]::Type{<:Real})
+            precompile(f, (Vector{Any},))
+        end
+        """
+    )
+    pkgid = Base.PkgId(string(KindDispatch))
+    Base.compilecache(pkgid)
+    @eval using $KindDispatch
+    M = invokelatest(getglobal, @__MODULE__, KindDispatch)
+    invokelatest() do
+        world = Base.get_world_counter()
+        mi = only(Base.specializations(only(methods(M.f))))
+        @test mi.specTypes === Tuple{typeof(M.f), Vector{Any}}
+        ci = mi.cache
+        while ci.max_world < world && isdefined(ci, :next)
+            ci = ci.next
+        end
+        @test ci.max_world == typemax(UInt)
     end
 end
 
@@ -1934,6 +2006,24 @@ precompile_test_harness("Module tparams") do load_path
     end
 end
 
+# A module reached only through a type parameter must support immediate serialization.
+precompile_test_harness("Module immediate serialization") do load_path
+    write(joinpath(load_path, "ModuleImmediateInline.jl"),
+        """
+        module ModuleImmediateInline
+            const value = Val{Module(:Anon)}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleImmediateInline"))
+    (@eval (using ModuleImmediateInline))
+    invokelatest() do
+        m = typeof(ModuleImmediateInline.value).parameters[1]
+        @test m isa Module
+        @test nameof(m) === :Anon
+        @test ModuleImmediateInline.value === Val(m)
+    end
+end
+
 precompile_test_harness("PkgCacheInspector") do load_path
     # Test functionality needed by PkgCacheInspector.jl
     write(joinpath(load_path, "PCI.jl"),
@@ -1955,8 +2045,8 @@ precompile_test_harness("PkgCacheInspector") do load_path
         local depmodnames
         io = open(cachefile, "r")
         try
-            # isvalid_cache_header returns checksum id or zero
-            Base.isvalid_cache_header(io) == 0 && throw(ArgumentError("Invalid header in cache file $cachefile."))
+            # isvalid_cache_header returns checksum id or nothing
+            Base.isvalid_cache_header(io) === nothing && throw(ArgumentError("Invalid header in cache file $cachefile."))
             depmodnames = Base.parse_cache_header(io, cachefile)[3]
             Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
         finally
@@ -2196,19 +2286,10 @@ precompile_test_harness("Test flags") do load_path
           end
           """)
 
-    current_flags = Base.CacheFlags()
-    modified_flags = Base.CacheFlags(
-        current_flags.use_pkgimages,
-        current_flags.debug_level,
-        2,
-        current_flags.inline,
-        3
-    )
     ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
-        _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
-        cacheflags = Base.CacheFlags(flags)
+        _, _, _, _, _, _, cacheflags = Base.parse_cache_header(io, ji)
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
@@ -2622,24 +2703,74 @@ end
 # Test --compiled-modules=strict in precompilepkgs
 @testset "compiled-modules=strict with dependencies" begin
     mkdepottempdir() do depot
-        # Create three packages: one that fails to precompile, one that loads it, one that doesn't
+        # Create three packages: one that fails to precompile, one that loads it, one that doesn't,
+        # plus a package that triggers an extension of the failing one and a non-project package
+        # between the failing one and the one that loads it
         project_path = joinpath(depot, "testenv")
         mkpath(project_path)
 
         # Create FailPkg - a package that can't be precompiled
         fail_pkg_path = joinpath(depot, "dev", "FailPkg")
         mkpath(joinpath(fail_pkg_path, "src"))
+        mkpath(joinpath(fail_pkg_path, "ext"))
         write(joinpath(fail_pkg_path, "Project.toml"),
               """
               name = "FailPkg"
               uuid = "10000000-0000-0000-0000-000000000001"
               version = "0.1.0"
+
+              [weakdeps]
+              TriggerPkg = "40000000-0000-0000-0000-000000000004"
+
+              [extensions]
+              FailPkgTriggerExt = "TriggerPkg"
               """)
         write(joinpath(fail_pkg_path, "src", "FailPkg.jl"),
               """
               module FailPkg
               print("Now FailPkg is running.\n")
               error("expected fail")
+              end
+              """)
+        write(joinpath(fail_pkg_path, "ext", "FailPkgTriggerExt.jl"),
+              """
+              module FailPkgTriggerExt
+              print("Now FailPkgTriggerExt is running.\n")
+              end
+              """)
+
+        # Create TriggerPkg - has no dependencies, triggers FailPkg's extension
+        trigger_pkg_path = joinpath(depot, "dev", "TriggerPkg")
+        mkpath(joinpath(trigger_pkg_path, "src"))
+        write(joinpath(trigger_pkg_path, "Project.toml"),
+              """
+              name = "TriggerPkg"
+              uuid = "40000000-0000-0000-0000-000000000004"
+              version = "0.1.0"
+              """)
+        write(joinpath(trigger_pkg_path, "src", "TriggerPkg.jl"),
+              """
+              module TriggerPkg
+              print("Now TriggerPkg is running.\n")
+              end
+              """)
+
+        # Create MidPkg - not a project dep, depends on FailPkg but doesn't load it
+        mid_pkg_path = joinpath(depot, "dev", "MidPkg")
+        mkpath(joinpath(mid_pkg_path, "src"))
+        write(joinpath(mid_pkg_path, "Project.toml"),
+              """
+              name = "MidPkg"
+              uuid = "50000000-0000-0000-0000-000000000005"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(mid_pkg_path, "src", "MidPkg.jl"),
+              """
+              module MidPkg
+              print("Now MidPkg is running.\n")
               end
               """)
 
@@ -2654,6 +2785,7 @@ end
 
               [deps]
               FailPkg = "10000000-0000-0000-0000-000000000001"
+              MidPkg = "50000000-0000-0000-0000-000000000005"
               """)
         write(joinpath(loads_pkg_path, "src", "LoadsFailPkg.jl"),
               """
@@ -2690,6 +2822,7 @@ end
               [deps]
               LoadsFailPkg = "20000000-0000-0000-0000-000000000002"
               DependsOnly = "30000000-0000-0000-0000-000000000003"
+              TriggerPkg = "40000000-0000-0000-0000-000000000004"
               """)
         write(joinpath(project_path, "Manifest.toml"),
               """
@@ -2706,7 +2839,7 @@ end
               version = "0.1.0"
 
               [[LoadsFailPkg]]
-              deps = ["FailPkg"]
+              deps = ["FailPkg", "MidPkg"]
               uuid = "20000000-0000-0000-0000-000000000002"
               version = "0.1.0"
 
@@ -2717,43 +2850,102 @@ end
               version = "0.1.0"
 
               [[deps.FailPkg]]
+              weakdeps = ["TriggerPkg"]
               path = "../dev/FailPkg/"
               uuid = "10000000-0000-0000-0000-000000000001"
               version = "0.1.0"
 
+                  [deps.FailPkg.extensions]
+                  FailPkgTriggerExt = "TriggerPkg"
+
               [[deps.LoadsFailPkg]]
-              deps = ["FailPkg"]
+              deps = ["FailPkg", "MidPkg"]
               path = "../dev/LoadsFailPkg/"
               uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.MidPkg]]
+              deps = ["FailPkg"]
+              path = "../dev/MidPkg/"
+              uuid = "50000000-0000-0000-0000-000000000005"
+              version = "0.1.0"
+
+              [[deps.TriggerPkg]]
+              path = "../dev/TriggerPkg/"
+              uuid = "40000000-0000-0000-0000-000000000004"
               version = "0.1.0"
               """)
 
         # Call precompilepkgs with output redirected to a file
+        Skipped_output = joinpath(depot, "Skipped_output.txt")
         LoadsFailPkg_output = joinpath(depot, "LoadsFailPkg_output.txt")
+        NoskipExt_output = joinpath(depot, "NoskipExt_output.txt")
         DependsOnly_output = joinpath(depot, "DependsOnly_output.txt")
+        Fresh_output = joinpath(depot, "Fresh_output.txt")
+        Forced_output = joinpath(depot, "Forced_output.txt")
         original_depot_path = copy(Base.DEPOT_PATH)
         old_proj = Base.active_project()
         try
             push!(empty!(DEPOT_PATH), depot)
             Base.set_active_project(project_path)
-            precompile_capture(file, pkg) = open(file, "w") do io
+            precompile_capture(file, pkgs; kwargs...) = open(file, "w") do io
                 try
-                    r = Base.Precompilation.precompilepkgs([pkg]; io, fancyprint=true)
-                    @test r isa Vector{String}
-                    r
+                    Base.Precompilation.precompilepkgs(pkgs isa String ? [pkgs] : pkgs; io, fancyprint=true, kwargs...)
                 catch ex
                     ex isa Base.Precompilation.PkgPrecompileError || rethrow()
                     ex
                 end
             end
-            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg")
+            # By default a package whose dependency failed is skipped, not attempted. Only skipped
+            # project deps are named: MidPkg is implied by LoadsFailPkg, and FailPkg's extension
+            # is skipped too but not reported, as its parent failing implies it.
+            skipped = precompile_capture(Skipped_output, ["LoadsFailPkg", "TriggerPkg"])
+            @test skipped isa Base.Precompilation.PkgPrecompileError
+            @test occursin("2 packages were skipped because a dependency failed to precompile, including LoadsFailPkg\n", skipped.msg)
+            @test occursin("skip_dependents=false", skipped.msg)
+            @test !occursin("MidPkg", skipped.msg)
+            @test !occursin("FailPkgTriggerExt", skipped.msg)
+            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg"; skip_dependents=false)
             @test loadsfailpkg isa Base.Precompilation.PkgPrecompileError
-            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly")
-            @test length(dependsonly) == 1
+            @test !occursin("skipped", loadsfailpkg.msg)
+            # the extension is never attempted, even when dependents are
+            noskipext = precompile_capture(NoskipExt_output, ["LoadsFailPkg", "TriggerPkg"]; skip_dependents=false)
+            @test noskipext isa Base.Precompilation.PkgPrecompileError
+            @test !occursin("skipped", noskipext.msg)
+            @test !occursin("FailPkgTriggerExt", noskipext.msg)
+            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly"; skip_dependents=false)
+            @test dependsonly isa Vector{String} && length(dependsonly) == 1
+            # A fresh cache is reused unless `force` is passed
+            fresh = precompile_capture(Fresh_output, "DependsOnly"; skip_dependents=false)
+            @test fresh isa Vector{String} && fresh == dependsonly
+            forced = precompile_capture(Forced_output, "DependsOnly"; skip_dependents=false, force=true)
+            @test forced isa Vector{String} && length(forced) == 1
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
         end
+
+        output = read(Skipped_output, String)
+        # LoadsFailPkg is skipped once FailPkg fails, so it never runs
+        @test count("✗ FailPkg", output) > 0
+        @test count("✗ LoadsFailPkg", output) > 0
+        @test count("skipped, FailPkg failed to precompile", output) > 0
+        @test count("2 skipped because a dependency failed to precompile", output) == 1
+        @test count("Now FailPkg is running.", output) == 1
+        @test count("Now LoadsFailPkg is running.", output) == 0
+        @test count("Now TriggerPkg is running.", output) == 1
+        # MidPkg is not a project dep, so it is skipped without a line of its own
+        @test count("Now MidPkg is running.", output) == 0
+        @test count("MidPkg", output) == 0
+        # the extension of FailPkg is neither attempted nor listed
+        @test count("Now FailPkgTriggerExt is running.", output) == 0
+        @test count("FailPkgTriggerExt", output) == 0
+
+        output = read(NoskipExt_output, String)
+        @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("Now MidPkg is running.", output) == 0 # already precompiled by the run above
+        @test count("Now FailPkgTriggerExt is running.", output) == 0
+        @test count("FailPkgTriggerExt", output) == 0
 
         output = read(LoadsFailPkg_output, String)
         # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
@@ -2763,6 +2955,7 @@ end
         @test count("✗ LoadsFailPkg", output) > 0
         @test count("Now FailPkg is running.", output) == 1
         @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("Now MidPkg is running.", output) == 1
         @test count("DependsOnly precompiling.", output) == 0
 
         # DependsOnly should succeed because it doesn't actually load FailPkg
@@ -2773,6 +2966,49 @@ end
         @test count("Precompiling DependsOnly finished.", output) == 1
         @test count("Now FailPkg is running.", output) == 0
         @test count("Now DependsOnly is running.", output) == 1
+
+        # nothing to do: the fresh cache is reused, so no package runs and no summary is printed
+        output = read(Fresh_output, String)
+        @test count("Now DependsOnly is running.", output) == 0
+        @test count("successfully precompiled", output) == 0
+        output = read(Forced_output, String)
+        @test count("Now DependsOnly is running.", output) == 1
+        @test count("1 dependency successfully precompiled", output) == 1
+    end
+end
+
+# Requesting precompilation of a package that lives in the sysimage has nothing to do
+# and must not error, even when it is the only dependency of the environment (#63189)
+@testset "precompilepkgs on a sysimage package" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        sha_uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+        @test Base.in_sysimage(Base.PkgId(Base.UUID(sha_uuid), "SHA"))
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            SHA = "$sha_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.SHA]]
+            uuid = "$sha_uuid"
+            version = "1.0.0"
+            """)
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            io = IOBuffer()
+            @test Base.Precompilation.precompilepkgs(["SHA"]; io, fancyprint=false) === nothing
+            @test Base.Precompilation.precompilepkgs(; io, fancyprint=false) === nothing
+            @test isempty(takestring!(io))
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
     end
 end
 
@@ -2979,6 +3215,34 @@ end
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+# Full workspace precompilation should find the root and recursively include member packages.
+@testset "full workspace precompilation" begin
+    workspace_path = joinpath(@__DIR__, "project", "Workspaces", "PrecompileExt")
+    nested_member_path = joinpath(workspace_path, "Nested", "Baz")
+    for active_project in (workspace_path, nested_member_path)
+        mkdepottempdir() do depot
+            original_depot_path = copy(Base.DEPOT_PATH)
+            old_proj = Base.active_project()
+            try
+                push!(empty!(DEPOT_PATH), depot)
+                Base.set_active_project(active_project)
+
+                io = IOBuffer()
+                ioc = IOContext(io, :color => false)
+                Base.Precompilation.precompilepkgs(; io=ioc, fancyprint=false, manifest=true)
+                output = String(take!(io))
+
+                @test occursin("Foo", output)
+                @test occursin("Bar", output)
+                @test occursin("Baz", output)
+            finally
+                Base.set_active_project(old_proj)
+                append!(empty!(DEPOT_PATH), original_depot_path)
+            end
         end
     end
 end
@@ -3381,6 +3645,104 @@ end
     end end
 end
 
+# Test that precompilepkgs recompiles a cached dependent of a loaded package when the
+# environment now resolves a different version of that package. The dependent's cache is
+# built against the loaded version, so a check that trusts loaded modules considers it fresh.
+@testset "precompilepkgs recompiles dependents of a loaded package at another version" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        for (dirname, marker, version) in (("LoadedDepOld", 1, "0.1.0"), ("LoadedDepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "LoadedDep"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "LoadedDep.jl"),
+                  """
+                  module LoadedDep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+        for (project, loaded_dep_dir, version) in (("old_project", "LoadedDepOld", "0.1.0"), ("new_project", "LoadedDepNew", "0.2.0"))
+            project_path = joinpath(dir, project)
+            mkpath(project_path)
+            write(joinpath(project_path, "Project.toml"),
+                  """
+                  [deps]
+                  DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+                  LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+                  """)
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  manifest_format = "2.0"
+
+                  [[deps.DepUser]]
+                  deps = ["LoadedDep"]
+                  path = "../dev/DepUser/"
+                  uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+                  version = "0.1.0"
+
+                  [[deps.LoadedDep]]
+                  path = "../dev/$loaded_dep_dir/"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+        end
+        old_project_path = joinpath(dir, "old_project")
+        new_project_path = joinpath(dir, "new_project")
+
+        # Cache DepUser against the old LoadedDep
+        @test success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e 'using DepUser'`,
+                             "JULIA_DEPOT_PATH" => depot))
+
+        # Load the old LoadedDep, switch to the project that resolves the new one, and precompile.
+        # DepUser has to be rebuilt against the new LoadedDep although the loaded one still matches
+        # its existing cache. Report which LoadedDep build the freshest DepUser cache requires.
+        script = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.Precompilation.precompilepkgs(; fancyprint=false)
+            dep = Base.identify_package("LoadedDep")
+            depuser = Base.identify_package("DepUser")
+            new_dep_build, _ = Base.parse_cache_buildid(Base.compilecache_freshest_path(dep; ignore_loaded=true))
+            depuser_cache = Base.compilecache_freshest_path(depuser; ignore_loaded=true)
+            io = open(depuser_cache)
+            Base.isvalid_cache_header(io)
+            required_modules = Base.parse_cache_header(io, depuser_cache)[3]
+            close(io)
+            required_dep_build = only(build_id for (pkg, build_id) in required_modules if pkg == dep)
+            println("DEPUSER_REBUILT_AGAINST_NEW_DEP=", required_dep_build == new_dep_build)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        logfile = joinpath(dir, "precompile.log")
+        proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+        output = read(logfile, String)
+        @test success(proc) || (println(output); false)
+        @test occursin("DEPUSER_REBUILT_AGAINST_NEW_DEP=true", output)
+    end end
+end
+
 # Test that warn_loaded does not warn when the loaded dep is already at the correct version
 @testset "warn_loaded does not warn when loaded dep matches env version" begin
     mkdepottempdir() do depot; mktempdir() do dir
@@ -3532,6 +3894,10 @@ precompile_test_harness("cache rejection reasons") do dir
     Base.record_reason(reasons, :incompatible_header)
     @test Base.list_reasons(reasons) == msg
 
+    # a dependency loaded at a different version is reported by name
+    @test Base.list_reasons(Dict(Symbol("dep_loaded_incompatible:Foo") => 1)) ==
+        " (cache not reused: Foo is already loaded at a different version)"
+
     # rejections of caches that weren't the ones searched for are never reported
     @test Base.list_reasons(Dict(:buildid_mismatch => 2)) == ""
     @test Base.list_reasons(nothing) == ""
@@ -3673,6 +4039,267 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
         @test Base.iscancelled(CancelExtB.B_MID)
         @test Base.iscancelled(CancelExtB.B_CHILD)
         @test Base.iscancelled(CancelExtB.B_GRAND)
+    end
+end
+
+precompile_test_harness("pkgimage type cache dedup") do dir
+    # Check deduplication when a type precedes its supertype in the image.
+    # The unused IFD binding preserves that order.
+    write(joinpath(dir, "DedupColors.jl"),
+          """
+          module DedupColors
+              export CAbstractGray, CGray
+              abstract type CAbstractGray{T} end
+              struct CGray{T} <: CAbstractGray{T}
+                  val::T
+              end
+              Base.adjoint(c::CAbstractGray) = c
+          end
+          """)
+    write(joinpath(dir, "DedupTrigger.jl"),
+          """
+          module DedupTrigger
+              using DedupColors
+
+              const IFD = Dict{UInt16, Any}
+
+              function readdata!(target::AbstractArray)
+                  fill!(reinterpret(UInt8, view(target, 1:length(target))), 0x00)
+              end
+
+              function load()
+                  ifd = IFD()
+                  ifd[0x0106] = UInt16(1)
+                  type = Int(ifd[0x0106]) == 2 ? Ref : CGray
+                  pixeltype = type{UInt8}
+                  cache = Array{pixeltype}(undef, 2, 2)
+                  readdata!(cache)
+                  Matrix(cache')
+              end
+
+              load()
+          end
+          """)
+    Base.compilecache(Base.PkgId("DedupColors"))
+    Base.compilecache(Base.PkgId("DedupTrigger"))
+    @eval using DedupColors
+    M = invokelatest() do
+        Memory{DedupColors.CGray{UInt8}}
+    end
+    @eval using DedupTrigger
+    invokelatest() do
+        CGrayU8 = DedupColors.CGray{UInt8}
+        for T in (Memory{CGrayU8}, DenseVector{CGrayU8})
+            tn = T.name
+            n = 0
+            for t in tn.cache
+                if t isa DataType && t.name === tn &&
+                        length(t.parameters) == length(T.parameters) &&
+                        all(i -> t.parameters[i] === T.parameters[i], eachindex(T.parameters))
+                    n += 1
+                end
+            end
+            @test n == 1
+        end
+        @test M === Memory{DedupColors.CGray{UInt8}}
+    end
+end
+
+# Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
+# the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
+# precompile in a child whose stderr is a pty and look for the color escapes in its output.
+if !Sys.iswindows() # child-on-fake-pty tests are skipped on Windows (see misc.jl)
+    @testset "precompile output to a TTY is colored" begin
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        mkdepottempdir() do depot
+            pkg_path = joinpath(depot, "dev", "ColorTTY")
+            mkpath(joinpath(pkg_path, "src"))
+            write(joinpath(pkg_path, "src", "ColorTTY.jl"), "module ColorTTY end\n")
+            write(joinpath(pkg_path, "Project.toml"),
+                """
+                name = "ColorTTY"
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            write(joinpath(pkg_path, "Manifest.toml"),
+                """
+                julia_version = "$(VERSION.major).$(VERSION.minor).0"
+                manifest_format = "2.0"
+
+                [[deps.ColorTTY]]
+                path = "."
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            # `stderr` is passed through untouched so the driver has to wrap the raw TTY itself
+            cmd = addenv(`$(Base.julia_cmd()) --color=yes --startup-file=no --project=$pkg_path -e 'Base.Precompilation.precompilepkgs(["ColorTTY"]; fancyprint=false)'`,
+                         "JULIA_DEPOT_PATH" => depot)
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, devnull, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            output = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(output, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            out = String(take!(output))
+            @test success(p)
+            @test occursin("ColorTTY", out)
+            @test occursin("\e[32m", out) # the green ✓ of the precompiled package
+        end
+    end
+end
+
+# A package loaded in this session whose cache file has since been evicted (#63187):
+# a dependent or extension precompiled afterwards cannot be built against the loaded
+# build id, so it must be loaded from source in this session rather than fail.
+# Windows keeps a loaded package's .ji open, so the eviction cannot be staged there.
+@testset "loaded dependency with evicted cache" begin
+    Sys.iswindows() && return
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        parent_uuid = "c1000000-0000-0000-0000-000000000001"
+        trigger_uuid = "c2000000-0000-0000-0000-000000000002"
+        dependent_uuid = "c3000000-0000-0000-0000-000000000003"
+
+        parent_dir = joinpath(depot, "dev", "EvictParent")
+        mkpath(joinpath(parent_dir, "src"))
+        mkpath(joinpath(parent_dir, "ext"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "EvictParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [weakdeps]
+            EvictTrigger = "$trigger_uuid"
+
+            [extensions]
+            EvictParentTriggerExt = "EvictTrigger"
+            """)
+        write(joinpath(parent_dir, "src", "EvictParent.jl"), """
+            module EvictParent
+            f(x) = error("extension not loaded")
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "EvictParentTriggerExt.jl"), """
+            module EvictParentTriggerExt
+            using EvictParent, EvictTrigger
+            EvictParent.f(x::Int) = "extension loaded"
+            end
+            """)
+
+        trigger_dir = joinpath(depot, "dev", "EvictTrigger")
+        mkpath(joinpath(trigger_dir, "src"))
+        write(joinpath(trigger_dir, "Project.toml"), """
+            name = "EvictTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigger_dir, "src", "EvictTrigger.jl"), """
+            module EvictTrigger
+            end
+            """)
+
+        dependent_dir = joinpath(depot, "dev", "EvictDependent")
+        mkpath(joinpath(dependent_dir, "src"))
+        write(joinpath(dependent_dir, "Project.toml"), """
+            name = "EvictDependent"
+            uuid = "$dependent_uuid"
+            version = "0.1.0"
+
+            [deps]
+            EvictParent = "$parent_uuid"
+            """)
+        write(joinpath(dependent_dir, "src", "EvictDependent.jl"), """
+            module EvictDependent
+            using EvictParent
+            const parent = EvictParent
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            EvictParent = "$parent_uuid"
+            EvictTrigger = "$trigger_uuid"
+            EvictDependent = "$dependent_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.EvictParent]]
+            path = "../dev/EvictParent/"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [deps.EvictParent.weakdeps]
+            EvictTrigger = "$trigger_uuid"
+
+            [deps.EvictParent.extensions]
+            EvictParentTriggerExt = "EvictTrigger"
+
+            [[deps.EvictTrigger]]
+            path = "../dev/EvictTrigger/"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+
+            [[deps.EvictDependent]]
+            deps = ["EvictParent"]
+            path = "../dev/EvictDependent/"
+            uuid = "$dependent_uuid"
+            version = "0.1.0"
+            """)
+
+        julia = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path`,
+                       "JULIA_DEPOT_PATH" => depot, "JULIA_LOAD_PATH" => "@")
+        run(`$julia -e "using EvictParent, EvictTrigger, EvictDependent"`)
+
+        # Load the parent, then evict every cache file, as a concurrent process compiling
+        # the same packages for other flags under JULIA_MAX_NUM_PRECOMPILE_FILES would.
+        # Only the .ji files go; a missing .ji is enough for a cache miss. The dependent
+        # and the extension then have to be recompiled against a parent whose loaded build
+        # id is no longer on disk.
+        preamble = """
+            using EvictParent
+            const parent = EvictParent
+            for (root, _, files) in walkdir(joinpath(DEPOT_PATH[1], "compiled")), file in files
+                endswith(file, ".ji") && rm(joinpath(root, file))
+            end
+            """
+        function run_after_eviction(name, body)
+            outfile = joinpath(depot, "evict_$(name)_out.txt")
+            errfile = joinpath(depot, "evict_$(name)_err.txt")
+            proc = run(pipeline(ignorestatus(`$julia -e $(preamble * body)`); stdout=outfile, stderr=errfile))
+            out = read(outfile, String)
+            err = read(errfile, String)
+            if !success(proc) || !occursin("evicted cache ok", out)
+                println(stderr, "evicted-cache $name run failed\nstdout:\n", out, "stderr:\n", err)
+            end
+            @test success(proc)
+            @test occursin("evicted cache ok", out)
+            # the strict worker must not fail outright, and the session must not load a
+            # second copy of the parent from the recompiled cache
+            @test !occursin("not available with flags", err)
+            @test !occursin("Replacing module", err)
+            @test !occursin("failed to create a usable precompiled cache file", err)
+            @test !occursin("Error during loading of extension", err)
+        end
+        run_after_eviction("dependent", """
+            using EvictDependent
+            EvictDependent.parent === parent || error("EvictDependent is bound to a different EvictParent")
+            Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
+            println("evicted cache ok")
+            """)
+        run_after_eviction("extension", """
+            using EvictTrigger
+            EvictParent.f(1) == "extension loaded" || error("extension not loaded")
+            Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
+            println("evicted cache ok")
+            """)
     end
 end
 

@@ -616,6 +616,12 @@ function to_code_info(ex::SyntaxTree)
     )
 end
 
+"""
+This pass convert's JuliaLowering's internal representation of untyped IR into
+a form the Julia runtime understands. This is a necessary decoupling which
+separates the development of JuliaLowering.jl from the evolution of the Julia
+runtime itself.
+"""
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
     @jl_assert kind(ex) in KSet"thunk code_info" ex
     add_debuginfo!(kind(ex) === K"thunk" ? ex[1] : ex)
@@ -839,9 +845,32 @@ end
 
 Like `include`, except reads code from the given string rather than from a file.
 """
-function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
-                        expr_compat_mode=false, version::VersionNumber=VERSION)
-    eval(mod, parseall(SyntaxTree, code; filename, version); expr_compat_mode)
+function include_string(mapexpr::Function, mod::Module, code::AbstractString,
+                        filename::AbstractString; expr_compat_mode=false,
+                        version::Union{VersionNumber, Nothing}=nothing)
+    # TODO: fix this hack.  The normal way of getting the parser for this module
+    # only gives us Expr.  We probably want the parser to always create
+    # SyntaxTree, then convert it to Expr if the version is too low.
+    version = if isnothing(version) && isdefined(mod, Symbol("#_internal_julia_parse"))
+        vp = getglobal(mod, Symbol("#_internal_julia_parse"))
+        vp isa Base.VersionedParse ? vp.ver : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+    else
+        version isa VersionNumber ? version : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+    end
+    st = parseall(SyntaxTree, code; filename, version, ignore_warnings=true)
+    @jl_assert kind(st) === K"toplevel" st
+    if mapexpr !== identity
+        # TODO: Is there any way to support provenance here?
+        local last = nothing
+        for c in children(st)
+            last = eval(mod, expr_to_est(mapexpr(est_to_expr(c))); expr_compat_mode)
+        end
+        last
+    else
+        eval(mod, st; expr_compat_mode)
+    end
 end
+include_string(mod, code, filename="string"; kws...) =
+    include_string(identity, mod, code, filename; kws...)
 
 include(path::AbstractString) = include(JuliaLowering, path)

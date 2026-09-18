@@ -678,7 +678,7 @@ let c1 = Threads.Condition()
     c2 = Threads.Condition(c1.lock)
     lock(c2)
     t = @task nothing
-    Base._wait2(c1, t)
+    Base.schedule_on_notify!(c1, t)
     c3, c4 = deserialize(IOBuffer(sprint(serialize, [c1, c2])))::Vector{Threads.Condition}
     @test c3.lock === c4.lock
     @test islocked(c1)
@@ -826,4 +826,28 @@ end
     data = take!(buf)
     data[end] = 0xbf # state byte: invalid severity 0xbf
     @test_throws ArgumentError deserialize(IOBuffer(data))
+end
+
+@testset "WaitEntryN" begin
+    # variable-sized runtime object: it must be reconstructed through the
+    # runtime allocator (the generic path would allocate only the fixed
+    # datatype size, and the GC would then scan a nonexistent slot tail)
+    w = Base.WaitEntryN(current_task(), 4)
+    buf = IOBuffer()
+    serialize(buf, w)
+    seekstart(buf)
+    w2 = deserialize(buf)
+    @test w2 isa Core.WaitEntryN
+    @test Base._nslots(w2) == 4
+    # transient wait state does not round-trip: no task, fresh free slots
+    @test (@atomic :monotonic w2.task) === nothing
+    @test all(i -> Base._slot_owner(w2, i) === nothing, 1:4)
+    GC.gc(true)
+    # identity sharing within one stream
+    buf = IOBuffer()
+    serialize(buf, (w, w))
+    seekstart(buf)
+    a, b = deserialize(buf)
+    @test a === b && Base._nslots(a) == 4
+    GC.gc(true)
 end

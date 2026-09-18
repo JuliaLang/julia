@@ -724,7 +724,7 @@ end
 let (inner, result) = test_mod.f_kwbody_box()
     @test result == 1
     # The kw body closure should be captured directly, not through a Box
-    kw_body_field = only(filter(f -> startswith(string(f), "#kw_body#"), fieldnames(typeof(inner))))
+    kw_body_field = only(filter(f -> contains(string(f), "#kw_body#"), fieldnames(typeof(inner))))
     @test !(getfield(inner, kw_body_field) isa Core.Box)
 end
 
@@ -1218,7 +1218,7 @@ end
 # global scope (typevars are only visible in the same lambda).  However, it
 # would probably make more sense to keep the sparam in both methods, and have
 # the inner lambda's sig refer to the sparam instead of the global.
-@test JuliaLowering.include_string(test_mod, """
+@test_warn r"declares type variable g_shadowed_by_sparam but does not use it" @test JuliaLowering.include_string(test_mod, """
 global g_shadowed_by_sparam = Int
 function f_sp_in_sig_in_lam_in_optarg(
         x, y=((z::g_shadowed_by_sparam)->z)) where g_shadowed_by_sparam
@@ -1268,7 +1268,7 @@ end
     """) == (1,2)
 
     # Inner methods in control flow are known to be buggy/discouraged
-    @test JuliaLowering.include_string(test_mod, """
+    @test_warn r"Method definition inner\(\).*overwritten" @test JuliaLowering.include_string(test_mod, """
     begin
         function f_if_redefines_inner(cond)
             function inner(); 1; end
@@ -1281,7 +1281,7 @@ end
     end
     """) == (2,2)
 
-    @test JuliaLowering.include_string(test_mod, """
+    @test_warn r"Method definition inner\(\).*overwritten" @test JuliaLowering.include_string(test_mod, """
     begin
         function f_let_redefines_inner()
             local a,b

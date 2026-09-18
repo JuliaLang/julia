@@ -144,11 +144,13 @@ end
             z = ordered[min(i1,j1)], ordered[max(i2,j2)]
             @test Base._extrema_rf(x, y) === z
         end
+        # a NaN operand wins, but its sign is not preserved: the sign of a NaN
+        # result is non-deterministic, so compare with `isequal` rather than `===`
         for i in 1:2, j1 in 1:6, j2 in 1:6 # unordered test (only 1 NaN)
             x = unorded[i] , unorded[i]
             y = ordered[j1], ordered[j2]
-            @test Base._extrema_rf(x, y) === x
-            @test Base._extrema_rf(y, x) === x
+            @test Base._extrema_rf(x, y) ≣ x
+            @test Base._extrema_rf(y, x) ≣ x
         end
         for i in 1:2, j in 1:2 # unordered test (2 NaNs)
             x = unorded[i], unorded[i]
@@ -2448,10 +2450,10 @@ let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end
 
-@testset "mod1 and fld1" begin
+@testset "mod1 and cld" begin
     @test all(x -> (m=mod1(x,3); 0<m<=3), -5:+5)
-    @test all(x -> x == (fld1(x,3)-1)*3 + mod1(x,3), -5:+5)
-    @test all(x -> fldmod1(x,3) == (fld1(x,3), mod1(x,3)), -5:+5)
+    @test all(x -> x == (cld(x,3)-1)*3 + mod1(x,3), -5:+5)
+    @test all(x -> cldmod1(x,3) == (cld(x,3), mod1(x,3)), -5:+5)
 end
 #Issue #5570
 @test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]

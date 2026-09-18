@@ -278,7 +278,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     }
 
     jl_print_gc_stats(JL_STDERR);
-    if (jl_options.code_coverage)
+    // an image-generating process instruments the image, not itself
+    if (jl_options.code_coverage && !jl_generating_output())
         jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
@@ -537,9 +538,7 @@ int jl_isabspath(const char *in) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
 {
-    const char* path_ = jl_symbol_name(path);
-    int tpath_len = strlen(jl_options.tracked_path);
-    return (strlen(path_) >= tpath_len) && (strncmp(path_, jl_options.tracked_path, tpath_len) == 0);
+    return jl_path_is_tracked(jl_symbol_name(path));
 }
 
 static void jl_set_io_wait(int v)

@@ -2050,14 +2050,11 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
     }
 }
 
-inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_binding_t *b, jl_module_t *mod, jl_sym_t *name)
+inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic)
 {
     jl_value_t *r = isatomic ? jl_atomic_load(p) : jl_atomic_load_relaxed(p);
-    if (__unlikely(r == NULL)) {
-        if (b)
-            jl_undefined_var_error(name, (jl_value_t*)mod);
+    if (__unlikely(r == NULL))
         jl_throw(jl_undefref_exception);
-    }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2);
     args[0] = r;
@@ -2065,9 +2062,7 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
         args[1] = rhs;
         jl_value_t *y = jl_apply_generic(op, args, 2);
         args[1] = y;
-        if (b)
-            jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!");
-        else if (!jl_isa(y, ty))
+        if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
         jl_gc_wb(parent, y);
         if (isatomic ? jl_atomic_cmpswap(p, &r, y) : jl_atomic_cmpswap_release(p, &r, y)) {
@@ -2185,7 +2180,7 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
     jl_value_t *ty = jl_field_type_concrete(st, i);
     char *p = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, NULL, NULL, NULL);
+        return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic);
     }
     else {
         uint8_t *psel = jl_is_uniontype(ty) ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
@@ -2193,7 +2188,7 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
     }
 }
 
-inline jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic, jl_module_t *mod, jl_sym_t *name)
+inline jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic)
 {
     jl_datatype_t *rettyp = jl_apply_cmpswap_type(ty);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
@@ -2202,11 +2197,8 @@ inline jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_val
     while (1) {
         jl_gc_wb(parent, rhs);
         success = isatomic ? jl_atomic_cmpswap(p, &r, rhs) : jl_atomic_cmpswap_release(p, &r, rhs);
-        if (__unlikely(r == NULL)) {
-            if (mod && name)
-                jl_undefined_var_error(name, (jl_value_t*)mod);
+        if (__unlikely(r == NULL))
             jl_throw(jl_undefref_exception);
-        }
         if (success || !jl_egal(r, expected))
             break;
     }
@@ -2298,7 +2290,7 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
     size_t offs = jl_field_offset(st, i);
     char *p = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        return replace_value(ty, (_Atomic(jl_value_t*)*)p, v, expected, rhs, isatomic, NULL, NULL);
+        return replace_value(ty, (_Atomic(jl_value_t*)*)p, v, expected, rhs, isatomic);
     }
     else {
         size_t fsz = jl_field_size(st, i);

@@ -10,9 +10,14 @@
 
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
+#ifdef JL_LIBRARY_STATIC
+#include "jl_static_codegen_fallbacks.inc"
+#endif
+
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        ios_t *z, ios_t *s, jl_emission_params_t *params) UNAVAILABLE
+        ios_t *z, uint32_t checksum, const char *unpack_func,
+        jl_emission_params_t *params) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, size_t *num, void **gvs) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gv_inits_fallback(void *native_code, size_t *num, void **inits) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, size_t *num_els, jl_code_instance_t *fns) UNAVAILABLE
@@ -98,6 +103,24 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
 JL_DLLEXPORT const char *jl_objcache_disabled_notice_fallback(void)
 {
     return NULL;
+}
+
+JL_DLLEXPORT jl_value_t *jl_objcache_kv_get_fallback(const char *ns, const uint8_t *key,
+                                                     size_t keylen)
+{
+    return jl_nothing;
+}
+
+JL_DLLEXPORT int jl_objcache_kv_put_fallback(const char *ns, const uint8_t *key,
+                                             size_t keylen, const uint8_t *val,
+                                             size_t vallen)
+{
+    return 0;
+}
+
+JL_DLLEXPORT int jl_objcache_kv_enabled_fallback(void)
+{
+    return 0;
 }
 
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)

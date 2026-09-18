@@ -42,8 +42,10 @@ end
 function print(io::IO, xs...)
     lock(io)
     try
-        for x in xs
-            print(io, x)
+        # xs[i] might be a known Union, and under --trim that gets split regardless of length.
+        # In contrast, `for x in xs` will fall back to Any for unions longer than 3.
+        for i in 1:nfields(xs)
+            print(io, xs[i])
         end
     finally
         unlock(io)
@@ -139,8 +141,8 @@ function print_to_string(xs...)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
-    for x in xs
-        print(s, x)
+    for i in 1:nfields(xs)
+        print(s, xs[i])
     end
     takestring!(s)
 end
@@ -156,8 +158,8 @@ function string_with_env(env, xs...)
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
-    for x in xs
-        print(env_io, x)
+    for i in 1:nfields(xs)
+        print(env_io, xs[i])
     end
     takestring!(s)
 end
@@ -234,8 +236,13 @@ function show(
 end
 
 # optimized methods to avoid iterating over chars
-write(io::IO, s::Union{String,SubString{String}}) =
-    GC.@preserve s (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int
+# (an explicit token is forwarded to unsafe_write, whose cancellable methods
+# accept it; the default sentinel keeps the plain call, which any IO's
+# unsafe_write method supports)
+write(io::IO, s::Union{String,SubString{String}}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    cancel === DEFAULT_CANCEL ?
+        GC.@preserve(s, (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int) :
+        GC.@preserve(s, (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)); cancel) % Int)::Int)
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 """

@@ -791,3 +791,30 @@ end
     end
     @test (res isa Exception) || res == (1, (2, 3))
 end
+
+@testset "reductions over ReshapedArray" begin
+    @test sum(reshape(map(UInt8, 1:9), 3, 3)) === 45
+    @test @inferred(sum(reshape(1:4, 2, 2))) === 10
+    for f in (minimum, maximum, extrema)
+        @test_throws "range must be non-empty" f(reshape(1:0, 0, 1))
+    end
+
+    P = reshape(PermutedDimsArray(collect(reshape(1:6, 2, 3)), (2, 1)), 2, 3)
+    C = collect(P)
+    @test mapreduce(string, *, P) == mapreduce(string, *, C)
+    @test foldl(-, P) == foldl(-, C) && foldr(-, P) == foldr(-, C)
+    @test [x for x in P] == C
+end
+
+@testset "type-stability for nested reductions" begin
+    nested_count(v) = maximum(count(!iszero, v .* i) for i in 1:3)
+    @test Base.infer_return_type(nested_count, (Vector{Float64},)) === Int
+    nested_sum(v) = sum(x -> sum(y -> y * x, v; init = 0.0), v; init = 0.0)
+    @test Base.infer_return_type(nested_sum, (Vector{Float64},)) === Float64
+    nested_prod(v) = maximum(prod(v .* i; init = 1.0) for i in 1:3)
+    @test Base.infer_return_type(nested_prod, (Vector{Float64},)) === Float64
+    v = [1.0, 2.0, 0.0]
+    @test nested_count(v) == 2
+    @test nested_sum(v) == sum(v)^2
+    @test nested_prod(v) == 0.0
+end

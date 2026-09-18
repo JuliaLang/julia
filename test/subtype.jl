@@ -3120,6 +3120,24 @@ let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E
     @test fixed_range isa Core.SimpleVector && fixed_range[1] isa TypeVar && !fixed_range[2]
 end
 
+# `Type{T}` pins `T` invariantly: the only dispatch types under `Type`
+# are the `Type{X}` singletons, each fixing `T = X` (the `DataType`/`Union`/
+# `UnionAll` kinds never appear as a dispatch-type tuple element). So even the
+# reflexive `Type` intersection must report `T` as bound, matching every
+# `Type{X}` case and `Base.Compiler.constrains_var(T, Type{T}, MATCH_TYPEOF)`.
+let e = only(intersection_env(Type, Type)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2]
+end
+let e = only(intersection_env(Type{Int}, Type)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2]
+end
+let e = only(intersection_env(Type{Integer}, Type)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2]
+end
+let e = only(intersection_env(Type{Union{}}, Type)[2])
+    @test e === Union{}
+end
+
 # Env entries must not introduce a fresh `newvar<:vb.lb` wrapper when `vb.lb`
 # is already a TypeVar. The doubled `where T<:T_outer where T_outer` pattern
 # that wrapper would produce accumulates across nested intersections and

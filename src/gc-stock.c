@@ -1312,6 +1312,11 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
     uv_mutex_unlock(&live_tasks_lock);
 }
 
+void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    // do nothing
+}
+
 static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_NOTSAFEPOINT
 {
     assert(pg->fl_begin_offset != UINT16_MAX);
@@ -2437,22 +2442,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         }
         // Symbols are always marked
         assert(vtag != (uintptr_t)jl_symbol_type && vtag != jl_symbol_tag << 4);
-        if (vtag == (jl_datatype_tag << 4) ||
-            vtag == (jl_unionall_tag << 4) ||
-            vtag == (jl_uniontype_tag << 4) ||
-            vtag == (jl_typeeq_tag << 4) ||
-            vtag == (jl_typeegal_tag << 4) ||
-            vtag == (jl_tvar_tag << 4) ||
-            vtag == (jl_vararg_tag << 4) ||
-            vtag == (jl_globalref_tag << 4) ||
-            vtag == (jl_gotoifnot_tag << 4) ||
-            vtag == (jl_returnnode_tag << 4) ||
-            vtag == (jl_enternode_tag << 4) ||
-            vtag == (jl_pinode_tag << 4) ||
-            vtag == (jl_phinode_tag << 4) ||
-            vtag == (jl_phicnode_tag << 4) ||
-            vtag == (jl_upsilonnode_tag << 4) ||
-            vtag == (jl_quotenode_tag << 4)) {
+        if (vtag >= jl_max_tags << 4) {
+            jl_datatype_t *vt = (jl_datatype_t *)vtag;
+            if (__unlikely(!jl_is_datatype(vt) || vt->smalltag))
+                gc_dump_queue_and_abort(ptls, vt);
+        }
+        else if (vtag - (jl_gc_generic_tags_first << 4) <=
+                 (jl_gc_generic_tags_last - jl_gc_generic_tags_first) << 4) {
             // these objects have pointers in them, but no other special handling
             // so we want these to fall through to the end
             vtag = (uintptr_t)ijl_small_typeof[vtag / sizeof(*ijl_small_typeof)];
@@ -2557,6 +2553,12 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 size_t dtsz = sizeof(jl_cancel_source_t) + np * sizeof(jl_cancel_parent_link_t);
                 if (update_meta)
                     gc_setmark(ptls, o, bits, dtsz);
+                // the waiter-list head and the walk lock are strong
+                // (adjacent) slots (the world is stopped; the relaxed
+                // mutator ordering is irrelevant here)
+                gc_mark_objarray(ptls, new_obj, (jl_value_t**)&cs->waiters_head,
+                                 (jl_value_t**)&cs->waiters_head + 2, 1,
+                                 (2 << 2) | (bits & GC_OLD));
                 if (np > 0) {
                     jl_value_t **objary_begin = (jl_value_t**)jl_cancel_source_links(cs);
                     // stride over the link entries, visiting only the
@@ -2565,6 +2567,32 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     jl_value_t **objary_end = objary_begin + step * np;
                     uintptr_t nptr = (np << 2) | (bits & GC_OLD);
                     gc_mark_objarray(ptls, new_obj, objary_begin, objary_end, step, nptr);
+                }
+            }
+            else if (vtag == jl_wait_entry_tag << 4) {
+                // Variable-sized: `nslots` {owner, next, aux} wait slots
+                // follow the fixed fields; `task` and the per-slot `owner`
+                // and `next` are strong references, `aux` is data.
+                jl_wait_entry_t *we = (jl_wait_entry_t*)new_obj;
+                size_t ns = we->nslots;
+                size_t dtsz = sizeof(jl_wait_entry_t) + ns * sizeof(jl_wait_slot_t);
+                if (update_meta)
+                    gc_setmark(ptls, o, bits, dtsz);
+                jl_value_t **task = (jl_value_t**)&we->task;
+                gc_mark_objarray(ptls, new_obj, task, task + 1, 1,
+                                 (1 << 2) | (bits & GC_OLD));
+                if (ns > 0) {
+                    jl_value_t **b = (jl_value_t**)jl_wait_entry_slots(we);
+                    uint32_t step = sizeof(jl_wait_slot_t) / sizeof(jl_value_t*);
+                    uintptr_t nptr = (ns << 2) | (bits & GC_OLD);
+                    // two strided passes: the `owner` slot of each entry...
+                    gc_mark_objarray(ptls, new_obj, b, b + step * ns, step, nptr);
+                    // ...and the `next` slot. The endpoint must stay within
+                    // (or one past) the object: `b + 1 + step*ns` would point
+                    // a full word past its end, so end one past the last
+                    // `next` slot instead - the strided walk stops at the
+                    // same last element either way.
+                    gc_mark_objarray(ptls, new_obj, b + 1, b + step * (ns - 1) + 2, step, nptr);
                 }
             }
             else if (vtag == jl_string_tag << 4) {
@@ -2579,11 +2607,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_setmark(ptls, o, bits, dtsz);
             }
             return;
-        }
-        else {
-            jl_datatype_t *vt = (jl_datatype_t *)vtag;
-            if (__unlikely(!jl_is_datatype(vt) || vt->smalltag))
-                gc_dump_queue_and_abort(ptls, vt);
         }
         jl_datatype_t *vt = (jl_datatype_t *)vtag;
         if (vt->name == jl_genericmemory_typename) {
@@ -2976,6 +2999,21 @@ static void gc_queue_thread_local(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOT
     if (task != NULL) {
         gc_try_claim_and_push(mq, task, NULL);
         gc_heap_snapshot_record_root((jl_value_t*)task, "next task");
+    }
+    task = ptls2->abandon_victim;
+    if (task != NULL) {
+        gc_try_claim_and_push(mq, task, NULL);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "abandon victim");
+    }
+    task = ptls2->abandon_to;
+    if (task != NULL) {
+        gc_try_claim_and_push(mq, task, NULL);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "abandon target");
+    }
+    jl_value_t *abandon_result = ptls2->abandon_result;
+    if (abandon_result != NULL) {
+        gc_try_claim_and_push(mq, abandon_result, NULL);
+        gc_heap_snapshot_record_root(abandon_result, "abandon result");
     }
     task = ptls2->previous_task;
     if (task != NULL) {
@@ -3741,6 +3779,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         // either another thread is running GC, or the GC got disabled just now.
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+        if (old_state == JL_GC_STATE_UNSAFE)
+            jl_gc_safepoint(); // ensure our gc_safe transition is recognized
         return;
     }
 
@@ -3793,6 +3833,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+    if (old_state == JL_GC_STATE_UNSAFE)
+        jl_gc_safepoint(); // ensure our gc_safe transition is recognized
 
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check

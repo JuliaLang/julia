@@ -87,14 +87,17 @@ If one needs functionality both available as a library and a script, it is bette
 
 ### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
-Running a Julia script using `julia file.jl` does not throw
-[`InterruptException`](@ref) when you try to terminate it with CTRL-C
-(SIGINT). To run a certain code before terminating a Julia script,
+Running a Julia script using `julia file.jl` terminates the process when
+you try to terminate it with CTRL-C (SIGINT), without raising a catchable
+exception. To run a certain code before terminating a Julia script,
 which may or may not be caused by CTRL-C, use [`atexit`](@ref).
-Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
-file.jl` to execute a script while being able to catch
-`InterruptException` in the [`try`](@ref) block.
-Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
+Alternatively, you can call
+[`Base.exit_on_sigint(false)`](@ref Base.exit_on_sigint) in the script
+(or use `julia -e 'include(popfirst!(ARGS))' file.jl`, where it is
+disabled by default) to have CTRL-C cancel the script's ^C scope instead,
+observed at cancellation points as a catchable
+[`Base.CancellationRequest`](@ref) in a [`try`](@ref) block.
+Note that with the `-e` strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ### How do I pass options to `julia` using `#!/usr/bin/env`?
 

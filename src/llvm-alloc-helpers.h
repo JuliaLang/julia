@@ -124,7 +124,7 @@ namespace jl_alloc {
         void dump(llvm::raw_ostream &OS);
         void dump();
         bool addMemOp(llvm::Instruction *inst, unsigned opno, uint32_t offset, llvm::Type *elty,
-                      bool isstore, const llvm::DataLayout &DL);
+                      bool isload, bool isstore, const llvm::DataLayout &DL);
         std::pair<const uint32_t,Field> &getField(uint32_t offset, uint32_t size, llvm::Type *elty);
         std::map<uint32_t,Field>::iterator findLowerField(uint32_t offset)
         {

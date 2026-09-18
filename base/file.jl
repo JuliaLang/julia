@@ -1020,7 +1020,7 @@ julia> readdir("base")
  ⋮
  "version_git.sh"
  "views.jl"
- "weakkeydict.jl"
+ "weakdict.jl"
 
 julia> readdir("base", join=true)
 145-element Vector{String}:
@@ -1030,7 +1030,7 @@ julia> readdir("base", join=true)
  ⋮
  "base/version_git.sh"
  "base/views.jl"
- "base/weakkeydict.jl"
+ "base/weakdict.jl"
 
 julia> readdir(abspath("base"), join=true)
 145-element Vector{String}:
@@ -1040,7 +1040,7 @@ julia> readdir(abspath("base"), join=true)
  ⋮
  "/home/JuliaUser/dev/julia/base/version_git.sh"
  "/home/JuliaUser/dev/julia/base/views.jl"
- "/home/JuliaUser/dev/julia/base/weakkeydict.jl"
+ "/home/JuliaUser/dev/julia/base/weakdict.jl"
 ```
 """
 readdir(; join::Bool=false, kwargs...) = readdir(join ? pwd() : "."; join, kwargs...)::Vector{String}

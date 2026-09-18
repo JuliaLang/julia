@@ -282,7 +282,7 @@ julia> with(() -> a[] * b[], a=>3, b=>4)
 12
 ```
 """
-function with(f, pair::Pair{<:AbstractScopedValue}, rest::Pair{<:AbstractScopedValue}...)
+@inline function with(f, pair::Pair{<:AbstractScopedValue}, rest::Pair{<:AbstractScopedValue}...)
     @with(pair, rest..., f())
 end
 with(@nospecialize(f)) = f()

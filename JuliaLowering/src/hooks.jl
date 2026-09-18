@@ -6,8 +6,8 @@ Becomes `Core._lower()` upon activating JuliaLowering.
 Returns an svec with the lowered code (usually expr) as its first element, and
 (until integration is less experimental) whatever we want after it
 """
-function core_lowering_hook(@nospecialize(code), mod::Module, file::Union{String,Ptr{UInt8}}="none",
-                            line::Integer=0, world::UInt=typemax(Csize_t), _warn::Bool=false)
+function core_lowering_hook(@nospecialize(code), mod::Module, file::String="none",
+                            line::Int=0, world::UInt=typemax(Csize_t), _warn::Bool=false)
     if !(code isa SyntaxTree || code isa Expr)
         # e.g. LineNumberNode, integer...
         return Core.svec(code)
@@ -18,11 +18,6 @@ function core_lowering_hook(@nospecialize(code), mod::Module, file::Union{String
         # Refuse to run as `Core._lower` without a pinned world
         error("`Core._lower` was set without pinning the lowering world; use `JuliaLowering.activate!()`")
     end
-
-    # TODO: fix in base
-    file = file isa Ptr{UInt8} ? unsafe_string(file) : file
-    line = !(line isa Int) ? Int(line) : line
-
     local st0, st1 = nothing, nothing
     try
         st0 = code isa Expr ? expr_to_est(code, LineNumberNode(line, file)) : code

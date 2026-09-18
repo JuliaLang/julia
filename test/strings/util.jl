@@ -67,6 +67,18 @@ end
     @test rpad("⟨k|H₁|k̃⟩", 12) |> textwidth == 12
     @test lpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
+    # wide pad with a remainder: fill whole columns when possible, otherwise
+    # overshoot the requested width
+    @test lpad("x", 6, '🍕') == "🍕🍕🍕x" == lpad("x", 6, "🍕")
+    @test rpad("x", 6, '🍕') == "x🍕🍕🍕" == rpad("x", 6, "🍕")
+    @test lpad('x', 6, '🍕') == "🍕🍕🍕x"
+    @test rpad('x', 6, '🍕') == "x🍕🍕🍕"
+    @test lpad("x", 6, "🍕a") == "🍕a🍕x"
+    @test rpad("x", 6, "🍕a") == "x🍕a🍕"
+    @test lpad("x", 5, "🍕a") == "🍕a🍕x"
+    @test rpad("x", 5, "🍕a") == "x🍕a🍕"
+    @test lpad("x", 7, "a🍕b") == "a🍕ba🍕x"
+    @test rpad("x", 7, "a🍕b") == "xa🍕ba🍕"
     for pad in (rpad, lpad), p in ('\0', "\0", "\0\0", "\u302")
         if ncodeunits(p) == 1
             @test_throws r".*has zero textwidth.*maybe you want.*bytes.*" pad("foo", 10, p)

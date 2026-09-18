@@ -420,29 +420,45 @@ jl_checked_assignment(bp, mod, var, val);
 
 The garbage collector also operates under the assumption that it is aware of every
 older-generation object pointing to a younger-generation one. Any time a pointer is updated
-breaking that assumption, it must be signaled to the collector with the `jl_gc_wb` (write
-barrier) function like so:
+breaking that assumption, it must be signaled to the collector with a write barrier.
+
+Prefer the `jl_gc_write` macro, which performs the barrier and the store together, in the
+correct order:
 
 ```c
 jl_value_t *parent = some_old_value, *child = some_young_value;
-((some_specific_type*)parent)->field = child;
-jl_gc_wb(parent, child);
+jl_gc_write(parent, ((some_specific_type*)parent)->field, jl_value_t, child);
+jl_gc_write_atomic(parent, ((some_specific_type*)parent)->atomic_field, jl_value_t, child, release);
 ```
 
-It is in general impossible to predict which values will be old at runtime, so the write
-barrier must be inserted after all explicit stores. One notable exception is if the `parent`
+`type` is the pointed-to type of the field; the atomic variant takes the memory ordering
+(`relaxed` or `release`) last.
+
+Use the underlying `jl_gc_wb` (write barrier) function directly only when the update is not a
+single assignment — a compare-and-swap, a bulk copy over several fields, or a destination
+that is not a plain lvalue. It must be issued **before** the store, because a collector may
+need to read the reference the store is about to displace:
+
+```c
+jl_value_t *parent = some_old_value, *child = some_young_value;
+jl_gc_wb(parent, child);
+((some_specific_type*)parent)->field = child;
+```
+
+It is in general impossible to predict which values will be old at runtime, so a write
+barrier is needed for all explicit stores. One notable exception is if the `parent`
 object has just been allocated and no garbage collection has run since then. Note that most
 `jl_...` functions can sometimes invoke garbage collection.
 
-The write barrier is also necessary for arrays of pointers when updating their data directly.
+A write barrier is also necessary for arrays of pointers when updating their data directly.
 Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be done. For example:
 
 ```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
 void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
-data[0] = some_value;
 jl_gc_wb(jl_array_owner(some_array), some_value);
+data[0] = some_value;
 ```
 
 ### Controlling the Garbage Collector

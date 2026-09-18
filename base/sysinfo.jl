@@ -256,7 +256,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
         summary = CPUinfo(cpu[i].model,0,0,0,0,0,0)
         count = j - i + 1
         for x = i:j
-            summary.speed += cpu[i].speed
+            summary.speed += cpu[x].speed
             summary.cpu_times!user += cpu[x].cpu_times!user
             summary.cpu_times!nice += cpu[x].cpu_times!nice
             summary.cpu_times!sys += cpu[x].cpu_times!sys
@@ -287,6 +287,7 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
         if model != cpu[i].model
             _cpu_summary(io, cpu, first, i-1)
             first = i
+            model = cpu[i].model
         end
     end
     _cpu_summary(io, cpu, first, length(cpu))

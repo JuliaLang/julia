@@ -177,7 +177,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
-    ([K"break"], when=vcx.in_loop) -> pass()
+    # An unlabeled break is also allowed inside anonymous `@label` blocks;
+    # breaking through a named block is rejected with a precise error during
+    # linearization.
+    ([K"break"], when=vcx.in_loop||vcx.in_symblock) -> pass()
     ([K"break" lab], when=vcx.in_loop||vcx.in_symblock) ->
         vst1_ident(vcx, lab; lhs=true)
     ([K"break" lab x], when=vcx.in_loop||vcx.in_symblock) ->
@@ -308,9 +311,15 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "can only be used inside a function") :
         !vcx.return_ok ?
         @fail(st, "current function not defined in comprehension or generator") : pass()
-    [K"unknown_head"] -> let head = syntax_name(st)
-        head === "latestworld-if-toplevel" ? pass() :
+    [K"unknown_head" xs...] -> let head = syntax_name(st)
+        if head === "latestworld-if-toplevel"
+            maxlen(st, xs, 0)
+        elseif head === "scope-block"
+            minlen(st, xs, 1) & maxlen(st, xs, 1) &
+                all(vst1, with(vcx; in_gscope=false), xs)
+        else
             @fail(st, string("unknown expr head: ", head))
+        end
     end
     [K"aliasscope"] -> pass()
     [K"popaliasscope"] -> pass()
@@ -334,8 +343,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "`Symbol` kind not valid until desugaring")
     [K"Placeholder"] ->
         @fail(st, "`Placeholder` kind not valid until desugaring")
-    [K"unknown_head" _...] ->
-        @fail(st, string("unknown expr head: ", syntax_name(st)))
     [K"$" x] -> @fail(st, raw"`$` expression outside string or quote")
     [K"continue" _...] ->
         @fail(st, "`continue` outside of a `while` or `for` loop")
@@ -428,6 +435,9 @@ function vst1_importpath(vcx, st; dots_ok)
                 ok &= @fail(c, "unexpected `.` in import path")
             end
             continue
+        end
+        if kind(c) === K"inert" && numchildren(c) == 1
+            c = c[1]
         end
         # syntax todo: lhs should probably not be true here
         ok = ok & (vst1_ident(vcx, c).ok ? pass() : vst1_ident(vcx, c; lhs=true))
@@ -1169,6 +1179,8 @@ function _assert_syntaxtree_node(st::SyntaxTree)
             (_, when=JuliaSyntax.is_literal(st)) -> (true,Any)
             (_, when=JuliaSyntax.is_trivia(st)) -> (false, Any) # green tree only
             (_, when=JuliaSyntax.is_operator(st)) -> (true,String) # TODO: remove
+            [K"StrMacroName"] -> (true,String)
+            [K"CmdMacroName"] -> (true,String)
             [K"LambdaBindings"] -> (true,LambdaBindings)
             [K"Slots"] -> (true,Vector{Slot})
             _ -> return vr & @fail(st, "unrecognized leaf kind $(kind(st))")
@@ -1357,6 +1369,7 @@ vst2_ident_val(vcx, st) = @stm st begin
     [K"BindingId"] -> pass()
     [K"core"] -> pass()
     [K"top"] -> pass()
+    [K"thisfunction"] -> pass()
     _ -> @fail(st, "expected identifier (val)")
 end
 

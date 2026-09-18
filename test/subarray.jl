@@ -610,6 +610,26 @@ end
     @test parent(view(B, 0x1, :)) === parent(view(B, 0x1, :)) === A
 end
 
+@testset "views with non-Int range indices" begin
+    A = collect(reshape(1.0:24.0, 4, 6))
+    @test @inferred(view(A, 1, UInt64(1):UInt64(2))) == A[1, 1:2]
+
+    v = view(vec(A), UInt64(1):UInt64(2):UInt64(5))
+    @test collect(v) == vec(A)[1:2:5]
+    @test strides(v) === (2,)
+    check_strided_get(v)
+
+    v = view(A, UInt64(2):UInt64(3), UInt64(4):UInt64(5))
+    @test strides(v) === (1, 4)
+    big_v = view(vec(A), big(1):big(2):big(5))
+    @test strides(big_v) === (2,)
+
+    R = reshape(UInt64(1):UInt64(2):UInt64(15), 2, 4)
+    @test view(vec(A), R) == vec(A)[R]
+
+    @test_throws BoundsError view(vec(A), typemax(UInt):typemax(UInt))
+end
+
 @testset "issue #15168" begin
     A = rand(10)
     sA = view(copy(A), :)

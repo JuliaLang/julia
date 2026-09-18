@@ -160,7 +160,13 @@ template <typename T>
 static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 {
     int havelock = jl_lock_profile_wr();
+    // Hidden from the thread-safety analysis: asserting a try-lock succeeded
+    // makes clang's try-lock tracking disagree with the `if (havelock)` below,
+    // and it disagrees differently depending on the clang version and on how
+    // the C library spells assert(). See llvm/llvm-project#211973.
+#ifndef __clang_safetyanalysis__
     assert(havelock);
+#endif
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -533,7 +539,10 @@ static int lookup_pointer(
         }
         else {
             int havelock = jl_lock_profile_wr();
+#ifndef __clang_safetyanalysis__
+            // see the comment in jl_profile_atomic
             assert(havelock); // we got it earlier on this thread, so we can get it again
+#endif
             if (havelock) {
                 auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
                 jl_unlock_profile_wr();

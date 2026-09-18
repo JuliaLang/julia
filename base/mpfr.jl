@@ -197,7 +197,7 @@ end
 end
 
 # While BigFloat (like all Numbers) is considered immutable, for practical reasons
-# of writing the algorithms on it we allow mutating sign, exp, and the contents of d
+# of writing the algorithms on it we allow mutating sign and exp
 @inline function Base.setproperty!(x::BigFloat, s::Symbol, v)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)
@@ -205,9 +205,8 @@ end
         return GC.@preserve d unsafe_store!(Ptr{Cint}(p) + offset_sign, v)
     elseif s === :exp
         return GC.@preserve d unsafe_store!(Ptr{Clong}(p) + offset_exp, v)
-    #elseif s === :d || s === :prec # not mutable
     else
-        return throw(FieldError(x, s))
+        throw(FieldError(BigFloat, s))
     end
 end
 

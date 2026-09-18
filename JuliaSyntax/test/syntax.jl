@@ -38,6 +38,13 @@ end
     @test parsestmt(SyntaxTree, "x = 1._"; ignore_errors=true) isa SyntaxTree
 end
 
+@testset "SyntaxTree type stability" begin
+    st0 = parsestmt(SyntaxTree, "f(::Int)")
+    # `children` must not leak the `Union{Nothing}` of the raw field into inference.
+    @test @inferred(children(st0)) isa Vector{SyntaxTree}
+    @test @inferred(prov(st0)) isa SyntaxTree
+end
+
 @testset "SyntaxTree provenance accessors" begin
 
     @testset "prov, prov_end, provenance, sourceref" begin

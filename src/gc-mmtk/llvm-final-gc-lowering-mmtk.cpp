@@ -13,6 +13,17 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     auto ptls = target->getArgOperand(0);
     auto type = target->getArgOperand(2);
+    // Sites that may execute with a cancellation reset region published
+    // (annotated by CancellationLowering) take their slow paths through the
+    // reset-safe entry points, which unpublish/republish the region
+    // themselves. The inline fastpath below is safe to span as-is: it only
+    // loads, bumps the cursor, and updates the allocation counter - a
+    // delivered reset can at worst abandon an unreferenced, still-untagged
+    // hole in the bump region and skew the allocation counter. Marking is
+    // not confused by the late tag store: it never reads headers of
+    // unreachable memory (sweep is line-liveness based), and on the normal
+    // path no safepoint lies between allocation and the tag store.
+    bool resetSafe = target->hasMetadata("julia.reset_region");
     uint64_t derefBytes = 0;
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
         size_t sz = (size_t)CI->getZExtValue();
@@ -21,7 +32,7 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         int offset = jl_gc_classify_pools(sz, &osize);
         if (offset < 0) {
             newI = builder.CreateCall(
-                bigAllocFunc,
+                resetSafe ? bigAllocResetSafeFunc : bigAllocFunc,
                 { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
             if (sz > 0)
                 derefBytes = sz;
@@ -78,7 +89,8 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
                 // slowpath
                 builder.SetInsertPoint(slowpath);
                 auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), 1);
-                auto new_call = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize_i32, type });
+                auto new_call = builder.CreateCall(resetSafe ? smallAllocResetSafeFunc : smallAllocFunc,
+                                                   { ptls, pool_offs, pool_osize_i32, type });
                 new_call->setAttributes(new_call->getCalledFunction()->getAttributes());
                 builder.CreateBr(next_instr->getParent());
 
@@ -86,12 +98,19 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
                 builder.SetInsertPoint(fastpath);
                 builder.CreateStore(new_cursor, cursor_ptr);
 
-                // ptls->gc_tls.gc_num.allocd += osize;
+                // ptls->gc_tls_common.gc_num.allocd += osize;
                 auto pool_alloc_pos = ConstantInt::get(Type::getInt64Ty(target->getContext()), offsetof(jl_tls_states_t, gc_tls_common) + offsetof(jl_gc_tls_states_common_t, gc_num));
                 auto pool_alloc_tls = builder.CreateInBoundsGEP(Type::getInt8Ty(target->getContext()), ptls, pool_alloc_pos);
                 auto pool_allocd = builder.CreateAlignedLoad(Type::getInt64Ty(target->getContext()), pool_alloc_tls, Align(sizeof(void *)));
                 auto pool_allocd_total = builder.CreateAdd(pool_allocd, pool_osize);
                 builder.CreateStore(pool_allocd_total, pool_alloc_tls);
+
+                // ptls->gc_tls_common.gc_num.poolalloc++;
+                auto pool_count_pos = ConstantInt::get(Type::getInt64Ty(target->getContext()), offsetof(jl_tls_states_t, gc_tls_common) + offsetof(jl_gc_tls_states_common_t, gc_num) + offsetof(jl_thread_gc_num_common_t, poolalloc));
+                auto pool_count_tls = builder.CreateInBoundsGEP(Type::getInt8Ty(target->getContext()), ptls, pool_count_pos);
+                auto pool_count = builder.CreateAlignedLoad(Type::getInt64Ty(target->getContext()), pool_count_tls, Align(sizeof(void *)));
+                auto pool_count_total = builder.CreateAdd(pool_count, ConstantInt::get(Type::getInt64Ty(target->getContext()), 1));
+                builder.CreateStore(pool_count_total, pool_count_tls);
 
                 auto v_raw = builder.CreateNSWAdd(result, ConstantInt::get(Type::getInt64Ty(target->getContext()), sizeof(jl_taggedvalue_t)));
                 auto v_as_ptr = builder.CreateIntToPtr(v_raw, smallAllocFunc->getReturnType());
@@ -106,7 +125,7 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
         // allocTypedFunc does not include the type tag in the allocation size!
-        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
+        newI = builder.CreateCall(resetSafe ? allocTypedResetSafeFunc : allocTypedFunc, { ptls, size, type });
         derefBytes = sizeof(void*);
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
@@ -172,10 +191,16 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
 
             auto mayTriggerSlowpath = SplitBlockAndInsertIfThen(is_unlogged, target, false, MDB.createBranchWeights(Weights));
             builder.SetInsertPoint(mayTriggerSlowpath);
-            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+            auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+            // Propagate CancellationLowering's reset-region annotation so
+            // lowerQueueGCRoot selects the reset-safe entry.
+            if (auto *MD = target->getMetadata("julia.reset_region"))
+                qr->setMetadata("julia.reset_region", MD);
         } else {
             Function *wb_func = getOrDeclare(jl_intrinsics::queueGCRoot);
-            builder.CreateCall(wb_func, { parent });
+            auto qr = builder.CreateCall(wb_func, { parent });
+            if (auto *MD = target->getMetadata("julia.reset_region"))
+                qr->setMetadata("julia.reset_region", MD);
         }
     } else {
         // Using a plan that does not need write barriers

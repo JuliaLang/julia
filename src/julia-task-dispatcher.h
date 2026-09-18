@@ -349,8 +349,8 @@ private:
 
 }; // class JuliaTaskDispatcher
 
-// Dispatcher work is not unwind-safe, so deliver pending SIGINTs at a later
-// safepoint instead of raising an InterruptException inside it.
+// Dispatcher work is not unwind-safe, so hold sigatomic to defer
+// asynchronous unwinds (e.g. task abandonment) to a later safepoint.
 struct dispatcher_sigdefer_guard {
   jl_ptls_t ptls;
   dispatcher_sigdefer_guard() JL_NOTSAFEPOINT : ptls(jl_current_task->ptls) {

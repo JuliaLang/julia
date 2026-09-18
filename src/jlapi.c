@@ -97,7 +97,8 @@ JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
     const char *image_path = jl_pathname_for_handle(handle);
     jl_options.image_file = image_path;
 
-    jl_resolve_sysimg_location(JL_IMAGE_JULIA_HOME, NULL);
+    // the image is already loaded, so its path must not be re-interpreted relative to julia_bindir
+    jl_resolve_sysimg_location(JL_IMAGE_IN_MEMORY, NULL);
     jl_image_buf_t sysimage = jl_set_sysimg_so(handle);
 
     jl_init_(sysimage);
@@ -1109,9 +1110,10 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
         while (!TracyCIsConnected) jl_cpu_pause(); // Wait for connection
 #endif
 
-    // no-op on Windows, note that the caller must have already converted
-    // from `wchar_t` to `UTF-8` already if we're running on Windows.
-    uv_setup_args(argc, argv);
+    // Use libuv's copy: setting the process title can overwrite the original
+    // argv storage, including option strings such as the coverage output path.
+    // On Windows the caller must already have converted argv to UTF-8.
+    argv = uv_setup_args(argc, argv);
 
     // No-op on non-windows
     lock_low32();

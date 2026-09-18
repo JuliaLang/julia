@@ -321,7 +321,7 @@ function convert_local_function_decl(ctx, ex)
         closure_type_fields(ctx, ex, closure_binds, false)
     name_str = reserve_module_binding_i(
         ctx.mod,
-        string("#", join(closure_binds.name_stack, "#"), "##"))
+        string("#", join(Iterators.reverse(closure_binds.name_stack), "#")))
     global_clstruct = new_global_binding(ctx, ex, name_str, ctx.mod)
     sp_syms = mapsyntax(sp->newleaf(sp, K"Symbol",
                                     get_binding(ctx, syntax_id(sp)).name),
