@@ -89,6 +89,10 @@ Compiler/Runtime improvements
   the LLVM threads each spawns to compile its native image, sharing a single thread budget so idle cores are
   filled during the long tail without oversubscribing the machine when many packages compile at once. The total
   budget can be set with the new `JULIA_PRECOMPILE_THREADS` environment variable ([#61958]).
+* Parallel package precompilation no longer attempts packages whose dependencies failed to precompile;
+  they are reported as skipped instead, and extensions of a failed package are dropped silently. Pass
+  `skip_dependents=false` to `Base.Precompilation.precompilepkgs` to attempt the packages anyway. A new `force`
+  keyword recompiles packages whose cache files are already fresh ([#63122]).
 * Coverage reports now include code executed by the interpreter, such as top-level statements and method
   bodies run with `--compile=min`. Consequently, LCOV output and `.cov` files may contain source lines that
   were absent in earlier releases ([#62514]).
