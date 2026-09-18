@@ -220,6 +220,76 @@ end
     @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) + Dates.Month(1) + Dates.Day(1) ==
         Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1) + Dates.Month(1) + Dates.Day(1)
     @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1)
+    # Periods are applied by type from coarsest to finest, independent of their order,
+    # so both orderings apply the Month before the Day.
+    @test Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1) == Dates.Date(2014, 3, 1)
+    @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014, 3, 1)
+    # Equal types are merged before being applied: Day(1) + Day(1) becomes Day(2), applied
+    # after the Month.
+    @test Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Day(1) + Dates.Month(1) == Dates.Date(2014, 3, 2)
+    # Merging equal types matters across leap years: Year(1) + Year(3) becomes Year(4),
+    # landing on the leap day, unlike applying Year(1) and Year(3) separately.
+    @test Dates.Date(2020, 2, 29) + Dates.Year(1) + Dates.Year(3) == Dates.Date(2024, 2, 29)
+end
+@testset "PERIOD_TYPES ordering invariant" begin
+    # `+(::TimeType, ::Period...)` applies periods in `PERIOD_TYPES` order, which must stay
+    # coarsest-to-finest, matching the order `CompoundPeriod` sorts by (descending
+    # `tons ∘ oneunit`). Otherwise the two addition paths would disagree.
+    types = collect(Dates.PERIOD_TYPES)
+    @test types == sort(types; by = T -> Dates.tons(oneunit(T)), rev = true)
+    # `PERIOD_TYPES` is the concatenation of the two conversion groups' types.
+    @test Dates.PERIOD_TYPES == (Dates.OTHER_PERIOD_TYPES..., Dates.FIXED_PERIOD_TYPES...)
+    @test Dates.OTHER_PERIOD_TYPES == map(first, Dates.OTHER_PERIOD_CONVERSIONS)
+    @test Dates.FIXED_PERIOD_TYPES == map(first, Dates.FIXED_PERIOD_CONVERSIONS)
+end
+
+# Custom `Period`s used to check that `+(::TimeType, ::Period...)` keeps custom subtypes
+# and orders them coarsest-to-finest. Each defines only `toms`: the shared ordering key
+# `tons ∘ oneunit` then sorts them into place and generic `+(::DateTime, ::Period)` applies
+# them.
+struct HalfDay <: Dates.TimePeriod   # 12 hours, finer than a Day, coarser than an Hour
+    value::Int64
+end
+Dates.toms(x::HalfDay) = 12 * 60 * 60 * 1000 * Dates.value(x)
+struct Fortnight <: Dates.DatePeriod # 14 days, finer than a Month, coarser than a Week
+    value::Int64
+end
+Dates.toms(x::Fortnight) = 14 * 24 * 60 * 60 * 1000 * Dates.value(x)
+
+@testset "custom Period ordering" begin
+    # Adding built-in and custom periods together routes through the `CompoundPeriod`
+    # fallback, which groups by type and applies them coarsest-to-finest, independent of
+    # argument order. The result is observable around a leap day: a `HalfDay` (12 h) is
+    # finer than a `Month`, so the `Month` is applied first. On Jan 30 2020 that clamps to
+    # Feb 29 and the following full day lands on Mar 1; applying the `HalfDay`s first would
+    # reach Jan 31 and the `Month` would clamp to Feb 29 instead.
+    dt = Dates.DateTime(2020, 1, 30)
+    @test dt + Dates.Month(1) + HalfDay(2) == Dates.DateTime(2020, 3, 1)
+    @test dt + HalfDay(2) + Dates.Month(1) == Dates.DateTime(2020, 3, 1)
+    # The optimized and `CompoundPeriod` paths must agree.
+    @test dt + Dates.Month(1) + HalfDay(2) == dt + Dates.CompoundPeriod(Dates.Month(1), HalfDay(2))
+
+    # Equal custom types are merged first: HalfDay(1) + HalfDay(1) becomes a full day,
+    # applied after the Month, regardless of where the second HalfDay appears.
+    @test dt + HalfDay(1) + Dates.Month(1) + HalfDay(1) == Dates.DateTime(2020, 3, 1)
+
+    # Custom periods must not be silently dropped when mixed with built-in periods.
+    base = Dates.DateTime(2000)
+    @test base + HalfDay(1) + Dates.Millisecond(1) == base + Dates.Hour(12) + Dates.Millisecond(1)
+    @test base + HalfDay(1) + Dates.Millisecond(1) == base + Dates.Millisecond(1) + HalfDay(1)
+
+    # A `Fortnight` (14 days) is finer than a `Month`, so the `Month` clamps to Feb 29
+    # before the 14 days are added (reaching Mar 14); adding the days first would reach
+    # Feb 13 and land on Mar 13.
+    @test dt + Dates.Month(1) + Fortnight(1) == Dates.DateTime(2020, 3, 14)
+    @test dt + Fortnight(1) + Dates.Month(1) == Dates.DateTime(2020, 3, 14)
+
+    # Merging still applies across the coarsest types even with a custom period present:
+    # Year(1) + Year(3) merges to Year(4) (2020 -> 2024, a leap year) so Feb 29 survives,
+    # then the HalfDays add a full day to reach Mar 1. Applied separately, Year(1) would
+    # first clamp to 2021-02-28.
+    leap = Dates.DateTime(2020, 2, 29)
+    @test leap + Dates.Year(1) + HalfDay(2) + Dates.Year(3) == Dates.DateTime(2024, 3, 1)
 end
 @testset "traits" begin
     @test Dates._units(Dates.Year(0)) == " years"
