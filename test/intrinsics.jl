@@ -896,3 +896,16 @@ tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
 # https://github.com/JuliaLang/julia/issues/61436
 primitive type UIntN256 <: Unsigned 256 end
 @test tofloat(reinterpret(UIntN256, (zeros(UInt8, 32)...,))) == 0.0
+
+# https://github.com/JuliaLang/julia/issues/63218
+let
+    f_f64_to_llvmptr(x) = Core.bitcast(Core.LLVMPtr{UInt32,1}, x)
+    f_llvmptr_to_f64(x) = Core.bitcast(Float64, x)
+    p = f_f64_to_llvmptr(0.0)
+    @test f_llvmptr_to_f64(p) === 0.0
+
+    f_f64_to_ptr(x) = Core.bitcast(Ptr{UInt8}, x)
+    f_ptr_to_f64(x) = Core.bitcast(Float64, x)
+    @test f_f64_to_ptr(0.0) === C_NULL
+    @test f_ptr_to_f64(C_NULL) === 0.0
+end
