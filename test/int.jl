@@ -453,6 +453,49 @@ end
             end
         end
     end
+
+    # Exact rounded remainders must not silently wrap for mixed signedness (#34325).
+    for X in (Int8, UInt8), Y in (Int8, UInt8)
+        rounded_type = typeof(mod(one(X), -signed(one(Y))))
+        mod_type = typeof(mod(one(X), one(Y)))
+        for x in typemin(X):typemax(X), y in typemin(Y):typemax(Y)
+            if y == 0 || (X === Int8 && Y === Int8 && x == typemin(X) && y == -1)
+                continue
+            end
+            for r in (RoundDown, RoundUp, RoundFromZero,
+                      RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+                d = div(Int16(x), Int16(y), r)
+                exact = Int16(x) - Int16(y) * d
+                R = r === RoundDown ||
+                    (r === RoundFromZero && signbit(x) != signbit(y)) ? mod_type : rounded_type
+                if typemin(R) <= exact <= typemax(R)
+                    expected = R(exact)
+                    @test rem(x, y, r) === expected
+                    @test divrem(x, y, r) === (div(x, y, r), expected)
+                else
+                    @test_throws InexactError rem(x, y, r)
+                    @test_throws InexactError divrem(x, y, r)
+                end
+            end
+        end
+    end
+
+    for T in Base.BitSigned_types
+        U = unsigned(T)
+        tm = typemin(T)
+        @test rem(T(7), tm, RoundUp) === T(7)
+        @test divrem(T(7), tm, RoundUp) === (T(0), T(7))
+        @test rem(T(-7), tm, RoundFromZero) === typemax(T) - T(6)
+        @test divrem(T(-7), tm, RoundFromZero) === (T(1), typemax(T) - T(6))
+        @test rem(U(7), U(2), RoundUp) === T(-1)
+        @test divrem(U(7), U(2), RoundUp) === (U(4), T(-1))
+        @test rem(U(7), U(2), RoundNearest) === T(-1)
+        @test_throws InexactError rem(U(1), typemax(U), RoundUp)
+        @test_throws InexactError divrem(U(1), typemax(U), RoundFromZero)
+    end
+    @test rem(3.0, UInt8(2), RoundUp) === -1.0
+    @test rem(true, UInt8(2), RoundUp) === Int8(-1)
+    @test divrem(true, UInt8(2), RoundUp) === (UInt8(1), Int8(-1))
 end
 
 @testset "bitreverse" begin
