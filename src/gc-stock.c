@@ -1665,7 +1665,6 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     uintptr_t header = jl_atomic_fetch_and_relaxed((_Atomic(uintptr_t) *)&o->header, ~GC_OLD);
     if (header & GC_OLD) { // write barrier has not been triggered in this object yet
         arraylist_push(&ptls->gc_tls.heap.remset, (jl_value_t*)ptr);
-        ptls->gc_tls.heap.remset_nptr++; // conservative
         // Image objects are analogous to a third "permanent" GC
         // generation, so here we maintain the remset for them.
         if (__unlikely((header & GC_IN_IMAGE) && !(header & GC_IN_IMAGE_REMSET))) {
@@ -1786,12 +1785,11 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
 }
 
 // Check if `nptr` is tagged for `old + refyoung`,
-// Push the object to the remset and update the `nptr` counter if necessary.
+// and push the object to the remset if so.
 STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
                                        uintptr_t nptr) JL_NOTSAFEPOINT
 {
     if (__unlikely((nptr & 0x3) == 0x3)) {
-        ptls->gc_tls.heap.remset_nptr += nptr >> 2;
         arraylist_t *remset = &ptls->gc_tls.heap.remset;
         size_t len = remset->len;
         if (__unlikely(len >= remset->max)) {
@@ -2435,7 +2433,7 @@ JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
 JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
                                             jl_value_t **objs, size_t nobjs)
 {
-    uintptr_t nptr = (nobjs << 2) | (jl_astaggedvalue(parent)->bits.gc & 2);
+    uintptr_t nptr = jl_astaggedvalue(parent)->bits.gc & 2;
     gc_mark_objarray(ptls, parent, objs, objs + nobjs, 1, nptr);
 }
 
@@ -2480,14 +2478,14 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 jl_value_t **objary_begin = data;
                 jl_value_t **objary_end = data + l;
                 uint32_t step = 1;
-                uintptr_t nptr = (l << 2) | (bits & GC_OLD);
+                uintptr_t nptr = bits & GC_OLD;
                 gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
             }
             else if (vtag == jl_module_tag << 4) {
                 if (update_meta)
                     gc_setmark(ptls, o, bits, sizeof(jl_module_t));
                 jl_module_t *mb_parent = (jl_module_t *)new_obj;
-                uintptr_t nptr = ((module_usings_length(mb_parent) + 1) << 2) | (bits & GC_OLD);
+                uintptr_t nptr = bits & GC_OLD;
                 gc_mark_module_binding(ptls, mb_parent, nptr, bits);
             }
             else if (vtag == jl_task_tag << 4) {
@@ -2548,7 +2546,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 uint8_t *obj8_begin = (uint8_t *)jl_dt_layout_ptrs(layout);
                 uint8_t *obj8_end = obj8_begin + npointers;
                 // assume tasks always reference young objects: set lowest bit
-                uintptr_t nptr = (npointers << 2) | 1 | bits;
+                uintptr_t nptr = 1 | bits;
                 new_obj = gc_mark_obj8(ptls, obj8_parent, obj8_begin, obj8_end, nptr);
                 if (new_obj != NULL) {
                     if (!remset_object)
@@ -2573,14 +2571,14 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 // mutator ordering is irrelevant here)
                 gc_mark_objarray(ptls, new_obj, (jl_value_t**)&cs->waiters_head,
                                  (jl_value_t**)&cs->waiters_head + 2, 1,
-                                 (2 << 2) | (bits & GC_OLD));
+                                 bits & GC_OLD);
                 if (np > 0) {
                     jl_value_t **objary_begin = (jl_value_t**)jl_cancel_source_links(cs);
                     // stride over the link entries, visiting only the
                     // (strong) `parent` slot of each
                     uint32_t step = sizeof(jl_cancel_parent_link_t) / sizeof(jl_value_t*);
                     jl_value_t **objary_end = objary_begin + step * np;
-                    uintptr_t nptr = (np << 2) | (bits & GC_OLD);
+                    uintptr_t nptr = bits & GC_OLD;
                     gc_mark_objarray(ptls, new_obj, objary_begin, objary_end, step, nptr);
                 }
             }
@@ -2595,11 +2593,11 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_setmark(ptls, o, bits, dtsz);
                 jl_value_t **task = (jl_value_t**)&we->task;
                 gc_mark_objarray(ptls, new_obj, task, task + 1, 1,
-                                 (1 << 2) | (bits & GC_OLD));
+                                 bits & GC_OLD);
                 if (ns > 0) {
                     jl_value_t **b = (jl_value_t**)jl_wait_entry_slots(we);
                     uint32_t step = sizeof(jl_wait_slot_t) / sizeof(jl_value_t*);
-                    uintptr_t nptr = (ns << 2) | (bits & GC_OLD);
+                    uintptr_t nptr = bits & GC_OLD;
                     // two strided passes: the `owner` slot of each entry...
                     gc_mark_objarray(ptls, new_obj, b, b + step * ns, step, nptr);
                     // ...and the `next` slot. The endpoint must stay within
@@ -2651,7 +2649,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             }
             else if (how == JL_GENERICMEMORY_STRINGOWNED) {
                 jl_value_t *owner = jl_genericmemory_data_owner_field(m);
-                uintptr_t nptr = (1 << 2) | (bits & GC_OLD);
+                uintptr_t nptr = bits & GC_OLD;
                 gc_try_claim_and_push(mq, owner, &nptr);
                 gc_heap_snapshot_record_internal_array_edge(new_obj, owner);
                 gc_mark_push_remset(ptls, new_obj, nptr);
@@ -2667,7 +2665,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 jl_value_t **objary_begin = (jl_value_t **)m->ptr;
                 jl_value_t **objary_end = objary_begin + m->length;
                 uint32_t step = 1;
-                uintptr_t nptr = (m->length << 2) | (bits & GC_OLD);
+                uintptr_t nptr = bits & GC_OLD;
                 gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
             }
             else if (layout->first_ptr >= 0) {
@@ -2679,7 +2677,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 jl_value_t **objary_begin = (jl_value_t**)m->ptr;
                 jl_value_t **objary_end = objary_begin + l * elsize;
                 uint32_t step = elsize;
-                uintptr_t nptr = ((l * npointers) << 2) | (bits & GC_OLD);
+                uintptr_t nptr = bits & GC_OLD;
                 if (npointers == 1) { // TODO: detect anytime time stride is uniform?
                     objary_begin += layout->first_ptr;
                     gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
@@ -2713,7 +2711,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         uint32_t npointers = layout->npointers;
         if (npointers == 0)
             return;
-        uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
+        uintptr_t nptr = bits & GC_OLD;
         assert((layout->nfields > 0 || layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN) &&
                "opaque types should have been handled specially");
         if (layout->flags.fielddesc_type == JL_FIELDDESC_8) {
@@ -3067,7 +3065,6 @@ static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPO
     }
     // Don't forget to clear the remset
     ptls2->gc_tls.heap.remset.len = 0;
-    ptls2->gc_tls.heap.remset_nptr = 0;
 }
 
 static void gc_queue_image_remset(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
@@ -3087,7 +3084,6 @@ static void gc_check_all_remsets_are_empty(void) JL_NOTSAFEPOINT
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL) {
             assert(ptls2->gc_tls.heap.remset.len == 0);
-            assert(ptls2->gc_tls.heap.remset_nptr == 0);
         }
     }
 }
@@ -3430,17 +3426,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     promoted_bytes += scanned_bytes;
     scanned_bytes = 0;
     // 4. next collection decision
-    int remset_nptr = 0;
     int sweep_full = next_sweep_full;
     int recollect = 0;
     assert(gc_n_threads != 0);
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL)
-            remset_nptr += ptls2->gc_tls.heap.remset_nptr;
-    }
-    (void)remset_nptr; //Use this information for something?
-
 
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
