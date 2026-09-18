@@ -85,8 +85,13 @@ typedef struct _jl_gc_chunk_t {
     void *elem_begin;           // used to scan pointers within objects when marking `ary8` or `ary16`
     void *elem_end;             // used to scan pointers within objects when marking `ary8` or `ary16`
     uint32_t step;              // step-size used when marking objarray
-    uintptr_t nptr;             // (`nptr` & 0x1) if array has young element and (`nptr` & 0x2) if array owner is old
+    uintptr_t flags;            // `MARK_*` flags of the array owner (see below)
 } jl_gc_chunk_t;
+
+// Flags threaded through the mark functions describing the object being scanned.
+// An object with both flags set is pushed to the remset once its scan finishes.
+#define MARK_HAS_YOUNG 0x1 // the object references at least one young object
+#define MARK_IS_OLD    0x2 // the object itself is old
 
 #define GC_CHUNK_BATCH_SIZE (1 << 16)       // maximum number of references that can be processed
                                             // without creating a chunk
