@@ -88,18 +88,24 @@ function dsymutil(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
     return Cmd(Cmd([dsymutil_path()]); env)
 end
 
-function ld()
+function ld(; strict_definitions::Bool = false)
     default_args = ``
     @static if Sys.iswindows()
         # From`x86_64-w64-mingw32-gcc -shared -Wl,--verbose`
         flavor = "gnu"
         m = Sys.ARCH == :x86_64 ? "i386pep" : "i386pe"
         entry = Sys.ARCH == :x86_64 ? "DllMainCRTStartup" : "_DllMainCRTStartup"
-        default_args = `-m $m -Bdynamic -e $entry --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
+        default_args = `-m $m -Bdynamic -e $entry --enable-auto-image-base --disable-auto-import --disable-runtime-pseudo-reloc`
+        if !strict_definitions
+            default_args = `$default_args --allow-multiple-definition`
+        end
     elseif Sys.isapple()
         flavor = "darwin"
         arch = Sys.ARCH == :aarch64 ? :arm64 : Sys.ARCH
-        default_args = `-arch $arch -undefined dynamic_lookup -platform_version macos $(Base.MACOS_PRODUCT_VERSION) $(Base.MACOS_PLATFORM_VERSION)`
+        default_args = `-arch $arch -platform_version macos $(Base.MACOS_PRODUCT_VERSION) $(Base.MACOS_PLATFORM_VERSION)`
+        if !strict_definitions
+            default_args = `$default_args -undefined dynamic_lookup`
+        end
         # due to an lld bug: https://github.com/llvm/llvm-project/issues/193646
         # we must make sure the syslibroot does not point to the system or else
         # it will not respect the provided `libSystem.tbd` file
@@ -169,7 +175,7 @@ function _find_loaded(re::Regex)
     error("no loaded shared object matching $re")
 end
 
-function link_image_cmd(path, out)
+function link_image_cmd(path, out; is_sysimage::Bool = false)
     PRIVATE_LIBDIR = "-L$(private_libdir())"
     LIBDIR = "-L$(libdir())"
     SHLIBDIR = "-L$(shlibdir())"
@@ -211,11 +217,12 @@ function link_image_cmd(path, out)
     end
 
     V = verbose_linking() ? "--verbose" : ""
-    `$(ld()) $V $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
+    `$(ld(; strict_definitions = is_sysimage)) $V $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
 end
 
-function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)
-    run(link_image_cmd(path, out), Base.DevNull(), internal_stderr, internal_stdout)
+function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout;
+                    is_sysimage::Bool = false)
+    run(link_image_cmd(path, out; is_sysimage), Base.DevNull(), internal_stderr, internal_stdout)
 end
 
 end # module Linking
