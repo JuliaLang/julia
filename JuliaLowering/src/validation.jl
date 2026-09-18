@@ -1183,6 +1183,7 @@ function _assert_syntaxtree_node(st::SyntaxTree)
             [K"CmdMacroName"] -> (true,String)
             [K"LambdaBindings"] -> (true,LambdaBindings)
             [K"Slots"] -> (true,Vector{Slot})
+            [K"VERSION"] -> (true,VersionNumber)
             _ -> return vr & @fail(st, "unrecognized leaf kind $(kind(st))")
         end
         if needs_val
