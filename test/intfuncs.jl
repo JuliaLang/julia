@@ -692,6 +692,11 @@ end
         @test exponent(big(2)^100 + 1) == 100
         @test exponent(big(-1)) == 0
         @test_throws DomainError exponent(big(0))
+        # `exponent(::BigInt)` must dispatch to the GMP method, which does not allocate
+        let x = big(2)^100 + 1
+            exponent(x) # compile
+            @test @allocated(exponent(x)) == 0
+        end
 
         @test Base.top_set_bit(big(0)) == 0
         @test Base.top_set_bit(big(2)^100) == 101
