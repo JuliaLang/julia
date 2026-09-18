@@ -530,11 +530,19 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz) JL_CA
     size_t allocsz = LLT_ALIGN(sz + offs, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     bigval_t *v = (bigval_t*)malloc_cache_align(allocsz);
     if (v == NULL)
         jl_throw(jl_memory_exception);
     gc_invoke_callbacks(jl_gc_cb_notify_external_alloc_t,
         gc_cblist_notify_external_alloc, (v, allocsz));
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
     jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
         jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + allocsz);
     jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.bigalloc,
@@ -1671,9 +1679,17 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
         if (__unlikely((header & GC_IN_IMAGE) && !(header & GC_IN_IMAGE_REMSET))) {
             header = jl_atomic_fetch_or_relaxed((_Atomic(uintptr_t) *)&o->header, GC_IN_IMAGE_REMSET);
             if (!(header & GC_IN_IMAGE_REMSET)) {
+                int last_errno = errno; // waiting on a lock can affect errno
+#ifdef _OS_WINDOWS_
+                DWORD last_error = GetLastError();
+#endif
                 JL_LOCK_NOGC(&image_remset_lock);
                 arraylist_push(&image_remset, (void*)ptr);
                 JL_UNLOCK_NOGC(&image_remset_lock);
+#ifdef _OS_WINDOWS_
+                SetLastError(last_error);
+#endif
+                errno = last_errno;
             }
         }
     }
@@ -3788,6 +3804,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
     jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     // `jl_safepoint_start_gc()` makes sure only one thread can run the GC.
     uint64_t t0 = jl_hrtime();
     if (!jl_safepoint_start_gc(ct)) {
@@ -3796,16 +3816,16 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
         if (old_state == JL_GC_STATE_UNSAFE)
             jl_gc_safepoint(); // ensure our gc_safe transition is recognized
+#ifdef _OS_WINDOWS_
+        SetLastError(last_error);
+#endif
+        errno = last_errno;
         return;
     }
 
     JL_TIMING_SUSPEND_TASK(GC, ct);
     JL_TIMING(GC, GC);
 
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
     // Now we are ready to wait for other threads to hit the safepoint,
     // we can do a few things that doesn't require synchronization.
     //
