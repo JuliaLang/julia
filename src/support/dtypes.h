@@ -76,7 +76,12 @@ typedef intptr_t ssize_t;
 #  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) JL_VISIBILITY_DEFAULT
 # endif
 #define JL_HIDDEN
-#define JL_DLLIMPORT   __declspec(dllimport) JL_VISIBILITY_DEFAULT
+# ifdef JL_LIBRARY_STATIC
+// static build: everything is linked into one image
+#  define JL_DLLIMPORT JL_VISIBILITY_DEFAULT
+# else
+#  define JL_DLLIMPORT __declspec(dllimport) JL_VISIBILITY_DEFAULT
+# endif
 #else
 #define STDCALL
 #define JL_DLLIMPORT __attribute__ ((visibility("default")))
