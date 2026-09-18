@@ -229,14 +229,11 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         jl_exceptionf(jl_argumenterror_type, "jl_genericmemory_copyto requires source and dest to have same type");
     const jl_datatype_layout_t *layout = dt->layout;
     if (layout->flags.arrayelem_isboxed) {
-        _Atomic(void*) * dest_p = (_Atomic(void*)*)destdata;
-        _Atomic(void*) * src_p = (_Atomic(void*)*)srcdata;
         jl_value_t *owner = jl_genericmemory_owner(dest);
-        jl_gc_wb_genericmemory_copy_boxed(owner, &dest_p, src, &src_p, &n);
-        return memmove_refs(dest_p, src_p, n);
+        return jl_gc_genericmemory_copy_boxed(owner, (_Atomic(void*)*)destdata, src,
+                                              (_Atomic(void*)*)srcdata, n);
     }
     size_t elsz = layout->size;
-    char *src_p = srcdata;
     int isbitsunion = layout->flags.arrayelem_isunion;
     if (isbitsunion) {
         char *sourcetypetagdata = jl_genericmemory_typetagdata(src);
@@ -247,8 +244,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
     }
     if (layout->first_ptr != -1) {
         jl_value_t *owner = jl_genericmemory_owner(dest);
-        jl_gc_wb_genericmemory_copy_ptr(owner, src, src_p, n, dt);
-        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
+        jl_gc_genericmemory_copy_ptr(owner, destdata, src, srcdata, n, dt);
     }
     else {
         memmove(destdata, srcdata, n * elsz);
@@ -545,7 +541,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t 
     char *data = (char*)m.ptr_or_offset;
     if (layout->flags.arrayelem_isboxed) {
         assert(data - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
-        return modify_value(eltype, (_Atomic(jl_value_t*)*)data, owner, op, rhs, isatomic, NULL, NULL, NULL);
+        return modify_value(eltype, (_Atomic(jl_value_t*)*)data, owner, op, rhs, isatomic, NULL, NULL, NULL, NULL);
     }
     size_t fsz = layout->size;
     uint8_t *psel = NULL;

@@ -758,6 +758,24 @@ test_global_undef(UndefComplex{Any})
 test_global_undef(UndefComplex{UndefComplex{Any}})
 test_global_undef(Int)
 
+# the read-modify-write builtins resolve the binding for writing, which never follows
+# imports, so a store through an import fails before any value is read
+module ImportedGlobalSource
+    global imported_x::Int = 1
+    global used_x::Int = 2
+end
+import .ImportedGlobalSource: imported_x
+using .ImportedGlobalSource: used_x
+for r in (:imported_x, :used_x)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, -1, 3) # `expected` is never compared
+end
+@test getglobal(ImportedGlobalSource, :imported_x) === 1
+@test getglobal(ImportedGlobalSource, :used_x) === 2
+
 function gen_test_globalonce(@nospecialize r)
     M = @__MODULE__
     return quote
@@ -784,6 +802,21 @@ test_globalonce(Union{Nothing,Integer})
 test_globalonce(UndefComplex{Any})
 test_globalonce(UndefComplex{UndefComplex{Any}})
 test_globalonce(Int)
+
+# An untyped `global x` declaration leaves no restriction on the binding partition, so its
+# declared type is `Any`. The read-modify-write builtins must read that as `Any` to form the result type.
+module DeclaredGlobal
+    global declared_rmw
+end
+let M = DeclaredGlobal
+    @test Core.get_binding_type(M, :declared_rmw) === Any
+    @test_throws UndefVarError modifyglobal!(M, :declared_rmw, +, 1)
+    @test setglobalonce!(M, :declared_rmw, 1) === true
+    @test modifyglobal!(M, :declared_rmw, +, 1) === Pair{Any,Any}(1, 2)
+    @test swapglobal!(M, :declared_rmw, "x") === 2
+    @test replaceglobal!(M, :declared_rmw, "x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
 
 # test macroexpansions
 global x::Int
