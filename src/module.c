@@ -906,6 +906,32 @@ void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 
 static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 
+// Raise the error for a write to a binding that is not a writable global.
+static void JL_NORETURN jl_binding_not_writable_error(jl_binding_t *b, jl_module_t *m, jl_sym_t *s, enum jl_partition_kind kind) JL_CANSAFEPOINT
+{
+    assert(kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED);
+    if (jl_bkind_is_some_guard(kind)) {
+        jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
+                    "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
+                    "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
+                    jl_symbol_name(m->name), jl_symbol_name(s),
+                    jl_symbol_name(s), jl_symbol_name(m->name));
+    }
+    else if (jl_bkind_is_some_constant(kind) && kind != PARTITION_KIND_IMPLICIT_CONST) {
+        jl_errorf("invalid assignment to constant %s.%s. This redefinition may be permitted using the `const` keyword.",
+                    jl_symbol_name(m->name), jl_symbol_name(s));
+    }
+    else {
+        jl_module_t *from = jl_binding_dbgmodule(b);
+        if (from == m || !from)
+            jl_errorf("cannot assign a value to imported variable %s.%s",
+                      jl_symbol_name(m->name), jl_symbol_name(s));
+        else
+            jl_errorf("cannot assign a value to imported variable %s.%s from module %s",
+                      jl_symbol_name(from->name), jl_symbol_name(s), jl_symbol_name(m->name));
+    }
+}
+
 // Checks that the binding in general is currently writable, but does not perform any checks on the
 // value to be written into the binding.
 // `bpart` is the partition the caller resolved this store against, or NULL to resolve `b` at the current world.
@@ -916,28 +942,8 @@ JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_bindin
         jl_binding_deprecation_check(bpart);
     }
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (!jl_bkind_is_some_global(kind)) {
-        if (jl_bkind_is_some_guard(kind)) {
-            jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
-                        "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
-                        "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
-                        jl_symbol_name(m->name), jl_symbol_name(s),
-                        jl_symbol_name(s), jl_symbol_name(m->name));
-        }
-        else if (jl_bkind_is_some_constant(kind) && kind != PARTITION_KIND_IMPLICIT_CONST) {
-            jl_errorf("invalid assignment to constant %s.%s. This redefinition may be permitted using the `const` keyword.",
-                        jl_symbol_name(m->name), jl_symbol_name(s));
-        }
-        else {
-            jl_module_t *from = jl_binding_dbgmodule(b);
-            if (from == m || !from)
-                jl_errorf("cannot assign a value to imported variable %s.%s",
-                          jl_symbol_name(m->name), jl_symbol_name(s));
-            else
-                jl_errorf("cannot assign a value to imported variable %s.%s from module %s",
-                          jl_symbol_name(from->name), jl_symbol_name(s), jl_symbol_name(m->name));
-        }
-    }
+    if (kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED)
+        jl_binding_not_writable_error(b, m, s, kind);
 }
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var)
