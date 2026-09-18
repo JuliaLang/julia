@@ -901,6 +901,7 @@ JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 
 # Use StickyImmix as the default MMTk plan.
 MMTK_PLAN ?= StickyImmix
+
 # Must specify a supported MMTk plan: Immix, StickyImmix, or ConcurrentImmix
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
@@ -909,8 +910,8 @@ else ifeq (${MMTK_PLAN},StickyImmix)
 JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 else ifeq (${MMTK_PLAN}, ConcurrentImmix)
-JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\"
-JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\"
+JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DGC_SNAPSHOT_BARRIER
+JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DGC_SNAPSHOT_BARRIER
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, or ConcurrentImmix.")
 endif
@@ -1686,6 +1687,9 @@ ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
+# When linking LTO bitcode, the debug map points dsymutil at the objects that ld64
+# compiled from it, which ld64 deletes unless told where to keep them.
+LTO_OBJECT_PATH = -Wl,-object_path_lto,$(1).lto
 endif
 
 ifeq ($(OS), WINNT)

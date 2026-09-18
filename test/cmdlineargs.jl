@@ -696,6 +696,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isempty(got)
         rm(covfile)
 
+        # option strings must survive `Sys.set_process_title`, which reuses the
+        # original argv storage for the title on Linux
+        @test readchomp(`$cov_exename -E "(Sys.set_process_title(\"julia0x1\"); unsafe_string(Base.JLOptions().output_code_coverage))"
+            --code-coverage=$covfile --code-coverage=none`) == repr(covfile)
+        @test !isfile(covfile)
+
         # a tracked path only matches at a path component boundary
         mktempdir() do parent
             foo = realpath(mkdir(joinpath(parent, "Foo")))

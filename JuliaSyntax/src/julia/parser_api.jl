@@ -79,6 +79,13 @@ function parse!(::Type{TreeType}, io::IO;
     tree, stream.diagnostics
 end
 
+"""
+    build_tree(type, ps::ParseStream; kws...)
+
+Build a tree of type `type` from a raw parsed stream `ps`.  This is the final step in parsing.
+"""
+function build_tree end
+
 function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=VERSION,
                 ignore_trivia=true, filename=nothing, first_line=1, ignore_errors=false,
                 ignore_warnings=ignore_errors, kws...) where {T}
