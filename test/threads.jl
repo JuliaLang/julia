@@ -780,6 +780,136 @@ end
     end
 end
 
+# Non-reentrant locks reject recursive ownership and allocate a queue only for waiters.
+@testset "NonReentrantLock" begin
+    gate = Base.NonReentrantLock()
+    @test isnothing(@atomic gate.condition)
+    @test !islocked(gate)
+    @test_throws ConcurrencyViolationError unlock(gate)
+    @test_throws ConcurrencyViolationError Base.assert_havelock(gate)
+    @test trylock(gate)
+    try
+        @test Base.assert_havelock(gate) === nothing
+        @test_throws ConcurrencyViolationError lock(gate)
+        @test_throws ConcurrencyViolationError trylock(gate)
+        @test !fetch(Threads.@spawn trylock(gate))
+        @test fetch(Threads.@spawn try
+            unlock(gate)
+        catch exception
+            exception
+        end) isa ConcurrencyViolationError
+        @test isnothing(@atomic gate.condition)
+    finally
+        unlock(gate)
+    end
+    wrapped = Base.Lockable(42, gate)
+    @test lock(() -> wrapped[], gate) == 42
+    @test_throws ErrorException("body failed") lock(() -> error("body failed"), gate)
+    @test !islocked(gate)
+    condition = Base.GenericCondition(gate)
+    for fail_wait in (false, true)
+        waiter = @async lock(condition) do
+            result = try
+                wait(condition)
+            catch exception
+                exception
+            end
+            @test Base.assert_havelock(gate) === nothing
+            result
+        end
+        @test timedwait(() -> parked_on(waiter, condition), 10.0) == :ok
+        expected = fail_wait ? ErrorException("wait failed") : :ready
+        @test lock(() -> notify(condition, expected; error=fail_wait), condition) == 1
+        @test fetch(waiter) === expected
+        @test !islocked(gate)
+    end
+end
+
+# Initialization is single-entry, and all waiters observe the same success or failure.
+@testset "OncePerProcess non-reentrant initialization" begin
+    calls = Ref(0)
+    recursive = OncePerProcess{Int}() do
+        calls[] += 1
+        calls[] == 1 ? recursive() : 42
+    end
+    @test_throws ConcurrencyViolationError("recursive lock acquisition") recursive()
+    @test calls[] == 1
+    @test_throws ErrorException("OncePerProcess initializer failed previously") recursive()
+    @test !islocked(recursive.lock)
+
+    for fail_init in (false, true)
+        started = Channel{Nothing}(1)
+        finish = Channel{Nothing}(1)
+        calls = Ref(0)
+        once = OncePerProcess{Vector{Int}}() do
+            calls[] += 1
+            put!(started, nothing)
+            take!(finish)
+            fail_init && error("initializer failed")
+            [42]
+        end
+        attempt = () -> try
+            once()
+        catch exception
+            exception
+        end
+        initializer = Threads.@spawn attempt()
+        take!(started)
+        waiters = [Threads.@spawn attempt() for index in 1:8]
+        @test timedwait(10.0) do
+            condition = @atomic once.lock.condition
+            !isnothing(condition) && all(task -> parked_on(task, condition), waiters)
+        end == :ok
+        put!(finish, nothing)
+        result = fetch(initializer)
+        results = fetch.(waiters)
+        @test calls[] == 1
+        @test !islocked(once.lock)
+        if fail_init
+            @test result == ErrorException("initializer failed")
+            @test all(==(ErrorException("OncePerProcess initializer failed previously")), results)
+        else
+            @test result == [42]
+            @test all(value -> value === result, results)
+            @test once() === result
+        end
+    end
+end
+
+# Cancelling one initializer waiter leaves initialization and other waiters intact.
+@testset "OncePerProcess cancelled waiter" begin
+    started = Channel{Nothing}(1)
+    finish = Channel{Nothing}(1)
+    once = OncePerProcess{Vector{Int}}() do
+        put!(started, nothing)
+        take!(finish)
+        [42]
+    end
+    initializer = Threads.@spawn once()
+    take!(started)
+    source = Base.CancellationTokenSource()
+    cancelled = @async Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.CancellationToken(source)) do
+        try
+            once()
+        catch exception
+            exception
+        end
+    end
+    survivor = @async once()
+    @test timedwait(10.0) do
+        condition = @atomic once.lock.condition
+        !isnothing(condition) && parked_on(cancelled, condition) && parked_on(survivor, condition)
+    end == :ok
+    Base.cancel!(source)
+    @test fetch(cancelled) isa Base.CancellationRequest
+    @test islocked(once.lock)
+    put!(finish, nothing)
+    result = fetch(initializer)
+    @test fetch(survivor) === result
+    @test once() === result
+    @test !islocked(once.lock)
+end
+
 let once = OncePerProcess(() -> return [nothing])
     @test typeof(once) <: OncePerProcess{Vector{Nothing}}
     x = @inferred once()
