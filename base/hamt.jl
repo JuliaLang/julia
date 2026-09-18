@@ -91,11 +91,6 @@ struct HashState{K}
     shift::Int
 end
 HashState(key) = HashState(key, objectid(key), 0, 0)
-# Reconstruct with an explicitly pinned key type. `key` can come from a trie Leaf
-# whose K is abstract (e.g. the ScopedValues scope HAMT keys); letting the implicit
-# constructor re-infer the parameter per call produces UnionAll-typed HashStates and
-# dynamic dispatch on every hop — unresolvable under static compilation
-# (`juliac --trim`). Pinning K keeps everything one concrete wrapper type.
 Base.@assume_effects :terminates_locally function HashState{K}(@nospecialize(other::HashState), @nospecialize(key)) where {K}
     h = HashState{K}(key, objectid(key), 0, 0)
     while h.depth !== other.depth
