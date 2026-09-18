@@ -29,7 +29,7 @@ EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC
 
 GCEXT_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/gcext" "CC=$(CC)"
 
-TEST_JULIA_OPTIONS := --check-bounds=yes --startup-file=no --depwarn=error
+TEST_JULIA_OPTIONS := --check-bounds=yes --startup-file=no --depwarn=error -q
 TEST_SCRIPT_OPTIONS := --buildroot=$(call cygpath_w,$(BUILDROOT))
 
 .PHONY: default
