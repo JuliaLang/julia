@@ -3062,7 +3062,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                 jl_reinstantiate_inner_types(dt, &dcache);
             }
             JL_CATCH {
-                dt->name->partial = NULL;
+                jl_gc_write(dt->name, dt->name->partial, jl_array_t, NULL);
                 JL_GC_POP();
                 jl_rethrow();
             }

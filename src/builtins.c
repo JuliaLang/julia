@@ -2675,7 +2675,7 @@ JL_CALLABLE(jl_f__task)
             jl_type_error("_task", (jl_value_t*)jl_anytuple_type_type, invoke_arg);
     }
     jl_task_t *task = jl_new_task(start, jl_nothing, ssize);
-    task->invoked = invoke_arg;
+    jl_gc_write(task, task->invoked, jl_value_t, invoke_arg);
     return (jl_value_t*)task;
 }
 
@@ -2782,7 +2782,7 @@ JL_CALLABLE(jl_f__typebody)
             jl_reinstantiate_inner_types(dt, NULL);
         }
         JL_CATCH {
-            dt->name->partial = NULL;
+            jl_gc_write(dt->name, dt->name->partial, jl_array_t, NULL);
             jl_rethrow();
         }
     }

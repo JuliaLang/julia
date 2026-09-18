@@ -5674,7 +5674,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             arraylist_push(&result, minmax);
             j++;
         }
-        memcpy(jl_array_data(env.t, jl_method_match_t*), result.items, j * sizeof(jl_method_match_t*));
+        for (size_t k = 0; k < j; k++)
+            jl_array_ptr_set(env.t, k, (jl_value_t*)result.items[k]);
         arraylist_free(&result);
         if (j != len)
             jl_array_del_end((jl_array_t*)env.t, len - j);
