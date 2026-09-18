@@ -60,7 +60,7 @@ end
 function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
     b = get_binding(ctx, var)
     box = ssavar(ctx, box_ex)
-    undef_var = new_local_binding(ctx, var, b.name; is_used_undef=true)
+    undef_var = new_local_binding(ctx, var, b.name)
     box_access =
         @ast ctx var [K"call" "getfield"::K"core" box "contents"::K"Symbol"]
     if !isnothing(b.type)
