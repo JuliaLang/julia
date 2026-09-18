@@ -7240,7 +7240,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
-#ifdef GC_SNAPSHOT_BARRIER
+#ifdef GC_BARRIER_SNAPSHOT
             // Barrier is needed to snapshot old scope value
             emit_write_barrier(ctx, get_current_task(ctx), scope_to_restore);
 #else
@@ -10645,7 +10645,7 @@ static jl_llvm_functions_t
                 Value *scope_boxed = boxed(ctx, scope);
                 Value *scope_ptr = get_scope_field(ctx);
                 LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
-#ifdef GC_SNAPSHOT_BARRIER
+#ifdef GC_BARRIER_SNAPSHOT
                 // Barrier is needed to snapshot scope value before replacement
                 emit_write_barrier(ctx, get_current_task(ctx), scope_boxed);
 #else

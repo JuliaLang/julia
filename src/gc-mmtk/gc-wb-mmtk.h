@@ -78,14 +78,14 @@ STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, void *slot JL_UN
 
 STATIC_INLINE void jl_gc_wb_current_task(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
-#ifdef GC_SNAPSHOT_BARRIER
+#ifdef GC_BARRIER_SNAPSHOT
     mmtk_gc_wb_fast(parent, ptr);
 #endif
 }
 
 STATIC_INLINE void jl_gc_wb_knownold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
-#ifdef GC_SNAPSHOT_BARRIER
+#ifdef GC_BARRIER_SNAPSHOT
     mmtk_gc_wb_fast(parent, ptr);
 #endif
 }
@@ -120,7 +120,7 @@ STATIC_INLINE void jl_gc_genericmemory_clear(const jl_value_t *owner JL_UNUSED,
                                           jl_genericmemory_t *m JL_UNUSED, char *data,
                                           size_t nbytes) JL_NOTSAFEPOINT
 {
-#ifdef GC_SNAPSHOT_BARRIER
+#ifdef GC_BARRIER_SNAPSHOT
     // a deletion barrier must snapshot the overwritten references before the clear
     mmtk_gc_wb_fast(owner, (void*)0);
 #endif

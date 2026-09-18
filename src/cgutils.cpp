@@ -2794,8 +2794,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             return;
         if (isboxed) {
             // Insertion-barrier optimization: skip when the new value is perm-allocated.
-            // Invalid under SATB (GC_SNAPSHOT_BARRIER), which must snapshot the old value.
-#ifndef GC_SNAPSHOT_BARRIER
+            // Invalid under SATB (GC_BARRIER_SNAPSHOT), which must snapshot the old value.
+#ifndef GC_BARRIER_SNAPSHOT
             if (type_is_permalloc(rhs.typ))
                 return;
 #endif
@@ -4498,8 +4498,8 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg
 {
     SmallVector<unsigned,4> perm_offsets;
     // Insertion-barrier optimization: drop perm-allocated inline fields. Invalid for
-    // plans that must observe the overwritten old inline values (GC_SNAPSHOT_BARRIER).
-#ifndef GC_SNAPSHOT_BARRIER
+    // plans that must observe the overwritten old inline values (GC_BARRIER_SNAPSHOT).
+#ifndef GC_BARRIER_SNAPSHOT
     if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
 #endif
