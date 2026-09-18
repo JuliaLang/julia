@@ -514,6 +514,51 @@ end
     @test Dates.parse_components("." * rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
 end
 
+@testset "fractional second code `n`" begin
+    # digits parse as a fraction of a second, down to nanosecond resolution
+    @test Dates.parse_components(".1", Dates.DateFormat(".n")) == [Dates.Nanosecond(100000000)]
+    @test Dates.parse_components(".123", Dates.DateFormat(".n")) == [Dates.Nanosecond(123000000)]
+    @test Dates.parse_components(".123456789", Dates.DateFormat(".n")) == [Dates.Nanosecond(123456789)]
+    @test Dates.parse_components(".1234567890", Dates.DateFormat(".n")) == [Dates.Nanosecond(123456789)]
+    @test_throws ArgumentError Dates.parse_components(".1234567891", Dates.DateFormat(".n"))
+    @test Dates.parse_components(".1" * "0"^72, Dates.DateFormat(".n")) ==
+        [Dates.Nanosecond(100000000)]
+    @test_throws ArgumentError Dates.parse_components(".123456789" * "0"^64 * "1", Dates.DateFormat(".n"))
+    # formatting strips trailing zeros, padded to at least the code width
+    @test Dates.format(Dates.Time(0, 0, 0, 500), "s") == "5"
+    @test Dates.format(Dates.Time(0, 0, 0, 500), "sss") == "500"
+    @test Dates.format(Dates.Time(0, 0, 0, 500), "n") == "5"
+    @test Dates.format(Dates.Time(0, 0, 0, 500), "nnnnnnnnn") == "500000000"
+    @test Dates.format(Dates.Time(0, 0, 0, 0, 0, 1), "n") == "000000001"
+    @test Dates.format(Dates.Time(0, 0, 0, 0, 0, 1), "nnn") == "000000001"
+    @test Dates.format(Dates.Time(0), "n") == "0"
+    @test Dates.format(Dates.Time(0), "nnn") == "000"
+    # fixed-width fractional fields truncate to their declared precision
+    fixed_ms = Dates.DateFormat("sSS")
+    fixed_ns = Dates.DateFormat("nnnSS")
+    fixed_ns9 = Dates.DateFormat("nnnnnnnnnSS")
+    @test Dates.format(Dates.Time(0, 0, 45, 123), fixed_ms) == "145"
+    @test Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns) == "00045"
+    @test Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns9) == "00000000145"
+    @test Dates.Time(Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns9), fixed_ns9) ==
+        Dates.Time(0, 0, 45, 0, 0, 1)
+    # DateTime can use `n` when the fraction is exactly representable in milliseconds
+    @test Dates.format(Dates.DateTime(2020, 1, 1, 0, 0, 0, 123), "n") == "123"
+    @test Dates.DateTime("2020-01-01T00:00:00.5", dateformat"yyyy-mm-dd\THH:MM:SS.n") ==
+        Dates.DateTime(2020, 1, 1, 0, 0, 0, 500)
+    @test tryparse(Dates.DateTime, "2020-01-01T00:00:00.000000001",
+                   dateformat"yyyy-mm-dd\THH:MM:SS.n") === nothing
+    @test_throws ArgumentError parse(Dates.DateTime, "2020-01-01T00:00:00.000000001",
+                                     dateformat"yyyy-mm-dd\THH:MM:SS.n")
+    # sub-millisecond times now round-trip through the default format
+    t = Dates.Time(12, 0, 0, 123, 456, 789)
+    @test string(t) == "12:00:00.123456789"
+    @test Dates.Time(string(t)) == t
+    @test Dates.Time("12:00:00.5") == Dates.Time(12, 0, 0, 500)
+    @test Dates.Time("12:00:00.123") == Dates.Time(12, 0, 0, 123)
+    @test Dates.format(t, "HH:MM:SS.n") == "12:00:00.123456789"
+end
+
 @testset "Time Parsing" begin
     let t
         time_tuple(t::Dates.Time) = (
