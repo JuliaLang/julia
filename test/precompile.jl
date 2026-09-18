@@ -3809,4 +3809,153 @@ end
     end end
 end
 
+# A package loaded in this session whose cache file has since been evicted (#63187):
+# a dependent or extension precompiled afterwards cannot be built against the loaded
+# build id, so it must be loaded from source in this session rather than fail.
+# Windows keeps a loaded package's .ji open, so the eviction cannot be staged there.
+@testset "loaded dependency with evicted cache" begin
+    Sys.iswindows() && return
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        parent_uuid = "c1000000-0000-0000-0000-000000000001"
+        trigger_uuid = "c2000000-0000-0000-0000-000000000002"
+        dependent_uuid = "c3000000-0000-0000-0000-000000000003"
+
+        parent_dir = joinpath(depot, "dev", "EvictParent")
+        mkpath(joinpath(parent_dir, "src"))
+        mkpath(joinpath(parent_dir, "ext"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "EvictParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [weakdeps]
+            EvictTrigger = "$trigger_uuid"
+
+            [extensions]
+            EvictParentTriggerExt = "EvictTrigger"
+            """)
+        write(joinpath(parent_dir, "src", "EvictParent.jl"), """
+            module EvictParent
+            f(x) = error("extension not loaded")
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "EvictParentTriggerExt.jl"), """
+            module EvictParentTriggerExt
+            using EvictParent, EvictTrigger
+            EvictParent.f(x::Int) = "extension loaded"
+            end
+            """)
+
+        trigger_dir = joinpath(depot, "dev", "EvictTrigger")
+        mkpath(joinpath(trigger_dir, "src"))
+        write(joinpath(trigger_dir, "Project.toml"), """
+            name = "EvictTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigger_dir, "src", "EvictTrigger.jl"), """
+            module EvictTrigger
+            end
+            """)
+
+        dependent_dir = joinpath(depot, "dev", "EvictDependent")
+        mkpath(joinpath(dependent_dir, "src"))
+        write(joinpath(dependent_dir, "Project.toml"), """
+            name = "EvictDependent"
+            uuid = "$dependent_uuid"
+            version = "0.1.0"
+
+            [deps]
+            EvictParent = "$parent_uuid"
+            """)
+        write(joinpath(dependent_dir, "src", "EvictDependent.jl"), """
+            module EvictDependent
+            using EvictParent
+            const parent = EvictParent
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            EvictParent = "$parent_uuid"
+            EvictTrigger = "$trigger_uuid"
+            EvictDependent = "$dependent_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.EvictParent]]
+            path = "../dev/EvictParent/"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [deps.EvictParent.weakdeps]
+            EvictTrigger = "$trigger_uuid"
+
+            [deps.EvictParent.extensions]
+            EvictParentTriggerExt = "EvictTrigger"
+
+            [[deps.EvictTrigger]]
+            path = "../dev/EvictTrigger/"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+
+            [[deps.EvictDependent]]
+            deps = ["EvictParent"]
+            path = "../dev/EvictDependent/"
+            uuid = "$dependent_uuid"
+            version = "0.1.0"
+            """)
+
+        julia = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path`,
+                       "JULIA_DEPOT_PATH" => depot, "JULIA_LOAD_PATH" => "@")
+        run(`$julia -e "using EvictParent, EvictTrigger, EvictDependent"`)
+
+        # Load the parent, then evict every cache file, as a concurrent process compiling
+        # the same packages for other flags under JULIA_MAX_NUM_PRECOMPILE_FILES would.
+        # Only the .ji files go; a missing .ji is enough for a cache miss. The dependent
+        # and the extension then have to be recompiled against a parent whose loaded build
+        # id is no longer on disk.
+        preamble = """
+            using EvictParent
+            const parent = EvictParent
+            for (root, _, files) in walkdir(joinpath(DEPOT_PATH[1], "compiled")), file in files
+                endswith(file, ".ji") && rm(joinpath(root, file))
+            end
+            """
+        function run_after_eviction(name, body)
+            outfile = joinpath(depot, "evict_$(name)_out.txt")
+            errfile = joinpath(depot, "evict_$(name)_err.txt")
+            proc = run(pipeline(ignorestatus(`$julia -e $(preamble * body)`); stdout=outfile, stderr=errfile))
+            out = read(outfile, String)
+            err = read(errfile, String)
+            if !success(proc) || !occursin("evicted cache ok", out)
+                println(stderr, "evicted-cache $name run failed\nstdout:\n", out, "stderr:\n", err)
+            end
+            @test success(proc)
+            @test occursin("evicted cache ok", out)
+            # the strict worker must not fail outright, and the session must not load a
+            # second copy of the parent from the recompiled cache
+            @test !occursin("not available with flags", err)
+            @test !occursin("Replacing module", err)
+            @test !occursin("failed to create a usable precompiled cache file", err)
+            @test !occursin("Error during loading of extension", err)
+        end
+        run_after_eviction("dependent", """
+            using EvictDependent
+            EvictDependent.parent === parent || error("EvictDependent is bound to a different EvictParent")
+            Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
+            println("evicted cache ok")
+            """)
+        run_after_eviction("extension", """
+            using EvictTrigger
+            EvictParent.f(1) == "extension loaded" || error("extension not loaded")
+            Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
+            println("evicted cache ok")
+            """)
+    end
+end
+
 finish_precompile_test!()
