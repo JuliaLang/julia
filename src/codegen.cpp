@@ -3468,9 +3468,11 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         return mark_julia_type(ctx, r, true, jl_any_type);
     }
     else if (issetglobalonce) {
-        Value *r = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
+        Value *old = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
-        return mark_julia_type(ctx, r, true, jl_bool_type);
+        // jl_checked_assignonce returns the previous value, or NULL when the store succeeds.
+        Value *r = ctx.builder.CreateIsNull(old);
+        return mark_julia_type(ctx, r, false, jl_bool_type);
     }
     abort(); // unreachable
 }
