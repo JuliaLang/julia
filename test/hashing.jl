@@ -358,3 +358,68 @@ end
     @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) !=
           hash(ps(Tuple{Int,Float64}, (Int, Int)))
 end
+
+# hash(::Real) via decompose: a Real that decomposes to an arbitrary num*2^pow/den, covering
+# typemin, unsigned, and BigInt numerators, negative denominators, an explicit exponent, and the
+# Int64, UInt64, and Float64 boundaries, all of which must hash like the equal built-in value
+struct DecomposedReal <: Real
+    num::Integer
+    pow::Int
+    den::Integer
+end
+Base.decompose(x::DecomposedReal) = (x.num, x.pow, x.den)
+@testset "hash(::Real) via decompose" begin
+    D = DecomposedReal
+    tm = typemin(Int64)
+    n = big(2)^60 + 1
+    for h in (zero(UInt), Base.HASH_SEED, typemax(UInt))
+        # typemin operands and the Int64 and UInt64 boundaries
+        @test hash(D(tm, 0, 1), h) == hash(tm, h)
+        @test hash(D(tm, 0, -1), h) == hash(big(2)^63, h)
+        @test hash(D(tm + 1, 0, -1), h) == hash(big(2)^63 - 1, h)
+        @test hash(D(tm, 1, -1), h) == hash(big(2)^64, h)
+        @test hash(D(1, 0, tm), h) == hash(-2.0^-63, h)
+        @test hash(D(tm, 0, tm), h) == hash(1, h)
+        @test hash(D(3, 61, -1), h) == hash(-(Int64(3) << 61), h)
+        @test hash(D(UInt64(3), 62, 1), h) == hash(UInt64(3) << 62, h)
+        @test hash(D(UInt64(3), 62, -1), h) == hash(-(big(3) << 62), h)
+        @test hash(D(-(Int128(2)^63 + 1), 0, -1), h) == hash(UInt64(1) << 63 + UInt64(1), h)
+        @test hash(D(-(Int128(2)^63 + 1), 0, 1), h) == hash(-(big(2)^63 + 1), h)
+        # negative denominators
+        @test hash(D(5, 0, -1), h) == hash(-5, h)
+        @test hash(D(1, -1, -1), h) == hash(-0.5, h)
+        @test hash(D(3, -2000, -1), h) == hash(-3 // big(2)^2000, h)
+        @test hash(D(3, 0, -5), h) == hash(-3 // 5, h)
+        # unsigned and Bool numerators
+        @test hash(D(true, -1, -1), h) == hash(-0.5, h)
+        @test hash(D(true, 2003, 1), h) == hash(big(2)^2003, h)
+        @test hash(D(1, 0, true), h) == hash(1, h)
+        @test hash(D(UInt64(5), 3, -1), h) == hash(-40, h)
+        @test hash(D(UInt64(1), -1, -1), h) == hash(-0.5, h)
+        @test hash(D(UInt64(3), 0, -5), h) == hash(-3 // 5, h)
+        @test hash(D(UInt64(1) << 63, 0, -1), h) == hash(tm, h)
+        @test hash(D(typemax(UInt64), 0, -1), h) == hash(-(big(2)^64 - 1), h)
+        # the power may be split between trailing zeros and the explicit exponent
+        @test hash(D(12, 5, 7), h) == hash(384 // 7, h)
+        @test hash(D(12, 5, 7), h) == hash(D(384, 0, 7), h)
+        @test hash(D(n, 2003, 1), h) == hash(n << 2003, h)
+        @test hash(D(n << 8, 1995, 1), h) == hash(n << 2003, h)
+        # a machine integer numerator must not overflow when shifted into position
+        @test hash(D(Int64(2)^60 + 1, 100, 1), h) == hash(big(2)^160 + big(2)^100, h)
+        # BigInt operands
+        @test hash(D(big(-3), 0, big(-1)), h) == hash(3, h)
+        @test hash(D(big(3), -1, big(-1)), h) == hash(-1.5, h)
+        @test hash(D(big(3), 0, big(-7)), h) == hash(-3 // 7, h)
+        @test hash(D(big(-40), 0, big(7)), h) == hash(-40 // 7, h)
+    end
+    # a BigInt numerator must not be mutated by hashing
+    let x = D(big(3), 5, big(7))
+        @test hash(x) == hash(x)
+        @test x.num == 3
+    end
+    # BigFloat carries its sign in the denominator of its decomposition
+    @test hash(BigFloat(-0.5)) == hash(-1 // 2)
+    @test hash(BigFloat(-3) * BigFloat(2)^-2000) == hash(-3 // big(2)^2000)
+    @test hash(BigFloat(3) * BigFloat(2)^2003) == hash(big(3) << 2003)
+    @test hash(BigFloat(typemin(Int64))) == hash(typemin(Int64))
+end
