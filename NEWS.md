@@ -231,6 +231,13 @@ Standard library changes
 * Strikethrough text via `~strike~` or `~~through~~` is now supported by the Markdown parser ([#60537]).
 * Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502]).
 
+### Mmap
+
+* Refactored for consistent behavior between Windows, Linux, and macOS; also made more robust and avoids surfacing
+  system errors in favor of Julia exceptions, addressing several longstanding issues ([#60955]).
+* `Mmap.Anonymous` deprecated in favor of new `Mmap.SharedMemory`, which acts like an IO object abstracting over
+  a named or anonymous shared memory segment supporting the `open`/`close` convention ([#60955]).
+
 #### Profile
 
 #### Random
@@ -249,6 +256,9 @@ Standard library changes
 
 #### SharedArrays
 
+* Naming of the internal shared memory segment has changed to reduce chance of collisions ([#60955]).
+* `unshare!(::SharedArray)` eagerly releases the shared-memory mappings on workers while leaving the
+  array available on the host process ([#60955]).
 * `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the
   array on all processes, e.g. so the file backing a file-backed `SharedArray` can be deleted
   immediately ([#62488]).
