@@ -2455,17 +2455,24 @@ end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
     checkbounds(v, lo:hi)
+    _quicksort!(v, lo, hi, a, o)
+end
+
+function _quicksort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
     @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
         j = partition!(v, lo, hi, o)
         if j-lo < hi-j
             # recurse on the smaller chunk
             # this is necessary to preserve O(log(n))
             # stack space in the worst case (rather than O(n))
-            lo < (j-1) && sort!(v, lo, j-1, a, o)
+            lo < (j-1) && _quicksort!(v, lo, j-1, a, o)
             lo = j+1
         else
-            j+1 < hi && sort!(v, j+1, hi, a, o)
+            j+1 < hi && _quicksort!(v, j+1, hi, a, o)
             hi = j-1
         end
     end
@@ -2477,8 +2484,16 @@ sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Orderi
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
         t0::Union{AbstractVector{T}, Nothing}=nothing) where T
     checkbounds(v, lo:hi)
+    _mergesort!(v, lo, hi, a, o, t0)
+end
+
+function _mergesort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
+        t0::Union{AbstractVector{T}, Nothing}) where T
     @inbounds if lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
 
         m = midpoint(lo, hi)
 
@@ -2486,8 +2501,8 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
         length(t) < m-lo+1 && resize!(t, m-lo+1)
         Base.require_one_based_indexing(t)
 
-        sort!(v, lo,  m,  a, o, t)
-        sort!(v, m+1, hi, a, o, t)
+        _mergesort!(v, lo,  m,  a, o, t)
+        _mergesort!(v, m+1, hi, a, o, t)
 
         i, j = 1, lo
         while j <= m
@@ -2520,8 +2535,16 @@ end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering)
     checkbounds(v, lo:hi)
+    _partialquicksort!(v, lo, hi, a, o)
+end
+
+function _partialquicksort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
+                            o::Ordering)
     @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
         j = partition!(v, lo, hi, o)
 
         if j <= first(a.k)
@@ -2533,10 +2556,10 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
             # this is necessary to preserve O(log(n))
             # stack space in the worst case (rather than O(n))
             if j-lo < hi-j
-                lo < (j-1) && sort!(v, lo, j-1, a, o)
+                lo < (j-1) && _partialquicksort!(v, lo, j-1, a, o)
                 lo = j+1
             else
-                hi > (j+1) && sort!(v, j+1, hi, a, o)
+                hi > (j+1) && _partialquicksort!(v, j+1, hi, a, o)
                 hi = j-1
             end
         end
