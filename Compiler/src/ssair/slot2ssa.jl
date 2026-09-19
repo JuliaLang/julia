@@ -327,6 +327,23 @@ function rename_phinode_edges(node::PhiNode, bb::Int, result_order::Vector{Int},
     return PhiNode(new_edges, new_values)
 end
 
+function rename_domsort_stmt(@nospecialize(stmt), bb::Int,
+                            result_order::Vector{Int}, bb_rename::Vector{Int},
+                            inst_rename::Vector{SSAValue})
+    if isa(stmt, PhiNode)
+        stmt = rename_phinode_edges(stmt, bb, result_order, bb_rename)
+    elseif isa(stmt, PhiCNode)
+        stmt = PhiCNode(Any[value for value in stmt.values
+                           if inst_rename[(value::SSAValue).id].id != -1])
+    elseif isexpr(stmt, :gc_preserve_end)
+        token = stmt.args[1]
+        if isa(token, SSAValue) && inst_rename[token.id].id == -1
+            return nothing
+        end
+    end
+    return renumber_ssa!(stmt, inst_rename, true)
+end
+
 """
 Sort the basic blocks in `ir` into domtree order (i.e. if `bb1` is higher in
 the domtree than `bb2`, it will come first in the linear order). The resulting
@@ -353,7 +370,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         push!(result_order, node_to_schedule)
         bb_rename[node_to_schedule] = length(result_order)
         cs = domtree.nodes[node_to_schedule].children
-        terminator = ir[SSAValue(last(ir.cfg.blocks[node_to_schedule].stmts))][:stmt]
+        block = ir.cfg.blocks[node_to_schedule]
+        terminator = ir[SSAValue(last(block.stmts))][:stmt]
         fallthrough = node_to_schedule + 1
         node_to_schedule = -1
 
@@ -374,7 +392,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
         # If a fallthrough successor is no longer the fallthrough after sorting, we need to
         # add a GotoNode (and either extend or split the basic block as necessary)
-        if node_to_schedule != fallthrough && !isa(terminator, Union{GotoNode, ReturnNode})
+        if node_to_schedule != fallthrough && !isempty(block.succs) && !isa(terminator, GotoNode)
             if isa(terminator, GotoIfNot)
                 # Need to break the critical edge
                 push!(result_order, 0)
@@ -397,13 +415,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
     end
     result = InstructionStream(nstmts + nfixupstmts)
-    inst_rename = Vector{SSAValue}(undef, length(ir.stmts) + length(ir.new_nodes))
-    @inbounds for i = 1:length(ir.stmts)
-        inst_rename[i] = SSAValue(-1)
-    end
-    @inbounds for i = 1:length(ir.new_nodes)
-        inst_rename[i + length(ir.stmts)] = SSAValue(i + length(result))
-    end
+    inst_rename = fill(SSAValue(-1), length(ir.stmts) + length(ir.new_nodes))
     bb_start_off = 0
     for (new_bb, bb) in pairs(result_order)
         if bb == 0
@@ -422,10 +434,6 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             @assert !isassigned(result.stmt, nidx)
             node = result[nidx]
             node[] = ir.stmts[idx]
-            stmt = node[:stmt]
-            if isa(stmt, PhiNode)
-                node[:stmt] = rename_phinode_edges(stmt, bb, result_order, bb_rename)
-            end
         end
         # Now fix up the terminator
         terminator = result[inst_range[end]][:stmt]
@@ -452,7 +460,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             else
                 @assert isexpr(terminator, :leave)
             end
-        elseif !isa(terminator, ReturnNode)
+        elseif !isempty(ir.cfg.blocks[bb].succs)
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
@@ -469,22 +477,32 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
     end
-    for i in 1:length(result)
-        result[i][:stmt] = renumber_ssa!(result[i][:stmt], inst_rename, true)
+    nnew = 0
+    for i in 1:length(ir.new_nodes)
+        inst_rename[ir.new_nodes.info[i].pos].id == -1 && continue
+        nnew += 1
+        inst_rename[length(ir.stmts) + i] = SSAValue(length(result) + nnew)
+    end
+    for (new_bb, bb) in pairs(result_order)
+        bb == 0 && continue
+        for idx in new_bbs[new_bb].stmts
+            result[idx][:stmt] = rename_domsort_stmt(result[idx][:stmt], bb,
+                result_order, bb_rename, inst_rename)
+        end
     end
     cfg = CFG(new_bbs, Int[first(bb.stmts) for bb in new_bbs[2:end]])
-    new_new_nodes = NewNodeStream(length(ir.new_nodes))
+    new_new_nodes = NewNodeStream(nnew)
     for i = 1:length(ir.new_nodes)
+        new_idx = inst_rename[length(ir.stmts) + i].id
+        new_idx == -1 && continue
+        new_idx -= length(result)
         new_info = ir.new_nodes.info[i]
         new_new_info = NewNodeInfo(inst_rename[new_info.pos].id, new_info.attach_after)
-        new_new_nodes.info[i] = new_new_info
-        new_node = new_new_nodes.stmts[i]
+        new_new_nodes.info[new_idx] = new_new_info
+        new_node = new_new_nodes.stmts[new_idx]
         new_node[] = ir.new_nodes.stmts[i]
-        new_node_inst = new_node[:stmt]
-        if isa(new_node_inst, PhiNode)
-            new_node_inst = rename_phinode_edges(new_node_inst, block_for_inst(ir.cfg, new_info.pos), result_order, bb_rename)
-        end
-        new_node[:stmt] = renumber_ssa!(new_node_inst, inst_rename, true)
+        new_node[:stmt] = rename_domsort_stmt(new_node[:stmt],
+            block_for_inst(ir.cfg, new_info.pos), result_order, bb_rename, inst_rename)
     end
     ir.debuginfo.codelocs = result.line
     new_ir = IRCode(ir, result, cfg, new_new_nodes)
