@@ -192,7 +192,7 @@ function du_visit!(ctx, state::DefUseState, e)
         du_kill!(state)
         return false
 
-    elseif k in KSet"break symbolicgoto oldsymbolicgoto"
+    elseif k in KSet"break symbolicgoto"
         # this kill!() is not required for soundness since these are branch points
         # not merge points, but it's here for parity with flisp
         du_kill!(state)
