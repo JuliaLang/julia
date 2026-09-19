@@ -60,7 +60,7 @@ ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
 else ifeq ($(OS), Darwin)
 CURL_TLS_CONFIGURE_FLAGS := --with-openssl
-CURL_TLS_CONFIGURE_FLAGS := --with-apple-sectrust
+CURL_TLS_CONFIGURE_FLAGS += --with-apple-sectrust
 else
 CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif

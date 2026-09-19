@@ -827,7 +827,10 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         # if env names a directory, search it
         proj = implicit_manifest_uuid_path(env, pkg)
         proj === nothing || return proj
-        # if not found
+        # if not found, this might be an extension - first we fast path needing
+        # to scan the whole directory for a matching extension by peeking at
+        # EXT_PRIMED. However, this only works if the parent package was loaded.
+        # This is usually the case, but not always, e.g. in precompilation.
         triggers = get(EXT_PRIMED, pkg, nothing)
         if triggers !== nothing
             parentid = triggers[1]
@@ -839,6 +842,10 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
                     mby_ext === nothing || return mby_ext
                 end
             end
+        else
+            # We still need to scan the whole directory for extensions.
+            ext_path, ext_proj = implicit_env_project_file_extension(env, pkg)
+            ext_path === nothing || return ext_path
         end
     end
     return nothing
@@ -1133,8 +1140,8 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
             extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
-                parent_path = locate_package(PkgId(UUID(uuid), name))
-                if parent_path === nothing
+                parent_path = explicit_manifest_entry_path(manifest_file, PkgId(UUID(uuid), name), entry)
+                if parent_path === nothing || parent_path === missing
                     error("failed to find source of parent package: \"$name\"")
                 end
                 p = normpath(dirname(parent_path), "..")
@@ -1553,6 +1560,12 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
                 uuid === nothing && continue
                 if UUID(uuid) == pkg.uuid
+                    if get(entry, "path", nothing) === nothing && get(entry, "git-tree-sha1", nothing) === nothing
+                        # a stdlib entry is loaded from Sys.STDLIB (see `explicit_manifest_uuid_path`), and
+                        # the manifest may have been resolved by a Julia version whose copy of the stdlib
+                        # had different extensions, so take them from the stdlib's own Project.toml
+                        return insert_extension_triggers(Sys.STDLIB, pkg)
+                    end
                     extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     extensions === nothing && return
                     weakdeps = get(Dict{String, Any}, entry, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
@@ -2732,12 +2745,12 @@ function __require_prelocked(pkg::PkgId, env)
         end
     end
 
-    if JLOptions().use_compiled_modules == 3
-        error("Precompiled image $pkg not available with flags $(CacheFlags())")
-    end
-
     # if the module being required was supposed to have a particular version
-    # but it was not handled by the precompile loader, complain
+    # but it was not handled by the precompile loader, complain. This runs before
+    # the strict-mode check: the pinned build id is the one the parent session has
+    # loaded, and once its cache file is gone nothing a worker can do will produce
+    # it again, so the dependent has to be loaded from source in that session
+    # rather than reported as a precompilation failure.
     for (concrete_pkg, concrete_build_id) in _concrete_dependencies
         if pkg == concrete_pkg
             @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
@@ -2747,6 +2760,10 @@ function __require_prelocked(pkg::PkgId, env)
                 throw(PrecompilableError())
             end
         end
+    end
+
+    if JLOptions().use_compiled_modules == 3
+        error("Precompiled image $pkg not available with flags $(CacheFlags())")
     end
 
     if JLOptions().use_compiled_modules == 1
@@ -4263,7 +4280,12 @@ end
             end
             M = maybe_root_module(req_key)
             if M isa Module
-                if PkgId(M) == req_key && module_build_id(M) === req_build_id
+                # With `ignore_loaded` the verdict has to reflect the environment rather than the
+                # session: a dependency loaded at the version this cache was built against says
+                # nothing about the version the manifest resolves now, so only sysimage modules,
+                # which cannot differ, are accepted on that basis; everything else is checked below
+                # against its located source and on-disk cache.
+                if PkgId(M) == req_key && module_build_id(M) === req_build_id && (!ignore_loaded || in_sysimage(req_key))
                     depmods[i] = M
                     continue
                 elseif M == Core
@@ -4289,20 +4311,20 @@ end
 
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
-        # or neither
-        if stalecheck
-            for (req_key, req_build_id) in _concrete_dependencies
-                build_id = get(modules, req_key, UInt64(0))
-                if build_id !== UInt64(0)
-                    build_id |= UInt128(checksum) << 64
-                    if build_id === req_build_id
-                        stalecheck = false
-                        break
-                    end
-                    @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
-                    record_reason(reasons, "different dependency build identifier")
-                    return true # cachefile doesn't provide the required version of the dependency
+        # or neither. This is not skipped for a trusted (driver-validated) file:
+        # the driver only checks that the file is fresh, not that it carries the
+        # build id the parent session pinned.
+        for (req_key, req_build_id) in _concrete_dependencies
+            build_id = get(modules, req_key, UInt64(0))
+            if build_id !== UInt64(0)
+                build_id |= UInt128(checksum) << 64
+                if build_id === req_build_id
+                    stalecheck = false
+                    break
                 end
+                @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
+                record_reason(reasons, "different dependency build identifier")
+                return true # cachefile doesn't provide the required version of the dependency
             end
         end
 
