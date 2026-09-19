@@ -595,6 +595,14 @@ end
     end
 end
 
+@testset "matrix log for non-BlasFloat matrices" begin
+    for T in (Int,)
+        A = UpperTriangular(T[1 2; 0 4])
+        B = log(float(A))
+        @test log(A) ≈ log(complex(A)) ≈ B
+    end
+end
+
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2
 A2real  = randn(n, n)/2

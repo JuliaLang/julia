@@ -1722,8 +1722,8 @@ powm(A::LowerTriangular, p::Real) = copy(transpose(powm!(copy(transpose(A)), p::
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-log(A::UpperTriangular{T}) where {T<:BlasFloat} = log_quasitriu(A)
-log(A::UnitUpperTriangular{T}) where {T<:BlasFloat} = log_quasitriu(A)
+log(A::UpperTriangular{T}) where {T<:Union{Real,Complex}} = log_quasitriu(float(A))
+log(A::UnitUpperTriangular{T}) where {T<:Union{Real,Complex}} = log_quasitriu(float(A))
 log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 log(A::UnitLowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
