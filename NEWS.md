@@ -218,6 +218,10 @@ Standard library changes
 * The `Precompiling` messages printed while loading name packages without their uuid when the
   name is unambiguous in the environment, name extensions by their parent package, and say which
   dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
+  That log message is now at debug level, with the full list of reasons a cache was not reused, and the
+  precompilation output itself explains the reasons a user can act on: a dependency loaded at a different
+  version than in the manifest, with how to get the manifest version instead, and compilation options that
+  differ from the existing caches'.
 
 #### JuliaSyntaxHighlighting
 

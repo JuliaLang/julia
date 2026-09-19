@@ -3642,6 +3642,41 @@ end
         output = fetch(log)
         @test occursin("currently loaded", output)
         @test occursin("LoadedDep", output)
+
+        # Loading DepUser with the old LoadedDep still loaded rejects the cache just built
+        # and recompiles for the loaded version; the summary should explain that cause.
+        # `-i` so the loading-time precompile output is not suppressed; `exit()` so the
+        # fallback REPL never starts on the non-tty stdin afterwards (EPIPE on CI).
+        script = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.disable_parallel_precompile = false
+            using DepUser
+            exit()
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -i --project=$(old_project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        out = Base.PipeEndpoint()
+        log = @async read(out, String)
+        try
+            proc = run(pipeline(cmd, stdin=devnull, stdout=out, stderr=out))
+            @test success(proc)
+        catch
+            @show fetch(log)
+            rethrow()
+        end
+        output = fetch(log)
+        # explained under the header (no tty here, so no `c` to cancel offered), not repeated in the summary
+        @test occursin("LoadedDep is loaded at a different version than in the manifest, so its dependents are being precompiled.", output)
+        @test occursin("Mixing versions may violate compat requirements and cause unexpected errors.", output)
+        @test occursin("To use the manifest version and its existing caches instead, restart julia with `--project=$(new_project_path)`.", output)
+        @test !occursin("were precompiled", output)
+        @test !occursin("currently loaded", output)
+
+        # many conflicting packages are listed five at a time
+        @test Base.Precompilation.format_names_list(["A"]) == "A"
+        @test Base.Precompilation.format_names_list(["A", "B"]) == "A and B"
+        @test Base.Precompilation.format_names_list(["A", "B", "C", "D", "E", "F", "G"]) == "A, B, C, D, E, and 2 more"
     end end
 end
 
