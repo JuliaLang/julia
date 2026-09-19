@@ -884,6 +884,28 @@ static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
 // replacement of the partition by a definition or an explicit import.
 static const uint16_t PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100;
 
+// #62154 re-type guard flags. Unlike the flags above these are not part of `kind`
+// but are stored in a separate `retype_flags` word (so their values are independent
+// of PARTITION_MASK_FLAG), which a replacement partition never inherits: they describe how *later* declarations
+// relate to this partition's restriction, and a fresh partition has no later
+// declarations yet. Once a partition is published, both are monotone (set under
+// world_counter_lock by jl_retype_flag_partitions and never cleared) and are read
+// concurrently by compiled guard code and the store commit windows.
+//
+// _RETYPE_READ: some later declaration allows the (single, shared) value slot to hold
+// a value that is not an instance of this partition's restriction. Reads compiled
+// against this partition must verify the values they load; while clear, a value
+// loaded from the slot (fenced before the flag check, see emit_retype_recheck) is
+// known to conform.
+static const uint16_t PARTITION_FLAG_RETYPE_READ     = 0x1;
+// _RETYPE_WRITE: a value conforming to this partition's restriction is not
+// necessarily storable under some later declaration's restriction. Stores validated
+// against this partition must divert to a path that re-validates against the latest
+// declared type under world_counter_lock; while clear, such a store may commit
+// directly (inside a commit window that re-checks this flag, see
+// jl_binding_begin_commit).
+static const uint16_t PARTITION_FLAG_RETYPE_WRITE    = 0x2;
+
 #if defined(_COMPILER_MICROSOFT_)
 #define JL_ALIGNED_ATTR(alignment) \
     __declspec(align(alignment))
@@ -910,8 +932,15 @@ typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     // the chain instead stores a backreference to the owning `jl_binding_t`, so
     // the chain can be walked circularly.
     _Atomic(struct _jl_binding_partition_t *) next; // more precisely, _Atomic( union { jl_binding_partition_t *pb; jl_binding_t *b; } )
-    size_t kind;
+    uint16_t kind;
+    _Atomic(uint16_t) retype_flags;
 } jl_binding_partition_t;
+
+static_assert(sizeof(_Atomic(uint16_t)) == sizeof(uint16_t),
+    "16-bit atomic binding flags must not add storage overhead");
+static_assert(offsetof(jl_binding_partition_t, retype_flags) ==
+              offsetof(jl_binding_partition_t, kind) + sizeof(uint16_t),
+    "binding kind and re-type flags must remain packed");
 
 STATIC_INLINE enum jl_partition_kind jl_binding_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
 {

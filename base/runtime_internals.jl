@@ -264,6 +264,10 @@ const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
 const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
 const PARTITION_FLAG_IMPLICITLY_DEPRECATED = 0x100
+# Re-type guard flags (#62154): stored in BindingPartition's separate atomic
+# `retype_flags` field, which replacement partitions initialize clear; see julia.h.
+const PARTITION_FLAG_RETYPE_READ  = 0x1
+const PARTITION_FLAG_RETYPE_WRITE = 0x2
 
 const PARTITION_MASK_KIND         = 0x0f
 const PARTITION_MASK_FLAG         = 0x1f0
@@ -326,10 +330,6 @@ Force the binding `mod.sym` to be undefined again, allowing it be redefined.
 Note that this operation is very expensive, requiring a full scan of all code in the system,
 as well as potential recompilation of any methods that (may) have used binding
 information.
-
-!!! warning
-    The implementation of this functionality is currently incomplete. Do not use
-    this method on versions that contain this disclaimer except for testing.
 """
 function delete_binding(mod::Module, sym::Symbol)
     ccall(:jl_disable_binding, Cvoid, (Any,), GlobalRef(mod, sym))

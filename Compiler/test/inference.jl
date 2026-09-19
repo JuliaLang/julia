@@ -7735,7 +7735,9 @@ let b = convert(Core.Binding, GlobalRef(ReformGlobalsSplice, :gdecl)),
     @test !Compiler.is_consistent(effects)
     @test !Compiler.is_nothrow(effects)
     @test Base.infer_return_type(readpart, ()) == Int
-    @test Base.infer_exception_type(readpart, ()) == UndefVarError
+    # a typed global may be re-declared with another type (#62154), so a stale read may
+    # also throw a `TypeError`
+    @test Base.infer_exception_type(readpart, ()) == Union{TypeError, UndefVarError}
     @test_throws UndefVarError readpart()
 end
 # The partition queries may be handed a non-leaf (import) partition, whose restriction is
