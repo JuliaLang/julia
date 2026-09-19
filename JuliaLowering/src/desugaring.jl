@@ -493,7 +493,7 @@ function expand_scalar_compare_chain(ctx, srcref, terms, i)
         lhs = terms[i]
         op = terms[i+1]
         rhs = terms[i+2]
-        if kind(op) == K"."
+        if kind(op) == K"." && numchildren(op) == 1
             break
         end
         comp = @ast ctx op [K"call"
@@ -533,7 +533,7 @@ function expand_compare_chain(ctx, ex)
     comparisons = nothing
     # Combine any number of dotted comparisons
     while i + 2 <= length(terms)
-        if kind(terms[i+1]) != K"."
+        if !(kind(terms[i+1]) == K"." && numchildren(terms[i+1]) == 1)
             (comp, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
         else
             lhs = terms[i]
@@ -1548,16 +1548,19 @@ function expand_let(ctx, ex)
             lhs = binding[1]
             rhs = binding[2]
             if is_identifier_like(lhs)
-                kind(lhs) === K"Placeholder" && continue
-                blk = @ast ctx binding [K"block"
-                    tmp := rhs
-                    [K"scope_block"(ex) scope_type
-                        [K"local"(lhs) lhs]
-                        [K"always_defined" lhs]
-                        [K"="(binding) lhs tmp]
-                        blk
+                if kind(lhs) === K"Placeholder"
+                    blk = @ast ctx binding [K"block" rhs blk]
+                else
+                    blk = @ast ctx binding [K"block"
+                        tmp := rhs
+                        [K"scope_block"(ex) scope_type
+                            [K"local"(lhs) lhs]
+                            [K"always_defined" lhs]
+                            [K"="(binding) lhs tmp]
+                            blk
+                        ]
                     ]
-                ]
+                end
             elseif kind(lhs) == K"::"
                 var = lhs[1]
                 kind(var) === K"Placeholder" && continue
@@ -2260,7 +2263,7 @@ function expand_decls(ctx, ex)
             [K".=" x _] -> x
             [K"op=" x _ _] -> x
             [K".op=" x _ _] -> x
-            [K"function" x _] -> x
+            [K"function" x _...] -> x
         end
         # type decls are handled elsewhere unless simple
         make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
@@ -2296,8 +2299,8 @@ function expand_const_decl(ctx, ex)
     end
     @stm ex[1] begin
         # const is ignored on function
-        [K"function" _ _] -> expand_forms_2(ctx, ex[1])
-        [K"global" [K"function" _ _]] -> expand_forms_2(ctx, ex[1])
+        [K"function" _...] -> expand_forms_2(ctx, ex[1])
+        [K"global" [K"function" _...]] -> expand_forms_2(ctx, ex[1])
 
         [K"global" x] -> let decls = SyntaxList()
             @jl_assert kind(x) === K"=" ex
@@ -2843,6 +2846,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     end
     @ast ctx src [K"block"
         [K"function_decl" m1_name]
+        [K"no_method_defs" m1_name] # hack: define closure type for next decl
         kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
         [K"method_defs" m1_name method_def_sparams(ctx, src, sparams) mdefs1]
         [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
@@ -3029,7 +3033,7 @@ end
 
 function _make_macro_name(ctx, ex)
     k = kind(ex)
-    if k == K"Identifier" || k == K"Symbol"
+    name = if k == K"Identifier" || k == K"Symbol"
         @mknode(ex; kind=k, value="@$(syntax_name(ex))", children=nothing)
     elseif k == K"Placeholder"
         @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))", children=nothing)
@@ -3039,6 +3043,7 @@ function _make_macro_name(ctx, ex)
     else
         @jl_assert false ex
     end
+    relayer_global_if_unhygienic(ctx, name)[1]
 end
 
 # flisp: expand-macro-def
@@ -3592,9 +3597,9 @@ function insert_struct_shim(ctx, fieldtypes, name)
     map(ex->_insert_fieldtype_struct_shim(ctx, name, ex), fieldtypes)
 end
 
-# Replace all (call core.apply_type ...) with (call core.apply_type_or_typeapp ...)
-# in an expression tree. Used for typegroup to handle TypeVar/TypeApp references
-# during type resolution before real DataTypes exist.
+# Used to handle TypeVar/TypeApp references during type resolution before real
+# DataTypes exist.  flisp: "Skips method bodies since constructors should use
+# plain apply_type for correct effects inference."
 function _replace_type_constructors(ctx, ex)
     if is_leaf(ex)
         return ex
@@ -3608,6 +3613,8 @@ function _replace_type_constructors(ctx, ex)
             push!(new_children, _replace_type_constructors(ctx, ex[i]))
         end
         return @ast ctx ex [K"call" new_children...]
+    elseif k === K"method" || is_quoted(ex)
+        ex
     else
         return mapchildren(e->_replace_type_constructors(ctx, e), ex)
     end
@@ -4326,7 +4333,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"function"
         if numchildren(ex) == 1
             return @ast ctx ex [K"block"
-                [K"global_if_global" ex[1]] [K"function_decl" ex[1]] ex[1]]
+                [K"global_if_global" ex[1]]
+                [K"function_decl" ex[1]]
+                [K"no_method_defs" ex[1]]
+                ex[1]]
         end
         sig, wheres = flatten_wheres(ex[1])
         name, args, rett = @stm sig begin

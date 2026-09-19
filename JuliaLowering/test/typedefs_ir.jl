@@ -406,7 +406,7 @@ end
 23  (call core.declare_const TestMod :X %₂₂)
 24  latestworld
 25  TestMod.X
-26  (call core.apply_type_or_typeapp core.Type %₂₅)
+26  (call core.apply_type core.Type %₂₅)
 27  (call core.svec %₂₆)
 28  (call core.svec)
 29  SourceLocation::2:5
@@ -729,21 +729,21 @@ end
 29  latestworld
 30  TestMod.#f##0
 31  (new %₃₀)
-32  (= slot₂/f %₃₁)
-33  TestMod.#f##0
-34  (call core.svec %₃₃)
-35  (call core.svec)
-36  SourceLocation::3:5
-37  (call core.svec %₃₄ %₃₅ %₃₆)
-38  (call core.define_method TestMod core.nothing %₃₇
+32  TestMod.#f##0
+33  (call core.svec %₃₂)
+34  (call core.svec)
+35  SourceLocation::3:5
+36  (call core.svec %₃₃ %₃₄ %₃₅)
+37  (call core.define_method TestMod core.nothing %₃₆
     --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁ 1)
     3   (return %₂)
-39  latestworld
+38  latestworld
+39  (= slot₂/f %₃₁)
 40  TestMod.X
-41  (call core.apply_type_or_typeapp core.Type %₄₀)
+41  (call core.apply_type core.Type %₄₀)
 42  (call core.svec %₄₁)
 43  (call core.svec)
 44  SourceLocation::4:5
@@ -758,7 +758,7 @@ end
 49  (call core.define_method TestMod core.nothing %₄₅ %₄₈)
 50  latestworld
 51  TestMod.X
-52  (call core.apply_type_or_typeapp core.Type %₅₁)
+52  (call core.apply_type core.Type %₅₁)
 53  (call core.svec %₅₂ core.Any)
 54  (call core.svec)
 55  SourceLocation::5:5
@@ -771,7 +771,7 @@ end
     3   (return %₂)
 58  latestworld
 59  TestMod.X
-60  (call core.apply_type_or_typeapp core.Type %₅₉)
+60  (call core.apply_type core.Type %₅₉)
 61  (call core.svec %₆₀ core.Any core.Any)
 62  (call core.svec)
 63  SourceLocation::6:5
@@ -793,7 +793,7 @@ end
     12  (return %₁₁)
 66  latestworld
 67  TestMod.X
-68  (call core.apply_type_or_typeapp core.Type %₆₇)
+68  (call core.apply_type core.Type %₆₇)
 69  (call core.svec %₆₈ core.Any core.Any core.Any)
 70  (call core.svec)
 71  SourceLocation::10:5
@@ -847,8 +847,8 @@ end
 29  TestMod.X
 30  TestMod.A
 31  TestMod.B
-32  (call core.apply_type_or_typeapp %₂₉ %₃₀ %₃₁)
-33  (call core.apply_type_or_typeapp core.Type %₃₂)
+32  (call core.apply_type %₂₉ %₃₀ %₃₁)
+33  (call core.apply_type core.Type %₃₂)
 34  (call core.svec %₃₃)
 35  (call core.svec)
 36  SourceLocation::3:5
@@ -863,8 +863,8 @@ end
 40  (call core.TypeVar :U)
 41  (call core.TypeVar :V)
 42  TestMod.X
-43  (call core.apply_type_or_typeapp %₄₂ %₄₀ %₄₁)
-44  (call core.apply_type_or_typeapp core.Type %₄₃)
+43  (call core.apply_type %₄₂ %₄₀ %₄₁)
+44  (call core.apply_type core.Type %₄₃)
 45  (call core.svec %₄₄)
 46  (call core.svec %₄₀ %₄₁)
 47  SourceLocation::4:5
@@ -883,23 +883,24 @@ end
 55  latestworld
 56  TestMod.#f##1
 57  (new %₅₆)
-58  (= slot₄/f %₅₇)
-59  TestMod.#f##1
-60  (call core.svec %₅₉)
-61  (call core.svec)
-62  SourceLocation::5:5
-63  (call core.svec %₆₀ %₆₁ %₆₂)
-64  (call core.define_method TestMod core.nothing %₆₃
+58  TestMod.#f##1
+59  (call core.svec %₅₈)
+60  (call core.svec)
+61  SourceLocation::5:5
+62  (call core.svec %₅₉ %₆₀ %₆₁)
+63  (call core.define_method TestMod core.nothing %₆₂
     --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   TestMod.A
     3   TestMod.B
-    4   (call core.apply_type_or_typeapp %₁ %₂ %₃)
+    4   (call core.apply_type %₁ %₂ %₃)
     5   (new %₄ 1)
     6   (return %₅)
-65  latestworld
-66  (return core.nothing)
+64  latestworld
+65  (= slot₄/f %₅₇)
+66  latestworld
+67  (return core.nothing)
 
 ########################################
 # new() calls with splats; `Any` fields
@@ -934,7 +935,7 @@ end
 23  (call core.declare_const TestMod :X %₂₂)
 24  latestworld
 25  TestMod.X
-26  (call core.apply_type_or_typeapp core.Type %₂₅)
+26  (call core.apply_type core.Type %₂₅)
 27  (call core.svec %₂₆ core.Any)
 28  (call core.svec)
 29  SourceLocation::4:5
@@ -987,8 +988,8 @@ end
 28  latestworld
 29  (call core.TypeVar :T)
 30  TestMod.X
-31  (call core.apply_type_or_typeapp %₃₀ %₂₉)
-32  (call core.apply_type_or_typeapp core.Type %₃₁)
+31  (call core.apply_type %₃₀ %₂₉)
+32  (call core.apply_type core.Type %₃₁)
 33  (call core.svec %₃₂ core.Any)
 34  (call core.svec %₂₉)
 35  SourceLocation::4:5
@@ -1176,7 +1177,7 @@ end
 26  (call core.declare_const TestMod :ShadowTypeParam %₂₅)
 27  latestworld
 28  TestMod.ShadowTypeParam
-29  (call core.apply_type_or_typeapp core.Type %₂₈)
+29  (call core.apply_type core.Type %₂₈)
 30  (call core.svec %₂₉ core.Any)
 31  (call core.svec)
 32  SourceLocation::3:5
@@ -1188,7 +1189,7 @@ end
     2   (= slot₄/T (call %₁ slot₂/x))
     3   TestMod.ShadowTypeParam
     4   slot₄/T
-    5   (call core.apply_type_or_typeapp %₃ %₄)
+    5   (call core.apply_type %₃ %₄)
     6   (call core.fieldtype %₅ 1)
     7   slot₂/x
     8   (= slot₃/tmp %₇)
