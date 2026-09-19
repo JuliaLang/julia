@@ -639,13 +639,18 @@ close(proc.in)
     # tighter timeout.
     script = "profile_spawnmany_exec.jl"
     cmd_base = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
+    # Report how long each run took. When this times out on a CI machine, the
+    # durations of the runs that did finish are the only evidence of whether
+    # the limit is merely tight there or something actually hung.
+    timeout_s = 200
     @testset for n in [20000, 200000, 2000000]
         cmd = ignorestatus(setenv(cmd_base, "NTASKS" => n; dir = @__DIR__))
         cmd = pipeline(cmd; stdout = stderr, stderr)
+        t0 = time_ns()
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
         timeout = false
-        timer = Timer(200) do _
+        timer = Timer(timeout_s) do _
             timeout = true
             for sig in (Base.SIGQUIT, Base.SIGKILL)
                 for _ in 1:3
@@ -664,8 +669,10 @@ close(proc.in)
             @atomic done[] = true
             close(timer)
         end
+        elapsed = round((time_ns() - t0) / 1e9, digits = 1)
+        println(stderr, "spawn and wait $n tasks: $(elapsed)s of $(timeout_s)s allowed")
         if !success(proc) || timeout
-            @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
+            @error "A \"spawn and wait lots of tasks\" test failed" n elapsed timeout_s proc.exitcode proc.termsignal success(proc) timeout
         end
         @test success(proc)
         @test !timeout
