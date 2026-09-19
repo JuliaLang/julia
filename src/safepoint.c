@@ -3,6 +3,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"
+#include <errno.h>
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
@@ -272,6 +273,10 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_NO_SAFEPOINT_ANALYSIS
 
 void jl_set_gc_and_wait(jl_task_t *ct)
 {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
@@ -283,6 +288,10 @@ void jl_set_gc_and_wait(jl_task_t *ct)
     jl_gc_notify_task_resume(ct);
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
 }
 
 // Exclude garbage collection for a brief critical section on a thread that
