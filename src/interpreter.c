@@ -702,7 +702,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // the newly entered scope is preserved through the current_task.
                 JL_GC_PUSH1(&old_scope);
                 jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
-                jl_gc_wb_current_task(ct, new_scope);
+                jl_gc_wb_current_task(ct, &ct->scope, new_scope);
                 ct->scope = new_scope;
                 // Installing a new scope invalidates the cached scoped-default
                 // cancellation token (see bound_cancel_default); the handler

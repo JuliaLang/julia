@@ -3,6 +3,7 @@
 #ifndef LLVM_PASS_HELPERS_H
 #define LLVM_PASS_HELPERS_H
 
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
@@ -60,12 +61,39 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *blackbox_func;
-    llvm::Function *write_barrier_func;
+    llvm::Function *object_write_barrier_func;
+    llvm::Function *field_write_barrier_p11_func;
+    llvm::Function *field_write_barrier_p13_func;
     llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
     llvm::Function *call3_func;
     llvm::Function *cancel_point_func;
+
+    // Object barriers carry (parent, children...); field barriers carry
+    // (parent, slot, child, ...) with additional (slot, child) pairs.
+    static constexpr unsigned field_wb_slot_arg = 1;
+
+    // Whether `callee` is either address-space variant of the field barrier.
+    bool isFieldWriteBarrier(const llvm::Value *callee) const {
+        return callee && (callee == field_write_barrier_p11_func ||
+                          callee == field_write_barrier_p13_func);
+    }
+
+    // Whether `callee` is one of the write barrier intrinsics above.
+    bool isWriteBarrierFunc(const llvm::Value *callee) const {
+        return callee && (callee == object_write_barrier_func ||
+                          isFieldWriteBarrier(callee));
+    }
+
+    // Skip the parent and, for field barriers, the interleaved slot operands.
+    auto writeBarrierChildren(const llvm::CallInst *call) const {
+        bool field = isFieldWriteBarrier(call->getCalledOperand());
+        return llvm::make_filter_range(llvm::drop_begin(call->args()),
+            [field](const llvm::Use &arg) {
+                return !field || arg.getOperandNo() % 2 == 0;
+            });
+    }
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -132,6 +160,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // Object barrier used when a transformation discards field locations.
+    extern const IntrinsicDescription objectWriteBarrier;
 
     // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
     extern const IntrinsicDescription safepoint;
