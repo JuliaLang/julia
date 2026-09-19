@@ -224,7 +224,7 @@ function hash(x::Real, h::UInt)
     # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be non-negative.
     if den == 1 || den == -1
-        num_sig_dig = ndigits0z(num, 2) - num_z
+        num_sig_dig = exponent(num) + 1 - num_z
         # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
             if 0 <= pow # if pow is non-negative, it is an integer
