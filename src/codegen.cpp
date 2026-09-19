@@ -912,7 +912,7 @@ static const auto jldeclareglobal_func = new JuliaFunction<>{
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(getVoidTy(C),
-            {T_pjlvalue, T_pjlvalue, T_prjlvalue, getInt32Ty(C)}, false); },
+            {T_pjlvalue, T_pjlvalue, T_prjlvalue, getInt32Ty(C), T_prjlvalue}, false); },
     nullptr,
 };
 static const auto jldepcheck_func = new JuliaFunction<>{

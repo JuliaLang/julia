@@ -1638,10 +1638,15 @@
           ,.(if (null? assigns) `((null)) '()))
         (let ((x (car b)))
           (cond ((or (assignment-like? x) (function-def? x))
-                 (let ((new-vars (lhs-decls (assigned-name (cadr x)))))
+                 (let* ((lhs (cadr x))
+                        (joint? (and (eq? (car x) '=) (decl? lhs)
+                                     (not (eventually-call? lhs))))
+                        (new-vars (lhs-decls (assigned-name lhs)))
+                        (new-vars (if joint? (map decl-var new-vars) new-vars)))
                   (loop (cdr b)
                        (append (map (lambda (x) `(,what ,x)) new-vars) decls)
-                       (cons `(,(car x) ,(all-decl-vars (cadr x)) ,(caddr x))
+                       (cons (if joint?
+                                 x `(,(car x) ,(all-decl-vars lhs) ,(caddr x)))
                              assigns))))
                 ((and (pair? x) (eq? (car x) '|::|))
                  (loop (cdr b)
@@ -1770,24 +1775,28 @@
              (T (caddr lhs))
              (rhs (caddr e)))
          (let ((e (remove-argument-side-effects x)))
-           (if const?
-               ;; This could go through convert-assignment in the closure
-               ;; conversion pass, but since constants don't have declared types
-               ;; the way other variables do, we insert convert() here.
-               (expand-forms
-                ;; TODO: This behaviour (`const _:T = ...` does not call convert,
-                ;; but still evaluates RHS) should be documented.
-                `(const (= ,(car e) ,(if (underscore-symbol? (car e))
-                                         rhs
-                                         (convert-for-type-decl rhs T #t #f)))))
-               (expand-forms
-                `(block ,@(cdr e)
-                        ;; TODO: When x is a complex expression, this acts as a
-                        ;; typeassert rather than a declaration.
-                        ,.(if (underscore-symbol? (car e))
-                              '() ; Assignment to _ will ultimately be discarded---don't declare anything
-                              `((decl ,(car e) ,T)))
-                        ,(maybe-wrap-const `(= ,(car e) ,rhs))))))))
+           (cond
+            (const?
+             ;; This could go through convert-assignment in the closure
+             ;; conversion pass, but since constants don't have declared types
+             ;; the way other variables do, we insert convert() here.
+             (expand-forms
+              ;; TODO: This behaviour (`const _:T = ...` does not call convert,
+              ;; but still evaluates RHS) should be documented.
+              `(const (= ,(car e) ,(if (underscore-symbol? (car e))
+                                       rhs
+                                       (convert-for-type-decl rhs T #t #f))))))
+            ((and (or (symbol? x) (globalref? x)) (not (underscore-symbol? x)))
+             `(= (|::| ,x ,(expand-forms T)) ,(expand-forms rhs)))
+            (else
+             (expand-forms
+              `(block ,@(cdr e)
+                      ;; TODO: When x is a complex expression, this acts as a
+                      ;; typeassert rather than a declaration.
+                      ,.(if (underscore-symbol? (car e))
+                            '() ; Assignment to _ will ultimately be discarded---don't declare anything
+                            `((decl ,(car e) ,T)))
+                      ,(maybe-wrap-const `(= ,(car e) ,rhs)))))))))
       ((vcat ncat)
        ;; (= (vcat . args) rhs)
        (error "use \"(a, b) = ...\" to assign multiple values"))
@@ -3306,6 +3315,8 @@
             (set! vars (cons (cadr e) vars)))
           ((= const)
            (let ((v (decl-var (cadr e))))
+             (if (decl? (cadr e)) ;; `x::T = rhs` may also assign within `T`
+                 (find-assigned-vars- (caddr (cadr e))))
              (unless (and (eq? (car e) 'const) (null? (cddr e)))
                (find-assigned-vars- (caddr e)))
              (if (or (ssavalue? v) (globalref? v) (underscore-symbol? v))
@@ -3598,11 +3609,11 @@
            ,(resolve-scopes- (caddr  e) scope)
            ,(resolve-scopes- (cadddr e) scope (method-expr-static-parameters e))))
         (else
-         (if (and (memq (car e) '(= const)) (symbol? (cadr e))
+         (if (and (memq (car e) '(= const)) (symbol? (decl-var (cadr e)))
                   scope (null? (lam:args (scope:lam scope)))
-                  (warn-var?! (cadr e) scope)
+                  (warn-var?! (decl-var (cadr e)) scope)
                   (= *scopewarn-opt* 1))
-             (let* ((v    (cadr e))
+             (let* ((v    (decl-var (cadr e)))
                     (loc  (extract-line-file loc)))
                (lowering-warning
                 1000 'warn (cadr loc) (car loc)
@@ -3726,12 +3737,18 @@
          (let ((vi (get tab (cadr e) #f)))
               (vinfo:set-never-undef! vi #t)))
         ((= const)
-         (let ((vi (and (symbol? (cadr e)) (get tab (cadr e) #f))))
+         (let* ((lhs (cadr e))
+                (v   (decl-var lhs))
+                (vi  (and (symbol? v) (get tab v #f))))
            (if vi ; if local or captured
                (begin (if (vinfo:asgn vi)
                           (vinfo:set-sa! vi #f)
                           (vinfo:set-sa! vi #t))
-                      (vinfo:set-asgn! vi #t))))
+                      (vinfo:set-asgn! vi #t)))
+           (if (decl? lhs)
+               ;; `x::T = rhs` also declares the type of `x`, and evaluates `T`
+               (begin (analyze-vars `(decl ,@(cdr lhs)) env captvars sp tab)
+                      (analyze-vars (caddr lhs) env captvars sp tab))))
          (unless (null? (cddr e))
            (analyze-vars (caddr e) env captvars sp tab)))
         ((call)
@@ -3904,21 +3921,27 @@ f(x) = yt(x)
       `(call (core getfield) ,fname ,(get opaq var))
       `(call (core getfield) ,fname (inert ,var))))
 
-(define (convert-global-assignment var rhs0 globals lam toplevel-pure)
-  (let* ((rhs1 (if (or (simple-atom? rhs0)
-                       (equal? rhs0 '(the_exception)))
-                   rhs0
-                   (make-ssavalue)))
+(define (convert-global-assignment var rhs0 globals lam toplevel-pure (T #f))
+  (let* ((rhs1  (make-ssavalue))
          (ref   (binding-to-globalref var))
-         (ty   `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
-         (rhs  (if (get globals ref #t) ;; no type declaration for constants
-                   (convert-for-type-decl rhs1 ty #f lam)
-                   rhs1))
-         (ex   `(= ,var ,rhs)))
+         (T1    (and T (make-ssavalue)))
+         (ty    (or T1 `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref)))))
+         (rhs   (if (or T (get globals ref #t)) ;; no type declaration for constants
+                    (convert-for-type-decl rhs1 ty #f lam)
+                    rhs1))
+         (stmts (if T
+                    `((toplevel-only decl ,ref)
+                      (= ,T1 ,T)
+                      ;; fail early if `T` is not a type
+                      (call (core isa) (null) ,T1)
+                      (= ,rhs1 ,rhs0)
+                      (call (core declare_global) ,(cadr ref) (inert ,(caddr ref)) (true) ,T1 ,rhs)
+                      (latestworld))
+                    `((= ,rhs1 ,rhs0)
+                      (= ,var ,rhs)))))
+    (if T (put! globals ref #t))
     `(toplevel-butfirst
-      ,(if (eq? rhs1 rhs0)
-           `(block ,ex ,rhs0)
-           `(block (= ,rhs1 ,rhs0) ,ex ,rhs1))
+      (block ,@stmts ,rhs1)
       ;; If this assignment is associated with a type declaration, we will have
       ;; inserted it into the `globals` table before reaching this point.  If it
       ;; isn't there, we must generate a declare_global call now.
@@ -3932,7 +3955,8 @@ f(x) = yt(x)
 ;; declared types.
 ;; when doing this, the original value needs to be preserved, to
 ;; ensure the expression `a=b` always returns exactly `b`.
-(define (convert-assignment var rhs0 fname lam interp opaq toplevel-pure parsed-method-stack globals locals)
+;; `T` is the converted type of a global `x::T = rhs`.
+(define (convert-assignment var rhs0 fname lam interp opaq toplevel-pure parsed-method-stack globals locals (T #f))
   (cond
     ((symbol? var)
      (let* ((vi (get locals var #f))
@@ -3945,7 +3969,7 @@ f(x) = yt(x)
        (if (and (not closed) (not capt) (equal? vt '(core Any)))
            (if (or (local-in? var lam) (underscore-symbol? var))
                `(= ,var ,rhs0)
-               (convert-global-assignment var rhs0 globals lam toplevel-pure))
+               (convert-global-assignment var rhs0 globals lam toplevel-pure T))
            (let* ((rhs1 (if (or (simple-atom? rhs0)
                                 (equal? rhs0 '(the_exception)))
                             rhs0
@@ -3965,7 +3989,7 @@ f(x) = yt(x)
                          ,ex
                          ,rhs1))))))
      ((globalref? var)
-      (convert-global-assignment var rhs0 globals lam toplevel-pure))
+      (convert-global-assignment var rhs0 globals lam toplevel-pure T))
      ((ssavalue? var)
       `(= ,var ,rhs0))
      (else
@@ -4202,8 +4226,11 @@ f(x) = yt(x)
                     #t
                     (begin (restore prev) #f)))))
             ((eq? (car e) '=)
-             (begin0 (visit (caddr e))
-                     (assign! (cadr e))))
+             (let* ((var (decl-var (cadr e)))
+                    (T   (if (decl? (cadr e)) (list (caddr (cadr e))) '()))
+                    (rhs (list (caddr e))))
+               (begin0 (eager-any visit (if (local-in? var lam) (append rhs T) (append T rhs)))
+                       (assign! var))))
             ((eq? (car e) 'local)
              (declare! (cadr e))
              #f)
@@ -4343,9 +4370,11 @@ f(x) = yt(x)
                (put! defined (caddr e) #t))
            e)
           ((=)
-           (let ((var (cadr e))
-                 (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
-             (convert-assignment var rhs fname lam interp opaq toplevel-pure parsed-method-stack globals locals)))
+           (let* ((var (decl-var (cadr e)))
+                  (T   (and (decl? (cadr e)) (not (local-in? var lam locals))
+                            (cl-convert (caddr (cadr e)) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
+                  (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
+             (convert-assignment var rhs fname lam interp opaq toplevel-pure parsed-method-stack globals locals T)))
           ((local-def) ;; make new Box for local declaration of defined variable
            (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))

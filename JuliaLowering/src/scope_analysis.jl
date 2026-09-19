@@ -215,6 +215,9 @@ end
 function resolve_name(ctx, ex; exclude_toplevel_globals=false)
     # TODO: probably want to cache these lookups
     nk = NameKey(ex)
+    toplevel_id = let s = top_scope(ctx)
+        kind(s.node_id) === K"toplevel_lambda" ? s.id : -1
+    end
     for sid in Iterators.reverse(ctx.scope_stack)
         bid = get(ctx.scopes[sid].vars, nk, nothing)
         isnothing(bid) && continue
@@ -225,7 +228,7 @@ function resolve_name(ctx, ex; exclude_toplevel_globals=false)
             s0 = ctx.scopes[ctx.scope_stack[end]]
             s0.is_lifted && ctx.scopes[sid].lambda_id == s0.lambda_id || continue
         end
-        if !exclude_toplevel_globals || sid !== top_scope(ctx).id || b.kind !== :global
+        if !exclude_toplevel_globals || sid !== toplevel_id || b.kind !== :global
             return b
         end
     end
@@ -293,6 +296,18 @@ function _find_scope_decls!(ctx, scope, ex)
         if !(k == K"constdecl" && numchildren(ex) == 1)
             _find_scope_decls!(ctx, scope, ex[2])
         end
+    elseif k === K"decl" && numchildren(ex) == 3
+        k1 = kind(ex[1])
+        _record_layer!(ctx, ex[1])
+        sc = ex[1].context::SyntaxContext
+        if k1 === K"Identifier"
+            ex[1].mod === nothing &&
+                get!(scope.assignments, NameKey(ex[1]), ex[1])
+        else
+            @jl_assert false (ex, "unknown kind in assignment")
+        end
+        _find_scope_decls!(ctx, scope, ex[2])
+        _find_scope_decls!(ctx, scope, ex[3])
     elseif needs_resolution(ex) && !(k in KSet"scope_block lambda method_defs")
         for e in children(ex)
             _find_scope_decls!(ctx, scope, e)
@@ -444,20 +459,16 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
     elseif k == K"decl"
         ex_out = mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
         name = ex_out[1]
-        if kind(name) != K"Placeholder"
-            binfo = get_binding(ctx, name)
-            if binfo.kind == :global && !is_top_scope(enclosing_lambda(ctx, scope))
-                throw(LoweringError(ex, "type declarations for global variables must be at top level, not inside a function"))
-            end
+        binfo = get_binding(ctx, name)
+        if binfo.kind == :global && !is_top_scope(enclosing_lambda(ctx, scope))
+            throw(LoweringError(ex, "type declarations for global variables must be at top level, not inside a function"))
         end
         id = ex_out[1]
-        if kind(id) != K"Placeholder"
-            binfo = get_binding(ctx, id)
-            if !isnothing(binfo.type) && binfo.kind !== :global
-                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
-            end
-            binfo.type = ex_out[2]
+        binfo = get_binding(ctx, id)
+        if !isnothing(binfo.type) && binfo.kind !== :global
+            throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
         end
+        binfo.type = ex_out[2]
         ex_out
     elseif k == K"always_defined"
         resolve_name(ctx, ex[1]).is_always_defined = true
@@ -830,7 +841,7 @@ function analyze_variables!(ctx, ex)
     elseif k == K"local" || k == K"global"
         # Presence of BindingId within local/global is ignored.
         return
-    elseif k == K"="
+    elseif k == K"=" || (k === K"decl" && numchildren(ex) == 3)
         lhs = ex[1]
         if kind(lhs) != K"Placeholder"
             b = get_binding(ctx, lhs)
@@ -840,10 +851,14 @@ function analyze_variables!(ctx, ex)
             if !isnothing(b.type)
                 # Assignments introduce a variable's type later during closure
                 # conversion, but we must model that explicitly here.
-                analyze_variables!(ctx, binding_type_ex(ctx, b))
+                if k === K"decl"
+                    analyze_variables!(ctx, ex[2])
+                elseif b.kind !== :global
+                    analyze_variables!(ctx, binding_type_ex(ctx, b))
+                end
             end
         end
-        analyze_variables!(ctx, ex[2])
+        analyze_variables!(ctx, ex[end])
     elseif k == K"function_decl"
         name = ex[1]
         b = get_binding(ctx, name)

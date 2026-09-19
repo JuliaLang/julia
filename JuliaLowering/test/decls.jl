@@ -198,6 +198,160 @@ end
 @test Core.get_binding_type(test_mod, :dotopassign_global_t) === Vector{Int}
 @test test_mod.dotopassign_global_t == [2,4,6]
 
+@testset "(AI) typed assignment `x::T = v`" for run in [fl_eval, jl_eval]
+    m = Module()
+    lowering_error = run === fl_eval ? ErrorException : LoweringError
+
+    # The expression `x::T = rhs` has the value of the unconverted `rhs`
+    @test run(m, :(ta1::Int = 1.0)) === 1.0
+    @test m.ta1 === 1
+    @test Core.get_binding_type(m, :ta1) === Int
+    r = run(m, :(ta2::Vector{Float64} = [1, 2]))
+    @test r isa Vector{Int}
+    @test m.ta2 isa Vector{Float64}
+
+    # T is evaluated exactly once, before the rhs, and the same result is used
+    # for the conversion and the declaration
+    run(m, :(ev_log = Symbol[]))
+    run(m, :(cnt = 0))
+    @test run(m, :(ord1::(push!(ev_log, :T); cnt += 1; cnt == 1 ? Int : String) =
+                       (push!(ev_log, :rhs); 1.0))) === 1.0
+    @test m.ev_log == [:T, :rhs]
+    @test m.cnt == 1
+    @test m.ord1 === 1
+    @test Core.get_binding_type(m, :ord1) === Int
+    # a mutable local T
+    @test run(m, :(let T = Int
+        global ord4::T = (T = String; 4.0)
+    end)) === 4.0
+    @test m.ord4 === 4
+    @test Core.get_binding_type(m, :ord4) === Int
+
+    # a failed typed assignment leaves the binding untouched
+    run(m, :(ran = false))
+    untouched(s) = Base.binding_kind(m, s) == Base.PARTITION_KIND_GUARD &&
+                   !Base.isdefinedglobal(m, s)
+    # T is not a type: rejected before the rhs runs
+    @test_throws TypeError run(m, :(fa1::1 = (ran = true; 1)))
+    @test !m.ran
+    @test untouched(:fa1)
+    @test_throws ErrorException run(m, :(fa3::error("T") = (ran = true; 1)))
+    @test !m.ran
+    @test untouched(:fa3)
+    @test_throws ErrorException run(m, :(fa4::Int = error("rhs")))
+    @test untouched(:fa4)
+    @test_throws InexactError run(m, :(fa6::Int = 1.5))
+    @test untouched(:fa6)
+
+    # the new type is never visible together with a stale value: while the rhs
+    # runs, the old declaration and value are what is seen
+    run(m, :(global sv))
+    setglobal!(m, :sv, "stale")
+    @test run(m, :(sv::Int = (sv_seen = (sv, Core.get_binding_type($m, :sv)); 1.0))) === 1.0
+    @test m.sv_seen == ("stale", Any)
+    @test m.sv === 1
+    @test Core.get_binding_type(m, :sv) === Int
+
+    # redeclaration: the same type is just an assignment; a different type is an
+    # error that keeps the old type and value, raised after the rhs has run; an
+    # untyped global cannot be given a type
+    @test run(m, :(rd1::Int = 1)) === 1
+    @test run(m, :(rd1::Int = 2.0)) === 2.0
+    @test m.rd1 === 2
+    run(m, :(rd_log = Int[]))
+    @test_throws ErrorException run(m, :(rd1::Float64 = (push!(rd_log, 1); 5.0)))
+    @test m.rd_log == [1]
+    @test m.rd1 === 2
+    @test Core.get_binding_type(m, :rd1) === Int
+    run(m, :(rd2 = 1))
+    @test_throws ErrorException run(m, :(rd2::Int = 2))
+    @test m.rd2 === 1
+
+    # chains
+    @test run(m, :(ch1::Int = ch2 = 1.0)) === 1.0
+    @test m.ch1 === 1
+    @test m.ch2 === 1.0
+    @test Core.get_binding_type(m, :ch2) === Any
+    @test run(m, :((td1::Int, td2::Float64) = (1.0, 2))) === (1.0, 2)
+    @test m.td1 === 1
+    @test m.td2 === 2.0
+    @test Core.get_binding_type(m, :td1) === Int
+
+    # top-level control flow: only the branch taken declares anything; value
+    # positions work; loops need the `global` keyword and declare on every
+    # iteration
+    @test run(m, :(if false; cf2::Int = 1.0; else; cf2::Float64 = 2; end)) === 2
+    @test m.cf2 === 2.0
+    @test Core.get_binding_type(m, :cf2) === Float64
+    @test run(m, :((cf6::Int = 1.0) + 1)) === 2.0
+    @test m.cf6 === 1
+    @test run(m, :(for i in 1:3; global cf17::Int = i; end)) === nothing
+    @test m.cf17 === 3
+    @test Core.get_binding_type(m, :cf17) === Int
+
+    # generated functions: no typed global assignment (untuped is OK)
+    run(m, :(gf1_x = 0))
+    run(m, :(gf2_x = 0))
+    run(m, :(@generated gf1(x) = :(global gf1_x = 1)))
+    run(m, :(@generated gf2(x) = :(global gf2_x::Int = 1)))
+    Core.@latestworld
+    @test m.gf1(0) === 1
+    @test m.gf1_x === 1
+    @test_throws Exception m.gf2(0)
+    @test m.gf2_x === 0
+
+    # typed locals: decl applies to every assignment in scope
+    @test run(m, :(let
+        x = 1.0
+        a = x
+        x::Int = 2.0
+        b = x
+        x = 3.0
+        (a, b, x)
+    end)) === (1, 2, 3)
+    # the value is the unconverted rhs; T runs after the rhs (so a local
+    # assigned in the rhs is usable in T) and again at every later assignment
+    @test run(m, :(let
+        n = 0
+        r = (x::(n += 1; typeof(y)) = (y = 1; 2.0))
+        x = 3.0
+        (r, x, n)
+    end)) === (2.0, 3, 2)
+    # assignments through a closure's box convert too
+    @test run(m, :(let
+        x::Int = 1.0
+        g = () -> (x = 2.0; x)
+        (g(), x)
+    end)) === (2, 2)
+    # definedness analysis sees the assignment
+    run(m, :(tl18(b) = (if b; x::Int = 1.0; end; @isdefined(x))))
+    Core.@latestworld
+    @test (m.tl18(true), m.tl18(false)) === (true, false)
+    @test_throws lowering_error run(m, :(let; x::Int = 1; x::Float64 = 2; end))
+
+    # `_::T = v` ignores T
+    run(m, :(ph_n = 0))
+    @test run(m, :(_::(ph_n += 1; Int) = "s")) == "s"
+    @test m.ph_n == 0
+    @test !Base.isdefinedglobal(m, :_)
+
+    # an explicit GlobalRef target is declared and assigned in its own module,
+    # while T is from the normal lowering module
+    gm = Module()
+    run(m, :(gr_T = Float32))
+    @gensym s
+    @test run(m, Expr(:(=), Expr(:(::), GlobalRef(gm, s), :gr_T), 1)) === 1
+    @test getproperty(gm, s) === 1.0f0
+    @test Core.get_binding_type(gm, s) === Float32
+    @test !Base.isdefinedglobal(m, s)
+
+    # T may assign the global being declared
+    run(m, :(global tx1::Int = 1))
+    @test run(m, :(global tx1::(tx1 = 2; Int) = 3)) === 3
+    @test m.tx1 === 3
+    @test Core.get_binding_type(m, :tx1) === Int
+end
+
 @test JuliaLowering.include_string(test_mod, "const x_c_T::Int = 9") === 9
 @test Base.isdefinedglobal(test_mod, :x_c_T)
 @test Base.isconst(test_mod, :x_c_T)

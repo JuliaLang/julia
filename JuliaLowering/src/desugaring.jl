@@ -1385,14 +1385,12 @@ function expand_assignment(ctx, ex, is_const=false)
                         convert_for_type_decl(ctx, ex, rhs, T, true)
                  ]])
         elseif is_identifier_like(x)
-            # Identifier in lhs[1] is a variable type declaration, eg
             # x::T = rhs
-            @ast ctx ex [K"block"
-                if kind(x) !== K"Placeholder"
-                     [K"decl" x T]
-                end
-                [K"=" x rhs]
-            ]
+            if kind(x) === K"Placeholder"
+                @ast ctx ex [K"=" x rhs]
+            else
+                @ast ctx ex [K"decl" x T rhs]
+            end
         else
             # Otherwise just a type assertion, eg
             # a[i]::T = rhs  ==>  (a[i]::T; a[i] = rhs)

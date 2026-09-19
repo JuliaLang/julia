@@ -155,8 +155,8 @@ function _register_kinds()
             # (That is, it's removable in the same sense as
             #  `@assume_effects :removable`.)
             "removable"
-            # Variable type declaration; `x::T = rhs` will be temporarily
-            # desugared to include `(decl x T)`
+            # `x::T = rhs` becomes `(decl x T [rhs])` so closure conversion can
+            # lift the assignment and T/rhs evaluation correctly
             "decl"
             # [K"captured_local" index]
             # A local variable captured into a global method. Contains the

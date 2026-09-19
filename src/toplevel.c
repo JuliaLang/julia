@@ -290,7 +290,7 @@ static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x
     return args[0];
 }
 
-void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) {
+void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong, jl_value_t *newval) {
     // create uninitialized mutable binding for "global x" decl sometimes or probably
     jl_module_t *gm;
     jl_sym_t *gs;
@@ -304,16 +304,21 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         gm = m;
         gs = (jl_sym_t*)arg;
     }
+    JL_GC_PUSH1(&newval);
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
     jl_binding_partition_t *bpart = NULL;
     if (!strong && set_type)
         jl_error("Weak global definitions cannot have types");
+    assert((newval == NULL) || (strong && set_type));
     enum jl_partition_kind new_kind = strong ? PARTITION_KIND_GLOBAL : PARTITION_KIND_DECLARED;
     jl_value_t *global_type = set_type;
     if (strong && !global_type)
-        global_type = (jl_value_t*)jl_any_type;
+        global_type = (jl_value_t *)jl_any_type;
+    // lowering converts `v` to `T` first, but check before mutating anything for direct callers
+    if (newval != NULL && !jl_isa(newval, global_type))
+        jl_type_error_global("setglobal!", gm, gs, global_type, newval);
     int replaced = 0; // whether a new partition was installed (so the world must be bumped)
     int update_partition = 0;
     int update_in_place = 0;
@@ -357,9 +362,14 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
             replaced = 1;
         }
     }
+    if (newval != NULL) {
+        jl_gc_wb(b, newval);
+        jl_atomic_store_release(&b->value, newval);
+    }
     if (replaced)
         jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
+    JL_GC_POP();
 }
 
 // module referenced by (top ...) from within m

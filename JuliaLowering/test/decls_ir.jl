@@ -148,15 +148,16 @@ xx = 10
 #---------------------
 1   (call core.declare_global TestMod :xx true)
 2   latestworld
-3   (call core.get_binding_type TestMod :xx)
-4   (= slot₁/tmp 10)
-5   (call core.isa slot₁/tmp %₃)
-6   (gotoifnot %₅ label₈)
-7   (goto label₉)
-8   (= slot₁/tmp (call top.convert %₃ slot₁/tmp))
-9   slot₁/tmp
-10  (call core.setglobal! TestMod :xx %₉)
-11  (return 10)
+3   10
+4   (call core.get_binding_type TestMod :xx)
+5   (= slot₁/tmp %₃)
+6   (call core.isa slot₁/tmp %₄)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₀)
+9   (= slot₁/tmp (call top.convert %₄ slot₁/tmp))
+10  slot₁/tmp
+11  (call core.setglobal! TestMod :xx %₁₀)
+12  (return %₃)
 
 ########################################
 # Typed global assignment
@@ -165,19 +166,17 @@ global xx::T = 10
 1   (call core.declare_global TestMod :xx false)
 2   latestworld
 3   TestMod.T
-4   (call core.declare_global TestMod :xx true %₃)
-5   latestworld
-6   (call core.declare_global TestMod :xx true)
-7   latestworld
-8   (call core.get_binding_type TestMod :xx)
-9   (= slot₁/tmp 10)
-10  (call core.isa slot₁/tmp %₈)
-11  (gotoifnot %₁₀ label₁₃)
-12  (goto label₁₄)
-13  (= slot₁/tmp (call top.convert %₈ slot₁/tmp))
-14  slot₁/tmp
-15  (call core.setglobal! TestMod :xx %₁₄)
-16  (return 10)
+4   (call core.isa core.nothing %₃)
+5   10
+6   (= slot₁/tmp %₅)
+7   (call core.isa slot₁/tmp %₃)
+8   (gotoifnot %₇ label₁₀)
+9   (goto label₁₁)
+10  (= slot₁/tmp (call top.convert %₃ slot₁/tmp))
+11  slot₁/tmp
+12  (call core.declare_global TestMod :xx true %₃ %₁₁)
+13  latestworld
+14  (return %₅)
 
 ########################################
 # Error: local with two type declarations
@@ -220,19 +219,17 @@ end
 4   (call core.declare_global TestMod :x false)
 5   latestworld
 6   TestMod.Int
-7   (call core.declare_global TestMod :x true %₆)
-8   latestworld
-9   (call core.declare_global TestMod :x true)
-10  latestworld
-11  (call core.get_binding_type TestMod :x)
-12  (= slot₁/tmp 1)
-13  (call core.isa slot₁/tmp %₁₁)
-14  (gotoifnot %₁₃ label₁₆)
-15  (goto label₁₇)
-16  (= slot₁/tmp (call top.convert %₁₁ slot₁/tmp))
-17  slot₁/tmp
-18  (call core.setglobal! TestMod :x %₁₇)
-19  (return 1)
+7   (call core.isa core.nothing %₆)
+8   1
+9   (= slot₁/tmp %₈)
+10  (call core.isa slot₁/tmp %₆)
+11  (gotoifnot %₁₀ label₁₃)
+12  (goto label₁₄)
+13  (= slot₁/tmp (call top.convert %₆ slot₁/tmp))
+14  slot₁/tmp
+15  (call core.declare_global TestMod :x true %₆ %₁₄)
+16  latestworld
+17  (return %₈)
 
 ########################################
 # Error: const ref
