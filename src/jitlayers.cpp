@@ -2304,7 +2304,14 @@ void JuliaOJIT::registerCI(jl_code_instance_t *CI)
 void JuliaOJIT::unregisterCI(jl_code_instance_t *CI)
 {
     std::unique_lock Lock{LinkerMutex};
-    CISymbols.erase(CI);
+    auto It = CISymbols.find(CI);
+    if (It == CISymbols.end())
+        return;
+    if (It->second.invoke)
+        CISymbolNames.erase(It->second.invoke);
+    if (It->second.specptr)
+        CISymbolNames.erase(It->second.specptr);
+    CISymbols.erase(It);
 }
 
 #define addAbsoluteToMap(map,name) \
@@ -2417,6 +2424,10 @@ CISymbolPtr JuliaOJIT::makeUniqueCIName(jl_code_instance_t *CI, const CISymbolPt
         abort();
     }
     CISymbols[CI] = Ret;
+    if (wrapper)
+        CISymbolNames.insert(wrapper);
+    if (specialized)
+        CISymbolNames.insert(specialized);
     return Ret;
 }
 
@@ -2574,14 +2585,6 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             makeAnonymousLinkGraphSymbol(G, *DestSym);
         It->second = renameLinkGraphSymbol(G, *It->second, Dest);
     }
-    SmallSet<SymbolStringPtr, 0> KnownCISyms;
-    for (auto &KV : CISymbols) {
-        auto &S = KV.second;
-        if (S.invoke)
-            KnownCISyms.insert(S.invoke);
-        if (S.specptr)
-            KnownCISyms.insert(S.specptr);
-    }
     SmallVector<jitlink::Symbol *, 0> DefinedSyms;
     for (auto *Sym : G.defined_symbols())
         DefinedSyms.push_back(Sym);
@@ -2589,7 +2592,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     // before this materialization unit registered its interface. Any body that
     // remains in this graph for that CI must not be exported here.
     for (auto *Sym : DefinedSyms) {
-        if (Sym->hasName() && KnownCISyms.contains(Sym->getName()) &&
+        if (Sym->hasName() && CISymbolNames.contains(Sym->getName()) &&
             !OwnedSyms.contains(Sym->getName()))
             makeAnonymousLinkGraphSymbol(G, *Sym);
     }
@@ -2719,6 +2722,9 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     cantFail(JD.define(orc::absoluteSymbols(Symbols)));
 
     auto &CISym = CISymbols[CI] = {API, InvokeSym, SpecSym};
+    if (InvokeSym)
+        CISymbolNames.insert(InvokeSym);
+    CISymbolNames.insert(SpecSym);
     return &CISym;
 }
 
