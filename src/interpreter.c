@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     jl_code_info_t *src; // contains the names and number of slots
     jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
     jl_code_instance_t *ci; // CodeInstance we're executing (for generated functions)
