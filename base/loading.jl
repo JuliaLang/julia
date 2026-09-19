@@ -2086,6 +2086,22 @@ end
 # should sync with the types of arguments of `stale_cachefile`
 const StaleCacheKey = Tuple{PkgId, UInt128, PkgLoadSpec, String, Bool, CacheFlags}
 
+function touch_cachefile(path::String)
+    # Do not modify cache files bundled with the Julia installation.
+    julia_dir = abspath(Sys.BINDIR, DATAROOTDIR, "julia")
+    # Cache files are at share/julia/compiled/v1.x/PkgName/file.ji.
+    cache_julia_dir = abspath(path, "..", "..", "..", "..")
+    samefile(julia_dir, cache_julia_dir) && return nothing
+    try
+        # Update the timestamp so the most recently used caches are tried first.
+        touch(path)
+    catch ex
+        # The cache file might be read-only, which is fine.
+        ex isa IOError || ex isa SystemError || rethrow()
+    end
+    return nothing
+end
+
 function compilecache_freshest_path(pkg::PkgId;
         ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
@@ -2137,12 +2153,7 @@ function compilecache_freshest_path(pkg::PkgId;
                 end
                 continue next_path
             end
-            try
-                # update timestamp of precompilation file so that it is the first to be tried by code loading
-                touch(path_to_try)
-            catch
-                # file might be read-only and then we fail to update timestamp, which is fine
-            end
+            touch_cachefile(path_to_try)
             return path_to_try
         end
     end
@@ -2377,11 +2388,7 @@ end
                     return M
                 end
                 if stalecheck
-                    try
-                        touch(path_to_try) # update timestamp of precompilation file
-                    catch
-                        # file might be read-only and then we fail to update timestamp, which is fine
-                    end
+                    touch_cachefile(path_to_try)
                 end
                 # finish loading module graph into staledeps
                 # n.b. this runs __init__ methods too early, so it is very unwise to have those, as they may see inconsistent loading state, causing them to fail unpredictably here
