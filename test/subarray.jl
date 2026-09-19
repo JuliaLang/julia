@@ -923,6 +923,43 @@ end
     end
 end
 
+@testset "issue #62906: views of views with slices" begin
+    @testset "reading" begin
+        M = reshape(1.0:25.0, 5, 5)
+        r = Base.IdentityUnitRange(2:4)
+        A = view(M, r, :)
+        B = view(A, :, 3)
+
+        @test axes(B) == (r,)
+        @test [B[2], B[3], B[4]] == [12.0, 13.0, 14.0]
+
+        for rows in (1:3, 2:4)
+            M = reshape(collect(1:16), 4, 4)
+            A = view(M, Base.IdentityUnitRange(rows), :)
+            W = view(A, :, :)
+
+            @test axes(W) == axes(A)
+            @test W[4] == W[first(rows), 2] == M[first(rows), 2]
+        end
+    end
+
+    @testset "writing" begin
+        for rows in (1:3, 2:4)
+            M = reshape(collect(1:16), 4, 4)
+            expected = copy(M)
+            for j in 1:4, i in rows
+                expected[i, j] = -1
+            end
+
+            A = view(M, Base.IdentityUnitRange(rows), :)
+            W = view(A, :, :)
+
+            W .= -1
+            @test M == expected
+        end
+    end
+end
+
 @testset "issue #29608; contiguousness" begin
     @test Base.iscontiguous(view(ones(1), 1))
     @test Base.iscontiguous(view(ones(10), 1:10))

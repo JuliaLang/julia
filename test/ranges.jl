@@ -2500,6 +2500,11 @@ end
                     rs = r[s]
                     @test rs == s
                     @test axes(rs) == axes(s)
+                    # Preserve values and axes without retaining Slice's semantics
+                    # of representing a complete slice of a dimension
+                    if r isa Base.IdentityUnitRange && s isa Base.Slice
+                        @test rs isa Base.IdentityUnitRange
+                    end
                 end
                 @test_throws BoundsError r[Base.IdentityUnitRange(first(r):last(r) + 1)]
             end
