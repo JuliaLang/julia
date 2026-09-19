@@ -208,7 +208,10 @@ static SRWLOCK ctx_rewrite_lock = SRWLOCK_INIT;
 // before any frame-based SEH search, so the synthetic frame needs no unwind
 // information.)
 
-static void *jl_win_restore_page = NULL;
+// Only the assembly of jl_win_restore_trigger refers to this by name, which
+// LTO cannot see, so keep it external and marked used: otherwise it is
+// internalized away and the stub is left with an undefined reference.
+__attribute__((used)) void *jl_win_restore_page = NULL;
 
 static inline int jl_addr_is_win_restore_trigger(uintptr_t addr)
 {
