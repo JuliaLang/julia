@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <julia.h>
+#include <limits.h>
 #include <stdio.h>
 #include <math.h>
 
@@ -28,6 +29,90 @@ jl_value_t *checked_eval_string(const char* code)
     }
     assert(result && "Missing return value but no exception occurred!");
     return result;
+}
+
+static volatile int tagged_root_fins_ran = 0;
+
+static void tagged_root_finalizer(void *o)
+{
+    (void)o;
+    tagged_root_fins_ran++;
+}
+
+// Every collection states its expected outcome, so that a premature sweep is
+// caught at the collection that caused it rather than masked by a later one.
+static void check_fins_ran(int expected, const char *ctx)
+{
+    if (tagged_root_fins_ran == expected)
+        return;
+    fprintf(stderr, "%s: %d finalizers ran, expected %d\n", ctx,
+            tagged_root_fins_ran, expected);
+    exit(1);
+}
+
+// Tagged pointers -- a tag in the low bits with the payload in the remaining
+// ones, e.g. the immediate values of a foreign runtime sharing Julia's GC --
+// may be stored in JL_GC_PUSH*/JL_GC_PUSHARGS roots. The GC must skip them
+// without disturbing the marking of neighboring roots.
+//
+// Detection: a fresh object whose only reference is a frame slot next to a
+// tagged pointer. If marking mishandles the tagged pointer, the object is
+// swept and its finalizer runs while the frame is still pushed.
+static void test_tagged_pointer_roots(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    // a payload occupying all but the low tag bits, on any pointer width
+    const uintptr_t large_imm = (uintptr_t)1 << (sizeof(uintptr_t) * CHAR_BIT - 4);
+
+    // Direct-layout frame (JL_GC_PUSHARGS). Every tag value appears, at both
+    // slot parities, and a live root follows a tagged slot of each parity:
+    // mistaking one for a finalizer entry skips the slot after it.
+    {
+        jl_value_t **args;
+        JL_GC_PUSHARGS(args, 6);
+        args[0] = (jl_value_t *)0x5;                // tag 0b01, even slot
+        args[1] = jl_box_int64(42424242);
+        args[2] = (jl_value_t *)0x6;                // tag 0b10, even slot
+        args[3] = (jl_value_t *)0x7;                // tag 0b11, odd slot
+        args[4] = jl_box_int64(43434343);
+        args[5] = (jl_value_t *)(large_imm | 0x1);  // last slot
+        jl_gc_add_ptr_finalizer(ptls, args[1], (void *)tagged_root_finalizer);
+        jl_gc_add_ptr_finalizer(ptls, args[4], (void *)tagged_root_finalizer);
+        jl_gc_collect(JL_GC_FULL);
+        check_fins_ran(0, "JL_GC_PUSHARGS frame, small tagged pointers");
+
+        // Large payloads must be skipped just the same, not mistaken for
+        // object references.
+        args[0] = (jl_value_t *)(large_imm | 0x1);
+        args[2] = (jl_value_t *)(large_imm | 0x2);
+        args[3] = (jl_value_t *)(large_imm | 0x3);
+        jl_gc_collect(JL_GC_FULL);
+        check_fins_ran(0, "JL_GC_PUSHARGS frame, large tagged pointers");
+        JL_GC_POP();
+    }
+    jl_gc_collect(JL_GC_FULL);
+    check_fins_ran(2, "after JL_GC_PUSHARGS frame was popped");
+    tagged_root_fins_ran = 0;
+
+    // Indirect-layout frame (JL_GC_PUSH3): locals holding tagged pointers.
+    {
+        jl_value_t *tagged = (jl_value_t *)0x5;
+        jl_value_t *obj = NULL;
+        jl_value_t *tagged2 = (jl_value_t *)0x6;
+        JL_GC_PUSH3(&tagged, &obj, &tagged2);
+        obj = jl_box_int64(24242424);
+        jl_gc_add_ptr_finalizer(ptls, obj, (void *)tagged_root_finalizer);
+        jl_gc_collect(JL_GC_FULL);
+        check_fins_ran(0, "JL_GC_PUSH frame, small tagged pointers");
+
+        tagged = (jl_value_t *)(large_imm | 0x3);
+        tagged2 = (jl_value_t *)(large_imm | 0x2);
+        jl_gc_collect(JL_GC_FULL);
+        check_fins_ran(0, "JL_GC_PUSH frame, large tagged pointers");
+        JL_GC_POP();
+    }
+    jl_gc_collect(JL_GC_FULL);
+    check_fins_ran(1, "after JL_GC_PUSH frame was popped");
 }
 
 int main()
@@ -204,6 +289,8 @@ int main()
     JL_CATCH {
         jl_printf(jl_stderr_stream(), "exception caught from C\n");
     }
+
+    test_tagged_pointer_roots();
 
     int ret = 0;
     jl_atexit_hook(ret);

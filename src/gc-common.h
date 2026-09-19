@@ -193,6 +193,26 @@ extern jl_mutex_t finalizers_lock;
 #define GC_FIN_CFUNC_TAG 1
 #define GC_FIN_COBJ_TAG  2
 #define GC_FIN_TAG_MASK  3
+
+// `jl_gc_run_finalizers_in_list` roots an in-flight finalizer list by pushing
+// it as a GC frame of kind `JL_GCFRAME_FINLIST` (see julia.h), the only kind
+// whose slots may carry `GC_FIN_*` tags. In every other frame kind a tagged
+// slot value is skipped; see `gc_is_tagged_pointer` below.
+#define JL_GC_ENCODE_PUSHFINLIST(n) ((((size_t)(n)) << 2) | JL_GCFRAME_FINLIST)
+
+// A tagged pointer carries a tag in the low bits and its payload in the
+// remaining ones, e.g. the immediate values of a foreign runtime sharing
+// Julia's GC. Heap objects are at least 4-byte aligned, so an untagged
+// pointer never has these bits set.
+//
+// The mark loop may only skip such a word because the payload is a pure
+// immediate. A tag attached to a real heap pointer would have to be cleared
+// before marking and restored afterwards, which neither collector does, so
+// that representation is unsupported rather than merely unhandled.
+STATIC_INLINE int gc_is_tagged_pointer(const void *v) JL_NOTSAFEPOINT
+{
+    return ((uintptr_t)v & 0x3) != 0;
+}
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 

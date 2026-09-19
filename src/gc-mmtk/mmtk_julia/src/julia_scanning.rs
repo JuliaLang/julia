@@ -16,6 +16,31 @@ use crate::jl_gc_get_stackbase;
 use crate::jl_gc_scan_julia_exc_obj;
 
 const JL_MAX_TAGS: usize = 64; // from vm/julia/src/jl_exports.h
+
+// The low bits of `jl_gcframe_t.nroots` hold the frame kind, the rest the
+// number of roots. These must match the `JL_GCFRAME_*` defines in julia.h.
+/// Slots hold object pointers (`JL_GC_PUSHARGS`, codegen).
+const JL_GCFRAME_DIRECT: usize = 0;
+/// Slots hold the addresses of local `jl_value_t *` variables (`JL_GC_PUSH1..8`).
+const JL_GCFRAME_INDIRECT: usize = 1;
+/// Direct roots of an interpreter frame.
+const JL_GCFRAME_INTERP: usize = 2;
+/// An in-flight finalizer list, the only kind whose slots may carry `GC_FIN_*` tags.
+const JL_GCFRAME_FINLIST: usize = 3;
+/// All bits used to encode the frame kind.
+const JL_GCFRAME_KIND_MASK: usize = 0x3;
+
+/// Bits that mark a word as a tagged pointer: a tag in the low bits with the
+/// payload in the remaining ones, e.g. the immediate values of a foreign
+/// runtime sharing Julia's GC. Must match `gc_is_tagged_pointer` in
+/// gc-common.h, which also documents why skipping such a word is sound. Kept
+/// separate from `JL_GCFRAME_KIND_MASK`, which currently has the same value
+/// for unrelated reasons.
+const TAGGED_POINTER_MASK: usize = 0x3;
+
+fn is_tagged_pointer(value: Address) -> bool {
+    value.as_usize() & TAGGED_POINTER_MASK != 0
+}
 const OFFSET_OF_INLINED_SPACE_IN_MODULE: usize =
     offset_of!(jl_module_t, usings) + offset_of!(arraylist_t, _space);
 
@@ -466,13 +491,24 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
 
         loop {
             let rts = Address::from_mut_ptr(s).shift::<Address>(2);
+            // Dispatch on the frame kind, as gc_mark_stack in gc-stock.c
+            // does. Only JL_GCFRAME_FINLIST slots carry GC_FIN_* tags; in
+            // every other kind a tagged slot value references no heap object
+            // and is skipped.
+            let frame_kind = nroots.as_usize() & JL_GCFRAME_KIND_MASK;
             let mut i = 0;
             while i < nr {
-                if (nroots.as_usize() & 1) != 0 {
+                if frame_kind == JL_GCFRAME_INDIRECT {
+                    // slots hold addresses of local `jl_value_t *` variables
                     let slot = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
                     let real_addr = get_stack_addr(slot, offset, lb, ub);
-                    process_slot(closure, real_addr);
-                } else {
+                    let value = read_stack(slot, offset, lb, ub);
+                    if !is_tagged_pointer(value) {
+                        process_slot(closure, real_addr);
+                    }
+                } else if frame_kind == JL_GCFRAME_FINLIST {
+                    // in-flight finalizer list pushed as a GC frame by
+                    // jl_gc_run_finalizers_in_list
                     let real_addr =
                         get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
 
@@ -493,6 +529,17 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                     }
 
                     process_slot(closure, real_addr);
+                } else {
+                    debug_assert!(
+                        frame_kind == JL_GCFRAME_DIRECT || frame_kind == JL_GCFRAME_INTERP
+                    );
+                    // slots hold object pointers
+                    let real_addr =
+                        get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    let value = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    if !is_tagged_pointer(value) {
+                        process_slot(closure, real_addr);
+                    }
                 }
 
                 i += 1;
