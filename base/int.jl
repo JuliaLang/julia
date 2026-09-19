@@ -580,6 +580,21 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 <=(x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <= y)
 <=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
 
+function max(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
+    R = promote_type(S, T)
+    ifelse(x < y, y % R, x % R)
+end
+
+function min(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
+    R = promote_type(S, T)
+    ifelse(x < y, x % R, y % R)
+end
+
+min(x::S, y::BitUnsigned) where S <: BitSigned = ifelse(x < y, x, y % S)
+min(x::BitUnsigned, y::T) where T <: BitSigned = ifelse(x < y, x % T, y)
+
+minmax(x::BitInteger, y::BitInteger) = (min(x, y), max(x, y))
+
 ## integer shifts ##
 
 # unsigned shift counts always shift in the same direction

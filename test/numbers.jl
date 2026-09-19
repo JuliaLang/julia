@@ -133,6 +133,19 @@ end
         @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
         @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
     end
+    for S in Base.BitInteger64_types, T in Base.BitInteger64_types
+        xvals = S <: Signed ? [typemin(S), -one(S), zero(S), one(S), typemax(S)] : [zero(S), one(S), typemax(S)]
+        yvals = T <: Signed ? [typemin(T), -one(T), zero(T), one(T), typemax(T)] : [zero(T), one(T), typemax(T)]
+        for x in xvals, y in yvals
+            x128, y128 = Int128(x), Int128(y)
+            @inferred min(x, y)
+            @test min(x, y) == min(x128, y128)
+            @inferred max(x, y)
+            @test max(x, y) == max(x128, y128)
+            @inferred minmax(x, y)
+            @test minmax(x, y) == minmax(x128, y128)
+        end
+    end
 end
 @testset "Base._extrema_rf for float" begin
     for T in (Float16, Float32, Float64, BigFloat)
