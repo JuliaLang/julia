@@ -83,26 +83,45 @@ module AbstractIrrationalExamples
     )
 end
 
-@testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
+macro big_expr(n, x)
+    x = esc(x)
+    for _ in 1:n
+        x = :($x + 1 - 1)
+    end
+    x
+end
+
+# threads.jl runs this file inside a `@testset` that wraps the `include`, so that every
+# top-level expression here is its own thunk. Wrapping the file body in one `@testset`
+# instead lowers it into a single thunk of some 28k statements, which the runtime infers
+# and compiles as one function before the first test runs: about 25 s on a fast x86-64
+# machine, and around ten minutes on a RISC-V board.
 
 @test Threads.threadid() == 1
 @test threadpool() in (:interactive, :default) # thread 1 could be in the interactive pool
 @test 1 <= threadpoolsize(:default) <= Threads.maxthreadid()
 
-# basic lock check
+# basic lock check: `t1` blocks in `lock` on a spin lock held by the root
+# task, which parks meanwhile. A spinning task never yields, so it must not
+# run on the thread the root task is bound to - pin it to another thread of
+# the default pool.
+function spawn_pinned(f, tid)
+    t = Task(f)
+    t.sticky = true
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid - 1) == 1 || error("failed to pin task to thread $tid")
+    return schedule(t)
+end
+other_default_tid() = first(tid for tid in Threads.threadpooltids(:default) if tid != Threads.threadid())
 if threadpoolsize(:default) > 1
     let lk = SpinLock()
         c1 = Base.Event()
-        c2 = Base.Event()
         @test trylock(lk)
         @test !trylock(lk)
-        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
-        t2 = Threads.@spawn (notify(c2); trylock(lk))
-        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
-        wait(c1)
-        wait(c2)
+        t2 = Threads.@spawn trylock(lk)
         @test !fetch(t2)
         @test istaskdone(t2)
+        t1 = spawn_pinned(() -> (notify(c1); lock(lk); unlock(lk); trylock(lk)), other_default_tid())
+        wait(c1)
         @test !istaskdone(t1)
         unlock(lk)
         @test fetch(t1)
@@ -113,16 +132,13 @@ end
 if threadpoolsize() > 1
     let lk = Base.Threads.PaddedSpinLock()
         c1 = Base.Event()
-        c2 = Base.Event()
         @test trylock(lk)
         @test !trylock(lk)
-        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
-        t2 = Threads.@spawn (notify(c2); trylock(lk))
-        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
-        wait(c1)
-        wait(c2)
+        t2 = Threads.@spawn trylock(lk)
         @test !fetch(t2)
         @test istaskdone(t2)
+        t1 = spawn_pinned(() -> (notify(c1); lock(lk); unlock(lk); trylock(lk)), other_default_tid())
+        wait(c1)
         @test !istaskdone(t1)
         unlock(lk)
         @test fetch(t1)
@@ -383,8 +399,8 @@ end
 function test_atomic_write(commbuf::CommBuf, n::Int)
     for i in 1:n
         # The atomic stores guarantee that var1 >= var2
-        commbuf.var1[] = i
-        commbuf.var2[] = i
+        @atomic commbuf.var1[] = i
+        @atomic commbuf.var2[] = i
     end
     commbuf.correct_write = true
 end
@@ -436,8 +452,8 @@ function test_fence(p::Peterson, id::Int, n::Int)
     correct = true
     otherid = mod1(id+1,2)
     for i in 1:n
-        p.flag[id][] = 1
-        p.turn[] = otherid
+        @atomic p.flag[id][] = 1
+        @atomic p.turn[] = otherid
         atomic_fence()
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
@@ -445,11 +461,11 @@ function test_fence(p::Peterson, id::Int, n::Int)
             ccall(:jl_gc_safepoint, Cvoid, ())
         end
         # critical section
-        p.critical[id][] = 1
+        @atomic p.critical[id][] = 1
         correct &= p.critical[otherid][] == 0
-        p.critical[id][] = 0
+        @atomic p.critical[id][] = 0
         # end of critical section
-        p.flag[id][] = 0
+        @atomic p.flag[id][] = 0
     end
     p.correct[id] = correct
 end
@@ -520,7 +536,7 @@ let atomictypes = (Int8, Int16, Int32, Int64, Int128,
                    Float16, Float32, Float64)
     for T in atomictypes
         var = Atomic{T}()
-        var[] = 42
+        @atomic var[] = 42
         @test var[] === T(42)
         old = atomic_xchg!(var, T(13))
         @test old === T(42)
@@ -621,7 +637,7 @@ for period in (0.06, Dates.Millisecond(60))
         close(async)
         @test_throws EOFError wait(async)
         @test !isopen(async)
-        @test_throws EOFError wait(t)
+        @test wait(t) === nothing
         @test_throws EOFError wait(async)
     end
 end
@@ -1128,8 +1144,6 @@ end
 
     unordered_fair = collect(jitter_channel(sin, k, delay, 10, Threads.FairSchedule()))
     unordered_static = collect(jitter_channel(sin, k, delay, 10, Threads.StaticSchedule()))
-    @test expected != unordered_fair
-    @test expected != unordered_static
     @test Set(expected) == Set(unordered_fair)
     @test Set(expected) == Set(unordered_static)
 
@@ -1165,7 +1179,7 @@ end
     end
 end
 
-# @spawn racying with sync_end
+# @spawn racing with sync_end
 
 hidden_spawn(f) = Threads.@spawn f()
 
@@ -1216,7 +1230,7 @@ function check_sync_end_race()
             # Useful for tuning the test:
             @debug "`check_sync_end_race` done" threadpoolsize(:default) ncompleted nnotscheduled nerror
         finally
-            done[] = true
+            @atomic done[] = true
         end
     end
     return nothing
@@ -1224,6 +1238,33 @@ end
 
 @testset "Racy `@spawn`" begin
     @test check_sync_end_race() === nothing
+end
+
+@testset "no lost wakeups under bursty spawn (#61820, #50425)" begin
+    # A multiqueue insert wakes one thread in the pool; bursts of tasks spawned
+    # across an idle pool must all still run to completion (regression smoke test
+    # that wake-one does not drop wakeups).
+    for pool in (:default, :interactive)
+        nt = Threads.threadpoolsize(pool)
+        n = 50 * nt
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn pool Threads.atomic_add!(done, 1)
+        end
+        @test timedwait(() -> done[] == n, 60.0) === :ok
+    end
+    # nested spawns must also complete
+    let n = 20 * Threads.threadpoolsize(:default)
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn begin
+                a = Threads.@spawn Threads.atomic_add!(done, 1)
+                b = Threads.@spawn Threads.atomic_add!(done, 1)
+                fetch(a); fetch(b)
+            end
+        end
+        @test timedwait(() -> done[] == 2n, 60.0) === :ok
+    end
 end
 
 # issue #41546, thread-safe package loading
@@ -1276,7 +1317,7 @@ end
     end
 end
 
-#Thread safety of threacall
+# Thread safety of threadcall
 function threadcall_threads()
     Threads.@threads for i = 1:8
         ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
@@ -1426,6 +1467,29 @@ end
             end
         end
     end
+
+    # Tasks completing on other threads while the waiter registers with them
+    # or runs its bookkeeping between two wakes: the multi-wait used to keep
+    # a partially registered entry across wakes and deadlock within a few
+    # iterations of this loop.
+    if threadpoolsize() > 1
+        @testset "concurrent completions" begin
+            for _ in 1:20_000
+                tasks = [Threads.@spawn nothing for _ in 1:3]
+                done, pending = waitall(tasks)
+                @test length(done) == 3 && isempty(pending)
+            end
+            for _ in 1:2_000
+                event = Threads.Event()
+                tasks = [Threads.@spawn(wait(event)), Threads.@spawn(nothing), Threads.@spawn(wait(event))]
+                done, pending = waitany(tasks)
+                @test tasks[2] in done
+                notify(event)
+                done, pending = waitall(tasks)
+                @test length(done) == 3 && isempty(pending)
+            end
+        end
+    end
 end
 
 @testset "Base.Experimental.task_metrics" begin
@@ -1469,6 +1533,9 @@ end
             Rational{I}(c)
         end
         function is_racy_rational_from_irrational()
+            # `local` is needed to avoid sharing (and racily clobbering) the
+            # outer function's `task`/`ok` while it is fetching them
+            local task, ok
             worker_count = 10 * Threads.nthreads()
             task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
             schedule(task)
@@ -1505,7 +1572,7 @@ end
         try
             Base.Experimental.task_metrics(true)
             start_time = time_ns()
-            t = Threads.@spawn peakflops()
+            t = Threads.@spawn peakflops(1024)
             wait(t)
             end_time = time_ns()
             wall_time_delta = end_time - start_time
@@ -1519,7 +1586,7 @@ end
         end
     end
     @testset "disabled" begin
-        t = Threads.@spawn peakflops()
+        t = Threads.@spawn peakflops(1024)
         wait(t)
         @test !t.metrics_enabled
         @test isnothing(Base.Experimental.task_running_time_ns(t))
@@ -1557,7 +1624,7 @@ end
             Base.Experimental.task_metrics(true)
             start = time_ns()
             t_outer = Threads.@spawn begin
-                t_inner = Task(() -> peakflops())
+                t_inner = Task(() -> peakflops(1024))
                 t_inner.sticky = false
                 # directly yield to `t_inner` rather calling `schedule(t_inner)`
                 yield(t_inner)
@@ -1586,7 +1653,7 @@ end
             @test Base.Experimental.task_running_time_ns(t1) > 0
             @test Base.Experimental.task_wall_time_ns(t1) > 0
             foo(a, b) = a + b
-            t2 = Task(() -> (peakflops(); foo(wait())))
+            t2 = Task(() -> (peakflops(1024); foo(wait())))
             schedule(t2)
             yield()
             @assert istaskstarted(t1) && !istaskdone(t2)
@@ -1714,4 +1781,179 @@ end
     end
 end
 
-end # main testset
+include("threads_comprehensions.jl")
+
+# This test is designed to trigger the performance regression from #60241:
+#   Thread 1                           Thread 2
+#   --------                           --------
+#   call f()
+#     infer f(), g()
+#     emit LLVM IR f()
+#       set f() invoke
+#     emit LLVM IR g() (slow!)         call f()
+#       ...                              materialize f()
+#       ...                                emit trampoline for g()
+#                                        run f()
+#                                          tojlinvoke trampoline for g()
+#     call f()
+#       f() already materialized
+#
+# We can tell the trampoline was generated if calling f() with a large integer
+# allocates (the trampoline will box the integer).
+
+@testset "Race invoke trampolines" begin
+    for i=1:10
+        @eval begin
+            @noinline function g(x)
+                x = @big_expr(4000, x)
+                if x > 0
+                    f(x-1)
+                else
+                    0
+                end
+            end
+
+            @noinline function f(x)
+                if x > 0
+                    g(x-1)
+                else
+                    0
+                end
+            end
+
+            t = Threads.@spawn f(10)
+            f(10)
+            wait(t)
+        end
+
+        @test @eval @allocations(f(10000)) == 0
+    end
+end
+
+
+# Forcible task abandonment (unsafe_abandon!): the victim must be running
+# on a thread of its own while the driver keeps executing.
+if threadpoolsize() >= 2
+    @testset "task abandonment wakes waiters" begin
+        # Synchronize on observable state, never on timing: the spin counter
+        # proves the victim is executing its loop on a thread.
+        spins = Threads.Atomic{Int}(0)
+        victim = Threads.@spawn begin
+            x = Ref(1.0)
+            while true
+                x[] = x[] * 1.0000001 + 0.1
+                Threads.atomic_add!(spins, 1)
+                # Safepoint needed. Otherwise it causes GC hang.
+                GC.safepoint()
+            end
+        end
+        watcher = @async wait(victim)
+        c0 = spins[]
+        while spins[] <= c0 + 10
+            yield()
+        end
+        rescue() = (t = Task(() -> (while true; wait(); end)); t.sticky = false; t)
+        # A refusal is transient (the victim may momentarily be inside the
+        # allocator or a runtime lock); retry until the abandonment commits.
+        while !Base.unsafe_abandon!(victim, rescue())
+            yield()
+        end
+        # unsafe_abandon! returns after the verdict settles: the states are
+        # already final.
+        @test istaskdone(victim)
+        @test victim.state === :abandoned
+        @test istaskfailed(victim)
+        # the staged abandonment outcome, not a value leaked mid-request
+        @test victim.result isa Base.CancellationRequest
+        # the watcher must be woken (abandoned tasks skip the regular
+        # completion path)
+        @test_throws TaskFailedException fetch(watcher)
+    end
+
+    @testset "unsafe_abandon! validates at delivery and can refuse" begin
+        # A victim cycling a ReentrantLock (which inhibits finalizers while
+        # held) must never be abandoned mid-hold: the delivery-point
+        # validation refuses instead of corrupting runtime bookkeeping.
+        # Abandon spam either gets a clean refusal or commits during an
+        # unlocked window; on refusal the victim must be left untouched -
+        # still running, and with its eventual completion value intact.
+        lk = ReentrantLock()
+        stop = Threads.Atomic{Bool}(false)
+        cycles = Threads.Atomic{Int}(0)
+        victim = Threads.@spawn begin
+            while !stop[]
+                lock(lk)
+                try
+                    x = 0
+                    for i in 1:2000
+                        x += i
+                    end
+                    Threads.atomic_add!(cycles, 1)
+                finally
+                    unlock(lk)
+                end
+            end
+            :completed
+        end
+        c0 = cycles[]
+        while cycles[] <= c0
+            yield()
+        end
+        committed = false
+        while !committed
+            rescue = Task(() -> (while true; wait(); end))
+            rescue.sticky = false
+            committed = Base.unsafe_abandon!(victim, rescue)
+            if !committed
+                # refusal must leave the victim untouched and running
+                @test !istaskdone(victim)
+                yield()
+            end
+        end
+        @test committed
+        @test victim.state === :abandoned
+        # runtime must be healthy afterwards (finalizers not leaked-inhibited)
+        GC.gc(false)
+    end
+
+    # Linux-only: blocks the abandon signal by number (SIGUSR2 == 12) and uses
+    # Linux's SIG_BLOCK/SIG_UNBLOCK values.
+    Sys.islinux() && @testset "an undelivered abandonment withdraws cleanly" begin
+        # Block the abandon signal in the victim so delivery cannot happen,
+        # and exercise the request/poll/withdraw primitives directly: the
+        # withdrawal must return every published effect, leaving the victim
+        # untouched - including its eventual completion value.
+        started = Threads.Atomic{Bool}(false)
+        release = Threads.Atomic{Bool}(false)
+        victim = Threads.@spawn begin
+            # block SIGUSR2 on this thread
+            sset = zeros(UInt8, 128)
+            ccall(:sigemptyset, Cint, (Ptr{UInt8},), sset)
+            ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, 12) # SIGUSR2
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 0 #= SIG_BLOCK =#, sset, C_NULL)
+            started[] = true
+            # spin in compute so the task stays current on its thread
+            while !release[]
+                ccall(:jl_cpu_pause, Cvoid, ())
+            end
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 1 #= SIG_UNBLOCK =#, sset, C_NULL)
+            :survived
+        end
+        while !started[]
+            yield()
+        end
+        rescue = Task(() -> (while true; wait(); end))
+        rescue.sticky = false
+        tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any, Ptr{Cvoid}),
+                    victim, rescue, Base.CancellationRequest(0x4), C_NULL)
+        @test tid >= 0
+        # undeliverable: the request stays pending
+        @test ccall(:jl_abandon_task_poll, Cint, (Int16,), tid % Int16) == 0
+        @test ccall(:jl_abandon_task_withdraw, Cint, (Int16,), tid % Int16) == 1
+        @test !istaskdone(victim)         # not falsely marked :abandoned
+        release[] = true                  # victim completes normally afterwards
+        @test fetch(victim) === :survived
+        # the withdrawal returned the rescue task's affinity claim
+        @test Threads.threadid(rescue) == 0
+    end
+end

@@ -21,7 +21,6 @@ end
 # within its parent and the node itself.
 function first_tree_error(c::RedTreeCursor, error_cursor::GreenTreeCursor)
     @assert !is_leaf(c) && !is_error(c)
-    first_child = first_error = nothing
     it = reverse_nontrivia_children(c)
     r = iterate(it)
     local child
@@ -94,7 +93,9 @@ function _incomplete_tag(theerror::ErrorSpec, codelen)
         return :block
     elseif kp in KSet"for while function if"
         return i == 1 ? :other : :block
-    elseif kp in KSet"module struct"
+    elseif kp == K"module"
+        return i <= 2 ? :other : :block
+    elseif kp == K"struct"
         return i == 1 ? :other : :block
     elseif kp == K"do"
         return i < 3  ? :other : :block

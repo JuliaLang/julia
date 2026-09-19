@@ -100,7 +100,7 @@ end
     end
 end
 
-@testset "#5939 uft8proc character predicates" begin
+@testset "#5939 utf8proc character predicates" begin
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
     for c in vcat(alower,ulower,['ª'])
@@ -305,7 +305,7 @@ end
     @test normalize("\0W", casefold=true) == "\0w"
 end
 
-@testset "ut8proc_map with GenericString" begin
+@testset "utf8proc_map with GenericString" begin
     @test normalize(GenericString("\u006e\u0303"), :NFC) == "\u00f1"
 end
 
@@ -537,6 +537,11 @@ isequal_normalized_naive(s1, s2; kws...) = normalize(s1; kws...) == normalize(s2
         # combining characters in the same class are inequivalent if re-ordered:
         @test !isequal_normalized("x\u0334\u0335", "x\u0335\u0334")
     end
+end
+
+@testset "combining_class" begin
+    @test Unicode.combining_class('\u0302') === 0x00e6 # combining class "Above"
+    @test Unicode.combining_class(reinterpret(Char, UInt32(0xc0) << 24)) === 0x0000 # malformed
 end
 
 @testset "Docstrings" begin

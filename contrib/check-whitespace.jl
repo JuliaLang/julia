@@ -33,11 +33,14 @@ allow_tabs(path) =
     endswith(path, "test/triplequote.jl")
 
 function check_whitespace()
-    # Get file list from ARGS if provided, otherwise use git ls-files
     errors = Set{Tuple{String,Int,String}}()
-    files_to_check = filter(arg -> arg != "--fix", ARGS)
+    files_to_check = filter(arg -> !startswith(arg, "-"), ARGS)
     if isempty(files_to_check)
-        files_to_check = eachline(`git ls-files -- $patterns`)
+        if "--stdin" in ARGS
+            files_to_check = collect(eachline(stdin))
+        else
+            files_to_check = collect(eachline(`git ls-files -- $patterns`))
+        end
     end
 
     files_fixed = 0

@@ -1,5 +1,3 @@
-@testset "modules" begin
-
 test_mod = Module()
 
 A = JuliaLowering.include_string(test_mod, """
@@ -50,5 +48,3 @@ module A
 end
 """)
 @test Amod.init_order == ["B", "D", "E", "C", "A"]
-
-end

@@ -130,7 +130,7 @@ global C pointers to Julia globals defined in `boot.jl`.
 
 From this point on, the code is again uniform, regardless of whether there is a sysimage or not.
 
-Now it runs a loops to call
+Now it runs a loop to call
 [`jl_module_run_initializer()`](https://github.com/JuliaLang/julia/blob/master/src/module.c) for
 each deserialized module to run the `__init__()` function.
 
@@ -162,9 +162,7 @@ executes it.
 
 ## `Base._start`
 
-[`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) calls [`Base.exec_options`](https://github.com/JuliaLang/julia/blob/master/base/client.jl)
-which calls [`jl_parse_input_line("println("Hello World!")")`](https://github.com/JuliaLang/julia/blob/master/src/ast.c)
-to create an expression object and [`Core.eval(Main, ex)`](@ref Core.eval) to execute the parsed expression `ex` in the module context of `Main`.
+[`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) calls [`Base.exec_options`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) which calls [`Meta.parse`](https://github.com/JuliaLang/julia/blob/master/base/meta.jl) to create an expression object and [`Core.eval(Main, ex)`](@ref Core.eval) to execute the parsed expression `ex` in the module context of `Main`.
 
 ## `Core.eval`
 
@@ -188,8 +186,8 @@ Hello World!
 
 | Stack frame                    | Source code     | Notes                                                |
 |:------------------------------ |:--------------- |:---------------------------------------------------- |
-| `jl_uv_write()`                | `jl_uv.c`       | called though [`ccall`](@ref)                        |
-| `julia_write_282942`           | `stream.jl`     | function `write!(s::IO, a::Array{T}) where T`        |
+| `jl_uv_write()`                | `jl_uv.c`       | called through [`ccall`](@ref)                        |
+| `julia_write_282942`           | `stream.jl`     | function `write(s::IO, a::Array{T}) where T`        |
 | `julia_print_284639`           | `ascii.jl`      | `print(io::IO, s::String) = (write(io, s); nothing)` |
 | `jlcall_print_284639`          |                 |                                                      |
 | `jl_apply()`                   | `julia.h`       |                                                      |

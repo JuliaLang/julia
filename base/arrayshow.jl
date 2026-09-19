@@ -183,7 +183,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
     screenwidth -= length(pre)::Int + length(post)::Int
     presp = repeat(" ", length(pre)::Int)  # indent each row to match pre string
     postsp = ""
-    @assert textwidth(hdots) == textwidth(ddots)
+    @assert textwidth(hdots) == textwidth(ddots) "hdots and ddots must have same textwidth"
     sepsize = length(sep)::Int
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
@@ -387,11 +387,17 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
         io = IOContext(io, :limit => false)
     end
 
-    if get(io, :limit, false)::Bool && displaysize(io)[1]-4 <= 0
-        return print(io, " …")
-    else
-        println(io)
+    if get(io, :limit, false)::Bool
+        # when there is no vertical room to show even one row of entries
+        # plus a vertical ellipsis, show as many entries as fit on a single
+        # line, truncated to the terminal width (#58323)
+        screenheight = displaysize(io)[1] - 4
+        if screenheight <= 0 || (screenheight == 1 && (ndims(X) > 2 || size(X, 1) > 1))
+            print(io, ' ')
+            return _show_oneline_truncated(io, X)
+        end
     end
+    println(io)
 
     # 3) update typeinfo
     #
@@ -405,6 +411,15 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # 4) show actual content
     recur_io = IOContext(io, :SHOWN_SET => X)
     print_array(recur_io, X)
+end
+
+function _show_oneline_truncated(io::IO, X::AbstractArray)
+    cols = displaysize(io)[2]
+    used = textwidth(sprint(summary, X; context=io)) + 2
+    width = max(cols - used, 8)
+    ctx = IOContext(io, :typeinfo => typeof(X), :compact => true)
+    str = sprint(show, X; context=ctx, sizehint=min(4width, 4096))
+    print(io, _truncate_at_width_or_chars(get(io, :color, false)::Bool, str, width))
 end
 
 ## printing with `show`
@@ -422,7 +437,7 @@ _show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
     _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
 
 function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
-    @assert !isempty(X)
+    @assert !isempty(X) "X should be non-empty"
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
     nr, nc = length(indr), length(indc)

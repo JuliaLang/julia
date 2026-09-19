@@ -400,3 +400,13 @@ function f50518(xs...=["a", "b", "c"]...; debug=false)
     return xs[1]
 end
 @test f50518() == f50518(;debug=false) == "a"
+
+# issue #62277
+struct Issue62277
+    S::Vector{Symbol}
+    Issue62277(s::Vector{Symbol}; cached=false) = new(s)
+end
+Issue62277(s::AbstractVector{<:Union{Char,AbstractString,Symbol}}; cached=false) =
+    Issue62277(Symbol.(s); cached)
+@test Issue62277([:a, :b]; cached=false).S == [:a, :b]
+@test Issue62277(['a', 'b']).S == [:a, :b]

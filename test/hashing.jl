@@ -294,11 +294,11 @@ end
 
 struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test AUnionParam.body.hash == 0
-@test Type{AUnionParam}.hash != 0
-@test Type{AUnionParam{<:Union{Float32,Float64}}}.hash == 0
+@test Base._jl_type_cache_hash(Type{AUnionParam}) != 0
+@test Base._jl_type_cache_hash(Type{AUnionParam{<:Union{Float32,Float64}}}) == 0
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
-@test Type{AUnionParam.body}.hash == 0
-@test Type{Base.Broadcast.Broadcasted}.hash != 0
+@test Base._jl_type_cache_hash(Type{AUnionParam.body}) == 0
+@test Base._jl_type_cache_hash(Type{Base.Broadcast.Broadcasted}) != 0
 
 
 @testset "issue 50628" begin
@@ -349,4 +349,12 @@ end
         hash_generator = Base.hash_bytes(a, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
         @test hash_generator === hash_pointer
     end
+end
+
+@testset "PartialStruct hash consistent with ==" begin
+    ps(t, f) = Core.PartialStruct(t, Any[f...])
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) ==
+          hash(ps(Tuple{Int,Float64}, (Int, Float64)))
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) !=
+          hash(ps(Tuple{Int,Float64}, (Int, Int)))
 end

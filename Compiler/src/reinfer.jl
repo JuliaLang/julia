@@ -3,7 +3,8 @@
 using ..Compiler.Base
 using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
     _methods_by_ftype, get_methodtable, get_ci_mi, should_instrument,
-    morespecific, RefValue, get_require_world, Vector, IdDict
+    morespecific, RefValue, get_require_world, Vector, IdDict,
+    binding_access_range, is_leaf_partition, WorldWithRange, WorldRange, min_world, max_world
 using .Core: CodeInstance, MethodInstance
 
 const CI_FLAGS_NATIVE_CACHE_VALID = 0b1000
@@ -66,15 +67,34 @@ function VerifyMethodResultState()
 end
 
 
+function binding_access_range_at(b::Core.Binding, world::UInt)
+    wr, _ = binding_access_range(b, WorldWithRange(world, WorldRange(get_require_world(), world)), false)
+    return wr
+end
+
+# Whether an access to `b` can resolve differently now than it did in any process that serialized code against it.
+function binding_changed_since_require_world(b::Core.Binding, world::UInt)
+    require_world = get_require_world()
+    # Fast path: this binding has not been repartitioned since the require world at all, and it
+    # resolves without crossing an import, so no walk is needed to know its range reaches back.
+    # A non-leaf partition has to take the slow path: the walk continues into the binding it
+    # imports, which may itself have been repartitioned after the require world even though `b`
+    # was not.
+    if isdefined(b, :partitions)
+        p = b.partitions
+        p.min_world <= require_world && is_leaf_partition(p) && return false
+    end
+    return min_world(binding_access_range_at(b, world)) > require_world
+end
+
 # Restore backedges to external targets
-# `edges` = [caller1, ...], the list of worklist-owned code instances internally
+# `internal_methods` = [caller1, ...], the list of worklist-owned code instances internally
 function insert_backedges(internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-    scan_new_methods!(internal_methods, backedges_only)
-    workspace = VerifyMethodWorkspace()
-    scan_new_code!(internal_methods, workspace)
+    scan_new_methods!(internal_methods, get_world_counter(), backedges_only)
+    scan_new_code!(internal_methods, VerifyMethodWorkspace())
     nothing
 end
 
@@ -124,11 +144,18 @@ function gen_staged_sig(def::Method, mi::MethodInstance)
 end
 
 function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::Method, validation_world::UInt)
+    # foreign CIs (owner !== nothing) aren't run as native code here, so instrumenting them is moot
+    codeinst.owner === nothing || return false
     if JLOptions().code_coverage != 0 || JLOptions().malloc_log != 0
         # test if the code needs to run with instrumentation, in which case we cannot use existing generated code
         if isdefined(def, :debuginfo) ? # generated_only functions do not have debuginfo, so fall back to considering their codeinst debuginfo though this may be slower and less reliable
             should_instrument(def.module, def.debuginfo) :
             isdefined(codeinst, :debuginfo) && should_instrument(def.module, codeinst.debuginfo)
+            # Compatible image code already has the requested counters.
+            # Allocation tracking still needs fresh instrumentation.
+            if JLOptions().malloc_log == 0 && ccall(:jl_codeinst_coverage_compatible, Cint, (Any,), codeinst) != 0
+                return false
+            end
             return true
         end
         gensig = gen_staged_sig(def, mi)
@@ -154,7 +181,7 @@ function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::
 end
 
 # Test all edges relevant to a method:
-# - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
+# - Visit the entire call graph, starting from `codeinst` to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 #   and slightly modified with an early termination option once the computation reaches its minimum
 function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
@@ -202,7 +229,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
             # Check for invalidation of GlobalRef edges
             if (initial.def.did_scan_source & 0x1) == 0x0
                 backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-                scan_new_method!(initial.def, backedges_only)
+                scan_new_method!(initial.def, validation_world, backedges_only)
             end
             if (initial.def.did_scan_source & 0x4) != 0x0
                 maxworld = 0
@@ -239,16 +266,16 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         edge = sig
                     elseif edge isa Core.Binding
                         j += 1
-                        min_valid2 = minworld
-                        max_valid2 = maxworld
-                        if !binding_was_invalidated(edge)
-                            if isdefined(edge, :partitions)
-                                min_valid2 = edge.partitions.min_world
-                                max_valid2 = edge.partitions.max_world
-                            end
-                        else
+                        # Check that what of and how this code accessed the leaf partition is still valid.
+                        wr = binding_access_range_at(edge, validation_world)
+                        if min_world(wr) > get_require_world()
+                            # Nothing can be backdated before the require world, so an access
+                            # whose range does not reach it cannot be shown valid at all.
                             min_valid2 = 1
                             max_valid2 = 0
+                        else
+                            min_valid2 = min_world(wr)
+                            max_valid2 = max_world(wr)
                         end
                     else
                         callee = initial.callees[j+1]
@@ -464,6 +491,11 @@ function method_morespecific_via_interferences(method1::Method, method2::Method)
     return false
 end
 
+# Max interference-set size for which n==1 uses the interference fast path instead of
+# `ml_matches`: the scan probes every member with `typeintersect`, so above this size the
+# pruned `ml_matches` lookup is cheaper (~8 is the empirical crossover).
+const VERIFY_INTERF_CAP = 8
+
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, matches::Vector{Any})
     # verify that these edges intersect with the same methods as before
     mi = nothing
@@ -480,36 +512,48 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         if _jl_debug_method_invalidation[] === nothing && world == get_world_counter()
             return UInt(1), UInt(0)
         end
-    elseif n == 1
-        # first, fast-path a check if the expected method simply dominates its sig anyways
-        # so the result of ml_matches is already simply known
-        let t = expecteds[i], meth, minworld, maxworld
-            meth = get_method_from_edge(t)
-            if !(t isa Method)
-                if t isa CodeInstance
-                    mi = get_ci_mi(t)::MethodInstance
-                else
-                    mi = t::MethodInstance
+    else # n >= 1
+        if n == 1
+            # first, fast-path a check if the expected method simply dominates its sig anyways
+            # so the result of ml_matches is already simply known
+            let t = expecteds[i], meth, minworld, maxworld
+                meth = get_method_from_edge(t)
+                if !(t isa Method)
+                    if t isa CodeInstance
+                        mi = get_ci_mi(t)::MethodInstance
+                    else
+                        mi = t::MethodInstance
+                    end
+                    # Fast path is legal when fully_covers=true
+                    if fully_covers && !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                        minworld = meth.primary_world
+                        @assert minworld ≤ world "expected method not present in verification world"
+                        maxworld = typemax(UInt)
+                        return minworld, maxworld
+                    end
                 end
                 # Fast path is legal when fully_covers=true
-                if fully_covers && !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
                     minworld = meth.primary_world
                     @assert minworld ≤ world "expected method not present in verification world"
                     maxworld = typemax(UInt)
                     return minworld, maxworld
                 end
             end
-            # Fast path is legal when fully_covers=true
-            if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
-                minworld = meth.primary_world
-                @assert minworld ≤ world "expected method not present in verification world"
-                maxworld = typemax(UInt)
-                return minworld, maxworld
+        end
+        # Try the interference set fast path (used by both n==1, when the O(1) checks above
+        # did not resolve it, and n>1): the result is unchanged as long as no interfering
+        # method intersects sig outside of what the expected method(s) cover.
+        interference_fast_path_success = fully_covers
+        if interference_fast_path_success && n == 1
+            # Skip to ml_matches for large interference sets (see VERIFY_INTERF_CAP). The set
+            # is packed, so isassigned(., cap+1) tests "size > cap" without any typeintersect.
+            let interf = get_method_from_edge(expecteds[i]).interferences, cap = VERIFY_INTERF_CAP
+                if length(interf) > cap && isassigned(interf, cap + 1)
+                    interference_fast_path_success = false
+                end
             end
         end
-    elseif n > 1
-        # Try the interference set fast path: check if all interference sets are covered by expecteds
-        interference_fast_path_success = fully_covers
         # If it didn't fail yet, then check that all interference methods are either expected, or not applicable.
         if interference_fast_path_success
             local interference_minworld::UInt = 1

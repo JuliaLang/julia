@@ -137,7 +137,7 @@ f10502() = ()
 
 # issue #11982
 @generated function f11982(T)
-    string(T.parameters[1])
+    string(Base.type_parameter(T))
 end
 @test f11982(Float32) == "Float32"
 @test f11982(Int32) == "Int32"
@@ -185,6 +185,22 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
     Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
     @test_throws Expected gf_err()
     @test_throws Expected gf_err()
+    @test gf_err_ref[] < 1000
+end
+
+# the error must fire even when the scheduler holds no other runnable task:
+# `yield()` then pops the current task itself, and the switch-to-self fast
+# path must not skip the forbidden-context checks
+gf_err_ref[] = 0
+let
+    @generated function gf_err_yield_to_self()
+        gf_err_ref[] += 1
+        yield()
+        gf_err_ref[] += 1000
+    end
+    Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
+    @test_throws Expected gf_err_yield_to_self()
+    @test_throws Expected gf_err_yield_to_self()
     @test gf_err_ref[] < 1000
 end
 
@@ -414,7 +430,7 @@ end
 
 # Test that writing a bad cassette-style pass gives the expected error (#49715)
 function generator49715(world, source, self, f, tt)
-    tt = tt.parameters[1]
+    tt = Base.type_parameter(tt)
     sig = Tuple{f, tt.parameters...}
     mi = Base._which(sig; world)
     error("oh no")
@@ -479,3 +495,38 @@ module GeneratedScope57417
 end
 
 @test_throws "syntax: expression too large" code_lowered(ntuple, (Returns{Nothing}, Val{1000000}))
+
+# test that generator methods also have reasonable line numbers
+f_generated_lno1_lower_bound = @__LINE__()
+function f_generated_lno1(x)
+    if @generated
+        :(x)
+    else
+        "nongen"
+    end
+end
+
+@test f_generated_lno1(1) == 1 || f_generated_lno1(1) == "nongen"
+let m = methods(f_generated_lno1)[1]
+    @test m.line > f_generated_lno1_lower_bound
+    @test m.file |> string == @__FILE__()
+    let mgen = methods(m.generator.gen)[1]
+        @test mgen.line > f_generated_lno1_lower_bound
+        @test mgen.file |> string == @__FILE__()
+    end
+end
+
+f_generated_lno2_lower_bound = @__LINE__()
+@generated function f_generated_lno2(x)
+    :(x)
+end
+
+@test f_generated_lno2(1) == 1 || f_generated_lno2(1) == "nongen"
+let m = methods(f_generated_lno2)[1]
+    @test m.line > f_generated_lno2_lower_bound
+    @test m.file |> string == @__FILE__()
+    let mgen = methods(m.generator.gen)[1]
+        @test mgen.line > f_generated_lno2_lower_bound
+        @test mgen.file |> string == @__FILE__()
+    end
+end

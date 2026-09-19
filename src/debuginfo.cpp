@@ -50,14 +50,18 @@ static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
     return *DebugRegistry;
 }
 
+namespace {
 struct debug_link_info {
     StringRef filename;
     uint32_t crc32;
 };
+}  // anonymous namespace
 
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
-extern "C" void __register_frame(void*) JL_NOTSAFEPOINT;
-extern "C" void __deregister_frame(void*) JL_NOTSAFEPOINT;
+extern "C" {
+    JL_DLLIMPORT extern void __register_frame(void*) JL_NOTSAFEPOINT;
+    JL_DLLIMPORT extern void __deregister_frame(void*) JL_NOTSAFEPOINT;
+}
 
 template <typename callback>
 static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f) JL_NOTSAFEPOINT
@@ -82,23 +86,10 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
 }
 #endif
 
-std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL)
-{
-    std::string MangledName;
-    {
-        raw_string_ostream MangledNameStream(MangledName);
-        Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
-    }
-    return MangledName;
-}
-
-void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
-    (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
-}
-
 jl_code_instance_t *JITDebugInfoRegistry::lookupCodeInstance(size_t pointer)
 {
-    jl_lock_profile();
+    if (!jl_trylock_profile())
+        return nullptr;
     auto region = cimap.lower_bound(pointer);
     jl_code_instance_t *linfo = NULL;
     if (region != cimap.end() && pointer < region->first + region->second.first)
@@ -113,6 +104,25 @@ JITDebugInfoRegistry::getObjectMap()
 {
     return objectmap;
 }
+
+#ifdef __clang_safetyanalysis__
+// Clang's thread-safety analysis drops the capability attributes when it
+// *implicitly* instantiates a member function of a class template (the
+// JL_NOTSAFEPOINT_ENTER on Locked<T>::operator* is lost), so it no longer sees
+// the accessor as entering the no-safepoint region. Force explicit
+// instantiations that carry the attribute for each Locked<T> accessor used
+// below, which the analyzer then honors. This is only needed for -D__clang_safetyanalysis__;
+// normal builds instantiate implicitly as usual.
+template JL_NOTSAFEPOINT_ENTER
+JITDebugInfoRegistry::Locked<llvm::DenseMap<uint64_t, JITDebugInfoRegistry::image_info_t>>::LockT
+JITDebugInfoRegistry::Locked<llvm::DenseMap<uint64_t, JITDebugInfoRegistry::image_info_t>>::operator*();
+template JL_NOTSAFEPOINT_ENTER
+JITDebugInfoRegistry::Locked<llvm::DenseMap<uint64_t, JITDebugInfoRegistry::image_info_t>>::ConstLockT
+JITDebugInfoRegistry::Locked<llvm::DenseMap<uint64_t, JITDebugInfoRegistry::image_info_t>>::operator*() const;
+template JL_NOTSAFEPOINT_ENTER
+JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
+JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::operator*();
+#endif
 
 void JITDebugInfoRegistry::add_image_info(image_info_t info) {
     (**this->image_info)[info.base] = info;
@@ -136,11 +146,13 @@ JITDebugInfoRegistry::get_objfile_map() {
 
 JITDebugInfoRegistry::JITDebugInfoRegistry() { }
 
+namespace {
 struct unw_table_entry
 {
     int32_t start_ip_offset;
     int32_t fde_offset;
 };
+}  // anonymous namespace
 
 // some actions aren't signal (especially profiler) safe so we acquire a lock
 // around them to establish a mutual exclusion with unwinding from a signal
@@ -148,7 +160,13 @@ template <typename T>
 static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 {
     int havelock = jl_lock_profile_wr();
+    // Hidden from the thread-safety analysis: asserting a try-lock succeeded
+    // makes clang's try-lock tracking disagree with the `if (havelock)` below,
+    // and it disagrees differently depending on the clang version and on how
+    // the C library spells assert(). See llvm/llvm-project#211973.
+#ifndef __clang_safetyanalysis__
     assert(havelock);
+#endif
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -163,23 +181,7 @@ static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
         jl_unlock_profile_wr();
 }
 
-
 // --- storing and accessing source location metadata ---
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
-{
-    // Non-opaque-closure MethodInstances are considered globally rooted
-    // through their methods, but for OC, we need to create a global root
-    // here.
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
-        jl_task_t *ct = jl_current_task;
-        int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
-        jl_as_global_root((jl_value_t*)mi, 1);
-        jl_gc_unsafe_leave(ct->ptls, gc_state);
-    }
-    getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
-}
-
 
 #if defined(_OS_WINDOWS_)
 static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
@@ -235,10 +237,25 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
 }
 #endif
 
-void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
-                        std::function<uint64_t(const StringRef &)> getLoadAddress)
+void JITDebugInfoRegistry::registerJITObject(
+    const object::ObjectFile &Object,
+    std::function<uint64_t(const StringRef &)> getLoadAddress,
+    const jl_linker_info_t &Info)
 {
     object::section_iterator EndSection = Object.section_end();
+
+    StringMap<jl_code_instance_t *> sym_to_ci;
+    for (auto &[ci, funcs] : Info.ci_funcs) {
+        // don't remember toplevel thunks because
+        // they may not be rooted in the gc for the life of the program,
+        // and the runtime doesn't notify us when the code becomes unreachable :(
+        if (!jl_is_method(jl_get_ci_mi(ci)->def.method))
+            continue;
+        if (funcs.invoke)
+            sym_to_ci[*funcs.invoke] = ci;
+        if (funcs.specptr)
+            sym_to_ci[*funcs.specptr] = ci;
+    }
 
     bool anyfunctions = false;
     for (const object::SymbolRef &sym_iter : Object.symbols()) {
@@ -379,15 +396,14 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                 (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
         jl_code_instance_t *codeinst = NULL;
-        {
-            auto lock = *this->codeinst_in_flight;
-            auto &codeinst_in_flight = *lock;
-            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
-            if (codeinst_it != codeinst_in_flight.end()) {
-                codeinst = codeinst_it->second;
-                codeinst_in_flight.erase(codeinst_it);
-            }
+        auto it = sym_to_ci.find(sName);
+        if (it != sym_to_ci.end()) {
+            codeinst = it->second;
         }
+        // opaque-closure code instances are pre-promoted to global roots
+        // by jl_register_jit_object before this JL_NOTSAFEPOINT region runs.
+        // All other codeinstances are rooted by the cache.
+        JL_GC_PROMISE_ROOTED(codeinst);
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (codeinst)
                 cimap[Addr] = std::make_pair(Size, codeinst);
@@ -405,9 +421,28 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 }
 
 void jl_register_jit_object(const object::ObjectFile &Object,
-                            std::function<uint64_t(const StringRef &)> getLoadAddress)
+                            std::function<uint64_t(const StringRef &)> getLoadAddress,
+                            const jl_linker_info_t &Info)
 {
-    getJITDebugRegistry().registerJITObject(Object, getLoadAddress);
+    // Opaque-closure code instances are not otherwise reachable through their
+    // method, so promote them to global roots here, before entering the
+    // JL_NOTSAFEPOINT registerJITObject body. Scanning the list is safe in the
+    // GC-safe materialization state (registerJITObject reads the same fields),
+    // so only switch to GC-unsafe around the rare allocating promotion.
+    jl_task_t *ct = jl_current_task;
+    for (auto &[ci, funcs] : Info.ci_funcs) {
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (jl_is_method(mi->def.method) && mi->def.method->is_for_opaque_closure) {
+            jl_code_instance_t *ci_root = ci;
+            // jl_gc_unsafe_enter may safepoint, so root before the transition.
+            JL_GC_PUSH1(&ci_root);
+            int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+            jl_as_global_root((jl_value_t*)ci_root, 1);
+            JL_GC_POP();
+            jl_gc_unsafe_leave(ct->ptls, gc_state);
+        }
+    }
+    getJITDebugRegistry().registerJITObject(Object, getLoadAddress, Info);
 }
 
 // TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols
@@ -504,14 +539,20 @@ static int lookup_pointer(
         }
         else {
             int havelock = jl_lock_profile_wr();
-            assert(havelock); (void)havelock;
-            auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-            jl_unlock_profile_wr();
-#if JL_LLVM_VERSION < 210000
-            info = std::move(lineinfo);
-#else
-            info = std::move(lineinfo.value());
+#ifndef __clang_safetyanalysis__
+            // see the comment in jl_profile_atomic
+            assert(havelock); // we got it earlier on this thread, so we can get it again
 #endif
+            if (havelock) {
+                auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+                jl_unlock_profile_wr();
+#if JL_LLVM_VERSION < 210000
+                info = std::move(lineinfo);
+#else
+                if (lineinfo)
+                    info = std::move(*lineinfo);
+#endif
+            }
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -537,6 +578,17 @@ static int lookup_pointer(
             frame->fromC = 1;
 
         frame->line = info.Line;
+        if (fromC) {
+            frame->pc = info.Column;
+        }
+        else if (info.Column > 0) {
+            // See "DWARF column" in codegen.cpp: If any frame has nonzero
+            // column, it is a PC into the first (non-inlined) frame.  Move it
+            // there for sanity.
+            jl_frame_t *frame0 = &(*frames)[n_frames - 1];
+            assert((frame0->pc == 0 || frame0->pc == (int)info.Column) && "conflicting pcs");
+            frame0->pc = info.Column;
+        }
         std::string file_name(info.FileName);
 
         if (file_name == "<invalid>")
@@ -1304,7 +1356,7 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-extern "C" jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT_CODEGEN jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
 {
     return getJITDebugRegistry().lookupCodeInstance((size_t)p);
 }
@@ -1322,7 +1374,7 @@ extern "C" jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
 // This implementation handles frame registration for local targets.
 void register_eh_frames(uint8_t *Addr, size_t Size)
 {
-  // On OS X OS X __register_frame takes a single FDE as an argument.
+  // On OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
   processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_register_frame(Entry);
@@ -1351,8 +1403,8 @@ static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End) JL
     return P + 1;
 }
 
-// Parse a LEB128 encoding to a type T. Truncate the result if there's more
-// bytes than what there are more bytes than what the type can store.
+// Parse a LEB128 encoding to a type T. Truncate the result if there are more
+// bytes than what the type can store.
 // Adjust the pointer to the first unprocessed byte.
 template<typename T> static T parse_leb128(const uint8_t *&Addr,
                                            const uint8_t *End) JL_NOTSAFEPOINT
@@ -1408,7 +1460,7 @@ enum DW_EH_PE : uint8_t {
 
     DW_EH_PE_pcrel = 0x10, // Value is PC relative.
 
-    // We currently don't support the following once.
+    // We currently don't support the following ones.
     DW_EH_PE_textrel = 0x20, // Value is text relative.
     DW_EH_PE_datarel = 0x30, // Value is data relative.
     DW_EH_PE_funcrel = 0x40, // Value is relative to start of function.
@@ -1677,10 +1729,11 @@ extern "C" JL_DLLEXPORT_CODEGEN
 uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr) JL_NOTSAFEPOINT
 {
     // Might be called from unmanaged thread
-    jl_lock_profile();
+    uint64_t ipstart = 0;
+    if (!jl_trylock_profile())
+        return ipstart;
     auto &objmap = getJITDebugRegistry().getObjectMap();
     auto it = objmap.lower_bound(dwAddr);
-    uint64_t ipstart = 0; // ip of the start of the section (if found)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
         ipstart = (uint64_t)(uintptr_t)(*it).first;
     }

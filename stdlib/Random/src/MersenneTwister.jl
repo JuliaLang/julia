@@ -2,6 +2,12 @@
 
 ## MersenneTwister
 
+# Contiguous reinterpret view; `pointer` forwards to the parent's storage,
+# so it is safe in the bulk pointer-based fill paths below.
+const ContigReinterpretArray{T} =
+    Base.NonReshapedReinterpretArray{T,N,S,<:Base.MutableDenseArrayType{S}} where {N,S}
+const BulkArray{T} = Union{Array{T}, ContigReinterpretArray{T}}
+
 const MT_CACHE_F = 501 << 1 # number of Float64 in the cache
 const MT_CACHE_I = 501 << 4 # number of bytes in the UInt128 cache
 
@@ -104,7 +110,7 @@ function show(io::IO, rng::MersenneTwister)
               sep, s ? rng.idxF : zero(rng.idxF))
     end
     if rng.adv_ints != -1
-        idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 represents one Int64
+        idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 = sizeof(Int64)
         idxI = Int(idxI) # idxI should always be an integer when using public APIs
         print(io, sep, rng.adv_ints, sep, idxI)
     end
@@ -374,7 +380,7 @@ function rand!(r::MersenneTwister, A::UnsafeView{Float64},
 end
 
 # fills up A reinterpreted as an array of Float64 with n64 values
-function _rand!(r::MersenneTwister, A::Array{T}, n64::Int, I::FloatInterval_64) where T
+function _rand!(r::MersenneTwister, A::BulkArray{T}, n64::Int, I::FloatInterval_64) where T
     # n64 is the length in terms of `Float64` of the target
     @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbitstype(T)
     GC.@preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
@@ -383,7 +389,7 @@ end
 
 ##### Array: Float64, Float16, Float32
 
-rand!(r::MersenneTwister, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) =
+rand!(r::MersenneTwister, A::BulkArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) =
     _rand!(r, A, length(A), I[])
 
 mask128(u::UInt128, ::Type{Float16}) =
@@ -393,7 +399,7 @@ mask128(u::UInt128, ::Type{Float32}) =
     (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
 for T in (Float16, Float32)
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen12{$T}})
+    @eval function rand!(r::MersenneTwister, A::BulkArray{$T}, ::SamplerTrivial{CloseOpen12{$T}})
         n = length(A)
         n128 = n * sizeof($T) ÷ 16
         _rand!(r, A, 2*n128, CloseOpen12())
@@ -421,7 +427,7 @@ for T in (Float16, Float32)
         A
     end
 
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen01{$T}})
+    @eval function rand!(r::MersenneTwister, A::BulkArray{$T}, ::SamplerTrivial{CloseOpen01{$T}})
         rand!(r, A, CloseOpen12($T))
         I32 = one(Float32)
         for i in eachindex(A)
@@ -459,7 +465,7 @@ function rand!(r::MersenneTwister, A::UnsafeView{UInt128}, ::SamplerType{UInt128
 end
 
 for T in BitInteger_types
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T})
+    @eval function rand!(r::MersenneTwister, A::BulkArray{$T}, sp::SamplerType{$T})
         GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp)
         A
     end

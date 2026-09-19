@@ -62,7 +62,7 @@ LLVM makes `testall1` take 8-10 times as long while using 20 times as much memor
 reduced to respectively a factor of 3 and 4 by using the options described below).
 
 By default, Julia sets the `allow_user_segv_handler=1` ASAN flag, which is required for signal
-delivery to work properly. You can define other options using the `ASAN_OPTIONS` environment flag,
+delivery to work properly. You can define other options using the `ASAN_OPTIONS` environment variable,
 in which case you'll need to repeat the default option mentioned before. For example, memory usage
 can be reduced by specifying `fast_unwind_on_malloc=0` and `malloc_context_size=2`, at the cost
 of backtrace accuracy. For now, Julia also sets `detect_leaks=0`, but this should be removed in

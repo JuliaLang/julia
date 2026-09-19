@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang-tidy %s --checks=-*,concurrency-implicit-atomics -load libImplicitAtomicsPlugin%shlibext -- -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} -x c -std=c11 | FileCheck --check-prefixes=CHECK,CHECK-C %s
-// RUN: clang-tidy %s --checks=-*,concurrency-implicit-atomics -load libImplicitAtomicsPlugin%shlibext -- -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} ${CXXFLAGS} -x c++ -std=c++11 | FileCheck --check-prefixes=CHECK,CHECK-CXX %s
+// RUN: clang-tidy %s --checks=-*,concurrency-implicit-atomics -load libImplicitAtomicsPlugin%{shlibext} -- -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} -x c -std=c11 | FileCheck --check-prefixes=CHECK,CHECK-C %s
+// RUN: clang-tidy %s --checks=-*,concurrency-implicit-atomics -load libImplicitAtomicsPlugin%{shlibext} -- -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} %{cxxflags} -x c++ -std=c++11 | FileCheck --check-prefixes=CHECK,CHECK-CXX %s
 
 #include "julia_atomics.h"
 
@@ -58,6 +58,9 @@ void hiddenAtomics(void) {
 
     *(int*)&x = 3; // CHECK-NOT: [[@LINE]]
     *(int*)px = 3; // CHECK-NOT: [[@LINE]]
+
+    &*px; // CHECK-NOT: [[@LINE]]
+    *&*px = 3; // CHECK: [[@LINE]]:8: warning: Implicit Atomic seq_cst synchronization
 
     y.y = 2; // CHECK-NOT: [[@LINE]]
     py->y = 2; // CHECK-NOT: [[@LINE]]

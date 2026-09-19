@@ -1,7 +1,7 @@
 module Ryu
 
 using .Base.Libc
-import .Base: significand_bits, significand_mask, exponent_bits, exponent_mask, exponent_bias, exponent_max, uinttype
+using .Base: significand_bits, significand_mask, exponent_mask, exponent_bias, exponent_max, uinttype
 
 include("utils.jl")
 include("shortest.jl")
@@ -55,14 +55,17 @@ function writeshortest(x::T,
         decchar::UInt8=UInt8('.'),
         typed::Bool=false,
         compact::Bool=false) where {T <: Base.IEEEFloat}
-    buf = Base.StringVector(neededdigits(T))
+    precision = Int(precision)
+    precision >= -1 || throw(ArgumentError("precision must be at least -1"))
+    bufsize = precision < 0 ? neededdigits(T) : Base.checked_add(precision, neededdigits(T))
+    buf = Base.StringVector(bufsize)
     pos = writeshortest(buf, 1, x, plus, space, hash, precision, expchar, padexp, decchar, typed, compact)
     return String(resize!(buf, pos - 1))
 end
 
 """
     Ryu.writefixed(x, precision, plus=false, space=false, hash=false, decchar=UInt8('.'), trimtrailingzeros=false)
-    Ryu.writefixed(buf::AbstractVector{UInt8}, pos::Int, x, args...)
+    Ryu.writefixed(buf::AbstractVector{UInt8}, pos::Int, x, precision, args...)
 
 Convert a float value `x` into a "fixed" size decimal string of the provided precision.
 This function allows achieving the `%f` printf format.
@@ -72,7 +75,7 @@ Various options for the output format include:
   * `plus`: for positive `x`, prefix decimal string with a `'+'` character
   * `space`: for positive `x`, prefix decimal string with a `' '` character; overridden if `plus=true`
   * `hash`: whether the decimal point should be written, even if no additional digits are needed for precision
-  * `precision`: minimum number of significant digits to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
+  * `precision`: exact number of digits after the decimal point to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
   * `decchar`: decimal point character to be used
   * `trimtrailingzeros`: whether trailing zeros of fractional part should be removed
 """
@@ -83,14 +86,16 @@ function writefixed(x::T,
     hash::Bool=false,
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
-    buf = Base.StringVector(precision + neededdigits(T))
+    precision = Int(precision)
+    precision >= 0 || throw(ArgumentError("precision must be non-negative"))
+    buf = Base.StringVector(Base.checked_add(precision, neededdigits(T)))
     pos = writefixed(buf, 1, x, precision, plus, space, hash, decchar, trimtrailingzeros)
     return String(resize!(buf, pos - 1))
 end
 
 """
     Ryu.writeexp(x, precision, plus=false, space=false, hash=false, expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false)
-    Ryu.writeexp(buf::AbstractVector{UInt8}, pos::Int, x, args...)
+    Ryu.writeexp(buf::AbstractVector{UInt8}, pos::Int, x, precision, args...)
 
 Convert a float value `x` into a scientific notation decimal string.
 This function allows achieving the `%e` printf format.
@@ -100,7 +105,7 @@ Various options for the output format include:
   * `plus`: for positive `x`, prefix decimal string with a `'+'` character
   * `space`: for positive `x`, prefix decimal string with a `' '` character; overridden if `plus=true`
   * `hash`: whether the decimal point should be written, even if no additional digits are needed for precision
-  * `precision`: minimum number of significant digits to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
+  * `precision`: exact number of digits after the decimal point to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
   * `expchar`: character to use exponent component in scientific notation
   * `decchar`: decimal point character to be used
   * `trimtrailingzeros`: whether trailing zeros should be removed
@@ -113,7 +118,9 @@ function writeexp(x::T,
     expchar::UInt8=UInt8('e'),
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
-    buf = Base.StringVector(precision + neededdigits(T))
+    precision = Int(precision)
+    precision >= 0 || throw(ArgumentError("precision must be non-negative"))
+    buf = Base.StringVector(Base.checked_add(precision, neededdigits(T)))
     pos = writeexp(buf, 1, x, precision, plus, space, hash, expchar, decchar, trimtrailingzeros)
     return String(resize!(buf, pos - 1))
 end

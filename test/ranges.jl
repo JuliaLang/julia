@@ -230,7 +230,7 @@ end
             @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
             @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
             @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
-            @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits+1) # extra bit because division is hard
+            @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits+1) # see #59140 for justification for the `+1`
             y = rand(T)
             yw = widen(widen(y))
             @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
@@ -892,6 +892,12 @@ end
     @test sum(0:0.000001:1) == 500000.5
     @test sum(0:0.1:10) == 505.
 end
+@testset "sum(::StepRangeLen) includes the low word of the step contribution" begin
+    # the low part `s_lo` of the step sum used to be dropped, giving a 1-2 ULP error
+    # (e.g. 43.65000000000001 instead of 43.65)
+    @test sum(range(-3.5, 4.4, length=97)) == 43.65
+    @test sum(range(-3.5, 4.4, length=97)) == Float64(sum(big, range(-3.5, 4.4, length=97)))
+end
 @testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
     @test broadcast(-, T(1):3, 2) === T(1)-2:1
     @test broadcast(-, T(1):3, 0.25) === range(T(1)-0.25, length=T(3)) == T(1)-0.25:3-0.25
@@ -1472,7 +1478,7 @@ end
 end
 
 @testset "PR 12200 and related" begin
-    for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
+    for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0, LinRange(1, 10, 10),
                range(1, stop=100, length=10), range(1f0, stop=100f0, length=10))
         float_r = float(_r)
         big_r = broadcast(big, _r)
@@ -2663,6 +2669,11 @@ end
 end
 
 @testset "collect with specialized vcat" begin
+    # Specialized range concatenation must check its aggregate allocation length.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    overflow_range = 1:overflow_dim
+    @test_throws OverflowError vcat(overflow_range, overflow_range, overflow_range)
+
     struct OneToThree <: AbstractUnitRange{Int} end
     Base.size(r::OneToThree) = (3,)
     Base.first(r::OneToThree) = 1
@@ -2813,6 +2824,23 @@ end
     Base.getindex(r::MyUnitRange, i::Int) = getindex(r.range, i)
     @test promote(MyUnitRange(2:3), Base.OneTo(3)) == (2:3, 1:3)
     @test promote(MyUnitRange(UnitRange(3.0, 4.0)), Base.OneTo(3)) == (3.0:4.0, 1.0:3.0)
+end
+
+@testset "StepRangeLen indexing with implicit conversion (#61580) " begin
+    # testing direct path where the result type of range arithmetic
+    # will implicitly convert to element type.
+    struct Num61580
+        x::Float64
+        global _mknum(x::Float64) = new(x)
+    end
+    Base.convert(::Type{Num61580}, x::Real) = _mknum(Float64(x))
+    r1 = StepRangeLen{Num61580,Float64,Float64,Int64}(0.0, 1.0, 5, 1)
+    @test r1[1] === convert(Num61580, 0.0)
+
+    # a more concrete example where the result of range arithmetic
+    # is already of the element type.
+    r2 = range(Time(0), step = Hour(9), length = 3)
+    @test r2[begin:end] == [Time(0), Time(9), Time(18)]  # can be indexed
 end
 
 @testset "StepRange(::StepRangeLen)" begin

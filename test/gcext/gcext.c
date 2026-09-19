@@ -418,7 +418,7 @@ void stk_push(jl_value_t *s, jl_value_t *v)
     }
 }
 
-// Return top value from `s`. Raise error if not empty.
+// Return top value from `s`. Raise error if empty.
 
 jl_value_t *stk_top(jl_value_t *s)
 {
@@ -427,7 +427,7 @@ jl_value_t *stk_top(jl_value_t *s)
     return stk->data[stk->size - 1];
 }
 
-// Pop a value from `s` and return it. Raise error if not empty.
+// Pop a value from `s` and return it. Raise error if empty.
 
 jl_value_t *stk_pop(jl_value_t *s)
 {

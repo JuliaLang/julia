@@ -340,6 +340,7 @@ private:
 
     void LiftPhi(State &S, PHINode *Phi);
     void LiftSelect(State &S, SelectInst *SI);
+    void LiftExtractElement(State &S, ExtractElementInst *EEI);
     Value *MaybeExtractScalar(State &S, std::pair<Value*,int> ValExpr, Instruction *InsertBefore);
     SmallVector<Value*, 0> MaybeExtractVector(State &S, Value *BaseVec, Instruction *InsertBefore);
     Value *GetPtrForNumber(State &S, unsigned Num, Instruction *InsertBefore);
@@ -351,7 +352,7 @@ private:
 
     void NoteOperandUses(State &S, BBState &BBS, Instruction &UI);
     void MaybeTrackDst(State &S, MemTransferInst *MI);
-    void MaybeTrackStore(State &S, StoreInst *I);
+    bool MaybeTrackStore(State &S, StoreInst *I);
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
@@ -385,6 +386,15 @@ private:
     Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
+    // Reset-safe variants of the above, used for call sites that
+    // CancellationLowering annotated with julia.reset_region metadata (they
+    // may execute with a cancellation reset region published): these entry
+    // points unpublish/republish the region themselves, so no per-site drop
+    // is needed (see llvm-cancellation-lowering.cpp).
+    Function *queueRootResetSafeFunc;
+    Function *smallAllocResetSafeFunc;
+    Function *bigAllocResetSafeFunc;
+    Function *allocTypedResetSafeFunc;
     Value *pgcstack;
     Type *T_size;
 

@@ -1,7 +1,3 @@
-using Test
-const JS = JuliaSyntax
-const JL = JuliaLowering
-
 test_mod = Module()
 
 const JL_DIR = joinpath(@__DIR__, "..")
@@ -9,7 +5,7 @@ const JL_DIR = joinpath(@__DIR__, "..")
 # copied from JuliaSyntax/test/parse_packages.jl
 function find_source_in_path(basedir)
     src_list = String[]
-    for (root, dirs, files) in walkdir(basedir)
+    for (root, _dirs, files) in walkdir(basedir)
         append!(src_list, (joinpath(root, f) for f in files
                                if endswith(f, ".jl") && (p = joinpath(root,f); !islink(p) && isfile(p))))
     end
@@ -50,6 +46,9 @@ end
 
 # ignore_linenums=false is good for checking, but too noisy to use much
 function expr_equal_forgiving(e1, e2; ignore_linenums=true)
+    if e1 isa QuoteNode && e2 isa QuoteNode
+        return expr_equal_forgiving(e1.value, e2.value; ignore_linenums)
+    end
     !(e1 isa Expr && e2 isa Expr) && return e1 == e2
     if ignore_linenums
         e1, e2 = let e1b = Expr(e1.head), e2b = Expr(e2.head)
@@ -102,11 +101,10 @@ end
 
     # TODO: `@ast_` escaping is broken
     unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
-    JuliaLowering.ensure_macro_attributes!(unused._graph)
     local st_wrappers = Function[
-        x->(@assert(!isnothing(x)); @ast unused._graph unused (x::K"Value"))
-        x->(@assert(!isnothing(x)); @ast unused._graph unused [K"inert" x::K"Value"])
-        x->(@assert(!isnothing(x)); @ast unused._graph unused [K"function" x::K"Value"])
+        x->(@ast _ unused (x::K"Value"))
+        x->(@ast _ unused [K"inert" x::K"Value"])
+        x->(@ast _ unused [K"function" x::K"Value"])
     ]
 
     @testset "every basic case" begin
@@ -116,7 +114,6 @@ end
         end
 
         for e in expr_syntax, st_w in st_wrappers, e_w in expr_wrappers
-            isnothing(e) && continue
             e_wrapped = st_w(e_w(e))
             @test roundtrip(e_wrapped) == e_wrapped
             e_wrapped = e_w(st_w(e))
@@ -137,7 +134,7 @@ end
     end
 
     @testset "provenance via scavenging for LineNumberNodes" begin
-        # Provenenance of a node should generally be the last seen
+        # Provenance of a node should generally be the last seen
         # LineNumberNode in the depth-first traversal of the Expr, or the
         # initial line given if none have been seen yet.  If none have been seen
         # and no initial line was given, .source should still be defined on all
@@ -155,9 +152,6 @@ end
 
         # No initial line provided
         st = JuliaLowering.expr_to_est(ex)
-        for i in length(st._graph.edge_ranges)
-            @test !isnothing(get(SyntaxTree(st._graph, i), :source, nothing))
-        end
         @test let lnn = st[1].source;    lnn isa LineNumberNode && lnn.line === 123; end
         @test let lnn = st[1][1].source; lnn isa LineNumberNode && lnn.line === 123; end
         @test let lnn = st[1][2].source; lnn isa LineNumberNode && lnn.line === 456; end
@@ -425,6 +419,13 @@ test_programs = [
     "try x catch e; y finally z end",
     "try x catch e; y else z end",
     "try x catch e; y else z finally w end",
+    "..",
+    "a..b",
+    "..(a)",
+    "..(..,..)",
+    "@.",
+    "@..",
+    "@..."
 ]
 test_toplevel_programs = [
     "\"docstr\"\nthing_to_be_documented",
@@ -503,6 +504,10 @@ test_toplevel_programs = [
             @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
         end
     end
+
+    # empty let block linenumbernode is accepted by lowering
+    fl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1))) == 1
+    jl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1))) == 1
 end
 
 @testset "non-ASCII operator handling" begin
@@ -510,4 +515,192 @@ end
     @test JuliaLowering.include_string(test_mod, raw"""
     @noinline (x = 0xF; x ⊻= 1; x)
     """; expr_compat_mode=true) == 0xE
+end
+
+@testset "Expr(:ssavalue) conversion" begin
+    # Expr(:ssavalue, N) should be converted to [K"ssavalue" N::K"Value"]
+    st = JuliaLowering.expr_to_est(Expr(:ssavalue, 0))
+    @test kind(st) === K"ssavalue"
+    @test st[1].value == 0
+
+    st = JuliaLowering.expr_to_est(Expr(:ssavalue, 42))
+    @test kind(st) === K"ssavalue"
+    @test st[1].value == 42
+
+    # Roundtrip: ssavalue should convert back to Expr(:ssavalue, N)
+    @test JL.est_to_expr(JuliaLowering.expr_to_est(Expr(:ssavalue, 5))) ==
+        Expr(:ssavalue, 5)
+
+    # ssavalue references inside a lambda body should lower successfully
+    lambda = Expr(:lambda, Any[:x],
+        Expr(:block,
+            Expr(:(=), Expr(:ssavalue, 0), Expr(:call, GlobalRef(Core, :typeof), :x)),
+            Expr(:return, Expr(:ssavalue, 0))))
+    out = JL.core_lowering_hook(lambda, test_mod)
+    @test out isa Core.SimpleVector && out[1] isa Core.CodeInfo
+end
+
+@testset "expr compat: #self# becomes `thisfunction`" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self()
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (let
+        ()->(var"#self#")
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    var_self_short() = var"#self#"
+    var_self_short()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro var_self_macro(); var"#self#"; end
+    @var_self_macro
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_kw(; k=1)
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_quoted()
+        :(var"#self#")
+    end)()
+    """; expr_compat_mode=true) === Symbol("#self#")
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @isdefined(var"#self#") ? var"#self#" : nothing
+    """; expr_compat_mode=true) == nothing
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_isdefined()
+        @isdefined(var"#self#") ? var"#self#" : nothing
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    # we don't bother with generators
+    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    collect(var"#self#" for i in 1:1)[1]
+    """; expr_compat_mode=true) isa Function
+
+    # we assume the user doesn't create vars with this name
+    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_assign()
+        var"#self#" = 1
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) == 1
+end
+
+@testset "scope-block" begin
+    lam = Expr(:lambda, Symbol[Symbol("#self#"), :f],
+               Expr(Symbol("scope-block"),
+                    Expr(:block,
+                         Expr(:return, 1))))
+    @test fl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+end
+
+@testset "with-static-parameters" begin
+    lam = Expr(Symbol("with-static-parameters"),
+               Expr(:lambda, [Symbol("#self#"), :x],
+                    Expr(:block, Expr(:return, :T))), :T)
+    @test fl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+end
+
+# `x^n` is rewritten to `literal_pow(^, x, Val(n))` if n is an Int
+@testset "(AI) literal_pow" begin
+    pow_mod = @newmod(:LiteralPowTest)
+    Core.eval(pow_mod, quote
+        struct P end
+        Base.:^(::P, n) = (:call, n)
+        Base.literal_pow(::typeof(^), ::P, ::Val{n}) where {n} = (:literal, n)
+        Base.Broadcast.broadcastable(x::P) = Ref(x)
+        const p = P()
+    end)
+
+    cases = [
+        "p^2"                                  => (:literal, 2)
+        "p^0"                                  => (:literal, 0)
+        "p^1"                                  => (:literal, 1)
+        "p^-2"                                 => (:literal, -2)
+        "p^(2)"                                => (:literal, 2)
+        "^(p, 2)"                              => (:literal, 2)
+        "p^$(typemax(Int))"                    => (:literal, typemax(Int))
+        "p^$(BigInt(typemax(Int)) + 1)"        => (:call, BigInt(typemax(Int)) + 1)
+        "p^true"                               => (:call, true)
+        "p^0x02"                               => (:call, 0x02)
+        "p^0x0002"                             => (:call, 0x0002)
+        "p^0x00000002"                         => (:call, 0x00000002)
+        "p^0x0000000000000002"                 => (:call, 0x0000000000000002)
+        "p^0x00000000000000000000000000000002" => (:call, UInt128(2))
+        "p^big\"2\""                           => (:call, big(2))
+        "p^(1 + 1)"                            => (:call, 2)
+        "Base.:^(p, 2)"                        => (:call, 2)
+        "p .^ 2"                               => (:literal, 2)
+        "p .^ -1"                              => (:literal, -1)
+        "(.^)(p, 2)"                           => (:literal, 2)
+        "[p] .^ 2"                             => [(:literal, 2)]
+        "identity.([p] .^ 2)"                  => [(:literal, 2)]
+        "p .^ 0x02"                            => (:call, 0x02)
+        "p .^ true"                            => (:call, true)
+        "p .^ 2.0"                             => (:call, 2.0)
+        "(.^)(p, 0x02)"                        => (:call, 0x02)
+        "[p] .^ 0x02"                          => [(:call, 0x02)]
+    ]
+
+    for (str, expected) in cases
+        ex = parsestmt(SyntaxTree, str)
+        fl = fl_eval(pow_mod, ex)
+        jl = jl_eval(pow_mod, ex; expr_compat_mode=true)
+        @test (str, fl) == (str, expected) context=str
+        @test (str, jl) == (str, fl) context=str
+    end
+
+    let ex = parsestmt(SyntaxTree, "let q = p; q ^= 2; q end")
+        @test fl_eval(pow_mod, ex) == (:literal, 2)
+        @test_broken jl_eval(pow_mod, ex; expr_compat_mode=true) == (:literal, 2)
+    end
+end
+
+@testset "quoted import path components" begin
+    local run(s) = JuliaLowering.include_string(test_mod, s)
+
+    @test run("baremodule M; end; isdefined(M, :+)") == false
+    @test run("baremodule M; import Base: Base.:(+); end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.:+; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base: (+); end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.var\"+\"; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base: var\"+\"; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.:sin; end; getglobal(M,:sin) === Base.sin")
+    @test run("baremodule M; import Base.:(sin); end; getglobal(M,:sin) === Base.sin")
+    @test run("baremodule M; import Base.:Iterators; end; getglobal(M,:Iterators) === Base.Iterators")
+    @test run("baremodule M; import Base.:Iterators.:take; end; getglobal(M,:take) === Base.Iterators.take")
+    @test run("baremodule M; import Base.:Iterators: take; end; getglobal(M,:take) === Base.Iterators.take")
+    @test run("baremodule M; import Base.:+ as plus; end; getglobal(M,:plus) === Base.:+")
+    @test run("baremodule M; using Base.:Iterators; end; isdefined(M, :take)")
+    @test run("module Outer; f() = 1; baremodule In; import ..Outer.:f; end; end; getglobal(Outer.In,:f) === Outer.f")
+    @test run("module Outer; f() = 1; baremodule In; import ..Outer: f; end; end; getglobal(Outer.In,:f) === Outer.f")
+end
+
+@testset "validation of macro-expansion-specific forms" begin
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(:escape))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape), @__MODULE__))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape, :x, :y), @__MODULE__))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope")))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope"), :x))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(Symbol("hygienic-scope"), :x, :y, :z))
 end

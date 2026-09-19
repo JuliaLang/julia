@@ -643,7 +643,7 @@ The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
   * `flags`: one of `Consts.BLAME_NORMAL` or `Consts.BLAME_FIRST_PARENT` (the other blame flags
      are not yet implemented by libgit2).
-  * `min_match_characters`: the minimum number of *alphanumeric* characters which much change
+  * `min_match_characters`: the minimum number of *alphanumeric* characters which must change
     in a commit in order for the change to be associated with that commit. The default is 20.
     Only takes effect if one of the `Consts.BLAME_*_COPIES` flags are used, which libgit2 does
     not implement yet.
@@ -1521,7 +1521,7 @@ end
 """
     reject(payload::CredentialPayload; shred::Bool=true) -> nothing
 
-Discard the `payload` credential from begin re-used in future authentication. Should only be
+Discard the `payload` credential from being re-used in future authentication. Should only be
 called when authentication was unsuccessful.
 
 The `shred` keyword controls whether sensitive information in the payload credential field

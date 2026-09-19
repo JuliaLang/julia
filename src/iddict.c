@@ -8,7 +8,7 @@
 #define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val);
+static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz)
 {
@@ -61,8 +61,7 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
             }
             if (jl_egal(key, k2)) {
                 if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL) {
-                    jl_atomic_store_release(&tab[index + 1], val);
-                    jl_gc_wb(a, val);
+                    jl_gc_write_atomic(a, tab[index + 1], jl_value_t, val, release);
                     return 0;
                 }
                 // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
@@ -80,15 +79,13 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            jl_atomic_store_release(&tab[empty_slot], key);
-            jl_gc_wb(a, key);
-            jl_atomic_store_release(&tab[empty_slot + 1], val);
-            jl_gc_wb(a, val);
+            jl_gc_write_atomic(a, tab[empty_slot], jl_value_t, key, release);
+            jl_gc_write_atomic(a, tab[empty_slot + 1], jl_value_t, val, release);
             return 1;
         }
 
         /* table full */
-        /* quadruple size, rehash, retry the insert */
+        /* grow size, rehash, retry the insert */
         /* it's important to grow the table really fast; otherwise we waste */
         /* lots of time rehashing all the keys over and over. */
         sz = a -> length;
@@ -173,6 +170,8 @@ jl_value_t *jl_eqtable_pop(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *d
     if (bp == NULL)
         return deflt;
     jl_value_t *val = jl_atomic_load_relaxed(bp);
+    // Deletion barrier: snapshot the overwritten key/value for SATB collectors.
+    jl_gc_wb(h, NULL);
     jl_atomic_store_relaxed(bp - 1, jl_nothing); // clear the key
     jl_atomic_store_relaxed(bp, NULL); // and the value (briefly corrupting the table)
     return val;

@@ -31,7 +31,7 @@
  * they should.  This breaks them in 64-bit builds on the x86_64
  * architecture.
  *
- * Newer gfortran compoilers no longer default to the F2C calling
+ * Newer gfortran compilers no longer default to the F2C calling
  * convention.  These wrappers map the F2C conformant functions in
  * libBLAS and libLAPACK to the native gfortran calling convention, so
  * that the libraries can be used with software built for x86_64

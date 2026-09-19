@@ -220,10 +220,10 @@ function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
     while true
+        nsent = min(typemax(Cssize_t), bytes) # biggest allowed chunk
         result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
-                       src.handle, dst.handle, src_offset, bytes)
+                       src.handle, dst.handle, src_offset, nsent)
         uv_error("sendfile", result)
-        nsent = result
         bytes -= nsent
         src_offset += nsent
         bytes <= 0 && break
@@ -269,16 +269,17 @@ function read(f::File, ::Type{UInt8})
     ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
                 f.handle, p, 1)
     uv_error("read", ret)
-    @assert ret <= sizeof(p) == 1
+    @assert ret <= sizeof(p) == 1 "unexpected read size"
     ret < 1 && throw(EOFError())
     return p[] % UInt8
 end
 
 function read(f::File, ::Type{Char})
     b0 = read(f, UInt8)
-    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
+    lo = UInt8(leading_ones(b0))
     c = UInt32(b0) << 24
-    if l ≤ 0x10
+    if 0x02 ≤ lo ≤ 0x04
+        l = 0x08 * (0x04 - lo)
         s = 16
         while s ≥ l && !eof(f)
             # this works around lack of peek(::File)
@@ -441,7 +442,7 @@ See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
 """
 function iswritable(path::String)
     # We use `access()` and `W_OK` to determine if a given path is
-    # writeable by the current user.  `W_OK` comes from `unistd.h`.
+    # writable by the current user.  `W_OK` comes from `unistd.h`.
     W_OK = 0x02
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end

@@ -130,8 +130,7 @@ julia> write("hello.txt", "Hello, World!")
 
 _(`13` is the number of bytes written.)_
 
-You can read the contents of a file with the `read(filename::String)` method, or `read(filename::String, String)`
-to the contents as a string:
+You can read the contents of a file with the `read(filename::String)` method, or `read(filename::String, String)` to read the contents as a string:
 
 ```julia-repl
 julia> read("hello.txt", String)
@@ -405,7 +404,7 @@ UDP can use special multicast addresses to allow simultaneous communication betw
 
 ### Receiving IP Multicast Packets
 
-To transmit data over UDP multicast, simply `recv` on the socket, and the first packet received will be returned. Note that it may not be the first packet that you sent however!
+To receive data over UDP multicast, simply `recv` on the socket, and the first packet received will be returned. Note that it may not be the first packet that you sent however!
 
 ```julia
 using Sockets

@@ -171,6 +171,47 @@ if !test_relocated_depot
         end
     end
 
+    @testset "depot selection with overlapping incomplete depots" begin
+        # A depot missing some of a cache's source files must not win the depot
+        # resolution over a depot containing all of them, regardless of the order
+        # of the two depots in DEPOT_PATH and of the order in which the source
+        # files are scanned.
+        test_harness() do
+            mkdepottempdir() do depot_complete
+                mkdepottempdir() do depot_incomplete
+                    pkgname = "DepotResolution"
+                    for depot in (depot_complete, depot_incomplete)
+                        srcdir = joinpath(depot, pkgname, "src")
+                        mkpath(srcdir)
+                        write(joinpath(srcdir, "$pkgname.jl"), """
+                            module $pkgname
+                            include("extra.jl")
+                            end
+                            """)
+                    end
+                    write(joinpath(depot_complete, pkgname, "src", "extra.jl"), "f() = 1\n")
+                    write(joinpath(depot_complete, pkgname, "Project.toml"), """
+                        name = "$pkgname"
+                        uuid = "00000000-0000-0000-0000-000000000003"
+                        version = "1.0.0"
+                        """)
+                    pushfirst!(LOAD_PATH, depot_complete)
+                    push!(DEPOT_PATH, depot_complete)
+                    pkg = Base.identify_package(pkgname)
+                    Base.compilecache(pkg)
+                    cachefile = only(Base.find_all_in_cache_path(pkg))
+                    for depots in ([depot_complete, depot_incomplete],
+                                   [depot_incomplete, depot_complete])
+                        copy!(DEPOT_PATH, depots)
+                        _, (includes, _, _), _... = Base.parse_cache_header(cachefile)
+                        @test all(inc -> startswith(inc.filename, depot_complete), includes)
+                        @test Base.isprecompiled(pkg)
+                    end
+                end
+            end
+        end
+    end
+
     @testset "#52161" begin
         # Take the src files from two pkgs Example1 and Example2,
         # which are each located in depot1 and depot2, respectively, and

@@ -2,6 +2,9 @@ name = "Compiler"
 uuid = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 version = "0.1.1"
 
+[syntax]
+julia_version = "1.14"
+
 [compat]
 julia = "1.10"
 

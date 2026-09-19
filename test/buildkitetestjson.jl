@@ -149,7 +149,9 @@ function get_test_call_str(result)
     end
     prefix = get(TEST_TYPE_MAP, result.test_type, nothing)
     prefix === nothing && return error("Unknown test type $(repr(result.test_type))")
-    return prefix == "@test_throws" ? "@test_throws $(result.data) $(result.orig_expr)" : "$prefix $(result.orig_expr)"
+    return (prefix == "@test_throws" && result isa Test.Pass) ?
+        "@test_throws $(result.data) $(result.orig_expr)" :
+        "$prefix $(result.orig_expr)"
 end
 
 get_rid(rdata) = (rdata["location"], rdata["result"], haskey(rdata, "failure_expanded") ? hash(rdata["failure_expanded"]) : UInt64(0))
@@ -261,7 +263,7 @@ function serialize_testset_result_file(dir::String, testset::Test.DefaultTestSet
     return res_file
 end
 
-# deserilalizes the results files and writes them to collated JSON files of 5000 max results
+# deserializes the results files and writes them to collated JSON files of 5000 max results
 function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     data = Dict{String,Any}[]
     read_files = String[]

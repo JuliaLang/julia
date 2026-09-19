@@ -10,8 +10,9 @@ CURL=$(which curl 2>/dev/null)
 FETCH=$(which fetch 2>/dev/null)
 
 TIMEOUT=15 # seconds
-WGET_OPTS="--no-check-certificate --tries=1 --timeout=$TIMEOUT"
-CURL_OPTS="-fkL --connect-timeout $TIMEOUT -y $TIMEOUT"
+RETRIES=3
+WGET_OPTS="--no-check-certificate --waitretry=$TIMEOUT --tries=$RETRIES --timeout=$TIMEOUT"
+CURL_OPTS="-fkL --connect-timeout $TIMEOUT -y $TIMEOUT --retry $RETRIES --retry-max-time $TIMEOUT"
 FETCH_OPTS="-T $TIMEOUT"
 
 if [ $# -eq 1 ]; then

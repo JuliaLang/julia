@@ -221,8 +221,8 @@ end
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
-            twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
+            twopk = ((k % UInt64) +% UInt64(53)) << 52
+            return reinterpret(T, twopk +% reinterpret(UInt64, small_part))*0x1p-53
         end
         #k == 1024 && return (small_part * 2.0) * 0x1p1023
     end
@@ -249,8 +249,8 @@ end
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
-            twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
+            twopk = ((k % UInt64) +% UInt64(53)) << 52
+            return reinterpret(T, twopk +% reinterpret(UInt64, small_part))*0x1p-53
         end
         k == 1024 && return (small_part * 2.0) * 0x1p1023
     end
@@ -267,7 +267,7 @@ end
     r = muladd(N_float, LogBo256U(base, T), x)
     r = muladd(N_float, LogBo256L(base, T), r)
     k = N >> 8
-    jU = reinterpret(Float64, JU_CONST | (@inbounds J_TABLE[N&255 + 1] & JU_MASK))
+    jU, _ = table_unpack(N)
     small_part =  muladd(jU, expm1b_kernel(base, r), jU)
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))

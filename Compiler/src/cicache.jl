@@ -13,13 +13,13 @@ in(world::UInt, wr::WorldRange) = wr.min_world <= world <= wr.max_world
 min_world(wr::WorldRange) = first(wr)
 max_world(wr::WorldRange) = last(wr)
 
-function intersect(a::WorldRange, b::WorldRange)
+@inline function intersect(a::WorldRange, b::WorldRange)
     ret = WorldRange(max(a.min_world, b.min_world), min(a.max_world, b.max_world))
     @assert ret.min_world <= ret.max_world
     return ret
 end
 
-function union(a::WorldRange, b::WorldRange)
+@inline function union(a::WorldRange, b::WorldRange)
     if b.min_world < a.min_world
         (b, a) = (a, b)
     end
@@ -30,7 +30,7 @@ end
 """
     struct InternalCodeCache
 
-Internally, each `MethodInstance` keep a unique global cache of code instances
+Internally, each `MethodInstance` keeps a unique global cache of code instances
 that have been created for the given method instance, stratified by world age
 ranges. This struct abstracts over access to this cache.
 """

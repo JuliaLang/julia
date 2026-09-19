@@ -10,7 +10,7 @@ using Base.Threads
 Test to ensure that the interactive threadpool works as designed.
 
 Task A is a standard task that does a lot of work (~2 seconds) without
-yielding. This would prevent ordinarily prevent other tasks from running.
+yielding. This would ordinarily prevent other tasks from running.
 
 Task B is an interactive task that does a little work (~0.02 seconds) and
 yields.

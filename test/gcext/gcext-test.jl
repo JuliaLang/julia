@@ -66,6 +66,9 @@ end
             GC.gc(true)
         end
         @test Base.invokelatest(Foreign.get_nmark)  > 0
+        # Bugfix: the following used to crash
+        summarysize = Base.summarysize(Foreign.FObj())
+        @test summarysize >= sizeof(Ptr)
         @time Base.invokelatest(Foreign.test, 10)
         GC.gc(true)
         @test Base.invokelatest(Foreign.get_nsweep) > 0

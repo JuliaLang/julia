@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-HTIMPL_R(equalhash, _hash_lispvalue_, _equal_lispvalue_)
+HTIMPL_R(equalhash, _hash_lispvalue_, _equal_lispvalue_, _HTIMPL_IDENTITY_KEYALLOC, _HTIMPL_NOOP_KEYFREE)
 
 #ifdef __cplusplus
 }

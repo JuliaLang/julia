@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# accumulate_pairwise slightly slower then accumulate, but more numerically
+# `accumulate_pairwise` runs slightly slower than `accumulate`, but more numerically
 # stable in certain situations (e.g. sums).
-# it does double the number of operations compared to accumulate,
-# though for cheap operations like + this does not have much impact (20%)
+# It does double the number of operations compared to `accumulate`,
+# though for cheap operations like `+` this does not have much impact (20%).
 function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
     if n < 128
         @inbounds s_ = v[i1]
@@ -476,7 +476,7 @@ function _accumulate_promote_op(op, v; init=nothing)
     end
 
     # Finally loop again with the two types promoted together
-    # If the `op` fails and reduce_first was used then then this will still just
+    # If the `op` fails and reduce_first was used then this will still just
     # return the initial type, allowing the `op` to error during execution.
     function h(op, v, r)
         for val in v

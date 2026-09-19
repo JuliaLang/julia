@@ -106,9 +106,9 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     #    1. Replace x by |x| (cosh(x) = cosh(-x)).
     #    2. Find the branch and the expression to calculate and return it
     #      a)   x <= COSH_SMALL_X
-    #               approximate sinh(x) with a minimax polynomial
+    #               approximate cosh(x) with a minimax polynomial
     #      b)   COSH_SMALL_X <= x < H_LARGE_X
-    #               return cosh(x) = = (exp(x) + exp(-x))/2
+    #               return cosh(x) = (exp(x) + exp(-x))/2
     #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
     #               Note that this branch automatically deals with Infs and NaNs
@@ -162,7 +162,7 @@ end
 AH_LN2(::Type{Float64}) = 6.93147180559945286227e-01
 AH_LN2(::Type{Float32}) = 6.9314718246f-01
 # asinh methods
-function asinh(x::T) where T <: Union{Float32, Float64}
+@assume_effects :nothrow function asinh(x::T) where T <: Union{Float32, Float64}
     # Method
     # mathematically asinh(x) = sign(x)*log(|x| + sqrt(x*x + 1))
     # is the principle value of the inverse hyperbolic sine
@@ -175,6 +175,8 @@ function asinh(x::T) where T <: Union{Float32, Float64}
     #        return sign(x)*log(2|x|+1/(|x|+sqrt(x*x+1)))
     #    d) |x| >= 2^28
     #        return sign(x)*(log(x)+ln2))
+    # Non-finite inputs are handled below; all log/log1p calls receive positive
+    # arguments, so this function never throws for Float32/Float64.
     if !isfinite(x)
         return x
     end
@@ -240,7 +242,7 @@ end
 @noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for |x| ≤ 1."))
 function atanh(x::T) where T <: Union{Float32, Float64}
     # Method
-    # 1.Reduced x to positive by atanh(-x) = -atanh(x)
+    # 1. Reduce x to positive by atanh(-x) = -atanh(x)
     # 2. Find the branch and the expression to calculate and return it
     #     a) 0 <= x < 0.5
     #         return 0.5*log1p(2x/(1-x))

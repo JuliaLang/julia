@@ -13,29 +13,34 @@ extern "C" {
     XX(_apply_iterate,"_apply_iterate") \
     XX(_call_in_world_total,"_call_in_world_total") \
     XX(_compute_sparams,"_compute_sparams") \
-    XX(_defaultctors,"_defaultctors") \
     XX(_equiv_typedef,"_equiv_typedef") \
     XX(_expr,"_expr") \
     XX(_import, "_import") \
+    XX(_new_cancel_source,"_new_cancel_source") \
     XX(_primitivetype,"_primitivetype") \
     XX(_setsuper,"_setsuper!") \
     XX(_structtype,"_structtype") \
     XX(_svec_len,"_svec_len") \
     XX(_svec_ref,"_svec_ref") \
+    XX(_task,"_task") \
     XX(_typebody,"_typebody!") \
     XX(_typevar,"_typevar") \
     XX(_using, "_using") \
     XX(applicable,"applicable") \
     XX(apply_type,"apply_type") \
+    XX(cancellation_point,"cancellation_point!") \
     XX(compilerbarrier,"compilerbarrier") \
     XX(current_scope,"current_scope") \
+    XX(depwarn_partition,"depwarn_partition") \
     XX(donotdelete,"donotdelete") \
     XX(fieldtype,"fieldtype") \
     XX(finalizer,"finalizer") \
     XX(get_binding_type,"get_binding_type") \
     XX(getfield,"getfield") \
     XX(getglobal,"getglobal") \
+    XX(getglobal_partition,"getglobal_partition") \
     XX(declare_global,"declare_global") \
+    XX(define_method,"define_method") \
     XX(ifelse,"ifelse") \
     XX(intrinsic_call,"intrinsic_call") \
     XX(invoke,"invoke") \
@@ -45,6 +50,7 @@ extern "C" {
     XX(isa,"isa") \
     XX(isdefined,"isdefined") \
     XX(isdefinedglobal,"isdefinedglobal") \
+    XX(isdefinedglobal_partition,"isdefinedglobal_partition") \
     XX(issubtype,"<:") \
     XX(memorynew,"memorynew") \
     XX(memoryrefnew,"memoryrefnew") \
@@ -55,30 +61,39 @@ extern "C" {
     XX(memoryrefreplace,"memoryrefreplace!") \
     XX(memoryrefset,"memoryrefset!") \
     XX(memoryrefsetonce,"memoryrefsetonce!") \
+    XX(memoryrefunset,"memoryrefunset!") \
     XX(memoryrefswap,"memoryrefswap!") \
     XX(modifyfield,"modifyfield!") \
     XX(modifyglobal,"modifyglobal!") \
+    XX(modifyglobal_partition,"modifyglobal_partition") \
     XX(nfields,"nfields") \
     XX(opaque_closure_call,"opaque_closure_call") \
     XX(replacefield,"replacefield!") \
     XX(replaceglobal,"replaceglobal!") \
+    XX(replaceglobal_partition,"replaceglobal_partition") \
     XX(declare_const,"declare_const") \
     XX(setfield,"setfield!") \
     XX(setfieldonce,"setfieldonce!") \
     XX(setglobal,"setglobal!") \
+    XX(setglobal_partition,"setglobal_partition") \
     XX(setglobalonce,"setglobalonce!") \
+    XX(setglobalonce_partition,"setglobalonce_partition") \
+    XX(bitsizeof,"bitsizeof") \
     XX(sizeof,"sizeof") \
     XX(svec,"svec") \
     XX(swapfield,"swapfield!") \
     XX(swapglobal,"swapglobal!") \
+    XX(swapglobal_partition,"swapglobal_partition") \
+    XX(task_result_type,"task_result_type") \
     XX(throw,"throw") \
     XX(throw_methoderror,"throw_methoderror") \
     XX(tuple,"tuple") \
     XX(typeassert,"typeassert") \
     XX(typeof,"typeof") \
+    XX(has_free_typevars,"has_free_typevars")
 
 #define DECLARE_BUILTIN(cname,jlname) \
-    JL_CALLABLE(jl_f_##cname);
+    JL_CALLABLE(jl_f_##cname) JL_CANSAFEPOINT;
 JL_BUILTIN_FUNCTIONS(DECLARE_BUILTIN)
 #undef DECLARE_BUILTIN
 

@@ -19,9 +19,6 @@ convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)::T
 
 # ## dims-type-converting Array constructors for convenience
-# type and dimensionality specified, accepting dims as series of Integers
-Vector{T}(::UndefInitializer, m::Integer) where {T} = Vector{T}(undef, Int(m))
-Matrix{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Matrix{T}(undef, Int(m), Int(n))
 Array{T,N}(::UndefInitializer, d::Vararg{Integer,N}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # type but not dimensionality specified, accepting dims as series of Integers
 Array{T}(::UndefInitializer, m::Integer) where {T} = Array{T,1}(undef, Int(m))

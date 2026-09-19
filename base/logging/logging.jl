@@ -3,7 +3,7 @@
 module CoreLogging
 
 import Base: isless, +, -, convert, show
-import Base.ScopedValues: ScopedValue, with, @with
+import Base.ScopedValues: ScopedValue, @with
 
 export
     AbstractLogger,
@@ -60,7 +60,7 @@ function min_enabled_level end
     catch_exceptions(logger)
 
 Return `true` if the logger should catch exceptions which happen during log
-record construction.  By default, messages are caught.
+record construction.  By default, exceptions are caught.
 
 By default all exceptions are caught to prevent log message generation from
 crashing the program.  This lets users confidently toggle little-used
@@ -307,7 +307,7 @@ function log_record_id(_module, level, message, log_kws)
             push!(_log_record_ids, id)
             return id
         end
-        h += 1
+        h +%= 1
     end
 end
 
@@ -506,7 +506,12 @@ end
           catch ex
               LazyString("Exception handling log message: ", ex)
           end
-    bt = real ? catch_backtrace() : backtrace()
+    bt = Base.scrub_repl_backtrace(real ? catch_backtrace() : stacktrace())
+    if !real
+        # drop the frames of the logging machinery itself
+        i = findfirst(fr -> fr.func === :logging_error, bt)
+        i === nothing || deleteat!(bt, 1:i)
+    end
     handle_message(
         logger, Error, msg, _module, :logevent_error, id, filepath, line;
         exception=(err,bt))
@@ -558,7 +563,7 @@ Logging.disable_logging(Logging.Info) # Disable debug and info
 ```
 """
 function disable_logging(level::LogLevel)
-    _min_enabled_level[] = level + 1
+    @atomic _min_enabled_level[] = level + 1
 end
 
 let _debug_groups_include::Vector{Symbol} = Symbol[],

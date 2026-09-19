@@ -36,13 +36,14 @@ typedef Instruction TerminatorInst;
 namespace {
 
 struct LowerPTLS {
-    LowerPTLS(Module &M, bool imaging_mode=false)
-        : imaging_mode(imaging_mode), M(&M), TargetTriple(M.getTargetTriple())
+    LowerPTLS(Module &M, bool imaging_mode = false, bool tls_getters = false)
+        : imaging_mode(imaging_mode), tls_getters(tls_getters), M(&M), TargetTriple(M.getTargetTriple())
     {}
 
     bool run(bool *CFGModified);
 private:
     const bool imaging_mode;
+    const bool tls_getters;
     Module *M;
     Triple TargetTriple;
     MDNode *tbaa_const{nullptr};
@@ -280,32 +281,14 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         }
         set_pgcstack_attrs(pgcstack);
     }
-    else if (jl_tls_offset != -1) {
+    else if (!tls_getters && jl_tls_offset != -1) {
         pgcstack->replaceAllUsesWith(emit_pgcstack_tp(nullptr, pgcstack));
         pgcstack->eraseFromParent();
     }
     else {
-        // use the address of the actual getter function directly
-        jl_get_pgcstack_func *f;
-        jl_pgcstack_key_t k;
-        jl_pgcstack_getkey(&f, &k);
-        Constant *val = ConstantInt::get(T_size, (uintptr_t)f);
-        val = ConstantExpr::getIntToPtr(val, T_pgcstack_getter);
-        if (TargetTriple.isOSDarwin()) {
-            assert(sizeof(k) == sizeof(uintptr_t));
-            Constant *key = ConstantInt::get(T_size, (uintptr_t)k);
-#if JL_LLVM_VERSION >= 200000
-            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack->getIterator());
-#else
-            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
-#endif
-            new_pgcstack->takeName(pgcstack);
-            pgcstack->replaceAllUsesWith(new_pgcstack);
-            pgcstack->eraseFromParent();
-            pgcstack = new_pgcstack;
-        } else {
-            pgcstack->setCalledFunction(pgcstack->getFunctionType(), val);
-        }
+        auto FT = FunctionType::get(Type::getVoidTy(pgcstack->getContext()), false);
+        auto F = M->getOrInsertFunction("jl_get_pgcstack_resolved", FT).getCallee();
+        pgcstack->setCalledFunction(pgcstack->getFunctionType(), F);
         set_pgcstack_attrs(pgcstack);
     }
 }
@@ -333,7 +316,9 @@ bool LowerPTLS::run(bool *CFGModified)
             if (imaging_mode) {
                 pgcstack_func_slot = create_hidden_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
                 pgcstack_key_slot = create_hidden_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                pgcstack_offset = create_hidden_global(T_size, "jl_tls_offset");
+                // n.b. not named `jl_tls_offset`, to avoid clashing with the libjulia-internal
+                // variable of that name when the image is linked statically with the runtime
+                pgcstack_offset = create_hidden_global(T_size, "jl_image_tls_offset");
             }
             need_init = false;
         }
@@ -368,7 +353,7 @@ bool LowerPTLS::run(bool *CFGModified)
 } // anonymous namespace
 
 PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
-    LowerPTLS lower(M, imaging_mode);
+    LowerPTLS lower(M, imaging_mode, tls_getters);
     bool CFGModified = false;
     bool modified = lower.run(&CFGModified);
 #ifdef JL_VERIFY_PASSES

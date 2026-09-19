@@ -3,6 +3,8 @@
 # RUNx: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
 # RUNx: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
 
+# RUN: julia --startup-file=no %s %t && llvm-link -S %t/* | FileCheck %s --check-prefix=UNOPT
+
 # RUN: julia --startup-file=no -O2 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
 # RUN: julia --startup-file=no -O3 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
 
@@ -73,6 +75,83 @@ function multiiterate_write!(arr1, arr2)
     for i in eachindex(arr1, arr2)
         arr1[i] += arr2[i]
     end
+end
+
+# COM: Preserve alias information for complete small typed copies while keeping padded and large copies as memcpy
+
+# ALL-LABEL: @"julia_copy_complex!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_complex!
+# UNOPT: [[COMPLEX0:%.*copyload.*]] = load i64
+# UNOPT: [[COMPLEX1:%.*copyload.*]] = load i64
+# UNOPT: store i64 [[COMPLEX0]], ptr addrspace(13)
+# UNOPT: store i64 [[COMPLEX1]], ptr addrspace(13)
+function copy_complex!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_bytes!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_bytes!
+# UNOPT: [[BYTES:%.*copyload.*]] = load i64
+# UNOPT: store i64 [[BYTES]], ptr addrspace(13)
+function copy_bytes!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_three_bytes!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_three_bytes!
+# UNOPT: [[BYTES0:%.*copyload.*]] = load i8
+# UNOPT: [[BYTES1:%.*copyload.*]] = load i8
+# UNOPT: [[BYTES2:%.*copyload.*]] = load i8
+# UNOPT: store i8 [[BYTES0]], ptr addrspace(13)
+# UNOPT: store i8 [[BYTES1]], ptr addrspace(13)
+# UNOPT: store i8 [[BYTES2]], ptr addrspace(13)
+function copy_three_bytes!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_float3!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_float3!
+# UNOPT: [[FLOAT0:%.*copyload.*]] = load i32
+# UNOPT: [[FLOAT1:%.*copyload.*]] = load i32
+# UNOPT: [[FLOAT2:%.*copyload.*]] = load i32
+# UNOPT: store i32 [[FLOAT0]], ptr addrspace(13)
+# UNOPT: store i32 [[FLOAT1]], ptr addrspace(13)
+# UNOPT: store i32 [[FLOAT2]], ptr addrspace(13)
+function copy_float3!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+struct PaddedCopy
+    x::UInt8
+    y::UInt16
+end
+
+# UNOPT-LABEL: @"julia_copy_padded!
+# UNOPT: call void @llvm.memcpy{{.*}}(ptr addrspace(13) {{.*}}, ptr{{.*}}%"split::PaddedCopy", i64 4
+function copy_padded!(dest, src)
+    @inbounds dest[1] = src[1]
+end
+
+struct LargeCopy
+    data::NTuple{17, UInt8}
+end
+
+# UNOPT-LABEL: @"julia_copy_large!
+# UNOPT: call void @llvm.memcpy{{.*}}(ptr addrspace(13) {{.*}}, ptr{{.*}}%"split::LargeCopy", i64 17
+function copy_large!(dest, src)
+    @inbounds dest[1] = src[1]
 end
 
 # COM: memset checks
@@ -151,10 +230,16 @@ emit(iterate_write!, Vector{Int64})
 emit(multiiterate_read, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write, Vector{Int64}, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write!, Vector{Int64}, Vector{Int64})
+emit(copy_complex!, Vector{ComplexF64}, Vector{ComplexF64})
+emit(copy_bytes!, Vector{NTuple{8, UInt8}}, Vector{NTuple{8, UInt8}})
+emit(copy_three_bytes!, Vector{NTuple{3, UInt8}}, Vector{NTuple{3, UInt8}})
+emit(copy_float3!, Vector{NTuple{3, Float32}}, Vector{NTuple{3, Float32}})
+emit(copy_padded!, Vector{PaddedCopy}, Vector{PaddedCopy})
+emit(copy_large!, Vector{LargeCopy}, Vector{LargeCopy})
 
-emit(zeros, Type{Int64}, Int64)
-emit(zeros, Type{Int32}, Int64)
-emit(zeros, Type{Int16}, Int64)
+emit(zeros, Core.TypeEgal{Int64}, Int64)
+emit(zeros, Core.TypeEgal{Int32}, Int64)
+emit(zeros, Core.TypeEgal{Int16}, Int64)
 # COM: Int8 is hardcoded to memset anyways
 
 emit(sumloop, Int64)

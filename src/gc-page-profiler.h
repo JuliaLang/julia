@@ -69,7 +69,7 @@ STATIC_INLINE void gc_page_profile_write_live_obj(gc_page_profiler_serializer_t 
         jl_value_t *t = jl_typeof(a);
         ios_t str_;
         int ios_need_close = 0;
-        char *type_name = NULL;
+        const char *type_name = NULL;
         char *type_name_in_serializer = NULL;
         if (t == (jl_value_t *)jl_get_buff_tag()) {
             type_name = "Buffer";

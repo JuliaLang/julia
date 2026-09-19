@@ -82,13 +82,6 @@
     (io.set-lineno! io lineno)
     (parse-all- io filename)))
 
-(define (jl-parse-file filename (lineno 1))
-  (trycatch
-    (let ((io (open-input-string str)))
-      (io.set-lineno! io lineno)
-      (parse-all- io filename))
-    (lambda (e) #f)))
-
 ;; lowering entry points
 
 ; find the first line number in this expression, before we might eliminate them
@@ -186,12 +179,6 @@
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()
                 (julia-expand-macroscope expr))))
-
-(define (jl-default-inner-ctor-body field-kinds file line)
-  (lower-to-thunk- (default-inner-ctor-body (cdr field-kinds) file line) file line))
-
-(define (jl-default-outer-ctor-body args file line)
-  (lower-to-thunk- (default-outer-ctor-body (cadr args) (caddr args) (cadddr args) file line) file line))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

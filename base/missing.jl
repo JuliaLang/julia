@@ -126,12 +126,14 @@ div(::Missing, ::Missing, r::RoundingMode) = missing
 div(::Missing, ::Number, r::RoundingMode) = missing
 div(::Number, ::Missing, r::RoundingMode) = missing
 
-min(::Missing, ::Missing) = missing
-min(::Missing, ::Any)     = missing
-min(::Any,     ::Missing) = missing
-max(::Missing, ::Missing) = missing
-max(::Missing, ::Any)     = missing
-max(::Any,     ::Missing) = missing
+for (f, result) in ((:min, missing), (:max, missing), (:minmax, (missing, missing)))
+    @eval begin
+        $f(::Missing, ::Missing) = $result
+        $f(::Missing, ::Any)     = $result
+        $f(::Any,     ::Missing) = $result
+        $f(::Missing) = $result
+    end
+end
 clamp(::Missing, lo, hi) = missing
 
 missing_conversion_msg(@nospecialize T) =

@@ -100,9 +100,6 @@ JuliaSyntax.is_prefix_call
 JuliaSyntax.is_infix_op_call
 JuliaSyntax.is_prefix_op_call
 JuliaSyntax.is_postfix_op_call
-JuliaSyntax.is_dotted
-JuliaSyntax.is_suffixed
-JuliaSyntax.is_decorated
 JuliaSyntax.numeric_flags
 ```
 

@@ -958,7 +958,7 @@ end
 
 ```
 
-for which we want to add a number of methods to. We can do this programmatically in the
+to which we want to add a number of methods. We can do this programmatically in the
 following loop:
 
 ```jldoctest mynumber-codegen
@@ -1432,7 +1432,7 @@ julia> sub2ind_gen_impl(Tuple{Int,Int}, Int, Int)
 ```
 
 So, the method body that will be used here doesn't include a loop at all - just indexing into
-the two tuples, multiplication and addition/subtraction. All the looping is performed compile-time,
+the two tuples, multiplication and addition/subtraction. All the looping is performed at compile time,
 and we avoid looping during execution entirely. Thus, we only loop *once per type*, in this case
 once per `N` (except in edge cases where the function is generated more than once - see disclaimer
 above).

@@ -6,6 +6,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/IR/Attributes.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
@@ -163,6 +164,84 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
     return inst;
 }
 
+// Whether the tag `TBAA`, or any of its ancestors up to the `jtbaa` root, has a
+// name in `strset`.
+static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*> const strset)
+{
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = llvm::cast<llvm::MDNode>(TBAA->getOperand(1).get());
+        auto str = llvm::cast<llvm::MDString>(TBAA->getOperand(0))->getString();
+        for (auto str2 : strset) {
+            if (str == str2) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// The '!alias.scope' domain naming which of codegen's memory regions an access may touch.
+#define JL_REGION_DOMAIN_NAME "jnoalias"
+
+// The regions in whose domain a base object cannot stop referencing a tracked
+// pointer stored in them while the base is live.
+static inline bool isRootedRegionName(llvm::StringRef name)
+{
+    return name == "jnoalias_immutdata" || name == "jnoalias_mutconstdata";
+}
+
+// Whether the object rooting the address `LI` loads from also roots the loaded value
+// -- so that late-gc-lowering may refine the loaded pointer to the load's pointer
+// operand instead of giving it a gc-frame slot of its own.
+//
+// This asks whether the slot is ever overwritten, so that what the base references
+// here is fixed for as long as it lives. The region records that ('!alias.scope'), the
+// access tag ('!tbaa') does not. A load qualifies if its scopes in the
+// region domain are nonempty and all rooted.
+static inline bool isLoadFromRootedRegion(llvm::LoadInst *LI)
+{
+    using namespace llvm;
+    // Constant memory never changes, so the base can never stop referencing what is
+    // stored here, wherever it lives. This is also the only leg that fires on foreign
+    // IR carrying no region metadata.
+    if (LI->getMetadata(LLVMContext::MD_invariant_load))
+        return true;
+    MDNode *scopes = LI->getMetadata(LLVMContext::MD_alias_scope);
+    if (!scopes)
+        return false;
+    bool found = false;
+    for (const MDOperand &op : scopes->operands()) {
+        MDNode *scope = dyn_cast_or_null<MDNode>(op.get());
+        if (!scope)
+            continue;
+        AliasScopeNode snode(scope);
+        const MDNode *domain = snode.getDomain();
+        if (!domain || domain->getNumOperands() < 1)
+            continue;
+        MDString *domain_name = dyn_cast<MDString>(domain->getOperand(0));
+        if (!domain_name || domain_name->getString() != JL_REGION_DOMAIN_NAME)
+            continue;
+        // A scope is named either by its string key in operand 0 ({name, domain})
+        // or, when a self-reference keys it, by a trailing name operand
+        // ({self, domain, name}); AliasScopeNode reads the latter.
+        StringRef name = snode.getName();
+        if (name.empty())
+            if (MDString *key = dyn_cast<MDString>(scope->getOperand(0)))
+                name = key->getString();
+        if (name.empty() || !isRootedRegionName(name))
+            return false; // may reside in a region that can drop the reference
+        found = true;
+    }
+    return found;
+}
+
+static inline bool isConstGV(llvm::GlobalVariable *gv)
+{
+    return gv->isConstant() || gv->getMetadata("julia.constgv");
+}
+
 // Get PTLS through current task.
 static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Value *pgcstack)
 {
@@ -248,7 +327,7 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
                 return old_state;
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
-    builder.CreateCondBr(builder.CreateICmpEQ(old_state, state, "is_new_state"), // Safepoint whenever we change the GC state
+    builder.CreateCondBr(builder.CreateICmpNE(old_state, state, "is_new_state"), // Safepoint whenever we change the GC state
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
@@ -516,3 +595,12 @@ void ConstantUses<U>::forward()
     }
 }
 }
+
+
+void multiversioning_preannotate(llvm::Module &M);
+std::optional<bool> always_have_fma(Function&, const Triple &TT) JL_NOTSAFEPOINT;
+
+namespace llvm::jitlink {
+    class JITLinkMemoryManager;
+}
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT;

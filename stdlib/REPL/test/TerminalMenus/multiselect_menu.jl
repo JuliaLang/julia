@@ -50,7 +50,7 @@ for i = 1:multi_menu.pagesize
     end
 end
 
-# Test SDTIN
+# Test STDIN
 multi_menu = MultiSelectMenu(string.(1:10), charset=:ascii)
 @test simulate_input(multi_menu, :enter, :down, :enter, 'd') == Set([1,2])
 multi_menu = MultiSelectMenu(["single option"], charset=:ascii)

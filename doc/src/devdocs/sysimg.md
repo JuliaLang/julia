@@ -22,11 +22,37 @@ This operation is useful for multiple reasons. A user may:
 The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
 wrapper functions to automate this process.
 
+## Coverage instrumentation
+
+Set `JULIA_COVERAGE_IMAGES=1` in `Make.user` before building Julia to compile
+`hit`-mode coverage counters into the system image and the bundled package
+images. Coverage runs in `hit` mode then reuse the native code instead of
+recompiling it in each process. This configuration is intended for coverage
+CI: the images retain instrumentation overhead even when coverage is disabled,
+and cached inference effects can differ from those of an ordinary build.
+
+Like `--check-bounds`, coverage uses the system image as built, without
+invalidating its native code at startup. For newly compiled and interpreted
+code, `@<path>` uses the same instrumentation policy as `user`: Base and Core
+code are excluded. The path filters reports, not compilation. Compatible image
+counters can still report Base and Core locations under the selected path;
+relative Base filenames are resolved against the installed Base source directory.
+Complete coverage of Base requires suitable instrumented images and `all` for
+newly compiled Base code.
+An instrumented image carries counters for every statement, and the requested
+scope selects which of them contribute to the report. The counters contribute
+only when their mode can serve the request: count counters can serve hit mode,
+but hit counters cannot serve count mode. An ordinary system image has no
+counters. Package images are selected separately by their instrumentation flags.
+Allocation tracking retains its per-method recompilation fallback because
+images carry no allocation counters. Image generation does not record coverage
+hits for its own precompile workload.
+
 ## [System image optimized for multiple microarchitectures](@id sysimg-multi-versioning)
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures
 under the same instruction set architecture (ISA). Multiple versions of the same function
-may be created with minimum dispatch point inserted into shared functions
+may be created with minimal dispatch points inserted into shared functions
 in order to take advantage of different ISA extensions or other microarchitecture features.
 The version that offers the best performance will be selected automatically at runtime
 based on available CPU features.
@@ -94,29 +120,35 @@ performance and stability problems in some code.
 
 ### Implementation overview
 
-This is a brief overview of different part involved in the implementation.
-See code comments for each components for more implementation details.
+CPU and feature tables come from the [cpufeatures](https://github.com/JuliaLang/cpufeatures)
+library. A build-time generator extracts tables from LLVM's TableGen data and emits
+standalone C headers (`generated/target_tables_{x86_64,aarch64,riscv64}.h`).
 
-1. System image compilation
+The runtime library (`libtarget_parsing`) handles target string parsing, host CPU
+detection, and serialization.
 
-    The parsing and cloning decision are done in `src/processor*`.
-    We currently support cloning of function based on the present of loops, simd instructions,
-    or other math operations (e.g. fastmath, fma, muladd).
-    This information is passed on to `src/llvm-multiversioning.cpp` which does the actual cloning.
-    In addition to doing the cloning and insert dispatch slots
-    (see comments in `MultiVersioning::runOnModule` for how this is done),
-    the pass also generates metadata so that the runtime can load and initialize the
-    system image correctly.
-    A detailed description of the metadata is available in `src/processor.h`.
+  - `src/processor.cpp`: parses target strings, detects the host, resolves targets,
+    and serializes/deserializes target data for system images.
+  - `src/llvm-multiversioning.cpp`: clones functions based on target feature diffs.
+    Functions with loops or CPU queries are always cloned; SIMD, math, float16, and
+    bfloat16 functions are cloned when the target adds those capabilities.
 
-2. System image loading
+### Upgrading LLVM
 
-    The loading and initialization of the system image is done in `src/processor*` by
-    parsing the metadata saved during system image generation.
-    Host feature detection and selection decision are done in `src/processor_*.cpp`
-    depending on the ISA. The target selection will prefer exact CPU name match,
-    larger vector register size, and larger number of features.
-    An overview of this process is in `src/processor.cpp`.
+When Julia's LLVM version changes, regenerate the cpufeatures headers:
+
+```
+cd cpufeatures
+cmake -B build -DCMAKE_PREFIX_PATH=<path-to-new-llvm>
+cmake --build build --target gen_target_tables
+build/gen_target_tables x86_64-linux-gnu > generated/target_tables_x86_64.h
+build/gen_target_tables aarch64-linux-gnu > generated/target_tables_aarch64.h
+build/gen_target_tables riscv64-linux-gnu > generated/target_tables_riscv64.h
+```
+
+Commit the updated headers and update Julia's cpufeatures dependency. A
+`static_assert` in `src/processor.cpp` checks `TARGET_TABLES_LLVM_VERSION_MAJOR`
+against Julia's LLVM version, so mismatches are caught at build time.
 
 ## Trimming
 
@@ -169,7 +201,7 @@ debug info, respectively, and so will make debugging more difficult.
 - Use tools like [JET.jl](https://github.com/aviatesk/JET.jl),
   [Cthulhu.jl](https://github.com/JuliaDebug/Cthulhu.jl), and/or
   [SnoopCompile](https://github.com/timholy/SnoopCompile.jl)
-  to identify failures of type-inference, and follow our [Performance Tips](@ref) to fix them.
+  to identify failures of type-inference, and follow our [Performance Tips](@ref man-performance-tips) to fix them.
 
 ### Compatibility concerns
 

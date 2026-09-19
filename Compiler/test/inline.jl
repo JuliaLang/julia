@@ -10,6 +10,41 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
+# Inlined IR drops coverage effects when the process does not instrument the
+# inlinee. Every coverage scope instruments this user module.
+coverage_strip_callee() = nothing
+let mi = Base.method_instance(coverage_strip_callee, ()),
+    src = make_codeinfo(Any[Expr(:code_coverage_effect), ReturnNode(nothing)];
+                        ssavaluetypes=Any[Nothing, Nothing],
+                        slottypes=Any[typeof(coverage_strip_callee)], slotnames=[:self])
+    ir, _, _ = Compiler.retrieve_ir_for_inlining(mi, src, true)
+    instrumented = Base.JLOptions().code_coverage != 0
+    @test any(stmt -> isexpr(stmt, :code_coverage_effect), ir.stmts.stmt) == instrumented
+    @test isexpr(src.code[1], :code_coverage_effect)
+end
+
+# Hit mode omits the inlining entry marker when the inlinee carries its own
+# markers; count mode always inserts it. The rule only applies when the process
+# instruments the callee.
+coverage_entry_callee() = nothing
+if Base.JLOptions().code_coverage != 0
+    let mi = Base.method_instance(coverage_entry_callee, ())
+        for has_marker in (false, true)
+            code = has_marker ? Any[Expr(:code_coverage_effect), ReturnNode(nothing)] :
+                                Any[ReturnNode(nothing)]
+            src = make_codeinfo(code; ssavaluetypes=Any[Nothing for _ in code],
+                                slottypes=Any[typeof(coverage_entry_callee)], slotnames=[:self])
+            callee_ir, spec_info, di = Compiler.retrieve_ir_for_inlining(mi, src, true)
+            @test any(stmt -> isexpr(stmt, :code_coverage_effect), callee_ir.stmts.stmt) == has_marker
+            ir = make_ircode(Any[ReturnNode(nothing)])
+            Compiler.ir_prepare_inlining!(Compiler.InsertBefore(ir, SSAValue(1)), ir, callee_ir,
+                                          spec_info, di, mi, (Int32(1), Int32(0), Int32(0)), Any[])
+            inserted = any(stmt -> isexpr(stmt, :code_coverage_effect), ir.new_nodes.stmts.stmt)
+            @test inserted == (!has_marker || Base.JLOptions().code_coverage_mode != 0)
+        end
+    end
+end
+
 """
 Helper to walk the AST and call a function on every node.
 """
@@ -152,7 +187,7 @@ end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !(x.args[2] in (Core.GlobalRef(Base, :throw_boundserror), Base.throw_boundserror))
+        isexpr(x, :invoke) && !(isinvoke(:throw_boundserror, x) || isinvoke(:_throw_boundserror_indices, x))
     end
 end
 
@@ -265,7 +300,7 @@ function foo_apply_apply_type_svec()
 end
 @test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
-# The that inlining doesn't drop ambiguity errors (#30118)
+# Test that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
 c30118(::Tuple{Ref, Ref}) = nothing
 b30118(x...) = c30118(x)
@@ -316,7 +351,7 @@ end
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] in (GlobalRef(Base, :memoryrefget), Base.memoryrefget)), ci.code)
+    @test any(iscall((ci, Base.memoryrefget)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats
@@ -635,7 +670,6 @@ function getcacheci(mi::Core.MethodInstance)
     cache = Compiler.code_cache(Compiler.NativeInterpreter())
     codeinst = Compiler.get(cache, mi, nothing)
     codeinst === nothing && return nothing
-    codeinst isa Compiler.InferenceResult && (codeinst = codeinst.ci)
     return codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
@@ -765,7 +799,7 @@ end
 # Issue #42264 - crash on certain union splits
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
-    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # in inlining. For this particular case, we're relying on `iterate(::CartesianIndex)` throwing an error, such
     # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
@@ -821,7 +855,7 @@ end
 # test single, non-dispatchtuple callsite inlining
 
 @constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
-    isa(t, DataType) && t.name === Type.body.name
+    isa(t, DataType) && t.name === Core.TypeEq.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(x)
@@ -832,7 +866,7 @@ let
 end
 
 @constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
-    c && isa(t, DataType) && t.name === Type.body.name
+    c && isa(t, DataType) && t.name === Core.TypeEq.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(true, x)
@@ -1848,6 +1882,55 @@ let src = code_typed1((AtomicMemoryRef{Int},)) do a
     @test count(isinvokemodify(:+), src.code) == 1
 end
 
+# Core._task handling
+# ===================
+# Test that _task inlines properly with const prop
+f_task_invoke() = 42
+let src = code_typed1(()) do
+        return Task(f_task_invoke)
+    end
+    m = which(f_task_invoke, ())
+    @test count(e -> begin
+            if iscall((src, Core._task), e) && e isa Expr && e.head === :call && length(e.args) == 4
+                ci = e.args[4]
+                if ci isa CodeInstance && ci.def.def === m
+                    return true
+                end
+            end
+            return false
+        end, src.code) == 1
+end
+
+# Test that no invoke target is injected when the single method match does not fully
+# cover the argument type: the task must fall back to generic dispatch so that
+# non-callable bodies still raise a MethodError when the task runs.
+abstract type TaskCallable end
+struct TaskCallableImpl <: TaskCallable end
+(::TaskCallableImpl)() = 1
+let src = code_typed1((TaskCallable,)) do f
+        return Task(f)
+    end
+    @test count(e -> iscall((src, Core._task), e) && length((e::Expr).args) == 3, src.code) == 1
+end
+
+# Test that task_result_type gets inlined to its constant value
+let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
+    # Should be inlined to the `Any` constant, with no call to task_result_type
+    @test count(iscall((src, Core.task_result_type)), src.code) == 0
+    @test src.code[end] == ReturnNode(Any)
+end
+let src = code_typed1((Union{Task,Int},)) do t; Core.task_result_type(t); end
+    # The Int path throws, so the call cannot be folded away.
+    @test count(iscall((src, Core.task_result_type)), src.code) == 1
+end
+for src in (
+        code_typed1((Int,)) do i; Core.task_result_type(i); end,
+        code_typed1(()) do; Core.task_result_type(); end,
+        code_typed1((Task,Task)) do t, u; Core.task_result_type(t, u); end)
+    # Invalid argument types and arities must retain the throwing call.
+    @test count(iscall((src, Core.task_result_type)), src.code) == 1
+end
+
 # apply `ssa_inlining_pass` multiple times
 func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)
 multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
@@ -2000,7 +2083,41 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
     end
     @test Base.return_types((Int,)) do x
         make_issue47349(Val(4))((x,nothing,Int))
-    end |> only === Type{Int}
+    end |> only == Core.TypeEgal{Int}
+end
+
+# JIT preparation should keep resolved invoke edges so inlined Type-argument
+# calls do not allocate.
+struct FastReadBuffer62001
+    data::Vector{UInt8}
+    position::Base.RefValue{Int}
+end
+FastReadBuffer62001() = FastReadBuffer62001(UInt8[0x01, 0x02], Ref(0))
+@inline function read_byte62001(buf::FastReadBuffer62001, ::Type{UInt8})
+    nextpos = buf.position[] + 1
+    nextpos > length(buf.data) && throw(EOFError())
+    buf.position[] = nextpos
+    @inbounds return buf.data[nextpos]
+end
+let buf = FastReadBuffer62001()
+    let src = code_typed1(Base.allocated,
+            Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}})
+        @test count(src.code) do @nospecialize x
+            Meta.isexpr(x, :invoke) &&
+            (x.args[1]::Core.CodeInstance).def.specTypes ==
+                Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}}
+        end == 1
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        read_byte62001(buf, UInt8)
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        Base.allocated(read_byte62001, buf, UInt8)
+    end
+    buf.position[] = 0
+    @test Base.allocated(read_byte62001, buf, UInt8) == 0
 end
 
 # Test that irinterp can make use of constant results even if they're big
@@ -2107,7 +2224,10 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
     global finalizer_escape::Int = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(iscall((src, Core.setglobal!)), src.code)
+        # `reformulate_globals_pass!` rewrites the resolved default `setglobal!` store to
+        # an `Expr(:(=), ::Core.BindingPartition, value)` form.
+        @test any(x -> iscall((src, Core.setglobal!))(x) ||
+                       (Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition)), src.code)
     end
 
     let
@@ -2309,13 +2429,15 @@ end
 path = Ref{Symbol}(:unknown)
 function f59018_generator(x)
     if @generated
-        if x isa DataType && x.name === Type.body.name
+        # a runtime-dispatched type-valued argument reaches the generator as the
+        # egality kind `Core.TypeEgal{T}`; by-type expansion uses `Type{T}`
+        if x isa Core.TypeEq || x isa Core.TypeEgal
             path[] = :generator
-            return Core.sizeof(x.parameters[1])
+            return Core.sizeof(Base.type_parameter(x))
         end
     else
         path[] = :fallback
-        return Core.sizeof(x.parameters[1])
+        return Core.sizeof(x isa Union{Core.TypeEq, Core.TypeEgal} ? Base.type_parameter(x) : x.parameters[1])
     end
 end
 f59018() = f59018_generator(Base.inferencebarrier(Int64))
@@ -2362,4 +2484,37 @@ let src = code_typed1(issue44428, (Any,))
     @test count(x->Meta.isexpr(x,:call), src.code) == 0
 end
 
+# issue #61552
+let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
+        Tuple{typeof(ndims), Matrix{Float64}}, Core.svec())
+    codeinst = getcacheci(mi)::Core.CodeInstance
+    @test Compiler.use_const_api(codeinst)
+    @test codeinst.inferred === nothing
+    interp = Compiler.NativeInterpreter()
+    @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
+end
+
+
+# `statement_cost` prices the reformulated global-access builtin calls via their registered
+# tfunc cost: `getglobal_partition` reads are free (matching plain `getglobal`), and the
+# `setglobal_partition` store matches the store builtins' tfunc cost, as does the `:(=)` form.
+let m = Module()
+    Core.eval(m, :(global gcost::Int = 0))
+    gr = GlobalRef(m, :gcost)
+    b = convert(Core.Binding, gr)
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b)
+    src = code_typed(() -> nothing, ())[1][1]
+    params = Compiler.OptimizationParams()
+    sptypes = Compiler.VarState[]
+    getcall = Expr(:call, GlobalRef(Core, :getglobal_partition), QuoteNode(gr), QuoteNode(part),
+                   QuoteNode(:acquire))
+    setcall = Expr(:call, GlobalRef(Core, :setglobal_partition), QuoteNode(part), 0,
+                   QuoteNode(:release))
+    @test Compiler.statement_cost(getcall, -1, src, sptypes, params) ==
+          Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.getglobal_partition)] == 0
+    store_cost = Compiler.statement_cost(setcall, -1, src, sptypes, params)
+    assign_cost = Compiler.statement_cost(Expr(:(=), part, 0), -1, src, sptypes, params)
+    @test store_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal_partition)]
+    @test assign_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal!)]
+end
 end # module inline_tests

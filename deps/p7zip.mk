@@ -4,7 +4,7 @@ include $(SRCDIR)/p7zip.version
 ifneq ($(USE_BINARYBUILDER_P7ZIP),1)
 
 $(SRCCACHE)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://downloads.sourceforge.net/project/sevenzip/7-Zip/$(P7ZIP_VER)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz
+	$(JLDOWNLOAD) $@ https://github.com/ip7z/7zip/releases/download/$(P7ZIP_VER)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz
 
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz
 	$(JLCHECKSUM) $<
@@ -31,7 +31,7 @@ $(eval $(call staged-install, \
 clean-p7zip:
 	-rm -f $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
 	-rm -f $(build_bindir)/7z$(EXE) $(build_bindir)/7z$(EXE) $(build_private_libexecdir)/7z$(EXE)
-	-$(MAKE) -C $(BUILDDIR)/p7zip-$(P7ZIP_VER) $(MAKE_COMMON) $(P7ZIP_BUILD_OPTS) clean
+	-if [ -d $(BUILDDIR)/p7zip-$(P7ZIP_VER) ]; then $(MAKE) -C $(BUILDDIR)/p7zip-$(P7ZIP_VER) $(MAKE_COMMON) $(P7ZIP_BUILD_OPTS) clean; fi
 
 distclean-p7zip:
 	rm -rf $(SRCCACHE)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)

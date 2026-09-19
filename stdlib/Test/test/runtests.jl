@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-using Test: guardseed, _should_escape_call, _escape_call
+using Test: guardseed, _should_escape_call, _escape_call, _to_pair_iterator
 using Serialization
 using Distributed: RemoteException
 
@@ -264,8 +264,10 @@ end
     end
 
     # @test_nowarn with broken=true when test fails (has warning) should be Broken
-    let results = @testset NoThrowTestSet begin
-            @test_nowarn (println(stderr, "oops"); 1) broken=true
+    let results = redirect_stderr(devnull) do
+            @testset NoThrowTestSet begin
+                @test_nowarn (println(stderr, "oops"); 1) broken=true
+            end
         end
         @test length(results) == 1
         @test results[1] isa Test.Broken
@@ -348,8 +350,10 @@ end
     end
 
     # @test_nowarn failure shows expected "" and captured stderr
-    let results = @testset NoThrowTestSet begin
-            @test_nowarn println(stderr, "oops")
+    let results = redirect_stderr(devnull) do
+            @testset NoThrowTestSet begin
+                @test_nowarn println(stderr, "oops")
+            end
         end
         @test length(results) == 1
         fail = results[1]
@@ -394,35 +398,43 @@ let fails = @testset NoThrowTestSet begin
         # 16 & 17 - Fail - function with keyword
         @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
         @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
-        # 18 - Fail - function keyword splatting
-        k = [(:atol, 0), (:nans, true)]
-        @test isapprox(1, 2; k...)
-        # 19 - Fail - call negation
+        # 18 - 20 - Fail - function keyword splatting
+        k1 = [(:atol, 0), (:nans, true)]
+        k2 = (atol = 0, nans = true)
+        k3 = (:atol => 0, :nans => true)
+        @test isapprox(1, 2; k1...)
+        @test isapprox(1, 2; k2...)
+        @test isapprox(1, 2; k3...)
+        # 21 - Fail - call negation
         @test !isequal(1, 2 - 1)
-        # 20 - Fail - comparison negation
+        # 22 - Fail - comparison negation
         @test !(2 + 3 == 1 + 4)
-        # 21 - Fail - chained negation
+        # 23 - Fail - chained negation
         @test !(2 + 3 == 1 + 4 == 5)
-        # 22 - Fail - isempty
+        # 24 - Fail - isempty
         nonempty = [1, 2, 3]
         @test isempty(nonempty)
         str1 = "Hello"
         str2 = "World"
-        # 23 - Fail - occursin
+        # 25 - Fail - occursin
         @test occursin(str1, str2)
-        # 24 - Fail - startswith
+        # 26 - Fail - startswith
         @test startswith(str1, str2)
-        # 25 - Fail - endswith
+        # 27 - Fail - endswith
         @test endswith(str1, str2)
-        # 26 - Fail - contains
+        # 28 - Fail - contains
         @test Base.contains(str1, str2)
-        # 27 - Fail - issetequal
+        # 29 - Fail - issetequal
         @test issetequal([2, 3] .- 1, [1, 3])
-        # 28 - Fail - Type Comparison
+        # 30 - Fail - Type Comparison
         @test typeof(1) <: typeof("julia")
-        # 29 - Fail - assignment
+        # 31 - Fail - assignment
         @test (i = length([1, 2])) == 3
-        # 30 - 33 - Fail - wrong message
+        # 32 - Fail - symbol comparison
+        @test 1 + 2 == :sym
+        # 33 - Fail - symbol in function call
+        @test isequal(1 + 2, :sym)
+        # 34 - 37 - Fail - wrong message
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
@@ -518,81 +530,100 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[18])
-        @test occursin("Expression: isapprox(1, 2; k...)", str)
+        @test occursin("Expression: isapprox(1, 2; k1...)", str)
         @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
     end
 
     let str = sprint(show, fails[19])
+        @test occursin("Expression: isapprox(1, 2; k2...)", str)
+        @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
+    end
+
+    let str = sprint(show, fails[20])
+        @test occursin("Expression: isapprox(1, 2; k3...)", str)
+        @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
+    end
+
+    let str = sprint(show, fails[21])
         @test occursin("Expression: !(isequal(1, 2 - 1))", str)
         @test occursin("Evaluated: !(isequal(1, 1))", str)
     end
 
-    let str = sprint(show, fails[20])
+    let str = sprint(show, fails[22])
         @test occursin("Expression: !(2 + 3 == 1 + 4)", str)
         @test occursin("Evaluated: !(5 == 5)", str)
     end
 
-    let str = sprint(show, fails[21])
+    let str = sprint(show, fails[23])
         @test occursin("Expression: !(2 + 3 == 1 + 4 == 5)", str)
         @test occursin("Evaluated: !(5 == 5 == 5)", str)
     end
 
-    let str = sprint(show, fails[22])
+    let str = sprint(show, fails[24])
         @test occursin("Expression: isempty(nonempty)", str)
         @test occursin("Evaluated: isempty([1, 2, 3])", str)
     end
 
-    let str = sprint(show, fails[23])
+    let str = sprint(show, fails[25])
         @test occursin("Expression: occursin(str1, str2)", str)
         @test occursin("Evaluated: occursin(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[24])
+    let str = sprint(show, fails[26])
         @test occursin("Expression: startswith(str1, str2)", str)
         @test occursin("Evaluated: startswith(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[25])
+    let str = sprint(show, fails[27])
         @test occursin("Expression: endswith(str1, str2)", str)
         @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[26])
+    let str = sprint(show, fails[28])
         @test occursin("Expression: Base.contains(str1, str2)", str)
         @test occursin("Evaluated: Base.contains(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[27])
+    let str = sprint(show, fails[29])
         @test occursin("Expression: issetequal([2, 3] .- 1, [1, 3])", str)
         @test occursin("Evaluated: issetequal([1, 2], [1, 3])", str)
     end
 
-    let str = sprint(show, fails[28])
+    let str = sprint(show, fails[30])
         @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
         @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
     end
 
-    let str = sprint(show, fails[29])
+    let str = sprint(show, fails[31])
         @test occursin("Expression: (i = length([1, 2])) == 3", str)
         @test occursin("Evaluated: 2 == 3", str)
     end
 
-    let str = sprint(show, fails[30])
+    # Test that symbols are printed with : prefix
+    let str = sprint(show, fails[32])
+        @test occursin("Evaluated: 3 == :sym", str)
+    end
+
+    let str = sprint(show, fails[33])
+        @test occursin("Evaluated: isequal(3, :sym)", str)
+    end
+
+    let str = sprint(show, fails[34])
         @test occursin("Expected: \"A test\"", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[31])
+    let str = sprint(show, fails[35])
         @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
         @test occursin(r"Message: .*Try sqrt\(Complex", str)
     end
 
-    let str = sprint(show, fails[32])
+    let str = sprint(show, fails[36])
         @test occursin("Expected: < match function >", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[33])
+    let str = sprint(show, fails[37])
         @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
@@ -1084,6 +1115,11 @@ uninferable_small_union(i) = (1, nothing)[i]
 @test_throws ErrorException @inferred(Missing, uninferable_small_union(1))
 @test_throws ErrorException @inferred(Missing, uninferable_small_union(2))
 @test_throws ArgumentError @inferred(nothing, uninferable_small_union(1))
+let T = Core.TypeVar(:T)
+    f_free_typevar_result() = Rational{T}
+    err = @test_throws ErrorException @inferred(f_free_typevar_result())
+    @test occursin("return type Type{Rational{T}} does not match inferred return type", err.value.msg)
+end
 
 # Ensure @inferred only evaluates the arguments once
 inferred_test_global = 0
@@ -1138,9 +1174,30 @@ end
     rm(f; force=true)
 end
 
+@testset "backtraces in exceptions thrown outside of @test" begin
+    # the backtrace is anchored at the enclosing @testset: frames below it
+    # (include machinery, script/test-harness drivers) say nothing about the
+    # failure
+    local f = tempname() * ".jl"
+    write(f,
+    """
+    using Test
+    @testset "outer" begin
+        error("boom")
+    end
+    """)
+    local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=devnull), String)
+    @test occursin("Got exception outside of a @test", msg)
+    # frame paths contract the home dir to `~` (e.g. the temp dir on Windows)
+    @test occursin(Base.contractuser(f) * ":3", msg)
+    @test !occursin("include(", msg)
+    @test !occursin("exec_options", msg)
+    @test !occursin("_start()", msg)
+    rm(f; force=true)
+end
+
 @testset "provide informative location in backtrace for test failures" begin
-    win2unix(filename) = replace(filename, "\\" => '/')
-    utils = win2unix(tempname())
+    utils = tempname()
     write(utils,
     """
     function test_properties2(value)
@@ -1148,7 +1205,7 @@ end
     end
     """)
 
-    included = win2unix(tempname())
+    included = tempname()
     write(included,
     """
     @testset "Other tests" begin
@@ -1165,12 +1222,12 @@ end
     end))
     """)
 
-    runtests = win2unix(tempname())
+    runtests = tempname()
     write(runtests,
     """
     using Test
 
-    include("$utils")
+    include($(repr(utils)))
 
     function test_properties(value)
         @test isodd(value)
@@ -1181,11 +1238,13 @@ end
         @noinline test_properties(8)
         test_properties2(8)
 
-        include("$included")
+        include($(repr(included)))
     end
     """)
-    msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
-    msg = win2unix(msg)
+    # Disable homedir contraction in stack traces so paths match tempname() output
+    msg = withenv("JULIA_STACKTRACE_CONTRACT_HOMEDIR" => "0") do
+        read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
+    end
     regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n  Stacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
     failures = map(eachmatch(regex, msg)) do m
         m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n  Stacktrace:\n((?:.|\n)*)", m.match)
@@ -2316,7 +2375,7 @@ end
         @test _escape_call(:(f(; y=1))) == (; func, args=[], kwargs=[:(:y => $(esc(1)))], quoted_func)
         @test _escape_call(:(f(y=1; z))) == (; func, args=[], kwargs=[:(:y => $(esc(1))), :(:z => $(esc(:z)))], quoted_func)
         @test _escape_call(:(f(; y.z))) == (; func, args=[], kwargs=[:(:z => $(esc(:(y.z))))], quoted_func)
-        @test _escape_call(:(f(; y...))) ==  (; func, args=[], kwargs=[:($(esc(:y))...)], quoted_func)
+        @test _escape_call(:(f(; y...))) ==  (; func, args=[], kwargs=[:($(_to_pair_iterator)(; $(esc(:y))...)...)], quoted_func)
     end
 
     @testset "comparison" begin
@@ -2388,6 +2447,30 @@ end
         @test recorded_error2 isa Test.Error
         @test recorded_error2.context !== nothing
         @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
+    end
+
+    # Unexpected pass (broken=true) should show context before "Got correct result" message
+    @testset "context shown for unexpected pass in context testset" begin
+        mock_parent4 = MockParentTestSet()
+        ctx_ts4 = Test.ContextTestSet(mock_parent4, :x, 42)
+
+        unbroken_result = Test.Error(:test_unbroken, "x != 99", "true", "", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts4, unbroken_result)
+
+        @test length(mock_parent4.results) == 1
+        recorded = mock_parent4.results[1]
+        @test recorded isa Test.Error
+        @test recorded.context !== nothing
+        @test occursin("x = 42", recorded.context)
+
+        str = sprint(show, recorded)
+        @test occursin("Unexpected Pass", str)
+        @test occursin("Context:", str)
+        @test occursin("x = 42", str)
+        # Context should appear before "Got correct result"
+        ctx_pos = findfirst("Context:", str)
+        got_pos = findfirst("Got correct result", str)
+        @test first(ctx_pos) < first(got_pos)
     end
 end
 
@@ -2470,5 +2553,19 @@ end
         # Should not contain verbose messages
         @test !occursin("Starting testset:", output)
         @test !occursin("Finished testset:", output)
+    end
+end
+
+# world age increments implicitly after each statement in the body of both
+# `@testset begin` and `@testset for`, as a special case
+let m = Module()
+    Core.eval(m, :(f() = 0))
+    @testset "implicit world age increment in `@testset begin`" begin
+        Core.eval(m, :(f() = 42))
+        @test m.f() == 42
+    end
+    @testset "implicit world age increment in `@testset for` ($i)" for i in 1:2
+        Core.eval(m, :(f() = $i))
+        @test m.f() == i
     end
 end

@@ -28,7 +28,6 @@ export
     raw!
 
 import Base:
-    check_open, # stream.jl
     displaysize,
     flush,
     pipe_reader,

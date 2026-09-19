@@ -31,7 +31,7 @@ JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
 JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX
 
-// Define holder locations for function addresses as `const void * $(name)_addr = NULL;
+// Define holder locations for function addresses as `JL_HIDDEN anonfunc * $(name)_addr = NULL;`
 #define XX(name)    JL_HIDDEN anonfunc * name##_addr = NULL;
 JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_

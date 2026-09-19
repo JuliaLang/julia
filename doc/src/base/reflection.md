@@ -48,7 +48,7 @@ of these fields is the `types` field observed in the example above.
 ## Subtypes
 
 The *direct* subtypes of any `DataType` may be listed using [`subtypes`](@ref). For example,
-the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
+the abstract `DataType` [`AbstractFloat`](@ref) has five (concrete) subtypes:
 
 ```jldoctest; setup = :(using InteractiveUtils)
 julia> InteractiveUtils.subtypes(AbstractFloat)
@@ -117,8 +117,7 @@ method-specific code-lowering is available using [`code_lowered`](@ref),
 and the type-inferred form is available using [`code_typed`](@ref).
 [`code_warntype`](@ref) adds highlighting to the output of [`code_typed`](@ref).
 
-Closer to the machine, the LLVM intermediate representation of a function may be printed using
-by [`code_llvm`](@ref), and finally the compiled machine code is available
+Closer to the machine, the LLVM intermediate representation of a function may be printed using [`code_llvm`](@ref), and finally the compiled machine code is available
 using [`code_native`](@ref) (this will trigger JIT compilation/code
 generation for any function which has not previously been called).
 
@@ -144,15 +143,15 @@ For more information see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
 of debug information printed.
 
-```jldoctest; setup = :(using InteractiveUtils), filter = r"int.jl:\d+"
+```jldoctest; setup = :(using InteractiveUtils), filter = r"\w+\.jl:\d+"
 julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)
 CodeInfo(
-    @ int.jl:87 within `+`
+    @ essentials.jl:1190 within `+`
 1 ─ %1 = intrinsic Base.add_int(x, y)::Int64
 └──      return %1
 ) => Int64
 ```
 
 Possible values for `debuginfo` are: `:none`, `:source`, and `:default`.
-Per default debug information is not printed, but that can be changed
+By default, debug information is not printed, but that can be changed
 by setting `Base.IRShow.default_debuginfo[] = :source`.

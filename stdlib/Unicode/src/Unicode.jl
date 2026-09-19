@@ -225,7 +225,7 @@ end
 # because of the bitfields.
 combining_class(uc::Integer) =
     0x000301 ≤ uc ≤ 0x10ffff ? unsafe_load(ccall(:utf8proc_get_property, Ptr{UInt16}, (UInt32,), uc), 2) : 0x0000
-combining_class(c::AbstractChar) = ismalformed(c) ? 0x0000 : combining_class(UInt32(c))
+combining_class(c::AbstractChar) = Base.ismalformed(c) ? 0x0000 : combining_class(UInt32(c))
 
 """
     isequal_normalized(s1::AbstractString, s2::AbstractString; casefold=false, stripmark=false, chartransform=identity)

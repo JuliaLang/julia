@@ -4,6 +4,12 @@ JULIAHOME := $(SRCDIR)
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/stdlib/stdlib.mk
 
+# Compile coverage instrumentation into the sysimage. Instrument the
+# basecompiler stages too; later stages reuse their inference results.
+ifeq ($(JULIA_COVERAGE_IMAGES),1)
+JULIA_SYSIMG_BUILD_FLAGS += $(JULIA_COVERAGE_IMAGE_FLAGS)
+endif
+
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug
 basecompiler-ji: $(build_private_libdir)/basecompiler.ji
@@ -19,10 +25,15 @@ sysbase-debug: $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
-	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ \
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		--disable-auto-import --disable-runtime-pseudo-reloc $(WIN_LD_LIBPATHS), \
+		$(WIN_LD_DLL_CRT_START) \
 		$(call whole_archive,$<) \
 		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia) \
-		$$([ $(OS) = WINNT ] && echo '' $(LIBM) -lssp -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc))
+		$(LIBM) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir), \
+		$(call whole_archive,$<) \
+		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia)))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
 	@$(DSYMUTIL) $@
 
@@ -92,7 +103,7 @@ RELDATADIR := $(call rel_path,$(JULIAHOME)/base,$(build_datarootdir))/ # <-- mak
 
 $(build_private_libdir)/basecompiler.ji: $(COMPILER_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
-	JULIA_NUM_THREADS=1 $(call spawn,$(JULIA_EXECUTABLE)) $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp \
+	JULIA_NUM_THREADS=1 $(call spawn,$(JULIA_EXECUTABLE)) $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp $(JULIA_COVERAGE_IMAGE_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --depwarn=error -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 Base_compiler.jl --buildroot $(RELBUILDROOT) --dataroot $(RELDATADIR))
 	@mv $@.tmp $@
 
@@ -101,7 +112,7 @@ $$(build_private_libdir)/basecompiler$1-o.a $$(build_private_libdir)/basecompile
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
 	JULIA_NUM_THREADS=1 \
-		$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp \
+		$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_COVERAGE_IMAGE_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --depwarn=error -g$$(BOOTSTRAP_DEBUG_LEVEL) Base_compiler.jl --buildroot $$(RELBUILDROOT) --dataroot $$(RELDATADIR))
 	@mv $$@.tmp $$@
 $$(build_private_libdir)/sysbase$1.ji: $$(build_private_libdir)/basecompiler$1.$$(SHLIB_EXT) $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)

@@ -72,6 +72,8 @@ x^42.0
 #---------------------
 LoweringError:
 #= line 1 =# - malformed `call`
+Expression:
+  (call)
 
 ########################################
 # Simple broadcast
@@ -267,7 +269,7 @@ x .= y
 2   TestMod.y
 3   (call top.broadcasted top.identity %₂)
 4   (call top.materialize! %₁ %₃)
-5   (return %₄)
+5   (return %₁)
 
 ########################################
 # Fused in-place broadcast update
@@ -279,7 +281,7 @@ x .= y .+ z
 4   TestMod.z
 5   (call top.broadcasted %₂ %₃ %₄)
 6   (call top.materialize! %₁ %₅)
-7   (return %₆)
+7   (return %₁)
 
 ########################################
 # In-place broadcast update with property assignment on left hand side
@@ -290,7 +292,7 @@ x.prop .= y
 3   TestMod.y
 4   (call top.broadcasted top.identity %₃)
 5   (call top.materialize! %₂ %₄)
-6   (return %₅)
+6   (return %₂)
 
 ########################################
 # In-place broadcast update with ref on left hand side
@@ -303,7 +305,7 @@ x[i,end] .= y
 5   TestMod.y
 6   (call top.broadcasted top.identity %₅)
 7   (call top.materialize! %₄ %₆)
-8   (return %₇)
+8   (return %₄)
 
 ########################################
 # <: as a function call
@@ -352,7 +354,7 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall (static_eval (tuple :strlen TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+4   (foreigncall (foreignsymbol (tuple (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
@@ -504,21 +506,23 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 # back before codegen generates code for `cglobal`
 cglobal((:sym, lib), Int)
 #---------------------
-1   TestMod.lib
-2   (call core.tuple :sym %₁)
-3   TestMod.Int
-4   (call core.cglobal %₂ %₃)
+1   TestMod.Int
+2   (call core.apply_type top.Ptr %₁)
+3   (foreignglobal (foreignsymbol (tuple (inert sym) TestMod.lib)))
+4   (call top.bitcast %₂ %₃)
 5   (return %₄)
 
 ########################################
 # cglobal - non-tuple expressions in first arg are lowered as normal
 cglobal(f(), Int)
 #---------------------
-1   TestMod.f
-2   (call %₁)
-3   TestMod.Int
-4   (call core.cglobal %₂ %₃)
-5   (return %₄)
+1   TestMod.Int
+2   (call core.apply_type top.Ptr %₁)
+3   TestMod.f
+4   (call %₃)
+5   (foreignglobal %₄)
+6   (call top.bitcast %₂ %₅)
+7   (return %₆)
 
 ########################################
 # Error: cglobal too many arguments
@@ -534,7 +538,7 @@ cglobal = 10
 #---------------------
 LoweringError:
 cglobal = 10
-└─────┘ ── invalid assignment location
+└─────┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: assigning to `ccall`
@@ -542,7 +546,7 @@ ccall = 10
 #---------------------
 LoweringError:
 ccall = 10
-└───┘ ── invalid assignment location
+└───┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: assigning to `var"ccall"`
@@ -550,7 +554,7 @@ var"ccall" = 10
 #---------------------
 LoweringError:
 var"ccall" = 10
-#   └───┘ ── invalid assignment location
+#   └───┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: Invalid function name ccall
@@ -559,7 +563,7 @@ end
 #---------------------
 LoweringError:
 function ccall()
-#        └───┘ ── Invalid function name
+#        └───┘ ── ccall is a reserved identifier
 end
 
 ########################################
@@ -569,7 +573,7 @@ end
 #---------------------
 LoweringError:
 function A.ccall()
-#        └─────┘ ── Invalid function name
+#          └───┘ ── ccall is a reserved identifier
 end
 
 ########################################
@@ -579,7 +583,7 @@ end
 #---------------------
 LoweringError:
 function ccall{<:T}()
-#        └───┘ ── Invalid function name
+#        └───┘ ── ccall is a reserved identifier
 end
 
 ########################################

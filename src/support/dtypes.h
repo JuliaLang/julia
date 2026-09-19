@@ -28,7 +28,7 @@
 #define WIN32_LEAN_AND_MEAN
 /* Clang does not like fvisibility=hidden with windows headers. This adds the visibility attribute there.
    Arguably this is a clang bug. */
-# ifndef _COMPILER_MICROSOFT_
+# if !defined(_COMPILER_MICROSOFT_) && !defined(DECLSPEC_IMPORT)
 #  define DECLSPEC_IMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
 # endif
 #include <windows.h>
@@ -119,9 +119,6 @@ typedef intptr_t ssize_t;
 
 #define STATIC_INLINE static inline
 #define FORCE_INLINE static inline __attribute__((always_inline))
-
-#define EXTERN_INLINE_DECLARE inline __attribute__ ((visibility("default")))
-#define EXTERN_INLINE_DEFINE extern inline JL_DLLEXPORT
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
@@ -304,7 +301,7 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 #define JL_FALLTHROUGH __attribute__((fallthrough))
 #elif defined(__cplusplus) && defined(__clang_major__) && \
     defined(__clang_minor__) && (__clang_major__ > 4 || __clang_minor__ >= 5)
-// We require at least clang 3.x
+// We require at least clang 3.5
 #define JL_FALLTHROUGH [[clang::fallthrough]]
 #else
 #define JL_FALLTHROUGH

@@ -12,7 +12,7 @@ using .Main.OffsetArrays
 @testset "Base.Sort docstrings" begin
     undoc = Docs.undocumented_names(Base.Sort)
     @test_broken isempty(undoc)
-    @test undoc == [:Algorithm, :SMALL_THRESHOLD, :Sort]
+    @test undoc == [:Algorithm, :Sort]
 end
 
 @testset "Order" begin
@@ -984,6 +984,18 @@ end
         @test !issorted(v[2001:4000])
         @test !issorted(v)
     end
+
+    # out-of-range lo/hi must throw rather than silently corrupt memory (#63215)
+    for alg in [MergeSort, QuickSort, InsertionSort, PartialQuickSort(1:5),
+                Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        w = rand(10)
+        @test_throws BoundsError sort!(w, 1, 11, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 0, 10, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 1, 2000, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 1, 2000, alg, Base.Forward, similar(w))
+        @test sort!(w, 11, 10, alg, Base.Forward) === w # empty range is fine
+        @test issorted(sort!(w, 1, 10, alg, Base.Forward))
+    end
 end
 
 @testset "IEEEFloatOptimization with -0.0" begin
@@ -1093,7 +1105,7 @@ function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissing
     out
 end
 
-@testset "Non-scaler indexing of WithoutMissingVector" begin
+@testset "Non-scalar indexing of WithoutMissingVector" begin
     @testset "Unit test" begin
         wmv = Base.Sort.WithoutMissingVector(Union{Missing, Int}[1, 7, 2, 9])
         @test wmv[[1, 3]] == [1, 2]

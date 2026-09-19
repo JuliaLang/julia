@@ -5,14 +5,13 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit
 
 import Base:
     sort,
     sort!,
     issorted,
-    sortperm,
-    to_indices
+    sortperm
 
 export # also exported by Base
     # order-only:
@@ -40,8 +39,7 @@ export # not exported by Base
     Algorithm,
     DEFAULT_UNSTABLE,
     DEFAULT_STABLE,
-    SMALL_ALGORITHM,
-    SMALL_THRESHOLD
+    SMALL_ALGORITHM
 
 abstract type Algorithm end
 
@@ -599,7 +597,7 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
 end
 Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
-    @assert !(out isa Missing)
+    @assert !(out isa Missing) "encountered `missing` in WithoutMissingVector"
     out::eltype(v)
 end
 Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
@@ -694,7 +692,7 @@ end
 Move NaN values to the end, partition by sign, and reinterpret the rest as unsigned integers.
 
 IEEE floating point numbers (`Float64`, `Float32`, and `Float16`) compare the same as
-unsigned integers with the bits with a few exceptions. This pass
+unsigned integers with the bits with a few exceptions.
 
 This pass is triggered for both `sort([1.0, NaN, 3.0])` and `sortperm([1.0, NaN, 3.0])`.
 """
@@ -924,7 +922,7 @@ end
 ConsiderCountingSort(next) = ConsiderCountingSort(CountingSort(), next)
 function _sort!(v::AbstractVector{<:Integer}, a::ConsiderCountingSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx
-    range = maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
+    range = maybe_unsigned(o === Reverse ? mn -% mx : mx -% mn)
 
     if range < (sizeof(eltype(v)) > 8 ? 5(hi-lo)-100 : div(hi-lo, 2))
         _sort!(v, a.counting, o, kw)
@@ -949,18 +947,18 @@ maybe_reverse(o::ForwardOrdering, x) = x
 maybe_reverse(o::ReverseOrdering, x) = reverse(x)
 function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx scratch
-    range = maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
-    offs = 1 - (o === Reverse ? mx : mn)
+    range = maybe_unsigned(o === Reverse ? mn -% mx : mx -% mn)
+    offs = 1 -% (o === Reverse ? mx : mn)
 
     counts = fill(0, range+1) # TODO use scratch (but be aware of type stability)
     @inbounds for i = lo:hi
-        counts[v[i] + offs] += 1
+        counts[v[i] +% offs] += 1
     end
 
     idx = lo
     @inbounds for i = maybe_reverse(o, 1:range+1)
         lastidx = idx + counts[i] - 1
-        val = i-offs
+        val = i -% offs
         for j = idx:lastidx
             v[j] = val isa Unsigned && eltype(v) <: Signed ? signed(val) : val
         end
@@ -1251,13 +1249,13 @@ function move!(v, target, source)
     # This function never dominates runtime—only add `@inbounds` if you can demonstrate a
     # performance improvement. And if you do, also double check behavior when `target`
     # is out of bounds.
-    @assert length(target) == length(source)
+    @assert length(target) == length(source) "length mismatch"
     if length(target) == 1 || isdisjoint(target, source)
         for (i, j) in zip(target, source)
             v[i], v[j] = v[j], v[i]
         end
     else
-        @assert minimum(source) <= minimum(target)
+        @assert minimum(source) <= minimum(target) "range mismatch"
         reverse!(v, minimum(source), maximum(target))
         reverse!(v, minimum(target), maximum(target))
     end
@@ -1328,7 +1326,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             # Specifically, this means that expected_middle_ln == ln, so
             # ln <= ... + 2.0expected_middle_ln && return ...
             # will trigger.
-            @assert false
+            @assert false "this should never happen"
             # But if it does happen, the kernel reduces to
             0, hi
         elseif lo_signpost_i <= lo
@@ -1748,7 +1746,7 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v` is
+When calling `sort` on the [`keys`](@ref) or [`values`](@ref) of a dictionary, `v` is
 collected and then sorted.
 
 !!! compat "Julia 1.12"
@@ -2058,13 +2056,13 @@ end
 
 # sortperm for vectors of few unique integers
 function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
-    offs = 1 - minval
+    offs = 1 -% minval
     n = length(x)
 
     counts = fill(0, rangelen+1)
     counts[1] = 1
     @inbounds for i = 1:n
-        counts[x[i] + offs + 1] += 1
+        counts[x[i] +% offs +% 1] += 1
     end
 
     #cumsum!(counts, counts)
@@ -2074,7 +2072,7 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
 
     P = Vector{Int}(undef, n)
     @inbounds for i = 1:n
-        label = x[i] + offs
+        label = x[i] +% offs
         P[counts[label]] = i
         counts[label] += 1
     end
@@ -2241,7 +2239,7 @@ UIntMappable(T::Type, order::Ordering) = nothing
 """
     uint_map(x, order::Base.Order.Ordering)::Unsigned
 
-Map `x` to an un unsigned integer, maintaining sort order.
+Map `x` to an unsigned integer, maintaining sort order.
 
 The map should be reversible with [`uint_unmap`](@ref), so `isless(order, a, b)` must be
 a linear ordering for `a, b <: typeof(x)`. Satisfies
@@ -2332,7 +2330,7 @@ Characteristics:
     compare equal (e.g. "a" and "A" in a sort of letters that
     ignores case).
   * *in-place* in memory.
-  * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+  * *divide-and-conquer*: sort strategy similar to [`QuickSort`](@ref).
 
 Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
 
@@ -2454,6 +2452,7 @@ function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
 end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
+    checkbounds(v, lo:hi)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -2475,6 +2474,7 @@ sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Orderi
     invoke(sort!, Tuple{typeof.((v, lo, hi, a, o))..., AbstractVector{T}}, v, lo, hi, a, o, t0) # For disambiguation
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
         t0::Union{AbstractVector{T}, Nothing}=nothing) where T
+    checkbounds(v, lo:hi)
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
@@ -2517,6 +2517,7 @@ end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering)
+    checkbounds(v, lo:hi)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -2546,11 +2547,13 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
+    checkbounds(v, lo:hi)
     _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
+    checkbounds(v, lo:hi)
     _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end

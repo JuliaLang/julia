@@ -1121,7 +1121,7 @@ loops cannot be merged because of the intervening `sort` function.
 
 Finally, the maximum efficiency is typically achieved when the output array of a vectorized operation
 is *pre-allocated*, so that repeated calls do not allocate new arrays over and over again for
-the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this is `X .= ...`, which
+the results (see [Pre-allocate outputs](@ref)). A convenient syntax for this is `X .= ...`, which
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,
@@ -1131,7 +1131,7 @@ so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression
 can be tedious and lead to code that is difficult to read, the macro
-[`@.`](@ref @__dot__) is provided to convert *every* function call,
+[`@.`](@ref @__dot__) is provided to convert every function call,
 operation, and assignment in an expression into the "dotted" version.
 
 ```jldoctest
