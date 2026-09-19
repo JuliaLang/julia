@@ -9,7 +9,7 @@
 
 @tag = external addrspace(10) global {}, align 16
 
-declare void @julia.write_barrier({} addrspace(10)*, {} addrspace(10)*)
+declare void @julia.object_write_barrier({} addrspace(10)*, ...)
 declare {}*** @julia.get_pgcstack()
 declare {} addrspace(10)* @julia.gc_alloc_obj({}**, i64, {} addrspace(10)*)
 
@@ -21,7 +21,7 @@ top:
   %current_task = bitcast {}*** %pgcstack to {}**
   %parent = call {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
   %child = call {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
-  call void @julia.write_barrier({} addrspace(10)* %parent, {} addrspace(10)* %child)
+  call void ({} addrspace(10)*, ...) @julia.object_write_barrier({} addrspace(10)* %parent, {} addrspace(10)* %child)
   ret {} addrspace(10)* %parent
 
 ; The critical test: GC tag loads must be volatile to prevent constant folding
@@ -38,4 +38,30 @@ top:
 
 ; CHECK: trigger_wb:
 ; CHECK: call void @ijl_gc_queue_root(ptr {{.*}})
+}
+
+; Field lowering must test children, not slot addresses, and skip null children.
+declare void @julia.field_write_barrier.p11(ptr addrspace(10), ptr addrspace(11), ptr addrspace(10), ...)
+declare void @julia.field_write_barrier.p13(ptr addrspace(10), ptr addrspace(13), ptr addrspace(10), ...)
+
+; CHECK-LABEL: @field_barrier_children(
+; CHECK: getelementptr inbounds i64, ptr addrspace(10) %parent, i64 -1
+; CHECK: getelementptr inbounds i64, ptr addrspace(10) %child, i64 -1
+; CHECK-NOT: getelementptr {{.*}}null
+; CHECK: call void @ijl_gc_queue_root(ptr addrspace(10) %parent)
+; CHECK: ret void
+define void @field_barrier_children(ptr addrspace(10) %parent, ptr addrspace(11) %slot, ptr addrspace(10) %child) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  call void (ptr addrspace(10), ptr addrspace(11), ptr addrspace(10), ...) @julia.field_write_barrier.p11(ptr addrspace(10) %parent, ptr addrspace(11) %slot, ptr addrspace(10) null, ptr addrspace(11) %slot, ptr addrspace(10) %child)
+  ret void
+}
+
+; CHECK-LABEL: @field_barrier_clear_loaded(
+; CHECK-NOT: load
+; CHECK-NOT: write_barrier
+; CHECK: ret void
+define void @field_barrier_clear_loaded(ptr addrspace(10) %parent, ptr addrspace(13) %slot) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  call void (ptr addrspace(10), ptr addrspace(13), ptr addrspace(10), ...) @julia.field_write_barrier.p13(ptr addrspace(10) %parent, ptr addrspace(13) %slot, ptr addrspace(10) null)
+  ret void
 }

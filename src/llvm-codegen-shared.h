@@ -95,6 +95,25 @@ namespace JuliaType {
     }
 }
 
+// Shared by codegen and passes that create write barrier declarations.
+static inline llvm::AttributeList getWriteBarrierAttributes(llvm::LLVMContext &C)
+{
+    using namespace llvm;
+    AttrBuilder FnAttrs(C);
+    auto effects = MemoryEffects::inaccessibleMemOnly();
+#ifdef GC_BARRIER_SNAPSHOT
+    // Snapshot barriers read old fields, including out-of-line object storage.
+    effects |= MemoryEffects::readOnly();
+#endif
+    FnAttrs.addMemoryAttr(effects);
+    FnAttrs.addAttribute(Attribute::NoUnwind);
+    FnAttrs.addAttribute(Attribute::NoRecurse);
+    AttrBuilder ParentAttrs(C);
+    ParentAttrs.addAttribute(Attribute::ReadOnly);
+    return AttributeList::get(C, AttributeSet::get(C, FnAttrs), AttributeSet(),
+                             {AttributeSet::get(C, ParentAttrs)});
+}
+
 // return how many Tracked pointers are in T (count > 0),
 // and if there is anything else in T (all == false)
 struct CountTrackedPointers {
