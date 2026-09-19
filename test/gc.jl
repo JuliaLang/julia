@@ -68,6 +68,23 @@ end
     run_gctest("gc/copyto.jl")
 end
 
+@testset "errno survives allocation" begin
+    # The threads contend for the allocator's locks, and `:static` keeps each task on its
+    # thread (errno is per-thread) between setting errno and reading it back.
+    prog = """
+        Threads.@threads :static for _ in 1:Threads.nthreads()
+            keep = Vector{Vector{UInt8}}(undef, 2000) # keeps the allocations from being optimized out
+            for i in eachindex(keep)
+                Libc.errno(0xc0ffee)
+                keep[i] = Vector{UInt8}(undef, 1024)
+                Libc.errno() == 0xc0ffee || exit(1)
+            end
+        end
+        """
+    cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no -t16 -e $prog`
+    @test success(cmd)
+end
+
 #FIXME: Issue #57103 disabling tests for MMTk, since
 # they rely on information that is specific to the stock GC.
 @static if Base.USING_STOCK_GC

@@ -453,7 +453,8 @@ julia> α="\alpha[TAB]"   # LaTeX completion also works in strings
 julia> α="α"
 ```
 
-A full list of tab-completions can be found in the [Unicode Input](@ref) section of the manual.
+Full lists of tab-completions can be found in the [Unicode Input](@ref) and
+[Emoji Input](@ref) sections of the manual.
 
 Completion of paths works for strings and julia's shell mode:
 
