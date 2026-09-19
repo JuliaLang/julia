@@ -364,13 +364,14 @@ end
 # Int64, UInt64, and Float64 boundaries, all of which must hash like the equal built-in value
 struct DecomposedReal <: Real
     num::Integer
-    pow::Int
+    pow::Integer
     den::Integer
 end
 Base.decompose(x::DecomposedReal) = (x.num, x.pow, x.den)
 @testset "hash(::Real) via decompose" begin
     D = DecomposedReal
     tm = typemin(Int64)
+    tp = typemax(Int64)
     n = big(2)^60 + 1
     for h in (zero(UInt), Base.HASH_SEED, typemax(UInt))
         # typemin operands and the Int64 and UInt64 boundaries
@@ -393,6 +394,7 @@ Base.decompose(x::DecomposedReal) = (x.num, x.pow, x.den)
         # unsigned and Bool numerators
         @test hash(D(true, -1, -1), h) == hash(-0.5, h)
         @test hash(D(true, 2003, 1), h) == hash(big(2)^2003, h)
+        @test hash(D(true, 0, 7), h) == hash(1 // 7, h)
         @test hash(D(1, 0, true), h) == hash(1, h)
         @test hash(D(UInt64(5), 3, -1), h) == hash(-40, h)
         @test hash(D(UInt64(1), -1, -1), h) == hash(-0.5, h)
@@ -406,11 +408,34 @@ Base.decompose(x::DecomposedReal) = (x.num, x.pow, x.den)
         @test hash(D(n << 8, 1995, 1), h) == hash(n << 2003, h)
         # a machine integer numerator must not overflow when shifted into position
         @test hash(D(Int64(2)^60 + 1, 100, 1), h) == hash(big(2)^160 + big(2)^100, h)
+        # a wide numerator must not be rounded to Float64 when only den has trailing zeros
+        @test hash(D(Int64(2)^60 - 1, 0, Int64(2)^10), h) == hash(D(Int64(2)^60 - 1, -10, 1), h)
+        @test hash(D(Int64(2)^60 - 1, 0, Int64(2)^10), h) == hash(big(Int64(2)^60 - 1) // 1024, h)
+        @test hash(D(Int64(2)^53 - 1, 0, Int64(2)^10), h) == hash((Int64(2)^53 - 1) / 1024, h)
+        # Float64 exponent boundaries
+        @test hash(D(1, 1023, 1), h) == hash(2.0^1023, h)
+        @test hash(D(1, 1024, 1), h) == hash(big(2)^1024, h)
+        @test hash(D(1, -1074, 1), h) == hash(2.0^-1074, h)
+        @test hash(D(1, -1075, 1), h) == hash(1 // big(2)^1075, h)
+        # pow near typemax/typemin must not overflow when combined with the trailing zeros of num and
+        # den or when compared against the Int64 and Float64 bounds;
+        @test hash(D(1, tp, 4), h) == hash(D(4, tp - 4, 1), h)
+        @test hash(D(big(2)^100, tp - 50, 1), h) == hash(D(1, big(tp) + 50, 1), h)
+        @test hash(D(4, tp, 1), h) == hash(D(1, big(tp) + 2, 1), h)
+        @test hash(D(1, tm, 2), h) == hash(D(1, big(tm) - 1, 1), h)
+        # pow of other integer types
+        @test hash(D(1, true, 1), h) == hash(2, h)
+        @test hash(D(1, Int8(3), 1), h) == hash(8, h)
+        @test hash(D(1, UInt8(3), 1), h) == hash(8, h)
+        @test hash(D(1, Int128(2)^64 + 3, 1), h) == hash(D(1, big(2)^64 + 3, 1), h)
+        @test hash(D(1, typemax(UInt64), 1), h) == hash(D(1, big(2)^64 - 1, 1), h)
         # BigInt operands
         @test hash(D(big(-3), 0, big(-1)), h) == hash(3, h)
         @test hash(D(big(3), -1, big(-1)), h) == hash(-1.5, h)
         @test hash(D(big(3), 0, big(-7)), h) == hash(-3 // 7, h)
         @test hash(D(big(-40), 0, big(7)), h) == hash(-40 // 7, h)
+        @test hash(D(big(3), 5, big(7)), h) == hash(96 // 7, h)
+        @test hash(D(typemax(Int128), 5, Int128(7)), h) == hash((32*(big(2)^127-1)) // 7, h)
     end
     # a BigInt numerator must not be mutated by hashing
     let x = D(big(3), 5, big(7))

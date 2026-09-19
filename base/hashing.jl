@@ -203,7 +203,6 @@ function hash(x::Real, h::UInt)
     # promote Bool to Int8 for trailing_zeros and widen
     num = _num isa Bool ? Int8(_num) : _num
     den = _den isa Bool ? Int8(_den) : _den
-    pow::Int = _pow
 
     # handle special values
     num == 0 && den == 0 && return hash(NaN, h)
@@ -214,8 +213,9 @@ function hash(x::Real, h::UInt)
     # num is shifted lazily, so that the generic path below can fold the shift into one operation.
     num_z::Int = trailing_zeros(num)
     den_z::Int = trailing_zeros(den)
+    # effective pow for hashing purposes is defined as pow%Int64
+    pow::Int64 = _pow%Int64 + num_z - den_z
     den >>= den_z
-    pow = pow + num_z - den_z
     num_signbit = signbit(num)
     den_signbit = signbit(den)
     x_signbit = num_signbit ⊻ den_signbit
@@ -224,23 +224,22 @@ function hash(x::Real, h::UInt)
     # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be non-negative.
     if den == 1 || den == -1
-        # left = ceil(log2(abs(num >> num_z)*2^pow))
-        left = ndigits0z(num, 2) - num_z + pow
+        num_sig_dig = ndigits0z(num, 2) - num_z
         # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
             if 0 <= pow # if pow is non-negative, it is an integer
                 # Int64 and UInt64 hash by their 64-bit pattern, so compute the pattern of
                 # num*2^pow modulo 2^64. It is exact when the value fits in Int64 or UInt64.
-                if left <= 64 - x_signbit
+                if pow <= 64 - x_signbit - num_sig_dig
                     unum = (num >> num_z) % UInt64
-                    return hash(ifelse(den_signbit, -unum, unum) << pow, h)
+                    return hash(ifelse(den_signbit, -unum, unum) << Int(pow), h)
                 end
             end # typemin(Int64) handled by Float64 case
             # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
             # Float64s have 53 mantissa bits (including implicit bit)
-            if left <= 1024 && left - pow <= 53
+            if pow <= 1024 - num_sig_dig && num_sig_dig <= 53
                 fnum = Float64((num >> num_z) % Int64) # exact: abs(num >> num_z) has at most 53 bits here
-                return hash(ldexp(ifelse(den_signbit, -fnum, fnum), pow), h)
+                return hash(ldexp(ifelse(den_signbit, -fnum, fnum), Int(pow)), h)
             end
         end
     else
