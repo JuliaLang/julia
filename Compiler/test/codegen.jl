@@ -388,6 +388,40 @@ str = String(take!(io))
 @test occursin("aliasscope", str)
 @test occursin("noalias", str)
 
+# Issue #63129: inside `@aliasscope`, only loads of `Const` arrays may be assumed not to
+# alias the stores in the scope. A recurrence carried through a plain array must be exact.
+function fwd63129!(B, a, n)
+    for l in axes(B, 1)
+        @Base.Experimental.aliasscope begin
+            @inbounds for i in 2:n
+                B[l, i] -= a[i] * B[l, i-1]
+            end
+        end
+    end
+    return B
+end
+function acc63129!(output, input, n)
+    for I in CartesianIndices(output)
+        i, j = I.I
+        @Base.Experimental.aliasscope begin
+            for k in j:n
+                output[I] += input[i, k]
+            end
+        end
+    end
+    return output
+end
+let n = 16, B = rand(4, n), a = rand(n)
+    Bref = copy(B)
+    for l in axes(Bref, 1), i in 2:n
+        Bref[l, i] -= a[i] * Bref[l, i-1]
+    end
+    @test fwd63129!(copy(B), a, n) == Bref
+    input = rand(n, n)
+    ref = [sum(@view input[i, j:n]) for i in 1:n, j in 1:n]
+    @test acc63129!(zeros(n, n), input, n) ≈ ref
+end
+
 # Issue #10208 - Unnecessary boxing for calling objectid
 struct FooDictHash{T}
     x::T

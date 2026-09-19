@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname, is_function_def, @propagate_inbounds
+using Base: Threads, sync_varname, is_function_def
 using Base: GenericCondition
 using Base.Meta
 
@@ -29,7 +29,16 @@ end
 Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
-@propagate_inbounds Base.getindex(A::Const, i1::Int, I::Int...) = A.a[i1, I...]
+Base.@assume_effects :noub_if_noinbounds function Base.getindex(A::Const, i::Int)
+    @inline
+    @boundscheck Base.checkbounds(A.a, i)
+    return Core.const_memoryrefget(Core.memoryrefnew(getfield(A.a, :ref), i, false), :not_atomic, false)
+end
+function Base.getindex(A::Const, i1::Int, i2::Int, I::Int...)
+    @inline
+    @boundscheck Base.checkbounds(A.a, i1, i2, I...) # generally _to_linear_index requires bounds checking
+    return @inbounds A[Base._to_linear_index(A.a, i1, i2, I...)]
+end
 
 """
     @aliasscope expr
