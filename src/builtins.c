@@ -1021,7 +1021,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
                 JL_GC_ASSERT_LIVE(value);
                 if (arg_heap)
-                    jl_gc_wb(arg_heap, value);
+                    jl_gc_wb(arg_heap, (void*)&newargs[n], value);
                 newargs[n++] = value;
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
@@ -1130,8 +1130,7 @@ JL_CALLABLE(jl_f_svec)
         return (jl_value_t*)jl_emptysvec;
     jl_svec_t *t = jl_alloc_svec_uninit(nargs);
     for (i = 0; i < nargs; i++) {
-        jl_gc_wb_fresh(t, args[i]);
-        jl_svec_data(t)[i] = args[i];
+        jl_gc_write_fresh(t, jl_svec_data(t)[i], jl_value_t, args[i]);
     }
     return (jl_value_t*)t;
 }
@@ -2675,7 +2674,7 @@ JL_CALLABLE(jl_f__task)
             jl_type_error("_task", (jl_value_t*)jl_anytuple_type_type, invoke_arg);
     }
     jl_task_t *task = jl_new_task(start, jl_nothing, ssize);
-    task->invoked = invoke_arg;
+    jl_gc_write(task, task->invoked, jl_value_t, invoke_arg);
     return (jl_value_t*)task;
 }
 
@@ -2782,7 +2781,7 @@ JL_CALLABLE(jl_f__typebody)
             jl_reinstantiate_inner_types(dt, NULL);
         }
         JL_CATCH {
-            dt->name->partial = NULL;
+            jl_gc_write(dt->name, dt->name->partial, jl_array_t, NULL);
             jl_rethrow();
         }
     }

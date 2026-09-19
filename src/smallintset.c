@@ -174,7 +174,7 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     if (val + 1 >= jl_max_int(a)) {
         a = smallintset_rehash(a, hash, data, a->length, val + 1);
-        if (parent) jl_gc_wb(parent, a);
+        if (parent) jl_gc_wb(parent, (void*)pcache, a);
         jl_atomic_store_release(pcache, a);
     }
     while (1) {
@@ -195,7 +195,7 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
         else
             newsz = sz << 2;
         a = smallintset_rehash(a, hash, data, newsz, 0);
-        if (parent) jl_gc_wb(parent, a);
+        if (parent) jl_gc_wb(parent, (void*)pcache, a);
         jl_atomic_store_release(pcache, a);
     }
 }
@@ -234,7 +234,7 @@ size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *
             }
         }
         if (parent)
-            jl_gc_wb(parent, na);
+            jl_gc_wb(parent, (void*)pcache, na);
         jl_atomic_store_release(pcache, na);
         JL_GC_POP();
     }

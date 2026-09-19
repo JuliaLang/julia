@@ -1257,20 +1257,19 @@ static const auto jl_blackbox_func = new JuliaFunction<>{
             {}); },
 };
 
-static const auto jl_write_barrier_func = new JuliaFunction<>{
-    "julia.write_barrier",
+static const auto jl_field_write_barrier_p11_func = new JuliaFunction<>{
+    "julia.field_write_barrier.p11",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {JuliaType::get_prjlvalue_ty(C)}, true); },
-    [](LLVMContext &C) {
-        AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        FnAttrs.addAttribute(Attribute::NoRecurse);
-        return AttributeList::get(C,
-            AttributeSet::get(C, FnAttrs),
-            AttributeSet(),
-            {Attributes(C, {Attribute::ReadOnly})});
-    },
+            {JuliaType::get_prjlvalue_ty(C), PointerType::get(C, AddressSpace::Derived),
+             JuliaType::get_prjlvalue_ty(C)}, true); },
+    getWriteBarrierAttributes,
+};
+static const auto jl_field_write_barrier_p13_func = new JuliaFunction<>{
+    "julia.field_write_barrier.p13",
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {JuliaType::get_prjlvalue_ty(C), PointerType::get(C, AddressSpace::Loaded),
+             JuliaType::get_prjlvalue_ty(C)}, true); },
+    getWriteBarrierAttributes,
 };
 
 static const auto jl_cancellation_point_func = new JuliaFunction<>{
@@ -4676,10 +4675,22 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (lock)
             emit_lockstate_value(ctx, lock, true);
-        // Deletion barrier before clearing the slot: a SATB collector must
-        // snapshot the overwritten reference. The barrier is keyed on the
-        // parent (the memory object), so a NULL child is fine.
-        emit_write_barrier(ctx, mem, Constant::getNullValue(ctx.types().T_prjlvalue));
+        // Emit a barrier covering all reference slots in the element before clearing it.
+        // Offsets are relative to `ptr`, which points past any element lock.
+        Value *null_child = Constant::getNullValue(ctx.types().T_prjlvalue);
+        if (isboxed) {
+            emit_write_barrier(ctx, mem, ptr, null_child);
+        }
+        else {
+            auto *dt = (jl_datatype_t*)ety;
+            SmallVector<unsigned, 4> offsets;
+            SmallVector<Value*, 4> children;
+            for (size_t i = 0; i < dt->layout->npointers; i++) {
+                offsets.push_back(jl_ptr_offset(dt, i) * ctx.types().sizeof_ptr);
+                children.push_back(null_child);
+            }
+            emit_field_write_barrier(ctx, mem, ptr, children, offsets);
+        }
         emit_aliased_store(ctx, Constant::getNullValue(elty), ptr, Align(al),
                            memorybuf_aliasinfo(ctx, layout),
                            ctx.noalias().aliasscope.current, storeOrder);
@@ -4943,7 +4954,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         for (size_t i = 0; i < nargs; i++) {
             Value *elem = boxed(ctx, argv[i + 1]);
             Value *elem_ptr = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr * (i + 1));
-            emit_write_barrier(ctx, svec, elem);
+            emit_write_barrier(ctx, svec, elem_ptr, elem);
             auto *store = ctx.builder.CreateAlignedStore(elem, elem_ptr, Align(ctx.types().sizeof_ptr));
             store->setOrdering(AtomicOrdering::Release);
         }
@@ -5925,6 +5936,7 @@ isdefined_unknown_idx:
         ctx.builder.CreateCondBr(already_clear, point_bb, clear_bb);
 
         ctx.builder.SetInsertPoint(clear_bb);
+        emit_write_barrier(ctx, ct, bound_ptr, nothing_val);
         StoreInst *clear_store = ctx.builder.CreateAlignedStore(nothing_val, bound_ptr, ctx.types().alignof_ptr);
         clear_store->setOrdering(AtomicOrdering::Monotonic);
         ai.decorateInst(clear_store);
@@ -5946,6 +5958,7 @@ isdefined_unknown_idx:
         ctx.builder.SetInsertPoint(rebind_bb);
         // N.B.: Do NOT annotate julia.reset_safe here. We want the LLVM pass
         // to reset any live region before this.
+        emit_write_barrier(ctx, ct, bound_ptr, src);
         StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
         bind_store->setOrdering(AtomicOrdering::Release);
         ai.decorateInst(bind_store);
@@ -5953,7 +5966,6 @@ isdefined_unknown_idx:
         // scoped default, so the cache flag must drop (the same-source skip
         // path keeps a matching cache intact).
         ai.decorateInst(ctx.builder.CreateAlignedStore(ConstantInt::get(T_int8, 0), bound_default_ptr, Align(1)));
-        emit_write_barrier(ctx, ct, src);
         ctx.builder.CreateBr(point_bb);
 
         // The cancellation point intrinsic (which the CancellationLowering
@@ -7240,9 +7252,9 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
-#ifdef GC_SNAPSHOT_BARRIER
+#ifdef GC_BARRIER_SNAPSHOT
             // Barrier is needed to snapshot old scope value
-            emit_write_barrier(ctx, get_current_task(ctx), scope_to_restore);
+            emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_to_restore);
 #else
             // No barrier required: old Tasks are implicitly in the GC remset
 #endif
@@ -10645,9 +10657,9 @@ static jl_llvm_functions_t
                 Value *scope_boxed = boxed(ctx, scope);
                 Value *scope_ptr = get_scope_field(ctx);
                 LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
-#ifdef GC_SNAPSHOT_BARRIER
+#ifdef GC_BARRIER_SNAPSHOT
                 // Barrier is needed to snapshot scope value before replacement
-                emit_write_barrier(ctx, get_current_task(ctx), scope_boxed);
+                emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_boxed);
 #else
                 // No barrier required: old Tasks are implicitly in the GC remset
 #endif
@@ -11287,7 +11299,8 @@ static void init_jit_functions(void)
     add_named_global(jl_alloc_obj_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
     add_named_global(jl_typeof_func, (void*)NULL);
-    add_named_global(jl_write_barrier_func, (void*)NULL);
+    add_named_global(jl_field_write_barrier_p11_func, (void*)NULL);
+    add_named_global(jl_field_write_barrier_p13_func, (void*)NULL);
     add_named_global(jldlsym_func, &jl_load_and_lookup);
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);
