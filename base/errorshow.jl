@@ -976,7 +976,7 @@ end
 
 function _backtrace_remove_kwcall_frames!(trace)
     todelete = findall(trace) do (frame, _)
-        code = frame.linfo
+        code = StackTraces.frame_mi(frame)
         if code isa MethodInstance
             def = code.def
             if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
@@ -985,7 +985,7 @@ function _backtrace_remove_kwcall_frames!(trace)
                 # the argument list, since it has the right line number info)
                 return true
             end
-        else
+        else # this branch may not be needed, from before current keyword argument handling
             frame.func === :kwcall && return true
         end
         return false
