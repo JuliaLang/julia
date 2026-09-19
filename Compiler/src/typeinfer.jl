@@ -166,7 +166,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                     resize!(inferred_result.slottypes::Vector{Any}, nslots)
                     resize!(inferred_result.slotnames, nslots)
                 end
-                inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result)
+                inferred_result = maybe_compress_codeinfo(interp, ci, inferred_result)
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands (nothing or CodeInfo)
                 inferred_result = nothing
@@ -575,8 +575,8 @@ function discard_optimized_result(interp::AbstractInterpreter, inlining_cost::In
     return true
 end
 
-function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
-    def = mi.def
+function maybe_compress_codeinfo(interp::AbstractInterpreter, codeinst::CodeInstance, ci::CodeInfo)
+    def = get_ci_mi(codeinst).def
     isa(def, Method) || return ci # don't compress toplevel code
     can_discard_trees = may_discard_trees(interp)
     inlineable = is_inlineable(ci)
@@ -588,7 +588,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
         return nothing
     end
     # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
-    may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
+    may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any, Any), def, codeinst, ci)
     return ci
 end
 

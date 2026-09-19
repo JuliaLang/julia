@@ -31,11 +31,11 @@ extern "C" {
 #define TAG_LONG_EXPR          14
 #define TAG_LONG_PHINODE       15
 #define TAG_LONG_PHICNODE      16
-#define TAG_METHODROOT         17
+#define TAG_LITERAL            17
 #define TAG_EDGE               18
 #define TAG_STRING             19
 #define TAG_SHORT_INT64        20
-//#define TAG_UNUSED           21
+#define TAG_METHODROOT         21
 #define TAG_CNULL              22
 #define TAG_ARRAY1D            23
 #define TAG_SINGLETON          24
@@ -57,7 +57,7 @@ extern "C" {
 #define TAG_VECTORTY           40
 #define TAG_PTRTY              41
 #define TAG_LONG_SSAVALUE      42
-#define TAG_LONG_METHODROOT    43
+#define TAG_LONG_LITERAL       43
 #define TAG_LONG_EDGE          44
 #define TAG_SHORTER_INT64      45
 #define TAG_SHORT_INT32        46
@@ -72,7 +72,7 @@ extern "C" {
 #define TAG_GOTOIFNOT          55
 #define TAG_RETURNNODE         56
 #define TAG_ARGUMENT           57
-#define TAG_RELOC_METHODROOT   58
+#define TAG_LONG_METHODROOT    58
 #define TAG_BINDING            59
 #define TAG_MEMORYT            60
 #define TAG_ENTERNODE          61
@@ -88,7 +88,7 @@ typedef struct {
     jl_method_t *method;
     jl_svec_t *edges;
     jl_ptls_t ptls;
-    uint8_t relocatability;
+    jl_array_t *roots;
 } jl_ircode_state;
 
 // type => tag hash for a few core types (e.g., Expr, PhiNode, etc)
@@ -124,36 +124,39 @@ static jl_value_t *jl_deser_symbol(uint8_t tag)
 static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) JL_CANSAFEPOINT;
 #define jl_encode_value(s, v) jl_encode_value_((s), (jl_value_t*)(v), 0)
 
-static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
+static int find_literal(jl_array_t *roots, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    if (!get_root_reference(rr, s->method, i))
-        s->relocatability = 0;
-}
-
-static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_CANSAFEPOINT
-{
-    jl_array_t *rs = s->method->roots;
-    int i, l = jl_array_nrows(rs);
-    if (jl_is_symbol(v) || jl_is_concrete_type(v)) { // TODO: or more generally, any ptr-egal value
-        for (i = 0; i < l; i++) {
-            if (jl_array_ptr_ref(rs, i) == v)
-                return tagged_root(rr, s, i);
+    if (roots == NULL)
+        return -1;
+    int l = jl_array_nrows(roots);
+    if (jl_is_symbol(v) || jl_is_concrete_type(v)) {
+        for (int i = 0; i < l; i++) {
+            if (jl_array_ptr_ref(roots, i) == v)
+                return i;
         }
     }
     else {
-        for (i = 0; i < l; i++) {
-            if (jl_egal(jl_array_ptr_ref(rs, i), v))
-                return tagged_root(rr, s, i);
+        for (int i = 0; i < l; i++) {
+            if (jl_egal(jl_array_ptr_ref(roots, i), v))
+                return i;
         }
     }
+    return -1;
+}
+
+// Nonnegative indices are literals, negative are edges.
+static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_CANSAFEPOINT
+{
+    int id = find_literal(s->roots, v);
+    if (id >= 0)
+        return id;
     for (size_t i = 0; i < jl_svec_len(s->edges); i++) {
-        if (jl_svecref(s->edges, i) == v) {
-            rr->index = i;
-            return;
-        }
+        if (jl_svecref(s->edges, i) == v)
+            return ~((int)i);
     }
-    jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
-    return tagged_root(rr, s, jl_array_nrows(rs) - 1);
+    int l = jl_array_nrows(s->roots);
+    jl_array_ptr_1d_push(s->roots, v);
+    return l;
 }
 
 static void jl_encode_int32(jl_ircode_state *s, int32_t x)
@@ -170,14 +173,17 @@ static void jl_encode_int32(jl_ircode_state *s, int32_t x)
 
 static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v) JL_CANSAFEPOINT
 {
-    rle_reference rr = {.key = -1, .index = -1};
-
     if (jl_is_string(v))
         v = jl_as_global_root(v, 1);
-    literal_val_id(&rr, s, v);
-    int id = rr.index;
-    assert(id >= 0);
-    if (rr.key == -1) {
+    int id = s->roots != s->method->roots ? find_literal(s->method->roots, v) : -1;
+    uint8_t short_tag = TAG_METHODROOT, long_tag = TAG_LONG_METHODROOT;
+    if (id < 0) {
+        id = literal_val_id(s, v);
+        short_tag = TAG_LITERAL;
+        long_tag = TAG_LONG_LITERAL;
+    }
+    if (id < 0) {
+        id = ~id;
         if (id <= UINT8_MAX) {
             write_uint8(s->s, TAG_EDGE);
             write_uint8(s->s, id);
@@ -188,17 +194,13 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v) JL_CANS
         }
         return;
     }
-    if (rr.key) {
-        write_uint8(s->s, TAG_RELOC_METHODROOT);
-        write_uint64(s->s, rr.key);
-    }
     if (id <= UINT8_MAX) {
-        write_uint8(s->s, TAG_METHODROOT);
+        write_uint8(s->s, short_tag);
         write_uint8(s->s, id);
     }
     else {
         assert(id <= UINT32_MAX);
-        write_uint8(s->s, TAG_LONG_METHODROOT);
+        write_uint8(s->s, long_tag);
         write_uint32(s->s, id);
     }
 }
@@ -777,7 +779,6 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s)
     assert(!ios_eof(s->s));
     jl_value_t *v;
     size_t n;
-    uint64_t key;
     uint8_t tag = read_uint8(s->s);
     if (tag > LAST_TAG)
         return jl_deser_tag(tag);
@@ -786,23 +787,14 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s)
     case 0:
         tag = read_uint8(s->s);
         return jl_deser_tag(tag);
-    case TAG_RELOC_METHODROOT:
-    {
-        key = read_uint64(s->s);
-        tag = read_uint8(s->s);
-        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
-        int index = -1;
-        if (tag == TAG_METHODROOT)
-            index = read_uint8(s->s);
-        else if (tag == TAG_LONG_METHODROOT)
-            index = read_uint32(s->s);
-        assert(index >= 0);
-        return lookup_root(s->method, key, index);
-    }
+    case TAG_LITERAL:
+        return jl_array_ptr_ref(s->roots, read_uint8(s->s));
+    case TAG_LONG_LITERAL:
+        return jl_array_ptr_ref(s->roots, read_uint32(s->s));
     case TAG_METHODROOT:
-        return lookup_root(s->method, 0, read_uint8(s->s));
+        return jl_array_ptr_ref(s->method->roots, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
-        return lookup_root(s->method, 0, read_uint32(s->s));
+        return jl_array_ptr_ref(s->method->roots, read_uint32(s->s));
     case TAG_EDGE:
         return jl_svecref(s->edges, read_uint8(s->s));
     case TAG_LONG_EDGE:
@@ -1004,7 +996,7 @@ typedef enum {
 #define checked_size(data, macro_size) \
     (declaration_context(static_assert(sizeof(data) == macro_size, #macro_size " does not match written size")), data)
 
-JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
+JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_code_info_t *code)
 {
     JL_TIMING(AST_COMPRESS, AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
@@ -1017,8 +1009,15 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_t dest;
     ios_mem(&dest, 0);
 
-    if (m->roots == NULL) {
-        jl_gc_write(m, m->roots, jl_array_t, jl_alloc_vec_any(0));
+    jl_array_t *roots = metadata ? metadata->roots : m->roots;
+    if (roots == NULL) {
+        roots = jl_alloc_vec_any(0);
+        if (metadata) {
+            jl_gc_write(metadata, metadata->roots, jl_array_t, roots);
+        }
+        else {
+            jl_gc_write(m, m->roots, jl_array_t, roots);
+        }
     }
     jl_value_t *edges = code->edges;
     jl_ircode_state s = {
@@ -1027,7 +1026,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         m,
         (!isdef && jl_is_svec(edges)) ? (jl_svec_t*)edges : jl_emptysvec,
         jl_current_task->ptls,
-        1
+        roots
     };
 
     uint8_t nargsmatchesmethod = code->nargs == m->nargs;
@@ -1086,14 +1085,14 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         jl_encode_value(&s, jl_nothing);
     }
 
-    write_uint8(s.s, s.relocatability);
-
     ios_flush(s.s);
     v = jl_pchar_to_string(s.s->buf, s.s->size);
     ios_close(s.s);
-    if (jl_array_nrows(m->roots) == 0) {
-        jl_gc_wb(m, NULL);
-        m->roots = NULL;
+    if (jl_array_nrows(roots) == 0) {
+        if (metadata)
+            metadata->roots = NULL;
+        else
+            m->roots = NULL;
     }
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
@@ -1121,7 +1120,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         m,
         metadata == NULL ? NULL : jl_atomic_load_relaxed(&metadata->edges),
         jl_current_task->ptls,
-        1
+        metadata ? metadata->roots : m->roots
     };
     jl_code_info_t *code = jl_new_code_info_uninit();
     jl_value_t *slotnames = NULL;
@@ -1182,7 +1181,6 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     assert(code->debuginfo);
     assert(jl_array_nrows(code->code) == codelocs_nstmts(code->debuginfo->codelocs) || jl_string_len(code->debuginfo->codelocs) == 0);
 
-    (void) read_uint8(s.s);   // relocatability
     assert(!ios_eof(s.s));
     assert(ios_getc(s.s) == -1);
 
