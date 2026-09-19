@@ -737,8 +737,8 @@ function string_distance(a::AbstractString, lena::Integer, b::AbstractString, le
         lena, lenb = lenb, lena
     end
     start = 0
-    for (i, j) in zip(a, b)
-        if a == b
+    for (achar, bchar) in zip(a, b)
+        if achar == bchar
             start += 1
         else
             break
