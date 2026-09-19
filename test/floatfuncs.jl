@@ -287,12 +287,11 @@ end
 end
 
 @testset "isapprox(x, x) for integers agrees with the `Number` method" begin
+    # Equal inputs compare equal even with NaN or negative tolerances.
     tolerances = (0, 1, 0.5, 1e-8, Inf, NaN, -1)
     for T in (Base.BitInteger_types..., BigInt)
         for x in (T(0), T(5), T === BigInt ? BigInt(1) << 200 : typemax(T))
             for atol in tolerances, rtol in tolerances
-                # equal arguments cannot overflow, so the `Integer` method has no reason to
-                # deviate from the `Number` method it specializes
                 @test isapprox(x, x; atol, rtol) ==
                       invoke(isapprox, Tuple{Number,Number}, x, x; atol, rtol) == true
             end
@@ -303,12 +302,11 @@ end
 end
 
 @testset "isapprox for integers is exact" begin
-    # every value that makes `x - y`, `abs(x)` or `promote(x, y)` misbehave
+    # Check extreme values and mixed integer types against exact BigInt arithmetic.
     testvals(::Type{Bool}) = (false, true)
     testvals(::Type{BigInt}) = (-(big(1) << 200), big(-1), big(0), big(1), big(1) << 200)
     testvals(T) = unique(T[typemin(T), typemin(T)+one(T), zero(T), one(T), T(10),
                            typemax(T)-one(T), typemax(T)])
-    # `Any` keeps each value in its own type; `vcat` would promote them to a common one
     values = Any[v for T in (Bool, Base.BitInteger_types..., BigInt) for v in testvals(T)]
 
     @test all(x -> Base.uabs(x) == abs(big(x)), values)
@@ -318,12 +316,10 @@ end
         bx, by = big(x), big(y)
         d = abs(bx - by)
         d == Base._uabsdiff(x, y) || push!(wrongdiff, (x, y))
-        # `atol` alone is the bound, and an integer `rtol` scales an exactly representable
-        # `max(|x|, |y|)`, so both comparisons can be checked against exact arithmetic
         for atol in (0, 1, 1000)
             isapprox(x, y; atol) == (d <= atol) || push!(wrongatol, (x, y, atol))
         end
-        for rtol in (1, 2, 3) # 2 and 3 overflow the scale at the extremes
+        for rtol in (1, 2, 3)
             isapprox(x, y; rtol) == (d <= rtol * max(abs(bx), abs(by))) ||
                 push!(wrongrtol, (x, y, rtol))
         end
@@ -332,7 +328,7 @@ end
     @test isempty(wrongatol)
     @test isempty(wrongrtol)
 
-    # a mixed signed/unsigned pair used to throw, because `max` and `minmax` promote
+    # Tolerances at and just below the exact distance.
     for T in (Int8, Int16, Int32, Int64, Int128)
         U = unsigned(T)
         @test isapprox(typemin(T), U(0); atol=big(2)^(8*sizeof(T)-1))
@@ -342,8 +338,7 @@ end
         @test isapprox(typemin(T), T(0); rtol=1)
     end
 
-    # a difference that carries out of the common unsigned type is decided without one,
-    # so only a tolerance that is itself out of range reaches a wider type
+    # Distances larger than the common unsigned type.
     for T in (Int8, Int16, Int32, Int64, Int128)
         U = unsigned(T)
         @test !isapprox(typemin(T), typemax(U); atol=typemax(U))
@@ -352,7 +347,7 @@ end
         @test isapprox(typemin(T), typemax(U); atol=Inf)
         @test isapprox(typemin(T), typemax(U); atol=big(typemax(U)) + big(2)^(8*sizeof(T)-1))
     end
-    # an `rtol` scale that overflows its type still bounds every possible difference
+    # Overflowing relative-tolerance products.
     for T in Base.BitInteger_types
         @test isapprox(zero(T), typemax(T); rtol=3)
         @test isapprox(typemax(T), zero(T); rtol=typemax(T))
