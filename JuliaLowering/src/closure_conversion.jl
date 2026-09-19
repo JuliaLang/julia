@@ -142,13 +142,26 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
     end
 end
 
-function convert_global_assignment(ctx, ex, var, rhs0)
+# For `x::T = rhs` (`type` given, already closure-converted), the declaration and the
+# value are installed together by one `declare_global` call, so the new type is never
+# visible with a stale (or no) value. The type is evaluated once, before the rhs, and
+# checked to be a type before the rhs runs, as a separate `decl` would be.
+function convert_global_assignment(ctx, ex, var, rhs0, type=nothing)
     binfo = get_binding(ctx, var)
     @jl_assert binfo.kind == :global ex var
     stmts = SyntaxList()
-    decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
-    if kind(decl) !== K"TOMBSTONE"
-        push!(stmts, decl)
+    if isnothing(type)
+        decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
+        if kind(decl) !== K"TOMBSTONE"
+            push!(stmts, decl)
+        end
+    else
+        if !is_simple_atom(ctx, type)
+            ttmp = ssavar(ctx, type, "T")
+            push!(stmts, @ast ctx ex [K"=" ttmp type])
+            type = ttmp
+        end
+        push!(stmts, @ast ctx ex [K"call" "isa"::K"core" (::K"nothing") type])
     end
     rhs1 = if is_simple_atom(ctx, rhs0)
         rhs0
@@ -157,7 +170,10 @@ function convert_global_assignment(ctx, ex, var, rhs0)
         push!(stmts, @ast ctx rhs0 [K"=" tmp rhs0])
         tmp
     end
-    rhs = if binfo.is_const && isnothing(binfo.type)
+    rhs = if !isnothing(type)
+        do_typeassert = false # Global assignment type checking is done by the runtime
+        convert_for_type_decl(ctx, ex, rhs1, type, do_typeassert)
+    elseif binfo.is_const && isnothing(binfo.type)
         # const global assignments without a type declaration don't need us to
         # deal with the binding type at all.
         rhs1
@@ -174,7 +190,14 @@ function convert_global_assignment(ctx, ex, var, rhs0)
         do_typeassert = false # Global assignment type checking is done by the runtime
         convert_for_type_decl(ctx, ex, rhs1, type_var, do_typeassert)
     end
-    push!(stmts, @ast ctx ex [K"=" var rhs])
+    if isnothing(type)
+        push!(stmts, @ast ctx ex [K"=" var rhs])
+    else
+        push!(stmts, @ast ctx ex [K"call"
+            "declare_global"::K"core"
+            binfo.mod::K"Value" binfo.name::K"Symbol" true::K"Bool" type rhs])
+        push!(stmts, @ast ctx ex (::K"latestworld"))
+    end
     @ast ctx ex [K"block"
         stmts...
         rhs1
@@ -186,7 +209,9 @@ end
 #
 # When doing this, the original value needs to be preserved, to ensure the
 # expression `a=b` always returns exactly `b`.
-function convert_assignment(ctx, ex)
+#
+# `type` is the (converted) declared type of a global `x::T = rhs`.
+function convert_assignment(ctx, ex, type=nothing)
     var = ex[1]
     rhs0 = _convert_closures(ctx, ex[2])
     if kind(var) == K"Placeholder"
@@ -195,7 +220,7 @@ function convert_assignment(ctx, ex)
     @jl_assert kind(var) == K"BindingId" ex
     binfo = get_binding(ctx, var)
     if binfo.kind == :global
-        convert_global_assignment(ctx, ex, var, rhs0)
+        convert_global_assignment(ctx, ex, var, rhs0, type)
     else
         @jl_assert binfo.kind in (:local, :argument, :typevar) ex
         boxed = is_boxed(binfo)
@@ -463,7 +488,13 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"decl"
         @jl_assert kind(ex[1]) == K"BindingId" ex
         binfo = get_binding(ctx, ex[1])
-        if binfo.kind == :global
+        if numchildren(ex) == 3
+            # `x::T = v`: a global takes `T` from here; a local takes it from
+            # its binding, where scope analysis recorded it.
+            type = binfo.kind == :global ? _convert_closures(ctx, ex[2]) : nothing
+            assignment = @ast ctx ex [K"=" ex[1] ex[3]]
+            convert_assignment(ctx, assignment, type)
+        elseif binfo.kind == :global
             # flisp has this, but our K"assert" handling is in a previous pass
             # [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
             make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))

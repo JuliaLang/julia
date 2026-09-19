@@ -230,12 +230,20 @@ function du_visit!(ctx, state::DefUseState, e)
         return false
 
     elseif k == K"decl"
-        # Don't recurse into decl nodes - the BindingId is just a declaration,
-        # not a use. We only need to visit the type expression.
-        if numchildren(e) >= 2
-            return du_visit!(ctx, state, e[2])
+        # Don't recurse into the BindingId: it is a declaration, not a use. Visit
+        # the type expression and, for `[K"decl" x T v]` (`x::T = v`), the value,
+        # in emission order: a global evaluates the type before the value, a local
+        # the value before the type (in the conversion).
+        has_label = false
+        if numchildren(e) == 3
+            is_global = get_binding(ctx, e[1]).kind == :global
+            has_label |= du_visit!(ctx, state, e[is_global ? 2 : 3])
+            has_label |= du_visit!(ctx, state, e[is_global ? 3 : 2])
+            du_assign!(state, syntax_id(e[1]))
+        elseif numchildren(e) >= 2
+            has_label = du_visit!(ctx, state, e[2])
         end
-        return false
+        return has_label
 
     elseif k == K"function_decl"
         # [function_decl] defines and instantiates the closure type

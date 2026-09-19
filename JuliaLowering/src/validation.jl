@@ -1281,6 +1281,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"global" x] -> vst2_ident_lhs(vcx, x)
     [K"local" x] -> vst2_ident_lhs(vcx, x)
     [K"decl" x t] -> vst2_ident(vcx, x) & vst2(vcx, t)
+    [K"decl" x t v] -> vst2_ident_lhs(vcx, x) & vst2(vcx, t) & vst2(vcx, v) # `x::T = v`
     [K"if" cond t] -> vst2(vcx, cond) & vst2(vcx, t)
     [K"if" cond t f] -> vst2(vcx, cond) & vst2(vcx, t) & vst2(vcx, f)
     [K"elseif" cond t] -> vst2(vcx, cond) & vst2(vcx, t)
