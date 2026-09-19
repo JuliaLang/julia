@@ -686,13 +686,13 @@ end
         @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
-        @test string(parse(BigFloat, "1e6")) == "1.0e6"
+        @test string(parse(BigFloat, "1e12")) == "1.0e12"
     end
     setprecision(123) do
         @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
-        @test string(parse(BigFloat, "1e6")) == "1.0e6"
+        @test string(parse(BigFloat, "1e6")) == "1000000.0"
     end
 end
 @testset "eps" begin
@@ -999,42 +999,47 @@ end
         starts::String="")
         sx = sprint(show, x)
         scx = sprint(show, x, context=:compact => true)
+        stx = sprint(show, x, context=:typeinfo => BigFloat)
         strx = string(x)
-        @test sx == strx
+        @test stx == strx
         @test length(scx) < 20
         @test length(scx) <= length(sx)
-        @test x == parse(BigFloat, sx)
+        @test x == Meta.parse(sx) |> eval
         @test ≈(x, parse(BigFloat, scx), rtol=1e-4)
-        for s in (sx, scx)
-            @test occursin('e', s) == contains_e
-            @test startswith(s, starts)
-            @test endswith(s, ends)
-        end
+        @test ≈(x, parse(BigFloat, stx), rtol=1e-4)
+        @test all(occursin.('e', [sx, stx]) .== contains_e)
+        @test startswith(sx, (isnegative(x) ? "-big\"" : "big\"") * starts)
+        @test endswith(sx, ends * '"')
     end
 
     test_show_bigfloat(big"1.23456789", contains_e=false, starts="1.23")
-    test_show_bigfloat(big"-1.23456789", contains_e=false, starts="-1.23")
+    test_show_bigfloat(big"-1.23456789", contains_e=false, starts="1.23")
     test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e10000")
-    test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
+    test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="2.345", ends="e-10000")
     test_show_bigfloat(big"42.0", contains_e=false, starts="42.0")
     test_show_bigfloat(big"420.0", contains_e=false, starts="420.0") # '0's have to be added on the right before point
-    test_show_bigfloat(big"-420.0", contains_e=false, starts="-420.0")
+    test_show_bigfloat(big"-420.0", contains_e=false, starts="420.0")
     test_show_bigfloat(big"420000.0", contains_e=false, starts="420000.0")
     test_show_bigfloat(big"654321.0", contains_e=false, starts="654321.0")
-    test_show_bigfloat(big"-654321.0", contains_e=false, starts="-654321.0")
-    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e6")
+    test_show_bigfloat(big"-654321.0", contains_e=false, starts="654321.0")
+    test_show_bigfloat(big"6543210.0", contains_e=false, starts="65")
+    test_show_bigfloat(BigFloat(6543210, precision=18), starts="6.5", ends="e6")
     test_show_bigfloat(big"0.000123", contains_e=false, starts="0.000123")
-    test_show_bigfloat(big"-0.000123", contains_e=false, starts="-0.000123")
+    test_show_bigfloat(big"-0.000123", contains_e=false, starts="0.000123")
     test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-5")
 
     for to_string in [string,
-                      x->sprint(show, x),
+                      x->sprint(show, x, context=:typeinfo => BigFloat),
                       x->sprint(show, x, context=:compact => true)]
         @test to_string(big"0.0") == "0.0"
         @test to_string(big"-0.0") == "-0.0"
         @test to_string(big"1.0") == "1.0"
         @test to_string(big"-1.0") == "-1.0"
     end
+    @test sprint(show, big"0.0") == "big\"0.0\""
+    @test sprint(show, big"-0.0") == "-big\"0.0\""
+    @test sprint(show, big"1.0") == "big\"1.0\""
+    @test sprint(show, big"-1.0") == "-big\"1.0\""
 end
 @testset "big(::Type)" begin
     for x in (2f0, pi, 7.8, big(ℯ))

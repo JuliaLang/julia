@@ -207,7 +207,7 @@ function show(io::IO, z::Complex)
         print(io, compact ? "+" : " + ")
         write(io, bufio)
     end
-    if !(isa(i,Signed) || isa(i,AbstractFloat) && isfinite(i))
+    if !(i isa Signed || i isa AbstractFloat && isfinite(i)) || (i isa BigFloat && !compact)
         print(io, "*")
     end
     print(io, "im")
