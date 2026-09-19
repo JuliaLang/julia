@@ -5,6 +5,7 @@ module History
 using ..REPL: REPL
 
 using StyledStrings: @styled_str as @S_str, Face, addface!, face!, annotations, AnnotatedIOBuffer, AnnotatedString, AnnotatedChar
+using StyledStrings: getface, rgbcolor
 using JuliaSyntaxHighlighting: highlight
 using Base.Threads
 using Dates
