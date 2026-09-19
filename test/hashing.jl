@@ -418,7 +418,7 @@ Base.decompose(x::DecomposedReal) = (x.num, x.pow, x.den)
         @test hash(D(1, -1074, 1), h) == hash(2.0^-1074, h)
         @test hash(D(1, -1075, 1), h) == hash(1 // big(2)^1075, h)
         # pow near typemax/typemin must not overflow when combined with the trailing zeros of num and
-        # den or when compared against the Int64 and Float64 bounds;
+        # den or when compared against the Int64 and Float64 bounds
         @test hash(D(1, tp, 4), h) == hash(D(4, tp - 4, 1), h)
         @test hash(D(big(2)^100, tp - 50, 1), h) == hash(D(1, big(tp) + 50, 1), h)
         @test hash(D(4, tp, 1), h) == hash(D(1, big(tp) + 2, 1), h)
