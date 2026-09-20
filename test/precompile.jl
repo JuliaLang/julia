@@ -3827,19 +3827,24 @@ end
     end end
 end
 
-# Issue #63268: the cache file name is keyed on the environment. Two environments at the
-# same project path (the same mount point in different containers, or one project whose
-# manifest is switched) that resolve different versions of a package must not overwrite
-# each other's cache files, so the manifest contents are part of the key.
+# Issue #63268: environments at the same project path (one per container, or one project
+# whose manifest is switched) resolving different versions of a package must not overwrite
+# each other's cache files. A file whose source is gone from the depot is dropped later.
 @testset "cache files of different versions at the same project path coexist" begin
     mkdepottempdir() do depot; mktempdir() do dir
-        for (dirname, marker, version) in (("DepOld", 1, "0.1.0"), ("DepNew", 2, "0.2.0"))
-            path = joinpath(dir, "dev", dirname)
+        uuid = Base.UUID("a1a1a1a1-0000-0000-0000-000000000001")
+        # tree hashes place the versions under the depot, like Pkg does, so the caches
+        # are relocatable
+        versions = Dict("0.1.0" => (1, "1111111111111111111111111111111111111111"),
+                        "0.2.0" => (2, "2222222222222222222222222222222222222222"))
+        srcdir(version) = joinpath(depot, "packages", "Dep", Base.version_slug(uuid, Base.SHA1(versions[version][2])))
+        for (version, (marker, _)) in versions
+            path = srcdir(version)
             mkpath(joinpath(path, "src"))
             write(joinpath(path, "Project.toml"),
                   """
                   name = "Dep"
-                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  uuid = "$uuid"
                   version = "$version"
                   """)
             write(joinpath(path, "src", "Dep.jl"),
@@ -3854,16 +3859,16 @@ end
         write(joinpath(project_path, "Project.toml"),
               """
               [deps]
-              Dep = "a1a1a1a1-0000-0000-0000-000000000001"
+              Dep = "$uuid"
               """)
-        function use_dep(dirname, version)
+        function use_dep(version)
             write(joinpath(project_path, "Manifest.toml"),
                   """
                   manifest_format = "2.0"
 
                   [[deps.Dep]]
-                  path = "../dev/$dirname/"
-                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  git-tree-sha1 = "$(versions[version][2])"
+                  uuid = "$uuid"
                   version = "$version"
                   """)
         end
@@ -3885,25 +3890,55 @@ end
         cachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Dep")
         cachefiles() = filter(endswith(".ji"), readdir(cachedir))
 
-        use_dep("DepOld", "0.1.0")
+        use_dep("0.1.0")
         output = run_dep()
         @test occursin("PRECOMPILED=false", output)
         @test occursin("DEP_VERSION=1", output)
         @test length(cachefiles()) == 1
 
         # The other version is cached alongside, not over, the first one
-        use_dep("DepNew", "0.2.0")
+        use_dep("0.2.0")
         output = run_dep()
         @test occursin("PRECOMPILED=false", output)
         @test occursin("DEP_VERSION=2", output)
         @test length(cachefiles()) == 2
 
         # so switching back needs no recompilation
-        use_dep("DepOld", "0.1.0")
+        use_dep("0.1.0")
         output = run_dep()
         @test occursin("PRECOMPILED=true", output)
         @test occursin("DEP_VERSION=1", output)
         @test length(cachefiles()) == 2
+
+        # Once a version's source is gone from the depot (as after `Pkg.gc`) and its cache
+        # file has not been loaded for a week, the next cache write for the package drops it
+        rm(srcdir("0.1.0"); recursive=true)
+        use_dep("0.2.0")
+        function edit_dep(edit)
+            write(joinpath(srcdir("0.2.0"), "src", "Dep.jl"),
+                  """
+                  module Dep
+                  const _v = 2
+                  const _edit = $edit
+                  end
+                  """)
+        end
+        edit_dep(1)
+        output = run_dep()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles()) == 2 # recently loaded, so kept
+        for file in cachefiles()
+            old = time() - 8 * 24 * 60 * 60
+            f = Base.Filesystem.open(joinpath(cachedir, file), Base.Filesystem.JL_O_RDWR)
+            Base.Filesystem.futime(f, old, old)
+            close(f)
+        end
+        edit_dep(2)
+        output = run_dep()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles()) == 1
     end end
 end
 

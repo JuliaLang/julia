@@ -3650,16 +3650,14 @@ function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=Cac
         abspath(cachepath, entryfile) * ".ji"
     else
         crc = _crc32c(project)
-        # Distinct environments can share a project path (e.g. the same mount point in
-        # different containers) yet pin different package versions, so key on the
-        # manifest contents too, or they would overwrite each other's cache files (#63268).
+        # environments at the same path (e.g. in different containers) may resolve
+        # different versions, so key on the manifest contents too (#63268)
         manifest = isempty(project) ? nothing : project_file_manifest_path(project)
         if manifest !== nothing
             try
                 crc = open(io -> _crc32c(io, crc), manifest, "r")
             catch e
-                # e.g. a concurrent Pkg operation replacing the manifest; only the name is affected
-                e isa IOError || rethrow()
+                e isa IOError || rethrow() # only the file name is affected
             end
         end
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
@@ -3807,19 +3805,22 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             if pkg.uuid !== nothing
                 entrypath, entryfile = cache_file_entry(pkg)
                 cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(cachepath))
+                # drop files whose source is gone (e.g. after `Pkg.gc`) rather than let them
+                # fill the LRU slots; loading touches a file, so one not loaded for a week is
+                # not in use by a process with another view of the depots (another container)
+                cutoff = time() - 7 * 24 * 60 * 60
+                filter!(cachefiles) do file
+                    path = joinpath(cachepath, file)
+                    (mtime(path) < cutoff && cachefile_source_removed(path)) || return true
+                    @debug "Evicting cache file whose source was removed" path
+                    rm_cachefile(path)
+                    return false
+                end
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
                     evicted_cachefile = joinpath(cachepath, cachefiles[idx])
                     @debug "Evicting file from cache" evicted_cachefile
-                    rm(evicted_cachefile; force=true)
-                    try
-                        rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
-                        @static if Sys.isapple()
-                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
-                        end
-                    catch e
-                        e isa IOError || rethrow()
-                    end
+                    rm_cachefile(evicted_cachefile)
                 end
             end
 
@@ -3854,6 +3855,33 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
     else
         error("Failed to precompile $(repr("text/plain", pkg)) to $(repr(tmppath)) ($(Base.process_status(p))).")
     end
+end
+
+# remove a cache file along with its object file (and dSYM bundle on macOS)
+function rm_cachefile(cachefile::String)
+    rm(cachefile; force=true)
+    try
+        rm(ocachefile_from_cachefile(cachefile); force=true)
+        @static if Sys.isapple()
+            rm(ocachefile_from_cachefile(cachefile) * ".dSYM"; force=true, recursive=true)
+        end
+    catch e
+        e isa IOError || rethrow()
+    end
+end
+
+# whether the package source a cache file was built from is gone from every depot;
+# sources outside a depot are not judged (another process may still see them), nor is
+# a file whose header does not parse (it may belong to another julia build)
+function cachefile_source_removed(cachefile::String)
+    srcfiles = try
+        parse_cache_header(cachefile)[2][2]
+    catch
+        return false
+    end
+    # parse_cache_header restores the `@depot` tags it can resolve
+    depot_tag = string("@depot", Filesystem.pathsep())
+    return !isempty(srcfiles) && all(inc -> startswith(inc.filename, depot_tag), srcfiles)
 end
 
 function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0)
