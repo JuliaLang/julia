@@ -760,7 +760,9 @@ worth understanding. See the
 `SnoopCompile` package for a full analysis.
 
 If loading a package invalidated existing compiled code, the number of invalidated code instances is
-appended to its line, and a tip about the `invalidations` option is printed once per session.
+appended to its line, and a tip about the `invalidations` option is printed once per session. To see
+what actually gets recompiled as a result, and what that costs, combine with [`@trace_compile`](@ref):
+`@time_imports @trace_compile using Plots`.
 
 With `invalidations=true`, the package's line is instead preceded by a summary of the invalidations,
 grouped by what triggered them: usually a method definition, otherwise a method deletion, a binding

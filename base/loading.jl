@@ -1624,7 +1624,7 @@ function print_time_imports_report(
         printstyled(" ($perc_show% recompilation)", color = Base.warn_color())
     end
     if n_invalidations > 0
-        printstyled(" $n_invalidations invalidation", n_invalidations == 1 ? "" : "s", color = :light_black)
+        printstyled(" $n_invalidations invalidation$(n_invalidations == 1 ? "" : "s")", color = :light_black)
         TIMING_IMPORTS_INVALIDATIONS_HINT[] = true
     end
     println()

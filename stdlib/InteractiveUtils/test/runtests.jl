@@ -973,6 +973,9 @@ end
     end
 end
 
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
+import .FakePTYs: open_fake_pty
+
 @testset "@time_imports invalidations" begin
     mktempdir() do dir
         try
@@ -1041,6 +1044,40 @@ end
 
             @test_throws ArgumentError @eval @time_imports invalidations=:none using InvExtG3242
             @test_throws LoadError @eval @time_imports foo=true using InvExtG3242
+
+            # the report itself must not compile anything, or it would add recompilation to
+            # what it measures; checked in a pty-attached process, as in a terminal session
+            if !Sys.iswindows()
+                script = """
+                    pushfirst!(LOAD_PATH, $(repr(dir)))
+                    using InteractiveUtils
+                    @time_imports using InvExtF3242
+                    """
+                cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --color=yes -e $script`, Dict("TERM" => ""))
+                # compile the fixture packages for the child's flags first, outside the traced run
+                run(pipeline(cmd; stdout=devnull, stderr=devnull))
+                tracefile, _ = mktemp()
+                pts, ptm = open_fake_pty()
+                outbuf = IOBuffer()
+                drain = @async try
+                    while !eof(ptm)
+                        write(outbuf, readavailable(ptm))
+                    end
+                catch # ignore EIO when the child exits
+                end
+                p = run(`$cmd --trace-compile=$tracefile`, pts, pts, pts; wait=false)
+                Base.close_stdio(pts)
+                wait(p)
+                wait(drain)
+                close(ptm)
+                out = replace(String(take!(outbuf)), r"\e\[[0-9;]*m" => "")  # strip colors
+                @test occursin("InvExtF3242 1 invalidation", out)
+                @test occursin("Tip:", out)
+                trace = read(tracefile, String)
+                report_compiles = filter(l -> occursin(r"time_imports|printstyled|with_output_color|invalidation", l),
+                                         split(trace, '\n'))
+                @test isempty(report_compiles)
+            end
         finally
             filter!((≠)(dir), LOAD_PATH)
         end
