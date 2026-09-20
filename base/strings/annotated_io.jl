@@ -345,29 +345,126 @@ end
 
 function printstyled end
 
-# NOTE: This is an interim solution to the invalidations caused
-# by the split styled display implementation. This should be
-# replaced by a more robust solution (such as a consolidation of
-# the type and method definitions) in the near future.
+"""
+    AnnotatedDisplay
+
+How an annotated string, substring, or char is written and shown. The value type of its
+annotations selects an [`AnnotationStyle`](@ref), and [`awrite`](@ref) renders it under
+that style. Base provides `NoStyle`, which writes the plain text; a package whose values
+carry display information (such as StyledStrings' `Face`) declares a style for its type
+and implements `awrite` for it, and strings holding such values then render statically,
+without a lookup at write time.
+
+!!! warning "Experimental"
+    This interface is experimental and may change or be removed in a future release
+    without deprecation.
+"""
 module AnnotatedDisplay
 
 using ..Base: IO, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer
-using ..Base: eachregion, invoke_in_world, tls_world_age, unannotate
+using ..Base: eachregion, unannotate, raw_substring, annotations, annotatedstring, annot_valtype, invoke_in_world, tls_world_age, Fix1
+using ..Base: escape_string, annotate!, _clear_annotations_in_region!, RegionAnnotation
+
+public AbstractAnnotationStyle, AnnotationStyle, NoStyle, awrite
+
+# Annotation styles
+
+"""
+    AbstractAnnotationStyle
+
+The supertype of the singletons that [`AnnotationStyle`](@ref) selects between.
+"""
+abstract type AbstractAnnotationStyle end
+
+struct NoStyle <: AbstractAnnotationStyle end
+
+# These are plain functions rather than constructors so that `max_methods` applies to them
+# (a constructor shares `DataType`'s limit). When the value type is not a compile-time
+# constant, a call sees at least two applicable methods (`NoStyle` and `DynamicStyle`), so
+# inference leaves it dynamic and records no method-table edge. A package's style or writer
+# definitions therefore cannot invalidate Base's compiled callers.
+"""
+    AnnotationStyle(::Type{V}) -> AbstractAnnotationStyle
+
+Trait selecting how annotations whose values have type `V` are displayed.
+
+A type that carries display information (such as StyledStrings' `Face`) returns its own
+`AbstractAnnotationStyle` singleton, for which [`awrite`](@ref) methods are defined.
+A type that is mere metadata returns `NoStyle()`, the default. A `Union` value type reduces
+over its members with `AnnotationStyle(a, b)`, so annotations of several types are displayed
+by the member with a style. Two members whose styles differ have no display style in
+common, and raise an `ArgumentError` until one of their packages defines an
+`AnnotationStyle(a, b)` method that settles it, in either order, as a `promote_rule`
+settles a promotion; a method may also return `nothing` to leave the pair unsettled. Where
+both orders have a rule, the one in the order the styles are combined in is used.
+`Any` is `DynamicStyle()`, which finds the style from the values held.
+"""
+function AnnotationStyle end
+typeof(AnnotationStyle).name.max_methods = 0x1 # `Base.Experimental.@max_methods 1`, before it exists
+
+AnnotationStyle(::Type) = NoStyle()
+# As `promote_type` reads `promote_rule`, `promotestyle` reads `AnnotationStyle` rules in either
+# orientation; the fallback's `nothing` means no rule, so no reflection is needed and it stays foldable
+AnnotationStyle(::AbstractAnnotationStyle, ::AbstractAnnotationStyle) = nothing
+
+# The identities belong to the combination, as `promote_type`'s do, so no rule can clash with them
+promotestyle(a::S, ::S) where {S <: AbstractAnnotationStyle} = a
+promotestyle(a::AbstractAnnotationStyle, ::NoStyle) = a
+promotestyle(::NoStyle, b::AbstractAnnotationStyle) = b
+promotestyle(::NoStyle, ::NoStyle) = NoStyle()
+function promotestyle(a::AbstractAnnotationStyle, b::AbstractAnnotationStyle)
+    ab = AnnotationStyle(a, b)
+    isnothing(ab) || return ab
+    ba = AnnotationStyle(b, a)
+    isnothing(ba) || return ba
+    throw(ArgumentError(LazyString("annotation styles ", a, " and ", b, " have no style in common: define AnnotationStyle(::",
+                                   typeof(a), ", ::", typeof(b), ") to settle it")))
+end
+
+Base.@assume_effects :foldable AnnotationStyle(U::Union) =
+    promotestyle(AnnotationStyle(U.a), AnnotationStyle(U.b))
+
+style(x) = AnnotationStyle(annot_valtype(x))
 
 # Write
 
-# Unstyled fallback for when StyledStrings is not loaded.
-ansi_write(f::Function, io::IO, x::Any) =
-    f(io, x isa AnnotatedChar ? x.char : unannotate(x))
+"""
+    awrite(textwriter, style::AbstractAnnotationStyle, io::IO, x)
+    awrite(style::AbstractAnnotationStyle, io::IO, mime::MIME, x)
 
-ansi_write_(f::Function, io::IO, @nospecialize(x::Any)) =
-    invoke_in_world(tls_world_age(), ansi_write, f, io, x)
+Write `x`, an annotated string, substring, or char, to `io` under `style`, with each run of
+text written by `textwriter(io, text)`, and return the number of bytes written; or, with a
+`mime`, show `x` in that format.
+
+A package implements the first for its [`AnnotationStyle`](@ref), for annotated strings and
+substrings (a char is written as a one-character string unless a method is added for it),
+and may implement the second. Taking the text writer as an argument lets a transformation
+of the text, such as escaping, keep its styling. `NoStyle` writes the plain text and has no
+`mime` form.
+"""
+function awrite end
+typeof(awrite).name.max_methods = 0x1 # As for `AnnotationStyle`
+
+awrite(style::AbstractAnnotationStyle, io::IO, x) = awrite(write, style, io, x)
+
+const AnnotatedStr = Union{AnnotatedString, SubString{<:AnnotatedString}}
+
+awrite(textwriter::F, style::AbstractAnnotationStyle, io::IO, c::AnnotatedChar) where {F} =
+    awrite(textwriter, style, io, annotatedstring(c))
+
+awrite(textwriter::F, ::NoStyle, io::IO, s::AnnotatedStr) where {F} = textwriter(io, unannotate(s))
+awrite(textwriter::F, ::NoStyle, io::IO, c::AnnotatedChar) where {F} = textwriter(io, c.char)
+
+# Thrown here rather than by dispatch, so that a non-constant style still sees two methods
+awrite(::NoStyle, io::IO, m::MIME, x) = throw(MethodError(show, (io, m, x)))
+
+# Via the writer form, so that a non-constant style sees two methods there as well
+awrite(io::IO, x) = awrite(write, style(x), io, x)
 
 Base.write(io::IO, s::Union{AnnotatedString{S}, SubString{<:AnnotatedString{S}}}) where {S} =
-    ansi_write_(write, io, s)::Int
-
+    awrite(io, s)::Int
 Base.write(io::IO, c::AnnotatedChar) =
-    ansi_write_(write, io, c)::Int
+    awrite(io, c)::Int
 
 function Base.write(io::IO, aio::AnnotatedIOBuffer{V}) where {V}
     if get(io, :color, false) == true
@@ -377,7 +474,7 @@ function Base.write(io::IO, aio::AnnotatedIOBuffer{V}) where {V}
         # writing from an AnnotatedIOBuffer with style.
         # In the meantime, by converting to an `AnnotatedString` we can just
         # reuse all the work done to make that work.
-        ansi_write_(write, io, read(aio, AnnotatedString{String, V}))::Int
+        awrite(io, read(aio, AnnotatedString{String, V}))::Int
     else
         write(io, aio.io)
     end
@@ -385,17 +482,11 @@ end
 
 # Print
 
+# Via `write`, which keeps the annotations when the destination can hold them
 Base.print(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
-    (ansi_write_(write, io, s); nothing)
-
-Base.print(io::IO, s::AnnotatedChar) =
-    (ansi_write_(write, io, s); nothing)
-
-Base.print(io::AnnotatedIOBuffer, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
     (write(io, s); nothing)
-
-Base.print(io::AnnotatedIOBuffer, c::AnnotatedChar) =
-    (write(io, c); nothing)
+Base.print(io::IO, s::AnnotatedChar) =
+    (write(io, s); nothing)
 
 styled_print(io::AnnotatedIOBuffer, msg::Any, kwargs::Any) = print(io, msg...)
 
@@ -407,25 +498,81 @@ Base.printstyled(io::AnnotatedIOBuffer, msg...; kwargs...) =
 
 # Escape
 
-Base.escape_string(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}},
-              esc = ""; keep = (), ascii::Bool=false, fullhex::Bool=false) =
-    (ansi_write_((io, s) -> escape_string(io, s, esc; keep, ascii, fullhex), io, s); nothing)
+function Base.escape_string(io::IO, s::AnnotatedStr, esc = ""; keep = (), ascii::Bool=false, fullhex::Bool=false)
+    stop = if s isa SubString s.offset + s.ncodeunits else ncodeunits(s) end
+    # Before a hex digit, a `\0` or non-ASCII character can escape longer, so escape the region with the digit, then drop it
+    function escregion(io, text)
+        sub = SubString(text) # A style may write the text as a whole `String`
+        str, after = sub.string, sub.offset + sub.ncodeunits
+        next = if after < stop Char(codeunit(str, after + 1)) else '\0' end
+        if isxdigit(next) && (codeunit(str, after) == 0x00 || codeunit(str, after) >= 0x80)
+            escaped = escape_string(raw_substring(str, sub.offset + 1, sub.ncodeunits + 1), esc; keep, ascii, fullhex)
+            write(io, raw_substring(escaped, 1, ncodeunits(escaped) - 1 - (next in esc)))
+        else
+            escape_string(io, text, esc; keep, ascii, fullhex)
+        end
+        nothing
+    end
+    escape_annotated(first(Base.unwrapcontext(io)), io, s, escregion) # Qualified, as `show.jl` defines it after this file
+    nothing
+end
+
+# Into an annotated buffer, the escaped text keeps the annotations
+function escape_annotated(aio::AnnotatedIOBuffer{V}, _, s, escregion) where {V}
+    annots = convert(Vector{RegionAnnotation{V}}, annotations(s)) # As `write` does, before any text is written
+    ends, outs = Int[0], Int[position(aio)] # Where each region ends in `s`, and where its escaped text ends in `aio`
+    isappending = eof(aio)
+    for (text, _) in eachregion(s)
+        escregion(aio, text)
+        push!(ends, last(ends) + ncodeunits(text))
+        push!(outs, position(aio))
+    end
+    isappending || _clear_annotations_in_region!(aio.annotations, first(outs)+1:last(outs))
+    # Where the escaped text of `region` in `s` lies in `aio`, clipped to `s` and widened to whole characters
+    outrange(region) = UnitRange(outs[searchsortedlast(ends, clamp(first(region) - 1, 0, last(ends)))] + 1,
+                                 outs[searchsortedfirst(ends, clamp(last(region), 0, last(ends)))])
+    for (; region, label, value) in annots # A substring's annotations may reach beyond it
+        annotate!(aio, outrange(region), label, value)
+    end
+end
+escape_annotated(_, io, s, escregion) = awrite(escregion, style(s), io, s)
 
 # Show
 
-show_annot(io::IO, ::Any) = nothing
-show_annot(io::IO, ::MIME, ::Any) = nothing
-
-show_annot_(io::IO, @nospecialize(x::Any)) =
-    invoke_in_world(tls_world_age(), show_annot, io, x)::Nothing
-
-show_annot_(io::IO, m::MIME, @nospecialize(x::Any)) =
-    invoke_in_world(tls_world_age(), show_annot, io, m, x)::Nothing
-
 Base.show(io::IO, m::MIME"text/html", s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
-    show_annot_(io, m, s)
+    (awrite(style(s), io, m, s); nothing)
+Base.show(io::IO, m::MIME"text/html", c::AnnotatedChar) = show(io, m, annotatedstring(c))
 
-Base.show(io::IO, m::MIME"text/html", c::AnnotatedChar) =
-    show_annot_(io, m, c)
+function Base.showable(m::MIME"text/html", x::Union{AnnotatedStr, AnnotatedChar})
+    s = style(x)
+    if s === DynamicStyle()
+        s = invoke_in_world(tls_world_age(), valuestyle, x)
+    end
+    written = if x isa AnnotatedChar AnnotatedString{String, annot_valtype(x)} else typeof(x) end
+    s !== NoStyle() && hasmethod(awrite, Tuple{typeof(s), IO, typeof(m), written})
+end
+
+# Dynamic styles
+
+# An `Any` value type says nothing about display, so `DynamicStyle` works the style out from
+# the values held. It does this in the latest world, so that new style methods do not
+# invalidate compiled callers of `Any`-valued strings.
+struct DynamicStyle <: AbstractAnnotationStyle end
+AnnotationStyle(::Type{Any}) = DynamicStyle()
+
+valuestyle(x) = mapfoldl(a -> AnnotationStyle(typeof(a.value)), promotestyle, annotations(x), init = NoStyle())
+
+dynamic(g, @nospecialize(x), args...) = g(valuestyle(x), args...)
+
+awrite(textwriter::F, ::DynamicStyle, io::IO, @nospecialize(s::AnnotatedStr)) where {F} =
+    if isempty(annotations(if s isa SubString s.string else s end)) # Plain text, with no style to find
+        textwriter(io, unannotate(s))
+    else
+        invoke_in_world(tls_world_age(), dynamic, Fix1(awrite, textwriter), s, io, s)
+    end
+awrite(textwriter::F, ::DynamicStyle, io::IO, @nospecialize(c::AnnotatedChar)) where {F} =
+    invoke_in_world(tls_world_age(), dynamic, Fix1(awrite, textwriter), c, io, c)
+awrite(::DynamicStyle, io::IO, m::MIME, @nospecialize(x)) =
+    invoke_in_world(tls_world_age(), dynamic, awrite, x, io, m, x)
 
 end
