@@ -204,8 +204,8 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\x03")
     readuntil(stdout_read, "press ^C again to cancel all in-flight work")
     # any other key stands the arm down: this ^C press only re-arms
-    write(stdin_write, "1\n")
-    readuntil(stdout_read, "julia> ")
+    write(stdin_write, "\"stand\" * \"-down\"\n")
+    readuntil(stdout_read, "stand-down")
     write(stdin_write, "\x03")
     readuntil(stdout_read, "press ^C again to cancel all in-flight work")
     # the second press in a row sweeps
