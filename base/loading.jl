@@ -1449,16 +1449,21 @@ cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Libc.Lib
 const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 
 # state for `@time_imports invalidations=...`: the two invalidation logs, sliced per package
-# load, and whether this session enabled them (and so may truncate and disable them)
-struct TimingInvalidations
-    logmeths::Vector{Any}  # runtime log, see `jl_debug_method_invalidation`
-    logedges::Vector{Any}  # cached-code edge verification log, see `ReinferUtils.debug_method_invalidation`
+# load, shared by all the `@time_imports` scopes that are active at once
+mutable struct TimingInvalidations
+    const logmeths::Vector{Any}  # runtime log, see `jl_debug_method_invalidation`
+    const logedges::Vector{Any}  # cached-code edge verification log, see `ReinferUtils.debug_method_invalidation`
     # invalidated instance => (trigger, superseded root), kept across loads so that cached code
     # invalidated by an earlier package's method definition is attributed to that definition
-    causes::IdDict{MethodInstance, Tuple{Any, Any}}
-    top::Int  # how many triggers to report per package
-    own_logmeths::Bool
-    own_logedges::Bool
+    const causes::IdDict{MethodInstance, Tuple{Any, Any}}
+    # whether this state enabled the logs, and so may truncate and disable them; otherwise the
+    # ranges already reported by nested loads are remembered here instead of being truncated
+    const own_logmeths::Bool
+    const own_logedges::Bool
+    const consumed_logmeths::Vector{UnitRange{Int}}
+    const consumed_logedges::Vector{UnitRange{Int}}
+    top::Int       # how many triggers to report per package
+    refcount::Int  # number of `@time_imports invalidations=...` scopes sharing this state
 end
 const TIMING_IMPORTS_INVALIDATIONS = Ref{Union{Nothing, TimingInvalidations}}(nothing)
 # set once a package line has shown an invalidation count, to print the tip about the
@@ -1474,41 +1479,48 @@ end
 # cached code failing edge verification when loaded
 invalidation_count() = Int(ccall(:jl_invalidation_count, Csize_t, ())) + ReinferUtils.n_invalidated_code_instances[]
 
-# `setting` is the `invalidations=` option of `@time_imports`. Returns the previous state,
-# to be passed to `timing_imports_invalidations_stop`.
+# `setting` is the `invalidations=` option of `@time_imports`. Returns the state this scope
+# joined, to be passed to `timing_imports_invalidations_stop`, or `nothing` if it is off.
 function timing_imports_invalidations_start(@nospecialize(setting))
     top = setting === true ? 5 :
           setting === false ? 0 :
           setting === :all ? typemax(Int) :
           setting isa Integer ? Int(setting) :
           throw(ArgumentError("`@time_imports invalidations=` expects `true`, `false`, `:all` or an integer, got $(repr(setting))"))
-    prev = TIMING_IMPORTS_INVALIDATIONS[]
-    if top <= 0
-        TIMING_IMPORTS_INVALIDATIONS[] = nothing
-    elseif prev !== nothing
-        # nested inside an enabled `@time_imports`: keep its logs, only change the count
-        TIMING_IMPORTS_INVALIDATIONS[] = TimingInvalidations(prev.logmeths, prev.logedges, prev.causes, top, false, false)
-    else
-        # only enable (and later disable) the logs if nothing else (e.g. SnoopCompile) already has
-        logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 2)
-        own_logmeths = logmeths === nothing
-        own_logmeths && (logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1))
-        logedges = ReinferUtils._jl_debug_method_invalidation[]
-        own_logedges = logedges === nothing
-        own_logedges && (logedges = ReinferUtils._jl_debug_method_invalidation[] = Any[])
-        TIMING_IMPORTS_INVALIDATIONS[] = TimingInvalidations(logmeths::Vector{Any}, logedges::Vector{Any},
-            IdDict{MethodInstance, Tuple{Any, Any}}(), top, own_logmeths, own_logedges)
+    top <= 0 && return nothing
+    @lock require_lock begin
+        ti = TIMING_IMPORTS_INVALIDATIONS[]
+        if ti === nothing
+            # only enable (and later disable) the logs if nothing else (e.g. SnoopCompile) already has
+            logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 2)
+            own_logmeths = logmeths === nothing
+            own_logmeths && (logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1))
+            logedges = ReinferUtils._jl_debug_method_invalidation[]
+            own_logedges = logedges === nothing
+            own_logedges && (logedges = ReinferUtils._jl_debug_method_invalidation[] = Any[])
+            ti = TimingInvalidations(logmeths::Vector{Any}, logedges::Vector{Any},
+                IdDict{MethodInstance, Tuple{Any, Any}}(), own_logmeths, own_logedges,
+                UnitRange{Int}[], UnitRange{Int}[], top, 1)
+            TIMING_IMPORTS_INVALIDATIONS[] = ti
+        else
+            ti.top = top
+            ti.refcount += 1
+        end
+        return ti
     end
-    return prev
 end
 
-function timing_imports_invalidations_stop(prev::Union{Nothing, TimingInvalidations})
-    cur = TIMING_IMPORTS_INVALIDATIONS[]
-    if cur !== nothing
-        cur.own_logmeths && ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
-        cur.own_logedges && (ReinferUtils._jl_debug_method_invalidation[] = nothing)
+function timing_imports_invalidations_stop(ti::Union{Nothing, TimingInvalidations})
+    if ti !== nothing
+        @lock require_lock begin
+            ti.refcount -= 1
+            if ti.refcount == 0
+                ti.own_logmeths && ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+                ti.own_logedges && (ReinferUtils._jl_debug_method_invalidation[] = nothing)
+                TIMING_IMPORTS_INVALIDATIONS[] = nothing
+            end
+        end
     end
-    TIMING_IMPORTS_INVALIDATIONS[] = prev
     if TIMING_IMPORTS[] == 0 && TIMING_IMPORTS_INVALIDATIONS_HINT[]
         TIMING_IMPORTS_INVALIDATIONS_HINT[] = false
         print_time_imports_invalidations_tip()
@@ -1694,8 +1706,16 @@ function summarize_invalidations!(ti::TimingInvalidations, n_logmeths::Int, n_lo
         end
         empty!(blocks)
     end
+    skips = filter(r -> first(r) > n_logmeths, ti.consumed_logmeths)
+    k = 1
     i, len = n_logmeths + 1, length(logmeths)
     while i <= len
+        # ranges already reported by nested loads are skipped
+        while k <= length(skips) && i >= first(skips[k])
+            i = max(i, last(skips[k]) + 1)
+            k += 1
+        end
+        i <= len || break
         item = logmeths[i]
         if item isa MethodInstance || item isa Core.ABIOverride
             mi = _invalidated_mi(item)
@@ -1731,8 +1751,15 @@ function summarize_invalidations!(ti::TimingInvalidations, n_logmeths::Int, n_lo
     # instance that no longer resolves to the same methods invalidates it, and that propagates
     # to its cached callers.
     logedges = ti.logedges
+    skips = filter(r -> first(r) > n_logedges, ti.consumed_logedges)
+    k = 1
     i, len = n_logedges + 1, length(logedges)
     while i + 2 <= len
+        while k <= length(skips) && i >= first(skips[k])
+            i = max(i, last(skips[k]) + 1)
+            k += 1
+        end
+        i + 2 <= len || break
         tag = logedges[i+1]
         if tag == "insert_backedges_callee"
             edge, target, matches = logedges[i], logedges[i+2]::CodeInstance, logedges[i+3]::Vector{Any}
@@ -1806,12 +1833,23 @@ function print_invalidation_root(io::IO, @nospecialize(root))
     end
 end
 
+# entries from `n+1` on have now been reported: drop them if the log is ours, otherwise
+# remember the range so that a parent load (this one may be from an `__init__`) skips them
+function mark_invalidations_reported!(log::Vector{Any}, consumed::Vector{UnitRange{Int}}, n::Int, own::Bool)
+    if own
+        resize!(log, n)
+    else
+        filter!(r -> last(r) <= n, consumed)
+        n < length(log) && push!(consumed, n+1:length(log))
+    end
+    nothing
+end
+
 function print_time_imports_report_invalidations(ti::TimingInvalidations, n_logmeths::Int, n_logedges::Int,
                                                  has_init::Bool, n_invalidations::Int)
     total, entries = summarize_invalidations!(ti, n_logmeths, n_logedges)
-    # nested loads (from `__init__`) have already reported their own entries
-    ti.own_logmeths && resize!(ti.logmeths, n_logmeths)
-    ti.own_logedges && resize!(ti.logedges, n_logedges)
+    mark_invalidations_reported!(ti.logmeths, ti.consumed_logmeths, n_logmeths, ti.own_logmeths)
+    mark_invalidations_reported!(ti.logedges, ti.consumed_logedges, n_logedges, ti.own_logedges)
     total == 0 && return
     ntriggers = length(entries)
     printstyled("               $(has_init ? "├" : "┌") ", color = :light_black)

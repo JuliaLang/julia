@@ -288,9 +288,9 @@ Standard library changes
 * `less`/`@less` and `edit`/`@edit` are now supported for documented variables ([#53539]).
 * A new `@methods` macro lists all methods applicable to a call expression, using the types of
   the given arguments, e.g. `@methods isvalid('a', 1)` or `@methods isvalid(::AbstractChar, ::Integer)` ([#62311]).
-* `@time_imports invalidations=true` reports, for each loaded package, how many method instances
-  were invalidated while loading it and the 5 method definitions responsible for the most of
-  them; `invalidations=:all` lists every trigger.
+* `@time_imports` now shows how much compiled code each package invalidated when it loaded, and
+  `@time_imports invalidations=true` lists the method definitions that triggered the most of those
+  invalidations; `invalidations=:all` lists every trigger.
 
 #### Dates
 

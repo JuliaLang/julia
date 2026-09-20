@@ -773,14 +773,14 @@ macro time_imports(args...)
     end
     ex = args[end]
     quote
-        local prev_invalidations = Base.timing_imports_invalidations_start($(esc(invalidations)))
+        local invalidations_state = Base.timing_imports_invalidations_start($(esc(invalidations)))
         Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
         @__tryfinally(
             # try
             $(esc(ex)),
             # finally
             (Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1);
-             Base.timing_imports_invalidations_stop(prev_invalidations))
+             Base.timing_imports_invalidations_stop(invalidations_state))
         )
     end
 end
