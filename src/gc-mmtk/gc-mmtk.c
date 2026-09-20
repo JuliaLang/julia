@@ -392,53 +392,23 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
 }
 
 
-// Based on jl_gc_collect from gc-stock.c
-// called when stopping the thread in `mmtk_block_for_gc`
-JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
+// Arm the GC safepoint and wait for every currently-registered mutator to reach it, on behalf of
+// `Collection::stop_all_mutators` in the mmtk_julia binding.
+//
+// This runs on whichever GC worker thread mmtk-core's own scheduler dedicates to running the
+// current pause's `StopMutators` work -- never on a mutator, and never with a second concurrent
+// caller, both guaranteed by mmtk-core.
+JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(int collection)
 {
-    // FIXME: set to JL_GC_AUTO since we're calling it from mmtk
-    // maybe just remove this?
-    JL_PROBE_GC_BEGIN(JL_GC_AUTO);
+    JL_PROBE_GC_BEGIN(collection);
 
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    if (!mmtk_is_collection_enabled()) {
-        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
-        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
-        static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
-        return;
-    }
-
-    int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
-    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
-    // `jl_safepoint_start_gc()` makes sure only one thread can run the GC.
     uint64_t t0 = jl_hrtime();
-    if (!jl_safepoint_start_gc(ct)) {
-        jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
-        jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
-        if (old_state == JL_GC_STATE_UNSAFE)
-            jl_gc_safepoint(); // ensure our gc_safe transition is recognized
-        jl_gc_notify_task_resume(ct);
-        return;
-    }
+    jl_safepoint_start_gc_from_gc_thread();
 
-    JL_TIMING_SUSPEND_TASK(GC, ct);
-    JL_TIMING(GC, GC);
-
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
-    // Now we are ready to wait for other threads to hit the safepoint,
-    // we can do a few things that doesn't require synchronization.
-    //
     // We must sync here with the tls_lock operations, so that we have a
     // seq-cst order between these events now we know that either the new
     // thread must run into our safepoint flag or we must observe the
     // existence of the thread in the jl_n_threads count.
-    //
-    // TODO: concurrently queue objects
     jl_fence();
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
@@ -449,41 +419,80 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     uint64_t duration = t1 - t0;
     if (duration > gc_num.max_time_to_safepoint)
         gc_num.max_time_to_safepoint = duration;
+    // time_to_safepoint is computed in the same way as stock GC, and it only counts
+    // the time to bring all the threads to safepoint.
+    // TODO: We may want to count from the time when we request the STW in MMTk,
+    // until all the threads are stopped (this would include the time for MMTk scheduler to schedule a stop-the-world packet).
+    // Either add a on_pause_requested callback in MMTk, or let MMTk measure time_to_safepoint and report it back here to Julia.
     gc_num.time_to_safepoint = duration;
     gc_num.total_time_to_safepoint += duration;
+}
 
-    if (mmtk_is_collection_enabled()) {
-        JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
-#ifndef __clang_gcanalyzer__
-        mmtk_block_thread_for_gc();
-#endif
-        JL_UNLOCK_NOGC(&finalizers_lock);
-    }
-
-    jl_gc_notify_task_resume(ct);
-
+// The other half of `jl_gc_mmtk_stop_the_world`: disarm the safepoint and let mutators run again,
+// on behalf of `Collection::resume_mutators`, once the pause's GC work is done.
+//
+// Finalizers no longer run here: a GC worker thread has no `jl_current_task` to run them on.
+// `jl_gc_mmtk_run_pending_finalizers` runs them instead, from the waiting mutator itself.
+JL_DLLEXPORT void jl_gc_mmtk_resume_the_world(void)
+{
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     jl_safepoint_end_gc();
-    jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
-    jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
-    if (old_state == JL_GC_STATE_UNSAFE)
-        jl_gc_safepoint(); // ensure our gc_safe transition is recognized
+}
 
-    // Only disable finalizers on current thread
-    // Doing this on all threads is racy (it's impossible to check
-    // or wait for finalizers on other threads without dead lock).
+// By the time a mutator gets here, collection may have been disabled. If so, defer the
+// allocation instead of waiting on a GC that won't run -- same as `jl_gc_collect` does.
+// Returns whether the caller should skip waiting.
+JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
+{
+    if (mmtk_is_collection_enabled())
+        return 0;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+    static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
+    jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
+    return 1;
+}
+
+// Called by `Collection::block_for_gc` right before it waits for the pause:
+// mark this task's own timing as suspended.
+JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_enter(void)
+{
+#if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
+    jl_timing_suspend_t suspend;
+    _jl_timing_suspend_ctor(&suspend, "GC", jl_current_task);
+#endif
+}
+
+// The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
+// task's own timing, and tell mmtk-core this task has resumed.
+JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
+{
+    jl_task_t *ct = jl_current_task;
+#if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
+    jl_timing_suspend_t suspend;
+    suspend.ct = ct;
+    _jl_timing_suspend_destroy(&suspend);
+#endif
+    jl_gc_notify_task_resume(ct);
+}
+
+// Runs this mutator's pending finalizers before `Collection::block_for_gc` returns --
+// `GC.gc()` is documented/tested to have run pending finalizers by the time they
+// return.
+JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    // Only disable finalizers on current thread. Doing this on all threads is racy (it's
+    // impossible to check or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
         JL_TIMING(GC, GC_Finalizers);
         run_finalizers(ct, 0);
     }
     JL_PROBE_GC_FINALIZER();
-
-#ifdef _OS_WINDOWS_
-    SetLastError(last_error);
-#endif
-    errno = last_errno;
 }
 
 // ========================================================================= //
@@ -1011,6 +1020,11 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
     sweep_mtarraylist_buffers();
 }
 
+void jl_gc_notify_task_suspend(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    jl_gc_wb_back(task);
+}
+
 void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
 {
 #ifdef MMTK_PLAN_CONCURRENTIMMIX
@@ -1121,6 +1135,20 @@ STATIC_INLINE void* bump_alloc_fast(MMTkMutatorContext* mutator, uintptr_t* curs
     }
 }
 
+// Like `bump_alloc_fast`, but the slow path is taken with explicit allocation options rather
+// than MMTk's defaults.
+STATIC_INLINE void* bump_alloc_fast_with_options(MMTkMutatorContext* mutator, uintptr_t* cursor, uintptr_t limit, size_t size, size_t align, size_t offset, int allocator, MMTk_AllocationOptions options) JL_NOTSAFEPOINT {
+    intptr_t delta = (-offset - *cursor) & (align - 1);
+    uintptr_t result = *cursor + (uintptr_t)delta;
+
+    if (__unlikely(result + size > limit)) {
+        return (void*) mmtk_alloc_with_options(mutator, size, align, offset, allocator, options);
+    } else {
+        *cursor = result + size;
+        return (void*)result;
+    }
+}
+
 STATIC_INLINE void* mmtk_immix_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
     ImmixAllocator* allocator = &mutator->allocators.immix[MMTK_DEFAULT_IMMIX_ALLOCATOR];
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (intptr_t)allocator->limit, size, align, offset, 0);
@@ -1135,9 +1163,18 @@ STATIC_INLINE void mmtk_immix_post_alloc_fast(MMTkMutatorContext* mutator, void*
     // but when supporting moving, this is where we set the valid object (VO) bit
 }
 
-STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
+// Permanent (immortal) allocation is `JL_NOTSAFEPOINT`.
+STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) JL_NOTSAFEPOINT {
     BumpAllocator* allocator = &mutator->allocators.bump_pointer[MMTK_IMMORTAL_BUMP_ALLOCATOR];
-    return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
+    MMTk_AllocationOptions options = {
+        // MMTk may go above the current heap size to allocate -- avoid returning NULL
+        .allow_overcommit = true,
+        // MMTk will not block here
+        .at_safepoint = false,
+        // MMTk will not call back into Julia to throw an exception -- we are in a `JL_NOTSAFEPOINT` region
+        .allow_oom_call = false,
+    };
+    return bump_alloc_fast_with_options(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1, options);
 }
 
 STATIC_INLINE void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
@@ -1307,14 +1344,22 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return realloc(p, sz);
 }
 
-void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     size_t allocsz = mmtk_align_alloc_sz(sz);
     void* addr = mmtk_immortal_alloc_fast(&ptls->gc_tls.mmtk_mutator, allocsz, align, offset);
+    if (__unlikely(addr == NULL)) {
+        // The immortal allocation is allowed to over-commit, so a NULL result means we could not
+        // get memory from the OS at all. We cannot block for a GC or throw from here (see the
+        // comment on `mmtk_immortal_alloc_fast`), and the callers have no way to recover from a
+        // failed permanent allocation, so this is fatal.
+        jl_safe_printf("FATAL: out of memory in permanent allocation of %zu bytes.\n", sz);
+        abort();
+    }
     return addr;
 }
 
-void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return jl_gc_perm_alloc_nolock(ptls, sz, zero, align, offset);
@@ -1426,13 +1471,14 @@ JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOIN
     mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
 }
 
-JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT {
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
+{
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
+    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, parent, ptr);
 }
 
-JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
+JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, void *dest JL_UNUSED, const void *stored,
                                         struct _jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     mmtk_unreachable();

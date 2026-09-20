@@ -1,6 +1,15 @@
-# Interrogate the fortran compiler (which is always GCC based) on where it is keeping its libraries
-STD_LIB_PATH := $(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^programs: =' | sed -e "s/^programs: =//")
-STD_LIB_PATH += $(PATHSEP)$(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^libraries: =' | sed -e "s/^libraries: =//")
+# Interrogate the fortran compiler (which is always GCC based) on where it is keeping its libraries.
+# If there is no functioning fortran compiler, fall back to the C compiler, since many distros
+# install the GCC runtime libraries even when gfortran itself is not installed. A GCC-based C
+# compiler reports the same search directories; clang (e.g. `CC=clang`) also answers
+# `-print-search-dirs` and includes the GCC installation it found, so the lookup works there too.
+ifneq ($(shell LANG=C $(FC) -print-search-dirs 2>/dev/null),)
+CSL_COMPILER := $(FC)
+else
+CSL_COMPILER := $(CC)
+endif
+STD_LIB_PATH := $(shell LANG=C $(CSL_COMPILER) -print-search-dirs 2>/dev/null | grep '^programs: =' | sed -e "s/^programs: =//")
+STD_LIB_PATH += $(PATHSEP)$(shell LANG=C $(CSL_COMPILER) -print-search-dirs 2>/dev/null | grep '^libraries: =' | sed -e "s/^libraries: =//")
 ifeq ($(BUILD_OS),WINNT)  # the mingw compiler lies about it search directory paths
 STD_LIB_PATH += $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
@@ -146,7 +155,7 @@ $(eval $(call copy_csl_static,crti.o))
 $(eval $(call copy_csl_static,crtn.o))
 $(eval $(call copy_csl_static,crtbeginS.o))
 $(eval $(call copy_csl_static,crtendS.o))
-ifeq ($(OS),Linux) # glibc-specific
+ifeq ($(LIBC),glibc)
 $(eval $(call copy_csl_static,libc_nonshared.a))
 endif
 endif
@@ -216,7 +225,7 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtn.o $(build_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtbeginS.o $(build_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtendS.o $(build_libdir)/
-ifeq ($(OS),Linux)
+ifeq ($(LIBC),glibc)
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libc_nonshared.a $(build_libdir)/
 endif
 endif

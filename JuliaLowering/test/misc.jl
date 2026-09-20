@@ -18,6 +18,21 @@ let x = [1,2]
 end
 """) == [1,2]
 
+# empty strings
+@test JuliaLowering.include_string(test_mod, raw"""
+\"\"\"
+\"\"\"
+""") == ""
+@test JuliaLowering.include_string(test_mod, raw"""
+""
+""") == ""
+@test JuliaLowering.include_string(test_mod, raw"""
+"$("")"
+""") == ""
+@test JuliaLowering.include_string(test_mod, raw"""
+\"\"\"$("")\"\"\"
+""") == ""
+
 @test JuliaLowering.include_string(test_mod, raw"""
 let
     x = 10
@@ -940,7 +955,7 @@ end
               :T),
               Expr(:block, Expr(:return, Expr(:static_parameter, 1))))
     local f
-    @test (f = fl_eval(test_mod, ex)) isa Function
+    @test (f = jl_eval(test_mod, ex)) isa Function
     @test f(String) == String
     @test (f = jl_eval(test_mod, ex; expr_compat_mode=true)) isa Function
     @test f(String) == String
@@ -957,10 +972,34 @@ end
                         Expr(:tuple, :x, :y,
                              Expr(:static_parameter, 1),
                              Expr(:static_parameter, 2)))))
-    @test (f = fl_eval(test_mod, ex)) isa Function
+    @test (f = jl_eval(test_mod, ex)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
     @test (f = jl_eval(test_mod, ex; expr_compat_mode=true)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
     @test (f = jl_eval(test_mod, ex; expr_compat_mode=false)) isa Function
     @test f(1, 'a') == (1, 'a', Int, Char)
+
+    ex = Expr(:function,
+         Expr(:where,
+              Expr(:tuple, Expr(:(::), Expr(:curly, :Type, :T))),
+              :T),
+              Expr(:block, Expr(:isdefined, Expr(:static_parameter, 1))))
+
+    @test (f = jl_eval(test_mod, ex)) isa Function
+    @test f(String) == true
 end
+
+# duplicated in base tests
+JuliaLowering.include_string(@__MODULE__, """
+@testset "interaction of @. with generators" begin
+   @test [(x,y,a,b) for x in 1:2, y in 3:4 for a in 5:6, b in 7:8 if true] ==
+       @. [(x,y,a,b) for x in 1:2, y in 3:4 for a in 5:6, b in 7:8 if true]
+   # + in iterspec gets dotted
+   @test [[11, 22]] == @. [x for x in [[1, 2] + [10, 20]] if true]
+   # + in body gets dotted
+   let m = @. [(x+y) for x in [[1,2],[10,20]], y in [100]]
+       @test m[1] == [101,102]
+       @test m[2] == [110,120]
+   end
+end
+""")

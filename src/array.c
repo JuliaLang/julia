@@ -134,7 +134,7 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
         str = jl_genericmemory_to_string(a->ref.mem, len);
     else
         str = jl_pchar_to_string(jl_array_data(a, char), len);
-    a->ref.mem = (jl_genericmemory_t*)((jl_datatype_t*)jl_memory_uint8_type)->instance;
+    jl_gc_write(a, a->ref.mem, jl_genericmemory_t, (jl_genericmemory_t*)((jl_datatype_t*)jl_memory_uint8_type)->instance);
     a->ref.ptr_or_offset = a->ref.mem->ptr;
     a->dimsize[0] = 0;
     return str;
@@ -244,10 +244,8 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
     // don't leave behind deleted data
     if (jl_is_genericmemory_zeroinit(a->ref.mem) && !jl_genericmemory_isbitsunion(a->ref.mem)) {
         size_t elsz = jl_array_elsize(a);
-        // Deletion barrier: snapshot the overwritten references for SATB collectors.
-        // A single object-remembering barrier on the owner covers all cleared slots.
-        jl_gc_wb((jl_value_t*)jl_genericmemory_owner(a->ref.mem), NULL);
-        memset(jl_array_data(a,char) + n * elsz, 0, elsz * dec);
+        jl_gc_genericmemory_clear(jl_genericmemory_owner(a->ref.mem), a->ref.mem,
+                                  jl_array_data(a,char) + n * elsz, elsz * dec);
     }
 }
 

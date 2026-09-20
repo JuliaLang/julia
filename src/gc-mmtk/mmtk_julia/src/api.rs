@@ -1,5 +1,6 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+use crate::util::PreserveErrno;
 use crate::JuliaVM;
 use crate::JULIA_HEADER_SIZE;
 use crate::MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
@@ -10,6 +11,7 @@ use libc::c_char;
 use log::*;
 use mmtk::memory_manager;
 use mmtk::scheduler::GCWorker;
+use mmtk::util::alloc::AllocationOptions;
 use mmtk::util::api_util::NullableObjectReference;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference, OpaquePointer};
@@ -206,6 +208,7 @@ pub extern "C" fn mmtk_notify_task_resume(
             return;
         }
 
+        let _errno = PreserveErrno::new();
         crate::scanning::GC_STACK_SNAPSHOTS.resume_barrier_scan_task(task);
     }
 
@@ -224,6 +227,7 @@ pub extern "C" fn mmtk_alloc(
     offset: usize,
     semantics: AllocationSemantics,
 ) -> Address {
+    let _errno = PreserveErrno::new();
     debug_assert!(
         mmtk::util::conversions::raw_is_aligned(
             size,
@@ -235,6 +239,38 @@ pub extern "C" fn mmtk_alloc(
     memory_manager::alloc::<JuliaVM>(unsafe { &mut *mutator }, size, align, offset, semantics)
 }
 
+/// Like [`mmtk_alloc`], but allows the caller to change the default allocation behavior.
+///
+/// This is used for allocation sites that cannot block for a GC, such as Julia's permanent
+/// (immortal) allocation, which is annotated `JL_NOTSAFEPOINT`.
+#[no_mangle]
+pub extern "C" fn mmtk_alloc_with_options(
+    mutator: *mut Mutator<JuliaVM>,
+    size: usize,
+    align: usize,
+    offset: usize,
+    semantics: AllocationSemantics,
+    options: AllocationOptions,
+) -> Address {
+    let _errno = PreserveErrno::new();
+    debug_assert!(
+        mmtk::util::conversions::raw_is_aligned(
+            size,
+            <JuliaVM as mmtk::vm::VMBinding>::MIN_ALIGNMENT
+        ),
+        "Alloc size {} is not aligned to min alignment",
+        size
+    );
+    memory_manager::alloc_with_options::<JuliaVM>(
+        unsafe { &mut *mutator },
+        size,
+        align,
+        offset,
+        semantics,
+        options,
+    )
+}
+
 #[no_mangle]
 pub extern "C" fn mmtk_alloc_large(
     mutator: *mut Mutator<JuliaVM>,
@@ -242,6 +278,7 @@ pub extern "C" fn mmtk_alloc_large(
     align: usize,
     offset: usize,
 ) -> Address {
+    let _errno = PreserveErrno::new();
     memory_manager::alloc::<JuliaVM>(
         unsafe { &mut *mutator },
         size,
@@ -258,6 +295,7 @@ pub extern "C" fn mmtk_post_alloc(
     bytes: usize,
     semantics: AllocationSemantics,
 ) {
+    let _errno = PreserveErrno::new();
     memory_manager::post_alloc::<JuliaVM>(unsafe { &mut *mutator }, refer, bytes, semantics)
 }
 
@@ -320,6 +358,7 @@ pub extern "C" fn mmtk_is_mapped_address(address: Address) -> bool {
 
 #[no_mangle]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, collection: u8) {
+    let _errno = PreserveErrno::new();
     AtomicIsize::fetch_add(&USER_TRIGGERED_GC, 1, Ordering::SeqCst);
     if !memory_manager::is_collection_enabled(&SINGLETON) {
         AtomicIsize::fetch_add(&USER_TRIGGERED_GC, -1, Ordering::SeqCst);
@@ -328,7 +367,7 @@ pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, coll
     // See jl_gc_collection_t
     match collection {
         // auto
-        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls),
+        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls, false),
         // full
         1 => SINGLETON.handle_user_collection_request(tls, true, true),
         // incremental
@@ -414,6 +453,7 @@ pub extern "C" fn mmtk_wait_for_new_gc_epoch(last_seen_epoch: u64) {
 
 #[no_mangle]
 pub extern "C" fn mmtk_add_weak_candidate(reff: ObjectReference) {
+    let _errno = PreserveErrno::new();
     memory_manager::add_weak_candidate(&SINGLETON, reff)
 }
 
@@ -465,6 +505,7 @@ pub static JULIA_MALLOC_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 #[no_mangle]
 pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {
+    let _errno = PreserveErrno::new();
     memory_manager::gc_poll(&SINGLETON, tls);
 }
 
@@ -536,6 +577,7 @@ pub extern "C" fn mmtk_object_reference_write_pre(
     src: ObjectReference,
     target: NullableObjectReference,
 ) {
+    let _errno = PreserveErrno::new();
     let mutator = unsafe { &mut *mutator };
     memory_manager::object_reference_write_pre(
         mutator,
@@ -551,6 +593,7 @@ pub extern "C" fn mmtk_object_reference_write_post(
     src: ObjectReference,
     target: NullableObjectReference,
 ) {
+    let _errno = PreserveErrno::new();
     let mutator = unsafe { &mut *mutator };
     memory_manager::object_reference_write_post(
         mutator,
@@ -561,11 +604,21 @@ pub extern "C" fn mmtk_object_reference_write_post(
 }
 
 #[no_mangle]
+pub extern "C" fn mmtk_gc_wb_finalizer_queue(
+    mutator: &'static mut Mutator<JuliaVM>,
+    queue: *const libc::c_void,
+) {
+    let _errno = PreserveErrno::new();
+    crate::julia_finalizer::wb_finalizer_queue(mutator, queue);
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_object_reference_write_slow(
     mutator: &'static mut Mutator<JuliaVM>,
     src: ObjectReference,
     target: NullableObjectReference,
 ) {
+    let _errno = PreserveErrno::new();
     use mmtk::MutatorContext;
     mutator.barrier().object_reference_write_slow(
         src,

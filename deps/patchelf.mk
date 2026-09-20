@@ -14,15 +14,7 @@ $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PA
 checksum-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
-# Backport of https://github.com/NixOS/patchelf/pull/469 (in patchelf 0.18.0): without it,
-# growing an rpath can produce a binary whose first two PT_LOAD segments share a page,
-# which FreeBSD's execve() rejects (the process dies with a silent SIGABRT).
-$(SRCCACHE)/patchelf-$(PATCHELF_VER)/patchelf-overlapping-segments.patch-applied: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
-	cd $(dir $@) && \
-		patch -p1 -f < $(SRCDIR)/patches/patchelf-overlapping-segments.patch
-	echo 1 > $@
-
-$(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-patched: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/patchelf-overlapping-segments.patch-applied
+$(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-patched: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
 	echo 1 > $@
 
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: CC:=$(HOSTCC)

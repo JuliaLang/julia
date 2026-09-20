@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# supertype access that forces a deferred supertype (an instantiation of a
+# self-referential definition fills `super` lazily, see issue #61347); a
+# plain field read on such an instantiation would see an undefined field
+datatype_super(x::DataType) = ccall(:jl_datatype_super, Any, (Any,), x)::DataType
+
 ###########
 # generic #
 ###########
@@ -379,9 +384,14 @@ end
 inlining_enabled() = (JLOptions().can_inline == 1)
 
 function instrumentation_enabled(m::Module, only_if_affects_optimizer::Bool)
-    generating_output() && return false # don't alter caches
+    if generating_output()
+        # an image is instrumented for every scope or not at all
+        # (jl_image_coverage_config), and the scope is applied when its counters
+        # are registered; the generating process itself is not instrumented
+        return only_if_affects_optimizer && ccall(:jl_image_coverage_config, UInt8, ()) != 0
+    end
     cov = JLOptions().code_coverage
-    if cov == 1 # user
+    if cov == 1 || cov == 3 # user instrumentation; @path filters reports
         m = moduleroot(m)
         m === Core && return false
         isdefined(Main, :Base) && m === Main.Base && return false

@@ -951,41 +951,85 @@ end
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
     length(output) >= 21 || println(output) # for better errors when this fails
-    @test startswith(lstrip(output[3]), "┌ ")
-    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test startswith(lstrip(output[3]), "┌┌ ")
+    @test lstrip(lstrip(output[3])[7:end])[1:3] == "[1]"
     @test occursin("f28442b", output[3])
-    @test startswith(lstrip(output[5]), "├ ")
-    @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
+    @test startswith(lstrip(output[5]), "├├ ")
+    @test lstrip(lstrip(output[5])[7:end])[1:3] == "[2]"
     @test occursin("g28442b", output[5])
 
     is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
     if is_windows_32_bit
         # Assuming tests are broken on 32-bit Windows as above, no need to repeat loose tests here.
     else
-        @test startswith(lstrip(output[8]), "┌┌ ")
+        @test occursin("repeated 10 times", output[7])
+
+        @test startswith(lstrip(output[8]), "├┌ ")
         @test occursin("h28442b", output[8])
+        @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
         @test startswith(lstrip(output[10]), "├├ ")
         @test occursin("g28442b", output[10])
-
-        @test startswith(lstrip(output[13]), "├┌ ")
-        @test occursin("f28442b", output[13])
-        @test startswith(lstrip(output[15]), "├├ ")
-        @test occursin("g28442b", output[15])
-
-        @test occursin("f28442b", output[19])
-
-        @test occursin("repeated 10 times", output[7])
-        @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
         @test lstrip(lstrip(output[10])[7:end])[1:4] == "[22]"
         @test occursin("repeated 10 times", output[12])
-        @test lstrip(lstrip(output[13])[7:end])[1:4] == "[41]"
-        @test lstrip(lstrip(output[15])[7:end])[1:4] == "[42]"
-        @test occursin("repeated 10 times", output[17])
-        @test occursin("repeated 2 times", output[18])
+
+        # The outer cycle closes here, having stood for two turns of the two above
+        @test occursin("repeated 2 times", output[13])
+
+        @test startswith(lstrip(output[14]), "┌ ")
+        @test occursin("f28442b", output[14])
+        @test lstrip(lstrip(output[14])[4:end])[1:4] == "[81]"
+        @test startswith(lstrip(output[16]), "├ ")
+        @test occursin("g28442b", output[16])
+        @test lstrip(lstrip(output[16])[4:end])[1:4] == "[82]"
+        @test occursin("repeated 10 times", output[18])
+
+        @test occursin("f28442b", output[19])
         @test lstrip(output[19])[1:5] == "[101]"
         @test lstrip(output[21])[1:5] == "[102]"
     end
 end
+
+@testset "Long stacktrace printing - cycle longer than two frames" begin
+    f59999(c) = g59999(c + 1)
+    g59999(c) = h59999(c + 1)
+    h59999(c) = c > 10000 ? (return backtrace()) : f59999(c + 1)
+    bt = f59999(1)
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    output = split(String(take!(io)), '\n')
+    length(output) >= 9 || println(output) # for better errors when this fails
+
+    # The bracket opens on the first frame of the repeating unit, not part way round it
+    @test lstrip(output[3])[1] == '┌'
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test occursin("h59999", output[3])
+    @test lstrip(output[5])[1] == '├'
+    @test occursin("g59999", output[5])
+    @test lstrip(output[7])[1] == '├'
+    @test occursin("f59999", output[7])
+    @test occursin(r"repeated \d+ times", output[9])
+end
+
+@testset "Long stacktrace printing - cycle ending near the end of the trace" begin
+    #= Built by hand so the number of frames after the cycle is exact: thirteen turns of a
+    four-frame unit, then one frame. The bracket has to be closed within the trace. =#
+    frame59999(name) = Base.StackTraces.StackFrame(Symbol(name), Symbol("demo.jl"), 1)
+    trace = Any[[(frame59999("u$u"), 1) for _ ∈ 1:13 for u ∈ 1:4]...,
+                (frame59999("tail"), 1)]
+    @test length(trace) > Base.BIG_STACKTRACE_SIZE
+
+    io = IOBuffer()
+    Base.show_backtrace(io, trace)
+    output = split(String(take!(io)), '\n')
+
+    @test lstrip(output[3])[1] == '┌'
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test occursin("u1", output[3])
+    # The cycle is closed, and what follows it is numbered past all of its repetitions
+    @test any(l -> occursin("repeated 13 times", l), output)
+    @test any(l -> occursin("[53] tail", l), output)
+end
+
 
 @testset "Line number correction" begin
     getbt() = backtrace()
@@ -1637,6 +1681,56 @@ let bt
     @test res
     bt_str = sprint(Base.show_backtrace, bt)
     @test occursin("simplify_kwargs_type(pos::$Int; kws::@Kwargs{kw1::Float64, kw2::String})", bt_str)
+end
+
+# the internal `Core.kwcall` sorter frame is hidden in favor of the demangled keyword method
+@noinline kwsorter_outer(; s = 4) = kwsorter_inner(s)
+@noinline kwsorter_inner(s) = error()
+@testset "kwcall frames" begin
+    # the trace also runs through the keyword calls of whatever invoked this test, so
+    # identify only the sorter frame belonging to `kwsorter_outer`
+    function iskwsorterframe(frame, @nospecialize(f))
+        code = frame.linfo isa Core.CodeInstance ? frame.linfo.def : frame.linfo
+        if code isa Core.MethodInstance
+            def = code.def
+            return def isa Method && def.name !== :kwcall &&
+                   def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,typeof(f),Vararg}
+        end
+        return frame.func === :kwcall
+    end
+    bt = try
+        kwsorter_outer(s = 3)
+        nothing
+    catch
+        catch_backtrace()
+    end
+    @test bt !== nothing
+    st = stacktrace(bt)
+    # the raw trace contains the keyword sorter frame ...
+    @test count(frame -> iskwsorterframe(frame, kwsorter_outer), st) == 1
+    # ... which `process_backtrace` drops
+    @test !any(((frame, _),) -> iskwsorterframe(frame, kwsorter_outer), Base.process_backtrace(st))
+    # leaving the demangled keyword method as the only frame for `kwsorter_outer`
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("kwsorter_outer(; s::$Int)", bt_str)
+    @test !occursin("kwcall", bt_str)
+    @test count(l -> occursin(r"\] kwsorter_outer\(", l), split(bt_str, '\n')) == 1
+
+    # Depending on the debug info available, the sorter frame carries a `MethodInstance`, a
+    # `CodeInstance`, or no code at all, so check every spelling rather than just the one
+    # this platform happens to produce.
+    kwframe = st[findfirst(frame -> iskwsorterframe(frame, kwsorter_outer), st)]
+    mi = kwframe.linfo isa Core.CodeInstance ? kwframe.linfo.def : kwframe.linfo
+    @test mi isa Core.MethodInstance
+    userframe = Base.StackTraces.StackFrame(:f, Symbol("user.jl"), 1)
+    kept(frame) = [f.func for (f, _) in Base.process_backtrace(Base.StackFrame[frame, userframe])]
+    @testset "linfo::$(nameof(typeof(linfo)))" for linfo in Any[mi, mi.cache]
+        # recognized by its signature, whichever way the code is attached
+        @test kept(Base.StackTraces.StackFrame(kwframe.func, kwframe.file, kwframe.line,
+                                               linfo, false, false, 0)) == [:f]
+    end
+    # with no code attached at all, the frame is recognized by name instead
+    @test kept(Base.StackTraces.StackFrame(:kwcall, Symbol("none"), 1)) == [:f]
 end
 
 # Test Base.print_with_compare in convert MethodErrors

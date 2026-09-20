@@ -232,7 +232,7 @@ function print_hoisted_inline_comments(io::IO, comments::Comments, a::AbstractDi
     vkeys = collect(keys(a))
     sorted && sort!(vkeys)
     for k in vkeys
-        kpath = (path..., String(k))
+        kpath = [path; String(k)]
         block = get(comments.items, kpath, nothing)
         if block !== nothing
             for line in block.above
@@ -282,7 +282,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
 
     entry_indentstr = ' '^4max(0, indent-1)
     if comments !== nothing
-        if print_comments_floating(io, comments, Tuple(ks), entry_indentstr)
+        if print_comments_floating(io, comments, ks, entry_indentstr)
             println(io)
         end
     end
@@ -303,7 +303,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
         end
 
         if comments !== nothing
-            entry_path = (ks..., String(key))
+            entry_path = [ks; String(key)]
             print_comments_above(io, comments, entry_path, entry_indentstr)
             if value isa AbstractDict && value in inline_tables
                 print_hoisted_inline_comments(io, comments, value, entry_path, entry_indentstr, sorted)
@@ -314,7 +314,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
         Base.print(io, " = ") # print separator
         printvalue(f, io, value, sorted)
         if comments !== nothing
-            print_comment_inline(io, comments, (ks..., String(key)))
+            print_comment_inline(io, comments, [ks; String(key)])
         end
         Base.print(io, "\n")  # new line?
         first_block = false
@@ -331,21 +331,21 @@ function print_table(f::Function, io::IO, a::AbstractDict,
             header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool || any(v in inline_tables for v in _values)::Bool
             if !header && comments !== nothing
                 # Preserve headers that anchor comments.
-                header = has_comments(comments, Tuple(ks))
+                header = has_comments(comments, ks)
             end
             if header
                 # print table
                 first_block || println(io)
                 first_block = false
                 if comments !== nothing
-                    print_comments_above(io, comments, Tuple(ks), ' '^4indent)
+                    print_comments_above(io, comments, ks, ' '^4indent)
                 end
                 Base.print(io, ' '^4indent)
                 Base.print(io,"[")
                 printkey(io, ks)
                 Base.print(io,"]")
                 if comments !== nothing
-                    print_comment_inline(io, comments, Tuple(ks))
+                    print_comment_inline(io, comments, ks)
                 end
                 Base.print(io,"\n")
             end
@@ -358,7 +358,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
             first_block = false
             push!(ks, String(key))
             if comments !== nothing
-                print_comments_above(io, comments, Tuple(ks), ' '^4indent)
+                print_comments_above(io, comments, ks, ' '^4indent)
             end
             for v in value
                 Base.print(io, ' '^4indent)

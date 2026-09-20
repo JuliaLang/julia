@@ -350,6 +350,7 @@ struct jl_linker_info_t {
     DenseMap<std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>, orc::SymbolStringPtr>
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;
+    DenseMap<_Atomic(uint64_t) *, orc::SymbolStringPtr> coverage_counters;
 };
 
 struct jl_emitted_output_t {
@@ -402,6 +403,12 @@ public:
 
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
+    // Module-local coverage counter globals, keyed by their runtime slots.
+    DenseMap<_Atomic(uint64_t) *, GlobalVariable*> coverage_counters;
+    // Imaging-mode coverage counter globals keyed by (interned filename, line),
+    // and whether the location is user code. Insertion-ordered so the emitted
+    // image coverage table is reproducible.
+    MapVector<std::pair<const char*, int>, std::pair<GlobalVariable*, bool>> image_coverage_counters;
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;
     std::map<jl_datatype_t*, DIType*> ditypes;
@@ -586,6 +593,7 @@ struct JITObjectInfo {
     std::unique_ptr<object::ObjectFile> Object;
     StringMap<uint64_t> SectionLoadAddresses;
     std::unique_ptr<jl_linker_info_t> LinkerInfo;
+    SmallVector<std::pair<_Atomic(uint64_t) *, jitlink::Symbol *>, 0> CoverageCounters;
 };
 
 class JLDebuginfoPlugin : public orc::ObjectLinkingLayer::Plugin {
@@ -638,15 +646,8 @@ public:
     typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
-    template
-    <typename ResourceT, size_t max = 0,
-        typename BackingT = std::stack<ResourceT,
-            std::conditional_t<max == 0,
-                SmallVector<ResourceT, 0>,
-                SmallVector<ResourceT, max>
-            >
-        >
-    >
+    template<typename ResourceT, size_t max = 0,
+             typename BackingT = std::stack<ResourceT, SmallVector<ResourceT, max>>>
     struct ResourcePool {
         public:
         ResourcePool(std::function<ResourceT()> creator) JL_NOTSAFEPOINT : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
@@ -812,6 +813,18 @@ public:
 
     const char *objCacheDisabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE {
         return OCache.disabledNotice();
+    }
+
+    jl_value_t *objCacheKVGet(const char *Ns, const uint8_t *Key,
+                              size_t KeyLen) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvGet(Ns, Key, KeyLen);
+    }
+    int objCacheKVPut(const char *Ns, const uint8_t *Key, size_t KeyLen,
+                      const uint8_t *Val, size_t ValLen) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvPut(Ns, Key, KeyLen, Val, ValLen);
+    }
+    int objCacheKVEnabled() JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvEnabled();
     }
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {

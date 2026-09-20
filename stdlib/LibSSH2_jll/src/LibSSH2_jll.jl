@@ -61,6 +61,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libssh2_path() = libssh2_path
+
 function __init__()
     global libssh2_path = string(libssh2.path)
     global artifact_dir = dirname(Sys.BINDIR)

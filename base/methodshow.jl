@@ -77,12 +77,12 @@ function arg_decl_parts(m::Method, html=false)
 end
 
 # NOTE: second argument is deprecated and is no longer used
-function kwarg_decl(m::Method, kwtype = nothing)
+function kwarg_decl(m::Method, kwtype = nothing; world::UInt=get_world_counter())
     if !(m.sig === Tuple || m.sig <: Tuple{Core.Builtin, Vararg}) # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
         sig_params = (unwrap_unionall(m.sig)::DataType).parameters
         sig = rewrap_unionall(Tuple{kwtype, NamedTuple, sig_params...}, m.sig)
-        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, world)
         if kwli === nothing
             # a compiled keyword sorter is specialized on the dispatch (egality)
             # spelling of closed type-valued slots, so retry the lookup with
@@ -101,7 +101,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             end
             if changed
                 sig = rewrap_unionall(Tuple{new_params...}, m.sig)
-                kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+                kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, world)
             end
         end
         if kwli !== nothing

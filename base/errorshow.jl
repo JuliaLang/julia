@@ -895,9 +895,14 @@ function _backtrace_find_and_remove_cycles(t)
     # Second: length of the cycle as a count in the trace
     # Third:  number of cycle repetitions
 
+    #= For each entry of the trace, where it ended up in `displayed_stackframes`, or 0 if it
+    was collapsed away, so that a cycle can be bracketed from where its turn began. =#
+    displayed_at = zeros(Int, length(t))
+
     t_curr = 1
 
     while t_curr ≤ length(t)
+        t_this = t_curr
         (last_frame, n) = t[t_curr]
         current_hash = hash(t[t_curr])
         positions = get(recorded_positions, current_hash,  Int[])
@@ -923,7 +928,7 @@ function _backtrace_find_and_remove_cycles(t)
             if t_prev_end ≥ t_curr - 1
                 #= At least one cycle repeated =#
                 ncycles = div(t_curr_end - t_prev + 1, t_cycle_length)
-                push!(repeated_cycles, (length(displayed_stackframes) - 1, t_cycle_length, ncycles))
+                push!(repeated_cycles, (displayed_at[t_prev - 1], t_cycle_length, ncycles))
                 t_curr += t_cycle_length * (ncycles - 1) - 1
                 nnested_cycles += 1
             end
@@ -935,6 +940,7 @@ function _backtrace_find_and_remove_cycles(t)
 
         if ncycles == 0
             push!(displayed_stackframes, (last_frame, n))
+            displayed_at[t_this] = length(displayed_stackframes)
         end
     end
     return displayed_stackframes, repeated_cycles, max_nested_cycles
@@ -1189,7 +1195,7 @@ end
 
 function _backtrace_remove_kwcall_frames!(trace)
     todelete = findall(trace) do (frame, _)
-        code = frame.linfo
+        code = StackTraces.frame_mi(frame)
         if code isa MethodInstance
             def = code.def
             if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
@@ -1198,7 +1204,7 @@ function _backtrace_remove_kwcall_frames!(trace)
                 # the argument list, since it has the right line number info)
                 return true
             end
-        else
+        else # this branch may not be needed, from before current keyword argument handling
             frame.func === :kwcall && return true
         end
         return false

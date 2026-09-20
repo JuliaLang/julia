@@ -890,6 +890,7 @@ export
     ntuple,
     splat,
     tap,
+    unsplat,
 
 # I/O and events
     close,

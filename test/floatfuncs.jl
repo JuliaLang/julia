@@ -94,6 +94,7 @@ end
         @test float(typeof(x)) == typeof(float(x))
         @test float(typeof(complex(x, x))) == typeof(float(complex(x, x)))
     end
+    @test_throws ErrorException("`float` not defined on abstractly-typed arrays; please convert to a more specific type") float(Real[])
 end
 
 @testset "significant digits" begin

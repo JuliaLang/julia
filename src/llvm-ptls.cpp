@@ -316,7 +316,9 @@ bool LowerPTLS::run(bool *CFGModified)
             if (imaging_mode) {
                 pgcstack_func_slot = create_hidden_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
                 pgcstack_key_slot = create_hidden_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                pgcstack_offset = create_hidden_global(T_size, "jl_tls_offset");
+                // n.b. not named `jl_tls_offset`, to avoid clashing with the libjulia-internal
+                // variable of that name when the image is linked statically with the runtime
+                pgcstack_offset = create_hidden_global(T_size, "jl_image_tls_offset");
             }
             need_init = false;
         }

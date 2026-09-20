@@ -57,6 +57,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libcurl_path() = libcurl_path
+
 function __init__()
     global libcurl_path = string(libcurl.path)
     global artifact_dir = dirname(Sys.BINDIR)

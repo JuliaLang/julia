@@ -734,4 +734,13 @@ function setindex!(x::Threads.Atomic, v)
     return @atomic x[] = v
 end
 
+# The `*_domain_error` helpers were replaced by `Math.throw_finite_domainerror` in #62842,
+# but some packages call them directly. Not deprecated, just kept for compatibility.
+@eval Math begin
+    @noinline sin_domain_error(x) = throw_finite_domainerror(:sin, x)
+    @noinline cos_domain_error(x) = throw_finite_domainerror(:cos, x)
+    @noinline sincos_domain_error(x) = throw_finite_domainerror(:sincos, x)
+    @noinline tan_domain_error(x) = throw_finite_domainerror(:tan, x)
+end
+
 # END 1.14 deprecations

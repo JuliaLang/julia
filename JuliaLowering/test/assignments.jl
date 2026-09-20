@@ -100,6 +100,17 @@ let x = [1 2; 3 4]
 end
 """) == [0 1 ; 3 4]
 
+@testset "in-place broadcast returns the lhs" begin
+    mod = @newmod()
+    JL.include_string(mod, """
+    f50794(Y) = Y .+= Any[zeros(size(Y))][1]
+    g50794(A, x) = A[1, :] .+= x
+    """)
+    @test only(Base.return_types(mod.f50794, (Vector{Float64},))) === Vector{Float64}
+    rt = only(Base.return_types(mod.g50794, (Matrix{Float64}, Any)))
+    @test rt <: SubArray{Float64, 1, Matrix{Float64}}
+end
+
 # Tuple-destructuring updating assignment `x, y += a, b`
 @test JuliaLowering.include_string(@newmod(), """
 struct Vec1; v::Int; end

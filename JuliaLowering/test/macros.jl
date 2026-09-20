@@ -779,6 +779,89 @@ let err = try
     @test err.err isa UndefVarError
 end
 
+@testset "(AI) macro name resolution" begin
+    lib = @newmod(macname_lib, test_mod)
+    def = @newmod(macname_def, test_mod)
+    use = @newmod(macname_use, test_mod)
+    for (m, s) in ((lib, :lib_inner), (def, :def_inner), (use, :use_inner))
+        fl_eval(m, :(macro inner(); QuoteNode($(QuoteNode(s))); end))
+    end
+    fl_eval(lib, :(macro name(); Symbol("@inner"); end))
+    fl_eval(lib, :(macro name_esc(); esc(Symbol("@inner")); end))
+    fl_eval(def, :(import ..macname_lib: @name, @name_esc))
+    fl_eval(def, :(const N = $lib))
+    fl_eval(use, :(const M = $lib))
+    fl_eval(def, quote
+        macro only_in_def(); QuoteNode(:only_in_def); end
+        macro outer_esc();      Expr(:macrocall, esc(Symbol("@inner")), __source__); end
+        macro outer_esc_missing(); Expr(:macrocall, esc(Symbol("@only_in_def")), __source__); end
+        macro outer_hyg();      Expr(:macrocall, Symbol("@inner"), __source__); end
+        macro outer_esc_dot();  Expr(:macrocall, esc(Expr(:., :M, QuoteNode(Symbol("@inner")))), __source__); end
+        macro outer_escl_dot(); Expr(:macrocall, Expr(:., esc(:M), QuoteNode(Symbol("@inner"))), __source__); end
+        macro outer_hyg_dot();  Expr(:macrocall, Expr(:., :N, QuoteNode(Symbol("@inner"))), __source__); end
+        macro outer_mc();       Expr(:macrocall, Expr(:macrocall, Symbol("@name"), __source__), __source__); end
+        macro outer_mc_esc();   Expr(:macrocall, Expr(:macrocall, Symbol("@name_esc"), __source__), __source__); end
+        macro outer_hs();       Expr(:macrocall, Expr(Symbol("hygienic-scope"), Symbol("@inner"), N), __source__); end
+        macro outer_gr();       Expr(:macrocall, GlobalRef(N, Symbol("@inner")), __source__); end
+        macro outer_val();      Expr(:macrocall, N.var"@inner", __source__); end
+    end)
+
+    # New-style expansions: caller-supplied identifier keeps the caller's layer
+    JuliaLowering.include_string(def, raw"""
+    macro outer_new_hyg();     @legacy_quote_to_syntax(:(@inner())); end
+    macro outer_new_hyg_dot(); @legacy_quote_to_syntax(:(N.@inner())); end
+    macro outer_new_dot(m);    @legacy_quote_to_syntax(:($m.@inner())); end
+    """)
+    fl_eval(use, :(import ..macname_def: @outer_esc, @outer_esc_missing,
+                   @outer_hyg, @outer_esc_dot, @outer_escl_dot, @outer_hyg_dot,
+                   @outer_mc, @outer_mc_esc, @outer_hs, @outer_gr, @outer_val,
+                   @outer_new_hyg, @outer_new_hyg_dot, @outer_new_dot))
+    Core.@latestworld
+
+    for expr_compat_mode in (true, false)
+        jl(ex) = jl_eval(use, ex; expr_compat_mode)
+        @test jl(:(@outer_esc())) === :use_inner
+        err = try jl(:(@outer_esc_missing())); nothing; catch e; e; end
+        @test err isa MacroExpansionError
+        @test err.err isa UndefVarError && err.err.var === Symbol("@only_in_def")
+        @test err.err.scope === use
+        # An unescaped name resolves in the macro's module (hygiene)
+        @test jl(:(@outer_hyg())) === :def_inner
+        # Dotted names: the leftmost identifier resolves in its own layer,
+        # whether that differs from the `.`'s layer (`escl_dot`) or not
+        @test jl(:(@outer_esc_dot())) === :lib_inner
+        @test jl(:(@outer_escl_dot())) === :lib_inner
+        @test jl(:(@outer_hyg_dot())) === :lib_inner
+        # A macrocall in name position: its output is hygienic in its macro's
+        # module (`lib`), unless the output escapes the name (then `def`)
+        @test jl(:(@outer_mc())) === :lib_inner
+        @test jl(:(@outer_mc_esc())) === :def_inner
+        # Explicit hygienic-scope, GlobalRef and function values in name position
+        @test jl(:(@outer_hs())) === :lib_inner
+        @test jl(:(@outer_gr())) === :lib_inner
+        @test jl(:(@outer_val())) === :lib_inner
+        # New-style macros
+        @test jl(:(@outer_new_hyg())) === :def_inner
+        @test jl(:(@outer_new_hyg_dot())) === :lib_inner
+        @test jl(:(@outer_new_dot(M))) === :lib_inner
+    end
+
+    # flisp agrees on every case it can express
+    fl(ex) = fl_eval(use, ex)
+    @test fl(:(@outer_hyg())) === :def_inner
+    @test fl(:(@outer_hyg_dot())) === :lib_inner
+    @test fl(:(@outer_mc())) === :lib_inner
+    @test fl(:(@outer_mc_esc())) === :def_inner
+    @test fl(:(@outer_hs())) === :lib_inner
+    @test fl(:(@outer_gr())) === :lib_inner
+    @test fl(:(@outer_val())) === :lib_inner
+    for ex in (:(@outer_esc()), :(@outer_esc_dot()), :(@outer_escl_dot()))
+        err = try fl(ex); nothing; catch e; e; end
+        err isa LoadError && (err = err.error)
+        @test err isa ErrorException && occursin("used outside of macro expansion", err.msg)
+    end
+end
+
 @test JuliaLowering.include_string(test_mod, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
 @test JuliaLowering.include_string(test_mod, "@ccall gc_safe=true strlen(\"asdf\"::Cstring)::Csize_t") == 4
 @test JuliaLowering.include_string(test_mod, """
@@ -869,11 +952,12 @@ end
 catch exc
     sprint(showerror, exc)
 end == """
-MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
+LoadError: MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
 @oldstyle_error
 └─────────────┘ ── Error expanding macro
 Caused by:
-Some error in old style macro"""
+Some error in old style macro
+in expression starting at string:1"""
 
 # Old-style macros returning non-Expr values
 Base.eval(test_mod, :(
@@ -900,8 +984,8 @@ try
     """)
     @test false
 catch exc
-    @test exc isa JuliaLowering.MacroExpansionError
-    mexc = exc.err
+    @test exc isa LoadError
+    mexc = exc.error.err
     @test mexc isa MethodError
     @test mexc.args isa Tuple{JuliaLowering.MacroContext, JuliaLowering.SyntaxTree, JuliaLowering.SyntaxTree}
 end
@@ -922,7 +1006,7 @@ end
         sprint(showerror, exc, context=:module=>test_mod)
     end
     @test startswith(err, """
-    MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
+    LoadError: MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
     Caused by:
@@ -1041,6 +1125,17 @@ end
         :(let A = [1,2,3], B = [4,5,6]
               simple_aliasscope(A,B), A, B
           end); expr_compat_mode) == (0, [4,5,6], [4,5,6])
+
+    @test JuliaLowering.include_string(test_mod, """@fastmath 1 <= 2 <= 3""")
+
+    # top-level nospecialize
+    @test JuliaLowering.include_string(test_mod, """
+    module NospecializeMod
+        @nospecialize
+        f(x) = x
+    end
+    first(methods(NospecializeMod.f)).nospecialize
+    """) == -1
 end
 
 @testset "empty meta" begin
@@ -1334,6 +1429,16 @@ end
         ref_ci = find_method_ci(Meta.lower(test_mod, Meta.parse(prog_def)))
         our_ci = find_method_ci(jlower_e(prog_def))
         @test ref_ci.purity === our_ci.purity
+
+        prog = """
+        Base.@assume_effects :total function f_assume_nospecialize(x)
+            @nospecialize x
+            x
+        end
+        """
+        ref_ci = find_method_ci(fl_lower(test_mod, Meta.parse(prog)))
+        our_ci = find_method_ci(jlower_e(prog))
+        @test ref_ci.purity === our_ci.purity
     end
 end
 
@@ -1513,9 +1618,7 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
             Expr(:toplevel,
                  Expr(:module, false, esc(name),
                       Expr(:block,
-                           # TODO: escape node in outer context
-                           # Expr(:const, Expr(:(=), esc(:c), 1))
-                           )))
+                           Expr(:const, Expr(:(=), esc(:c), 1)))))
         end
         end); expr_compat_mode=true)
 
@@ -1526,8 +1629,7 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
         # module name should escape macmod->test_mod
         @test test_mod.newmod isa Module
         @test !isdefined(test_mod.MacMod, :newmod)
-        # const in mod body should
-        @test_broken test_mod.newmod.c == 1
+        @test test_mod.newmod.c == 1
     end
 end
 
@@ -1564,6 +1666,57 @@ end
 
     @test JuliaLowering.include_string(
         test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=false) === 123
+
+    # unescaped top-level macro should be visible in the old system
+    @test JuliaLowering.include_string(test_mod, raw"""
+    module MacrosDefiningMacros
+    macro make_old_unescaped_macro(name)
+        :(macro $name(x)
+            x
+        end)
+    end
+    macro make_old_escaped_macro(name)
+        :(macro $(esc(name))(x)
+            x
+        end)
+    end
+    end
+    """; expr_compat_mode=true) isa Module
+    @test JuliaLowering.include_string(test_mod, raw"""
+    MacrosDefiningMacros.@make_old_unescaped_macro make_old_unescaped_macro_out
+    """; expr_compat_mode=true) isa Function
+    @test JuliaLowering.include_string(test_mod, raw"""
+    MacrosDefiningMacros.@make_old_escaped_macro make_old_escaped_macro_out
+    """; expr_compat_mode=true) isa Function
+    @test JuliaLowering.include_string(test_mod, raw"""
+    MacrosDefiningMacros.@make_old_unescaped_macro_out 1
+    """; expr_compat_mode=true) == 1
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @make_old_escaped_macro_out 1
+    """; expr_compat_mode=true) == 1
+
+    # standard scope-layer-carrying macro arg `name` should work in new system
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro make_new_nameprovided_macro(name)
+        @legacy_quote_to_syntax :(macro $name(x)
+            x
+        end)
+    end
+    @make_new_nameprovided_macro make_new_nameprovided_macro_out
+    @make_new_nameprovided_macro_out 1
+    """; expr_compat_mode=false) == 1
+
+    # unhygienic new macro def shouldn't be visible (may change)
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro make_new_anaphoric_macro_fail()
+        @legacy_quote_to_syntax :(macro make_new_anaphoric_macro_fail_out(x)
+            x
+        end)
+    end
+    @make_new_anaphoric_macro_fail
+    """; expr_compat_mode=false) isa Function
+    @test_throws MacroExpansionError JuliaLowering.include_string(
+        test_mod, "@make_new_anaphoric_macro_fail_out"; expr_compat_mode=false)
 end
 
 @testset "SIMD loopinfo" begin
@@ -1896,4 +2049,50 @@ end
     """; expr_compat_mode=true)
     @test !isdefined(test_mod, :a)
     @test !isdefined(macro_mod, :a)
+end
+
+# Method annotations propagate from the body to positional-default wrappers
+# and the `Core.kwcall` sorter (matching flisp's `propagate-method-meta`).
+@testset "method meta propagation" begin
+    JuliaLowering.include_string(test_mod, raw"""
+    @inline function _test_opts_kw(x::Int, y::Int=1; k::Int=2)
+        x + y + k
+    end
+    """)
+    fkw = test_mod._test_opts_kw
+    @test fkw(1) == 4
+    for m in (which(fkw, (Int,)), which(fkw, (Int, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fkw), Int)))
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # Destructuring prepends assignments but must retain the metadata.
+    JuliaLowering.include_string(test_mod, raw"""
+    @inline function _test_opts_destr((a, b)::Tuple{Int,Int}, y::Int=1; k::Int=2)
+        a + b + y + k
+    end
+    """)
+    fd = test_mod._test_opts_destr
+    @test fd((1, 2)) == 6
+    for m in (which(fd, (Tuple{Int,Int},)), which(fd, (Tuple{Int,Int}, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fd), Tuple{Int,Int})))
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # @nospecializeinfer
+    local f = JuliaLowering.include_string(@newmod(), raw"""
+    Base.@nospecializeinfer function f(@nospecialize(x), y::Int=1)
+        (x, y)
+    end
+    """)
+    @test which(f, (Any, Int)).nospecializeinfer == true
+    @test which(f, (Any,)).nospecializeinfer == true
+
+    local f = JuliaLowering.include_string(@newmod(), raw"""
+    Base.@nospecializeinfer function f(@nospecialize(x); k::Int=1)
+        (x, k)
+    end
+    """)
+    local sorter = x->which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(x), Any))
+    @test sorter(f).nospecializeinfer == true
 end

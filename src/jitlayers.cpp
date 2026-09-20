@@ -313,6 +313,22 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
         info->global_targets[val] = intern(gv->getName());
     }
 
+    if (!coverage_counters.empty()) {
+        // llvm.compiler.used keeps the write-only counters alive. Sort the
+        // globals so pointer-dependent DenseMap iteration cannot affect the
+        // module hash.
+        SmallVector<GlobalValue*, 0> counters;
+        for (auto &[slot, counter] : coverage_counters) {
+            counters.push_back(counter);
+            info->coverage_counters[slot] = intern(counter->getName());
+        }
+        std::sort(counters.begin(), counters.end(),
+                  [](GlobalValue *a, GlobalValue *b) JL_NOTSAFEPOINT {
+                      return a->getName() < b->getName();
+                  });
+        appendToCompilerUsed(*mod, counters);
+    }
+
     return {std::move(ctx), std::move(mod), std::move(info)};
 }
 
@@ -795,11 +811,29 @@ void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     auto NewObj =
         cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
 
+    SmallVector<std::pair<_Atomic(uint64_t) *, jitlink::Symbol *>, 0> CoverageCounters;
+    if (!LinkerInfo->coverage_counters.empty()) {
+        StringMap<jitlink::Symbol *> DefinedSymbols;
+        for (auto *Sym : G.defined_symbols()) {
+            if (Sym->hasName())
+                DefinedSymbols[*Sym->getName()] = Sym;
+        }
+        for (auto &[slot, name] : LinkerInfo->coverage_counters) {
+            auto It = DefinedSymbols.find(*name);
+            assert(It != DefinedSymbols.end());
+            // Relocations can target an anonymous section symbol, leaving the
+            // named counter with no incoming edges for the prune pass.
+            It->second->setLive(true);
+            CoverageCounters.push_back({slot, It->second});
+        }
+    }
+
     {
         std::lock_guard<std::mutex> lock{PluginMutex};
         assert(PendingObjs.count(&MR) == 0);
         PendingObjs[&MR] = std::unique_ptr<JITObjectInfo>(new JITObjectInfo{
-            std::move(NewBuffer), std::move(NewObj), {}, std::move(LinkerInfo)});
+            std::move(NewBuffer), std::move(NewObj), {}, std::move(LinkerInfo),
+            std::move(CoverageCounters)});
     }
 }
 
@@ -863,6 +897,12 @@ Error JLDebuginfoPlugin::notifyEmitted(MaterializationResponsibility &MR) JL_NO_
         // concurrently while it is held.
         if (GDBRegistrar)
             registerWithGDB(MR.getExecutionSession(), *NewInfo);
+        // Publish counters only after linking has initialized their storage.
+        // The link graph (and its symbols) is still alive during notifyEmitted.
+        for (auto &[slot, counter] : NewInfo->CoverageCounters) {
+            jl_coverage_register_counter(
+                slot, (_Atomic(uint64_t)*)counter->getAddress().getValue());
+        }
         PendingObjs.erase(&MR);
     }
 
@@ -1390,18 +1430,14 @@ namespace {
         OptimizationLevel O;
         SmallVector<std::function<void()>, 0> &printers;
         std::mutex &llvm_printing_mutex;
-        bool cache_enabled;
-        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled) JL_NOTSAFEPOINT
-            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex), cache_enabled(cache_enabled) {}
+        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT
+            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex) {}
         ~PMCreator() JL_NOTSAFEPOINT = default;
 
         auto operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
             fixupTM(*TM);
             auto options = OptimizationOptions::defaults();
-            // It is unsafe to embed the specific TLS offset into the output
-            // when the cache is enabled.
-            options.tls_getters = cache_enabled;
             auto NPM = std::make_unique<NewPM>(std::move(TM), O, options);
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
             {
@@ -1416,9 +1452,9 @@ namespace {
 
     template<size_t N>
     struct sizedOptimizerT {
-        sizedOptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled) JL_NOTSAFEPOINT {
+        sizedOptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT {
             for (size_t i = 0; i < N; i++) {
-                PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers, llvm_printing_mutex, cache_enabled));
+                PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers, llvm_printing_mutex));
             }
         }
 
@@ -1597,8 +1633,8 @@ namespace {
 }
 
 struct JuliaOJIT::OptimizerT {
-    OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled)
-        : opt(TM, printers, llvm_printing_mutex, cache_enabled) {}
+    OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex)
+        : opt(TM, printers, llvm_printing_mutex) {}
     void operator()(Module &M) JL_NOTSAFEPOINT {
         opt(M);
     }
@@ -1888,7 +1924,7 @@ JuliaOJIT::JuliaOJIT()
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
     JITPointers(std::make_unique<JITPointersT>(SharedBytes, SharedBytesMutex)),
     JITPointersLayer(ES, CompileLayer, IRTransformRef(*JITPointers)),
-    Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex, OCache.isEnabled())),
+    Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex)),
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
@@ -2872,6 +2908,26 @@ extern "C" JL_DLLEXPORT_CODEGEN
 const char *jl_objcache_disabled_notice_impl(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     return jl_ExecutionEngine->objCacheDisabledNotice();
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+jl_value_t *jl_objcache_kv_get_impl(const char *ns, const uint8_t *key,
+                                    size_t keylen) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCacheKVGet(ns, key, keylen);
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+int jl_objcache_kv_put_impl(const char *ns, const uint8_t *key, size_t keylen,
+                            const uint8_t *val, size_t vallen) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCacheKVPut(ns, key, keylen, val, vallen);
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+int jl_objcache_kv_enabled_impl(void) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCacheKVEnabled();
 }
 
 // API for adding bytes to record being owned by the JIT

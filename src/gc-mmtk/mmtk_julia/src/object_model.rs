@@ -18,6 +18,12 @@ pub struct VMObjectModel {}
 /// 1 bit per object
 pub(crate) const LOGGING_SIDE_METADATA_SPEC: VMGlobalLogBitSpec = VMGlobalLogBitSpec::side_first();
 
+/// Global field-logging bit metadata spec
+/// 1 bit per word. Only plans that need a field-granularity log bit (e.g. LXR) actually
+/// reserve this; Julia does not currently use such a plan, so this is unused in practice.
+pub(crate) const FIELD_LOGGING_SIDE_METADATA_SPEC: VMGlobalFieldUnlogBitSpec =
+    VMGlobalFieldUnlogBitSpec::side_after(LOGGING_SIDE_METADATA_SPEC.as_spec());
+
 pub(crate) const MARKING_METADATA_SPEC: VMLocalMarkBitSpec =
     VMLocalMarkBitSpec::side_after(LOS_METADATA_SPEC.as_spec());
 
@@ -38,6 +44,7 @@ pub(crate) const LOS_METADATA_SPEC: VMLocalLOSMarkNurserySpec =
 
 impl ObjectModel<JuliaVM> for VMObjectModel {
     const GLOBAL_LOG_BIT_SPEC: VMGlobalLogBitSpec = LOGGING_SIDE_METADATA_SPEC;
+    const GLOBAL_FIELD_UNLOG_BIT_SPEC: VMGlobalFieldUnlogBitSpec = FIELD_LOGGING_SIDE_METADATA_SPEC;
     const LOCAL_FORWARDING_POINTER_SPEC: VMLocalForwardingPointerSpec =
         VMLocalForwardingPointerSpec::in_header(-64);
 
@@ -61,61 +68,16 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         semantics: CopySemantics,
         copy_context: &mut GCWorkerCopyContext<JuliaVM>,
     ) -> ObjectReference {
-        trace!("Attempting to copy object {}", from);
+        // `alloc_copy` should never return zero here.
+        Self::julia_copy(from, semantics, copy_context).unwrap()
+    }
 
-        let bytes = Self::get_current_size(from);
-        let from_addr = from.to_raw_address();
-        let from_start = Self::ref_to_object_start(from);
-        let header_offset = from_addr - from_start;
-
-        let dst = if header_offset == 8 {
-            // regular object
-            // Note: The `from` reference is not used by any allocator currently in MMTk core.
-            copy_context.alloc_copy(from, bytes, 16, 8, semantics)
-        } else if header_offset == 16 {
-            // buffer should not be copied
-            unimplemented!();
-        } else {
-            unimplemented!()
-        };
-        // `alloc_copy` should never return zero.
-        debug_assert!(!dst.is_zero());
-
-        let src = from_start;
-        unsafe {
-            std::ptr::copy_nonoverlapping::<u8>(src.to_ptr(), dst.to_mut_ptr(), bytes);
-        }
-        let to_obj = unsafe { ObjectReference::from_raw_address_unchecked(dst + header_offset) };
-
-        copy_context.post_copy(to_obj, bytes, semantics);
-
-        trace!("Copied object {} into {}", from, to_obj);
-
-        unsafe {
-            let vt = mmtk_jl_typeof(from.to_raw_address());
-
-            if (*vt).name == jl_genericmemory_typename {
-                jl_gc_update_inlined_array(from.to_raw_address(), to_obj.to_raw_address())
-            }
-        }
-
-        // zero from_obj (for debugging purposes)
-        #[cfg(debug_assertions)]
-        {
-            use atomic::Ordering;
-            unsafe {
-                libc::memset(from_start.to_mut_ptr(), 0, bytes);
-            }
-
-            Self::LOCAL_FORWARDING_BITS_SPEC.store_atomic::<JuliaVM, u8>(
-                from,
-                0b10_u8, // BEING_FORWARDED
-                None,
-                Ordering::SeqCst,
-            );
-        }
-
-        to_obj
+    fn try_copy(
+        from: ObjectReference,
+        semantics: CopySemantics,
+        copy_context: &mut GCWorkerCopyContext<JuliaVM>,
+    ) -> Option<ObjectReference> {
+        Self::julia_copy(from, semantics, copy_context)
     }
 
     fn copy_to(_from: ObjectReference, _to: ObjectReference, _region: Address) -> Address {
@@ -165,6 +127,73 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
 
     fn dump_object(_object: ObjectReference) {
         unimplemented!()
+    }
+}
+
+impl VMObjectModel {
+    /// Shared implementation for `copy` and `try_copy`. Returns `None` if the allocator failed
+    /// to reserve space for the copy (which can only happen for `try_copy`), otherwise the reference to the copy.
+    fn julia_copy(
+        from: ObjectReference,
+        semantics: CopySemantics,
+        copy_context: &mut GCWorkerCopyContext<JuliaVM>,
+    ) -> Option<ObjectReference> {
+        trace!("Attempting to copy object {}", from);
+
+        let bytes = Self::get_current_size(from);
+        let from_addr = from.to_raw_address();
+        let from_start = Self::ref_to_object_start(from);
+        let header_offset = from_addr - from_start;
+
+        let dst = if header_offset == 8 {
+            // regular object
+            // Note: The `from` reference is not used by any allocator currently in MMTk core.
+            copy_context.alloc_copy(from, bytes, 16, 8, semantics)
+        } else if header_offset == 16 {
+            // buffer should not be copied
+            unimplemented!();
+        } else {
+            unimplemented!()
+        };
+        if dst.is_zero() {
+            return None;
+        }
+
+        let src = from_start;
+        unsafe {
+            std::ptr::copy_nonoverlapping::<u8>(src.to_ptr(), dst.to_mut_ptr(), bytes);
+        }
+        let to_obj = unsafe { ObjectReference::from_raw_address_unchecked(dst + header_offset) };
+
+        copy_context.post_copy(to_obj, bytes, semantics);
+
+        trace!("Copied object {} into {}", from, to_obj);
+
+        unsafe {
+            let vt = mmtk_jl_typeof(from.to_raw_address());
+
+            if (*vt).name == jl_genericmemory_typename {
+                jl_gc_update_inlined_array(from.to_raw_address(), to_obj.to_raw_address())
+            }
+        }
+
+        // zero from_obj (for debugging purposes)
+        #[cfg(debug_assertions)]
+        {
+            use atomic::Ordering;
+            unsafe {
+                libc::memset(from_start.to_mut_ptr(), 0, bytes);
+            }
+
+            Self::LOCAL_FORWARDING_BITS_SPEC.store_atomic::<JuliaVM, u8>(
+                from,
+                0b10_u8, // BEING_FORWARDED
+                None,
+                Ordering::SeqCst,
+            );
+        }
+
+        Some(to_obj)
     }
 }
 
