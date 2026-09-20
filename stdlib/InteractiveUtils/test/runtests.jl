@@ -872,7 +872,7 @@ file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
     m = @which versioninfo()
     s = sprint(showerror, e)
     m = match(Regex("@ .+ (.*?):$(m.line)"), s)
-    @test isfile(expanduser(m.captures[1]))
+    @test isfile(replace(expanduser(m.captures[1]), "@stdlib" => Sys.STDLIB))
 
     g() = x
     e, bt = try code_llvm(g, Tuple{Int})
@@ -882,7 +882,7 @@ file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
     @test e isa Exception
     s = sprint(showerror, e, bt)
     m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
-    @test isfile(expanduser(m.captures[1]))
+    @test isfile(replace(expanduser(m.captures[1]), "@stdlib" => Sys.STDLIB))
 end
 
 @testset "Issue #34434" begin
