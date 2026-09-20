@@ -106,9 +106,6 @@ preceding_whitespace(tok::SyntaxToken) = tok.preceding_whitespace
     RawGreenNode(head::SyntaxHead, byte_span::UInt32, orig_kind::Kind) # Terminal
     RawGreenNode(head::SyntaxHead, byte_span::UInt32, nchildren::UInt32) # Non-terminal
 
-!!! warning "Not public API"
-    `RawGreenNode` is internal. It is not public API.
-
 A "green tree" is a lossless syntax tree which overlays all the source text.
 The most basic properties of a green tree are that:
 
