@@ -734,6 +734,8 @@ See also: [`code_native`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref)
 
 """
     @time_imports
+    @time_imports invalidations=true
+    @time_imports invalidations=:all
 
 A macro to execute an expression and produce a report of any time spent importing packages and their
 dependencies. Any compilation time will be reported as a percentage, and how much of which was recompilation, if any.
@@ -741,6 +743,15 @@ dependencies. Any compilation time will be reported as a percentage, and how muc
 One line is printed per package or package extension. The duration shown is the time to import that package itself, not including the time to load any of its dependencies.
 
 On Julia 1.9+ [package extensions](@ref man-extensions) will show as Parent → Extension.
+
+With `invalidations=true`, each package's line is preceded by a count of the method instances whose
+compiled code was invalidated while loading that package, grouped by what triggered them: usually a
+new method definition that supersedes an existing method for some already-compiled calls. The 5
+triggers with the most downstream invalidations are listed (an integer selects a different number,
+`:all` lists them all), each with the existing method or call signature it affected most. Cached code
+in the package being loaded that is invalidated because a method defined by an earlier package changed
+which methods one of its calls resolves to is attributed to that earlier definition, so the trigger
+shown may be from a different package. Nothing is printed for packages that caused no invalidations.
 
 !!! note
     During the load process a package sequentially imports all of its dependencies, not just its direct dependencies.
@@ -765,8 +776,22 @@ julia> @time_imports using CSV
    1681.2 ms  CSV 92.40% compilation time
 ```
 
+```julia-repl
+julia> @time_imports invalidations=true using JSON
+[...]
+               ┌ 122 invalidations from 4 triggers:
+               │     43  convert(::Type{Symbol}, x::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:455  affecting calls to convert(::Core.TypeEgal{Symbol}, ::Any)
+               │     34  isequal(x::AbstractString, y::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:475  superseding isequal(x, y) @ Base
+               │     26  convert(::Type{String}, x::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:446  affecting calls to convert(::Core.TypeEgal{String}, ::Any)
+               │     25  isequal(x::JSON.PtrString, y::AbstractString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:474  superseding isequal(x, y) @ Base
+    114.6 ms  JSON
+```
+
 !!! compat "Julia 1.8"
     This macro requires at least Julia 1.8
+
+!!! compat "Julia 1.14"
+    The `invalidations` option requires at least Julia 1.14
 
 """
 :@time_imports

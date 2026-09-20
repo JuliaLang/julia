@@ -1448,6 +1448,58 @@ cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Libc.Lib
 # use an Int counter so that nested @time_imports calls all remain open
 const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 
+# state for `@time_imports invalidations=...`: the two invalidation logs, sliced per package
+# load, and whether this session enabled them (and so may truncate and disable them)
+struct TimingInvalidations
+    logmeths::Vector{Any}  # runtime log, see `jl_debug_method_invalidation`
+    logedges::Vector{Any}  # cached-code edge verification log, see `ReinferUtils.debug_method_invalidation`
+    # invalidated instance => (trigger, superseded root), kept across loads so that cached code
+    # invalidated by an earlier package's method definition is attributed to that definition
+    causes::IdDict{MethodInstance, Tuple{Any, Any}}
+    top::Int  # how many triggers to report per package
+    own_logmeths::Bool
+    own_logedges::Bool
+end
+const TIMING_IMPORTS_INVALIDATIONS = Ref{Union{Nothing, TimingInvalidations}}(nothing)
+
+# `setting` is the `invalidations=` option of `@time_imports`. Returns the previous state,
+# to be passed to `timing_imports_invalidations_stop`.
+function timing_imports_invalidations_start(@nospecialize(setting))
+    top = setting === true ? 5 :
+          setting === false ? 0 :
+          setting === :all ? typemax(Int) :
+          setting isa Integer ? Int(setting) :
+          throw(ArgumentError("`@time_imports invalidations=` expects `true`, `false`, `:all` or an integer, got $(repr(setting))"))
+    prev = TIMING_IMPORTS_INVALIDATIONS[]
+    if top <= 0
+        TIMING_IMPORTS_INVALIDATIONS[] = nothing
+    elseif prev !== nothing
+        # nested inside an enabled `@time_imports`: keep its logs, only change the count
+        TIMING_IMPORTS_INVALIDATIONS[] = TimingInvalidations(prev.logmeths, prev.logedges, prev.causes, top, false, false)
+    else
+        # only enable (and later disable) the logs if nothing else (e.g. SnoopCompile) already has
+        logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 2)
+        own_logmeths = logmeths === nothing
+        own_logmeths && (logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1))
+        logedges = ReinferUtils._jl_debug_method_invalidation[]
+        own_logedges = logedges === nothing
+        own_logedges && (logedges = ReinferUtils._jl_debug_method_invalidation[] = Any[])
+        TIMING_IMPORTS_INVALIDATIONS[] = TimingInvalidations(logmeths::Vector{Any}, logedges::Vector{Any},
+            IdDict{MethodInstance, Tuple{Any, Any}}(), top, own_logmeths, own_logedges)
+    end
+    return prev
+end
+
+function timing_imports_invalidations_stop(prev::Union{Nothing, TimingInvalidations})
+    cur = TIMING_IMPORTS_INVALIDATIONS[]
+    if cur !== nothing
+        cur.own_logmeths && ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+        cur.own_logedges && (ReinferUtils._jl_debug_method_invalidation[] = nothing)
+    end
+    TIMING_IMPORTS_INVALIDATIONS[] = prev
+    nothing
+end
+
 # loads a precompile cache file, ignoring stale_cachefile tests
 # assuming all depmods are already loaded and everything is valid
 # these return either the array of modules loaded from the path / content given
@@ -1456,11 +1508,17 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}; register::Bool=true)
     assert_havelock(require_lock)
     timing_imports = TIMING_IMPORTS[] > 0
+    timing_invalidations = timing_imports ? TIMING_IMPORTS_INVALIDATIONS[] : nothing
     try
         if timing_imports
             t_before = time_ns()
             cumulative_compile_timing(true)
             t_comp_before = cumulative_compile_time_ns()
+        end
+        if timing_invalidations !== nothing
+            # only the log entries added while loading this package belong to its report
+            n_logmeths = length(timing_invalidations.logmeths)
+            n_logedges = length(timing_invalidations.logedges)
         end
 
         for i in eachindex(depmods)
@@ -1505,6 +1563,10 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 if timing_imports
                     elapsed_time = time_ns() -% t_before
                     comp_time, recomp_time = map(-%, cumulative_compile_time_ns(), t_comp_before)
+                    if timing_invalidations !== nothing
+                        has_init = any(m -> isdefined(m::Module, :__init__), sv[2]::Vector{Any})
+                        print_time_imports_report_invalidations(timing_invalidations, n_logmeths, n_logedges, has_init)
+                    end
                     print_time_imports_report(M, elapsed_time, comp_time, recomp_time)
                 end
                 return M
@@ -1561,6 +1623,192 @@ function print_time_imports_report_init(
         printstyled(" ($(perc < 1 ? "<1" : Ryu.writefixed(perc, 0))% recompilation)", color = Base.warn_color())
     end
     println()
+end
+
+_invalidated_mi(x::MethodInstance) = x
+_invalidated_mi(x::Core.ABIOverride) = x.def
+_invalidated_mi(x::CodeInstance) = get_ci_mi(x)
+
+# Summarize the entries of the invalidation logs past `n_logmeths`/`n_logedges`, grouped by
+# what triggered them: the `Method` whose definition (or deletion) invalidated existing code,
+# or a binding change. Returns the number of distinct invalidated instances and, sorted by
+# that count, `(trigger, count, superseded root => count)` for each trigger, where a root is
+# the `Method` or call signature whose existing callers were invalidated.
+function summarize_invalidations!(ti::TimingInvalidations, n_logmeths::Int, n_logedges::Int)
+    instances = Dict{Any, IdSet{MethodInstance}}()
+    roots = Dict{Any, Dict{Any, Int}}()
+    causes = ti.causes
+    function record!(@nospecialize(trigger), @nospecialize(root), mis)
+        s = get!(IdSet{MethodInstance}, instances, trigger)
+        r = get!(Dict{Any, Int}, roots, trigger)
+        nnew = 0
+        for mi in mis
+            causes[mi] = (trigger, root)
+            mi in s && continue
+            push!(s, mi)
+            nnew += 1
+        end
+        r[root] = get(r, root, 0) + nnew
+        return
+    end
+
+    # Runtime log (see the pushes in `src/gf.c`): `(mi, depth::Int32)` entries are invalidated
+    # callers, a `(mi, tag)` or signature `Type` entry closes the tree of callers of that
+    # superseded instance or signature, and a `(Method, tag)` entry closes the trees caused by
+    # inserting or deleting that method.
+    logmeths = ti.logmeths
+    pending = MethodInstance[]
+    blocks = Pair{Any, Vector{MethodInstance}}[]
+    function close_root!(@nospecialize(root))
+        push!(blocks, root => copy(pending))
+        empty!(pending)
+    end
+    function close_trigger!(@nospecialize(trigger))
+        isempty(pending) || close_root!(nothing)
+        for (root, mis) in blocks
+            record!(trigger, root, mis)
+        end
+        empty!(blocks)
+    end
+    i, len = n_logmeths + 1, length(logmeths)
+    while i <= len
+        item = logmeths[i]
+        if item isa MethodInstance || item isa Core.ABIOverride
+            mi = _invalidated_mi(item)
+            next = i < len ? logmeths[i+1] : nothing
+            if next isa Int32
+                push!(pending, mi)
+            elseif next == "invalidate_mt_cache"
+                # only a dispatch cache entry is dropped, no compiled code is invalidated
+            elseif next isa String
+                close_root!(mi.def isa Method ? mi.def : mi)
+            end
+            i += 2
+        elseif item isa Type
+            close_root!(item)
+            i += 1
+        elseif item isa Method
+            tag = i < len ? logmeths[i+1] : nothing
+            close_trigger!(tag == "jl_method_table_disable" ? (:deleting, item) : item)
+            i += 2
+        elseif item isa Core.BindingPartition
+            close_trigger!((:rebinding, item))
+            i += 2
+        elseif item isa String
+            close_trigger!((:rebinding, nothing))
+            i += 1
+        else
+            i += 1
+        end
+    end
+    close_trigger!((:unknown, nothing))
+
+    # Edge verification log (see `ReinferUtils.verify_method`): a callee edge of a cached code
+    # instance that no longer resolves to the same methods invalidates it, and that propagates
+    # to its cached callers.
+    logedges = ti.logedges
+    i, len = n_logedges + 1, length(logedges)
+    while i + 2 <= len
+        tag = logedges[i+1]
+        if tag == "insert_backedges_callee"
+            edge, target, matches = logedges[i], logedges[i+2]::CodeInstance, logedges[i+3]::Vector{Any}
+            i += 4
+            trigger = length(matches) == 1 ? matches[1]::Method :
+                      !isempty(matches) ? Tuple(matches) :
+                      edge isa Core.Binding ? (:rebinding, edge) : (:deleting, edge)
+            root = edge isa Union{MethodInstance, CodeInstance, Core.ABIOverride} ? _invalidated_mi(edge).def : edge
+            record!(trigger, root, (_invalidated_mi(target),))
+        elseif tag == "verify_methods"
+            target, cause = logedges[i]::CodeInstance, logedges[i+2]::CodeInstance
+            i += 3
+            target === cause && continue
+            cause_mi = _invalidated_mi(cause)
+            trigger, root = get(causes, cause_mi, ((:callee, cause_mi.def), cause_mi.def))
+            record!(trigger, root, (_invalidated_mi(target),))
+        elseif tag == "method_globalref"
+            def, target = logedges[i]::Method, logedges[i+2]::CodeInstance
+            i += 4
+            record!((:globalref, def), def, (_invalidated_mi(target),))
+        else
+            error("unknown invalidation log tag ", repr(tag))
+        end
+    end
+
+    all_invalidated = IdSet{MethodInstance}()
+    for s in values(instances)
+        union!(all_invalidated, s)
+    end
+    entries = [(trigger, length(instances[trigger]), roots[trigger]) for trigger in keys(instances)]
+    sort!(entries; by = e -> e[2], rev = true)
+    return length(all_invalidated), entries
+end
+
+function print_invalidation_trigger(io::IO, @nospecialize(trigger))
+    if trigger isa Method
+        show(io, trigger)
+    elseif trigger isa Tuple && trigger[1] isa Method
+        show(io, trigger[1])
+        print(io, " (and ", length(trigger) - 1, " more)")
+    else
+        reason, x = trigger::Tuple{Symbol, Any}
+        if reason === :deleting
+            print(io, "deleting ")
+            print_invalidation_root(io, x)
+        elseif reason === :rebinding
+            print(io, "binding change")
+            x isa Core.Binding && print(io, " of ", x.globalref)
+        elseif reason === :globalref
+            print(io, "binding change affecting ")
+            show(io, x::Method)
+        elseif reason === :callee
+            print(io, "previously invalidated callee ")
+            print_invalidation_root(io, x)
+        else
+            print(io, "unknown cause")
+        end
+    end
+end
+
+function print_invalidation_root(io::IO, @nospecialize(root))
+    if root isa Method
+        show(IOContext(io, :print_method_signature_only => true), root)
+        print(io, " @ ", parentmodule(root))
+    elseif root isa Type
+        show_tuple_as_call(io, Symbol(""), root; qualified=true)
+    elseif root isa Core.Binding
+        print(io, root.globalref)
+    else
+        show(io, root)
+    end
+end
+
+function print_time_imports_report_invalidations(ti::TimingInvalidations, n_logmeths::Int, n_logedges::Int, has_init::Bool)
+    total, entries = summarize_invalidations!(ti, n_logmeths, n_logedges)
+    # nested loads (from `__init__`) have already reported their own entries
+    ti.own_logmeths && resize!(ti.logmeths, n_logmeths)
+    ti.own_logedges && resize!(ti.logedges, n_logedges)
+    total == 0 && return
+    ntriggers = length(entries)
+    printstyled("               $(has_init ? "├" : "┌") ", color = :light_black)
+    print(total, " invalidation", total == 1 ? "" : "s", " from ", ntriggers, " trigger", ntriggers == 1 ? "" : "s")
+    ti.top < ntriggers && print(", top ", ti.top)
+    println(":")
+    # truncate to the terminal width; the 25 columns are the prefix printed before the trigger
+    cols = stdout isa TTY ? displaysize(stdout)[2] - 25 : typemax(Int)
+    hascolor = get(stdout, :color, false)::Bool
+    for (trigger, count, trigger_roots) in Iterators.take(entries, ti.top)
+        printstyled("               │ ", color = :light_black)
+        print(lpad(count, 6), "  ")
+        line = sprint(context = stdout) do io
+            print_invalidation_trigger(io, trigger)
+            root = argmax(last, trigger_roots).first
+            if root !== nothing && !(trigger isa Tuple && trigger[1] === :callee)
+                printstyled(io, "  ", root isa Type ? "affecting calls to " : "superseding ", color = :light_black)
+                printstyled(io, sprint(print_invalidation_root, root; context = IOContext(io, :color => false)), color = :light_black)
+            end
+        end
+        println(_truncate_at_width_or_chars(hascolor, line, cols))
+    end
 end
 
 # if M is an extension, return the string name of the parent. Otherwise return nothing

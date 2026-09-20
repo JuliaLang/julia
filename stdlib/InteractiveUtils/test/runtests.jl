@@ -973,6 +973,56 @@ end
     end
 end
 
+@testset "@time_imports invalidations" begin
+    mktempdir() do dir
+        try
+            pushfirst!(LOAD_PATH, dir)
+            # InvExt3242 defines a method that supersedes InvBase3242.f(::AbstractThing) for the
+            # call compiled into InvBase3242's cache, so loading it invalidates `callf`
+            write(joinpath(dir, "InvBase3242.jl"),
+                """
+                module InvBase3242
+                abstract type AbstractThing end
+                f(::AbstractThing) = 1
+                callf(xs::Vector{AbstractThing}) = f(xs[1])
+                precompile(callf, (Vector{AbstractThing},))
+                end
+                """)
+            write(joinpath(dir, "InvExt3242.jl"),
+                """
+                module InvExt3242
+                using InvBase3242
+                struct Thing <: InvBase3242.AbstractThing end
+                InvBase3242.f(::Thing) = 2
+                end
+                """)
+            Base.compilecache(Base.PkgId("InvBase3242"))
+            Base.compilecache(Base.PkgId("InvExt3242"))
+
+            fname = tempname()
+            open(fname, "w") do f
+                redirect_stdout(f) do
+                    @eval @time_imports invalidations=true using InvExt3242
+                end
+            end
+            out = read(fname, String)
+            rm(fname)
+            @test occursin("ms  InvBase3242", out)
+            @test occursin("ms  InvExt3242", out)
+            @test occursin("1 invalidation from 1 trigger:", out)
+            @test occursin(r"1  f\(::InvExt3242\.Thing\) @ InvExt3242 .*superseding f\(::InvBase3242\.AbstractThing\) @ InvBase3242", out)
+            # the logs are switched off again afterwards
+            @test ccall(:jl_debug_method_invalidation, Any, (Cint,), 2) === nothing
+            @test Base.ReinferUtils._jl_debug_method_invalidation[] === nothing
+
+            @test_throws ArgumentError @eval @time_imports invalidations=:none using InvExt3242
+            @test_throws LoadError @eval @time_imports foo=true using InvExt3242
+        finally
+            filter!((≠)(dir), LOAD_PATH)
+        end
+    end
+end
+
 let # `default_tt` should work with any function with one method
     @test (code_warntype(devnull, function ()
         sin(42)

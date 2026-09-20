@@ -2407,7 +2407,10 @@ JL_DLLEXPORT jl_value_t *jl_debug_method_invalidation(int state) JL_CANSAFEPOINT
 {
     /* After calling with `state = 1`, caller is responsible for
        holding a reference to the returned array until this is called
-       again with `state = 0`. */
+       again with `state = 0`. `state = 2` queries the current array
+       without enabling logging. */
+    if (state == 2)
+        return _jl_debug_method_invalidation ? (jl_value_t*)_jl_debug_method_invalidation : jl_nothing;
     if (state) {
         if (_jl_debug_method_invalidation)
             return (jl_value_t*) _jl_debug_method_invalidation;
