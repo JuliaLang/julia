@@ -3827,6 +3827,86 @@ end
     end end
 end
 
+# Issue #63268: the cache file name is keyed on the environment. Two environments at the
+# same project path (the same mount point in different containers, or one project whose
+# manifest is switched) that resolve different versions of a package must not overwrite
+# each other's cache files, so the manifest contents are part of the key.
+@testset "cache files of different versions at the same project path coexist" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        for (dirname, marker, version) in (("DepOld", 1, "0.1.0"), ("DepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "Dep"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "Dep.jl"),
+                  """
+                  module Dep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              Dep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        function use_dep(dirname, version)
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  manifest_format = "2.0"
+
+                  [[deps.Dep]]
+                  path = "../dev/$dirname/"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+        end
+        script = """
+            dep = Base.identify_package("Dep")
+            println("PRECOMPILED=", Base.isprecompiled(dep))
+            using Dep
+            println("DEP_VERSION=", Dep._v)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        function run_dep()
+            logfile = joinpath(dir, "run.log")
+            proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+            output = read(logfile, String)
+            @test success(proc) || (println(output); false)
+            return output
+        end
+        cachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Dep")
+        cachefiles() = filter(endswith(".ji"), readdir(cachedir))
+
+        use_dep("DepOld", "0.1.0")
+        output = run_dep()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=1", output)
+        @test length(cachefiles()) == 1
+
+        # The other version is cached alongside, not over, the first one
+        use_dep("DepNew", "0.2.0")
+        output = run_dep()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles()) == 2
+
+        # so switching back needs no recompilation
+        use_dep("DepOld", "0.1.0")
+        output = run_dep()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=1", output)
+        @test length(cachefiles()) == 2
+    end end
+end
+
 # PR #61915: a precompiled value with an inline `Type{Union{}}` field used to abort
 # in `record_memoryrefs_inside` while writing the cache, because the `TypeEq` field
 # type is laid out as the singleton `typeof(Union{})` `DataType`.

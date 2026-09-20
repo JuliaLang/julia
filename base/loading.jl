@@ -3650,6 +3650,18 @@ function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=Cac
         abspath(cachepath, entryfile) * ".ji"
     else
         crc = _crc32c(project)
+        # Distinct environments can share a project path (e.g. the same mount point in
+        # different containers) yet pin different package versions, so key on the
+        # manifest contents too, or they would overwrite each other's cache files (#63268).
+        manifest = isempty(project) ? nothing : project_file_manifest_path(project)
+        if manifest !== nothing
+            try
+                crc = open(io -> _crc32c(io, crc), manifest, "r")
+            catch e
+                # e.g. a concurrent Pkg operation replacing the manifest; only the name is affected
+                e isa IOError || rethrow()
+            end
+        end
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(_cacheflag_to_uint8(flags), crc)
