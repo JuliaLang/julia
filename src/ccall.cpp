@@ -2233,11 +2233,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             }
             else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
-#if JL_LLVM_VERSION >= 200000
                 auto ID = Intrinsic::lookupIntrinsicID(f_name);
-#else
-                auto ID = Function::lookupIntrinsicID(f_name);
-#endif
                 std::string foreign_msg;
                 if (is_foreign_target_intrinsic(ctx, ID, f_name, foreign_msg)) {
                     emit_error(ctx, foreign_msg);
@@ -2247,23 +2243,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
                     SmallVector<Type*, 4> overloadTys;
-#if JL_LLVM_VERSION >= 230000
                     if (Intrinsic::isSignatureValid(ID, functype, overloadTys)) {
                         {
-#else
-                    SmallVector<Intrinsic::IITDescriptor, 8> Table;
-                    getIntrinsicInfoTableEntries(ID, Table);
-                    ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-                    auto res = Intrinsic::matchIntrinsicSignature(functype, TableRef, overloadTys);
-                    if (res == Intrinsic::MatchIntrinsicTypes_Match) {
-                        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
-                        if (matchvararg) {
-#endif
-#if JL_LLVM_VERSION >= 200000
                             Function *intrinsic = Intrinsic::getOrInsertDeclaration(jl_Module, ID, overloadTys);
-#else
-                            Function *intrinsic = Intrinsic::getDeclaration(jl_Module, ID, overloadTys);
-#endif
                             assert(intrinsic->getFunctionType() == functype);
                             if (intrinsic->getName() == f_name || Intrinsic::getBaseName(ID) == f_name)
                                 llvmf = intrinsic;
