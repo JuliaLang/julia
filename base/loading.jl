@@ -3475,6 +3475,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     uuid_tuple = pkg.uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, pkg.uuid)
 
     ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
+    ccall(:jl_set_module_build_id_seed, Cvoid, (UInt64,), precompile_build_id_seed(pkg, input))
     if source !== nothing
         task_local_storage()[:SOURCE_PATH] = source
     end
@@ -3529,6 +3530,19 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     @lock require_lock end_loading(pkg, m)
     # insert_extension_triggers(pkg)
     # run_package_callbacks(pkg)
+end
+
+# The modules created while precompiling `pkg` get their `build_id.lo` from this seed, so
+# that precompiling the same package twice gives the same cache header.
+function precompile_build_id_seed(pkg::PkgId, input::String)
+    uuid = pkg.uuid === nothing ? UInt128(0) : UInt128(pkg.uuid)
+    id = _crc32c(pkg.name, _crc32c(uuid))
+    src = open(_crc32c, input, "r")
+    src = _crc32c(ccall(:jl_cache_flags, UInt8, ()), src)
+    # (a package outside of every depot is not relocatable, so it need not be reproducible either)
+    src = _crc32c(replace_depot_path(input), src)
+    seed = (UInt64(id) << 32) | UInt64(src)
+    return seed == 0 ? UInt64(1) : seed
 end
 
 function check_package_module_loaded_error(pkg)

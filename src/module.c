@@ -584,6 +584,14 @@ JL_DLLEXPORT jl_value_t *jl_binding_backedges_getindex(jl_binding_t *b, size_t i
     return ret;
 }
 
+// When non-zero, new modules derive their `build_id.lo` from this seed
+_Atomic(uint64_t) jl_module_build_id_seed;
+
+JL_DLLEXPORT void jl_set_module_build_id_seed(uint64_t seed)
+{
+    jl_atomic_store_relaxed(&jl_module_build_id_seed, seed);
+}
+
 static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
@@ -596,10 +604,17 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent) JL_CANS
     m->parent = parent ? parent : m;
     m->istopmod = 0;
     m->uuid = uuid_zero;
+    m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
+        bitmix(name->hash, parent->hash);
     static _Atomic(unsigned int) mcounter; // simple counter backup, in case hrtime is not incrementing
     unsigned int count = jl_atomic_fetch_add_relaxed(&mcounter, 1);
+    // seed is zero when modules does not belong to a package we're precompiling; e.g. one defined in the REPL
+    uint64_t seed = jl_atomic_load_relaxed(&jl_module_build_id_seed);
     // TODO: this is used for ir decompression and is liable to hash collisions so use more of the bits
-    m->build_id.lo = bitmix(jl_hrtime() + count, jl_rand());
+    if (seed)
+        m->build_id.lo = bitmix(seed, m->hash);
+    else
+        m->build_id.lo = bitmix(jl_hrtime() + count, jl_rand());
     if (!m->build_id.lo)
         m->build_id.lo++; // build id 0 is invalid
     m->build_id.hi = ~(uint64_t)0;
@@ -615,8 +630,6 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent) JL_CANS
     jl_atomic_store_relaxed(&m->export_set_changed_since_require_world, 0);
     m->file = jl_empty_sym;
     m->line = 0;
-    m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
-        bitmix(name->hash, parent->hash);
     JL_MUTEX_INIT(&m->lock, "module->lock");
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
     jl_atomic_store_relaxed(&m->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);

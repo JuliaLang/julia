@@ -419,6 +419,7 @@
     XX(jl_set_module_infer) \
     XX(jl_set_module_nospecialize) \
     XX(jl_set_module_optlevel) \
+    XX(jl_set_module_build_id_seed) \
     XX(jl_set_module_uuid) \
     XX(jl_set_next_task) \
     XX(jl_set_nth_field) \
