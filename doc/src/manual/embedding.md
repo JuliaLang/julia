@@ -441,7 +441,7 @@ need to read the reference the store is about to displace:
 
 ```c
 jl_value_t *parent = some_old_value, *child = some_young_value;
-jl_gc_wb(parent, child);
+jl_gc_wb(parent, &((some_specific_type*)parent)->field, child);
 ((some_specific_type*)parent)->field = child;
 ```
 
@@ -457,7 +457,7 @@ Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be 
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
 void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
-jl_gc_wb(jl_array_owner(some_array), some_value);
+jl_gc_wb(jl_array_owner(some_array), &data[0], some_value);
 data[0] = some_value;
 ```
 

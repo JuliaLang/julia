@@ -162,6 +162,34 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
     Function *Callee = CI.getCalledFunction();
+#ifdef GC_BARRIER_FIELD_PRECISE
+    // There are currently no codegen exceptions permitting whole-object barriers.
+    Check(!Callee || Callee->getName() != "julia.object_write_barrier",
+          "Object write barrier is not permitted with field-precise barriers", &CI);
+#endif
+    // Varargs are not type-checked by LLVM, so validate every (slot, child) pair.
+    if (Callee && Callee->getName().starts_with("julia.field_write_barrier.")) {
+        bool derived = Callee->getName() == "julia.field_write_barrier.p11";
+        Check(derived || Callee->getName() == "julia.field_write_barrier.p13",
+              "Unknown field write barrier address space", &CI);
+        auto isPointerInAS = [](Value *V, unsigned AS) {
+            auto *Ty = dyn_cast<PointerType>(V->getType());
+            return Ty && Ty->getAddressSpace() == AS;
+        };
+        Check(CI.arg_size() >= 3 && CI.arg_size() % 2 == 1,
+              "Field write barrier must be (parent, slot, child) plus (slot, child) pairs", &CI);
+        if (!CI.arg_empty())
+            Check(isPointerInAS(CI.getArgOperand(0), AddressSpace::Tracked),
+                  "Field write barrier requires a tracked parent", &CI);
+        for (unsigned i = 1; i + 1 < CI.arg_size(); i += 2) {
+            Check(isPointerInAS(CI.getArgOperand(i), derived ? AddressSpace::Derived : AddressSpace::Loaded),
+                  "Field write barrier slot address space must match its declaration", &CI);
+            Check(isPointerInAS(CI.getArgOperand(i + 1), AddressSpace::Tracked),
+                  "Field write barrier requires tracked children", &CI);
+            Check(!isa<ConstantPointerNull>(CI.getArgOperand(i)->stripPointerCasts()),
+                  "Field write barrier requires non-null slots", &CI);
+        }
+    }
     if (Callee && (Callee->getName() == "julia.call" ||
                    Callee->getName() == "julia.call2" ||
                    Callee->getName() == "julia.call3")) {

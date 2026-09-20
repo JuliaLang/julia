@@ -558,6 +558,13 @@ Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIM
 >     primitive type with a power-of-two number of bytes (e.g. 1, 2, 4, 8, 16, etc) such as
 >     Int8 or Float64.
 
+The ABI for vectors smaller than a SIMD register is not portable between C compilers.
+On x86-64, Julia follows gcc when classifying vectors of a single floating-point
+element; clang differs for some arguments and return values. On AArch64, Julia passes
+vectors smaller than the 8-byte minimum for a short vector as composites in
+general-purpose registers. This matches gcc and clang for structures containing such a
+vector, although they disagree on bare vectors of these sizes.
+
 For instance, consider this C routine that uses AVX intrinsics:
 
 ```c

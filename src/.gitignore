@@ -5,6 +5,7 @@
 /*.lib
 /*.pdb
 /*.exp
+/*.lto
 
 /boot.j.inc
 /julia_flisp.boot
@@ -12,7 +13,7 @@
 /flisp.boot.inc
 /jl_data_globals_defs.inc
 /jl_internal_funcs.inc
-/jl_codegen_hash.inc
+/jl_codegen_hash.inc*
 /jl_static_codegen_fallbacks.inc
 
 /libjulia-debug.a

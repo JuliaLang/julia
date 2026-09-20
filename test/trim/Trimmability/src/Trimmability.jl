@@ -2,6 +2,8 @@
 module Trimmability
 
 using Sockets
+using SparseArrays
+using LinearAlgebra
 
 world::String = "world!"
 const str = OncePerProcess{String}() do
@@ -170,6 +172,93 @@ end
 # keeps in a merged union: each `print` must still resolve statically.
 @noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
 
+function _test_sparse_constructors()
+    A = sparse([1, 2, 3], [1, 2, 3], [1.0, 2.0, 3.0])
+    B = spdiagm(0 => ones(3), 1 => ones(2))
+    C = sparse([1, 1, 2], [1, 1, 2], [1.0, 2.0, 3.0], 2, 2, +)
+    println(Core.stdout, "sparse constructors: ", nnz(A), " ", nnz(B), " ", nnz(C), " ", C[1, 1])
+end
+
+# A = [1 0 4; 0 2 0; 0 0 3]
+const SPARSE_A = sparse([1, 2, 3, 1], [1, 2, 3, 3], [1.0, 2.0, 3.0, 4.0])
+const SPARSE_X = [1.0, 2.0, 3.0]
+
+function _test_sparse_products()
+    A, x = SPARSE_A, SPARSE_X
+    matvec = sum(A * x)
+    y = zeros(3)
+    mul!(y, A, x)
+    matmat = nnz(A * A)
+    kronecker = nnz(kron(A, A))
+    println(Core.stdout, "sparse products: ", matvec, " ", sum(y), " ", matmat, " ", kronecker)
+end
+
+function _test_sparse_structure()
+    A = SPARSE_A
+    transposed = nnz(sparse(transpose(A)))
+    indexed = A[1, 3] + A[2, 2]
+    B = copy(A)
+    B[2, 1] = 5.0
+    B[1, 1] = 0.0
+    dropped = nnz(dropzeros!(B))
+    permuted = nnz(permute(A, [3, 1, 2], [1, 2, 3]))
+    println(Core.stdout, "sparse structure: ", transposed, " ", indexed, " ", dropped, " ", permuted)
+end
+
+function _test_sparse_broadcast()
+    A = SPARSE_A
+    scaled = nnz(A .* 2.0) + nnz(A .+ A)
+    densified = sum(A .+ 1.0)
+    found = length(findnz(A)[1])
+    concatenated = nnz([A A; A A])
+    println(Core.stdout, "sparse broadcast: ", scaled, " ", densified, " ", found, " ", concatenated)
+end
+
+function _test_sparse_vectors()
+    A = SPARSE_A
+    v = sparsevec([1, 3], [2.0, 4.0], 5)
+    dotted = dot(v, v .* 2.0)
+    added = nnz(v + v)
+    diagonal = sum(diag(A))
+    densesum = sum(Matrix(A))
+    println(Core.stdout, "sparse vectors: ", dotted, " ", added, " ", diagonal, " ", densesum)
+end
+
+function _test_sparse_reductions()
+    A = SPARSE_A
+    total = sum(A)
+    firstrow = sum(A, dims = 2)[1]
+    trace = tr(A)
+    frobenius = norm(A)
+    println(Core.stdout, "sparse reductions: ", total, " ", firstrow, " ", trace, " ", frobenius)
+end
+
+function _test_sparse_nested_reductions()
+    A = SPARSE_A
+    onenorm = opnorm(A, 1)
+    colnorm = maximum(norm(view(A, :, j)) for j in axes(A, 2))
+    nested = sum(a -> sum(b -> a * b, nonzeros(A), init = 0.0), nonzeros(A), init = 0.0)
+    println(Core.stdout, "sparse nested reductions: ", onenorm, " ", colnorm, " ", nested)
+end
+
+function _test_sparse_solves()
+    A, x = SPARSE_A, SPARSE_X
+    triangular = round(sum(UpperTriangular(A) \ x), digits = 6)
+    backslash = round(sum(A \ x), digits = 6)
+    lusolve = round(sum(lu(A) \ x), digits = 6)
+    println(Core.stdout, "sparse solves: ", triangular, " ", backslash, " ", lusolve)
+end
+
+function _test_sparse_factorizations()
+    A, x = SPARSE_A, SPARSE_X
+    S = sparse([2.0 1.0; 1.0 2.0])
+    b = [1.0, 1.0]
+    cholsolve = round(sum(cholesky(S) \ b), digits = 6)
+    ldltsolve = round(sum(ldlt(S) \ b), digits = 6)
+    qrsolve = round(sum(qr(A) \ x), digits = 6)
+    println(Core.stdout, "sparse factorizations: ", cholsolve, " ", ldltsolve, " ", qrsolve)
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -209,6 +298,16 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
 
     println(Core.stdout, interpolate_many(1:3, 2.5, :sym, 'c'))
+    _test_sparse_constructors()
+    _test_sparse_products()
+    _test_sparse_structure()
+    _test_sparse_broadcast()
+    _test_sparse_vectors()
+    _test_sparse_reductions()
+    _test_sparse_nested_reductions()
+    # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
+    # _test_sparse_solves()
+    # _test_sparse_factorizations()
 
     try
         sock = connect("localhost", 4900)

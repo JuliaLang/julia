@@ -330,8 +330,17 @@ mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims::D=:, init=_InitialValue())
 mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kw...) =
     reduce(op, map(f, A, B...); kw...)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
-    mapfoldl_impl(f, op, nt, A)
+function _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon)
+    # equivalent to `mapfoldl_impl(f, op, nt, A)` this logic is expanded here
+    # to work around limitations in inference's recursion heuristic
+    y = iterate(A)
+    y === nothing && return nt
+    v = op(nt, f(y[1]))
+    for x in Iterators.rest(A, y[2])
+        v = op(v, f(x))
+    end
+    return v
+end
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)

@@ -456,38 +456,18 @@ JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
     return 1;
 }
 
-// Saved errno/last-error, passed from `jl_gc_mmtk_block_for_gc_enter` to
-// `jl_gc_mmtk_run_pending_finalizers`, which restores it.
-typedef struct {
-    int saved_errno;
-    uint32_t saved_last_error; // Windows only; always 0 elsewhere.
-} jl_gc_mmtk_saved_errno_t;
-
-// Called by `Collection::block_for_gc` right before it waits for the pause, mirroring what
-// `jl_gc_prepare_to_collect` used to do around the same wait when it ran on this same mutator:
-// save errno, and mark this task's own timing as suspended.
-JL_DLLEXPORT jl_gc_mmtk_saved_errno_t jl_gc_mmtk_block_for_gc_enter(void)
+// Called by `Collection::block_for_gc` right before it waits for the pause:
+// mark this task's own timing as suspended.
+JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_enter(void)
 {
-    jl_gc_mmtk_saved_errno_t saved;
-    saved.saved_errno = errno;
-#ifdef _OS_WINDOWS_
-    saved.saved_last_error = GetLastError();
-#else
-    saved.saved_last_error = 0;
-#endif
 #if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
     jl_timing_suspend_t suspend;
     _jl_timing_suspend_ctor(&suspend, "GC", jl_current_task);
 #endif
-    return saved;
 }
 
 // The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
 // task's own timing, and tell mmtk-core this task has resumed.
-//
-// errno/last-error are NOT restored here -- pending finalizers still need to run first, and they
-// can set errno themselves, so the restore waits until after them (see
-// `jl_gc_mmtk_run_pending_finalizers` below).
 JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -501,8 +481,8 @@ JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
 
 // Runs this mutator's pending finalizers before `Collection::block_for_gc` returns --
 // `GC.gc()` is documented/tested to have run pending finalizers by the time they
-// return. Also restores the errno/last-error `saved` carries from `jl_gc_mmtk_block_for_gc_enter`.
-JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(jl_gc_mmtk_saved_errno_t saved)
+// return.
+JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -513,10 +493,6 @@ JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(jl_gc_mmtk_saved_errno_t sav
         run_finalizers(ct, 0);
     }
     JL_PROBE_GC_FINALIZER();
-#ifdef _OS_WINDOWS_
-    SetLastError(saved.saved_last_error);
-#endif
-    errno = saved.saved_errno;
 }
 
 // ========================================================================= //
@@ -1044,6 +1020,11 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
     sweep_mtarraylist_buffers();
 }
 
+void jl_gc_notify_task_suspend(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    jl_gc_wb_back(task);
+}
+
 void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
 {
 #ifdef MMTK_PLAN_CONCURRENTIMMIX
@@ -1154,6 +1135,20 @@ STATIC_INLINE void* bump_alloc_fast(MMTkMutatorContext* mutator, uintptr_t* curs
     }
 }
 
+// Like `bump_alloc_fast`, but the slow path is taken with explicit allocation options rather
+// than MMTk's defaults.
+STATIC_INLINE void* bump_alloc_fast_with_options(MMTkMutatorContext* mutator, uintptr_t* cursor, uintptr_t limit, size_t size, size_t align, size_t offset, int allocator, MMTk_AllocationOptions options) JL_NOTSAFEPOINT {
+    intptr_t delta = (-offset - *cursor) & (align - 1);
+    uintptr_t result = *cursor + (uintptr_t)delta;
+
+    if (__unlikely(result + size > limit)) {
+        return (void*) mmtk_alloc_with_options(mutator, size, align, offset, allocator, options);
+    } else {
+        *cursor = result + size;
+        return (void*)result;
+    }
+}
+
 STATIC_INLINE void* mmtk_immix_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
     ImmixAllocator* allocator = &mutator->allocators.immix[MMTK_DEFAULT_IMMIX_ALLOCATOR];
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (intptr_t)allocator->limit, size, align, offset, 0);
@@ -1168,9 +1163,18 @@ STATIC_INLINE void mmtk_immix_post_alloc_fast(MMTkMutatorContext* mutator, void*
     // but when supporting moving, this is where we set the valid object (VO) bit
 }
 
-STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
+// Permanent (immortal) allocation is `JL_NOTSAFEPOINT`.
+STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) JL_NOTSAFEPOINT {
     BumpAllocator* allocator = &mutator->allocators.bump_pointer[MMTK_IMMORTAL_BUMP_ALLOCATOR];
-    return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
+    MMTk_AllocationOptions options = {
+        // MMTk may go above the current heap size to allocate -- avoid returning NULL
+        .allow_overcommit = true,
+        // MMTk will not block here
+        .at_safepoint = false,
+        // MMTk will not call back into Julia to throw an exception -- we are in a `JL_NOTSAFEPOINT` region
+        .allow_oom_call = false,
+    };
+    return bump_alloc_fast_with_options(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1, options);
 }
 
 STATIC_INLINE void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
@@ -1340,14 +1344,22 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return realloc(p, sz);
 }
 
-void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     size_t allocsz = mmtk_align_alloc_sz(sz);
     void* addr = mmtk_immortal_alloc_fast(&ptls->gc_tls.mmtk_mutator, allocsz, align, offset);
+    if (__unlikely(addr == NULL)) {
+        // The immortal allocation is allowed to over-commit, so a NULL result means we could not
+        // get memory from the OS at all. We cannot block for a GC or throw from here (see the
+        // comment on `mmtk_immortal_alloc_fast`), and the callers have no way to recover from a
+        // failed permanent allocation, so this is fatal.
+        jl_safe_printf("FATAL: out of memory in permanent allocation of %zu bytes.\n", sz);
+        abort();
+    }
     return addr;
 }
 
-void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return jl_gc_perm_alloc_nolock(ptls, sz, zero, align, offset);
@@ -1459,13 +1471,14 @@ JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOIN
     mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
 }
 
-JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT {
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
+{
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
+    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, parent, ptr);
 }
 
-JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
+JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, void *dest JL_UNUSED, const void *stored,
                                         struct _jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     mmtk_unreachable();

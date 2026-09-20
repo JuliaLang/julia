@@ -50,9 +50,9 @@ Julia emits two orthogonal kinds of alias metadata: LLVM's
 [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata) describes the
 layout/type of the data at a location (see `jl_tbaacache_t` in `src/codegen.cpp` for the
 inclusion relationships), while `!alias.scope`/`!noalias` metadata describes the disjoint
-memory regions (GC frame, stack, heap data, constant; see `jl_noaliascache_t`). Codegen
-tracks both together in `jl_aliasinfo_t`, with some standard pairings precomputed in
-`jl_aliascache_t`.
+memory regions (GC frame, stack, heap data, constant, coverage counters; see
+`jl_noaliascache_t`). Codegen tracks both together in `jl_aliasinfo_t`, with some standard
+pairings precomputed in `jl_aliascache_t`.
 
 The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 

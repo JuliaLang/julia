@@ -321,9 +321,17 @@ cd(@__DIR__) do
                 # never ourselves, as we still have to finish exiting. The
                 # workers are all gone by then, so they cannot be in our subtree.
                 ospid = wrkr == 1 ? getpid() : get(worker_ospids, wrkr, nothing)
-                ospid === nothing && continue
+                if ospid === nothing
+                    Core.print(Core.stderr, "Test $test is still running on worker $wrkr at teardown, but no pid was recorded for it; cannot core-dump it.\n")
+                    continue
+                end
                 subtree = reverse!(descendant_pids(ospid))
-                wrkr == 1 && isempty(subtree) && continue
+                if wrkr == 1 && isempty(subtree)
+                    # Nothing to signal: a node 1 test runs in this process, and we must
+                    # not signal ourselves. Report it rather than bailing silently
+                    Core.print(Core.stderr, "Test $test is still running on worker 1 (pid $ospid) at teardown, but it has no live subprocesses; nothing to core-dump.\n")
+                    continue
+                end
                 foreach(quit!, subtree)
                 wrkr == 1 || quit!(ospid)
                 target = (wrkr == 1 ? "" : "it and ") * "its $(length(subtree)) subprocess(es)"

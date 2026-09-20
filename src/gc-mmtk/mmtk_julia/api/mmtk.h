@@ -36,6 +36,16 @@ extern void mmtk_destroy_mutator(MMTk_Mutator mutator);
 extern void* mmtk_alloc(MMTk_Mutator mutator, size_t size,
     size_t align, size_t offset, int allocator);
 
+// Mirrors `mmtk::util::alloc::AllocationOptions` (which is #[repr(C)]).
+typedef struct {
+    bool allow_overcommit;
+    bool at_safepoint;
+    bool allow_oom_call;
+} MMTk_AllocationOptions;
+
+extern void* mmtk_alloc_with_options(MMTk_Mutator mutator, size_t size,
+    size_t align, size_t offset, int allocator, MMTk_AllocationOptions options);
+
 extern void* mmtk_alloc_large(MMTk_Mutator mutator, size_t size,
     size_t align, size_t offset, int allocator);
 

@@ -777,13 +777,13 @@ end
 # type.
 
 # Legacy constructor
-function Core.PartialStruct(𝕃::AbstractLattice, @nospecialize(typ), fields::Vector{Any})
+function Core.PartialStruct(𝕃::AbstractLattice, @nospecialize(typ::Type), fields::Vector{Any})
     undefs = partialstruct_init_undefs(typ, fields)
     undefs === nothing && error("This object never exists at runtime")
     return PartialStruct(𝕃, typ, undefs, fields)
 end
 
-function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), undefs::Vector{Union{Nothing,Bool}}, fields::Vector{Any})
+function Core.PartialStruct(::AbstractLattice, @nospecialize(typ::Type), undefs::Vector{Union{Nothing,Bool}}, fields::Vector{Any})
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
     end

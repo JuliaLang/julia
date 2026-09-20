@@ -91,26 +91,37 @@ macro big_expr(n, x)
     x
 end
 
-@testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
+# threads.jl runs this file inside a `@testset` that wraps the `include`, so that every
+# top-level expression here is its own thunk. Wrapping the file body in one `@testset`
+# instead lowers it into a single thunk of some 28k statements, which the runtime infers
+# and compiles as one function before the first test runs: about 25 s on a fast x86-64
+# machine, and around ten minutes on a RISC-V board.
 
 @test Threads.threadid() == 1
 @test threadpool() in (:interactive, :default) # thread 1 could be in the interactive pool
 @test 1 <= threadpoolsize(:default) <= Threads.maxthreadid()
 
-# basic lock check
+# basic lock check: `t1` blocks in `lock` on a spin lock held by the root
+# task, which parks meanwhile. A spinning task never yields, so it must not
+# run on the thread the root task is bound to - pin it to another thread of
+# the default pool.
+function spawn_pinned(f, tid)
+    t = Task(f)
+    t.sticky = true
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid - 1) == 1 || error("failed to pin task to thread $tid")
+    return schedule(t)
+end
+other_default_tid() = first(tid for tid in Threads.threadpooltids(:default) if tid != Threads.threadid())
 if threadpoolsize(:default) > 1
     let lk = SpinLock()
         c1 = Base.Event()
-        c2 = Base.Event()
         @test trylock(lk)
         @test !trylock(lk)
-        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
-        t2 = Threads.@spawn (notify(c2); trylock(lk))
-        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
-        wait(c1)
-        wait(c2)
+        t2 = Threads.@spawn trylock(lk)
         @test !fetch(t2)
         @test istaskdone(t2)
+        t1 = spawn_pinned(() -> (notify(c1); lock(lk); unlock(lk); trylock(lk)), other_default_tid())
+        wait(c1)
         @test !istaskdone(t1)
         unlock(lk)
         @test fetch(t1)
@@ -121,16 +132,13 @@ end
 if threadpoolsize() > 1
     let lk = Base.Threads.PaddedSpinLock()
         c1 = Base.Event()
-        c2 = Base.Event()
         @test trylock(lk)
         @test !trylock(lk)
-        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
-        t2 = Threads.@spawn (notify(c2); trylock(lk))
-        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
-        wait(c1)
-        wait(c2)
+        t2 = Threads.@spawn trylock(lk)
         @test !fetch(t2)
         @test istaskdone(t2)
+        t1 = spawn_pinned(() -> (notify(c1); lock(lk); unlock(lk); trylock(lk)), other_default_tid())
+        wait(c1)
         @test !istaskdone(t1)
         unlock(lk)
         @test fetch(t1)
@@ -1459,6 +1467,29 @@ end
             end
         end
     end
+
+    # Tasks completing on other threads while the waiter registers with them
+    # or runs its bookkeeping between two wakes: the multi-wait used to keep
+    # a partially registered entry across wakes and deadlock within a few
+    # iterations of this loop.
+    if threadpoolsize() > 1
+        @testset "concurrent completions" begin
+            for _ in 1:20_000
+                tasks = [Threads.@spawn nothing for _ in 1:3]
+                done, pending = waitall(tasks)
+                @test length(done) == 3 && isempty(pending)
+            end
+            for _ in 1:2_000
+                event = Threads.Event()
+                tasks = [Threads.@spawn(wait(event)), Threads.@spawn(nothing), Threads.@spawn(wait(event))]
+                done, pending = waitany(tasks)
+                @test tasks[2] in done
+                notify(event)
+                done, pending = waitall(tasks)
+                @test length(done) == 3 && isempty(pending)
+            end
+        end
+    end
 end
 
 @testset "Base.Experimental.task_metrics" begin
@@ -1541,7 +1572,7 @@ end
         try
             Base.Experimental.task_metrics(true)
             start_time = time_ns()
-            t = Threads.@spawn peakflops()
+            t = Threads.@spawn peakflops(1024)
             wait(t)
             end_time = time_ns()
             wall_time_delta = end_time - start_time
@@ -1555,7 +1586,7 @@ end
         end
     end
     @testset "disabled" begin
-        t = Threads.@spawn peakflops()
+        t = Threads.@spawn peakflops(1024)
         wait(t)
         @test !t.metrics_enabled
         @test isnothing(Base.Experimental.task_running_time_ns(t))
@@ -1593,7 +1624,7 @@ end
             Base.Experimental.task_metrics(true)
             start = time_ns()
             t_outer = Threads.@spawn begin
-                t_inner = Task(() -> peakflops())
+                t_inner = Task(() -> peakflops(1024))
                 t_inner.sticky = false
                 # directly yield to `t_inner` rather calling `schedule(t_inner)`
                 yield(t_inner)
@@ -1622,7 +1653,7 @@ end
             @test Base.Experimental.task_running_time_ns(t1) > 0
             @test Base.Experimental.task_wall_time_ns(t1) > 0
             foo(a, b) = a + b
-            t2 = Task(() -> (peakflops(); foo(wait())))
+            t2 = Task(() -> (peakflops(1024); foo(wait())))
             schedule(t2)
             yield()
             @assert istaskstarted(t1) && !istaskdone(t2)
@@ -1798,8 +1829,6 @@ include("threads_comprehensions.jl")
         @test @eval @allocations(f(10000)) == 0
     end
 end
-
-end # main testset
 
 
 # Forcible task abandonment (unsafe_abandon!): the victim must be running

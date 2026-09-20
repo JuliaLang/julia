@@ -376,6 +376,8 @@ static Value *emit_plt(
 
 class AbiLayout {
 public:
+    // True while classifying variadic arguments.
+    bool varargs = false;
     virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) JL_CANSAFEPOINT = 0;
     virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) JL_CANSAFEPOINT = 0;
@@ -398,6 +400,21 @@ static bool is_native_simd_type(jl_datatype_t *dt) JL_CANSAFEPOINT {
             // Not homogeneous
             return false;
     // Type is homogeneous.  Check if it maps to LLVM vector.
+    return jl_special_vector_alignment(n, ft0) != 0;
+}
+
+// Match the `VecElement` tuples lowered as LLVM vectors.
+static bool is_vector_type(jl_datatype_t *dt) JL_CANSAFEPOINT
+{
+    if (!jl_is_tuple_type(dt))
+        return false;
+    uint32_t n = jl_datatype_nfields(dt);
+    if (n == 0)
+        return false;
+    jl_value_t *ft0 = jl_field_type(dt, 0);
+    for (uint32_t i = 1; i < n; ++i)
+        if (jl_field_type(dt, i) != ft0)
+            return false;
     return jl_special_vector_alignment(n, ft0) != 0;
 }
 
@@ -547,6 +564,8 @@ static jl_cgval_t drop_inline_roots(const jl_cgval_t &x)
 // pointer, so that the conversion is guaranteed to be valid on this runtime branch
 static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x, const Twine &msg) JL_CANSAFEPOINT
 {
+    if (x.typ == jl_bottom_type)
+        return x;
     if (x.typ == (jl_value_t*)jl_voidpointer_type)
         return x;
     if (!jl_is_cpointer_type(x.typ))
@@ -1307,11 +1326,16 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                if (jl_datatype_size(bt) < 4) {
+                size_t sz = jl_datatype_size(bt);
+                if (sz < 4) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
                         ab.addAttribute(Attribute::ZExt);
+                }
+                else if (sz == 4 && ctx->TargetTriple.isRISCV64()) {
+                    // RISC-V sign-extends all 32-bit arguments to XLEN.
+                    ab.addAttribute(Attribute::SExt);
                 }
             }
         }
@@ -1324,6 +1348,8 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
 
         // Whether or not LLVM wants us to emit a pointer to the data
         assert(t && "LLVM type should not be null");
+        if (nreqargs > 0 && i == nreqargs)
+            abi->varargs = true;
         bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, LLVMCtx, t);
 
         if (jl_is_cpointer_type(tti)) {
@@ -1345,10 +1371,16 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
             if (!llvmcall && cc == CallingConv::C) {
                 if (pat->isIntegerTy() && pat->getPrimitiveSizeInBits() < sizeof(int) * 8)
                     pat = getInt32Ty(lrt->getContext());
-                if (pat->isFloatingPointTy() && pat->getPrimitiveSizeInBits() < sizeof(double) * 8)
+                // Default argument promotion does not widen `_Float16` or `__bf16`.
+                if (pat->isFloatTy())
                     pat = getDoubleTy(lrt->getContext());
                 ab.removeAttribute(Attribute::SExt);
                 ab.removeAttribute(Attribute::ZExt);
+                if (ctx->TargetTriple.isRISCV64() && pat->isIntegerTy() &&
+                        pat->getPrimitiveSizeInBits() <= 32) {
+                    // RISC-V applies the same XLEN extension to variadic integers.
+                    ab.addAttribute(Attribute::SExt);
+                }
             }
         }
 
@@ -1364,6 +1396,18 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
     // If return value is boxed it must be non-null.
     if (retboxed)
         RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::NonNull);
+    else if (ctx->TargetTriple.isRISCV64() && rt != jl_bottom_type &&
+             jl_is_primitivetype(rt) && lrt->isIntegerTy()) {
+        // RISC-V returns integers as if passed as the first named argument.
+        size_t sz = jl_datatype_size(rt);
+        if (sz < 4) {
+            bool issigned = jl_signed_type && jl_subtype(rt, (jl_value_t*)jl_signed_type);
+            RetAttrs = RetAttrs.addAttribute(LLVMCtx, issigned ? Attribute::SExt : Attribute::ZExt);
+        }
+        else if (sz == 4) {
+            RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::SExt);
+        }
+    }
     if (rt == jl_bottom_type)
         FnAttrs = FnAttrs.addAttribute(LLVMCtx, Attribute::NoReturn);
 
@@ -1818,22 +1862,16 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == ctx.types().T_size);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        jl_aliasinfo_t ai = ctx.alias().constant;
 
         // jl_task_t *ct = jl_current_task;
         // if (ct->ptls->in_pure_callback)
         //     return ~(size_t)0;
         // return jl_atomic_load_acquire(&jl_world_counter);
-        Type *T_int16 = getInt16Ty(ctx.builder.getContext());
-        Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_tls_states_t, in_pure_callback) / sizeof(int16_t));
-        Value *field_ptr = ctx.builder.CreateInBoundsGEP(T_int16, get_current_ptls(ctx), offset);
-        Instruction *in_pure_callback = ai.decorateInst(ctx.builder.CreateAlignedLoad(T_int16,
-            field_ptr, Align(sizeof(int16_t)), "in_pure_callback"));
-        Value *cond = ctx.builder.CreateICmpEQ(in_pure_callback, ConstantInt::get(T_int16, 0));
+        LoadInst *in_pure_callback = emit_in_pure_callback_load(ctx);
+        Value *cond = ctx.builder.CreateICmpEQ(in_pure_callback,
+            ConstantInt::get(in_pure_callback->getType(), 0));
 
-        Value *world_counter = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
-        cast<LoadInst>(world_counter)->setOrdering(AtomicOrdering::Acquire);
+        Value *world_counter = emit_world_counter_load(ctx);
         Value *ret = ctx.builder.CreateSelect(cond, world_counter, ConstantInt::get(ctx.types().T_size, ~(size_t)0));
         return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
     }
@@ -2180,9 +2218,16 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = f_name.consume_front("extern ");
             llvmf = NULL;
             if (f_extern) {
-                llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
-                if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
-                    llvmf = NULL;
+                // An "extern" name is never allowed to be an intrinsic. Check that
+                // before creating the declaration: `getOrInsertFunction` on an
+                // overloaded intrinsic's base name would leave an ill-formed
+                // (unmangled) intrinsic declaration behind in the module even
+                // though we go on to reject the call.
+                if (!f_name.starts_with("llvm.")) {
+                    llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
+                    if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
+                        llvmf = NULL;
+                }
             }
             else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
@@ -2200,6 +2245,10 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
                     SmallVector<Type*, 4> overloadTys;
+#if JL_LLVM_VERSION >= 230000
+                    if (Intrinsic::isSignatureValid(ID, functype, overloadTys)) {
+                        {
+#else
                     SmallVector<Intrinsic::IITDescriptor, 8> Table;
                     getIntrinsicInfoTableEntries(ID, Table);
                     ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
@@ -2207,6 +2256,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     if (res == Intrinsic::MatchIntrinsicTypes_Match) {
                         bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
                         if (matchvararg) {
+#endif
 #if JL_LLVM_VERSION >= 200000
                             Function *intrinsic = Intrinsic::getOrInsertDeclaration(jl_Module, ID, overloadTys);
 #else
@@ -2368,8 +2418,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             if (static_rt)
                 return mark_julia_slot(result, rt, NULL, ctx.alias().stack);
             ++SRetCCalls;
-            result = ctx.builder.CreateLoad(sretty, result);
+            result = ctx.builder.CreateLoad(zext_struct_type(sretty), result);
             setName(ctx.emission_context, result, "returned");
+            result = trunc_struct_helper(ctx, result, sretty);
         }
     }
     else {

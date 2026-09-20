@@ -348,3 +348,9 @@ end
     lines = split(out, '\n')
     @test lines[findfirst(==("b = 1"), lines) - 1] == "# above b"
 end
+
+@testset "a comment that ends in a multi-byte character" begin
+    data, comments = parse_with_comments("# ends in an em dash \u2014\nname = \"MyPkg\"\n")
+    @test data == Dict("name" => "MyPkg")
+    @test comments.items[["name"]].above == [" ends in an em dash \u2014"]
+end

@@ -149,8 +149,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
 `--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
-`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
-command line arguments that are not at their default values.
+`--code-coverage`, `--code-coverage-mode`, `--track-allocation`, `--color`, `--startup-file`,
+and `--depwarn` command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
 
@@ -227,6 +227,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
     end
+    opts.code_coverage_mode == 1 && push!(addflags, "--code-coverage-mode=count")
     if opts.malloc_log == 1
         push!(addflags, "--track-allocation=user")
     elseif opts.malloc_log == 2

@@ -10,7 +10,7 @@ import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, ~, &, |,
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, iszero, isone, big, flipsign, signbit,
-             sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
+             sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit, exponent,
              ispositive, isnegative, clamp
 
 import Core: Signed, Float16, Float32, Float64

@@ -1181,6 +1181,7 @@ static void do_profile(void) JL_NOTSAFEPOINT
         // and restore from the SEGV handler if anything happens.
         jl_jmp_buf *old_buf = jl_get_safe_restore();
         jl_jmp_buf buf;
+        size_t bt_size_start = profile_bt_size_cur;
 
         jl_set_safe_restore(&buf);
         if (jl_setjmp(buf, 0)) {
@@ -1192,6 +1193,11 @@ static void do_profile(void) JL_NOTSAFEPOINT
                     profile_bt_size_max - profile_bt_size_cur - 1, &signal_context, NULL);
         }
         jl_set_safe_restore(old_buf);
+        if (profile_bt_size_cur == bt_size_start) {
+            // unwinding produced no frames: record a marker so the sample is not silently dropped
+            profile_bt_size_cur += failed_to_unwind_fun((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                    profile_bt_size_max - profile_bt_size_cur - 1, 0);
+        }
 
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
 
@@ -1593,7 +1599,11 @@ static void jl_thread_suspend_membarrier(void) JL_NOTSAFEPOINT
     // jl_thread_suspend tries to interrupt the thread for up to 1 second,
     // so we retry in a loop until it succeeds or we determine the thread
     // is no longer alive.
+    jl_task_t *ct = jl_get_current_task();
+    int16_t self_tid = ct == NULL ? -1 : jl_atomic_load_relaxed(&ct->tid);
     for (int tid = 0; tid < jl_atomic_load_acquire(&jl_n_threads); tid++) {
+        if (tid == self_tid)
+            continue; // the calling thread is synchronized by program order
         while (!jl_thread_suspend(tid, &ctx)) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
             jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
@@ -1750,4 +1760,5 @@ JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT {
         abort();
     }
 }
+
 #endif // !_OS_DARWIN_

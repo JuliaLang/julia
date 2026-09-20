@@ -532,7 +532,7 @@ function skip_comment(l::Parser)::Bool
         else
             start = l.prevpos
             accept_batch(l, !isnewline)
-            l.captured_comment = String(SubString(l.str, start:(l.prevpos-1)))
+            l.captured_comment = String(SubString(l.str, start:prevind(l.str, l.prevpos)))
         end
     end
     return found_comment
