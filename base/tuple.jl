@@ -73,6 +73,8 @@ function iterate(@nospecialize(t::Tuple), i::Int=1)
 end
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
+haskey(t::Tuple{Vararg{Any}}, key::Real) = isinteger(key) && 1 <= key <= length(t)
+haskey(t::Tuple{Vararg{Any}}, ::Any) = false
 
 """
     prevind(A, i)

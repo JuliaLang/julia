@@ -211,6 +211,31 @@ end
         @test get(()->0, (), 4) == 0
         @test get(()->0, (1,), 3) == 0
     end
+
+    @testset "haskey() method for Tuple (Issue #35516)" begin
+        @test haskey((5, 6, 7), 1)
+        @test haskey((5, 6, 7), 3)
+        @test !haskey((5, 6, 7), 0)
+        @test !haskey((5, 6, 7), 4)
+        @test !haskey((), 1)
+        @test haskey((1,), 1)
+        @test !haskey((1,), 2)
+        @test !haskey((5, 6, 7), :a)
+        @test !haskey((5, 6, 7), "x")
+        # integer-valued reals agree with `in` on `keys(t)` (OneTo)
+        @test haskey((5, 6, 7), 1.0)
+        @test haskey((5, 6, 7), 2.0)
+        @test haskey((5, 6, 7), 3.0)
+        @test !haskey((5, 6, 7), 0.0)
+        @test !haskey((5, 6, 7), 4.0)
+        @test !haskey((5, 6, 7), 1.5)
+        @test haskey((1,), true)
+        @test !haskey((1,), false)
+        @test !haskey((5, 6, 7), 1 + 0im)
+        # NamedTuple haskey (Symbol names / positional Integers) is unaffected
+        @test haskey((a = 1, b = 2), :a)
+        @test haskey((a = 1, b = 2), 1)
+    end
 end
 
 @testset "fill to length" begin
