@@ -221,6 +221,13 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
 // Return the CPU target string used to build the current sysimage
 JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void);
+
+/**
+ * If `cpu_target` starts with the "sysimage" keyword, replace it with the target string
+ * stored in the loaded sysimage. Otherwise return a copy of `cpu_target` as-is.
+ * The caller owns the returned string and must `free` it.
+ */
+JL_DLLEXPORT char *jl_expand_sysimage_keyword(const char *cpu_target);
 // Dump the name and feature set of the host CPU
 JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
 // Check if the CPU has native FMA instructions;
