@@ -41,6 +41,7 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Attributes.h>
+#include <llvm/IR/AutoUpgrade.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/ValueHandle.h>
@@ -7638,6 +7639,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         ctx.LoopID = MDNode::getDistinct(ctx.builder.getContext(), MDs);
         // Replace the temporary node with a self-reference.
         ctx.LoopID->replaceOperandWith(0, ctx.LoopID);
+        // Rewrite user-provided hints that LLVM no longer accepts, like the
+        // two-operand `llvm.loop.vectorize.enable` form rejected since LLVM 24.
+        ctx.LoopID = upgradeInstructionLoopAttachment(*ctx.LoopID);
         return jl_cgval_t();
     }
     else if (head == jl_leave_sym || head == jl_coverageeffect_sym
@@ -10033,8 +10037,13 @@ static jl_llvm_functions_t
                                             topdebugloc, ctx.builder.GetInsertBlock());
                 }
                 else {
+#if JL_LLVM_VERSION >= 240000
+                    dbuilder.insertDbgValue(theArg.V, vi.dinfo, dbuilder.createExpression(),
+                                            topdebugloc, ctx.builder.GetInsertBlock());
+#else
                     dbuilder.insertDbgValueIntrinsic(theArg.V, vi.dinfo, dbuilder.createExpression(),
                                                         topdebugloc, ctx.builder.GetInsertBlock());
+#endif
                 }
             }
         }
