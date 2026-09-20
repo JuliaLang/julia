@@ -22,11 +22,7 @@
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Passes/PassBuilder.h>
-#if JL_LLVM_VERSION >= 220000
 #  include <llvm/Plugins/PassPlugin.h>
-#else
-#  include <llvm/Passes/PassPlugin.h>
-#endif
 
 // NewPM needs to manually include all the pass headers
 #include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
@@ -106,11 +102,7 @@ using namespace llvm;
 
 namespace {
     static unsigned getSpeedupLevel(OptimizationLevel O) JL_NOTSAFEPOINT {
-#if JL_LLVM_VERSION >= 230000
         return static_cast<unsigned>(O);
-#else
-        return O.getSpeedupLevel();
-#endif
     }
 
     //Shamelessly stolen from Clang's approach to sanitizers
@@ -260,11 +252,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeEarlySimplificationCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O);
-#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeCGSCCCallbacks(CGSCCPassManager &CGPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -276,11 +264,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerEarlyCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokeOptimizerEarlyEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokeOptimizerEarlyEPCallbacks(MPM, O);
-#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeLateLoopOptimizationCallbacks(LoopPassManager &LPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -310,11 +294,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerLastCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokeOptimizerLastEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokeOptimizerLastEPCallbacks(MPM, O);
-#endif
     }
 
     // Fallbacks
