@@ -3642,15 +3642,14 @@ function compilecache_dir(pkg::PkgId)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""), srcpaths::String="")::String
+function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), srcpaths::String="")::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
     if pkg.uuid === nothing
         abspath(cachepath, entryfile) * ".ji"
     else
-        crc = _crc32c(project)
-        crc = _crc32c(srcpaths, crc)
+        crc = _crc32c(srcpaths)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(_cacheflag_to_uint8(flags), crc)
@@ -3850,8 +3849,8 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
 end
 
 # The source paths of a package and of the modules its cache requires, as resolved in this
-# environment. Environments at the same project path (e.g. in different containers) may
-# resolve different versions, so cache file names are keyed on these as well (#63268).
+# environment. Cache file names are keyed on these rather than on the project path, which
+# environments resolving different versions can share (e.g. in different containers, #63268).
 function cachefile_srcpaths(entrypath::String, required_modules::Vector{Pair{PkgId,UInt128}})
     paths = String[entrypath]
     for (id, _) in required_modules
@@ -4461,10 +4460,10 @@ global mkpidlock_hook::Any
 global trymkpidlock_hook::Any
 global parse_pidfile_hook::Any
 
-# The preferences blob is only known after precompilation so just assume no preferences.
-# Also ignore the active project, which means that if all other conditions are equal,
-# the same package cannot be precompiled from different projects and/or different preferences at the same time.
-compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, ""; project="", flags) * ".pidfile"
+# The preferences blob and source paths are only known after precompilation so assume none,
+# which means that if all other conditions are equal, the same package cannot be precompiled
+# from different environments and/or different preferences at the same time.
+compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, ""; flags) * ".pidfile"
 
 const compilecache_pidlock_stale_age = 10
 

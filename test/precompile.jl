@@ -3829,9 +3829,9 @@ end
 
 # Issue #63268: environments at the same project path (one per container, or one project
 # whose manifest is switched) resolving different versions of a package must not overwrite
-# each other's cache files, nor those of its dependents. A file whose source is gone from
-# the depot is dropped later.
-@testset "cache files of different versions at the same project path coexist" begin
+# each other's cache files, nor those of its dependents, while environments resolving the
+# same versions share one. A file whose source is gone from the depot is dropped later.
+@testset "cache files are keyed on the resolved versions, not the project path" begin
     mkdepottempdir() do depot; mktempdir() do dir
         dep_uuid = Base.UUID("a1a1a1a1-0000-0000-0000-000000000001")
         top_uuid = Base.UUID("b2b2b2b2-0000-0000-0000-000000000002")
@@ -3881,7 +3881,7 @@ end
               [deps]
               Top = "$top_uuid"
               """)
-        function use_dep(version)
+        function use_dep(version, project_path=project_path)
             write(joinpath(project_path, "Manifest.toml"),
                   """
                   manifest_format = "2.0"
@@ -3904,9 +3904,9 @@ end
             using Top
             println("DEP_VERSION=", Top.Dep._v)
             """
-        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
-                     "JULIA_DEPOT_PATH" => depot)
-        function run_top()
+        function run_top(project_path=project_path)
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
+                         "JULIA_DEPOT_PATH" => depot)
             logfile = joinpath(dir, "run.log")
             proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
             output = read(logfile, String)
@@ -3937,6 +3937,17 @@ end
         output = run_top()
         @test occursin("PRECOMPILED=true", output)
         @test occursin("DEP_VERSION=1", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # Another project resolving the same versions shares the cache files
+        project2_path = joinpath(dir, "project2")
+        mkpath(project2_path)
+        cp(joinpath(project_path, "Project.toml"), joinpath(project2_path, "Project.toml"))
+        use_dep("0.2.0", project2_path)
+        output = run_top(project2_path)
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
         @test length(cachefiles("Dep")) == 2
         @test length(cachefiles("Top")) == 2
 
