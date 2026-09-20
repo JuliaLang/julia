@@ -253,6 +253,11 @@ end
     @test write(aio, ' ') == 1
     @test write(aio, Base.AnnotatedString("world", [(1:5, :tag, 2)])) == 5
     @test Base.annotations(aio) == vec2ann([(1:5, :tag, 1), (7:11, :tag, 2)])
+    # Printing through a context keeps the annotations
+    ctxaio = Base.AnnotatedIOBuffer()
+    print(IOContext(ctxaio, :color => true), Base.AnnotatedString("hi", [(1:2, :tag, 3)]))
+    print(IOContext(ctxaio), Base.AnnotatedChar('!', [(:tag, 4)]))
+    @test Base.annotations(ctxaio) == vec2ann([(1:2, :tag, 3), (3:3, :tag, 4)])
     # Check `annotate!`, including region sorting
     @test truncate(aio, 0).io.size == 0
     @test write(aio, "hello world") == ncodeunits("hello world")
@@ -935,4 +940,122 @@ end
             @test_throws MethodError replace(Base.AnnotatedIOBuffer{Symbol}(), astr("apple", (1:5, :red)), "p" => wide)
         end
     end
+end
+
+# A package with its own annotation value type and a style to display it.
+module MarkedAnnotations
+    import Base.AnnotatedDisplay: AbstractAnnotationStyle, AnnotationStyle, awrite
+    struct Mark end
+    struct Mark2 end # A second value type displayed the same way
+    struct Tag end   # A value type of another package, with its own style
+    struct Note end  # As `Tag`, but with no agreed style against `Mark`
+    struct Hilite end # Whose style writes HTML for whole strings only
+    struct Gloss end # Whose rule against `Mark` is written in the orientation its unions don't present
+    struct MarkStyle <: AbstractAnnotationStyle end
+    struct TagStyle <: AbstractAnnotationStyle end
+    struct NoteStyle <: AbstractAnnotationStyle end
+    struct HiliteStyle <: AbstractAnnotationStyle end
+    struct GlossStyle <: AbstractAnnotationStyle end
+    AnnotationStyle(::Type{Mark}) = MarkStyle()
+    AnnotationStyle(::Type{Mark2}) = MarkStyle()
+    AnnotationStyle(::Type{Tag}) = TagStyle()
+    AnnotationStyle(::Type{Note}) = NoteStyle()
+    AnnotationStyle(::Type{Hilite}) = HiliteStyle()
+    AnnotationStyle(::Type{Gloss}) = GlossStyle()
+    AnnotationStyle(a::MarkStyle, ::TagStyle) = a
+    AnnotationStyle(a::MarkStyle, ::GlossStyle) = a
+    function awrite(textwriter::F, ::MarkStyle, io::IO, s) where {F}
+        buf = IOBuffer()
+        for (str, annots) in Base.eachregion(s)
+            isempty(annots) || write(buf, "<")
+            textwriter(buf, str)
+            isempty(annots) || write(buf, ">")
+        end
+        write(io, take!(buf))
+    end
+    awrite(::MarkStyle, io::IO, ::MIME"text/html", s) = sum(Base.eachregion(s)) do (str, annots)
+        if isempty(annots) write(io, str) else write(io, "<mark>") + write(io, str) + write(io, "</mark>") end
+    end
+    awrite(::HiliteStyle, io::IO, ::MIME"text/html", s::Base.AnnotatedString) = write(io, "<mark>", String(s), "</mark>")
+end
+
+@testset "AnnotationStyle" begin
+    (; Mark, MarkStyle) = MarkedAnnotations
+    AnnotationStyle, NoStyle = Base.AnnotatedDisplay.AnnotationStyle, Base.AnnotatedDisplay.NoStyle
+    @test AnnotationStyle(String) === NoStyle()
+    @test AnnotationStyle(Mark) === MarkStyle()
+    @test AnnotationStyle(Union{Mark, String}) === MarkStyle()
+    @test AnnotationStyle(Union{String, Int, Mark}) === MarkStyle()
+    @test AnnotationStyle(Union{String, Int}) === NoStyle()
+    @test Base.AnnotatedDisplay.promotestyle(MarkStyle(), NoStyle()) === Base.AnnotatedDisplay.promotestyle(NoStyle(), MarkStyle()) === MarkStyle()
+    # Types sharing a style combine; styles that differ have no answer until one is given
+    @test AnnotationStyle(Union{Mark, MarkedAnnotations.Mark2}) === MarkStyle()
+    @test_throws ArgumentError AnnotationStyle(Union{Mark, MarkedAnnotations.Note})
+    @test AnnotationStyle(Union{Mark, MarkedAnnotations.Tag}) === MarkStyle() # By `MarkedAnnotations`
+    @test Base.AnnotatedDisplay.promotestyle(MarkedAnnotations.TagStyle(), MarkStyle()) === MarkStyle() # The rule, in the other orientation
+    # A rule found only in its other orientation settles a union in compiled code, at compile time
+    glossmark() = AnnotationStyle(Union{MarkedAnnotations.Gloss, Mark})
+    @test glossmark() === MarkStyle()
+    @test Base.infer_return_type(glossmark, ()) === MarkStyle
+    marked(V) = Base.AnnotatedString{String, V}("x", [(1:1, :m, Mark())])
+    @test sprint(print, marked(Mark)) == "<x>"
+    @test sprint(print, marked(Union{Mark, Int})) == "<x>"
+    @test sprint(print, marked(Any)) == "<x>" # The style is found from the values
+    @test sprint(print, Base.AnnotatedString{String, Any}("xy", [(1:1, :t, MarkedAnnotations.Tag()), (2:2, :m, Mark())])) == "<x><y>"
+    @test sprint(print, Base.AnnotatedString{String, Int}("x", [(1:1, :n, 1)])) == "x"
+    @test sprint(print, Base.AnnotatedString{String, Any}("x", [(1:1, :n, 1)])) == "x"
+    # HTML is available exactly when the style provides it, as for a plain `String`
+    unstyled = Base.AnnotatedString{String, Int}("a<b", [(1:1, :n, 1)])
+    @test !showable(MIME("text/html"), unstyled) && !showable(MIME("text/html"), unstyled[1])
+    @test_throws MethodError sprint(show, MIME("text/html"), unstyled)
+    @test !showable(MIME("text/html"), Base.AnnotatedString("a<b"))
+    @test !showable(MIME("text/html"), Base.AnnotatedString{String, Any}("a", [(1:1, :n, 1)]))
+    @test showable(MIME("text/html"), marked(Any)) && showable(MIME("text/html"), marked(Any)[1])
+    @test showable(MIME("text/html"), marked(Mark)) && showable(MIME("text/html"), marked(Mark)[1])
+    @test sprint(show, MIME("text/html"), marked(Mark)) == sprint(show, MIME("text/html"), marked(Mark)[1]) == "<mark>x</mark>"
+    let hilited = Base.AnnotatedString("x", [(1:1, :h, MarkedAnnotations.Hilite())])
+        @test showable(MIME("text/html"), hilited) && showable(MIME("text/html"), hilited[1])
+        @test !showable(MIME("text/html"), SubString(hilited, 1:1))
+    end
+    # Escaping keeps the annotations on their (longer) text
+    @test sprint(escape_string, Base.AnnotatedString{String, Mark}("a\nb", [(1:1, :m, Mark()), (3:3, :m, Mark())])) == "<a>\\n<b>"
+    escaped(s; wrap = identity) = (buf = Base.AnnotatedIOBuffer(); escape_string(wrap(buf), s); read(seekstart(buf), Base.AnnotatedString))
+    @test escaped(Base.AnnotatedString("a\nb\tc", [(1:1, :x, 1), (3:3, :y, 2), (2:5, :z, 3)])) == Base.AnnotatedString("a\\nb\\tc", [(1:1, :x, 1), (4:4, :y, 2), (2:7, :z, 3)])
+    @test escaped(SubString(Base.AnnotatedString("a\nbc", [(1:3, :x, 1)]), 2, 4)) == Base.AnnotatedString("\\nbc", [(1:3, :x, 1)])
+    @test escaped(Base.AnnotatedString("x\ty", [(2:2, :t, 1)]); wrap = io -> IOContext(io, :color => true)) == Base.AnnotatedString("x\\ty", [(2:3, :t, 1)])
+    let buf = Base.AnnotatedIOBuffer{Float64}() # Values are converted to the buffer's value type, as by `write`
+        escape_string(buf, Base.AnnotatedString("ab", [(1:1, :x, 1)]))
+        @test Base.annotations(buf) == [(region = 1:1, label = :x, value = 1.0)]
+    end
+    # The style of a known value type is resolved at compile time
+    folded(V) = only(code_typed(Base.AnnotatedDisplay.style, (Base.AnnotatedString{String, V},)))[1].code
+    @test folded(Mark) == Any[Core.ReturnNode(MarkStyle())]
+    @test folded(Union{Mark, Int}) == Any[Core.ReturnNode(MarkStyle())]
+    # Defining a style, or a writer for one, must not invalidate code compiled for strings of
+    # unknown value type. Checked in a fresh process, where only Base's methods exist as when a
+    # package is first loaded; here the loaded packages' methods would make inference give up
+    # for that reason alone.
+    guard = """
+    import Base.AnnotatedDisplay: AbstractAnnotationStyle, AnnotationStyle, awrite
+    struct Late end
+    struct LateStyle <: AbstractAnnotationStyle end
+    struct Sink <: IO end
+    Base.write(::Sink, ::UInt8) = 1
+    Base.unsafe_write(::Sink, ::Ptr{UInt8}, n::UInt) = Int(n)
+    # A new IO type and an unusual string type, so the print chain is compiled here rather than
+    # taken from the sysimage; `v[1]` is inferred with the value type unbound.
+    unknown_valtype(v::Vector{Base.AnnotatedString{SubString{String}}}) = print(Sink(), v[1])
+    unknown_html(v::Vector{Base.AnnotatedString{SubString{String}}}) = show(Sink(), MIME("text/html"), v[1])
+    strings = Base.AnnotatedString{SubString{String}}[Base.AnnotatedString{SubString{String}, Int}(SubString("x"))]
+    unknown_valtype(strings)
+    try unknown_html(strings) catch end # compiled, then correctly a `MethodError` without a style
+    log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    AnnotationStyle(::Type{Late}) = LateStyle()
+    awrite(textwriter, ::LateStyle, io::IO, s::Base.AnnotatedString) = 0
+    awrite(::LateStyle, io::IO, ::MIME"text/html", s::Base.AnnotatedString) = 0
+    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+    print(join(unique(x.def.name for x in log if x isa Core.MethodInstance), ' '))
+    """
+    invalidated = split(read(`$(Base.julia_cmd()) --startup-file=no -e $guard`, String))
+    @test invalidated ⊆ ["AnnotationStyle", "awrite"]
 end
