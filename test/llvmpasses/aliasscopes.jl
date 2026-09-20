@@ -73,8 +73,8 @@ end
 # CHECK-DAG: [[SCOPE3_ST]] = !{[[ALIASSCOPE3]]
 # CHECK-DAG: [[SCOPE4_LD]] = !{[[ALIASSCOPE4:![0-9]+]]
 # CHECK-DAG: [[SCOPE4_ST]] = !{[[ALIASSCOPE4]]
-# CHECK-DAG: [[SCOPE4_PLAIN]] = !{[[JNOALIAS_DATA:![0-9]+]]}
-# CHECK-DAG: [[JNOALIAS_DATA]] = !{!"jnoalias_memorybuf"
+# CHECK-DAG: [[SCOPE4_PLAIN]] = !{[[JNOALIAS_MEMORYBUF:![0-9]+]]}
+# CHECK-DAG: [[JNOALIAS_MEMORYBUF]] = !{!"jnoalias_memorybuf"
 # CHECK-DAG: [[ALIASSCOPE]] = !{!"aliasscope", [[MDNODE:![0-9]+]]}
 # CHECK-DAG: [[MDNODE]] = !{!"simple"}
 
