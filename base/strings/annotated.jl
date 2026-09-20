@@ -230,7 +230,7 @@ end
 function getindex(s::AnnotatedString{S, V}, i::Integer) where {S, V}
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], Annotation{V}[(; label, value) for (; label, value) in annotations(s, i)])
+        AnnotatedChar(s.string[i], Annotation{V}[Annotation{V}((a.label, a.value)) for a in annotations(s, i)])
     else
         string_index_err(s, i)
     end
@@ -307,7 +307,7 @@ julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label, 1)]), ", and 
 "annotated, and unannotated"
 ```
 """
-function annotatedstring(xs...)
+function annotatedstring(xs::Vararg{Any, N}) where {N}
     isempty(xs) && return AnnotatedString("")
     size = mapreduce(_str_sizehint, +, xs)
     buf = IOBuffer(sizehint=size)
@@ -603,20 +603,22 @@ function eachregion(s::AnnotatedString{S, V}, subregion::UnitRange{Int}=firstind
         return RegionIterator(s.string, UnitRange{Int}[], Vector{Annotation{V}}[])
     events = annotation_events(s, subregion)
     isempty(events) && return RegionIterator(s.string, [subregion], [Annotation{V}[]])
-    annotvals = Annotation{V}[
-        (; label, value) for (; label, value) in annotations(s)]
+    # Constructed from the fields, as `(; label, value)` would type the tuple from each
+    # value rather than from `V`, which is very slow when `V` is a union.
+    annotvals = Annotation{V}[Annotation{V}((a.label, a.value)) for a in annotations(s)]
     regions = Vector{UnitRange{Int}}()
     annots = Vector{Vector{Annotation{V}}}()
+    unannotated = Annotation{V}[] # Shared by every region without annotations
     pos = first(events).pos
     if pos > first(subregion)
         push!(regions, thisind(s, first(subregion)):prevind(s, pos))
-        push!(annots, Annotation[])
+        push!(annots, unannotated)
     end
     activelist = Int[]
     for event in events
         if event.pos != pos
             push!(regions, pos:prevind(s, event.pos))
-            push!(annots, annotvals[activelist])
+            push!(annots, if isempty(activelist) unannotated else annotvals[activelist] end)
             pos = event.pos
         end
         if event.active
@@ -627,7 +629,7 @@ function eachregion(s::AnnotatedString{S, V}, subregion::UnitRange{Int}=firstind
     end
     if last(events).pos < nextind(s, last(subregion))
         push!(regions, last(events).pos:thisind(s, last(subregion)))
-        push!(annots, Annotation[])
+        push!(annots, unannotated)
     end
     RegionIterator(s.string, regions, annots)
 end
@@ -654,6 +656,7 @@ is the index of the annotation in question.
 """
 function annotation_events(s::AbstractString, annots::Vector{<:RegionAnnotation}, subregion::UnitRange{Int})
     events = Vector{NamedTuple{(:pos, :active, :index), Tuple{Int, Bool, Int}}}() # Position, Active?, Annotation index
+    sizehint!(events, 2 * length(annots))
     for (i, (; region)) in enumerate(annots)
         if !isempty(intersect(subregion, region))
             start, stop = max(first(subregion), first(region)), min(last(subregion), last(region))
@@ -662,7 +665,7 @@ function annotation_events(s::AbstractString, annots::Vector{<:RegionAnnotation}
             push!(events, (pos=nextind(s, stop), active=false, index=i))
         end
     end
-    sort(events, by=e -> e.pos)
+    sort!(events, by=e -> e.pos)
 end
 
 annotation_events(s::AnnotatedString, subregion::UnitRange{Int}) =
