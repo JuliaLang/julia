@@ -744,17 +744,37 @@ One line is printed per package or package extension. The duration shown is the 
 
 On Julia 1.9+ [package extensions](@ref man-extensions) will show as Parent → Extension.
 
-With `invalidations=true`, each package's line is preceded by a count of the method instances whose
-compiled code was invalidated while loading that package, grouped by what triggered them: usually a
-new method definition that supersedes an existing method for some already-compiled calls. The 5
-triggers with the most downstream invalidations are listed (an integer selects a different number,
-`:all` lists them all), each with the existing method or call signature it affected most. Cached code
-in the package being loaded that is invalidated because a method defined by an earlier package changed
-which methods one of its calls resolves to is attributed to that earlier definition, so the trigger
-shown may be from a different package. Nothing is printed for packages that caused no invalidations.
-
 !!! note
     During the load process a package sequentially imports all of its dependencies, not just its direct dependencies.
+
+# Invalidations
+
+Loading a package can invalidate compiled code that already exists in the session: a method it
+defines may take precedence over an existing method for calls that were already compiled against
+that existing method, or its own cached code may have been compiled against a set of methods that
+no longer matches the session. Invalidated code has to be recompiled the next time it is called,
+which shows up in the compilation and recompilation time of later loads and of the first calls after
+loading. Invalidations are not a problem in themselves, but a large number of them from one package is
+worth understanding. See the
+[blog post on invalidations](https://julialang.org/blog/2020/08/invalidations/), and the
+`SnoopCompile` package for a full analysis.
+
+If loading a package invalidated existing compiled code, the number of invalidated code instances is
+appended to its line, and a tip about the `invalidations` option is printed once per session.
+
+With `invalidations=true`, the package's line is instead preceded by a summary of the invalidations,
+grouped by what triggered them: usually a method definition, otherwise a method deletion, a binding
+change, or a callee that had already been invalidated. The 5 triggers with the most downstream
+invalidations are listed (an integer selects a different number, `:all` lists them all), each with
+the number of method instances it invalidated and the existing method whose compiled callers it
+superseded, or the call signature it affected, for the most of them. Lines are truncated to the
+terminal width. Nothing is printed for packages that caused no invalidations.
+
+The trigger shown may belong to an earlier package: cached code in the package being loaded is
+invalidated when a method that an earlier package defined changed which methods one of its calls
+resolves to, and such invalidations are attributed to that earlier definition. The count in the
+summary is of distinct method instances, so it can be lower than the count of code instances
+shown without the option.
 
 ```julia-repl
 julia> @time_imports using CSV
@@ -777,14 +797,20 @@ julia> @time_imports using CSV
 ```
 
 ```julia-repl
+julia> @time_imports using JSON
+[...]
+      1.9 ms  StructUtils
+     97.1 ms  JSON 122 invalidations
+              Tip: `@time_imports invalidations=true` lists what caused the invalidations
+
 julia> @time_imports invalidations=true using JSON
 [...]
                ┌ 122 invalidations from 4 triggers:
-               │     43  convert(::Type{Symbol}, x::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:455  affecting calls to convert(::Core.TypeEgal{Symbol}, ::Any)
-               │     34  isequal(x::AbstractString, y::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:475  superseding isequal(x, y) @ Base
-               │     26  convert(::Type{String}, x::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:446  affecting calls to convert(::Core.TypeEgal{String}, ::Any)
-               │     25  isequal(x::JSON.PtrString, y::AbstractString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:474  superseding isequal(x, y) @ Base
-    114.6 ms  JSON
+               │  43  convert(::Type{Symbol}, x::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:455  affecting calls to convert(::Core.TypeEgal{Symbol}, ::Any)
+               │  34  isequal(x::AbstractString, y::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:475  superseding isequal(x, y) @ Base
+               │  26  convert(::Type{String}, x::JSON.PtrString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:446  affecting calls to convert(::Core.TypeEgal{String}, ::Any)
+               │  25  isequal(x::JSON.PtrString, y::AbstractString) @ JSON ~/.julia/packages/JSON/7iJdS/src/lazy.jl:474  superseding isequal(x, y) @ Base
+      7.8 ms  JSON
 ```
 
 !!! compat "Julia 1.8"

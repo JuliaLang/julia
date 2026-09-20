@@ -2423,6 +2423,13 @@ JL_DLLEXPORT jl_value_t *jl_debug_method_invalidation(int state) JL_CANSAFEPOINT
 
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth) JL_CANSAFEPOINT;
 
+// number of code instances invalidated so far, for `@time_imports`
+static _Atomic(size_t) n_invalidated_code_instances = 0;
+JL_DLLEXPORT size_t jl_invalidation_count(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&n_invalidated_code_instances);
+}
+
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world, int depth) JL_CANSAFEPOINT
 {
@@ -2444,6 +2451,7 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     if (replacedmaxworld == ~(size_t)0) {
         assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
+        jl_atomic_fetch_add_relaxed(&n_invalidated_code_instances, 1);
         // recurse to all backedges to update their valid range also
         _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
         // TODO: should we visit all forward edges now and delete ourself from all of those lists too?

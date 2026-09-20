@@ -977,46 +977,70 @@ end
     mktempdir() do dir
         try
             pushfirst!(LOAD_PATH, dir)
-            # InvExt3242 defines a method that supersedes InvBase3242.f(::AbstractThing) for the
-            # call compiled into InvBase3242's cache, so loading it invalidates `callf`
+            # the extension packages define methods that supersede InvBase3242.f/g(::AbstractThing)
+            # for the calls compiled into InvBase3242's cache, so loading them invalidates `callf`/`callg`
             write(joinpath(dir, "InvBase3242.jl"),
                 """
                 module InvBase3242
                 abstract type AbstractThing end
                 f(::AbstractThing) = 1
+                g(::AbstractThing) = 1
                 callf(xs::Vector{AbstractThing}) = f(xs[1])
+                callg(xs::Vector{AbstractThing}) = g(xs[1])
                 precompile(callf, (Vector{AbstractThing},))
+                precompile(callg, (Vector{AbstractThing},))
                 end
                 """)
-            write(joinpath(dir, "InvExt3242.jl"),
+            write(joinpath(dir, "InvExtF3242.jl"),
                 """
-                module InvExt3242
+                module InvExtF3242
                 using InvBase3242
                 struct Thing <: InvBase3242.AbstractThing end
                 InvBase3242.f(::Thing) = 2
                 end
                 """)
-            Base.compilecache(Base.PkgId("InvBase3242"))
-            Base.compilecache(Base.PkgId("InvExt3242"))
-
-            fname = tempname()
-            open(fname, "w") do f
-                redirect_stdout(f) do
-                    @eval @time_imports invalidations=true using InvExt3242
+            write(joinpath(dir, "InvExtG3242.jl"),
+                """
+                module InvExtG3242
+                using InvBase3242
+                struct Thing <: InvBase3242.AbstractThing end
+                InvBase3242.g(::Thing) = 2
                 end
+                """)
+            Base.compilecache(Base.PkgId("InvBase3242"))
+            Base.compilecache(Base.PkgId("InvExtF3242"))
+            Base.compilecache(Base.PkgId("InvExtG3242"))
+
+            function capture_stdout(f)
+                fname = tempname()
+                open(fname, "w") do io
+                    redirect_stdout(f, io)
+                end
+                out = read(fname, String)
+                rm(fname)
+                return out
             end
-            out = read(fname, String)
-            rm(fname)
-            @test occursin("ms  InvBase3242", out)
-            @test occursin("ms  InvExt3242", out)
+
+            out = capture_stdout() do
+                @eval @time_imports using InvExtF3242
+            end
+            @test occursin("ms  InvBase3242\n", out)
+            @test occursin("ms  InvExtF3242 1 invalidation\n", out)
+            @test occursin("Tip: `@time_imports invalidations=true` lists what caused the invalidations", out)
+
+            out = capture_stdout() do
+                @eval @time_imports invalidations=true using InvExtG3242
+            end
             @test occursin("1 invalidation from 1 trigger:", out)
-            @test occursin(r"1  f\(::InvExt3242\.Thing\) @ InvExt3242 .*superseding f\(::InvBase3242\.AbstractThing\) @ InvBase3242", out)
+            @test occursin(r"1  g\(::InvExtG3242\.Thing\) @ InvExtG3242 .*superseding g\(::InvBase3242\.AbstractThing\) @ InvBase3242", out)
+            @test occursin("ms  InvExtG3242\n", out)
+            @test !occursin("lists what caused", out)
             # the logs are switched off again afterwards
             @test ccall(:jl_debug_method_invalidation, Any, (Cint,), 2) === nothing
             @test Base.ReinferUtils._jl_debug_method_invalidation[] === nothing
 
-            @test_throws ArgumentError @eval @time_imports invalidations=:none using InvExt3242
-            @test_throws LoadError @eval @time_imports foo=true using InvExt3242
+            @test_throws ArgumentError @eval @time_imports invalidations=:none using InvExtG3242
+            @test_throws LoadError @eval @time_imports foo=true using InvExtG3242
         finally
             filter!((≠)(dir), LOAD_PATH)
         end

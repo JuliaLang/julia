@@ -1461,6 +1461,18 @@ struct TimingInvalidations
     own_logedges::Bool
 end
 const TIMING_IMPORTS_INVALIDATIONS = Ref{Union{Nothing, TimingInvalidations}}(nothing)
+# set once a package line has shown an invalidation count, to print the tip about the
+# `invalidations=true` option when the outermost `@time_imports` finishes
+const TIMING_IMPORTS_INVALIDATIONS_HINT = Ref(false)
+const print_time_imports_invalidations_tip = OncePerProcess{Nothing}() do
+    # indented to the package name column
+    printstyled("              Tip: `@time_imports invalidations=true` lists what caused the invalidations\n", color = :light_black)
+    nothing
+end
+
+# number of code instances invalidated so far, by method definitions at runtime and by
+# cached code failing edge verification when loaded
+invalidation_count() = Int(ccall(:jl_invalidation_count, Csize_t, ())) + ReinferUtils.n_invalidated_code_instances[]
 
 # `setting` is the `invalidations=` option of `@time_imports`. Returns the previous state,
 # to be passed to `timing_imports_invalidations_stop`.
@@ -1497,6 +1509,10 @@ function timing_imports_invalidations_stop(prev::Union{Nothing, TimingInvalidati
         cur.own_logedges && (ReinferUtils._jl_debug_method_invalidation[] = nothing)
     end
     TIMING_IMPORTS_INVALIDATIONS[] = prev
+    if TIMING_IMPORTS[] == 0 && TIMING_IMPORTS_INVALIDATIONS_HINT[]
+        TIMING_IMPORTS_INVALIDATIONS_HINT[] = false
+        print_time_imports_invalidations_tip()
+    end
     nothing
 end
 
@@ -1514,6 +1530,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             t_before = time_ns()
             cumulative_compile_timing(true)
             t_comp_before = cumulative_compile_time_ns()
+            n_invalidations_before = invalidation_count()
         end
         if timing_invalidations !== nothing
             # only the log entries added while loading this package belong to its report
@@ -1563,11 +1580,13 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 if timing_imports
                     elapsed_time = time_ns() -% t_before
                     comp_time, recomp_time = map(-%, cumulative_compile_time_ns(), t_comp_before)
+                    n_invalidations = invalidation_count() - n_invalidations_before
                     if timing_invalidations !== nothing
                         has_init = any(m -> isdefined(m::Module, :__init__), sv[2]::Vector{Any})
-                        print_time_imports_report_invalidations(timing_invalidations, n_logmeths, n_logedges, has_init)
+                        print_time_imports_report_invalidations(timing_invalidations, n_logmeths, n_logedges, has_init, n_invalidations)
+                        n_invalidations = 0  # the report above already covers them
                     end
-                    print_time_imports_report(M, elapsed_time, comp_time, recomp_time)
+                    print_time_imports_report(M, elapsed_time, comp_time, recomp_time, n_invalidations)
                 end
                 return M
             end
@@ -1586,7 +1605,8 @@ function print_time_imports_report(
         mod::Module,
         elapsed_time::UInt64=UInt64(1),
         comp_time::UInt64=UInt64(1),
-        recomp_time::UInt64=UInt64(1)
+        recomp_time::UInt64=UInt64(1),
+        n_invalidations::Int=0
     )
     print(lpad(round(elapsed_time / 1e6, digits=1), 9), " ms  ")
     ext_parent = extension_parent_name(mod)
@@ -1602,6 +1622,10 @@ function print_time_imports_report(
         perc = Float64(100 * recomp_time / comp_time)
         perc_show = perc < 1 ? "<1" : Ryu.writefixed(perc, 0)
         printstyled(" ($perc_show% recompilation)", color = Base.warn_color())
+    end
+    if n_invalidations > 0
+        printstyled(" $n_invalidations invalidation", n_invalidations == 1 ? "" : "s", color = :light_black)
+        TIMING_IMPORTS_INVALIDATIONS_HINT[] = true
     end
     println()
 end
@@ -1782,7 +1806,8 @@ function print_invalidation_root(io::IO, @nospecialize(root))
     end
 end
 
-function print_time_imports_report_invalidations(ti::TimingInvalidations, n_logmeths::Int, n_logedges::Int, has_init::Bool)
+function print_time_imports_report_invalidations(ti::TimingInvalidations, n_logmeths::Int, n_logedges::Int,
+                                                 has_init::Bool, n_invalidations::Int)
     total, entries = summarize_invalidations!(ti, n_logmeths, n_logedges)
     # nested loads (from `__init__`) have already reported their own entries
     ti.own_logmeths && resize!(ti.logmeths, n_logmeths)
@@ -1793,12 +1818,13 @@ function print_time_imports_report_invalidations(ti::TimingInvalidations, n_logm
     print(total, " invalidation", total == 1 ? "" : "s", " from ", ntriggers, " trigger", ntriggers == 1 ? "" : "s")
     ti.top < ntriggers && print(", top ", ti.top)
     println(":")
-    # truncate to the terminal width; the 25 columns are the prefix printed before the trigger
-    cols = stdout isa TTY ? displaysize(stdout)[2] - 25 : typemax(Int)
+    # align the counts on the width of the package's total, and truncate to the terminal width
+    width = ndigits(max(n_invalidations, entries[1][2]))
+    cols = stdout isa TTY ? displaysize(stdout)[2] - (17 + width + 2) : typemax(Int)
     hascolor = get(stdout, :color, false)::Bool
     for (trigger, count, trigger_roots) in Iterators.take(entries, ti.top)
         printstyled("               │ ", color = :light_black)
-        print(lpad(count, 6), "  ")
+        print(lpad(count, width), "  ")
         line = sprint(context = stdout) do io
             print_invalidation_trigger(io, trigger)
             root = argmax(last, trigger_roots).first
