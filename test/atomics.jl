@@ -769,6 +769,39 @@ test_globalonce(UndefComplex{Any})
 test_globalonce(UndefComplex{UndefComplex{Any}})
 test_globalonce(Int)
 
+# Test the untyped `global x`, particularly with the compiled versions which use the fallback path.
+module DeclaredGlobalCompiled
+    global declared_rmw
+    setonce(v) = setglobalonce!(@__MODULE__, :declared_rmw, v)
+    modify(v) = modifyglobal!(@__MODULE__, :declared_rmw, +, v)
+    swap(v) = swapglobal!(@__MODULE__, :declared_rmw, v)
+    replace(x, v) = replaceglobal!(@__MODULE__, :declared_rmw, x, v)
+end
+let M = DeclaredGlobalCompiled
+    @test_throws UndefVarError M.modify(1)
+    @test M.setonce(1) === true
+    @test M.setonce(2) === false
+    @test M.modify(1) === Pair{Any,Any}(1, 2)
+    @test M.swap("x") === 2
+    @test M.replace("x", 3) === ReplaceType{Any}(("x", true))
+    @test getglobal(M, :declared_rmw) === 3
+end
+
+# An untyped `global x` declaration leaves no restriction on the binding partition, so its
+# declared type is `Any`. The read-modify-write builtins must read that as `Any` to form the result type.
+module DeclaredGlobal
+    global declared_rmw
+end
+let M = DeclaredGlobal
+    @test Core.get_binding_type(M, :declared_rmw) === Any
+    @test_throws UndefVarError modifyglobal!(M, :declared_rmw, +, 1)
+    @test setglobalonce!(M, :declared_rmw, 1) === true
+    @test modifyglobal!(M, :declared_rmw, +, 1) === Pair{Any,Any}(1, 2)
+    @test swapglobal!(M, :declared_rmw, "x") === 2
+    @test replaceglobal!(M, :declared_rmw, "x", 3) === ReplaceType{Any}(("x", true))
+    @test getglobal(M, :declared_rmw) === 3
+end
+
 # test macroexpansions
 global x::Int
 let a = @__MODULE__

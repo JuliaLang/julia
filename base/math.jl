@@ -924,6 +924,9 @@ For a normalized floating-point number `x`, this corresponds to the exponent of 
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
 
+!!! compat "Julia 1.14"
+    Calling `exponent` on a `Bool` requires Julia 1.14 or later.
+
 See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref), [`ldexp`](@ref).
 # Examples
 ```jldoctest
@@ -1001,6 +1004,14 @@ function exponent(x::Base.BitInteger)
     iszero(x) && throw(DomainError(x, "cannot be zero"))
     ux = Base.uabs(x)
     return 8sizeof(ux) - leading_zeros(ux) - 1
+end
+
+function exponent(x::Bool)
+    if x
+        0
+    else
+        throw(DomainError(x, "cannot be zero"))
+    end
 end
 
 """

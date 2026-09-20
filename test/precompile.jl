@@ -3233,6 +3233,41 @@ end
     end
 end
 
+# Requesting precompilation of a package that lives in the sysimage has nothing to do
+# and must not error, even when it is the only dependency of the environment (#63189)
+@testset "precompilepkgs on a sysimage package" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        sha_uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+        @test Base.in_sysimage(Base.PkgId(Base.UUID(sha_uuid), "SHA"))
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            SHA = "$sha_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.SHA]]
+            uuid = "$sha_uuid"
+            version = "1.0.0"
+            """)
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            io = IOBuffer()
+            @test Base.Precompilation.precompilepkgs(["SHA"]; io, fancyprint=false) === nothing
+            @test Base.Precompilation.precompilepkgs(; io, fancyprint=false) === nothing
+            @test isempty(takestring!(io))
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_path
     # Test that compile-time preferences invalidate, even when queried from a
     # "foreign" UUID / package namespace
@@ -3440,6 +3475,34 @@ end
     end
 end
 
+# Full workspace precompilation should find the root and recursively include member packages.
+@testset "full workspace precompilation" begin
+    workspace_path = joinpath(@__DIR__, "project", "Workspaces", "PrecompileExt")
+    nested_member_path = joinpath(workspace_path, "Nested", "Baz")
+    for active_project in (workspace_path, nested_member_path)
+        mkdepottempdir() do depot
+            original_depot_path = copy(Base.DEPOT_PATH)
+            old_proj = Base.active_project()
+            try
+                push!(empty!(DEPOT_PATH), depot)
+                Base.set_active_project(active_project)
+
+                io = IOBuffer()
+                ioc = IOContext(io, :color => false)
+                Base.Precompilation.precompilepkgs(; io=ioc, fancyprint=false, manifest=true)
+                output = String(take!(io))
+
+                @test occursin("Foo", output)
+                @test occursin("Bar", output)
+                @test occursin("Baz", output)
+            finally
+                Base.set_active_project(old_proj)
+                append!(empty!(DEPOT_PATH), original_depot_path)
+            end
+        end
+    end
+end
+
 # Test that warn_loaded names loaded packages and counts affected dependents
 @testset "warn_loaded names packages and counts dependents" begin
     mkdepottempdir() do depot; mktempdir() do dir
@@ -3564,6 +3627,104 @@ end
     end end
 end
 
+# Test that precompilepkgs recompiles a cached dependent of a loaded package when the
+# environment now resolves a different version of that package. The dependent's cache is
+# built against the loaded version, so a check that trusts loaded modules considers it fresh.
+@testset "precompilepkgs recompiles dependents of a loaded package at another version" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        for (dirname, marker, version) in (("LoadedDepOld", 1, "0.1.0"), ("LoadedDepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "LoadedDep"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "LoadedDep.jl"),
+                  """
+                  module LoadedDep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+        for (project, loaded_dep_dir, version) in (("old_project", "LoadedDepOld", "0.1.0"), ("new_project", "LoadedDepNew", "0.2.0"))
+            project_path = joinpath(dir, project)
+            mkpath(project_path)
+            write(joinpath(project_path, "Project.toml"),
+                  """
+                  [deps]
+                  DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+                  LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+                  """)
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  manifest_format = "2.0"
+
+                  [[deps.DepUser]]
+                  deps = ["LoadedDep"]
+                  path = "../dev/DepUser/"
+                  uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+                  version = "0.1.0"
+
+                  [[deps.LoadedDep]]
+                  path = "../dev/$loaded_dep_dir/"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+        end
+        old_project_path = joinpath(dir, "old_project")
+        new_project_path = joinpath(dir, "new_project")
+
+        # Cache DepUser against the old LoadedDep
+        @test success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e 'using DepUser'`,
+                             "JULIA_DEPOT_PATH" => depot))
+
+        # Load the old LoadedDep, switch to the project that resolves the new one, and precompile.
+        # DepUser has to be rebuilt against the new LoadedDep although the loaded one still matches
+        # its existing cache. Report which LoadedDep build the freshest DepUser cache requires.
+        script = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.Precompilation.precompilepkgs(; fancyprint=false)
+            dep = Base.identify_package("LoadedDep")
+            depuser = Base.identify_package("DepUser")
+            new_dep_build, _ = Base.parse_cache_buildid(Base.compilecache_freshest_path(dep; ignore_loaded=true))
+            depuser_cache = Base.compilecache_freshest_path(depuser; ignore_loaded=true)
+            io = open(depuser_cache)
+            Base.isvalid_cache_header(io)
+            required_modules = Base.parse_cache_header(io, depuser_cache)[3]
+            close(io)
+            required_dep_build = only(build_id for (pkg, build_id) in required_modules if pkg == dep)
+            println("DEPUSER_REBUILT_AGAINST_NEW_DEP=", required_dep_build == new_dep_build)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        logfile = joinpath(dir, "precompile.log")
+        proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+        output = read(logfile, String)
+        @test success(proc) || (println(output); false)
+        @test occursin("DEPUSER_REBUILT_AGAINST_NEW_DEP=true", output)
+    end end
+end
+
 # Test that warn_loaded does not warn when the loaded dep is already at the correct version
 @testset "warn_loaded does not warn when loaded dep matches env version" begin
     mkdepottempdir() do depot; mktempdir() do dir
@@ -3646,6 +3807,155 @@ end
         output = fetch(log)
         @test !occursin("currently loaded", output)
     end end
+end
+
+# A package loaded in this session whose cache file has since been evicted (#63187):
+# a dependent or extension precompiled afterwards cannot be built against the loaded
+# build id, so it must be loaded from source in this session rather than fail.
+# Windows keeps a loaded package's .ji open, so the eviction cannot be staged there.
+@testset "loaded dependency with evicted cache" begin
+    Sys.iswindows() && return
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        parent_uuid = "c1000000-0000-0000-0000-000000000001"
+        trigger_uuid = "c2000000-0000-0000-0000-000000000002"
+        dependent_uuid = "c3000000-0000-0000-0000-000000000003"
+
+        parent_dir = joinpath(depot, "dev", "EvictParent")
+        mkpath(joinpath(parent_dir, "src"))
+        mkpath(joinpath(parent_dir, "ext"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "EvictParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [weakdeps]
+            EvictTrigger = "$trigger_uuid"
+
+            [extensions]
+            EvictParentTriggerExt = "EvictTrigger"
+            """)
+        write(joinpath(parent_dir, "src", "EvictParent.jl"), """
+            module EvictParent
+            f(x) = error("extension not loaded")
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "EvictParentTriggerExt.jl"), """
+            module EvictParentTriggerExt
+            using EvictParent, EvictTrigger
+            EvictParent.f(x::Int) = "extension loaded"
+            end
+            """)
+
+        trigger_dir = joinpath(depot, "dev", "EvictTrigger")
+        mkpath(joinpath(trigger_dir, "src"))
+        write(joinpath(trigger_dir, "Project.toml"), """
+            name = "EvictTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigger_dir, "src", "EvictTrigger.jl"), """
+            module EvictTrigger
+            end
+            """)
+
+        dependent_dir = joinpath(depot, "dev", "EvictDependent")
+        mkpath(joinpath(dependent_dir, "src"))
+        write(joinpath(dependent_dir, "Project.toml"), """
+            name = "EvictDependent"
+            uuid = "$dependent_uuid"
+            version = "0.1.0"
+
+            [deps]
+            EvictParent = "$parent_uuid"
+            """)
+        write(joinpath(dependent_dir, "src", "EvictDependent.jl"), """
+            module EvictDependent
+            using EvictParent
+            const parent = EvictParent
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            EvictParent = "$parent_uuid"
+            EvictTrigger = "$trigger_uuid"
+            EvictDependent = "$dependent_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.EvictParent]]
+            path = "../dev/EvictParent/"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [deps.EvictParent.weakdeps]
+            EvictTrigger = "$trigger_uuid"
+
+            [deps.EvictParent.extensions]
+            EvictParentTriggerExt = "EvictTrigger"
+
+            [[deps.EvictTrigger]]
+            path = "../dev/EvictTrigger/"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+
+            [[deps.EvictDependent]]
+            deps = ["EvictParent"]
+            path = "../dev/EvictDependent/"
+            uuid = "$dependent_uuid"
+            version = "0.1.0"
+            """)
+
+        julia = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path`,
+                       "JULIA_DEPOT_PATH" => depot, "JULIA_LOAD_PATH" => "@")
+        run(`$julia -e "using EvictParent, EvictTrigger, EvictDependent"`)
+
+        # Load the parent, then evict every cache file, as a concurrent process compiling
+        # the same packages for other flags under JULIA_MAX_NUM_PRECOMPILE_FILES would.
+        # Only the .ji files go; a missing .ji is enough for a cache miss. The dependent
+        # and the extension then have to be recompiled against a parent whose loaded build
+        # id is no longer on disk.
+        preamble = """
+            using EvictParent
+            const parent = EvictParent
+            for (root, _, files) in walkdir(joinpath(DEPOT_PATH[1], "compiled")), file in files
+                endswith(file, ".ji") && rm(joinpath(root, file))
+            end
+            """
+        function run_after_eviction(name, body)
+            outfile = joinpath(depot, "evict_$(name)_out.txt")
+            errfile = joinpath(depot, "evict_$(name)_err.txt")
+            proc = run(pipeline(ignorestatus(`$julia -e $(preamble * body)`); stdout=outfile, stderr=errfile))
+            out = read(outfile, String)
+            err = read(errfile, String)
+            if !success(proc) || !occursin("evicted cache ok", out)
+                println(stderr, "evicted-cache $name run failed\nstdout:\n", out, "stderr:\n", err)
+            end
+            @test success(proc)
+            @test occursin("evicted cache ok", out)
+            # the strict worker must not fail outright, and the session must not load a
+            # second copy of the parent from the recompiled cache
+            @test !occursin("not available with flags", err)
+            @test !occursin("Replacing module", err)
+            @test !occursin("failed to create a usable precompiled cache file", err)
+            @test !occursin("Error during loading of extension", err)
+        end
+        run_after_eviction("dependent", """
+            using EvictDependent
+            EvictDependent.parent === parent || error("EvictDependent is bound to a different EvictParent")
+            Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
+            println("evicted cache ok")
+            """)
+        run_after_eviction("extension", """
+            using EvictTrigger
+            EvictParent.f(1) == "extension loaded" || error("extension not loaded")
+            Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
+            println("evicted cache ok")
+            """)
+    end
 end
 
 finish_precompile_test!()

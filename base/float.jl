@@ -753,7 +753,7 @@ function decompose(x::Float16)::NTuple{3,Int}
     e = ((n & 0x7c00) >> 10) % Int
     s |= Int16(e != 0) << 10
     d = ifelse(signbit(x), -1, 1)
-    s, e - 25 + (e == 0), d
+    s%Int, e - 25 + (e == 0), d
 end
 
 function decompose(x::Float32)::NTuple{3,Int}
@@ -764,7 +764,7 @@ function decompose(x::Float32)::NTuple{3,Int}
     e = ((n & 0x7f800000) >> 23) % Int
     s |= Int32(e != 0) << 23
     d = ifelse(signbit(x), -1, 1)
-    s, e - 150 + (e == 0), d
+    s%Int, e - 150 + (e == 0), d
 end
 
 function decompose(x::Float64)::Tuple{Int64, Int, Int}

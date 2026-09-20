@@ -12,7 +12,7 @@ struct ExplicitEnv
     project_weakdeps::Dict{String, UUID} # [weakdeps] in the active project's Project.toml
     project_extras::Dict{String, UUID}   # [extras] in the active project's Project.toml
     project_extensions::Dict{String, Vector{UUID}} # [extensions] in the active project's Project.toml
-    workspace_deps::Dict{String, UUID}   # union of [deps] from all workspace member Project.tomls
+    workspace_deps::Dict{UUID, String}   # packages and [deps] from all workspace member Project.tomls
     deps::Dict{UUID, Vector{UUID}}       # full dependency graph from Manifest.toml
     weakdeps::Dict{UUID, Vector{UUID}}   # full weak dependency graph from Manifest.toml
     extensions::Dict{UUID, Dict{String, Vector{UUID}}}
@@ -34,7 +34,7 @@ function ExplicitEnv(::Nothing, envpath::String="")
         Dict{String, UUID}(),     # project_weakdeps
         Dict{String, UUID}(),     # project_extras
         Dict{String, Vector{UUID}}(), # project_extensions
-        Dict{String, UUID}(),     # workspace_deps
+        Dict{UUID, String}(),     # workspace_deps
         Dict{UUID, Vector{UUID}}(),   # deps
         Dict{UUID, Vector{UUID}}(),   # weakdeps
         Dict{UUID, Dict{String, Vector{UUID}}}(), # extensions
@@ -241,6 +241,8 @@ function ExplicitEnv(envpath::String)
         extensions_expanded[pkg] = exts_expanded
     end
 
+    fixup_stdlib_deps!(deps_expanded, weakdeps_expanded, extensions_expanded, names, lookup_strategy)
+
     # Everything that does not yet have a lookup_strategy is missing from the manifest
     for (_, uuid) in project_deps
         get!(lookup_strategy, uuid, missing)
@@ -262,39 +264,113 @@ function ExplicitEnv(envpath::String)
     end
     =#
 
-    # Collect the union of [deps] from all workspace member projects.
-    # For non-workspace projects, this is the same as project_deps.
-    workspace_deps = copy(project_deps)
-    base = base_project(envpath)
-    if base !== nothing
-        base_d = parsed_toml(base)
-        # Add deps from the workspace root project
-        for (name, _uuid) in get(Dict{String, Any}, base_d, "deps")::Dict{String, Any}
-            workspace_deps[name] = UUID(_uuid::String)
-        end
-        # Add deps from each workspace member project
-        ws = get(base_d, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
-        if ws !== nothing
-            ws_projects = get(ws, "projects", nothing)::Union{Vector{String}, Nothing, String}
-            if ws_projects isa Vector
-                ws_root = dirname(base)
-                for ws_proj in ws_projects
-                    ws_proj_dir = joinpath(ws_root, ws_proj)
-                    ws_proj_file = Base.env_project_file(ws_proj_dir)
-                    ws_proj_file isa String || continue
-                    ws_d = parsed_toml(ws_proj_file)
-                    for (name, _uuid) in get(Dict{String, Any}, ws_d, "deps")::Dict{String, Any}
-                        workspace_deps[name] = UUID(_uuid::String)
-                    end
-                end
-            end
-        end
-    end
+    workspace_deps = collect_workspace_deps(envpath)
 
     return ExplicitEnv(envpath, project_deps, project_weakdeps, project_extras,
                        project_extensions, workspace_deps,
                        deps_expanded, weakdeps_expanded, extensions_expanded,
                        names, lookup_strategy, #=prefs, local_prefs=#)
+end
+
+function collect_workspace_deps(project_file::String)
+    while true
+        base = base_project(project_file)
+        base === nothing && break
+        project_file = base
+    end
+
+    workspace_deps = Dict{UUID, String}()
+    collect_workspace_deps!(workspace_deps, Set{String}(), project_file)
+    return workspace_deps
+end
+
+function collect_workspace_deps!(workspace_deps::Dict{UUID, String}, seen::Set{String}, project_file::String)
+    project_file = abspath(project_file)
+    project_file in seen && return
+    push!(seen, project_file)
+
+    project = parsed_toml(project_file)
+    for (name, _uuid) in get(Dict{String, Any}, project, "deps")::Dict{String, Any}
+        workspace_deps[UUID(_uuid::String)] = name
+    end
+
+    name = get(project, "name", nothing)::Union{String, Nothing}
+    _uuid = get(project, "uuid", nothing)::Union{String, Nothing}
+    if name !== nothing && _uuid !== nothing
+        workspace_deps[UUID(_uuid)] = name
+    end
+
+    workspace = get(project, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
+    workspace === nothing && return
+    projects = get(workspace, "projects", nothing)::Union{Vector{String}, Nothing, String}
+    projects isa Vector || return
+    for member in projects
+        member_file = Base.env_project_file(joinpath(dirname(project_file), member))
+        member_file isa String || continue
+        collect_workspace_deps!(workspace_deps, seen, member_file)
+    end
+    return
+end
+
+# A manifest resolved by a different Julia version can record stale information for
+# stdlibs: a dependency or extension the stdlib gained later, a dependency that is not in
+# the manifest at all, or a git-tree-sha1 from when the package was not a stdlib yet.
+# Code loading tolerates this by falling back to the stdlib's own Project.toml (see
+# `Base.identify_stdlib_project_dep` and `Base.insert_extension_triggers`), so the
+# dependency graph must include those edges too, otherwise a missing dependency is never
+# precompiled before the stdlib that needs it and the strict precompile worker fails.
+function fixup_stdlib_deps!(deps::Dict{UUID, Vector{UUID}}, weakdeps::Dict{UUID, Vector{UUID}},
+                            extensions::Dict{UUID, Dict{String, Vector{UUID}}}, names::Dict{UUID, String},
+                            lookup_strategy::Dict{UUID, Union{SHA1, String, Nothing, Missing}})
+    stdlib_names = Set(readdir(Sys.STDLIB))
+    stack = collect(keys(lookup_strategy))
+    while !isempty(stack)
+        uuid = pop!(stack)
+        name = names[uuid]
+        # same check as `Base.is_stdlib`, but keeping the parsed Project.toml
+        name in stdlib_names || continue
+        project_file = Base.locate_project_file(joinpath(Sys.STDLIB, name))
+        project_file isa String || continue
+        project_d = parsed_toml(project_file)
+        project_uuid = get(project_d, "uuid", nothing)::Union{String, Nothing}
+        (project_uuid !== nothing && UUID(project_uuid) == uuid) || continue
+        project_deps = get(Dict{String, Any}, project_d, "deps")::Dict{String, Any}
+        project_weakdeps = get(Dict{String, Any}, project_d, "weakdeps")::Dict{String, Any}
+        project_extensions = get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
+        pkg_deps = get!(Vector{UUID}, deps, uuid)
+        for (dep_name, _dep_uuid) in project_deps
+            dep_uuid = UUID(_dep_uuid::String)
+            dep_uuid in pkg_deps && continue
+            push!(pkg_deps, dep_uuid)
+            if !haskey(lookup_strategy, dep_uuid)
+                # not in the manifest at all, so it is loaded as a stdlib
+                names[dep_uuid] = dep_name
+                lookup_strategy[dep_uuid] = nothing
+                push!(stack, dep_uuid)
+            end
+        end
+        pkg_weakdeps = get!(Vector{UUID}, weakdeps, uuid)
+        for (dep_name, _dep_uuid) in project_weakdeps
+            dep_uuid = UUID(_dep_uuid::String)
+            dep_uuid in pkg_weakdeps && continue
+            push!(pkg_weakdeps, dep_uuid)
+            get!(names, dep_uuid, dep_name)
+        end
+        pkg_extensions = get!(Dict{String, Vector{UUID}}, extensions, uuid)
+        for (ext, triggers) in project_extensions
+            haskey(pkg_extensions, ext) && continue
+            triggers = triggers isa String ? [triggers] : triggers::Vector{String}
+            trigger_uuids = UUID[]
+            for trigger in triggers
+                _trigger_uuid = get(project_weakdeps, trigger, get(project_deps, trigger, nothing))::Union{String, Nothing}
+                _trigger_uuid === nothing && break
+                push!(trigger_uuids, UUID(_trigger_uuid))
+            end
+            length(trigger_uuids) == length(triggers) || continue
+            pkg_extensions[ext] = trigger_uuids
+        end
+    end
+    return deps
 end
 
 ## PROGRESS BAR
@@ -707,9 +783,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # Determine which packages to consider for precompilation by walking
     # transitive dependencies from the appropriate roots.
     # `manifest` controls the scope: workspace_deps (all members) vs project_deps (current project).
-    roots = manifest ? env.workspace_deps : env.project_deps
+    root_uuids = manifest ? keys(env.workspace_deps) : values(env.project_deps)
     pkg_uuids = Set{UUID}()
-    for (_, uuid) in roots
+    for uuid in root_uuids
         _collect_reachable!(pkg_uuids, env.deps, uuid)
     end
 
@@ -746,13 +822,19 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
     end
 
-    project_deps = [
-        Base.PkgId(uuid, name)
-        for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
-    ]
-
+    project_deps = Base.PkgId[]
+    if manifest
+        for (uuid, name) in env.workspace_deps
+            push!(project_deps, Base.PkgId(uuid, name))
+        end
+    else
+        for (name, uuid) in env.project_deps
+            push!(project_deps, Base.PkgId(uuid, name))
+        end
+    end
+    filter!(!Base.in_sysimage, project_deps)
     # consider exts of project deps to be project deps so that errors are reported
-    append!(project_deps, keys(filter(d->last(d).name in keys(env.project_deps), ext_to_parent)))
+    append!(project_deps, keys(filter(d -> last(d) in project_deps, ext_to_parent)))
 
     # An extension effectively depends on another extension if it has a strict superset of its triggers
     for ext_a in keys(ext_to_parent)
@@ -829,6 +911,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         if isempty(pkgs)
             return
         else
+            # a request for packages that are all in the sysimage has nothing to do
+            all(Base.in_sysimage, requested_pkgids) && return
             error("No direct dependencies outside of the sysimage found matching $(pkgs)")
         end
     end
