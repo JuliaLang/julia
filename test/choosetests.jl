@@ -206,6 +206,12 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
+    if Sys.iswindows() && Sys.WORD_SIZE == 32 && "JuliaLowering_stdlibs" in tests
+        # Building the JuliaLowering sysimage exhausts the 32-bit address space
+        @warn "Skipping JuliaLowering_stdlibs tests on 32-bit Windows"
+        filter!(x -> x != "JuliaLowering_stdlibs", tests)
+    end
+
     if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
         @warn "Running under valgrind: Skipping rounding tests"
         filter!(x -> x != "rounding", tests)
