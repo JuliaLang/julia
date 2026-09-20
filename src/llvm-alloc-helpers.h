@@ -14,6 +14,10 @@
 
 #include "llvm-pass-helpers.h"
 
+namespace llvm {
+    class Loop;
+}
+
 namespace jl_alloc {
 
     struct CheckInst {
@@ -144,16 +148,14 @@ namespace jl_alloc {
     };
 
     struct EscapeAnalysisOptionalArgs {
-        //A set of basic blocks to run escape analysis over. Uses outside these basic blocks
-        //will not be considered. Defaults to nullptr, which means all uses of the allocation
-        //are considered
-        const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set;
+        // Ignore uses outside this loop. nullptr means all uses are considered.
+        const llvm::Loop *valid_loop = nullptr;
         llvm::OptimizationRemarkEmitter *ORE = nullptr;
 
         EscapeAnalysisOptionalArgs() = default;
 
-        EscapeAnalysisOptionalArgs &with_valid_set(decltype(valid_set) valid_set) {
-            this->valid_set = valid_set;
+        EscapeAnalysisOptionalArgs &with_valid_loop(decltype(valid_loop) valid_loop) {
+            this->valid_loop = valid_loop;
             return *this;
         }
 
