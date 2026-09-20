@@ -826,3 +826,92 @@ end
         end
     end
 end
+
+# A package with its own annotation value type and a style to display it.
+module MarkedAnnotations
+    import Base.AnnotatedDisplay: AbstractAnnotationStyle, AnnotationStyle, awrite
+    struct Mark end
+    struct Mark2 end # A second value type displayed the same way
+    struct Tag end   # A value type of another package, with its own style
+    struct Note end  # As `Tag`, but with no agreed style against `Mark`
+    struct MarkStyle <: AbstractAnnotationStyle end
+    struct TagStyle <: AbstractAnnotationStyle end
+    struct NoteStyle <: AbstractAnnotationStyle end
+    AnnotationStyle(::Type{Mark}) = MarkStyle()
+    AnnotationStyle(::Type{Mark2}) = MarkStyle()
+    AnnotationStyle(::Type{Tag}) = TagStyle()
+    AnnotationStyle(::Type{Note}) = NoteStyle()
+    AnnotationStyle(a::MarkStyle, ::TagStyle) = a
+    function awrite(textwriter::F, ::MarkStyle, io::IO, s) where {F}
+        buf = IOBuffer()
+        for (str, annots) in Base.eachregion(s)
+            isempty(annots) || write(buf, "<")
+            textwriter(buf, str)
+            isempty(annots) || write(buf, ">")
+        end
+        write(io, take!(buf))
+    end
+    awrite(::MarkStyle, io::IO, ::MIME"text/html", s) = sum(Base.eachregion(s)) do (str, annots)
+        if isempty(annots) write(io, str) else write(io, "<mark>") + write(io, str) + write(io, "</mark>") end
+    end
+end
+
+@testset "AnnotationStyle" begin
+    (; Mark, MarkStyle) = MarkedAnnotations
+    AnnotationStyle, NoStyle = Base.AnnotatedDisplay.AnnotationStyle, Base.AnnotatedDisplay.NoStyle
+    @test AnnotationStyle(String) === NoStyle()
+    @test AnnotationStyle(Mark) === MarkStyle()
+    @test AnnotationStyle(Union{Mark, String}) === MarkStyle()
+    @test AnnotationStyle(Union{String, Int, Mark}) === MarkStyle()
+    @test AnnotationStyle(Union{String, Int}) === NoStyle()
+    @test AnnotationStyle(MarkStyle(), NoStyle()) === AnnotationStyle(NoStyle(), MarkStyle()) === MarkStyle()
+    # Types sharing a style combine; styles that differ have no answer until one is given
+    @test AnnotationStyle(Union{Mark, MarkedAnnotations.Mark2}) === MarkStyle()
+    @test_throws MethodError AnnotationStyle(Union{Mark, MarkedAnnotations.Note})
+    @test AnnotationStyle(Union{Mark, MarkedAnnotations.Tag}) === MarkStyle() # By `MarkedAnnotations`
+    marked(V) = Base.AnnotatedString{String, V}("x", [(1:1, :m, Mark())])
+    @test sprint(print, marked(Mark)) == "<x>"
+    @test sprint(print, marked(Union{Mark, Int})) == "<x>"
+    @test sprint(print, marked(Any)) == "<x>" # The style is found from the values
+    @test sprint(print, Base.AnnotatedString{String, Int}("x", [(1:1, :n, 1)])) == "x"
+    @test sprint(print, Base.AnnotatedString{String, Any}("x", [(1:1, :n, 1)])) == "x"
+    # HTML is available exactly when the style provides it, as for a plain `String`
+    unstyled = Base.AnnotatedString{String, Int}("a<b", [(1:1, :n, 1)])
+    @test !showable(MIME("text/html"), unstyled) && !showable(MIME("text/html"), unstyled[1])
+    @test_throws MethodError sprint(show, MIME("text/html"), unstyled)
+    @test showable(MIME("text/html"), marked(Mark)) && showable(MIME("text/html"), marked(Mark)[1])
+    @test sprint(show, MIME("text/html"), marked(Mark)) == sprint(show, MIME("text/html"), marked(Mark)[1]) == "<mark>x</mark>"
+    # Escaping keeps the annotations on their (longer) text
+    @test sprint(escape_string, Base.AnnotatedString{String, Mark}("a\nb", [(1:1, :m, Mark()), (3:3, :m, Mark())])) == "<a>\\n<b>"
+    # The style of a known value type is resolved at compile time
+    folded(V) = only(code_typed(Base.AnnotatedDisplay.style, (Base.AnnotatedString{String, V},)))[1].code
+    @test folded(Mark) == Any[Core.ReturnNode(MarkStyle())]
+    @test folded(Union{Mark, Int}) == Any[Core.ReturnNode(MarkStyle())]
+    # Defining a style, or a writer for one, must not invalidate code compiled for strings of
+    # unknown value type. Checked in a fresh process, where only Base's methods exist as when a
+    # package is first loaded; here the loaded packages' methods would make inference give up
+    # for that reason alone.
+    guard = """
+    import Base.AnnotatedDisplay: AbstractAnnotationStyle, AnnotationStyle, awrite
+    struct Late end
+    struct LateStyle <: AbstractAnnotationStyle end
+    struct Sink <: IO end
+    Base.write(::Sink, ::UInt8) = 1
+    Base.unsafe_write(::Sink, ::Ptr{UInt8}, n::UInt) = Int(n)
+    # A new IO type and an unusual string type, so the print chain is compiled here rather than
+    # taken from the sysimage; `v[1]` is inferred with the value type unbound.
+    unknown_valtype(v::Vector{Base.AnnotatedString{SubString{String}}}) = print(Sink(), v[1])
+    unknown_html(v::Vector{Base.AnnotatedString{SubString{String}}}) = show(Sink(), MIME("text/html"), v[1])
+    strings = Base.AnnotatedString{SubString{String}}[Base.AnnotatedString{SubString{String}, Int}(SubString("x"))]
+    unknown_valtype(strings)
+    try unknown_html(strings) catch end # compiled, then correctly a `MethodError` without a style
+    log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    AnnotationStyle(::Type{Late}) = LateStyle()
+    awrite(textwriter, ::LateStyle, io::IO, s::Base.AnnotatedString) = 0
+    awrite(::LateStyle, io::IO, ::MIME"text/html", s::Base.AnnotatedString) = 0
+    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+    print(join(unique(x.def.name for x in log if x isa Core.MethodInstance), ' '))
+    """
+    invalidated = split(read(`$(Base.julia_cmd()) --startup-file=no -e $guard`, String))
+    @test invalidated ⊆ ["AnnotationStyle", "awrite"]
+end
