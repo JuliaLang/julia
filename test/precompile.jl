@@ -3829,22 +3829,24 @@ end
 
 # Issue #63268: environments at the same project path (one per container, or one project
 # whose manifest is switched) resolving different versions of a package must not overwrite
-# each other's cache files. A file whose source is gone from the depot is dropped later.
+# each other's cache files, nor those of its dependents. A file whose source is gone from
+# the depot is dropped later.
 @testset "cache files of different versions at the same project path coexist" begin
     mkdepottempdir() do depot; mktempdir() do dir
-        uuid = Base.UUID("a1a1a1a1-0000-0000-0000-000000000001")
+        dep_uuid = Base.UUID("a1a1a1a1-0000-0000-0000-000000000001")
+        top_uuid = Base.UUID("b2b2b2b2-0000-0000-0000-000000000002")
         # tree hashes place the versions under the depot, like Pkg does, so the caches
         # are relocatable
         versions = Dict("0.1.0" => (1, "1111111111111111111111111111111111111111"),
                         "0.2.0" => (2, "2222222222222222222222222222222222222222"))
-        srcdir(version) = joinpath(depot, "packages", "Dep", Base.version_slug(uuid, Base.SHA1(versions[version][2])))
+        srcdir(version) = joinpath(depot, "packages", "Dep", Base.version_slug(dep_uuid, Base.SHA1(versions[version][2])))
         for (version, (marker, _)) in versions
             path = srcdir(version)
             mkpath(joinpath(path, "src"))
             write(joinpath(path, "Project.toml"),
                   """
                   name = "Dep"
-                  uuid = "$uuid"
+                  uuid = "$dep_uuid"
                   version = "$version"
                   """)
             write(joinpath(path, "src", "Dep.jl"),
@@ -3854,12 +3856,30 @@ end
                   end
                   """)
         end
+        # Top's source is the same in both environments, only its dependency differs
+        top_path = joinpath(dir, "dev", "Top")
+        mkpath(joinpath(top_path, "src"))
+        write(joinpath(top_path, "Project.toml"),
+              """
+              name = "Top"
+              uuid = "$top_uuid"
+              version = "0.1.0"
+
+              [deps]
+              Dep = "$dep_uuid"
+              """)
+        write(joinpath(top_path, "src", "Top.jl"),
+              """
+              module Top
+              using Dep
+              end
+              """)
         project_path = joinpath(dir, "project")
         mkpath(project_path)
         write(joinpath(project_path, "Project.toml"),
               """
               [deps]
-              Dep = "$uuid"
+              Top = "$top_uuid"
               """)
         function use_dep(version)
             write(joinpath(project_path, "Manifest.toml"),
@@ -3868,47 +3888,57 @@ end
 
                   [[deps.Dep]]
                   git-tree-sha1 = "$(versions[version][2])"
-                  uuid = "$uuid"
+                  uuid = "$dep_uuid"
                   version = "$version"
+
+                  [[deps.Top]]
+                  deps = ["Dep"]
+                  path = "../dev/Top/"
+                  uuid = "$top_uuid"
+                  version = "0.1.0"
                   """)
         end
         script = """
-            dep = Base.identify_package("Dep")
-            println("PRECOMPILED=", Base.isprecompiled(dep))
-            using Dep
-            println("DEP_VERSION=", Dep._v)
+            top = Base.identify_package("Top")
+            println("PRECOMPILED=", Base.isprecompiled(top))
+            using Top
+            println("DEP_VERSION=", Top.Dep._v)
             """
         cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
                      "JULIA_DEPOT_PATH" => depot)
-        function run_dep()
+        function run_top()
             logfile = joinpath(dir, "run.log")
             proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
             output = read(logfile, String)
             @test success(proc) || (println(output); false)
             return output
         end
-        cachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Dep")
-        cachefiles() = filter(endswith(".ji"), readdir(cachedir))
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        cachefiles(name) = filter(endswith(".ji"), readdir(joinpath(compiled, name)))
 
         use_dep("0.1.0")
-        output = run_dep()
+        output = run_top()
         @test occursin("PRECOMPILED=false", output)
         @test occursin("DEP_VERSION=1", output)
-        @test length(cachefiles()) == 1
+        @test length(cachefiles("Dep")) == 1
+        @test length(cachefiles("Top")) == 1
 
-        # The other version is cached alongside, not over, the first one
+        # The other version is cached alongside, not over, the first one, and so is the
+        # dependent built against it
         use_dep("0.2.0")
-        output = run_dep()
+        output = run_top()
         @test occursin("PRECOMPILED=false", output)
         @test occursin("DEP_VERSION=2", output)
-        @test length(cachefiles()) == 2
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
 
         # so switching back needs no recompilation
         use_dep("0.1.0")
-        output = run_dep()
+        output = run_top()
         @test occursin("PRECOMPILED=true", output)
         @test occursin("DEP_VERSION=1", output)
-        @test length(cachefiles()) == 2
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
 
         # Once a version's source is gone from the depot (as after `Pkg.gc`) and its cache
         # file has not been loaded for a week, the next cache write for the package drops it
@@ -3924,21 +3954,21 @@ end
                   """)
         end
         edit_dep(1)
-        output = run_dep()
+        output = run_top()
         @test occursin("PRECOMPILED=false", output)
         @test occursin("DEP_VERSION=2", output)
-        @test length(cachefiles()) == 2 # recently loaded, so kept
-        for file in cachefiles()
+        @test length(cachefiles("Dep")) == 2 # recently loaded, so kept
+        for file in cachefiles("Dep")
             old = time() - 8 * 24 * 60 * 60
-            f = Base.Filesystem.open(joinpath(cachedir, file), Base.Filesystem.JL_O_RDWR)
+            f = Base.Filesystem.open(joinpath(compiled, "Dep", file), Base.Filesystem.JL_O_RDWR)
             Base.Filesystem.futime(f, old, old)
             close(f)
         end
         edit_dep(2)
-        output = run_dep()
+        output = run_top()
         @test occursin("PRECOMPILED=false", output)
         @test occursin("DEP_VERSION=2", output)
-        @test length(cachefiles()) == 1
+        @test length(cachefiles("Dep")) == 1
     end end
 end
 

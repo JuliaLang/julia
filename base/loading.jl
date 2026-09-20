@@ -3642,7 +3642,7 @@ function compilecache_dir(pkg::PkgId)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""))::String
+function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""), srcpaths::String="")::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
@@ -3650,16 +3650,7 @@ function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=Cac
         abspath(cachepath, entryfile) * ".ji"
     else
         crc = _crc32c(project)
-        # environments at the same path (e.g. in different containers) may resolve
-        # different versions, so key on the manifest contents too (#63268)
-        manifest = isempty(project) ? nothing : project_file_manifest_path(project)
-        if manifest !== nothing
-            try
-                crc = open(io -> _crc32c(io, crc), manifest, "r")
-            catch e
-                e isa IOError || rethrow() # only the file name is affected
-            end
-        end
+        crc = _crc32c(srcpaths, crc)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(_cacheflag_to_uint8(flags), crc)
@@ -3774,10 +3765,11 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                 Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so)
             end
 
-            # Read preferences blob back from .ji file (we can't precompute because we don't
-            # actually know what the list of compile-time preferences are without compiling)
-            prefs_blob = preferences_blob(tmppath)
-            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
+            # Read the preferences blob and the required modules back from the .ji file (we
+            # can't know either without compiling) to key the cache file name on
+            _, _, required_modules, _, prefs_blob = parse_cache_header(tmppath)
+            srcpaths = cachefile_srcpaths(spec.path, required_modules)
+            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags, srcpaths)
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
@@ -3855,6 +3847,19 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
     else
         error("Failed to precompile $(repr("text/plain", pkg)) to $(repr(tmppath)) ($(Base.process_status(p))).")
     end
+end
+
+# The source paths of a package and of the modules its cache requires, as resolved in this
+# environment. Environments at the same project path (e.g. in different containers) may
+# resolve different versions, so cache file names are keyed on these as well (#63268).
+function cachefile_srcpaths(entrypath::String, required_modules::Vector{Pair{PkgId,UInt128}})
+    paths = String[entrypath]
+    for (id, _) in required_modules
+        id.uuid === nothing && continue
+        path = locate_package(id)
+        path === nothing || push!(paths, path)
+    end
+    return join(sort!(paths), '\0')
 end
 
 # remove a cache file along with its object file (and dSYM bundle on macOS)
