@@ -801,7 +801,7 @@ julia> @time_imports using JSON
 [...]
       1.9 ms  StructUtils
      97.1 ms  JSON 122 invalidations
-              Tip: `@time_imports invalidations=true` lists what caused the invalidations
+              Tip: `@time_imports invalidations=true` lists what triggered the invalidations
 
 julia> @time_imports invalidations=true using JSON
 [...]

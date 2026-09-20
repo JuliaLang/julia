@@ -1026,7 +1026,7 @@ end
             end
             @test occursin("ms  InvBase3242\n", out)
             @test occursin("ms  InvExtF3242 1 invalidation\n", out)
-            @test occursin("Tip: `@time_imports invalidations=true` lists what caused the invalidations", out)
+            @test occursin("Tip: `@time_imports invalidations=true` lists what triggered the invalidations", out)
 
             out = capture_stdout() do
                 @eval @time_imports invalidations=true using InvExtG3242

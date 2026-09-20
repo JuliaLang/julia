@@ -1466,7 +1466,7 @@ const TIMING_IMPORTS_INVALIDATIONS = Ref{Union{Nothing, TimingInvalidations}}(no
 const TIMING_IMPORTS_INVALIDATIONS_HINT = Ref(false)
 const print_time_imports_invalidations_tip = OncePerProcess{Nothing}() do
     # indented to the package name column
-    printstyled("              Tip: `@time_imports invalidations=true` lists what caused the invalidations\n", color = :light_black)
+    printstyled("              Tip: `@time_imports invalidations=true` lists what triggered the invalidations\n", color = :light_black)
     nothing
 end
 
