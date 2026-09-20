@@ -503,52 +503,128 @@ function expand_compare_chain(ctx, ex)
     @jl_assert numchildren(ex) >= 3 ex
     @jl_assert isodd(numchildren(ex)) ex
 
+    comparisons = nothing
     i = 1
 
-    # create ssa variables for each side in the comparison chain, skip operators
-    sym_and_expr = map(enumerate(terms)) do (i, term)
-        if isodd(i)
-            (ssavar(ctx, term, "hs_sym"), term)
+    while i+2 <= length(terms)
+        chain = if kind(terms[i+1]) == K"."
+            # if the op starts a dot-chain, just expand it
+            (vector_chain, i) = expand_vector_compare_chain(ctx, ex, terms, i)
+            vector_chain
         else
-            (nothing, term)
+            dotchain_head = nothing
+            # move the first evaluation of a following dot-chain to the top
+            # in order to avoid it getting skipped by short circuiting
+            next_dotop = findnext(op -> kind(op) == K".", terms, i+3)
+            if !isnothing(next_dotop)
+                dotop_lhs = terms[next_dotop-1]
+                if kind(dotop_lhs) != K"BindingId"
+                    dotop_lhs_ident = ssavar(ctx, dotop_lhs, "dotop_lhs_ident")
+                    terms[next_dotop-1] = dotop_lhs_ident
+                    dotchain_head = @ast ctx dotop_lhs [K"=" dotop_lhs_ident dotop_lhs]
+                end
+            end
+
+            (scalar_chain, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
+            if !isnothing(dotchain_head)
+                @ast ctx ex [K"block" dotchain_head scalar_chain]
+            else
+                scalar_chain
+            end
+        end
+
+        comparisons = if isnothing(comparisons)
+            chain
+        else
+            @ast ctx ex [K"dotcall"
+            "&"::K"top"
+            # ^^ NB: Flisp bug. Flisp lowering essentially does
+            #     adopt_scope("&"::K"Identifier", ctx.mod)
+            # here which seems wrong if the comparison chain arose from
+            # a macro in a different module. One fix would be to use
+            #     adopt_scope("&"::K"Identifier", ex)
+            # to get the module of the comparison expression for the
+            # `&` operator. But a simpler option is probably to always
+            # use `Base.&` so we do that.
+            comparisons
+            chain
+        ]
         end
     end
+    return comparisons
+end
 
-    # assign the evaluation of the rhs to the symbols
-    assignments = @ast ctx ex [K"block" map(sym_and_expr[1:2:end]) do (sym, expr)
-        @ast ctx ex [K"=" sym expr]
-    end...]
-
+function expand_scalar_compare_chain(ctx, srcref, terms, i)
     comparisons = nothing
 
-    # Combine any number of dotted comparisons
-    while i + 2 <= length(terms)
-        lhs = sym_and_expr[i][1]
+    while i+2 <= length(terms)
+        lhs = terms[i]
         op = terms[i+1]
-        rhs = sym_and_expr[i+2][1]
+        rhs = terms[i+2]
 
-        comp = if kind(op) != K"."
-            @ast ctx op [K"call"
-                op
-                lhs
-                rhs
+        kind(op) == K"." && break
+
+        rhs = if kind(rhs) != K"BindingId"
+            rhs_ident = ssavar(ctx, rhs, "rhs_ident")
+            terms[i+2] = rhs_ident
+            @ast ctx rhs [K"block"
+                @ast ctx rhs [K"=" rhs_ident rhs]
+                rhs_ident
             ]
         else
-            @ast ctx op [K"dotcall"
+            rhs
+        end
+
+        comp = @ast ctx op [K"call"
+            op
+            lhs
+            rhs
+        ]
+
+        comparisons = if isnothing(comparisons)
+            comp
+        else
+            @ast ctx srcref [K"&&"
+                comparisons
+                comp
+            ]
+        end
+        i+=2
+    end
+    (comparisons, i)
+end
+
+function expand_vector_compare_chain(ctx, srcref, terms, i)
+    comparisons = nothing
+
+    while i+2 <= length(terms)
+        lhs = terms[i]
+        op = terms[i+1]
+        rhs = terms[i+2]
+        
+        kind(op) != K"." && break
+
+        rhs = if kind(rhs) != K"BindingId"
+            rhs_ident = ssavar(ctx, rhs, "rhs_ident")
+            terms[i+2] = rhs_ident
+            @ast ctx rhs [K"block"
+                @ast ctx rhs [K"=" rhs_ident rhs]
+                rhs_ident
+            ]
+        else
+            rhs
+        end
+
+        comp = @ast ctx op [K"dotcall"
                 op[1]
                 lhs
                 rhs
             ]
-        end
-        if isnothing(comparisons)
-            comparisons = comp
-        elseif kind(op) != K"."
-            comparisons = @ast ctx ex [K"&&"
-                comparisons
-                comp
-            ]
+
+        comparisons = if isnothing(comparisons)
+            comp
         else
-            comparisons = @ast ctx ex [K"dotcall"
+            @ast ctx srcref [K"dotcall"
                 "&"::K"top"
                 # ^^ NB: Flisp bug. Flisp lowering essentially does
                 #     adopt_scope("&"::K"Identifier", ctx.mod)
@@ -562,9 +638,9 @@ function expand_compare_chain(ctx, ex)
                 comp
             ]
         end
-        i += 2
+        i+=2
     end
-    @ast ctx ex [K"block" assignments comparisons]
+    (comparisons, i)
 end
 
 #-------------------------------------------------------------------------------

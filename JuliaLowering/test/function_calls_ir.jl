@@ -115,83 +115,88 @@ x .&& y .|| z
 
 ########################################
 # Scalar comparison chain
-x < y < z
+x < y(1) < z
 #---------------------
-1   TestMod.x
-2   TestMod.y
-3   TestMod.z
-4   TestMod.<
-5   (call %₄ %₁ %₂)
-6   (gotoifnot %₅ label₁₀)
+1   TestMod.<
+2   TestMod.x
+3   TestMod.y
+4   (call %₃ 1)
+5   (call %₁ %₂ %₄)
+6   (gotoifnot %₅ label₁₁)
 7   TestMod.<
-8   (call %₇ %₂ %₃)
-9   (return %₈)
-10  (return false)
+8   TestMod.z
+9   (call %₇ %₄ %₈)
+10  (return %₉)
+11  (return false)
 
 ########################################
 # Broadcasted comparison chain
-x .< y .< z
+x .< y(1) .< z
 #---------------------
-1   TestMod.x
-2   TestMod.y
-3   TestMod.z
-4   TestMod.<
-5   (call top.broadcasted %₄ %₁ %₂)
+1   TestMod.<
+2   TestMod.x
+3   TestMod.y
+4   (call %₃ 1)
+5   (call top.broadcasted %₁ %₂ %₄)
 6   TestMod.<
-7   (call top.broadcasted %₆ %₂ %₃)
-8   (call top.broadcasted top.& %₅ %₇)
-9   (call top.materialize %₈)
-10  (return %₉)
+7   TestMod.z
+8   (call top.broadcasted %₆ %₄ %₇)
+9   (call top.broadcasted top.& %₅ %₈)
+10  (call top.materialize %₉)
+11  (return %₁₀)
 
 ########################################
 # Mixed scalar / broadcasted comparison chain
-a < b < c .< d .< e
+a < b < c(1) .< d .< e
 #---------------------
-1   TestMod.a
-2   TestMod.b
-3   TestMod.c
-4   TestMod.d
-5   TestMod.e
-6   TestMod.<
-7   (call %₆ %₁ %₂)
-8   (gotoifnot %₇ label₁₂)
-9   TestMod.<
-10  (= slot₁/if_val (call %₉ %₂ %₃))
-11  (goto label₁₃)
-12  (= slot₁/if_val false)
-13  slot₁/if_val
-14  TestMod.<
-15  (call top.broadcasted %₁₄ %₃ %₄)
-16  (call top.broadcasted top.& %₁₃ %₁₅)
-17  TestMod.<
-18  (call top.broadcasted %₁₇ %₄ %₅)
-19  (call top.broadcasted top.& %₁₆ %₁₈)
-20  (call top.materialize %₁₉)
-21  (return %₂₀)
+1   TestMod.c
+2   (call %₁ 1)
+3   TestMod.<
+4   TestMod.a
+5   TestMod.b
+6   (call %₃ %₄ %₅)
+7   (gotoifnot %₆ label₁₁)
+8   TestMod.<
+9   (= slot₁/if_val (call %₈ %₅ %₂))
+10  (goto label₁₂)
+11  (= slot₁/if_val false)
+12  slot₁/if_val
+13  TestMod.<
+14  TestMod.d
+15  (call top.broadcasted %₁₃ %₂ %₁₄)
+16  TestMod.<
+17  TestMod.e
+18  (call top.broadcasted %₁₆ %₁₄ %₁₇)
+19  (call top.broadcasted top.& %₁₅ %₁₈)
+20  (call top.broadcasted top.& %₁₂ %₁₉)
+21  (call top.materialize %₂₀)
+22  (return %₂₁)
 
 ########################################
 # Mixed scalar / broadcasted comparison chain
 a .< b .< c < d < e
 #---------------------
-1   TestMod.a
-2   TestMod.b
-3   TestMod.c
-4   TestMod.d
-5   TestMod.e
-6   TestMod.<
-7   (call top.broadcasted %₆ %₁ %₂)
-8   TestMod.<
-9   (call top.broadcasted %₈ %₂ %₃)
-10  (call top.broadcasted top.& %₇ %₉)
-11  (call top.materialize %₁₀)
-12  (gotoifnot %₁₁ label₁₉)
+1   TestMod.<
+2   TestMod.a
+3   TestMod.b
+4   (call top.broadcasted %₁ %₂ %₃)
+5   TestMod.<
+6   TestMod.c
+7   (call top.broadcasted %₅ %₃ %₆)
+8   (call top.broadcasted top.& %₄ %₇)
+9   TestMod.<
+10  TestMod.d
+11  (call %₉ %₆ %₁₀)
+12  (gotoifnot %₁₁ label₁₇)
 13  TestMod.<
-14  (call %₁₃ %₃ %₄)
-15  (gotoifnot %₁₄ label₁₉)
-16  TestMod.<
-17  (call %₁₆ %₄ %₅)
-18  (return %₁₇)
-19  (return false)
+14  TestMod.e
+15  (= slot₁/if_val (call %₁₃ %₁₀ %₁₄))
+16  (goto label₁₈)
+17  (= slot₁/if_val false)
+18  slot₁/if_val
+19  (call top.broadcasted top.& %₈ %₁₈)
+20  (call top.materialize %₁₉)
+21  (return %₂₀)
 
 ########################################
 # Comparison chain fused with other broadcasting
@@ -199,18 +204,17 @@ x .+ (a .< b .< c)
 #---------------------
 1   TestMod.+
 2   TestMod.x
-3   TestMod.a
-4   TestMod.b
-5   TestMod.c
-6   TestMod.<
-7   (call top.broadcasted %₆ %₃ %₄)
-8   TestMod.<
-9   (call top.broadcasted %₈ %₄ %₅)
-10  (call top.broadcasted top.& %₇ %₉)
-11  (call top.materialize %₁₀)
-12  (call top.broadcasted %₁ %₂ %₁₁)
-13  (call top.materialize %₁₂)
-14  (return %₁₃)
+3   TestMod.<
+4   TestMod.a
+5   TestMod.b
+6   (call top.broadcasted %₃ %₄ %₅)
+7   TestMod.<
+8   TestMod.c
+9   (call top.broadcasted %₇ %₅ %₈)
+10  (call top.broadcasted top.& %₆ %₉)
+11  (call top.broadcasted %₁ %₂ %₁₀)
+12  (call top.materialize %₁₁)
+13  (return %₁₂)
 
 ########################################
 # Broadcast with literal_pow
