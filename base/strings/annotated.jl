@@ -561,86 +561,98 @@ function annotated_chartransform(f::Function, str::AnnotatedString{S, V}, state=
     AnnotatedString{S, V}(convert(S, takestring!(outstr)), annots)
 end
 
-struct RegionIterator{S <: AbstractString, V}
-    str::S
-    regions::Vector{UnitRange{Int}}
-    annotations::Vector{Vector{Annotation{V}}}
+mutable struct RegionIterator{S <: AbstractString, V}
+    const str::S
+    const annotations::Vector{RegionAnnotation{V}}
+    const events::Vector{UInt64} # Each an annotation's start or end, see `annotation_events`
+    const subregion::UnitRange{Int}
+    const active::Vector{Int} # Sorted indices of the annotations over the current region
+    pos::Int                  # Where the current region starts
 end
 
-Base.length(si::RegionIterator) = length(si.regions)
+# The annotations over one region: read from the iterator's state while that is its current
+# region, and found again by position once it has moved on, in time linear in the annotations
+struct ActiveAnnotations{S, V} <: AbstractVector{Annotation{V}}
+    regions::RegionIterator{S, V}
+    pos::Int
+end
 
-Base.@propagate_inbounds function Base.iterate(si::RegionIterator, i::Integer=1)
-    if i <= length(si.regions)
-        @inbounds ((SubString(si.str, si.regions[i]), si.annotations[i]), i+1)
+Base.IndexStyle(::Type{<:ActiveAnnotations}) = IndexLinear()
+Base.size(a::ActiveAnnotations) =
+    (if a.regions.pos == a.pos length(a.regions.active) else count(annot -> a.pos in annot.region, a.regions.annotations) end,)
+function Base.getindex(a::ActiveAnnotations{S, V}, i::Int) where {S, V}
+    @boundscheck checkbounds(a, i)
+    a.regions.pos == a.pos || return first(Iterators.drop(a, i - 1))
+    (; label, value) = @inbounds a.regions.annotations[a.regions.active[i]]
+    Annotation{V}((label, value))
+end
+# A held region is read in one pass over the annotations, rather than a scan per element
+function Base.iterate(a::ActiveAnnotations{S, V}, i::Int = 1) where {S, V}
+    a.regions.pos == a.pos && return if i <= length(a); (@inbounds(a[i]), i + 1) end
+    annots = a.regions.annotations
+    index = findnext(annot -> a.pos in annot.region, annots, i)
+    isnothing(index) && return nothing
+    (; label, value) = @inbounds annots[index]
+    (Annotation{V}((label, value)), index + 1)
+end
+
+Base.IteratorSize(::Type{<:RegionIterator}) = SizeUnknown()
+Base.eltype(::Type{RegionIterator{S, V}}) where {S, V} = Tuple{SubString{S}, ActiveAnnotations{S, V}}
+
+@inline function Base.iterate(r::RegionIterator{S}, (i, pos) = (1, first(r.subregion))) where {S}
+    i == 1 && empty!(r.active)
+    pos > last(r.subregion) && return nothing
+    events = r.events
+    shift = unsigned(top_set_bit(2 * length(r.annotations) + 1))
+    while i <= length(events) && events[i] >> shift == pos # Apply every change at this position
+        event = events[i]
+        index, isstart = Int(event & (UInt64(1) << shift - 1)) >> 1, isodd(event)
+        at = searchsortedfirst(r.active, index)
+        if isstart # Shift within the list: `insert!` and `deleteat!` at its front reallocate on alternate calls
+            push!(r.active, index)
+            copyto!(r.active, at + 1, r.active, at, length(r.active) - at)
+            r.active[at] = index
+        else
+            copyto!(r.active, at, r.active, at + 1, length(r.active) - at)
+            pop!(r.active)
+        end
+        i += 1
     end
+    r.pos = pos
+    next = if i <= length(events)
+        Int(events[i] >> shift)
+    else # To the end of the character the subregion ends in
+        nextind(r.str, thisind(r.str, last(r.subregion)))
+    end
+    ((@inbounds(raw_substring(r.str, pos, next - pos)), ActiveAnnotations(r, pos)), (i, next))
 end
-
-Base.eltype(::RegionIterator{S, V}) where { S <: AbstractString, V} =
-    Tuple{SubString{S}, Vector{Annotation{V}}}
 
 """
     eachregion(s::AnnotatedString{S})
     eachregion(s::SubString{AnnotatedString{S}})
 
-Identify the contiguous substrings of `s` with a constant annotations, and return
-an iterator which provides each substring and the applicable annotations as a
-`Tuple{SubString{S}, Vector{$Annotation}}`.
+Identify the contiguous substrings of `s` with constant annotations, and return an
+iterator which provides each substring and the applicable annotations as a
+`Tuple{SubString{S}, AbstractVector{$Annotation}}`.
 
 # Examples
 
 ```jldoctest; setup=:(using Base: AnnotatedString, eachregion)
-julia> collect(eachregion(AnnotatedString(
-           "hey there", [(1:3, :face, :bold),
-                         (5:9, :face, :italic)])))
-3-element Vector{Tuple{SubString{String}, Vector{$Annotation}}}:
- ("hey", [$Annotation((:face, :bold))])
- (" ", [])
- ("there", [$Annotation((:face, :italic))])
+julia> a = AnnotatedString("hey there", [(1:3, :face, :bold), (5:9, :face, :italic)]);
+
+julia> map(collect, eachregion(a))
+3-element Vector{Vector{Any}}:
+ ["hey", [(label = :face, value = :bold)]]
+ [" ", @NamedTuple{label::Symbol, value::Symbol}[]]
+ ["there", [(label = :face, value = :italic)]]
 ```
 """
 function eachregion(s::AnnotatedString{S, V}, subregion::UnitRange{Int}=firstindex(s):lastindex(s)) where {S, V}
-    isempty(s) || isempty(subregion) &&
-        return RegionIterator(s.string, UnitRange{Int}[], Vector{Annotation{V}}[])
-    events = annotation_events(s, subregion)
-    isempty(events) && return RegionIterator(s.string, [subregion], [Annotation{V}[]])
-    # Constructed from the fields, as `(; label, value)` would type the tuple from each
-    # value rather than from `V`, which is very slow when `V` is a union.
-    annotvals = Annotation{V}[Annotation{V}((a.label, a.value)) for a in annotations(s)]
-    regions = Vector{UnitRange{Int}}()
-    annots = Vector{Vector{Annotation{V}}}()
-    unannotated = Annotation{V}[] # Shared by every region without annotations
-    pos = first(events).pos
-    if pos > first(subregion)
-        push!(regions, thisind(s, first(subregion)):prevind(s, pos))
-        push!(annots, unannotated)
-    end
-    activelist = Int[]
-    for event in events
-        if event.pos != pos
-            push!(regions, pos:prevind(s, event.pos))
-            push!(annots, if isempty(activelist) unannotated else annotvals[activelist] end)
-            pos = event.pos
-        end
-        if event.active
-            insert!(activelist, searchsortedfirst(activelist, event.index), event.index)
-        else
-            deleteat!(activelist, searchsortedfirst(activelist, event.index))
-        end
-    end
-    if last(events).pos < nextind(s, last(subregion))
-        push!(regions, last(events).pos:thisind(s, last(subregion)))
-        push!(annots, unannotated)
-    end
-    RegionIterator(s.string, regions, annots)
+    RegionIterator{S, V}(s.string, s.annotations, annotation_events(s, subregion), subregion, Int[], 0)
 end
 
-function eachregion(s::SubString{AnnotatedString{S, V}}, pos::UnitRange{Int}=firstindex(s):lastindex(s)) where {S, V}
-    if isempty(s)
-        RegionIterator(s.string, Vector{UnitRange{Int}}(), Vector{Vector{Annotation{V}}}())
-    else
-        eachregion(s.string, first(pos)+s.offset:last(pos)+s.offset)
-    end
-end
+eachregion(s::SubString{AnnotatedString{S, V}}, pos::UnitRange{Int}=firstindex(s):lastindex(s)) where {S, V} =
+    eachregion(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
     annotation_events(string::AbstractString, annots::Vector{$RegionAnnotation}, subregion::UnitRange{Int})
@@ -649,23 +661,24 @@ end
 Find all annotation "change events" that occur within a `subregion` of `annots`,
 with respect to `string`. When `string` is styled, `annots` is inferred.
 
-Each change event is given in the form of a `@NamedTuple{pos::Int, active::Bool,
-index::Int}` where `pos` is the position of the event, `active` is a boolean
-indicating whether the annotation is being activated or deactivated, and `index`
-is the index of the annotation in question.
+Each change event is a `UInt64` packing the position of the event above the index of
+the annotation in question, followed by a bit set when the annotation is being
+activated, so that sorting the events orders them by position. The index and bit take
+the low `top_set_bit(2length(annots) + 1)` bits, as the region iterator reads them.
 """
 function annotation_events(s::AbstractString, annots::Vector{<:RegionAnnotation}, subregion::UnitRange{Int})
-    events = Vector{NamedTuple{(:pos, :active, :index), Tuple{Int, Bool, Int}}}() # Position, Active?, Annotation index
+    events = UInt64[]
     sizehint!(events, 2 * length(annots))
+    shift = unsigned(top_set_bit(2 * length(annots) + 1))
+    leading_zeros(UInt64(ncodeunits(s) + 1)) >= shift || throw(ArgumentError(LazyString(
+        "too many annotations (", length(annots), ") to order the regions of a ", ncodeunits(s), "-byte string")))
     for (i, (; region)) in enumerate(annots)
-        if !isempty(intersect(subregion, region))
-            start, stop = max(first(subregion), first(region)), min(last(subregion), last(region))
-            start <= stop || continue # Currently can't handle empty regions
-            push!(events, (pos=thisind(s, start), active=true, index=i))
-            push!(events, (pos=nextind(s, stop), active=false, index=i))
-        end
+        start, stop = max(first(subregion), first(region)), min(last(subregion), last(region))
+        start <= stop || continue # Outside the subregion, or empty
+        push!(events, UInt64(thisind(s, start)) << shift | UInt64(i) << 1 | true)
+        push!(events, UInt64(nextind(s, stop)) << shift | UInt64(i) << 1)
     end
-    sort!(events, by=e -> e.pos)
+    sort!(events) # Integer keys, so the sort is radix when the input is out of order
 end
 
 annotation_events(s::AnnotatedString, subregion::UnitRange{Int}) =

@@ -881,6 +881,13 @@ end
     @test_throws MethodError sprint(show, MIME("text/html"), unstyled)
     @test showable(MIME("text/html"), marked(Mark)) && showable(MIME("text/html"), marked(Mark)[1])
     @test sprint(show, MIME("text/html"), marked(Mark)) == sprint(show, MIME("text/html"), marked(Mark)[1]) == "<mark>x</mark>"
+    # Regions consumed as they are yielded carry the same annotations as regions held
+    nested = Base.AnnotatedString("abcdef", [(1:6, :a, Mark()), (2:5, :b, Mark()), (3:4, :c, Mark())])
+    streamed = [(String(str), collect(annots)) for (str, annots) in Base.eachregion(nested)]
+    @test streamed == [(String(str), collect(annots)) for (str, annots) in collect(Base.eachregion(nested))]
+    @test map(last, streamed) == [[(label = :a, value = Mark())], [(label = :a, value = Mark()), (label = :b, value = Mark())],
+                                  [(label = :a, value = Mark()), (label = :b, value = Mark()), (label = :c, value = Mark())],
+                                  [(label = :a, value = Mark()), (label = :b, value = Mark())], [(label = :a, value = Mark())]]
     # Escaping keeps the annotations on their (longer) text
     @test sprint(escape_string, Base.AnnotatedString{String, Mark}("a\nb", [(1:1, :m, Mark()), (3:3, :m, Mark())])) == "<a>\\n<b>"
     # The style of a known value type is resolved at compile time
