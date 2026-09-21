@@ -193,6 +193,17 @@ $(DEPOT_PATH[1])/logs/repl_history.jl
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
 
+### [`JULIA_PRECOMPILE_CACHE_KEY`](@id JULIA_PRECOMPILE_CACHE_KEY)
+
+If set, an extra string mixed into the name of precompile cache files, on top of what
+already distinguishes them (the project path, the preferences, the compiler flags and the
+julia binary). It does not replace any of those. The name only decides which existing
+file a compile overwrites; loading checks file contents, so a cache written under one
+value is still reused under another. Setting a stable, distinct value per app lets
+containers that share a depot but mount different projects at the same path (say `/work`)
+keep their caches from overwriting each other. Apps with the same key and project path
+still collide.
+
 ### [`JULIA_VERBOSE_LINKING`](@id JULIA_VERBOSE_LINKING)
 
 If set to true, linker commands will be displayed during precompilation.

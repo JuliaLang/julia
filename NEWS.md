@@ -126,6 +126,10 @@ Command-line option changes
 ---------------------------
 
 * `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
+* Precompile cache file names now also include the value of the new `JULIA_PRECOMPILE_CACHE_KEY` environment
+  variable when it is set, so containers sharing a depot with different projects mounted at the same path can
+  keep their caches from overwriting each other. Loading is unaffected, as it checks file contents rather than
+  names ([#63268]).
 * `--code-coverage=@<path>` and `--track-allocation=@<path>` now restrict tracking to the specified file or
   directory tree. For example, `@/src/Foo` tracks `/src/Foo/x.jl`, but not `/src/Foobar/x.jl`. Specifying the
   filesystem root as `@/` tracks every absolute path. `Base.is_file_tracked` now returns `false` when Julia was

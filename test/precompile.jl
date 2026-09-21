@@ -3827,6 +3827,202 @@ end
     end end
 end
 
+# Issue #63268: containers sharing a depot can hold different environments at the same
+# project path, so the cache file name also carries `JULIA_PRECOMPILE_CACHE_KEY` when set.
+# Loading reads file contents, so the name only decides which existing file a compile
+# overwrites.
+@testset "cache file names carry JULIA_PRECOMPILE_CACHE_KEY" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+        top_uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+        for (dirname, marker, version) in (("DepOld", 1, "0.1.0"), ("DepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "Dep"
+                  uuid = "$dep_uuid"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "Dep.jl"),
+                  """
+                  module Dep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        top_path = joinpath(dir, "dev", "Top")
+        mkpath(joinpath(top_path, "src"))
+        write(joinpath(top_path, "Project.toml"),
+              """
+              name = "Top"
+              uuid = "$top_uuid"
+              version = "0.1.0"
+
+              [deps]
+              Dep = "$dep_uuid"
+              """)
+        function write_top(edit)
+            write(joinpath(top_path, "src", "Top.jl"),
+                  """
+                  module Top
+                  using Dep
+                  const _edit = $edit
+                  end
+                  """)
+        end
+        write_top(0)
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              Top = "$top_uuid"
+              """)
+        # the same project path resolving one version of Dep or the other, as two
+        # containers with their projects mounted at the same path would
+        function use_dep(dirname, version)
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  manifest_format = "2.0"
+
+                  [[deps.Dep]]
+                  path = "../dev/$dirname/"
+                  uuid = "$dep_uuid"
+                  version = "$version"
+
+                  [[deps.Top]]
+                  deps = ["Dep"]
+                  path = "../dev/Top/"
+                  uuid = "$top_uuid"
+                  version = "0.1.0"
+                  """)
+        end
+        script = """
+            top = Base.identify_package("Top")
+            println("PRECOMPILED=", Base.isprecompiled(top))
+            using Top
+            println("DEP_VERSION=", Top.Dep._v)
+            """
+        function run_top(key)
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
+                         "JULIA_DEPOT_PATH" => depot, "JULIA_PRECOMPILE_CACHE_KEY" => key)
+            logfile = joinpath(dir, "run.log")
+            proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+            output = read(logfile, String)
+            @test success(proc) || (println(output); false)
+            return output
+        end
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        cachefiles(name) = filter(endswith(".ji"), readdir(joinpath(compiled, name)))
+
+        # Incompatible versions written under different keys coexist, dependents included,
+        # and alternating between them reuses the caches
+        use_dep("DepOld", "0.1.0")
+        output = run_top("appA")
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=1", output)
+        @test length(cachefiles("Dep")) == 1
+        @test length(cachefiles("Top")) == 1
+        use_dep("DepNew", "0.2.0")
+        output = run_top("appB")
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+        use_dep("DepOld", "0.1.0")
+        output = run_top("appA")
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=1", output)
+        use_dep("DepNew", "0.2.0")
+        output = run_top("appB")
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # A compatible cache is reused under any other key
+        output = run_top("appC")
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # A rebuild under the same key and project replaces the same file
+        top_files = cachefiles("Top")
+        write_top(1)
+        output = run_top("appB")
+        @test occursin("PRECOMPILED=false", output)
+        @test cachefiles("Top") == top_files
+
+        # Projects at different paths with different preferences keep separate files
+        pref_uuid = "c3c3c3c3-0000-0000-0000-000000000003"
+        pref_path = joinpath(dir, "dev", "PrefPkg")
+        mkpath(joinpath(pref_path, "src"))
+        write(joinpath(pref_path, "Project.toml"),
+              """
+              name = "PrefPkg"
+              uuid = "$pref_uuid"
+              version = "0.1.0"
+              """)
+        write(joinpath(pref_path, "src", "PrefPkg.jl"),
+              """
+              module PrefPkg
+              const flag = get(Base.get_preferences(Base.UUID("$pref_uuid")), "flag", nothing)
+              Base.record_compiletime_preference(Base.UUID("$pref_uuid"), "flag")
+              end
+              """)
+        for (name, flag) in (("pref_a", "a"), ("pref_b", "b"))
+            path = joinpath(dir, name)
+            mkpath(path)
+            write(joinpath(path, "Project.toml"),
+                  """
+                  [deps]
+                  PrefPkg = "$pref_uuid"
+
+                  [preferences.PrefPkg]
+                  flag = "$flag"
+                  """)
+            write(joinpath(path, "Manifest.toml"),
+                  """
+                  manifest_format = "2.0"
+
+                  [[deps.PrefPkg]]
+                  path = "../dev/PrefPkg/"
+                  uuid = "$pref_uuid"
+                  version = "0.1.0"
+                  """)
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(path) -e 'using PrefPkg; println("FLAG=", PrefPkg.flag)'`,
+                         "JULIA_DEPOT_PATH" => depot, "JULIA_PRECOMPILE_CACHE_KEY" => "appA")
+            logfile = joinpath(dir, "run.log")
+            proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+            output = read(logfile, String)
+            @test success(proc) || (println(output); false)
+            @test occursin("FLAG=$flag", output)
+        end
+        @test length(cachefiles("PrefPkg")) == 2
+    end end
+
+    # The key is only in the name when set, and the pidfile path ignores it so locking
+    # stays shared
+    pkg = Base.PkgId(Base.UUID("a1a1a1a1-0000-0000-0000-000000000001"), "Dep")
+    unset = withenv("JULIA_PRECOMPILE_CACHE_KEY" => nothing) do
+        @test Base.compilecache_path(pkg, "") == Base.compilecache_path(pkg, ""; cache_key="")
+        Base.compilecache_pidfile_path(pkg)
+    end
+    empty = withenv("JULIA_PRECOMPILE_CACHE_KEY" => "") do
+        @test Base.compilecache_path(pkg, "") == Base.compilecache_path(pkg, ""; cache_key="")
+        Base.compilecache_pidfile_path(pkg)
+    end
+    custom = withenv("JULIA_PRECOMPILE_CACHE_KEY" => "appA") do
+        @test Base.compilecache_path(pkg, "") == Base.compilecache_path(pkg, ""; cache_key="appA")
+        @test Base.compilecache_path(pkg, "") != Base.compilecache_path(pkg, ""; cache_key="appB")
+        @test Base.compilecache_path(pkg, "") != Base.compilecache_path(pkg, ""; cache_key="")
+        Base.compilecache_pidfile_path(pkg)
+    end
+    @test unset == empty == custom
+end
+
 # PR #61915: a precompiled value with an inline `Type{Union{}}` field used to abort
 # in `record_memoryrefs_inside` while writing the cache, because the `TypeEq` field
 # type is laid out as the singleton `typeof(Union{})` `DataType`.
