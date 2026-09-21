@@ -53,6 +53,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libblastrampoline_path() = libblastrampoline_path
+
 function __init__()
     global libblastrampoline_path = string(libblastrampoline.path)
     global artifact_dir = dirname(Sys.BINDIR)

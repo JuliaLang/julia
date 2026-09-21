@@ -58,10 +58,12 @@ static void *load_library(const char * rel_path, const char * src_dir, int allow
 #if defined(_OS_WINDOWS_)
         if ((handle = GetModuleHandleA(basename)))
             return handle;
+        SetLastError(0);
 #else
         // if err == 0 the library is optional, so don't allow global lookups to see it
         if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL))))
             return handle;
+        (void) dlerror();
 #endif
     }
 
@@ -90,7 +92,10 @@ static void *load_library(const char * rel_path, const char * src_dir, int allow
     else {
         if (!err && !PATH_EXISTS()) {
 #if defined(_OS_WINDOWS_)
+            SetLastError(0);
             free(wpath);
+#else
+            (void) dlerror();
 #endif
             return NULL;
         }
@@ -159,9 +164,14 @@ static int env_var_bool(const char *name, int *value) {
 
 static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 #ifdef _OS_WINDOWS_
-    return GetProcAddress((HMODULE) lib_handle, symbol_name);
+    void *sym = GetProcAddress((HMODULE) lib_handle, symbol_name);
+    SetLastError(0); // clear error, if any
+    return sym;
 #else
-    return dlsym((void *)lib_handle, symbol_name);
+    void *sym = dlsym((void *)lib_handle, symbol_name);
+    if (sym == NULL)
+        (void) dlerror(); // clear dlerror
+    return sym;
 #endif
 }
 

@@ -197,7 +197,7 @@
 #    priority::UInt16
 #    @atomic _isexception::UInt8
 #    @atomic preempt_request::UInt8
-#    pad01::UInt8
+#    bound_cancel_default::UInt8
 #    pad02::UInt8
 #    rngState0::UInt64
 #    rngState1::UInt64
@@ -216,7 +216,7 @@
 #    cached_wait_entry::Any
 #    cached_cancel_entry::Any
 #    invoked::Any
-#    @atomic bound_cancel_token::Any
+#    @atomic bound_cancel_token::Union{Nothing, CancellationTokenSource}
 #end
 
 export
@@ -834,6 +834,8 @@ end))
 Array{T}(::UndefInitializer, m::Int) where {T} = Array{T, 1}(undef, m)
 Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T, 2}(undef, m, n)
 Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T, 3}(undef, m, n, o)
+# Guard against invalidations due to spurious `Tuple{}` intersections
+Array{T}(::UndefInitializer, ::Tuple{}) where {T} = Array{T, 0}(undef)
 Array{T}(::UndefInitializer, d::NTuple{N, Int}) where {T, N} = Array{T, N}(undef, d)
 # empty vector constructor
 (self::Type{Array{T, 1}})() where {T} = self(undef, 0)

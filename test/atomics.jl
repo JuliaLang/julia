@@ -758,6 +758,24 @@ test_global_undef(UndefComplex{Any})
 test_global_undef(UndefComplex{UndefComplex{Any}})
 test_global_undef(Int)
 
+# the read-modify-write builtins resolve the binding for writing, which never follows
+# imports, so a store through an import fails before any value is read
+module ImportedGlobalSource
+    global imported_x::Int = 1
+    global used_x::Int = 2
+end
+import .ImportedGlobalSource: imported_x
+using .ImportedGlobalSource: used_x
+for r in (:imported_x, :used_x)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, -1, 3) # `expected` is never compared
+end
+@test getglobal(ImportedGlobalSource, :imported_x) === 1
+@test getglobal(ImportedGlobalSource, :used_x) === 2
+
 function gen_test_globalonce(@nospecialize r)
     M = @__MODULE__
     return quote
@@ -784,6 +802,39 @@ test_globalonce(Union{Nothing,Integer})
 test_globalonce(UndefComplex{Any})
 test_globalonce(UndefComplex{UndefComplex{Any}})
 test_globalonce(Int)
+
+# Test the untyped `global x`, particularly with the compiled versions which use the fallback path.
+module DeclaredGlobalCompiled
+    global declared_rmw
+    setonce(v) = setglobalonce!(@__MODULE__, :declared_rmw, v)
+    modify(v) = modifyglobal!(@__MODULE__, :declared_rmw, +, v)
+    swap(v) = swapglobal!(@__MODULE__, :declared_rmw, v)
+    replace(x, v) = replaceglobal!(@__MODULE__, :declared_rmw, x, v)
+end
+let M = DeclaredGlobalCompiled
+    @test_throws UndefVarError M.modify(1)
+    @test M.setonce(1) === true
+    @test M.setonce(2) === false
+    @test M.modify(1) === Pair{Any,Any}(1, 2)
+    @test M.swap("x") === 2
+    @test M.replace("x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
+
+# An untyped `global x` declaration leaves no restriction on the binding partition, so its
+# declared type is `Any`. The read-modify-write builtins must read that as `Any` to form the result type.
+module DeclaredGlobal
+    global declared_rmw
+end
+let M = DeclaredGlobal
+    @test Core.get_binding_type(M, :declared_rmw) === Any
+    @test_throws UndefVarError modifyglobal!(M, :declared_rmw, +, 1)
+    @test setglobalonce!(M, :declared_rmw, 1) === true
+    @test modifyglobal!(M, :declared_rmw, +, 1) === Pair{Any,Any}(1, 2)
+    @test swapglobal!(M, :declared_rmw, "x") === 2
+    @test replaceglobal!(M, :declared_rmw, "x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
 
 # test macroexpansions
 global x::Int
@@ -1299,6 +1350,54 @@ test_memory_unset_multiptr(TwoInlinePtr,   AtomicMemory{TwoInlinePtr},   Val(:un
 # atomic memory with element size > MAX_POINTERATOMIC_SIZE: clears via lock + memset
 test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:unordered))
 
+# Test the public atomic unsetindex! overloads for memory references and memory.
+@testset "unsetindex_atomic!" begin
+    for (T, value) in Any[(Any, "value"), (Float32, 1.0f0)]
+        mem = AtomicMemory{T}(undef, 3)
+        ref = memoryref(mem, 2)
+        for order in [:unordered, :monotonic, :release, :sequentially_consistent]
+            # Unset the ref
+            @atomic :monotonic mem[2] = value
+            @test isassigned(ref) == isassigned(mem, 2) == true
+            @test Base.unsetindex_atomic!(ref, order) === ref
+            if T === Any
+                @test isassigned(ref) == isassigned(mem, 2) == false
+                @test_throws UndefRefError ref[]
+                @test_throws UndefRefError @atomic :monotonic mem[2]
+            else
+                @test isassigned(ref) == isassigned(mem, 2) == true
+                @test ref[] isa T
+                @test((@atomic :monotonic mem[2]) isa T)
+            end
+
+            # Unset the mem
+            @atomic :monotonic mem[2] = value
+            @test isassigned(ref) == isassigned(mem, 2) == true
+            @test Base.unsetindex_atomic!(mem, order, 2) === mem
+            if T === Any
+                @test isassigned(ref) == isassigned(mem, 2) == false
+                @test_throws UndefRefError ref[]
+                @test_throws UndefRefError @atomic :monotonic mem[2]
+            else
+                @test isassigned(ref) == isassigned(mem, 2) == true
+                @test ref[] isa T
+                @test((@atomic :monotonic mem[2]) isa T)
+            end
+        end
+    end
+
+    mem = AtomicMemory{Any}(undef, 1)
+    @atomic :monotonic mem[1] = "value"
+    ref = memoryref(mem, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :acquire)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :acquire_release)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :not_atomic)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire_release, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :not_atomic, 1)
+    @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, 0)
+end
+
 @noinline function _test_once_undef(r)
     r = r[]
     TT = eltype(r)
@@ -1332,6 +1431,25 @@ function add_one57190!()
 end
 
 @test add_one57190!() == 1
+
+# A field reached only by a read-modify-write gets a stack slot when `AllocOpt` splits
+# the non-escaping allocation
+mutable struct Atomic52575
+    @atomic x::Int
+    y::Int
+end
+replace52575!() = (r = Atomic52575(1, 2); @atomicreplace r.x 1 => 2)
+@test replace52575!() === (old = 1, success = true)
+modify52575!() = (r = Atomic52575(1, 2); @atomic r.x += 10)
+@test modify52575!() === 11
+swap52575!() = (r = Atomic52575(1, 2); @atomicswap r.x = 5)
+@test swap52575!() === 1
+mutable struct AtomicAny52575
+    @atomic x::Any
+    y::Any
+end
+replaceany52575!() = (r = AtomicAny52575(1, 2); @atomicreplace r.x 1 => 2)
+@test replaceany52575!() == (old = 1, success = true)
 
 # Test atomic Float16 operations at all optimization levels (GlobalISel miscompile on AArch64)
 # See https://github.com/JuliaLang/julia/pull/54140#issuecomment-2855794363

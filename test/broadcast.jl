@@ -286,6 +286,18 @@ let x = [1,2,3]
     @test (x .=== 1:3 .=== [1,2,3]) == @.(x === 1:3 === [1,2,3]) == [true, true, true]
 end
 
+@testset "interaction of @. with generators" begin
+    @test [(x,y,a,b) for x in 1:2, y in 3:4 for a in 5:6, b in 7:8 if true] ==
+        @. [(x,y,a,b) for x in 1:2, y in 3:4 for a in 5:6, b in 7:8 if true]
+    # + in iterspec gets dotted
+    @test [[11, 22]] == @. [x for x in [[1, 2] + [10, 20]] if true]
+    # + in body gets dotted
+    let m = @. [(x+y) for x in [[1,2],[10,20]], y in [100]]
+        @test m[1] == [101,102]
+        @test m[2] == [110,120]
+    end
+end
+
 # PR #17510: Fused in-place assignment
 let x = [1:4;], y = x
     y .= 2:5
@@ -1258,6 +1270,13 @@ end
     end
 end
 
+@testset "issue #50794: in-place broadcast returns the lhs" begin
+    f1(Y) = Y .+= Any[zeros(size(Y))][1]
+    @test only(Base.return_types(f1, (Vector{Float64},))) === Vector{Float64}
+    f2(A, x) = A[1, :] .+= x
+    rt = only(Base.return_types(f2, (Matrix{Float64}, Any)))
+    @test rt <: SubArray{Float64, 1, Matrix{Float64}}
+end
 
 @testset "fused broadcast eltype through intermediate unions" begin
     f62564(c, x, y) = sqrt.(ifelse.(c, x, y))

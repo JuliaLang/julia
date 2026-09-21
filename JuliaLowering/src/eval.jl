@@ -242,7 +242,7 @@ struct SourceByteTable
         if !isempty(spans)
             @assert !isempty(line_starts)
             min_byte = spans[begin][begin]
-            max_byte = maximum(last, spans)
+            max_byte = maximum(maximum, spans)
             @assert line_starts[begin] <= min_byte
             for ls in line_starts[begin+1:end]
                 @assert min_byte < ls
@@ -265,7 +265,7 @@ function SourceByteTable(sf::SourceFile, spans::Vector{Tuple{Int32, Int32}})
         popfirst!(line_starts)
         first_line += 1
     end
-    max_byte = maximum(last, spans)
+    max_byte = maximum(maximum, spans)
     while !isempty(line_starts) && max_byte < line_starts[end]
         pop!(line_starts)
     end
@@ -845,9 +845,32 @@ end
 
 Like `include`, except reads code from the given string rather than from a file.
 """
-function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
-                        expr_compat_mode=false, version::VersionNumber=VERSION)
-    eval(mod, parseall(SyntaxTree, code; filename, version); expr_compat_mode)
+function include_string(mapexpr::Function, mod::Module, code::AbstractString,
+                        filename::AbstractString; expr_compat_mode=false,
+                        version::Union{VersionNumber, Nothing}=nothing)
+    # TODO: fix this hack.  The normal way of getting the parser for this module
+    # only gives us Expr.  We probably want the parser to always create
+    # SyntaxTree, then convert it to Expr if the version is too low.
+    version = if isnothing(version) && isdefined(mod, Symbol("#_internal_julia_parse"))
+        vp = getglobal(mod, Symbol("#_internal_julia_parse"))
+        vp isa Base.VersionedParse ? vp.ver : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+    else
+        version isa VersionNumber ? version : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+    end
+    st = parseall(SyntaxTree, code; filename, version, ignore_warnings=true)
+    @jl_assert kind(st) === K"toplevel" st
+    if mapexpr !== identity
+        # TODO: Is there any way to support provenance here?
+        local last = nothing
+        for c in children(st)
+            last = eval(mod, expr_to_est(mapexpr(est_to_expr(c))); expr_compat_mode)
+        end
+        last
+    else
+        eval(mod, st; expr_compat_mode)
+    end
 end
+include_string(mod, code, filename="string"; kws...) =
+    include_string(identity, mod, code, filename; kws...)
 
 include(path::AbstractString) = include(JuliaLowering, path)

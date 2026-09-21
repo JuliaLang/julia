@@ -737,38 +737,10 @@ static void jl_exit_thread0_cb(void) JL_CANSAFEPOINT
     jl_raise(thread0_exit_signo);
 }
 
-// The graceful teardown hijacks thread 0 at an arbitrary point, so it can
-// deadlock: the interrupted frame may hold a lock the teardown needs (the
-// JIT/ORC session mid-compilation, the symbol table, an ios lock, ...).
-// Bound the damage with a deadline: if the process is still alive this long
-// after the exit request was dispatched, die abruptly with the original
-// signal (preserving the exit status and core-dump disposition), instead of
-// wedging as an unkillable-by-TERM process.
-#define JL_EXIT_GRACE_PERIOD_S 30
-static void *thread0_exit_watchdog(void *arg)
-{
-    int signo = (int)(uintptr_t)arg;
-    struct timespec ts = {JL_EXIT_GRACE_PERIOD_S, 0};
-    while (nanosleep(&ts, &ts) == -1 && errno == EINTR)
-        ;
-    // The graceful path did not finish in time: force the exit.
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, signo);
-    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
-    signal(signo, SIG_DFL);
-    raise(signo); // very unlikely to return
-    _exit(128 + signo);
-    return NULL;
-}
-
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     bt_context_t signal_context;
-    pthread_t watchdog;
-    if (pthread_create(&watchdog, NULL, thread0_exit_watchdog, (void*)(uintptr_t)signo) == 0)
-        pthread_detach(watchdog);
     // This also makes sure `sleep` is aborted.
     if (jl_thread_suspend_and_get_state(0, 30, &signal_context)) {
         thread0_exit_signo = signo;
@@ -816,9 +788,9 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
         // task's bound token source: level-triggered, so a request racing a
         // region's teardown is simply dropped and recovered at the task's
         // next cancellation point. bound_cancel_token is coherent with the
-        // published regions: everything that may rebind it while a region
-        // is live (exception handlers, the finalizer bracket) saves and
-        // restores the pair together. A preempt shootdown checks no source:
+        // published regions: exception handlers restore the pair together,
+        // and finalizers only run with the region unpublished. A preempt
+        // shootdown checks no source:
         // the reset point's re-execution observes the setjmp return code
         // and yields.
         jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
@@ -1209,6 +1181,7 @@ static void do_profile(void) JL_NOTSAFEPOINT
         // and restore from the SEGV handler if anything happens.
         jl_jmp_buf *old_buf = jl_get_safe_restore();
         jl_jmp_buf buf;
+        size_t bt_size_start = profile_bt_size_cur;
 
         jl_set_safe_restore(&buf);
         if (jl_setjmp(buf, 0)) {
@@ -1220,6 +1193,11 @@ static void do_profile(void) JL_NOTSAFEPOINT
                     profile_bt_size_max - profile_bt_size_cur - 1, &signal_context, NULL);
         }
         jl_set_safe_restore(old_buf);
+        if (profile_bt_size_cur == bt_size_start) {
+            // unwinding produced no frames: record a marker so the sample is not silently dropped
+            profile_bt_size_cur += failed_to_unwind_fun((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                    profile_bt_size_max - profile_bt_size_cur - 1, 0);
+        }
 
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
 
@@ -1375,15 +1353,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             uv_tty_reset_mode();
             thread0_exit_count++;
             fflush(NULL);
-            // A repeat request, or a request before initialization has
-            // completed, exits abruptly: hijacking thread 0 into
-            // jl_atexit_hook against a half-restored image crashes (the
-            // teardown walks unrelocated module bindings) or deadlocks (the
-            // interrupted thread may hold runtime locks the teardown needs,
-            // e.g. symtab_lock during the restore's symbol interning), and
-            // no Julia atexit hooks can have been registered yet anyway.
-            if (thread0_exit_count > 1 ||
-                    !jl_atomic_load_acquire(&jl_initialization_complete)) {
+            if (thread0_exit_count > 1) {
                 raise(sig); // very unlikely to return
                 _exit(128 + sig);
             }
@@ -1501,7 +1471,7 @@ static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf, int val)
     sigemptyset(&sset);
     sigaddset(&sset, sig);
     pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
-    jl_longjmp(jmpbuf, 1);
+    jl_longjmp(jmpbuf, val);
 #endif
 }
 
@@ -1525,6 +1495,9 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEP
 
 void jl_install_default_signal_handlers(void)
 {
+#ifdef _OS_LINUX_
+    (void)jl_ptr_demangle_available();
+#endif
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
@@ -1626,7 +1599,11 @@ static void jl_thread_suspend_membarrier(void) JL_NOTSAFEPOINT
     // jl_thread_suspend tries to interrupt the thread for up to 1 second,
     // so we retry in a loop until it succeeds or we determine the thread
     // is no longer alive.
+    jl_task_t *ct = jl_get_current_task();
+    int16_t self_tid = ct == NULL ? -1 : jl_atomic_load_relaxed(&ct->tid);
     for (int tid = 0; tid < jl_atomic_load_acquire(&jl_n_threads); tid++) {
+        if (tid == self_tid)
+            continue; // the calling thread is synchronized by program order
         while (!jl_thread_suspend(tid, &ctx)) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
             jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
@@ -1783,4 +1760,5 @@ JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT {
         abort();
     }
 }
+
 #endif // !_OS_DARWIN_

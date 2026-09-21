@@ -126,9 +126,8 @@ typedef struct {
 //
 // Delivery is gated on the cancellation of the task's bound token source
 // (`jl_task_t.bound_cancel_token`), which is coherent with the published
-// region by construction: everything that temporarily takes over the task
-// and may rebind it - exception handlers, the finalizer bracket in
-// gc-common.c - saves and restores the (region, token) pair together.
+// region by construction: exception handlers save and restore the (region,
+// token) pair together, and finalizers only run with the region unpublished.
 typedef struct _jl_reset_ctx_t {
     uintptr_t sp;
     struct _jl_gcframe_t *gcstack;
@@ -247,7 +246,7 @@ typedef struct _jl_tls_states_t {
     volatile sig_atomic_t in_task_switch;
     struct _jl_timing_block_t *timing_stack;
     // This is the location of our copy_stack
-    void *stackbase;
+    void *JL_NONNULL stackbase;
     size_t stacksize;
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
@@ -488,7 +487,17 @@ typedef struct _jl_task_t {
     // the task's next cancellation point; a preempt shootdown sets it and
     // kicks the task out of any published reset region.
     _Atomic(uint8_t) preempt_request;
-    uint8_t pad0[2];
+    // When nonzero, `bound_cancel_token` holds the cached resolution of the
+    // scoped-default CANCEL_TOKEN lookup for the task's current `scope` (the
+    // token's source, or `nothing` for "no governing token"), placed there by
+    // the slow path of `Base.default_cancel_token`. Owner-task private (no
+    // concurrent reader consults it). Cleared wherever a new scope is
+    // installed (codegen/interpreter `:enter` with scope, codegen's inline
+    // leave restore) and by a cancellation point that publishes a different
+    // source; saved and restored alongside `bound_cancel_token` by exception
+    // handlers and the finalizer bracket.
+    uint8_t bound_cancel_default;
+    uint8_t pad0[1];
     // === 64 bytes (cache line)
     uint64_t rngState[JL_RNG_SIZE];
     // flag indicating whether or not to record timing metrics for this task
@@ -529,7 +538,9 @@ typedef struct _jl_task_t {
     // `nothing`, or a `Core.CancellationTokenSource`. Read by cancellers
     // scanning for running computations governed by a cancelled subtree; may
     // be stale between cancellation points (benign: level-triggered recovery
-    // at the next check).
+    // at the next check). When `bound_cancel_default` is set, the value is
+    // the cached scoped-default resolution for the task's current scope
+    // (still a governing source, so the scanning semantics are unchanged).
     _Atomic(jl_value_t *) bound_cancel_token;
 
 // hidden state:

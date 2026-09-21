@@ -410,7 +410,10 @@ function g_dict_hash_alloc()
 end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
-@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.3
+# Take the minimum of several runs so that a one-time allocation inside the
+# measured call (e.g. lazy compilation of a call target) does not skew the ratio
+min_dict_hash_alloc(f) = minimum(@allocated(f()) for _ in 1:3)
+@test abs(min_dict_hash_alloc(f_dict_hash_alloc) / min_dict_hash_alloc(g_dict_hash_alloc) - 1) < 0.3
 
 # returning an argument shouldn't alloc a new box
 @noinline f33829(x) = (global called33829 = true; x)
@@ -884,7 +887,7 @@ let io = IOBuffer()
     code_llvm(io,foo54166, (Vector{Union{Missing,Int}}, Int, Int), dump_module=true, raw=true)
     str = String(take!(io))
     @test !occursin("jtbaa_unionselbyte", str)
-    @test occursin("jtbaa_arrayselbyte", str)
+    @test occursin("jtbaa_memoryselbyte", str)
 end
 
 ex54166 = Union{Missing, Int64}[missing -2; missing -2];
@@ -1074,7 +1077,78 @@ end
 let io = IOBuffer()
     code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
     str = String(take!(io))
-    @test occursin("julia.write_barrier", str)
+    @test occursin("julia.field_write_barrier", str)
+end
+
+# Aggregate barriers identify the stored payload's references, including locked elements.
+struct FieldBarrierElement
+    tag::Int
+    a::Any
+    b::Any
+    c::Any
+end
+unset_field_barrier(r, ::Val{order}) where {order} = Core.memoryrefunset!(r, order, false)
+set_field_barrier(r, x, ::Val{order}) where {order} = (Core.memoryrefset!(r, x, order, false); nothing)
+swap_field_barrier(r, x, ::Val{order}) where {order} = Core.memoryrefswap!(r, x, order, false)
+set_object_field_barrier(r, x) = (r[] = x; nothing)
+
+@testset "aggregate field barriers" begin
+    T = FieldBarrierElement
+    function check_slots(ir, slot_as; clear=false)
+        lines = split(ir, '\n')
+        barriers = filter(line -> occursin("call void", line) && occursin("@julia.field_write_barrier", line), lines)
+        @test length(barriers) == 1
+        isempty(barriers) && return
+        slots = [m.captures[1] for m in eachmatch(r"ptr addrspace\((?:11|13)\) (%[^ ,]+), ptr addrspace\(10\)", only(barriers))]
+        @test length(slots) == 3
+        @test occursin("@julia.field_write_barrier.p$slot_as", only(barriers))
+        if clear
+            @test length(collect(eachmatch(r"ptr addrspace\(10\) null", only(barriers)))) == 3
+        end
+        geps = Dict(m.captures[1] => (m.captures[2], parse(Int, m.captures[3]))
+                    for m in eachmatch(r"(%[^ ,]+) = getelementptr(?: inbounds)? i8, ptr addrspace\((?:11|13)\) (%[^ ,]+), i(?:32|64) ([0-9]+)", ir))
+        payloads = String[]
+        offsets = Int[]
+        for slot in slots
+            @test haskey(geps, slot)
+            haskey(geps, slot) || continue
+            payload, offset = geps[slot]
+            push!(payloads, payload)
+            push!(offsets, offset)
+        end
+        @test offsets == [fieldoffset(T, i) for i in 2:4]
+        @test length(unique(payloads)) == 1
+        if clear && !isempty(payloads)
+            @test any(line -> occursin("store ", line) && occursin("zeroinitializer, ptr addrspace(13) $(first(payloads)),", line), lines)
+        end
+    end
+    for (M, order) in ((Memory{T}, :not_atomic), (AtomicMemory{T}, :sequentially_consistent))
+        R = typeof(GenericMemoryRef(M(undef, 0)))
+        check_slots(get_llvm(unset_field_barrier, Tuple{R,Val{order}}, true, false, false), 13; clear=true)
+        for f in (set_field_barrier, swap_field_barrier)
+            check_slots(get_llvm(f, Tuple{R,T,Val{order}}, true, false, false), 13)
+        end
+    end
+    check_slots(get_llvm(set_object_field_barrier, Tuple{Base.RefValue{T},T}, true, false, false), 11)
+end
+
+# Cancellation-token clears and rebinds must barrier the slot before storing it.
+cancellation_binding_barrier(src) = Core.cancellation_point!(src)
+@testset "cancellation binding barriers" begin
+    ir = get_llvm(cancellation_binding_barrier, Tuple{Union{Nothing,Core.CancellationTokenSource}}, true, false, false)
+    lines = split(ir, '\n')
+    barriers = findall(line -> occursin("call void", line) && occursin("@julia.field_write_barrier.p11", line), lines)
+    @test length(barriers) == 2
+    casts = Dict(m.captures[1] => m.captures[2]
+                 for m in eachmatch(r"(%[^ ,]+) = addrspacecast ptr (%[^ ,]+) to ptr addrspace\(11\)", ir))
+    for i in barriers
+        operands = match(r"@julia.field_write_barrier.p11\(ptr addrspace\(10\) [^,]+, ptr addrspace\(11\) ([^,]+), ptr addrspace\(10\) (.*)\)", lines[i])
+        @test operands !== nothing
+        operands === nothing && continue
+        slot, child = operands.captures
+        destination = haskey(casts, slot) ? "ptr $(casts[slot])" : "ptr addrspace(11) $slot"
+        @test occursin("store atomic ptr addrspace(10) $child, $destination", lines[i + 1])
+    end
 end
 
 # Test phi node codegen for union types with inline roots
@@ -1152,70 +1226,4 @@ end
     @noinline f_srettest(x::Float32) = SretAlignTest(x, x+1, x+2)
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
-end
-
-# ipo_purity_bits are translated into LLVM call-site attributes
-function _fib_cse_test(n::Int)
-    n <= 1 && return n
-    n == 2 && return 1
-    return _fib_cse_test(n-1) + _fib_cse_test(n-2)
-end
-_bench_cse_test() = _fib_cse_test(40)
-_fib_cse_test(5); _bench_cse_test()
-@noinline _pure_effects_attrtest(x::Float64) = x * x + 1.0
-_pure_effects_attrcaller(x::Float64) = _pure_effects_attrtest(x) + 1.0
-_pure_effects_attrtest(1.0); _pure_effects_attrcaller(1.0)
-@noinline _pure_effects_licmcallee(x::Float64) = x * x * x + 2.0 * x * x + x + 1.0
-function _pure_effects_licmloop(A::Vector{Float64}, x::Float64)
-    for i in eachindex(A)
-        A[i] = _pure_effects_licmcallee(x)
-    end
-    return A
-end
-function _blackbox_licmloop(A::Vector{Float64}, x::Float64)
-    for i in eachindex(A)
-        A[i] = _pure_effects_licmcallee(Base.blackbox(x))
-    end
-    return A
-end
-function _blackbox_licmloop_simple(x::Float64)
-    for i in 1:5
-        y = Base.blackbox(x)
-        z = _pure_effects_licmcallee(y)
-        Base.donotdelete(z)
-    end
-    return nothing
-end
-_pure_effects_licmcallee(1.0); _pure_effects_licmloop(Float64[0.0], 1.0)
-_blackbox_licmloop(Float64[0.0], 1.0)
-_blackbox_licmloop_simple(1.0)
-@testset "effects to LLVM attributes" begin
-    # CSE: duplicate fib call eliminated by GVN using memory(argmem: read)
-    ir_bench = get_llvm(_bench_cse_test, Tuple{}, true, false, true)
-    @test count(r"call (swiftcc )?i\d+ @j__fib", ir_bench) == 3  # 4 calls reduced to 3
-
-    # Attribute emission: ipo_purity_bits translated to LLVM attrs on pure @noinline calls
-    ir_attrs = get_llvm(_pure_effects_attrcaller, Tuple{Float64}, true, true, false)
-    @test occursin("nounwind", ir_attrs)
-    @test occursin("willreturn", ir_attrs)
-    @test occursin("memory(argmem: read)", ir_attrs)
-
-    re_licmcall = r"call\b.*@j__pure_effects_licmcallee"
-    re_raw_arg = r"@j__pure_effects_licmcallee\w*\(double %\"x::Float64\"\)"
-
-    # LICM: loop-invariant pure call hoisted out of loop (takes raw argument)
-    ir_licm = get_llvm(_pure_effects_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
-    @test count(re_licmcall, ir_licm) == 1
-    @test occursin(re_raw_arg, ir_licm)
-
-    # blackbox prevents LICM: the callee takes the asm barrier output instead
-    # of the raw argument, proving it depends on the barrier.
-    ir_bb = get_llvm(_blackbox_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
-    @test count(re_licmcall, ir_bb) == 1
-    @test !occursin(re_raw_arg, ir_bb)
-
-    # blackbox prevents LICM in a simple loop without memory writes
-    ir_bb_simple = get_llvm(_blackbox_licmloop_simple, Tuple{Float64}, true, false, true)
-    @test count(re_licmcall, ir_bb_simple) == 5  # unrolled, not hoisted
-    @test !occursin(re_raw_arg, ir_bb_simple)
 end

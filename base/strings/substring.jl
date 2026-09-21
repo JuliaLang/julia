@@ -292,6 +292,8 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     r == 0 && return ""
     r == 1 && return String(s)
     n = sizeof(s)
+    n == 0 && return ""
+    r > typemax(UInt) ÷ UInt(n) && throw(OutOfMemoryError())
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single-byte string
         @inbounds b = codeunit(s, 1)

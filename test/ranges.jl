@@ -1478,7 +1478,7 @@ end
 end
 
 @testset "PR 12200 and related" begin
-    for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
+    for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0, LinRange(1, 10, 10),
                range(1, stop=100, length=10), range(1f0, stop=100f0, length=10))
         float_r = float(_r)
         big_r = broadcast(big, _r)
@@ -2669,6 +2669,11 @@ end
 end
 
 @testset "collect with specialized vcat" begin
+    # Specialized range concatenation must check its aggregate allocation length.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    overflow_range = 1:overflow_dim
+    @test_throws OverflowError vcat(overflow_range, overflow_range, overflow_range)
+
     struct OneToThree <: AbstractUnitRange{Int} end
     Base.size(r::OneToThree) = (3,)
     Base.first(r::OneToThree) = 1

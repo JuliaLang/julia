@@ -1451,6 +1451,124 @@ end
             run(cmd_proj_ext)
         end
 
+        # Look-ahead for `using A, B` in the REPL (#63185): the packages of the statement
+        # and the extensions they make loadable (including via already loaded triggers)
+        # are precompiled in one session, rather than one per package and extension.
+        # The REPL only runs on a tty, so drive a child on a fake pty.
+        if !Sys.iswindows()
+            isdefined(Main, :FakePTYs) || @eval Main include(joinpath(@__DIR__, "testhelpers", "FakePTYs.jl"))
+            proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+            # run `lines` in a REPL child with an empty depot and return the transcript
+            function repl_transcript(lines)
+                output = ""
+                mkdepottempdir() do depot
+                    nENV = copy(ENV)
+                    nENV["JULIA_LOAD_PATH"] = join([proj, "@stdlib"], sep) # the REPL must be loadable
+                    nENV["JULIA_DEPOT_PATH"] = depot * sep # trailing separator appends the default depots
+                    nENV["TERM"] = "dumb"
+                    Main.FakePTYs.with_fake_pty() do pts, ptm
+                        # `--compiled-modules=yes` so an inherited `=no` cannot skip the look-ahead
+                        p = run(detach(setenv(`$(Base.julia_cmd()) --startup-file=no --color=no --compiled-modules=yes -q`, nENV)), pts, pts, pts, wait=false)
+                        Base.close_stdio(pts)
+                        readuntil(ptm, "julia> ", keep=true)
+                        for line in lines
+                            write(ptm, line, "\n")
+                            output *= readuntil(ptm, "julia> ", keep=true)
+                        end
+                        write(ptm, "exit()\n")
+                        try
+                            output *= read(ptm, String)
+                        catch ex
+                            # some platforms (such as linux) report EIO instead of EOF
+                            (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
+                        end
+                        wait(p)
+                        @test success(p)
+                    end
+                end
+                return output
+            end
+            check_exts = "println(all(e -> Base.get_extension(HasExtensions, e) isa Module, (:Extension, :ExtensionDep, :ExtensionFolder)) ? \"lookahead ok\" : \"lookahead missing ext\")"
+
+            # a trigger is already loaded: `ExtensionFolder` needs `ExtDep2`
+            output = repl_transcript((
+                "Base.disable_parallel_precompile = false",
+                "using ExtDep2",
+                "using HasExtensions, ExtDep",
+                "using ExtDep3", # ExtensionDep was precompiled above; loads now with no new session
+                check_exts,
+            ))
+            @test occursin("lookahead ok", output)
+            precompiling = filter(l -> occursin("Info: Precompiling", l), split(output, '\n'))
+            # once for `using ExtDep2`, once for everything `using HasExtensions, ExtDep` loads,
+            # each a single parallel session
+            @test length(precompiling) == 2
+            @test count("successfully precompiled", output) == 2
+            if length(precompiling) == 2
+                # names are unique in this environment, so no uuids are shown
+                @test endswith(strip(precompiling[1]), "Precompiling ExtDep2")
+                @test !occursin("]", precompiling[2])
+                for name in ("HasExtensions", "ExtDep", "HasExtensions → Extension",
+                             "HasExtensions → ExtensionDep", "HasExtensions → ExtensionFolder")
+                    @test occursin(name, precompiling[2])
+                end
+            end
+
+            # the parent is already loaded: its extensions are batched with the triggers being loaded
+            output = repl_transcript((
+                "Base.disable_parallel_precompile = false",
+                "using HasExtensions",
+                "using ExtDep, ExtDep2",
+                "using ExtDep3",
+                check_exts,
+            ))
+            @test occursin("lookahead ok", output)
+            precompiling = filter(l -> occursin("Info: Precompiling", l), split(output, '\n'))
+            @test length(precompiling) == 2
+            @test count("successfully precompiled", output) == 2
+            if length(precompiling) == 2
+                @test occursin("Precompiling HasExtensions", precompiling[1])
+                @test !occursin("]", precompiling[2])
+                for name in ("ExtDep", "ExtDep2", "HasExtensions → Extension", "HasExtensions → ExtensionFolder")
+                    @test occursin(name, precompiling[2])
+                end
+            end
+        end
+
+        # a name shared by two uuids in the load path keeps the uuid in loading messages
+        mktempdir() do dir
+            write(joinpath(dir, "Project.toml"), """
+            [deps]
+            Foo = "11111111-1111-1111-1111-111111111111"
+            """)
+            write(joinpath(dir, "Manifest.toml"), """
+            julia_version = "1.14.0-DEV"
+            manifest_format = "2.0"
+
+            [[deps.Foo]]
+            uuid = "11111111-1111-1111-1111-111111111111"
+            version = "1.0.0"
+            [[deps.Foo]]
+            uuid = "22222222-2222-2222-2222-222222222222"
+            version = "1.0.0"
+            [[deps.Bar]]
+            uuid = "33333333-3333-3333-3333-333333333333"
+            version = "1.0.0"
+            """)
+            old_load_path = copy(LOAD_PATH)
+            try
+                copy!(LOAD_PATH, [dir])
+                foo = Base.PkgId(Base.UUID("11111111-1111-1111-1111-111111111111"), "Foo")
+                @test Base.pkg_log_name(foo) == "Foo [11111111-1111-1111-1111-111111111111]"
+                @test Base.pkg_log_name(Base.PkgId(Base.UUID("33333333-3333-3333-3333-333333333333"), "Bar")) == "Bar"
+                @test Base.pkg_log_name(Base.PkgId(nothing, "Baz")) == "Baz"
+                @test Base.pkg_log_name(Base.PkgId(Base.uuid5(foo.uuid, "FooExt"), "FooExt"), foo) ==
+                    "Foo [11111111-1111-1111-1111-111111111111] → FooExt"
+            finally
+                copy!(LOAD_PATH, old_load_path)
+            end
+        end
+
         # Extensions in implicit environments
         old_load_path = copy(LOAD_PATH)
         try
@@ -1488,7 +1606,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
@@ -1504,7 +1622,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
@@ -1521,7 +1639,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
         end
@@ -1537,7 +1655,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
         end
@@ -1556,7 +1674,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello parent!", String(read(cmd)))
         end
@@ -1571,7 +1689,7 @@ end
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
                 "JULIA_LOAD_PATH" => proj,
-                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+                "JULIA_DEPOT_PATH" => depot * sep,
             )
             @test occursin("Hello parent!", String(read(cmd)))
         end
@@ -1623,10 +1741,28 @@ end
     @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
-    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
+    @test cf.coverage == 0
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3, coverage=0)"
 
     # Round trip CacheFlags
     @test parse(Base.CacheFlags, repr(cf)) == cf
+
+    # Image workers need only the counter mode, independent of report scope.
+    counted = Base.CacheFlags(cf; coverage=2)
+    @test repr(counted) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3, coverage=2)"
+    @test parse(Base.CacheFlags, repr(counted)) == counted
+    @test Base.translate_cache_flags(counted, cf) == ["--code-coverage=user", "--code-coverage-mode=count"]
+    @test Base.translate_cache_flags(Base.CacheFlags(cf; coverage=1), cf) == ["--code-coverage=user", "--code-coverage-mode=hit"]
+    @test Base.translate_cache_flags(cf, counted) == ["--code-coverage=none"]
+
+    # Counts can serve hit requests, but not the other way around.
+    for (requested, compatible) in ((1, (1, 2)), (2, (2,)))
+        req = Base.CacheFlags(cf; coverage=requested)
+        for actual in (0, 1, 2)
+            image = Base.CacheFlags(cf; coverage=actual)
+            @test Base.match_cache_coverage(req, image) == (actual in compatible)
+        end
+    end
 end
 
 empty!(Base.DEPOT_PATH)
@@ -1678,6 +1814,17 @@ end
 end
 
 @testset "relocatable upgrades #51989" begin
+    function loading_test_success(cmd)
+        mktemp() do _, output
+            ok = success(pipeline(cmd; stdout=output, stderr=output))
+            if !ok
+                seekstart(output)
+                write(stderr, read(output))
+            end
+            return ok
+        end
+    end
+
     mkdepottempdir() do depot
         # realpath is needed because Pkg is used for one of the precompile paths below, and Pkg calls realpath on the
         # project path so the cache file slug will be different if the tempdir is given as a symlink
@@ -1712,10 +1859,10 @@ end
             """)
 
         # In our depot, `precompile` this `Foo` package.
-        @test success(pipeline(addenv(
+        @test loading_test_success(addenv(
             `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'Base.Precompilation.precompilepkgs(["Foo51989"]); exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
-        ); stdout, stderr))
+        ))
 
         # Get the size of the generated `.ji` file so that we can ensure that it gets altered
         foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
@@ -1733,10 +1880,10 @@ end
         end
 
         # Try to load `Foo`; this should trigger recompilation, not an error!
-        @test success(pipeline(addenv(
+        @test loading_test_success(addenv(
             `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'using Foo51989; exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
-        ); stdout, stderr))
+        ))
 
         # Ensure that there is still only one `.ji` file (it got replaced
         # and the file size changed).
@@ -1753,7 +1900,7 @@ end
         badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
-            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+            "JULIA_DEPOT_PATH" => depot * s,
         ))
     end
     mktempdir() do depot
@@ -1762,22 +1909,91 @@ end
         badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
-            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+            "JULIA_DEPOT_PATH" => depot * s,
         ))
+    end
+    mkdepottempdir() do depot
+        # This manifest has a LibGit2 entry that is missing LibGit2_jll, and a LibGit2_jll entry
+        # with a git-tree-sha1, emulating an old manifest resolved when LibGit2_jll was a regular
+        # package. A copy of the stdlib is installed at that depot path so it is what gets loaded,
+        # which invalidates the bundled LibGit2 cache. The parallel precompiler then has to know
+        # that LibGit2 depends on LibGit2_jll although the manifest does not say so, otherwise
+        # its strict worker for LibGit2 fails (#63099)
+        badmanifest_test_dir3 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps3")
+        jll_uuid = Base.UUID("e37daf67-58a4-590a-8e99-b0245dd2ffc5")
+        jll_copy = joinpath(depot, "packages", "LibGit2_jll", Base.version_slug(jll_uuid, Base.SHA1("1"^40)))
+        mkpath(dirname(jll_copy))
+        cp(joinpath(Sys.STDLIB, "LibGit2_jll"), jll_copy)
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir3 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot * s,
+        ))
+    end
+    mkdepottempdir() do depot
+        # Same for a dependency that is missing from the manifest altogether. Without the
+        # bundled stdlib caches in the depot path every stdlib in the chain has to be
+        # precompiled by the parallel precompiler, so its dependency graph has to include
+        # the stdlib deps the manifest does not list (#63099)
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+        # and for the git-tree-sha1 entry that is not installed, so the stdlib gets loaded
+        badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+    end
+    mkdepottempdir() do depot
+        # This manifest has a Statistics entry without its weakdeps and extensions, emulating
+        # a manifest from a version where SparseArraysExt did not exist yet. The extension
+        # has to be found from the stdlib Project.toml, both when loading and when building
+        # the precompilation dependency graph
+        badmanifest_test_dir4 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps4")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir4 --startup-file=no -e 'using Statistics, SparseArrays; exit(Base.get_extension(Statistics, :SparseArraysExt) === nothing ? 1 : 0)'`,
+            "JULIA_DEPOT_PATH" => depot * s,
+        ))
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir4 --startup-file=no -e 'Base.Precompilation.precompilepkgs(; io=devnull)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+        ext_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "SparseArraysExt")
+        @test isdir(ext_cache_dir) && !isempty(filter(endswith(".ji"), readdir(ext_cache_dir)))
     end
 end
 
 @testset "code coverage disabled during precompilation" begin
     mkdepottempdir() do depot
-        cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
+        cov_test_dir = joinpath(depot, "CovTest.jl")
+        cp(joinpath(@__DIR__, "project", "deps", "CovTest.jl"), cov_test_dir)
         cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        # Do not let an outer tracefile redirect .cov output.
+        cov_exename = Base.julia_cmd()[1]
         function rm_cov_files()
             for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
                 rm(cov_file)
             end
             @test !cov_exists()
         end
-        cov_exists() = !isempty(filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"))))
+        cov_files() = filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
+        cov_exists() = !isempty(cov_files())
+        # whether any line was recorded as executed (a coverage-instrumented
+        # package image lists its lines with zero counts as soon as it is loaded)
+        function cov_hit()
+            for cov_file in cov_files()
+                hit = open(cov_file) do io
+                    any(eachline(io)) do line
+                        m = match(r"^\s*(\d+) ", line)
+                        m !== nothing && parse(Int, m[1]) > 0
+                    end
+                end
+                hit && return true
+            end
+            return false
+        end
 
         rm_cov_files() # clear out any coverage files first
         @test !cov_exists()
@@ -1785,27 +2001,27 @@ end
         cd(cov_test_dir) do
             # In our depot, precompile CovTest.jl with coverage on
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
             @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
-            @test !cov_exists()
+            @test !cov_hit()
             rm_cov_files()
 
             # same again but call foo(), which is in the pkgimage, and should generate coverage
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test cov_exists()
+            @test cov_hit()
             rm_cov_files()
 
             # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
             @test success(addenv(
-                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test cov_exists()
+            @test cov_hit()
             rm_cov_files()
         end
     end

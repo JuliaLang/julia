@@ -73,6 +73,24 @@ end
     @test length(kids) == 2 # kept + escaped; the dead child was spliced out
     @test kept in kids && escaped_tok.source in kids
 
+    # Dead promoted children must be unlinked even if their pages have no young
+    # allocations, before a cancellation walk can reach their freed walk locks.
+    @noinline function make_promoted_children(root, n)
+        promoted = [CancellationTokenSource(CancellationToken(root)) for _ in 1:n]
+        GC.gc(false) # promote the children before allocating their walk locks
+        foreach(cancel!, promoted)
+        return nothing
+    end
+    for _ in 1:20
+        root3 = CancellationTokenSource()
+        kept3 = CancellationTokenSource(CancellationToken(root3))
+        make_promoted_children(root3, 200)
+        GC.gc(false)
+        @test cancel!(root3)
+        # MMTk may retain promoted children until a full collection.
+        @test live_children(root3) == [kept3] skip=!Base.USING_STOCK_GC
+    end
+
     # linked sources: a source with several parents is cancelled by any of
     # them (the graph is a DAG, not just a tree)
     la = CancellationTokenSource()
@@ -305,6 +323,103 @@ end
     cancel!(qroot)
     @test_throws CancellationRequest with(() -> Base.@cancel_check,
                                           CANCEL_TOKEN => CancellationToken(qchild))
+end
+
+@testset "scoped-default token cache" begin
+    # The per-task cache (Task.bound_cancel_default over bound_cancel_token)
+    # must be invisible: default_cancel_token() always resolves to what the
+    # CANCEL_TOKEN scoped lookup would return under the current scope.
+    src = CancellationTokenSource()
+    tok = CancellationToken(src)
+
+    # the ambient default outside our scopes (the test harness may itself
+    # run under a governing token, e.g. the ^C episode source)
+    ambient = Base.default_cancel_token()
+
+    # warm lookups agree with the scope, and the cache invariant holds
+    with(CANCEL_TOKEN => tok) do
+        t1 = Base.default_cancel_token()
+        t2 = Base.default_cancel_token()
+        @test t1 === tok && t2 === tok
+        ct = current_task()
+        @test getfield(ct, :bound_cancel_default) === 0x01
+        @test (@atomic :monotonic ct.bound_cancel_token) === src
+    end
+    # after the scope exits, the ambient default is back
+    @test Base.default_cancel_token() === ambient
+
+    # a cancellation point that publishes a *different* explicit source must
+    # not leave the cache claiming it as the scoped default
+    other = CancellationTokenSource()
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok      # warm the cache
+        Base.@cancel_check CancellationToken(other)    # rebind to `other`
+        @test Base.default_cancel_token() === tok      # still the scoped one
+        Base.@cancel_check nothing                     # explicit clear
+        @test Base.default_cancel_token() === tok
+    end
+
+    # the same-source cancellation point keeps a warm cache intact
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        Base.@cancel_check
+        @test getfield(current_task(), :bound_cancel_default) === 0x01
+        @test Base.default_cancel_token() === tok
+    end
+
+    # scope changes that do not touch CANCEL_TOKEN still resolve correctly
+    sv = ScopedValue(0)
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        with(sv => 1) do
+            @test Base.default_cancel_token() === tok
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # nesting and shielding, with warm caches at every level
+    inner = CancellationTokenSource()
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        with(CANCEL_TOKEN => CancellationToken(inner)) do
+            @test Base.default_cancel_token() === CancellationToken(inner)
+        end
+        @test Base.default_cancel_token() === tok
+        with(CANCEL_TOKEN => nothing) do
+            @test Base.default_cancel_token() === nothing
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # an exceptional unwind out of an inner scope restores the outer default
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        try
+            with(CANCEL_TOKEN => CancellationToken(inner)) do
+                @test Base.default_cancel_token() === CancellationToken(inner)
+                error("unwind")
+            end
+        catch err
+            @test err == ErrorException("unwind")
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # a task spawned under the scope resolves its inherited default
+    with(CANCEL_TOKEN => tok) do
+        t = Threads.@spawn Base.default_cancel_token()
+        @test fetch(t) === tok
+    end
+
+    # a warm cache still observes cancellation promptly (the cache holds the
+    # source; its state is what the check reads)
+    psrc = CancellationTokenSource()
+    with(CANCEL_TOKEN => CancellationToken(psrc)) do
+        @test Base.default_cancel_token() === CancellationToken(psrc)
+        Base.@cancel_check
+        cancel!(psrc)
+        @test_throws CancellationRequest Base.@cancel_check
+    end
 end
 
 @testset "cooperative cancellation of running tasks" begin
@@ -854,19 +969,30 @@ end
     end
     foreach(wait, ts2)
 
-    # waitall re-arms the same registered entry across completions
+    # waitall reuses its entry and source registration across completions
+    src3 = CancellationTokenSource()
     c3 = Channel{Int}(0)
     ts3 = [@async take!(c3) for _ in 1:3]
-    wa3 = @async waitall(ts3)
+    wa3 = @async waitall(ts3; cancel=CancellationToken(src3))
     @test timedwait(() -> (x = @atomic wa3.waiting_on; x isa Base.WaitEntryN), 10.0) == :ok
     w3 = (@atomic wa3.waiting_on)::Base.WaitEntryN
-    for _ in 1:3
+    for n in 1:2
         put!(c3, 0)
+        @test timedwait(10.0) do
+            (@atomic wa3.waiting_on) === w3 &&
+                count(i -> Base._slot_owner(w3, i) isa Base.ThreadSynchronizer,
+                      1:Base._nslots(w3)) == 3 - n
+        end == :ok
+        @test registry_entries(src3) == [w3]
     end
+    put!(c3, 0)
     done3, remaining3 = fetch(wa3)
     @test length(done3) == 3 && isempty(remaining3)
     @test (@atomic wa3.waiting_on) === nothing
     @test count(i -> Base._slot_owner(w3, i) isa Base.ThreadSynchronizer, 1:Base._nslots(w3)) == 0
+    @test (@atomic :monotonic w3.task) === nothing
+    cancel!(src3)
+    @test isempty(registry_entries(src3))
 end
 
 @testset "level-triggered delivery and shielding" begin
@@ -1112,13 +1238,14 @@ end
     @lock cond notify(cond) # still functional (no waiters)
 
     # Task blocked in wait(::Base.Process); the process itself keeps running
-    p = run(sleep_cmd(1000); wait=false)
+    p = open(`$(Base.julia_cmd()) --startup-file=no -e "read(stdin)"`, "w")
     t, src = cancellable(() -> wait(p))
     spin()
     cancel!(src)
     expect_cancelled(t)
     @test process_running(p)
-    kill(p); wait(p)
+    close(p); wait(p)
+    @test success(p)
 
     # Task blocked in waitany; the awaited tasks live in different scopes and
     # remain unaffected by the waiter's cancellation
@@ -1694,17 +1821,13 @@ end
 end
 
 @testset "cancelled recvfrom stops reception (no dropped datagram)" begin
-    # bind the receiver to a known free port (found via listenany, like the
-    # Sockets tests; retried in case another process grabs it in between)
-    local udp, port
-    for attempt in 1:10
-        port, tcpserver = Sockets.listenany(Sockets.localhost, 0)
-        close(tcpserver)
-        udp = Sockets.UDPSocket()
-        Sockets.bind(udp, Sockets.localhost, port) && break
-        close(udp)
-        attempt == 10 && error("could not bind a UDP test port")
-    end
+    # bind the receiver to an OS-assigned port: deriving a UDP port from a
+    # free TCP port (as `listenany` would) fails on Windows CI, where whole
+    # blocks of UDP ports are reserved (excluded port ranges) and sequential
+    # ephemeral TCP port assignment keeps landing inside them (#38711)
+    udp = Sockets.UDPSocket()
+    Sockets.bind(udp, Sockets.localhost, 0) || error("could not bind a UDP test port")
+    port = Sockets.getsockname(udp)[2]
     src = CancellationTokenSource()
     t = @async Sockets.recvfrom(udp; cancel=CancellationToken(src))
     @test timedwait(() -> is_parked(t), 10.0) == :ok
@@ -1838,8 +1961,7 @@ end
     # it through the annotated MPZ entry points - either their own
     # cancellation point, an asynchronous reset landing inside audited
     # libgmp compute (the reset region stays published across the annotated
-    # call), or the deferring allocation hooks chaining into the reset on
-    # exit.
+    # call), or the allocation hooks republishing the region on exit.
     function bigmul_loop(nbits)
         b = big(3)^(nbits ÷ 2)
         m = big(10)^(nbits ÷ 8)
@@ -1859,10 +1981,10 @@ end
         @test string(big(2)^128) == "340282366920938463463374607431768211456"
 
         # Allocation-churn storm: small, allocation-dominated BigInt work
-        # hammered by cancellation. Deliveries frequently land inside the
-        # deferring jl_gmp_counted_* hooks (the handler region), exercising
-        # the defer-and-chain path; correctness is "no crash, no corruption,
-        # clean arithmetic afterwards".
+        # hammered by cancellation. Deliveries frequently race the
+        # jl_gmp_counted_* hooks, exercising their unpublish/republish path;
+        # correctness is "no crash, no corruption, clean arithmetic
+        # afterwards".
         deadline = time() + 8
         rounds = 0
         while time() < deadline
@@ -2188,35 +2310,6 @@ end
     @test Base.sigint_active_severity(src) === CANCEL_REQUEST_ABANDON_ALL
 end
 
-
-Sys.isunix() && @testset "exit signals during startup" begin
-    # A termination signal delivered while the runtime is still initializing
-    # (e.g. mid sysimage restore) must kill the process cleanly. The graceful
-    # teardown used to be attempted unconditionally: hijacking thread 0 into
-    # jl_atexit_hook against the half-restored image segfaulted (walking
-    # unrelocated module bindings), or deadlocked when the interrupted thread
-    # held a runtime lock the teardown needs (symtab_lock during the
-    # restore's symbol interning) - a wedged, unkillable-by-TERM process.
-    exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    for delay in (0.01, 0.05, 0.1, 0.15, 0.25, 0.4)
-        out = Pipe()
-        p = run(pipeline(`$exe --startup-file=no -e 'sleep(60)'`,
-                         stdin=devnull, stdout=out, stderr=out), wait=false)
-        close(out.in)
-        reader = @async read(out, String)
-        sleep(delay)
-        process_running(p) && kill(p) # SIGTERM
-        exited = timedwait(() -> process_exited(p), 60.0)
-        @test exited === :ok
-        exited === :ok || kill(p, Base.SIGKILL)
-        wait(p)
-        output = fetch(reader)
-        @test !occursin("Segmentation fault", output)
-        # abrupt (killed by the signal / 128+SIGTERM) and graceful exits are
-        # both fine; crashes and wedges are not
-        @test p.termsignal == Base.SIGTERM || p.exitcode == 128 + Base.SIGTERM
-    end
-end
 
 Sys.isunix() && @testset "^C" begin
     # Children run the bare executable with default flags, NOT julia_cmd():
@@ -2590,9 +2683,9 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     # delivery could (corrupting the heap - issue #56545): the loop is
     # deliberately checkless, so delivery lands on an MPZ entry point's own
     # cancellation point, inside audited libgmp compute (unwound via the
-    # published reset region), or inside the allocation hooks (deferred and
-    # chained into the reset on exit) - and BigInt arithmetic in the
-    # session works correctly afterwards
+    # published reset region), or when an allocation hook republishes the
+    # region on exit - and BigInt arithmetic in the session works correctly
+    # afterwards
     sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
     expect("EVAL-6")
     sleep(0.5)

@@ -369,9 +369,8 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // Re-check now that the thread cannot run (the current task may have
     // switched before the freeze). Delivery is gated on an actual
     // cancellation of the task's bound token source - coherent with the
-    // published regions, since everything that may rebind it while a region
-    // is live (exception handlers, the finalizer bracket) restores the pair
-    // together.
+    // published regions: exception handlers restore the pair together, and
+    // finalizers only run with the region unpublished.
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     if (ct2 == NULL)
         goto resume;
@@ -520,11 +519,6 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         default: sig = SIGTERM; break;
     }
     if (!jl_ignore_sigint()) {
-        // Before initialization has completed, the orderly teardown
-        // (jl_atexit_hook) is unsafe against the half-restored runtime and
-        // there are no Julia atexit hooks to honor - exit abruptly.
-        if (sig != SIGINT && !jl_atomic_load_acquire(&jl_initialization_complete))
-            _exit(128 + sig);
         if (exit_on_sigint)
             jl_exit(128 + sig); // 128 + SIGINT
         if (sig == SIGINT) {
@@ -588,6 +582,12 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         default:
             break;
         }
+    }
+    else if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION &&
+             jl_get_safe_restore()) {
+        // Also honor unwind recovery on unmanaged threads, such as the profiler.
+        jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
+        return EXCEPTION_CONTINUE_EXECUTION;
     }
     ios_t full_error, summary;
     ios_mem(&full_error, 0);
@@ -690,6 +690,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     static int recursion = 0;
     if (recursion++)
         exit(1);
+    else if (ct == NULL)
+        // Avoid Julia teardown on an unmanaged thread: the profiler may have
+        // faulted with a thread suspended that the atexit hooks need to run.
+        jl_raise(SIGSEGV);
     else
         jl_exit(1);
 }
@@ -835,8 +839,14 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
 
                 // Get backtrace data
+                size_t bt_size_start = profile_bt_size_cur;
                 profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
                         profile_bt_size_max - profile_bt_size_cur - 1, &c, NULL);
+                if (profile_bt_size_cur == bt_size_start) {
+                    // unwinding produced no frames: record a marker so the sample is not silently dropped
+                    profile_bt_size_cur += failed_to_unwind_fun((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                            profile_bt_size_max - profile_bt_size_cur - 1, 0);
+                }
 
 #ifdef _CPU_X86_64_
                 // Clear abort pointer from TLS

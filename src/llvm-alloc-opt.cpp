@@ -140,6 +140,7 @@ private:
 
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
+    void removeWriteBarrierUse(CallInst *call, Instruction *val);
     void removeAlloc(CallInst *orig_inst);
     void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind);
     void initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, AllocFnKind allockind);
@@ -428,7 +429,11 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
-#if JL_LLVM_VERSION >= 200000
+#if JL_LLVM_VERSION >= 220000
+    // LLVM 22 dropped the size operand from the lifetime intrinsics.
+    (void)sz;
+    CallInst::Create(pass.lifetime_end, {ptr}, "", insert->getIterator());
+#elif JL_LLVM_VERSION >= 200000
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert->getIterator());
 #else
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
@@ -437,7 +442,11 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
 
 void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 {
-#if JL_LLVM_VERSION >= 200000
+#if JL_LLVM_VERSION >= 220000
+    // LLVM 22 dropped the size operand from the lifetime intrinsics.
+    (void)sz;
+    CallInst::Create(pass.lifetime_start, {ptr}, "", orig->getIterator());
+#elif JL_LLVM_VERSION >= 200000
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig->getIterator());
 #else
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
@@ -626,6 +635,11 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     // and compute the new name mangling schema
     SmallVector<Type*, 4> overloadTys;
     {
+#if JL_LLVM_VERSION >= 230000
+        bool valid = Intrinsic::isSignatureValid(ID, newfType, overloadTys);
+        assert(valid);
+        (void)valid;
+#else
         SmallVector<Intrinsic::IITDescriptor, 8> Table;
         getIntrinsicInfoTableEntries(ID, Table);
         ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
@@ -635,6 +649,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         bool matchvararg = !Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
         assert(matchvararg);
         (void)matchvararg;
+#endif
     }
 #if JL_LLVM_VERSION >= 200000
     auto newF = Intrinsic::getOrInsertDeclaration(call->getModule(), ID, overloadTys);
@@ -655,6 +670,24 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
     call->eraseFromParent();
+}
+
+void Optimizer::removeWriteBarrierUse(CallInst *call, Instruction *val)
+{
+    bool isDestination = call->getArgOperand(0) == val;
+    if (pass.isFieldWriteBarrier(call->getCalledOperand())) {
+        for (unsigned i = pass.field_wb_slot_arg; i < call->arg_size(); i += 2)
+            isDestination |= call->getArgOperand(i) == val;
+    }
+    if (isDestination) {
+        ++RemovedWriteBarriers;
+        call->eraseFromParent();
+    }
+    else {
+        // The allocation does not escape, but other fields covered by this
+        // barrier may still be written. Drop only the eliminated child.
+        call->replaceUsesOfWith(val, Constant::getNullValue(val->getType()));
+    }
 }
 
 void Optimizer::initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, AllocFnKind allockind)
@@ -794,9 +827,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee) {
-                ++RemovedWriteBarriers;
-                call->eraseFromParent();
+            if (pass.isWriteBarrierFunc(callee)) {
+                removeWriteBarrierUse(call, orig_i);
                 return;
             }
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
@@ -900,9 +932,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
-                ++RemovedWriteBarriers;
-                call->eraseFromParent();
+            if (pass.isWriteBarrierFunc(callee)) {
+                removeWriteBarrierUse(call, orig_i);
                 return;
             }
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
@@ -1225,9 +1256,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
-                ++RemovedWriteBarriers;
-                call->eraseFromParent();
+            if (pass.isWriteBarrierFunc(callee)) {
+                removeWriteBarrierUse(call, orig_i);
                 return;
             }
             if (pass.gc_preserve_begin_func == callee) {

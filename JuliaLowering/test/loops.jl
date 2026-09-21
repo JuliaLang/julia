@@ -1,7 +1,7 @@
-
 @testset "while loops" begin
 
 test_mod = Module()
+Base.set_syntax_version(test_mod, v"1.14")
 
 @test JuliaLowering.include_string(test_mod, """
 let
@@ -50,6 +50,7 @@ end
 @testset "for loops" begin
 
 test_mod = Module()
+Base.set_syntax_version(test_mod, v"1.14")
 
 # iteration
 @test JuliaLowering.include_string(test_mod, """
@@ -173,6 +174,7 @@ end
 @testset "multidimensional for loops" begin
 
 test_mod = Module()
+Base.set_syntax_version(test_mod, v"1.14")
 
 @test JuliaLowering.include_string(test_mod, """
 let

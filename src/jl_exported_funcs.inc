@@ -362,9 +362,7 @@
     XX(jl_operator_precedence) \
     XX(jl_parse) \
     XX(jl_parse_all) \
-    XX(jl_parse_input_line) \
     XX(jl_parse_opts) \
-    XX(jl_parse_string) \
     XX(jl_pathname_for_handle) \
     XX(jl_pathname_for_symbol) \
     XX(jl_pchar_to_array) \
@@ -553,6 +551,9 @@
     YY(jl_decorate_llvm_module) \
     YY(jl_jit_total_bytes) \
     YY(jl_objcache_disabled_notice) \
+    YY(jl_objcache_kv_get) \
+    YY(jl_objcache_kv_put) \
+    YY(jl_objcache_kv_enabled) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \

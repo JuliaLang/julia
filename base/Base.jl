@@ -182,7 +182,7 @@ include("channels.jl")
 include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
-include("weakkeydict.jl")
+include("weakdict.jl")
 
 # ScopedValues
 include("scopedvalues.jl")

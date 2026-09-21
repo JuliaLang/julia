@@ -120,6 +120,17 @@ end
 @doc "I am a macro"  :@ModuleMacroDoc.m
 
 @test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
+
+# docstrings on overlay methods (`Base.Experimental.@overlay`) apply to the function binding
+module OverlayDocs
+using Base.Experimental: @MethodTable, @overlay
+@MethodTable mt
+function devfun end
+"I am an overlay method"
+@overlay mt devfun(x::Int) = 1
+end
+@test docstrings_equal(@doc(OverlayDocs.devfun), doc"I am an overlay method")
+@test isempty(methods(OverlayDocs.devfun))
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
 # issue #38819

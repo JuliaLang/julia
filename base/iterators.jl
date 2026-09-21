@@ -1302,7 +1302,7 @@ IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(
 
 flatten_length(f, T::Type{Union{}}, slurp...) = 0
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
-    return N * length(f.it)
+    return checked_mul(N, length(f.it))
 end
 flatten_length(f, ::Type{<:Number}) = length(f.it)
 flatten_length(f, T) = throw(ArgumentError(
@@ -1705,8 +1705,8 @@ pairs(s::AbstractString) = IterableStatePairs(s)
 """
     nth(itr, n::Integer)
 
-Get the `n`th element of an iterable collection. Throw a `BoundsError`[@ref] if not existing.
-Will advance any `Stateful`[@ref] iterator.
+Get the `n`th element of an iterable collection. Throw a [`BoundsError`](@ref) if not existing.
+Will advance any [`Stateful`](@ref) iterator.
 
 See also: [`first`](@ref), [`last`](@ref)
 

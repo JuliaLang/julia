@@ -635,7 +635,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -645,7 +645,7 @@ end
 
 @noinline function typename(x::TypeEq)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::TypeEq)
@@ -669,7 +669,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -679,7 +679,7 @@ end
 
 @noinline function typename(x::Core.TypeEgal)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::Core.TypeEgal)
@@ -732,6 +732,15 @@ end
 function setindex!(x::Threads.Atomic, v)
     # depwarn(lazy"`a[] = v` on a `Threads.Atomic` is deprecated because read-modify-write uses like `a[] += 1` are not atomic; use `@atomic a[] = v` (or `@atomic a[] += 1`, `Threads.atomic_add!`, ...) instead.", :setindex!)
     return @atomic x[] = v
+end
+
+# The `*_domain_error` helpers were replaced by `Math.throw_finite_domainerror` in #62842,
+# but some packages call them directly. Not deprecated, just kept for compatibility.
+@eval Math begin
+    @noinline sin_domain_error(x) = throw_finite_domainerror(:sin, x)
+    @noinline cos_domain_error(x) = throw_finite_domainerror(:cos, x)
+    @noinline sincos_domain_error(x) = throw_finite_domainerror(:sincos, x)
+    @noinline tan_domain_error(x) = throw_finite_domainerror(:tan, x)
 end
 
 # END 1.14 deprecations

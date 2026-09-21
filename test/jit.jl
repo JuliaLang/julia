@@ -149,4 +149,88 @@ function test_gc_codeinst()
     true
 end
 @test test_gc_codeinst()
+
+# A small cache must evict in bounded transactions and still exit with writes pending.
+@testset "object-cache bounded eviction and shutdown" begin
+    mktempdir() do dir
+        logfile = joinpath(dir, "objcache.log")
+        script = """
+            for i in 1:600
+                f = Symbol(:objcache_eviction_, i)
+                @eval \$f(x) = x + \$i
+                @eval \$f(1)
+            end
+            print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0 ? "enabled" : "disabled")
+        """
+        cmd = addenv(
+            `$(Base.julia_cmd()) --startup-file=no --color=no -e $script`,
+            "JULIA_OBJCACHE" => "1",
+            "JULIA_OBJCACHE_PATH" => joinpath(dir, "cache"),
+            "JULIA_OBJCACHE_CAPACITY" => string(512 << 10),
+            "JULIA_OBJCACHE_LOG" => logfile,
+        )
+        outpath = joinpath(dir, "stdout")
+        errpath = joinpath(dir, "stderr")
+        completed = ok = false
+        open(outpath, "w") do stdout
+            open(errpath, "w") do stderr
+                proc = run(pipeline(cmd; stdout, stderr), wait=false)
+                completed = timedwait(() -> process_exited(proc), 180; pollint=0.05) === :ok
+                process_running(proc) && kill(proc, Base.SIGKILL)
+                wait(proc)
+                ok = completed && success(proc)
+            end
+        end
+        if !ok
+            @info "object-cache child failed" stdout=read(outpath, String) stderr=read(errpath, String)
+        end
+        @test completed
+        @test ok
+        status = read(outpath, String)
+        @test status in ("enabled", "disabled")
+        lines = isfile(logfile) ? readlines(logfile) : String[]
+        nevicted = count(startswith("evict,"), lines)
+        if status == "disabled"
+            @test_skip false
+        else
+            @test nevicted > 0
+            batches = [parse(Int, split(line, ',')[2]) for line in lines
+                       if startswith(line, "evict_batch,")]
+            @test length(batches) > 1
+            @test all(n -> 1 <= n <= 64, batches)
+        end
+    end
+end
+
+# The default database belongs to one target; an explicit path is used verbatim.
+@testset "object-cache per-target directory" begin
+    mktempdir() do depot
+        script = "print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0)"
+        cmd = addenv(
+            `$(Base.julia_cmd()) --startup-file=no -e $script`,
+            "JULIA_DEPOT_PATH" => depot,
+            "JULIA_OBJCACHE" => "1",
+            "JULIA_OBJCACHE_PATH" => nothing,
+        )
+        enabled = read(cmd, String)
+        @test enabled in ("true", "false")
+        if enabled == "false"
+            @test_skip false
+        else
+            cachedir = joinpath(depot, "cache", "v$(VERSION.major).$(VERSION.minor)", "objcache-lmdb1")
+            entries = readdir(cachedir)
+            @test length(entries) == 1
+            targetdir = joinpath(cachedir, only(entries))
+            @test isfile(joinpath(targetdir, "data.mdb"))
+            @test isfile(joinpath(targetdir, "lock.mdb"))
+            @test !isfile(joinpath(cachedir, "data.mdb"))
+
+            explicit = joinpath(depot, "explicit")
+            @test read(addenv(cmd, "JULIA_OBJCACHE_PATH" => explicit), String) == "true"
+            @test isfile(joinpath(explicit, "data.mdb"))
+            @test isfile(joinpath(explicit, "lock.mdb"))
+        end
+    end
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough

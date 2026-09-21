@@ -788,6 +788,17 @@ end
             @test repeat(S, T(3)) === S*S*S
         end
     end
+    # Repetition byte counts must not wrap before allocation.
+    @test repeat("", typemax(Csize_t)) === ""
+    for c in ('α', '∀', '🍕')
+        s = string(c)
+        n = Csize_t(ncodeunits(c))
+        r = typemax(Csize_t) ÷ n + one(Csize_t)
+        @test_throws OutOfMemoryError repeat(c, r)
+        @test_throws OutOfMemoryError repeat(s, r)
+        @test_throws OutOfMemoryError repeat(SubString(s, 1), r)
+        @test_throws OutOfMemoryError repeat(GenericString(s), r)
+    end
     # Issue #32160 (string allocation unsigned overflow)
     @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))
 end
@@ -1274,6 +1285,9 @@ end
 
     @test lazy"$(Float64(pi))"c == "3.14159" # :compact=>true
     @test lazy"$(collect(1:1000))"c == repr(collect(1:1000), context=:limit=>true) # :limit=>true
+
+    # Bound allocations for construction and first materialization of a short lazy string.
+    @test @allocations(String(lazy"item: $(1000)")) <= 7
 end
 
 @testset "String Effects" begin

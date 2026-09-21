@@ -610,6 +610,32 @@ end
     @test parent(view(B, 0x1, :)) === parent(view(B, 0x1, :)) === A
 end
 
+@testset "views with non-Int range indices" begin
+    A = collect(reshape(1.0:24.0, 4, 6))
+    @test @inferred(view(A, 1, UInt64(1):UInt64(2))) == A[1, 1:2]
+
+    v = view(vec(A), UInt64(1):UInt64(2):UInt64(5))
+    @test collect(v) == vec(A)[1:2:5]
+    @test strides(v) === (2,)
+    check_strided_get(v)
+
+    v = view(A, UInt64(2):UInt64(3), UInt64(4):UInt64(5))
+    @test strides(v) === (1, 4)
+    big_v = view(vec(A), big(1):big(2):big(5))
+    @test strides(big_v) === (2,)
+
+    # views of a non-contiguous strided parent
+    S = Strider(collect(1.0:24.0), (2, 8), (2, 3))
+    sv = view(S, big(1):big(2), big(1):big(3))
+    @test strides(sv) === (2, 8)
+    check_strided_get(sv)
+
+    R = reshape(UInt64(1):UInt64(2):UInt64(15), 2, 4)
+    @test view(vec(A), R) == vec(A)[R]
+
+    @test_throws BoundsError view(vec(A), typemax(UInt):typemax(UInt))
+end
+
 @testset "issue #15168" begin
     A = rand(10)
     sA = view(copy(A), :)
@@ -1210,4 +1236,19 @@ end
 @testset "copyto! @inbounds propagation" begin
     @test @inbounds(copyto!(Vector{Int}(undef, 10), 1, collect(1:10), 1, 10)) == 1:10
     @test_throws BoundsError copyto!(Vector{Int}(undef, 5), 1, collect(1:10), 1, 10)
+end
+
+@testset "strided views with reshaped range indices" begin
+    # A reshaped range with any constant step (not just unit step) is a valid
+    # strided index.
+    B = collect(1.0:100.0)
+    @testset "reshaped range $(R.parent)" for R in (reshape(3:14, 3, 4),
+                                                    reshape(1:2:16, 2, 4),
+                                                    reshape(16:-2:1, 2, 4),
+                                                    reshape(big(1):big(2):big(16), 2, 4))
+        v = view(B, R)
+        @test strides(v) isa NTuple{2,Int}
+        @test strides(v) == (step(R.parent), size(R, 1)*step(R.parent))
+        check_strided_get(v)
+    end
 end

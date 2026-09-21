@@ -4,6 +4,18 @@ using Test
 
 using Base.Threads
 
+function with_output_on_failure(f)
+    mktemp() do _, output
+        try
+            return f(output)
+        catch
+            seekstart(output)
+            write(stderr, read(output))
+            rethrow()
+        end
+    end
+end
+
 include("print_process_affinity.jl") # import `uv_thread_getaffinity`
 
 # whether `t` currently has an armed wait registration on `waitee`
@@ -393,7 +405,13 @@ let e = Event(true), started1 = Event(true), started2 = Event(true), done = Even
 end
 
 
-let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`,
+# Wrap the include in the testset rather than the file body (see threads_exec.jl).
+let program = """
+        using Test
+        @testset "threads_exec.jl with JULIA_NUM_THREADS == \$(ENV["JULIA_NUM_THREADS"])" begin
+            include("threads_exec.jl")
+        end""",
+    cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -e $program`,
     cmd2 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -e 'print(Threads.threadpoolsize(:default), ",", Threads.threadpoolsize(:interactive))'`
     for (test_nthreads, test_nthreadsi) in (
             (1, 0),
@@ -404,8 +422,11 @@ let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no th
             (4, 0)) # try a couple times to trigger bad races
         new_env = copy(ENV)
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
-        run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr))
         threads_config = "$test_nthreads,$test_nthreadsi"
+        with_output_on_failure() do output
+            run(pipeline(setenv(cmd1, new_env); stdout=output, stderr=output))
+        end
+        println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config passed")
         # threads set via env var
         @test chomp(read(setenv(cmd2, new_env), String)) == threads_config
         # threads set via -t

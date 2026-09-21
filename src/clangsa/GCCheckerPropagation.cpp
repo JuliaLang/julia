@@ -26,9 +26,9 @@ bool GCChecker::safepointEnabledHere(ProgramStateRef State) const {
 
 bool GCChecker::propagateArgumentRootedness(CheckerContext &C,
                                             ProgramStateRef &State) const {
-  const auto *LCtx = C.getLocationContext();
+  const auto *LCtx = C.getStackFrame();
 
-  const auto *Site = cast<StackFrameContext>(LCtx)->getCallSite();
+  const auto *Site = LCtx->getCallSite();
   if (!Site)
     return false;
 
@@ -136,7 +136,7 @@ bool GCChecker::propagateArgumentRootedness(CheckerContext &C,
 void GCChecker::checkBeginFunction(CheckerContext &C) const {
   // Consider top-level argument values rooted, unless an annotation says
   // otherwise
-  const auto *LCtx = C.getLocationContext();
+  const auto *LCtx = C.getStackFrame();
   const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
   assert(FD);
   unsigned CurrentHeight = getStackFrameHeight(C.getStackFrame());
@@ -215,7 +215,7 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
 void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
                                  CheckerContext &C) const {
   ProgramStateRef State = C.getState();
-  const auto *LCtx = C.getLocationContext();
+  const auto *LCtx = C.getStackFrame();
   const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
 
   if (RS && gcEnabledHere(State) && RS->getRetValue() && isGCTracked(RS->getRetValue())) {
@@ -537,6 +537,15 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
       if (Decl && declHasAnnotation(Decl, "julia_not_safepoint"))
         notSafepoint = true;
       if (Callee) {
+#if LLVM_VERSION_MAJOR >= 22
+        // Clang 22 removed ElaboratedType; a typedef'd type is now a
+        // TypedefType directly, with no elaborated wrapper to unpeel.
+        if (const TypedefType *TDT =
+                dyn_cast<TypedefType>(Callee->getType())) {
+          if (declHasAnnotation(TDT->getDecl(), "julia_not_safepoint"))
+            notSafepoint = true;
+        } else if (isa<CXXPseudoDestructorExpr>(Callee)) {
+#else
         if (const ElaboratedType *ET =
                 dyn_cast<ElaboratedType>(Callee->getType())) {
           if (const TypedefType *TDT =
@@ -545,6 +554,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
               notSafepoint = true;
           }
         } else if (isa<CXXPseudoDestructorExpr>(Callee)) {
+#endif
           // A pseudo-destructor is an expression that looks like a member
           // access to a destructor of a scalar type. It has no run-time
           // semantics beyond evaluating the base expression (which would have
@@ -882,8 +892,8 @@ bool GCChecker::processRootPropagatingRegionResult(
     ResultRegion = BindingRegion;
   if (!ResultRegion && IsPointerCarrier) {
     Result = C.getSValBuilder().conjureSymbolVal(
-        C.getCFGElementRef(), C.getLocationContext(), QT, C.blockCount());
-    State = State->BindExpr(Call.getOriginExpr(), C.getLocationContext(),
+        C.getCFGElementRef(), C.getStackFrame(), QT, C.blockCount());
+    State = State->BindExpr(Call.getOriginExpr(), C.getStackFrame(),
                             Result);
     ResultRegion = Result.getAsRegion();
   }
@@ -920,11 +930,11 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
   SymbolRef Sym = ResultValue.getAsSymbol();
   if (!Sym) {
     ResultValue = C.getSValBuilder().conjureSymbolVal(
-        C.getCFGElementRef(), C.getLocationContext(), QT, C.blockCount());
+        C.getCFGElementRef(), C.getStackFrame(), QT, C.blockCount());
     Sym = ResultValue.getAsSymbol();
   }
   if (!ResultValue.isUnknown())
-    State = State->BindExpr(Call.getOriginExpr(), C.getLocationContext(),
+    State = State->BindExpr(Call.getOriginExpr(), C.getStackFrame(),
                             ResultValue);
   LivenessState NewVState = LivenessState::getAllocated();
   GCObjectSet RootPropagatingObjects = emptyObjectSet(State);
@@ -1144,7 +1154,7 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
   QualType QT = getAtomicValueType(Result->getType());
   if (!QT->isPointerType() || QT->getPointeeType()->isVoidType())
     return nullptr;
-  auto ValLoc = State->getSVal(Result, C.getLocationContext()).getAs<Loc>();
+  auto ValLoc = State->getSVal(Result, C.getStackFrame()).getAs<Loc>();
   if (!ValLoc) {
     return nullptr;
   }
@@ -1152,10 +1162,10 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
   if (Loaded.isUnknown() || !Loaded.getAsSymbol()) {
     if (ShouldConjure || GCChecker::isGCTracked(Result)) {
       Loaded = C.getSValBuilder().conjureSymbolVal(
-          nullptr, C.getCFGElementRef(), C.getLocationContext(),
+          nullptr, C.getCFGElementRef(), C.getStackFrame(),
           QT, C.blockCount());
-      State = State->bindLoc(*ValLoc, Loaded, C.getLocationContext());
-      // State = State->BindExpr(Result, C.getLocationContext(),
+      State = State->bindLoc(*ValLoc, Loaded, C.getStackFrame());
+      // State = State->BindExpr(Result, C.getStackFrame(),
       // State->getSVal(*ValLoc));
     }
   }
@@ -1182,7 +1192,7 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
     if (NewValS && objectsAreReachable(State, NewObjects)) {
       return;
     }
-    State = promiseRootedSVal(State, State->getSVal(Result, C.getLocationContext()), C);
+    State = promiseRootedSVal(State, State->getSVal(Result, C.getStackFrame()), C);
     C.addTransition(State);
     return;
   }
@@ -1207,9 +1217,9 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
       return;
     }
     ResultVal = C.getSValBuilder().conjureSymbolVal(
-        C.getCFGElementRef(), C.getLocationContext(), ResultType,
+        C.getCFGElementRef(), C.getStackFrame(), ResultType,
         C.blockCount());
-    State = State->BindExpr(Result, C.getLocationContext(), ResultVal);
+    State = State->BindExpr(Result, C.getStackFrame(), ResultVal);
   }
   auto ValLoc = ResultVal.getAs<Loc>();
   if (!ValLoc)
@@ -1304,7 +1314,7 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
       // This works around us not being able to track symbols for struct/union
       // parameters very well.
       const auto *FD =
-          dyn_cast<FunctionDecl>(C.getLocationContext()->getDecl());
+          dyn_cast<FunctionDecl>(C.getStackFrame()->getDecl());
       if (FD) {
         inheritedState = true;
         bool isFunctionSafepoint = !isFDAnnotatedNotSafepoint(FD, getSM(C));
@@ -1415,7 +1425,7 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
   StringRef FDName =
       FD && FD->getDeclName().isIdentifier() ? FD->getName() : "";
   if (isMutexUnlock(FDName) || (FD && declHasAnnotation(FD, "julia_notsafepoint_leave"))) {
-    const auto *LCtx = C.getLocationContext();
+    const auto *LCtx = C.getStackFrame();
     const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
     if (State->get<SafepointDisabledAt>() == getStackFrameHeight(C.getStackFrame()) &&
         !isFDAnnotatedNotSafepoint(FD, getSM(C))) {
@@ -1576,6 +1586,10 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       State = addFrameRoot(State, CurrentDepth, Region, C);
       // Now for the value
       SVal Value = State->getSVal(Region);
+      if (Value.isUndef()) {
+        report_error(C, "Pushing an uninitialized value to the GC root stack");
+        return true;
+      }
       SymbolRef Sym = Value.getAsSymbol();
       if (!Sym)
         continue;
@@ -1681,9 +1695,9 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
-            C.getCFGElementRef(), C.getLocationContext(), FD->getType(),
+            C.getCFGElementRef(), C.getStackFrame(), FD->getType(),
             C.blockCount());
-        State = State->bindLoc(ItemsLoc, Items, C.getLocationContext());
+        State = State->bindLoc(ItemsLoc, Items, C.getStackFrame());
       }
       assert(Items.getAsRegion());
       // The items list is now rooted
@@ -1728,7 +1742,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     // GC State is explicitly modeled, so let's make sure
     // the execution matches our model
     SVal Result = C.getSValBuilder().makeTruthVal(EnabledNow, CE->getType());
-    C.addTransition(State->BindExpr(CE, C.getLocationContext(), Result));
+    C.addTransition(State->BindExpr(CE, C.getStackFrame(), Result));
     return true;
   }
   {
@@ -1757,10 +1771,10 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       SValBuilder &SVB = C.getSValBuilder();
       DefinedOrUnknownSVal RetVal =
           SVB.conjureSymbolVal(nullptr, C.getCFGElementRef(),
-                               C.getLocationContext(), CE->getType(),
+                               C.getStackFrame(), CE->getType(),
                                C.blockCount())
               .castAs<DefinedOrUnknownSVal>();
-      State = State->BindExpr(CE, C.getLocationContext(), RetVal);
+      State = State->BindExpr(CE, C.getStackFrame(), RetVal);
       if (State->get<SafepointDisabledAt>() == (unsigned)-1) {
         ProgramStateRef StateNonzero, StateZero;
         std::tie(StateNonzero, StateZero) = State->assume(RetVal);
@@ -1791,8 +1805,13 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   return false;
 }
 
+#if LLVM_VERSION_MAJOR >= 22
+void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
+                          bool /*AtDeclInit*/, CheckerContext &C) const {
+#else
 void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
                           CheckerContext &C) const {
+#endif
   auto State = C.getState();
   const MemRegion *R = LVal.getAsRegion();
   if (!R) {
@@ -1970,9 +1989,9 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
       if (const auto *E = dyn_cast_or_null<Expr>(S)) {
         if (isGCTracked(E)) {
           Loaded = C.getSValBuilder().conjureSymbolVal(
-              nullptr, C.getCFGElementRef(), C.getLocationContext(),
+              nullptr, C.getCFGElementRef(), C.getStackFrame(),
               E->getType(), C.blockCount());
-          State = State->bindLoc(*LoadLoc, Loaded, C.getLocationContext());
+          State = State->bindLoc(*LoadLoc, Loaded, C.getStackFrame());
           DidChange = true;
         }
       }
@@ -2025,9 +2044,9 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
         if ((Loaded.isUnknown() || !Loaded.getAsSymbol()) &&
             !LoadedType.isNull() && isGCTrackedType(LoadedType)) {
           Loaded = C.getSValBuilder().conjureSymbolVal(
-              nullptr, C.getCFGElementRef(), C.getLocationContext(),
+              nullptr, C.getCFGElementRef(), C.getStackFrame(),
               LoadedType, C.blockCount());
-          State = State->bindLoc(*LoadLoc, Loaded, C.getLocationContext());
+          State = State->bindLoc(*LoadLoc, Loaded, C.getStackFrame());
         }
         GCObjectSet LoadedObjects = getObjectsForSVal(State, Loaded);
         if (LoadedObjects.isEmpty()) {

@@ -36,6 +36,7 @@ public
     require_one_based_indexing,
     memoryindex,
     unsetindex!,
+    unsetindex_atomic!,
 
 # collections
     IteratorEltype,

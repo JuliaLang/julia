@@ -1746,7 +1746,7 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v` is
+When calling `sort` on the [`keys`](@ref) or [`values`](@ref) of a dictionary, `v` is
 collected and then sorted.
 
 !!! compat "Julia 1.12"
@@ -2452,17 +2452,25 @@ function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
 end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
+    checkbounds(v, lo:hi)
+    _quicksort!(v, lo, hi, a, o)
+end
+
+function _quicksort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
     @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
         j = partition!(v, lo, hi, o)
         if j-lo < hi-j
             # recurse on the smaller chunk
             # this is necessary to preserve O(log(n))
             # stack space in the worst case (rather than O(n))
-            lo < (j-1) && sort!(v, lo, j-1, a, o)
+            lo < (j-1) && _quicksort!(v, lo, j-1, a, o)
             lo = j+1
         else
-            j+1 < hi && sort!(v, j+1, hi, a, o)
+            j+1 < hi && _quicksort!(v, j+1, hi, a, o)
             hi = j-1
         end
     end
@@ -2473,8 +2481,17 @@ sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Orderi
     invoke(sort!, Tuple{typeof.((v, lo, hi, a, o))..., AbstractVector{T}}, v, lo, hi, a, o, t0) # For disambiguation
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
         t0::Union{AbstractVector{T}, Nothing}=nothing) where T
+    checkbounds(v, lo:hi)
+    _mergesort!(v, lo, hi, a, o, t0)
+end
+
+function _mergesort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
+        t0::Union{AbstractVector{T}, Nothing}) where T
     @inbounds if lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
 
         m = midpoint(lo, hi)
 
@@ -2482,8 +2499,8 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
         length(t) < m-lo+1 && resize!(t, m-lo+1)
         Base.require_one_based_indexing(t)
 
-        sort!(v, lo,  m,  a, o, t)
-        sort!(v, m+1, hi, a, o, t)
+        _mergesort!(v, lo,  m,  a, o, t)
+        _mergesort!(v, m+1, hi, a, o, t)
 
         i, j = 1, lo
         while j <= m
@@ -2515,8 +2532,17 @@ end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering)
+    checkbounds(v, lo:hi)
+    _partialquicksort!(v, lo, hi, a, o)
+end
+
+function _partialquicksort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
+                            o::Ordering)
     @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
         j = partition!(v, lo, hi, o)
 
         if j <= first(a.k)
@@ -2528,10 +2554,10 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
             # this is necessary to preserve O(log(n))
             # stack space in the worst case (rather than O(n))
             if j-lo < hi-j
-                lo < (j-1) && sort!(v, lo, j-1, a, o)
+                lo < (j-1) && _partialquicksort!(v, lo, j-1, a, o)
                 lo = j+1
             else
-                hi > (j+1) && sort!(v, j+1, hi, a, o)
+                hi > (j+1) && _partialquicksort!(v, j+1, hi, a, o)
                 hi = j-1
             end
         end
@@ -2544,11 +2570,13 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
+    checkbounds(v, lo:hi)
     _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
+    checkbounds(v, lo:hi)
     _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end

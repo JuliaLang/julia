@@ -278,7 +278,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     }
 
     jl_print_gc_stats(JL_STDERR);
-    if (jl_options.code_coverage)
+    // an image-generating process instruments the image, not itself
+    if (jl_options.code_coverage && !jl_generating_output())
         jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
@@ -638,12 +639,8 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
-
-    jl_atomic_store_release(&jl_initialization_complete, 1);
 }
 
-
-JL_DLLEXPORT _Atomic(int) jl_initialization_complete = 0;
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
 JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {

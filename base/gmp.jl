@@ -10,7 +10,7 @@ import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, ~, &, |,
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, iszero, isone, big, flipsign, signbit,
-             sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
+             sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit, exponent,
              ispositive, isnegative, clamp
 
 import Core: Signed, Float16, Float32, Float64
@@ -114,12 +114,9 @@ function __init__()
             bits_per_limb() != BITS_PER_LIMB ? @error(msg) : @warn(msg)
         end
 
-        # The jl_gmp_counted_* hooks are the jl_gc_counted_* allocators with a
-        # cancellation-handler region published across them: GMP computations
-        # run under a reset region (see the `reset_safe` annotations in MPZ),
-        # and the hooks are exactly where an asynchronous unwind must not
-        # land - a cancellation delivered inside them is deferred and chained
-        # into the reset on exit instead.
+        # GMP calls may run under a reset region and re-enter the runtime
+        # through these allocation hooks. The hooks unpublish the region
+        # around the allocator.
         ccall((:__gmp_set_memory_functions, libgmp), Cvoid,
               (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
               cglobal(:jl_gmp_counted_malloc),
@@ -629,13 +626,15 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
-# all uses of _bit_magnitude MUST ensure at callsite that `x` is strictly positive, otherwise it is UB
-_bit_magnitude(x::BigInt) = x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
+# all uses of _bit_magnitude MUST ensure at callsite that `x` is nonzero, otherwise it is UB
+function _bit_magnitude(x::BigInt)
+    n = abs(x.size)
+    return n * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, n))
+end
 
 function exponent(x::BigInt)
     iszero(x) && throw(DomainError(x, "cannot be zero"))
-    ux = abs(x)
-    return _bit_magnitude(ux) - 1
+    return _bit_magnitude(x) - 1
 end
 
 function top_set_bit(x::BigInt)

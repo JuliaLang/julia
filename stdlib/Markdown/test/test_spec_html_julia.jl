@@ -5,6 +5,14 @@ using Markdown
 
 @testset "CommonMark spec test suite: HTML mode, julia flavor" begin
 
+# Spec examples known not to conform. They are still run below, but instead of
+# one `@test_broken` each they push into `now_passing` when they unexpectedly
+# pass, and a single `@test_broken` at the bottom of this file stands in for
+# the whole set. If the `now_passing` test fails, some examples were fixed:
+# rerun regenerate_test_spec.jl and commit the regenerated files.
+known_broken = BitSet([2, 4, 5, 6, 7, 9, 17, 22, 23, 24, 32, 33, 34, 41, 46, 55, 60, 61, 79, 81, 82, 83, 87, 93, 95, 106, 118, 121, 124, 126, 127, 128, 131, 132, 133, 135, 136, 137, 138, 139, 143, 146, 147, 148, 175, 192, 193, 194, 195, 196, 198, 200, 202, 203, 204, 205, 206, 207, 208, 210, 214, 215, 216, 217, 218, 226, 232, 233, 237, 238, 247, 250, 251, 254, 255, 257, 260, 263, 266, 267, 271, 276, 278, 280, 285, 286, 287, 288, 290, 291, 292, 293, 294, 295, 296, 298, 299, 300, 304, 307, 308, 310, 311, 312, 313, 315, 317, 318, 319, 320, 321, 323, 325, 326, 329, 330, 331, 332, 333, 334, 335, 336, 339, 340, 341, 342, 347, 349, 352, 354, 359, 360, 361, 362, 363, 367, 368, 369, 372, 373, 374, 375, 376, 380, 385, 386, 387, 388, 389, 392, 398, 400, 401, 402, 407, 408, 409, 413, 414, 415, 416, 417, 418, 419, 425, 426, 427, 430, 431, 432, 437, 440, 442, 443, 444, 445, 446, 447, 449, 452, 454, 455, 456, 457, 458, 459, 464, 465, 466, 467, 468, 471, 472, 473, 474, 475, 476, 477, 478, 479, 480, 481, 482, 486, 488, 489, 492, 493, 494, 498, 499, 500, 503, 505, 506, 508, 509, 510, 515, 518, 519, 520, 521, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 549, 550, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571, 572, 573, 574, 575, 576, 577, 579, 580, 582, 583, 584, 585, 586, 587, 588, 589, 591, 592, 593, 597, 598, 599, 601, 626, 633, 635, 636, 637, 638, 642, 643, 644, 645])
+now_passing = Int[]
+
 
 #
 # Tabs
@@ -18,12 +26,12 @@ using Markdown
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 2
+    # Example 2 (known broken)
     input = "  \tfoo\tbaz\t\tbim\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>foo\tbaz\t\tbim\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 2)
 
     # Example 3
     input = "    a\ta\n    ὐ\ta\n"
@@ -32,33 +40,33 @@ using Markdown
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 4
+    # Example 4 (known broken)
     input = "  - foo\n\n\tbar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>foo</p>\n<p>bar</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 4)
 
-    # Example 5
+    # Example 5 (known broken)
     input = "- foo\n\n\t\tbar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>foo</p>\n<pre><code>  bar\n</code></pre>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 5)
 
-    # Example 6
+    # Example 6 (known broken)
     input = ">\t\tfoo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<pre><code>  foo\n</code></pre>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 6)
 
-    # Example 7
+    # Example 7 (known broken)
     input = "-\t\tfoo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<pre><code>  foo\n</code></pre>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 7)
 
     # Example 8
     input = "    foo\n\tbar\n"
@@ -67,12 +75,12 @@ using Markdown
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 9
+    # Example 9 (known broken)
     input = " - foo\n   - bar\n\t - baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo\n<ul>\n<li>bar\n<ul>\n<li>baz</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 9)
 
     # Example 10
     input = "#\tFoo\n"
@@ -130,12 +138,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 17
+    # Example 17 (known broken)
     input = "`` \\[\\` ``\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>\\[\\`</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 17)
 
     # Example 18
     input = "    \\[\\]\n"
@@ -165,26 +173,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 22
+    # Example 22 (known broken)
     input = "[foo](/bar\\* \"ti\\*tle\")\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/bar*\" title=\"ti*tle\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 22)
 
-    # Example 23
+    # Example 23 (known broken)
     input = "[foo]\n\n[foo]: /bar\\* \"ti\\*tle\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/bar*\" title=\"ti*tle\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 23)
 
-    # Example 24
+    # Example 24 (known broken)
     input = "``` foo\\+bar\nfoo\n```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code class=\"language-foo+bar\">foo\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 24)
 
 end
 
@@ -242,26 +250,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 32
+    # Example 32 (known broken)
     input = "[foo](/f&ouml;&ouml; \"f&ouml;&ouml;\")\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/f%C3%B6%C3%B6\" title=\"föö\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 32)
 
-    # Example 33
+    # Example 33 (known broken)
     input = "[foo]\n\n[foo]: /f&ouml;&ouml; \"f&ouml;&ouml;\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/f%C3%B6%C3%B6\" title=\"föö\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 33)
 
-    # Example 34
+    # Example 34 (known broken)
     input = "``` f&ouml;&ouml;\nfoo\n```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code class=\"language-föö\">foo\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 34)
 
     # Example 35
     input = "`f&ouml;&ouml;`\n"
@@ -305,12 +313,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 41
+    # Example 41 (known broken)
     input = "[a](url &quot;tit&quot;)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[a](url &quot;tit&quot;)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 41)
 
 end
 
@@ -354,12 +362,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 46
+    # Example 46 (known broken)
     input = "--\n**\n__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>--\n**\n__</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 46)
 
     # Example 47
     input = " ***\n  ***\n   ***\n"
@@ -417,12 +425,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 55
+    # Example 55 (known broken)
     input = "_ _ _ _ a\n\na------\n\n---a---\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>_ _ _ _ a</p>\n<p>a------</p>\n<p>---a---</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 55)
 
     # Example 56
     input = " *-*\n"
@@ -452,19 +460,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 60
+    # Example 60 (known broken)
     input = "* Foo\n* * *\n* Bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>Foo</li>\n</ul>\n<hr />\n<ul>\n<li>Bar</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 60)
 
-    # Example 61
+    # Example 61 (known broken)
     input = "- Foo\n- * * *\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>Foo</li>\n<li>\n<hr />\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 61)
 
 end
 
@@ -592,12 +600,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 79
+    # Example 79 (known broken)
     input = "## \n#\n### ###\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<h2></h2>\n<h1></h1>\n<h3></h3>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 79)
 
 end
 
@@ -613,26 +621,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 81
+    # Example 81 (known broken)
     input = "Foo *bar\nbaz*\n====\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<h1>Foo <em>bar\nbaz</em></h1>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 81)
 
-    # Example 82
+    # Example 82 (known broken)
     input = "  Foo *bar\nbaz*\t\n====\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<h1>Foo <em>bar\nbaz</em></h1>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 82)
 
-    # Example 83
+    # Example 83 (known broken)
     input = "Foo\n-------------------------\n\nFoo\n=\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<h2>Foo</h2>\n<h1>Foo</h1>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 83)
 
     # Example 84
     input = "   Foo\n---\n\n  Foo\n-----\n\n  Foo\n  ===\n"
@@ -655,12 +663,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 87
+    # Example 87 (known broken)
     input = "Foo\n    ---\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>Foo\n---</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 87)
 
     # Example 88
     input = "Foo\n= =\n\nFoo\n--- -\n"
@@ -697,12 +705,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 93
+    # Example 93 (known broken)
     input = "> foo\nbar\n===\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<p>foo\nbar\n===</p>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 93)
 
     # Example 94
     input = "- Foo\n---\n"
@@ -711,12 +719,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 95
+    # Example 95 (known broken)
     input = "Foo\nBar\n---\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<h2>Foo\nBar</h2>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 95)
 
     # Example 96
     input = "---\nFoo\n---\nBar\n---\nBaz\n"
@@ -788,12 +796,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 106
+    # Example 106 (known broken)
     input = "Foo\nbar\n\\---\nbaz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>Foo\nbar\n---\nbaz</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 106)
 
 end
 
@@ -879,12 +887,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 118
+    # Example 118 (known broken)
     input = "    foo  \n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>foo  \n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 118)
 
 end
 
@@ -907,12 +915,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 121
+    # Example 121 (known broken)
     input = "``\nfoo\n``\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>foo</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 121)
 
     # Example 122
     input = "```\naaa\n~~~\n```\n"
@@ -928,12 +936,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 124
+    # Example 124 (known broken)
     input = "````\naaa\n```\n``````\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>aaa\n```\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 124)
 
     # Example 125
     input = "~~~~\naaa\n~~~\n~~~~\n"
@@ -942,26 +950,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 126
+    # Example 126 (known broken)
     input = "```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code></code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 126)
 
-    # Example 127
+    # Example 127 (known broken)
     input = "`````\n\n```\naaa\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>\n```\naaa\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 127)
 
-    # Example 128
+    # Example 128 (known broken)
     input = "> ```\n> aaa\n\nbbb\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<pre><code>aaa\n</code></pre>\n</blockquote>\n<p>bbb</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 128)
 
     # Example 129
     input = "```\n\n  \n```\n"
@@ -977,26 +985,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 131
+    # Example 131 (known broken)
     input = " ```\n aaa\naaa\n```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>aaa\naaa\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 131)
 
-    # Example 132
+    # Example 132 (known broken)
     input = "  ```\naaa\n  aaa\naaa\n  ```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>aaa\naaa\naaa\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 132)
 
-    # Example 133
+    # Example 133 (known broken)
     input = "   ```\n   aaa\n    aaa\n  aaa\n   ```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>aaa\n aaa\naaa\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 133)
 
     # Example 134
     input = "    ```\n    aaa\n    ```\n"
@@ -1005,40 +1013,40 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 135
+    # Example 135 (known broken)
     input = "```\naaa\n  ```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>aaa\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 135)
 
-    # Example 136
+    # Example 136 (known broken)
     input = "   ```\naaa\n  ```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>aaa\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 136)
 
-    # Example 137
+    # Example 137 (known broken)
     input = "```\naaa\n    ```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>aaa\n    ```\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 137)
 
-    # Example 138
+    # Example 138 (known broken)
     input = "``` ```\naaa\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code> </code>\naaa</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 138)
 
-    # Example 139
+    # Example 139 (known broken)
     input = "~~~~~~\naaa\n~~~ ~~\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>aaa\n~~~ ~~\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 139)
 
     # Example 140
     input = "foo\n```\nbar\n```\nbaz\n"
@@ -1061,12 +1069,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 143
+    # Example 143 (known broken)
     input = "~~~~    ruby startline=3 \$%@#\$\ndef foo(x)\n  return 3\nend\n~~~~~~~\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code class=\"language-ruby\">def foo(x)\n  return 3\nend\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 143)
 
     # Example 144
     input = "````;\n````\n"
@@ -1082,19 +1090,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 146
+    # Example 146 (known broken)
     input = "~~~ aa ``` ~~~\nfoo\n~~~\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code class=\"language-aa\">foo\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 146)
 
-    # Example 147
+    # Example 147 (known broken)
     input = "```\n``` aaa\n```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>``` aaa\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 147)
 
 end
 
@@ -1103,12 +1111,12 @@ end
 #
 @testset "HTML blocks" begin
 
-    # Example 148
+    # Example 148 (known broken)
     input = "<table><tr><td>\n<pre>\n**Hello**,\n\n_world_.\n</pre>\n</td></tr></table>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<table><tr><td>\n<pre>\n**Hello**,\n<p><em>world</em>.\n</pre></p>\n</td></tr></table>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 148)
 
     # Example 149
     input = "<table>\n  <tr>\n    <td>\n           hi\n    </td>\n  </tr>\n</table>\n\nokay.\n"
@@ -1292,12 +1300,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 175
+    # Example 175 (known broken)
     input = "- <div>\n- foo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<div>\n</li>\n<li>foo</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 175)
 
     # Example 176
     input = "<style>p{color:red;}</style>\n*foo*\n"
@@ -1418,40 +1426,40 @@ end
 #
 @testset "Link reference definitions" begin
 
-    # Example 192
+    # Example 192 (known broken)
     input = "[foo]: /url \"title\"\n\n[foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 192)
 
-    # Example 193
+    # Example 193 (known broken)
     input = "   [foo]: \n      /url  \n           'the title'  \n\n[foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"the title\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 193)
 
-    # Example 194
+    # Example 194 (known broken)
     input = "[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"my_(url)\" title=\"title (with parens)\">Foo*bar]</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 194)
 
-    # Example 195
+    # Example 195 (known broken)
     input = "[Foo bar]:\n<my url>\n'title'\n\n[Foo bar]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"my%20url\" title=\"title\">Foo bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 195)
 
-    # Example 196
+    # Example 196 (known broken)
     input = "[foo]: /url '\ntitle\nline1\nline2\n'\n\n[foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"\ntitle\nline1\nline2\n\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 196)
 
     # Example 197
     input = "[foo]: /url 'title\n\nwith blank line'\n\n[foo]\n"
@@ -1460,12 +1468,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 198
+    # Example 198 (known broken)
     input = "[foo]:\n/url\n\n[foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 198)
 
     # Example 199
     input = "[foo]:\n\n[foo]\n"
@@ -1474,12 +1482,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 200
+    # Example 200 (known broken)
     input = "[foo]: <>\n\n[foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 200)
 
     # Example 201
     input = "[foo]: <bar>(baz)\n\n[foo]\n"
@@ -1488,54 +1496,54 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 202
+    # Example 202 (known broken)
     input = "[foo]: /url\\bar\\*baz \"foo\\\"bar\\baz\"\n\n[foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url%5Cbar*baz\" title=\"foo&quot;bar\\baz\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 202)
 
-    # Example 203
+    # Example 203 (known broken)
     input = "[foo]\n\n[foo]: url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"url\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 203)
 
-    # Example 204
+    # Example 204 (known broken)
     input = "[foo]\n\n[foo]: first\n[foo]: second\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"first\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 204)
 
-    # Example 205
+    # Example 205 (known broken)
     input = "[FOO]: /url\n\n[Foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\">Foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 205)
 
-    # Example 206
+    # Example 206 (known broken)
     input = "[ΑΓΩ]: /φου\n\n[αγω]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/%CF%86%CE%BF%CF%85\">αγω</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 206)
 
-    # Example 207
+    # Example 207 (known broken)
     input = "[foo]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = ""
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 207)
 
-    # Example 208
+    # Example 208 (known broken)
     input = "[\nfoo\n]: /url\nbar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>bar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 208)
 
     # Example 209
     input = "[foo]: /url \"title\" ok\n"
@@ -1544,12 +1552,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 210
+    # Example 210 (known broken)
     input = "[foo]: /url\n\"title\" ok\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>&quot;title&quot; ok</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 210)
 
     # Example 211
     input = "    [foo]: /url \"title\"\n\n[foo]\n"
@@ -1572,40 +1580,40 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 214
+    # Example 214 (known broken)
     input = "# [Foo]\n[foo]: /url\n> bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<h1><a href=\"/url\">Foo</a></h1>\n<blockquote>\n<p>bar</p>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 214)
 
-    # Example 215
+    # Example 215 (known broken)
     input = "[foo]: /url\nbar\n===\n[foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<h1>bar</h1>\n<p><a href=\"/url\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 215)
 
-    # Example 216
+    # Example 216 (known broken)
     input = "[foo]: /url\n===\n[foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>===\n<a href=\"/url\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 216)
 
-    # Example 217
+    # Example 217 (known broken)
     input = "[foo]: /foo-url \"foo\"\n[bar]: /bar-url\n  \"bar\"\n[baz]: /baz-url\n\n[foo],\n[bar],\n[baz]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/foo-url\" title=\"foo\">foo</a>,\n<a href=\"/bar-url\" title=\"bar\">bar</a>,\n<a href=\"/baz-url\">baz</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 217)
 
-    # Example 218
+    # Example 218 (known broken)
     input = "[foo]\n\n> [foo]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\">foo</a></p>\n<blockquote>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 218)
 
 end
 
@@ -1663,12 +1671,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 226
+    # Example 226 (known broken)
     input = "aaa     \nbbb     \n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>aaa<br />\nbbb</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 226)
 
 end
 
@@ -1719,19 +1727,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 232
+    # Example 232 (known broken)
     input = "> # Foo\n> bar\nbaz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<h1>Foo</h1>\n<p>bar\nbaz</p>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 232)
 
-    # Example 233
+    # Example 233 (known broken)
     input = "> bar\nbaz\n> foo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<p>bar\nbaz\nfoo</p>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 233)
 
     # Example 234
     input = "> foo\n---\n"
@@ -1754,19 +1762,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 237
+    # Example 237 (known broken)
     input = "> ```\nfoo\n```\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<pre><code></code></pre>\n</blockquote>\n<p>foo</p>\n<pre><code></code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 237)
 
-    # Example 238
+    # Example 238 (known broken)
     input = "> foo\n    - bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<p>foo\n- bar</p>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 238)
 
     # Example 239
     input = ">\n"
@@ -1824,12 +1832,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 247
+    # Example 247 (known broken)
     input = "> bar\nbaz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<p>bar\nbaz</p>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 247)
 
     # Example 248
     input = "> bar\n\nbaz\n"
@@ -1845,19 +1853,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 250
+    # Example 250 (known broken)
     input = "> > > foo\nbar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<blockquote>\n<blockquote>\n<p>foo\nbar</p>\n</blockquote>\n</blockquote>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 250)
 
-    # Example 251
+    # Example 251 (known broken)
     input = ">>> foo\n> bar\n>>baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<blockquote>\n<blockquote>\n<p>foo\nbar\nbaz</p>\n</blockquote>\n</blockquote>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 251)
 
     # Example 252
     input = ">     code\n\n>    not code\n"
@@ -1880,19 +1888,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 254
+    # Example 254 (known broken)
     input = "1.  A paragraph\n    with two lines.\n\n        indented code\n\n    > A block quote.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<p>A paragraph\nwith two lines.</p>\n<pre><code>indented code\n</code></pre>\n<blockquote>\n<p>A block quote.</p>\n</blockquote>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 254)
 
-    # Example 255
+    # Example 255 (known broken)
     input = "- one\n\n two\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>one</li>\n</ul>\n<p>two</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 255)
 
     # Example 256
     input = "- one\n\n  two\n"
@@ -1901,12 +1909,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 257
+    # Example 257 (known broken)
     input = " -    one\n\n     two\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>one</li>\n</ul>\n<pre><code> two\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 257)
 
     # Example 258
     input = " -    one\n\n      two\n"
@@ -1922,12 +1930,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 260
+    # Example 260 (known broken)
     input = ">>- one\n>>\n  >  > two\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<blockquote>\n<ul>\n<li>one</li>\n</ul>\n<p>two</p>\n</blockquote>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 260)
 
     # Example 261
     input = "-one\n\n2.two\n"
@@ -1943,12 +1951,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 263
+    # Example 263 (known broken)
     input = "1.  foo\n\n    ```\n    bar\n    ```\n\n    baz\n\n    > bam\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<p>foo</p>\n<pre><code>bar\n</code></pre>\n<p>baz</p>\n<blockquote>\n<p>bam</p>\n</blockquote>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 263)
 
     # Example 264
     input = "- Foo\n\n      bar\n\n\n      baz\n"
@@ -1964,19 +1972,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 266
+    # Example 266 (known broken)
     input = "1234567890. not ok\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>1234567890. not ok</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 266)
 
-    # Example 267
+    # Example 267 (known broken)
     input = "0. ok\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol start=\"0\">\n<li>ok</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 267)
 
     # Example 268
     input = "003. ok\n"
@@ -1999,12 +2007,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 271
+    # Example 271 (known broken)
     input = "  10.  foo\n\n           bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol start=\"10\">\n<li>\n<p>foo</p>\n<pre><code>bar\n</code></pre>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 271)
 
     # Example 272
     input = "    indented code\n\nparagraph\n\n    more code\n"
@@ -2034,12 +2042,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 276
+    # Example 276 (known broken)
     input = "-    foo\n\n  bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo</li>\n</ul>\n<p>bar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 276)
 
     # Example 277
     input = "-  foo\n\n   bar\n"
@@ -2048,12 +2056,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 278
+    # Example 278 (known broken)
     input = "-\n  foo\n-\n  ```\n  bar\n  ```\n-\n      baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo</li>\n<li>\n<pre><code>bar\n</code></pre>\n</li>\n<li>\n<pre><code>baz\n</code></pre>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 278)
 
     # Example 279
     input = "-   \n  foo\n"
@@ -2062,12 +2070,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 280
+    # Example 280 (known broken)
     input = "-\n\n  foo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li></li>\n</ul>\n<p>foo</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 280)
 
     # Example 281
     input = "- foo\n-\n- bar\n"
@@ -2097,33 +2105,33 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 285
+    # Example 285 (known broken)
     input = "foo\n*\n\nfoo\n1.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo\n*</p>\n<p>foo\n1.</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 285)
 
-    # Example 286
+    # Example 286 (known broken)
     input = " 1.  A paragraph\n     with two lines.\n\n         indented code\n\n     > A block quote.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<p>A paragraph\nwith two lines.</p>\n<pre><code>indented code\n</code></pre>\n<blockquote>\n<p>A block quote.</p>\n</blockquote>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 286)
 
-    # Example 287
+    # Example 287 (known broken)
     input = "  1.  A paragraph\n      with two lines.\n\n          indented code\n\n      > A block quote.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<p>A paragraph\nwith two lines.</p>\n<pre><code>indented code\n</code></pre>\n<blockquote>\n<p>A block quote.</p>\n</blockquote>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 287)
 
-    # Example 288
+    # Example 288 (known broken)
     input = "   1.  A paragraph\n       with two lines.\n\n           indented code\n\n       > A block quote.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<p>A paragraph\nwith two lines.</p>\n<pre><code>indented code\n</code></pre>\n<blockquote>\n<p>A block quote.</p>\n</blockquote>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 288)
 
     # Example 289
     input = "    1.  A paragraph\n        with two lines.\n\n            indented code\n\n        > A block quote.\n"
@@ -2132,54 +2140,54 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 290
+    # Example 290 (known broken)
     input = "  1.  A paragraph\nwith two lines.\n\n          indented code\n\n      > A block quote.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<p>A paragraph\nwith two lines.</p>\n<pre><code>indented code\n</code></pre>\n<blockquote>\n<p>A block quote.</p>\n</blockquote>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 290)
 
-    # Example 291
+    # Example 291 (known broken)
     input = "  1.  A paragraph\n    with two lines.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>A paragraph\nwith two lines.</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 291)
 
-    # Example 292
+    # Example 292 (known broken)
     input = "> 1. > Blockquote\ncontinued here.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<ol>\n<li>\n<blockquote>\n<p>Blockquote\ncontinued here.</p>\n</blockquote>\n</li>\n</ol>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 292)
 
-    # Example 293
+    # Example 293 (known broken)
     input = "> 1. > Blockquote\n> continued here.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<ol>\n<li>\n<blockquote>\n<p>Blockquote\ncontinued here.</p>\n</blockquote>\n</li>\n</ol>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 293)
 
-    # Example 294
+    # Example 294 (known broken)
     input = "- foo\n  - bar\n    - baz\n      - boo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo\n<ul>\n<li>bar\n<ul>\n<li>baz\n<ul>\n<li>boo</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 294)
 
-    # Example 295
+    # Example 295 (known broken)
     input = "- foo\n - bar\n  - baz\n   - boo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo</li>\n<li>bar</li>\n<li>baz</li>\n<li>boo</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 295)
 
-    # Example 296
+    # Example 296 (known broken)
     input = "10) foo\n    - bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol start=\"10\">\n<li>foo\n<ul>\n<li>bar</li>\n</ul>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 296)
 
     # Example 297
     input = "10) foo\n   - bar\n"
@@ -2188,26 +2196,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 298
+    # Example 298 (known broken)
     input = "- - foo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<ul>\n<li>foo</li>\n</ul>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 298)
 
-    # Example 299
+    # Example 299 (known broken)
     input = "1. - 2. foo\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<ul>\n<li>\n<ol start=\"2\">\n<li>foo</li>\n</ol>\n</li>\n</ul>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 299)
 
-    # Example 300
+    # Example 300 (known broken)
     input = "- # Foo\n- Bar\n  ---\n  baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<h1>Foo</h1>\n</li>\n<li>\n<h2>Bar</h2>\nbaz</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 300)
 
 end
 
@@ -2237,12 +2245,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 304
+    # Example 304 (known broken)
     input = "The number of windows in my house is\n14.  The number of doors is 6.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>The number of windows in my house is\n14.  The number of doors is 6.</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 304)
 
     # Example 305
     input = "The number of windows in my house is\n1.  The number of doors is 6.\n"
@@ -2258,19 +2266,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 307
+    # Example 307 (known broken)
     input = "- foo\n  - bar\n    - baz\n\n\n      bim\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo\n<ul>\n<li>bar\n<ul>\n<li>\n<p>baz</p>\n<p>bim</p>\n</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 307)
 
-    # Example 308
+    # Example 308 (known broken)
     input = "- foo\n- bar\n\n<!-- -->\n\n- baz\n- bim\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo</li>\n<li>bar</li>\n</ul>\n<!-- -->\n<ul>\n<li>baz</li>\n<li>bim</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 308)
 
     # Example 309
     input = "-   foo\n\n    notcode\n\n-   foo\n\n<!-- -->\n\n    code\n"
@@ -2279,33 +2287,33 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 310
+    # Example 310 (known broken)
     input = "- a\n - b\n  - c\n   - d\n  - e\n - f\n- g\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>a</li>\n<li>b</li>\n<li>c</li>\n<li>d</li>\n<li>e</li>\n<li>f</li>\n<li>g</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 310)
 
-    # Example 311
+    # Example 311 (known broken)
     input = "1. a\n\n  2. b\n\n   3. c\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<p>a</p>\n</li>\n<li>\n<p>b</p>\n</li>\n<li>\n<p>c</p>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 311)
 
-    # Example 312
+    # Example 312 (known broken)
     input = "- a\n - b\n  - c\n   - d\n    - e\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>a</li>\n<li>b</li>\n<li>c</li>\n<li>d\n- e</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 312)
 
-    # Example 313
+    # Example 313 (known broken)
     input = "1. a\n\n  2. b\n\n    3. c\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ol>\n<li>\n<p>a</p>\n</li>\n<li>\n<p>b</p>\n</li>\n</ol>\n<pre><code>3. c\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 313)
 
     # Example 314
     input = "- a\n- b\n\n- c\n"
@@ -2314,12 +2322,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 315
+    # Example 315 (known broken)
     input = "* a\n*\n\n* c\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>a</p>\n</li>\n<li></li>\n<li>\n<p>c</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 315)
 
     # Example 316
     input = "- a\n- b\n\n  c\n- d\n"
@@ -2328,40 +2336,40 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 317
+    # Example 317 (known broken)
     input = "- a\n- b\n\n  [ref]: /url\n- d\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>a</p>\n</li>\n<li>\n<p>b</p>\n</li>\n<li>\n<p>d</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 317)
 
-    # Example 318
+    # Example 318 (known broken)
     input = "- a\n- ```\n  b\n\n\n  ```\n- c\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>a</li>\n<li>\n<pre><code>b\n\n\n</code></pre>\n</li>\n<li>c</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 318)
 
-    # Example 319
+    # Example 319 (known broken)
     input = "- a\n  - b\n\n    c\n- d\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>a\n<ul>\n<li>\n<p>b</p>\n<p>c</p>\n</li>\n</ul>\n</li>\n<li>d</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 319)
 
-    # Example 320
+    # Example 320 (known broken)
     input = "* a\n  > b\n  >\n* c\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>a\n<blockquote>\n<p>b</p>\n</blockquote>\n</li>\n<li>c</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 320)
 
-    # Example 321
+    # Example 321 (known broken)
     input = "- a\n  > b\n  ```\n  c\n  ```\n- d\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>a\n<blockquote>\n<p>b</p>\n</blockquote>\n<pre><code>c\n</code></pre>\n</li>\n<li>d</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 321)
 
     # Example 322
     input = "- a\n"
@@ -2370,12 +2378,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 323
+    # Example 323 (known broken)
     input = "- a\n  - b\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 323)
 
     # Example 324
     input = "1. ```\n   foo\n   ```\n\n   bar\n"
@@ -2384,19 +2392,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 325
+    # Example 325 (known broken)
     input = "* foo\n  * bar\n\n  baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>foo</p>\n<ul>\n<li>bar</li>\n</ul>\n<p>baz</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 325)
 
-    # Example 326
+    # Example 326 (known broken)
     input = "- a\n  - b\n  - c\n\n- d\n  - e\n  - f\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>a</p>\n<ul>\n<li>b</li>\n<li>c</li>\n</ul>\n</li>\n<li>\n<p>d</p>\n<ul>\n<li>e</li>\n<li>f</li>\n</ul>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 326)
 
 end
 
@@ -2426,61 +2434,61 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 329
+    # Example 329 (known broken)
     input = "`` foo ` bar ``\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>foo ` bar</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 329)
 
-    # Example 330
+    # Example 330 (known broken)
     input = "` `` `\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>``</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 330)
 
-    # Example 331
+    # Example 331 (known broken)
     input = "`  ``  `\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code> `` </code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 331)
 
-    # Example 332
+    # Example 332 (known broken)
     input = "` a`\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code> a</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 332)
 
-    # Example 333
+    # Example 333 (known broken)
     input = "`\u00A0b\u00A0`\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>\u00A0b\u00A0</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 333)
 
-    # Example 334
+    # Example 334 (known broken)
     input = "`\u00A0`\n`  `\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>\u00A0</code>\n<code>  </code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 334)
 
-    # Example 335
+    # Example 335 (known broken)
     input = "``\nfoo\nbar  \nbaz\n``\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>foo bar   baz</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 335)
 
-    # Example 336
+    # Example 336 (known broken)
     input = "``\nfoo \n``\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>foo </code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 336)
 
     # Example 337
     input = "`foo   bar \nbaz`\n"
@@ -2496,33 +2504,33 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 339
+    # Example 339 (known broken)
     input = "``foo`bar``\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>foo`bar</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 339)
 
-    # Example 340
+    # Example 340 (known broken)
     input = "` foo `` bar `\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><code>foo `` bar</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 340)
 
-    # Example 341
+    # Example 341 (known broken)
     input = "*foo`*`\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*foo<code>*</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 341)
 
-    # Example 342
+    # Example 342 (known broken)
     input = "[not a `link](/foo`)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[not a <code>link](/foo</code>)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 342)
 
     # Example 343
     input = "`<a href=\"`\">`\n"
@@ -2552,12 +2560,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 347
+    # Example 347 (known broken)
     input = "```foo``\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>```foo``</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 347)
 
     # Example 348
     input = "`foo\n"
@@ -2566,12 +2574,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 349
+    # Example 349 (known broken)
     input = "`foo``bar``\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>`foo<code>bar</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 349)
 
 end
 
@@ -2594,12 +2602,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 352
+    # Example 352 (known broken)
     input = "a*\"foo\"*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>a*&quot;foo&quot;*</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 352)
 
     # Example 353
     input = "*\u00A0a\u00A0*\n"
@@ -2608,12 +2616,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 354
+    # Example 354 (known broken)
     input = "*\$*alpha.\n\n*£*bravo.\n\n*€*charlie.\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*\$*alpha.</p>\n<p>*£*bravo.</p>\n<p>*€*charlie.</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 354)
 
     # Example 355
     input = "foo*bar*\n"
@@ -2643,40 +2651,40 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 359
+    # Example 359 (known broken)
     input = "a_\"foo\"_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>a_&quot;foo&quot;_</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 359)
 
-    # Example 360
+    # Example 360 (known broken)
     input = "foo_bar_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo_bar_</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 360)
 
-    # Example 361
+    # Example 361 (known broken)
     input = "5_6_78\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>5_6_78</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 361)
 
-    # Example 362
+    # Example 362 (known broken)
     input = "пристаням_стремятся_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>пристаням_стремятся_</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 362)
 
-    # Example 363
+    # Example 363 (known broken)
     input = "aa_\"bb\"_cc\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>aa_&quot;bb&quot;_cc</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 363)
 
     # Example 364
     input = "foo-_(bar)_\n"
@@ -2699,26 +2707,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 367
+    # Example 367 (known broken)
     input = "*foo bar\n*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*foo bar\n*</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 367)
 
-    # Example 368
+    # Example 368 (known broken)
     input = "*(*foo)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*(*foo)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 368)
 
-    # Example 369
+    # Example 369 (known broken)
     input = "*(*foo*)*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>(<em>foo</em>)</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 369)
 
     # Example 370
     input = "*foo*bar\n"
@@ -2734,40 +2742,40 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 372
+    # Example 372 (known broken)
     input = "_(_foo)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>_(_foo)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 372)
 
-    # Example 373
+    # Example 373 (known broken)
     input = "_(_foo_)_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>(<em>foo</em>)</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 373)
 
-    # Example 374
+    # Example 374 (known broken)
     input = "_foo_bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>_foo_bar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 374)
 
-    # Example 375
+    # Example 375 (known broken)
     input = "_пристаням_стремятся\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>_пристаням_стремятся</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 375)
 
-    # Example 376
+    # Example 376 (known broken)
     input = "_foo_bar_baz_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo_bar_baz</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 376)
 
     # Example 377
     input = "_(bar)_.\n"
@@ -2790,12 +2798,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 380
+    # Example 380 (known broken)
     input = "a**\"foo\"**\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>a**&quot;foo&quot;**</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 380)
 
     # Example 381
     input = "foo**bar**\n"
@@ -2825,40 +2833,40 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 385
+    # Example 385 (known broken)
     input = "a__\"foo\"__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>a__&quot;foo&quot;__</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 385)
 
-    # Example 386
+    # Example 386 (known broken)
     input = "foo__bar__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo__bar__</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 386)
 
-    # Example 387
+    # Example 387 (known broken)
     input = "5__6__78\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>5__6__78</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 387)
 
-    # Example 388
+    # Example 388 (known broken)
     input = "пристаням__стремятся__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>пристаням__стремятся__</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 388)
 
-    # Example 389
+    # Example 389 (known broken)
     input = "__foo, __bar__, baz__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong>foo, <strong>bar</strong>, baz</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 389)
 
     # Example 390
     input = "foo-__(bar)__\n"
@@ -2874,12 +2882,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 392
+    # Example 392 (known broken)
     input = "**(**foo)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>**(**foo)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 392)
 
     # Example 393
     input = "*(**foo**)*\n"
@@ -2916,12 +2924,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 398
+    # Example 398 (known broken)
     input = "__(__foo)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>__(__foo)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 398)
 
     # Example 399
     input = "_(__foo__)_\n"
@@ -2930,26 +2938,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 400
+    # Example 400 (known broken)
     input = "__foo__bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>__foo__bar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 400)
 
-    # Example 401
+    # Example 401 (known broken)
     input = "__пристаням__стремятся\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>__пристаням__стремятся</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 401)
 
-    # Example 402
+    # Example 402 (known broken)
     input = "__foo__bar__baz__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong>foo__bar__baz</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 402)
 
     # Example 403
     input = "__(bar)__.\n"
@@ -2979,26 +2987,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 407
+    # Example 407 (known broken)
     input = "_foo _bar_ baz_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo <em>bar</em> baz</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 407)
 
-    # Example 408
+    # Example 408 (known broken)
     input = "__foo_ bar_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em><em>foo</em> bar</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 408)
 
-    # Example 409
+    # Example 409 (known broken)
     input = "*foo *bar**\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo <em>bar</em></em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 409)
 
     # Example 410
     input = "*foo **bar** baz*\n"
@@ -3021,54 +3029,54 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 413
+    # Example 413 (known broken)
     input = "***foo** bar*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em><strong>foo</strong> bar</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 413)
 
-    # Example 414
+    # Example 414 (known broken)
     input = "*foo **bar***\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo <strong>bar</strong></em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 414)
 
-    # Example 415
+    # Example 415 (known broken)
     input = "*foo**bar***\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo<strong>bar</strong></em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 415)
 
-    # Example 416
+    # Example 416 (known broken)
     input = "foo***bar***baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo<em><strong>bar</strong></em>baz</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 416)
 
-    # Example 417
+    # Example 417 (known broken)
     input = "foo******bar*********baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo<strong><strong><strong>bar</strong></strong></strong>***baz</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 417)
 
-    # Example 418
+    # Example 418 (known broken)
     input = "*foo **bar *baz* bim** bop*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo <strong>bar <em>baz</em> bim</strong> bop</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 418)
 
-    # Example 419
+    # Example 419 (known broken)
     input = "*foo [*bar*](/url)*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo <a href=\"/url\"><em>bar</em></a></em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 419)
 
     # Example 420
     input = "** is not an empty emphasis\n"
@@ -3105,26 +3113,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 425
+    # Example 425 (known broken)
     input = "__foo __bar__ baz__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong>foo <strong>bar</strong> baz</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 425)
 
-    # Example 426
+    # Example 426 (known broken)
     input = "____foo__ bar__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong><strong>foo</strong> bar</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 426)
 
-    # Example 427
+    # Example 427 (known broken)
     input = "**foo **bar****\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong>foo <strong>bar</strong></strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 427)
 
     # Example 428
     input = "**foo *bar* baz**\n"
@@ -3140,26 +3148,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 430
+    # Example 430 (known broken)
     input = "***foo* bar**\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong><em>foo</em> bar</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 430)
 
-    # Example 431
+    # Example 431 (known broken)
     input = "**foo *bar***\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong>foo <em>bar</em></strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 431)
 
-    # Example 432
+    # Example 432 (known broken)
     input = "**foo *bar **baz**\nbim* bop**\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong>foo <em>bar <strong>baz</strong>\nbim</em> bop</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 432)
 
     # Example 433
     input = "**foo [*bar*](/url)**\n"
@@ -3189,12 +3197,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 437
+    # Example 437 (known broken)
     input = "foo *\\**\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo <em>*</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 437)
 
     # Example 438
     input = "foo *_*\n"
@@ -3210,12 +3218,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 440
+    # Example 440 (known broken)
     input = "foo **\\***\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo <strong>*</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 440)
 
     # Example 441
     input = "foo **_**\n"
@@ -3224,47 +3232,47 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 442
+    # Example 442 (known broken)
     input = "**foo*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*<em>foo</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 442)
 
-    # Example 443
+    # Example 443 (known broken)
     input = "*foo**\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo</em>*</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 443)
 
-    # Example 444
+    # Example 444 (known broken)
     input = "***foo**\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*<strong>foo</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 444)
 
-    # Example 445
+    # Example 445 (known broken)
     input = "****foo*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>***<em>foo</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 445)
 
-    # Example 446
+    # Example 446 (known broken)
     input = "**foo***\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong>foo</strong>*</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 446)
 
-    # Example 447
+    # Example 447 (known broken)
     input = "*foo****\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo</em>***</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 447)
 
     # Example 448
     input = "foo ___\n"
@@ -3273,12 +3281,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 449
+    # Example 449 (known broken)
     input = "foo _\\__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo <em>_</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 449)
 
     # Example 450
     input = "foo _*_\n"
@@ -3294,12 +3302,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 452
+    # Example 452 (known broken)
     input = "foo __\\___\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo <strong>_</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 452)
 
     # Example 453
     input = "foo __*__\n"
@@ -3308,47 +3316,47 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 454
+    # Example 454 (known broken)
     input = "__foo_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>_<em>foo</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 454)
 
-    # Example 455
+    # Example 455 (known broken)
     input = "_foo__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo</em>_</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 455)
 
-    # Example 456
+    # Example 456 (known broken)
     input = "___foo__\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>_<strong>foo</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 456)
 
-    # Example 457
+    # Example 457 (known broken)
     input = "____foo_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>___<em>foo</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 457)
 
-    # Example 458
+    # Example 458 (known broken)
     input = "__foo___\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong>foo</strong>_</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 458)
 
-    # Example 459
+    # Example 459 (known broken)
     input = "_foo____\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo</em>___</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 459)
 
     # Example 460
     input = "**foo**\n"
@@ -3378,40 +3386,40 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 464
+    # Example 464 (known broken)
     input = "****foo****\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong><strong>foo</strong></strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 464)
 
-    # Example 465
+    # Example 465 (known broken)
     input = "____foo____\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong><strong>foo</strong></strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 465)
 
-    # Example 466
+    # Example 466 (known broken)
     input = "******foo******\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><strong><strong><strong>foo</strong></strong></strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 466)
 
-    # Example 467
+    # Example 467 (known broken)
     input = "***foo***\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em><strong>foo</strong></em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 467)
 
-    # Example 468
+    # Example 468 (known broken)
     input = "_____foo_____\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em><strong><strong>foo</strong></strong></em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 468)
 
     # Example 469
     input = "*foo _bar* baz_\n"
@@ -3427,82 +3435,82 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 471
+    # Example 471 (known broken)
     input = "**foo **bar baz**\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>**foo <strong>bar baz</strong></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 471)
 
-    # Example 472
+    # Example 472 (known broken)
     input = "*foo *bar baz*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*foo <em>bar baz</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 472)
 
-    # Example 473
+    # Example 473 (known broken)
     input = "*[bar*](/url)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*<a href=\"/url\">bar*</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 473)
 
-    # Example 474
+    # Example 474 (known broken)
     input = "_foo [bar_](/url)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>_foo <a href=\"/url\">bar_</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 474)
 
-    # Example 475
+    # Example 475 (known broken)
     input = "*<img src=\"foo\" title=\"*\"/>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*<img src=\"foo\" title=\"*\"/></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 475)
 
-    # Example 476
+    # Example 476 (known broken)
     input = "**<a href=\"**\">\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>**<a href=\"**\"></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 476)
 
-    # Example 477
+    # Example 477 (known broken)
     input = "__<a href=\"__\">\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>__<a href=\"__\"></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 477)
 
-    # Example 478
+    # Example 478 (known broken)
     input = "*a `*`*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>a <code>*</code></em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 478)
 
-    # Example 479
+    # Example 479 (known broken)
     input = "_a `_`_\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>a <code>_</code></em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 479)
 
-    # Example 480
+    # Example 480 (known broken)
     input = "**a<https://foo.bar/?q=**>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>**a<a href=\"https://foo.bar/?q=**\">https://foo.bar/?q=**</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 480)
 
-    # Example 481
+    # Example 481 (known broken)
     input = "__a<https://foo.bar/?q=__>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>__a<a href=\"https://foo.bar/?q=__\">https://foo.bar/?q=__</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 481)
 
 end
 
@@ -3511,12 +3519,12 @@ end
 #
 @testset "Links" begin
 
-    # Example 482
+    # Example 482 (known broken)
     input = "[link](/uri \"title\")\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\" title=\"title\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 482)
 
     # Example 483
     input = "[link](/uri)\n"
@@ -3539,12 +3547,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 486
+    # Example 486 (known broken)
     input = "[link](<>)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 486)
 
     # Example 487
     input = "[]()\n"
@@ -3553,19 +3561,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 488
+    # Example 488 (known broken)
     input = "[link](/my uri)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[link](/my uri)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 488)
 
-    # Example 489
+    # Example 489 (known broken)
     input = "[link](</my uri>)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/my%20uri\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 489)
 
     # Example 490
     input = "[link](foo\nbar)\n"
@@ -3581,26 +3589,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 492
+    # Example 492 (known broken)
     input = "[a](<b)c>)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"b)c\">a</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 492)
 
-    # Example 493
+    # Example 493 (known broken)
     input = "[link](<foo\\>)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[link](&lt;foo&gt;)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 493)
 
-    # Example 494
+    # Example 494 (known broken)
     input = "[a](<b)c\n[a](<b)c>\n[a](<b>c)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[a](&lt;b)c\n[a](&lt;b)c&gt;\n[a](<b>c)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 494)
 
     # Example 495
     input = "[link](\\(foo\\))\n"
@@ -3623,26 +3631,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 498
+    # Example 498 (known broken)
     input = "[link](foo\\(and\\(bar\\))\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"foo(and(bar)\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 498)
 
-    # Example 499
+    # Example 499 (known broken)
     input = "[link](<foo(and(bar)>)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"foo(and(bar)\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 499)
 
-    # Example 500
+    # Example 500 (known broken)
     input = "[link](foo\\)\\:)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"foo):\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 500)
 
     # Example 501
     input = "[link](#fragment)\n\n[link](https://example.com#fragment)\n\n[link](https://example.com?foo=3#frag)\n"
@@ -3658,12 +3666,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 503
+    # Example 503 (known broken)
     input = "[link](foo%20b&auml;)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"foo%20b%C3%A4\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 503)
 
     # Example 504
     input = "[link](\"title\")\n"
@@ -3672,19 +3680,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 505
+    # Example 505 (known broken)
     input = "[link](/url \"title\")\n[link](/url 'title')\n[link](/url (title))\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">link</a>\n<a href=\"/url\" title=\"title\">link</a>\n<a href=\"/url\" title=\"title\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 505)
 
-    # Example 506
+    # Example 506 (known broken)
     input = "[link](/url \"title \\\"&quot;\")\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title &quot;&quot;\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 506)
 
     # Example 507
     input = "[link](/url\u00A0\"title\")\n"
@@ -3693,26 +3701,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 508
+    # Example 508 (known broken)
     input = "[link](/url \"title \"and\" title\")\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[link](/url &quot;title &quot;and&quot; title&quot;)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 508)
 
-    # Example 509
+    # Example 509 (known broken)
     input = "[link](/url 'title \"and\" title')\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title &quot;and&quot; title\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 509)
 
-    # Example 510
+    # Example 510 (known broken)
     input = "[link](   /uri\n  \"title\"  )\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\" title=\"title\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 510)
 
     # Example 511
     input = "[link] (/uri)\n"
@@ -3742,12 +3750,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 515
+    # Example 515 (known broken)
     input = "[link \\[bar](/uri)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\">link [bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 515)
 
     # Example 516
     input = "[link *foo **bar** `#`*](/uri)\n"
@@ -3763,33 +3771,33 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 518
+    # Example 518 (known broken)
     input = "[foo [bar](/uri)](/uri)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo <a href=\"/uri\">bar</a>](/uri)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 518)
 
-    # Example 519
+    # Example 519 (known broken)
     input = "[foo *[bar [baz](/uri)](/uri)*](/uri)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo <em>[bar <a href=\"/uri\">baz</a>](/uri)</em>](/uri)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 519)
 
-    # Example 520
+    # Example 520 (known broken)
     input = "![[[foo](uri1)](uri2)](uri3)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"uri3\" alt=\"[foo](uri2)\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 520)
 
-    # Example 521
+    # Example 521 (known broken)
     input = "*[foo*](/uri)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*<a href=\"/uri\">foo*</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 521)
 
     # Example 522
     input = "[foo *bar](baz*)\n"
@@ -3805,159 +3813,159 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 524
+    # Example 524 (known broken)
     input = "[foo <bar attr=\"](baz)\">\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo <bar attr=\"](baz)\"></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 524)
 
-    # Example 525
+    # Example 525 (known broken)
     input = "[foo`](/uri)`\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo<code>](/uri)</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 525)
 
-    # Example 526
+    # Example 526 (known broken)
     input = "[foo<https://example.com/?search=](uri)>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo<a href=\"https://example.com/?search=%5D(uri)\">https://example.com/?search=](uri)</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 526)
 
-    # Example 527
+    # Example 527 (known broken)
     input = "[foo][bar]\n\n[bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 527)
 
-    # Example 528
+    # Example 528 (known broken)
     input = "[link [foo [bar]]][ref]\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\">link [foo [bar]]</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 528)
 
-    # Example 529
+    # Example 529 (known broken)
     input = "[link \\[bar][ref]\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\">link [bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 529)
 
-    # Example 530
+    # Example 530 (known broken)
     input = "[link *foo **bar** `#`*][ref]\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\">link <em>foo <strong>bar</strong> <code>#</code></em></a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 530)
 
-    # Example 531
+    # Example 531 (known broken)
     input = "[![moon](moon.jpg)][ref]\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\"><img src=\"moon.jpg\" alt=\"moon\" /></a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 531)
 
-    # Example 532
+    # Example 532 (known broken)
     input = "[foo [bar](/uri)][ref]\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo <a href=\"/uri\">bar</a>]<a href=\"/uri\">ref</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 532)
 
-    # Example 533
+    # Example 533 (known broken)
     input = "[foo *bar [baz][ref]*][ref]\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo <em>bar <a href=\"/uri\">baz</a></em>]<a href=\"/uri\">ref</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 533)
 
-    # Example 534
+    # Example 534 (known broken)
     input = "*[foo*][ref]\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*<a href=\"/uri\">foo*</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 534)
 
-    # Example 535
+    # Example 535 (known broken)
     input = "[foo *bar][ref]*\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\">foo *bar</a>*</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 535)
 
-    # Example 536
+    # Example 536 (known broken)
     input = "[foo <bar attr=\"][ref]\">\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo <bar attr=\"][ref]\"></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 536)
 
-    # Example 537
+    # Example 537 (known broken)
     input = "[foo`][ref]`\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo<code>][ref]</code></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 537)
 
-    # Example 538
+    # Example 538 (known broken)
     input = "[foo<https://example.com/?search=][ref]>\n\n[ref]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo<a href=\"https://example.com/?search=%5D%5Bref%5D\">https://example.com/?search=][ref]</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 538)
 
-    # Example 539
+    # Example 539 (known broken)
     input = "[foo][BaR]\n\n[bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 539)
 
-    # Example 540
+    # Example 540 (known broken)
     input = "[ẞ]\n\n[SS]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\">ẞ</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 540)
 
-    # Example 541
+    # Example 541 (known broken)
     input = "[Foo\n  bar]: /url\n\n[Baz][Foo bar]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\">Baz</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 541)
 
-    # Example 542
+    # Example 542 (known broken)
     input = "[foo] [bar]\n\n[bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo] <a href=\"/url\" title=\"title\">bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 542)
 
-    # Example 543
+    # Example 543 (known broken)
     input = "[foo]\n[bar]\n\n[bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo]\n<a href=\"/url\" title=\"title\">bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 543)
 
-    # Example 544
+    # Example 544 (known broken)
     input = "[foo]: /url1\n\n[foo]: /url2\n\n[bar][foo]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url1\">bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 544)
 
-    # Example 545
+    # Example 545 (known broken)
     input = "[bar][foo\\!]\n\n[foo!]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[bar][foo!]</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 545)
 
     # Example 546
     input = "[foo][ref[]\n\n[ref[]: /uri\n"
@@ -3980,19 +3988,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 549
+    # Example 549 (known broken)
     input = "[foo][ref\\[]\n\n[ref\\[]: /uri\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 549)
 
-    # Example 550
+    # Example 550 (known broken)
     input = "[bar\\\\]: /uri\n\n[bar\\\\]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/uri\">bar\\</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 550)
 
     # Example 551
     input = "[]\n\n[]: /uri\n"
@@ -4008,138 +4016,138 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 553
+    # Example 553 (known broken)
     input = "[foo][]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 553)
 
-    # Example 554
+    # Example 554 (known broken)
     input = "[*foo* bar][]\n\n[*foo* bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\"><em>foo</em> bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 554)
 
-    # Example 555
+    # Example 555 (known broken)
     input = "[Foo][]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">Foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 555)
 
-    # Example 556
+    # Example 556 (known broken)
     input = "[foo] \n[]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">foo</a>\n[]</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 556)
 
-    # Example 557
+    # Example 557 (known broken)
     input = "[foo]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 557)
 
-    # Example 558
+    # Example 558 (known broken)
     input = "[*foo* bar]\n\n[*foo* bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\"><em>foo</em> bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 558)
 
-    # Example 559
+    # Example 559 (known broken)
     input = "[[*foo* bar]]\n\n[*foo* bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[<a href=\"/url\" title=\"title\"><em>foo</em> bar</a>]</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 559)
 
-    # Example 560
+    # Example 560 (known broken)
     input = "[[bar [foo]\n\n[foo]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[[bar <a href=\"/url\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 560)
 
-    # Example 561
+    # Example 561 (known broken)
     input = "[Foo]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\" title=\"title\">Foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 561)
 
-    # Example 562
+    # Example 562 (known broken)
     input = "[foo] bar\n\n[foo]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url\">foo</a> bar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 562)
 
-    # Example 563
+    # Example 563 (known broken)
     input = "\\[foo]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo]</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 563)
 
-    # Example 564
+    # Example 564 (known broken)
     input = "[foo*]: /url\n\n*[foo*]\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>*<a href=\"/url\">foo*</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 564)
 
-    # Example 565
+    # Example 565 (known broken)
     input = "[foo][bar]\n\n[foo]: /url1\n[bar]: /url2\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url2\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 565)
 
-    # Example 566
+    # Example 566 (known broken)
     input = "[foo][]\n\n[foo]: /url1\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url1\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 566)
 
-    # Example 567
+    # Example 567 (known broken)
     input = "[foo]()\n\n[foo]: /url1\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 567)
 
-    # Example 568
+    # Example 568 (known broken)
     input = "[foo](not a link)\n\n[foo]: /url1\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url1\">foo</a>(not a link)</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 568)
 
-    # Example 569
+    # Example 569 (known broken)
     input = "[foo][bar][baz]\n\n[baz]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo]<a href=\"/url\">bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 569)
 
-    # Example 570
+    # Example 570 (known broken)
     input = "[foo][bar][baz]\n\n[baz]: /url1\n[bar]: /url2\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"/url2\">foo</a><a href=\"/url1\">baz</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 570)
 
-    # Example 571
+    # Example 571 (known broken)
     input = "[foo][bar][baz]\n\n[baz]: /url1\n[foo]: /url2\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo]<a href=\"/url1\">bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 571)
 
 end
 
@@ -4148,47 +4156,47 @@ end
 #
 @testset "Images" begin
 
-    # Example 572
+    # Example 572 (known broken)
     input = "![foo](/url \"title\")\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"foo\" title=\"title\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 572)
 
-    # Example 573
+    # Example 573 (known broken)
     input = "![foo *bar*]\n\n[foo *bar*]: train.jpg \"train & tracks\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"train.jpg\" alt=\"foo bar\" title=\"train &amp; tracks\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 573)
 
-    # Example 574
+    # Example 574 (known broken)
     input = "![foo ![bar](/url)](/url2)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url2\" alt=\"foo bar\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 574)
 
-    # Example 575
+    # Example 575 (known broken)
     input = "![foo [bar](/url)](/url2)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url2\" alt=\"foo bar\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 575)
 
-    # Example 576
+    # Example 576 (known broken)
     input = "![foo *bar*][]\n\n[foo *bar*]: train.jpg \"train & tracks\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"train.jpg\" alt=\"foo bar\" title=\"train &amp; tracks\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 576)
 
-    # Example 577
+    # Example 577 (known broken)
     input = "![foo *bar*][foobar]\n\n[FOOBAR]: train.jpg \"train & tracks\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"train.jpg\" alt=\"foo bar\" title=\"train &amp; tracks\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 577)
 
     # Example 578
     input = "![foo](train.jpg)\n"
@@ -4197,19 +4205,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 579
+    # Example 579 (known broken)
     input = "My ![foo bar](/path/to/train.jpg  \"title\"   )\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>My <img src=\"/path/to/train.jpg\" alt=\"foo bar\" title=\"title\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 579)
 
-    # Example 580
+    # Example 580 (known broken)
     input = "![foo](<url>)\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"url\" alt=\"foo\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 580)
 
     # Example 581
     input = "![](/url)\n"
@@ -4218,61 +4226,61 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 582
+    # Example 582 (known broken)
     input = "![foo][bar]\n\n[bar]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"foo\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 582)
 
-    # Example 583
+    # Example 583 (known broken)
     input = "![foo][bar]\n\n[BAR]: /url\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"foo\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 583)
 
-    # Example 584
+    # Example 584 (known broken)
     input = "![foo][]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"foo\" title=\"title\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 584)
 
-    # Example 585
+    # Example 585 (known broken)
     input = "![*foo* bar][]\n\n[*foo* bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"foo bar\" title=\"title\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 585)
 
-    # Example 586
+    # Example 586 (known broken)
     input = "![Foo][]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"Foo\" title=\"title\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 586)
 
-    # Example 587
+    # Example 587 (known broken)
     input = "![foo] \n[]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"foo\" title=\"title\" />\n[]</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 587)
 
-    # Example 588
+    # Example 588 (known broken)
     input = "![foo]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"foo\" title=\"title\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 588)
 
-    # Example 589
+    # Example 589 (known broken)
     input = "![*foo* bar]\n\n[*foo* bar]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"foo bar\" title=\"title\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 589)
 
     # Example 590
     input = "![[foo]]\n\n[[foo]]: /url \"title\"\n"
@@ -4281,26 +4289,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 591
+    # Example 591 (known broken)
     input = "![Foo]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><img src=\"/url\" alt=\"Foo\" title=\"title\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 591)
 
-    # Example 592
+    # Example 592 (known broken)
     input = "!\\[foo]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>![foo]</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 592)
 
-    # Example 593
+    # Example 593 (known broken)
     input = "\\![foo]\n\n[foo]: /url \"title\"\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>!<a href=\"/url\" title=\"title\">foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 593)
 
 end
 
@@ -4330,26 +4338,26 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 597
+    # Example 597 (known broken)
     input = "<MAILTO:FOO@BAR.BAZ>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"MAILTO:FOO@BAR.BAZ\">MAILTO:FOO@BAR.BAZ</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 597)
 
-    # Example 598
+    # Example 598 (known broken)
     input = "<a+b+c:d>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"a+b+c:d\">a+b+c:d</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 598)
 
-    # Example 599
+    # Example 599 (known broken)
     input = "<made-up-scheme://foo,bar>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"made-up-scheme://foo,bar\">made-up-scheme://foo,bar</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 599)
 
     # Example 600
     input = "<https://../>\n"
@@ -4358,12 +4366,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 601
+    # Example 601 (known broken)
     input = "<localhost:5001/foo>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"localhost:5001/foo\">localhost:5001/foo</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 601)
 
     # Example 602
     input = "<https://foo.bar/baz bim>\n"
@@ -4540,12 +4548,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 626
+    # Example 626 (known broken)
     input = "foo <!--> foo -->\n\nfoo <!---> foo -->\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo <!--> foo --&gt;</p>\n<p>foo <!---> foo --&gt;</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 626)
 
     # Example 627
     input = "foo <?php echo \$a; ?>\n"
@@ -4596,12 +4604,12 @@ end
 #
 @testset "Hard line breaks" begin
 
-    # Example 633
+    # Example 633 (known broken)
     input = "foo  \nbaz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo<br />\nbaz</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 633)
 
     # Example 634
     input = "foo\\\nbaz\n"
@@ -4610,33 +4618,33 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 635
+    # Example 635 (known broken)
     input = "foo       \nbaz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo<br />\nbaz</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 635)
 
-    # Example 636
+    # Example 636 (known broken)
     input = "foo  \n     bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo<br />\nbar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 636)
 
-    # Example 637
+    # Example 637 (known broken)
     input = "foo\\\n     bar\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo<br />\nbar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 637)
 
-    # Example 638
+    # Example 638 (known broken)
     input = "*foo  \nbar*\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><em>foo<br />\nbar</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 638)
 
     # Example 639
     input = "*foo\\\nbar*\n"
@@ -4659,33 +4667,33 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 642
+    # Example 642 (known broken)
     input = "<a href=\"foo  \nbar\">\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"foo  \nbar\"></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 642)
 
-    # Example 643
+    # Example 643 (known broken)
     input = "<a href=\"foo\\\nbar\">\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"foo\\\nbar\"></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 643)
 
-    # Example 644
+    # Example 644 (known broken)
     input = "foo\\\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo\\</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 644)
 
-    # Example 645
+    # Example 645 (known broken)
     input = "foo  \n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 645)
 
     # Example 646
     input = "### foo\\\n"
@@ -4751,5 +4759,8 @@ end
     @test expected == actual
 
 end
+
+@test now_passing == Int[]
+@test_broken isempty(known_broken)
 
 end

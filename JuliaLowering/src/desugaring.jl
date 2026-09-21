@@ -487,6 +487,8 @@ end
 #-------------------------------------------------------------------------------
 # Expand comparison chains
 
+is_dotted(x) = kind(x) === K"." && numchildren(x) == 1
+
 # Expanding comparison chains: (comparison a op b op c ...)
 #
 # We use && to combine pairs of adjacent scalar comparisons and .& to combine
@@ -507,7 +509,7 @@ function expand_compare_chain(ctx, ex)
     i = 1
 
     while i+2 <= length(terms)
-        chain = if kind(terms[i+1]) == K"."
+        chain = if is_dotted(terms[i+1])
             # if the op starts a dot-chain, just expand it
             (vector_chain, i) = expand_vector_compare_chain(ctx, ex, terms, i)
             vector_chain
@@ -515,7 +517,7 @@ function expand_compare_chain(ctx, ex)
             dotchain_head = nothing
             # move the first evaluation of a following dot-chain to the top
             # in order to avoid it getting skipped by short circuiting
-            next_dotop = findnext(op -> kind(op) == K".", terms, i+3)
+            next_dotop = findnext(is_dotted, terms, i+3)
             if !isnothing(next_dotop)
                 dotop_lhs = terms[next_dotop-1]
                 if kind(dotop_lhs) != K"BindingId"
@@ -562,7 +564,7 @@ function expand_scalar_compare_chain(ctx, srcref, terms, i)
         op = terms[i+1]
         rhs = terms[i+2]
 
-        kind(op) == K"." && break
+        is_dotted(op) && break
 
         rhs = if kind(rhs) != K"BindingId"
             rhs_ident = ssavar(ctx, rhs, "rhs_ident")
@@ -601,8 +603,8 @@ function expand_vector_compare_chain(ctx, srcref, terms, i)
         lhs = terms[i]
         op = terms[i+1]
         rhs = terms[i+2]
-        
-        kind(op) != K"." && break
+
+        !is_dotted(op) && break
 
         rhs = if kind(rhs) != K"BindingId"
             rhs_ident = ssavar(ctx, rhs, "rhs_ident")
@@ -799,7 +801,7 @@ function expand_dotcall(ctx, ex)
     k = kind(ex)
     if k == K"dotcall"
         @jl_assert numchildren(ex) >= 1 ex
-        farg = ex[1]
+        farg = setmeta(ex[1], :is_called, true)
         args = SyntaxList()
         append!(args, ex[2:end])
         kws = remove_kw_args!(ctx, args)
@@ -832,9 +834,8 @@ function expand_fuse_broadcast(ctx, ex)
         lhs = ex[1]
         kl = kind(lhs)
         rhs = expand_dotcall(ctx, ex[2])
-        @ast ctx ex [K"call"
-            "materialize!"::K"top"
-            if kl == K"ref"
+        @ast ctx ex [K"block"
+            dest := if kl == K"ref"
                 sctx = with_stmts(ctx)
                 (arr, idxs) = expand_ref_components(sctx, lhs)
                 [K"block"
@@ -853,7 +854,7 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 lhs
             end
-            if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && syntax_name(rhs[1]) == "broadcasted")
+            bc := if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && syntax_name(rhs[1]) == "broadcasted")
                 # Ensure the rhs of .= is always wrapped in a call to `broadcasted()`
                 [K"call"(rhs)
                     "broadcasted"::K"top"
@@ -863,6 +864,8 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 rhs
             end
+            [K"call" "materialize!"::K"top" dest bc]
+            dest
         ]
     else
         @ast ctx ex [K"call"
@@ -1623,36 +1626,43 @@ function expand_let(ctx, ex)
             lhs = binding[1]
             rhs = binding[2]
             if is_identifier_like(lhs)
-                kind(lhs) === K"Placeholder" && continue
-                blk = @ast ctx binding [K"block"
-                    tmp := rhs
-                    [K"scope_block"(ex) scope_type
-                        [K"local"(lhs) lhs]
-                        [K"always_defined" lhs]
-                        [K"="(binding) lhs tmp]
-                        blk
+                if kind(lhs) === K"Placeholder"
+                    blk = @ast ctx binding [K"block" rhs blk]
+                else
+                    blk = @ast ctx binding [K"block"
+                        tmp := rhs
+                        [K"scope_block"(ex) scope_type
+                            [K"local"(lhs) lhs]
+                            [K"always_defined" lhs]
+                            [K"="(binding) lhs tmp]
+                            blk
+                        ]
                     ]
-                ]
+                end
             elseif kind(lhs) == K"::"
                 var = lhs[1]
-                kind(var) === K"Placeholder" && continue
                 if !is_identifier_like(var)
                     throw(LoweringError(var, "Invalid assignment location in let syntax"))
-                end
-                blk = @ast ctx binding [K"block"
-                    tmp := rhs
-                    # type := lhs[2]
-                    [K"scope_block"(ex) scope_type
-                        # n.b. the declared type is referenced directly (not
-                        # hoisted into a temporary) so that the declaration
-                        # works for variables captured into other lambdas, where
-                        # it is re-evaluated at each assignment like flisp does
-                        [K"local"(lhs) [K"::" var lhs[2]]]
-                        [K"always_defined" var]
-                        [K"="(binding) var tmp]
-                        blk
+                elseif kind(var) === K"Placeholder"
+                    # do a typeassert/convert here? (this falls through flisp as
+                    # a typed global...)
+                    blk = @ast ctx binding [K"block" rhs blk]
+                else
+                    blk = @ast ctx binding [K"block"
+                        tmp := rhs
+                        # type := lhs[2]
+                        [K"scope_block"(ex) scope_type
+                            # n.b. the declared type is referenced directly (not
+                            # hoisted into a temporary) so that the declaration
+                            # works for variables captured into other lambdas, where
+                            # it is re-evaluated at each assignment like flisp does
+                            [K"local"(lhs) [K"::" var lhs[2]]]
+                            [K"always_defined" var]
+                            [K"="(binding) var tmp]
+                            blk
+                        ]
                     ]
-                ]
+                end
             elseif kind(lhs) == K"tuple"
                 lhs_locals = SyntaxList()
                 foreach_lhs_name(lhs) do var
@@ -2335,7 +2345,7 @@ function expand_decls(ctx, ex)
             [K".=" x _] -> x
             [K"op=" x _ _] -> x
             [K".op=" x _ _] -> x
-            [K"function" x _] -> x
+            [K"function" x _...] -> x
         end
         # type decls are handled elsewhere unless simple
         make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
@@ -2371,8 +2381,8 @@ function expand_const_decl(ctx, ex)
     end
     @stm ex[1] begin
         # const is ignored on function
-        [K"function" _ _] -> expand_forms_2(ctx, ex[1])
-        [K"global" [K"function" _ _]] -> expand_forms_2(ctx, ex[1])
+        [K"function" _...] -> expand_forms_2(ctx, ex[1])
+        [K"global" [K"function" _...]] -> expand_forms_2(ctx, ex[1])
 
         [K"global" x] -> let decls = SyntaxList()
             @jl_assert kind(x) === K"=" ex
@@ -2514,7 +2524,7 @@ end
 # desugarable AST to macro AST.  Fortunately there are only two places (meta
 # nkw, and destructuring arg assignments) we do this, so handle them manually.
 function prepend_function_body(ctx, body, ex)
-    @stm body begin
+    out = @stm body begin
         [K"_generated_body" [K"syntaxquote" gen] nongen] -> begin
             ex_est = @stm ex begin
                 [K"meta" [K"Symbol"] n] ->
@@ -2529,6 +2539,20 @@ function prepend_function_body(ctx, body, ex)
         end
         _ -> @ast ctx body [K"block" ex body]
     end
+    mm = getmeta(body, :method_metas, nothing)
+    isnothing(mm) || setmeta!(out, :method_metas, mm)
+    out
+end
+
+# Prepend method metadata and retain it through recursive wrapper generation.
+function prepend_method_metas(ctx, src, body, method_metas)
+    isnothing(method_metas) && return body
+    out = @stm body begin
+        [K"block" stmts...] ->
+            @ast ctx src [K"block" [K"meta" method_metas...] stmts...]
+        _ -> @ast ctx src [K"block" [K"meta" method_metas...] body]
+    end
+    setmeta(out, :method_metas, method_metas)
 end
 
 # Produce all `method` exprs for the given `argl`
@@ -2589,7 +2613,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @jl_assert kind(body) === K"_generated_body" && numchildren(body) == 2 body
     gen_name = let mangled = reserve_module_binding_i(
         ctx.layer.mod,
-        string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator#"))
+        string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator"))
         new_global_binding(ctx, src, mangled, ctx.layer.mod)
     end
 
@@ -2674,6 +2698,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
     req = pos_req_args(argl)
     passed = copy(req)
+    prop_metas = getmeta(body, :method_metas, nothing)
     methods = SyntaxList()
     for i in eachindex(opt)
         @jl_assert i == length(passed)-length(req)+1 src
@@ -2690,6 +2715,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             @ast ctx src [K"block"
                 [K"call" mapindex(passed, 1)... opt_defaults[i]]]
         end
+        wrapper_body = prepend_method_metas(ctx, src, wrapper_body, prop_metas)
         # this function and method_def_expr need sp bounds because of this
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
@@ -2744,7 +2770,7 @@ is_vararg_type_expr(st) = @stm st begin
     _ -> kind(st) in KSet"core Identifier" && syntax_name(st) == "Vararg"
 end
 
-function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, overlay)
     kws = argl[end]
     pargl = argl[1:end-1]
     @jl_assert kind(kws) === K"parameters" src
@@ -2770,11 +2796,10 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     (kw_decls, kw_names, kw_syms, kw_defaults, restkw) = expand_kw_args(ctx, kws)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
     pos_sparams = used_typevars(pargl, sparams)
+    prop_metas = getmeta(body, :method_metas, nothing)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),
-        mangled = reserve_module_binding_i(
-            ctx.layer.mod,
-            string(startswith(n, '#') ? "" : "#kw_body#", n, "#"))
+        mangled = string("#", n, "#kw_body#", module_unique_name(ctx.layer.mod))
         # probably not desirable, but fixes eval-into-closed-module
         m1_sc = escape_layer(mtable.context::SyntaxContext, true)
         @mknode(newsym(ctx, mtable, mangled);
@@ -2803,9 +2828,10 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             scope_nest(ctx, make_assigns(ctx, kw_names, kw_defaults),
                 @ast ctx src [K"call" m1_name kw_names... rkw forward_pargl...])
         end
+        nokw_body = prepend_method_metas(
+            ctx, src, @ast(ctx, src, [K"block" [K"return" body2]]), prop_metas)
         method_def_expr(
-            ctx, src, mtable, pos_sparams, pargl,
-            @ast(ctx, src, [K"block" [K"return" body2]]))
+            ctx, src, mtable, pos_sparams, pargl, nokw_body)
     end
     # (3) Core.kwcall(arg2::NamedTuple, pargl...) methods (one per optarg).
     # - for each kwarg:
@@ -2883,6 +2909,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             scope_nest(ctx, kw_assigns,
                        @ast ctx src [K"block" handle_excess final_call])
         end
+        kwcall_body = prepend_method_metas(ctx, src, kwcall_body, prop_metas)
         # Core.kwcall method has its own first argument.  Ensure closure
         # conversion knows not to put the closure there.
         let arg1_name = setmeta!(
@@ -2899,7 +2926,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     end
     @ast ctx src [K"block"
         [K"function_decl" m1_name]
-        kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
+        # hack: define closure type for next decl
+        overlay || kind(mtable) === K"nothing" ? nothing : [K"no_method_defs" m1_name]
+        overlay || kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
         [K"method_defs" m1_name method_def_sparams(ctx, src, sparams) mdefs1]
         [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
         [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
@@ -3012,7 +3041,8 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     end
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
-        keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+        keywords_method_def_expr(
+            ctx, src, mtable, sparams, argl, body, rett, overlay)
     elseif overlay
         mtmp = ssavar(ctx, mtable)
         @ast ctx src [K"block"
@@ -3083,12 +3113,18 @@ end
 #-------------------------------------------------------------------------------
 # Expand macro definitions
 
+# Name is hygienic-global in compat mode, hygienic otherwise
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
-        @mknode(ex; kind=k, value="@$(syntax_name(ex))", children=nothing)
+        if k === K"Identifier" && is_flisp_compat(ex)
+            @mknode(ex; kind=k, value="@$(syntax_name(ex))",
+                    mod=syntax_module(ex))
+        else
+            @mknode(ex; kind=k, value="@$(syntax_name(ex))")
+        end
     elseif k == K"Placeholder"
-        @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))", children=nothing)
+        @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))")
     elseif is_valid_modref(ex)
         @jl_assert numchildren(ex) == 2 ex
         @ast ctx ex [K"." ex[1] _make_macro_name(ctx, ex[2])]
@@ -3097,7 +3133,6 @@ function _make_macro_name(ctx, ex)
     end
 end
 
-# flisp: expand-macro-def
 function expand_macro_def(ctx, ex)
     if numchildren(ex) == 1
         # macro with zero methods
@@ -3648,9 +3683,9 @@ function insert_struct_shim(ctx, fieldtypes, name)
     map(ex->_insert_fieldtype_struct_shim(ctx, name, ex), fieldtypes)
 end
 
-# Replace all (call core.apply_type ...) with (call core.apply_type_or_typeapp ...)
-# in an expression tree. Used for typegroup to handle TypeVar/TypeApp references
-# during type resolution before real DataTypes exist.
+# Used to handle TypeVar/TypeApp references during type resolution before real
+# DataTypes exist.  flisp: "Skips method bodies since constructors should use
+# plain apply_type for correct effects inference."
 function _replace_type_constructors(ctx, ex)
     if is_leaf(ex)
         return ex
@@ -3664,6 +3699,8 @@ function _replace_type_constructors(ctx, ex)
             push!(new_children, _replace_type_constructors(ctx, ex[i]))
         end
         return @ast ctx ex [K"call" new_children...]
+    elseif k === K"method" || is_quoted(ex)
+        ex
     else
         return mapchildren(e->_replace_type_constructors(ctx, e), ex)
     end
@@ -3828,10 +3865,9 @@ function expand_typegroup_def(ctx, ex)
         ])
         push!(old_type_vars, old_var)
     end
-
     # 2e. Call resolve_typegroup
-    push!(stmts, @ast ctx ex [K"="
-        [K"tuple" struct_names...]
+    resolve_tmp = ssavar(ctx, ex)
+    push!(stmts, @ast ctx ex [K"=" resolve_tmp
         [K"call" "resolve_typegroup"::K"core"
             typegroup_mod::K"Value"
             [K"call" "svec"::K"core" struct_names...]
@@ -3842,7 +3878,10 @@ function expand_typegroup_def(ctx, ex)
 
     # 2f. Bind to global constants
     for i in 1:n
-        push!(stmts, @ast ctx entries[i].sdef [K"constdecl" global_names[i] struct_names[i]])
+        prov = entries[i].sdef
+        push!(stmts, @ast ctx prov [K"=" struct_names[i]
+                [K"call" "getfield"::K"core" resolve_tmp i::K"Value"]])
+        push!(stmts, @ast ctx prov [K"constdecl" global_names[i] struct_names[i]])
     end
 
     # 2f. latestworld
@@ -3894,15 +3933,10 @@ function expand_typegroup_def(ctx, ex)
 
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block, then do the expand and replace
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        mapsyntax(x->@ast(ctx, x, [K"global" x]), struct_names)...
+        [K"scope_block" [K"hard_scope"] [K"block" stmts...]]
         fdef_stmts...
     ]
 
@@ -4042,15 +4076,10 @@ function expand_struct_def(ctx, ex, docs)
     end
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
+        [K"global" struct_name]
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        [K"scope_block" [K"hard_scope"] stmts...]
         fdef_stmts...
     ]
 
@@ -4136,7 +4165,7 @@ end
 
 function _unplaceholder(st)
     k = kind(st)
-    k === K"Placeholder" ? @mknode(st; kind=K"Identifier") :
+    k === K"Placeholder" || k === K"Symbol" ? @mknode(st; kind=K"Identifier") :
         k === K"Identifier" ? st : @jl_assert false st
 end
 
@@ -4392,7 +4421,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"function"
         if numchildren(ex) == 1
             return @ast ctx ex [K"block"
-                [K"global_if_global" ex[1]] [K"function_decl" ex[1]] ex[1]]
+                [K"global_if_global" ex[1]]
+                [K"function_decl" ex[1]]
+                [K"no_method_defs" ex[1]]
+                ex[1]]
         end
         sig, wheres = flatten_wheres(ex[1])
         name, args, rett = @stm sig begin

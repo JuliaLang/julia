@@ -407,11 +407,15 @@ function parse(str::AbstractString;
     return ex
 end
 
-function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+function parseatom(text::AbstractString, pos::Integer; filename="none",
+                   lineno=1, mod::Union{Nothing, Module}=nothing,
+                   _parse = parser_for_module(mod))
     return _parse_string(text, String(filename), lineno, pos, :atom, _parse)
 end
 
-function parseall(text::AbstractString; filename="none", lineno=1, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+function parseall(text::AbstractString; filename="none", lineno=1,
+                  mod::Union{Nothing, Module}=nothing,
+                  _parse = parser_for_module(mod))
     ex,_ = _parse_string(text, String(filename), lineno, 1, :all, _parse)
     return ex
 end

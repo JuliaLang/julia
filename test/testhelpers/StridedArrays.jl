@@ -52,7 +52,7 @@ function check_strided_get(a::AbstractArray{T,N})::Nothing where {T, N}
                 first_idx = first(axes(a, d))
                 el_ptr += (i[d] - first_idx) * stride_in_bytes
             end
-            if unsafe_load(el_ptr) != a[i]
+            if unsafe_load(el_ptr) !== a[i]
                 error("getindex and unsafe_load mismatch at index $(i)")
             end
         end

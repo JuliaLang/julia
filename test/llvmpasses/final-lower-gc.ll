@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='FinalLowerGC' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 
 @tag = external addrspace(10) global {}
@@ -21,7 +21,7 @@ attributes #0 = { allocsize(1) }
 define void @gc_frame_lowering(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @gc_frame_lowering
-; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 4
+; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 4, align 16
   %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
 ; OPAQUE: [[GCFRAME_SLOT:%.*]] = call ptr @julia.get_pgcstack()
   %pgcstack = call {}*** @julia.get_pgcstack()

@@ -15,7 +15,7 @@ WITH_GC_DEBUG_ENV=1
 
 This sets the C preprocessor define `GC_DEBUG_ENV`, which enables several
 debugging features described below. It also automatically enables `GC_VERIFY`
-(see [GC Verification](@ref)).
+(see [GC Verification](@ref GC_VERIFY)).
 
 To rebuild Julia after changing `Make.user`:
 
@@ -107,7 +107,7 @@ a fixed interval:
 JULIA_GC_ALLOC_POOL=r1:1 JULIA_GC_ALLOC_OTHER=r1:1 ./julia myscript.jl
 ```
 
-## GC Verification (`GC_VERIFY`) {#GCVerify}
+## [GC Verification (`GC_VERIFY`)](@id GC_VERIFY)
 
 `WITH_GC_DEBUG_ENV=1` automatically enables `GC_VERIFY`. After every minor
 (quick) GC, a full second GC pass is run that:

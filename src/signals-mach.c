@@ -51,8 +51,10 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 
 static mach_port_t segv_port = 0;
 
-// Dedicated PROT_NONE page for the kernel-assisted restore trigger.
-void *jl_mach_restore_page = NULL;
+// Dedicated PROT_NONE page for the kernel-assisted restore trigger. Only the
+// assembly of jl_mach_restore_trigger refers to it by name, which LTO cannot
+// see, so mark it used to keep it from being internalized.
+__attribute__((used)) void *jl_mach_restore_page = NULL;
 
 // Maximum float state count (in natural_t units) across all supported flavors.
 #if defined(_CPU_X86_64_)
@@ -690,8 +692,8 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // Re-check now that the thread cannot run: the current task may have
     // switched before the freeze. Delivery is gated on an actual
     // cancellation of the task's bound token source, kept coherent with the
-    // published regions by the exception-handler and finalizer save/restore
-    // discipline.
+    // published regions: exception handlers restore the pair together, and
+    // finalizers only run with the region unpublished.
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     bound = ct2 == NULL ? NULL :
         jl_atomic_load_relaxed(&ct2->bound_cancel_token);
@@ -993,6 +995,7 @@ void jl_profile_thread_mach(int tid)
             *  and during stack unwinding we only ever read memory, but never write it.
             */
 
+        size_t bt_size_start = profile_bt_size_cur;
         forceDwarf = 0;
         unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
 
@@ -1011,6 +1014,11 @@ void jl_profile_thread_mach(int tid)
 #else
         profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL);
 #endif
+        if (profile_bt_size_cur == bt_size_start) {
+            // unwinding produced no frames: record a marker so the sample is not silently dropped
+            profile_bt_size_cur += failed_to_unwind_fun((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                    profile_bt_size_max - profile_bt_size_cur - 1, 0);
+        }
         jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
 
         // store threadid but add 1 as 0 is preserved to indicate end of block

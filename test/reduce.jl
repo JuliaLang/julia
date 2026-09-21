@@ -805,3 +805,16 @@ end
     @test foldl(-, P) == foldl(-, C) && foldr(-, P) == foldr(-, C)
     @test [x for x in P] == C
 end
+
+@testset "type-stability for nested reductions" begin
+    nested_count(v) = maximum(count(!iszero, v .* i) for i in 1:3)
+    @test Base.infer_return_type(nested_count, (Vector{Float64},)) === Int
+    nested_sum(v) = sum(x -> sum(y -> y * x, v; init = 0.0), v; init = 0.0)
+    @test Base.infer_return_type(nested_sum, (Vector{Float64},)) === Float64
+    nested_prod(v) = maximum(prod(v .* i; init = 1.0) for i in 1:3)
+    @test Base.infer_return_type(nested_prod, (Vector{Float64},)) === Float64
+    v = [1.0, 2.0, 0.0]
+    @test nested_count(v) == 2
+    @test nested_sum(v) == sum(v)^2
+    @test nested_prod(v) == 0.0
+end
