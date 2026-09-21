@@ -127,10 +127,6 @@ impl Collection<JuliaVM> for VMCollection {
         let now = unsafe { jl_hrtime() };
         trace!("gc_start = {}", now);
         GC_START.store(now, Ordering::Relaxed);
-        // Same instant the reported pause duration is measured from, so the timeline lines up with
-        // the `us=` figure on the `[lxr] stw pause=` line.
-        mmtk::scheduler::stage_timeline::start();
-        mmtk::scheduler::packet_timing::reset();
     }
 
     fn resume_mutators(_tls: VMWorkerThread) {
@@ -148,17 +144,11 @@ impl Collection<JuliaVM> for VMCollection {
         let end = unsafe { jl_hrtime() };
         trace!("gc_end = {}", end);
         let gc_time = end - GC_START.load(Ordering::Relaxed);
-        // `MMTK_LXR_TIMELINE` alone reports the pause and its critical path without enabling
-        // `MMTK_LXR_STATS`. That matters for measuring the pause honestly: the stats path makes
-        // `LXR::release` write three lines to stderr *inside* the pause, so leaving it on while
-        // attributing time to the `Release` packet measures the instrumentation too.
         let stats = std::env::var_os("MMTK_LXR_STATS").is_some();
-        let timeline = mmtk::scheduler::stage_timeline::enabled();
         // `MMTK_LXR_PAUSES` reports just the one `stw pause=` line per pause, so a pause
-        // distribution can be measured without any of the instrumentation that runs *inside* the
-        // pause: the stats path writes three lines from `LXR::release`, and the timeline path takes
-        // a mutex at every stage boundary.
-        if stats || timeline || pauses() {
+        // distribution can be measured without the stats path's three lines from
+        // `LXR::release`.
+        if stats || pauses() {
             // Attribute the STW window to the pause kind that produced it. The aggregate
             // `gc_num.total_time` mixes RefCount, InitialMark and FinalMark together, which
             // hides which of the three is actually costing the mutator.
@@ -186,33 +176,6 @@ impl Collection<JuliaVM> for VMCollection {
                 gc_time / 1000,
                 mutator_us
             );
-            // Wall-clock critical path of this pause. Unlike the packet table below, the deltas
-            // are real elapsed time and include the inter-stage handshake.
-            let timeline = mmtk::scheduler::stage_timeline::take();
-            let mut prev = 0u128;
-            for (label, nanos) in &timeline {
-                eprintln!(
-                    "[lxr]   at={:>8}us +{:>8}us {}",
-                    nanos / 1000,
-                    (nanos - prev) / 1000,
-                    label
-                );
-                prev = *nanos;
-            }
-            if !timeline.is_empty() {
-                eprintln!(
-                    "[lxr]   at={:>8}us +{:>8}us <resume_mutators>",
-                    gc_time / 1000,
-                    (gc_time as u128).saturating_sub(prev) / 1000
-                );
-            }
-            // Attribute the pause to the work packet types that ran in it. This is the last
-            // point in the pause, so everything the pause scheduled has already executed.
-            if stats {
-                for (name, count, nanos) in mmtk::scheduler::packet_timing::take_top(12) {
-                    eprintln!("[lxr]   packet n={:<6} us={:<8} {}", count, nanos / 1000, name);
-                }
-            }
         }
         unsafe {
             jl_gc_update_stats(
@@ -376,31 +339,12 @@ fn recheck_live_closure_after_sweep() {
     let snapshot = std::mem::take(&mut *LIVE_SNAPSHOT.lock().unwrap());
     let mut reused = 0usize;
     let mut zeroed = 0usize;
-    let mut on_free_line = 0usize;
     let mut examples: Vec<String> = vec![];
     for &(addr, header) in &snapshot {
         let a = unsafe { mmtk::util::Address::from_usize(addr) };
-        let o = a.to_object_reference::<JuliaVM>();
+        let o = unsafe { mmtk::util::ObjectReference::from_raw_address_unchecked(a) };
         let now = unsafe { (a - 8usize).load::<usize>() };
         let count_zero = lxr.is_rc_object(o) && lxr.rc.count(o) == 0;
-        // The mutator overwrites live data only after the GC ends, so catching it needs
-        // the state the allocator will act on, not the bytes as they stand right now.
-        if lxr.object_occupies_free_line(o) {
-            on_free_line += 1;
-            if examples.len() < 16 {
-                let name = unsafe {
-                    std::ffi::CStr::from_ptr(crate::jl_typeof_str(a))
-                        .to_str()
-                        .unwrap_or("?")
-                };
-                examples.push(format!(
-                    "live object on a line the allocator will reuse: {:?} type={} size={}",
-                    o,
-                    name,
-                    o.get_size::<JuliaVM>()
-                ));
-            }
-        }
         if now != header {
             reused += 1;
             if examples.len() < 16 {
@@ -413,17 +357,15 @@ fn recheck_live_closure_after_sweep() {
             }
         }
     }
-    if reused != 0 || zeroed != 0 || on_free_line != 0 {
+    if reused != 0 || zeroed != 0 {
         eprintln!(
-            "[lxr-verify] after sweep: reused={} count_zeroed={} on_free_line={}",
-            reused, zeroed, on_free_line
+            "[lxr-verify] after sweep: reused={} count_zeroed={}",
+            reused, zeroed
         );
         for e in examples {
             eprintln!("[lxr-verify]   {}", e);
         }
     }
-    let (zeroed, kept) = mmtk::plan::lxr::sweep_dead_cycle_counts();
-    eprintln!("[lxr-verify] sweep dead cycles: zeroed={zeroed} kept_marked={kept} (cumulative)");
     audit_reference_counts(lxr, &snapshot);
 }
 
@@ -454,7 +396,7 @@ fn audit_reference_counts(lxr: &mmtk::plan::lxr::LXR<JuliaVM>, snapshot: &[(usiz
         if !intact(addr, header) {
             continue;
         }
-        let o = unsafe { mmtk::util::Address::from_usize(addr).to_object_reference::<JuliaVM>() };
+        let o = unsafe { mmtk::util::ObjectReference::from_raw_address_unchecked(mmtk::util::Address::from_usize(addr)) };
         o.iterate_fields::<JuliaVM, _>(mmtk::util::VMThread::UNINITIALIZED, |s| {
             if s.is_derived() {
                 return;
@@ -475,7 +417,7 @@ fn audit_reference_counts(lxr: &mmtk::plan::lxr::LXR<JuliaVM>, snapshot: &[(usiz
         if !intact(addr, header) {
             continue;
         }
-        let o = unsafe { mmtk::util::Address::from_usize(addr).to_object_reference::<JuliaVM>() };
+        let o = unsafe { mmtk::util::ObjectReference::from_raw_address_unchecked(mmtk::util::Address::from_usize(addr)) };
         if !lxr.is_rc_object(o) {
             continue;
         }
@@ -620,11 +562,6 @@ fn verify_rc_covers_live_closure() {
         });
     }
 
-    // Hand the live set to the plan so a decrement that takes one of these objects to zero
-    // reports itself as it happens. The post-sweep check below can only say *that* it
-    // happened, never which decrement did it.
-    mmtk::plan::lxr::set_live_set(seen.clone());
-
     // Keep the closure with each object's header word, so `recheck_live_closure_after_sweep`
     // can tell whether the collector handed any of this memory out again.
     {
@@ -642,7 +579,6 @@ fn verify_rc_covers_live_closure() {
     );
     for (o, name) in &missing {
         eprintln!("[lxr-verify]   uncounted {:?} type={}", o, name);
-        mmtk::plan::lxr::dump_rc_events(*o);
     }
 
     // An uncounted object is only interesting through its referrers: it has a zero count while
@@ -671,15 +607,13 @@ fn verify_rc_covers_live_closure() {
                         .unwrap_or("?")
                 };
                 eprintln!(
-                    "[lxr-verify]     referrer of {:?}: {:?} type={} rc={} obj_unlogged={} \
-                     field={} field_logged={:?} derived={}",
+                    "[lxr-verify]     referrer of {:?}: {:?} type={} rc={} \
+                     field={} derived={}",
                     t,
                     referrer,
                     name,
                     lxr.rc.count(referrer),
-                    mmtk::plan::lxr::object_is_unlogged::<JuliaVM>(referrer),
                     s.to_address(),
-                    mmtk::plan::lxr::field_is_logged::<JuliaVM>(s.to_address()),
                     mmtk::vm::slot::Slot::is_derived(&s),
                 );
             });
