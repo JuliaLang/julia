@@ -409,10 +409,10 @@ void stk_push(jl_value_t *s, jl_value_t *v)
     else {
         dynstack_t *newstk = allocate_stack_mem(stk->capacity * 3 / 2 + 1);
         newstk->size = stk->size;
+        jl_gc_wb_object((jl_value_t *)newstk);
         memcpy(newstk->data, stk->data, sizeof(jl_value_t *) * stk->size);
         newstk->data[newstk->size++] = v;
         jl_gc_schedule_foreign_sweepfunc(ptls, (jl_value_t *)(newstk));
-        jl_gc_wb_back((jl_value_t *)newstk);
         // The replaced stack pointer is the field at offset 0 of `s`.
         jl_gc_wb(s, (void *)s, (jl_value_t *)newstk);
         *(dynstack_t **)s = newstk;

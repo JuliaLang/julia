@@ -1324,13 +1324,6 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
     uv_mutex_unlock(&live_tasks_lock);
 }
 
-void jl_gc_notify_task_suspend(jl_task_t *task) JL_NOTSAFEPOINT
-{
-    // Remember stack and task-field updates made while the task was running,
-    // even if termination is about to discard its stack.
-    jl_gc_wb_back(task);
-}
-
 void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
 {
     // do nothing
@@ -1703,7 +1696,7 @@ JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const 
     jl_gc_queue_root((jl_value_t*)parent);
 }
 
-void jl_gc_queue_multiroot(const jl_value_t *parent, void *dest JL_UNUSED, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
+void jl_gc_multi_wb_cold(const jl_value_t *parent, void *dest JL_UNUSED, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = dt->layout;
     uint32_t npointers = ly->npointers;
@@ -1711,8 +1704,8 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, void *dest JL_UNUSED, const
     //    return;
     jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
     if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-        // this pointer was young, move the barrier back now
-        jl_gc_wb_back(parent);
+        // this pointer is young
+        jl_gc_wb_object(parent);
         return;
     }
     assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
@@ -1733,8 +1726,8 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, void *dest JL_UNUSED, const
         }
         jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
         if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-            // this pointer was young, move the barrier back now
-            jl_gc_wb_back(parent);
+            // this pointer is young
+            jl_gc_wb_object(parent);
             return;
         }
     }
