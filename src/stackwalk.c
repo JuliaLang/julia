@@ -640,6 +640,17 @@ JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPO
     abort_profile_ptr = abort_ptr;
 }
 
+// Touch the thread-locals the unwinder uses while another thread is suspended.
+// mingw emulates TLS, and `__emutls_get_address` calls `calloc` on a variable's
+// first use in each thread - under the process heap lock, which a suspended
+// thread can be holding. The sampler thread calls this before it suspends
+// anything.
+void jl_profile_prefault_tls(void) JL_NOTSAFEPOINT
+{
+    abort_profile_ptr = NULL;
+    memset(&HistoryTable, 0, sizeof(HistoryTable));
+}
+
 // Open the abort window around a Windows-runtime call made while the profiled
 // thread is suspended (dbghelp, `RtlLookupFunctionEntry`, ...): the watchdog
 // resumes that thread if the call blocks on a lock it holds, and the unwind

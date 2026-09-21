@@ -292,6 +292,7 @@ extern uv_mutex_t bt_data_prof_lock;
 void jl_profile_task(void) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)
 JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT;
+void jl_profile_prefault_tls(void) JL_NOTSAFEPOINT;
 #endif
 
 // number of cycles since power-on

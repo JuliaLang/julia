@@ -784,11 +784,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         jl_safe_fprintf(ios_safe_stderr, "failed to create profile watchdog timer queue.\n");
         abort();
     }
-    // Allocate this thread's emulated-TLS block now: the abort pointer is set
-    // and cleared around a suspended thread, and `__emutls_get_address` calls
-    // `calloc` on first touch - which is one of the very heap locks a
-    // suspended thread can be holding.
-    jl_set_profile_abort_ptr(NULL);
+    jl_profile_prefault_tls();
     while (1) {
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
