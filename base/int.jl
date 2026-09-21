@@ -585,11 +585,6 @@ function max(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
     ifelse(x < y, y % R, x % R)
 end
 
-function min(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
-    R = promote_type(S, T)
-    ifelse(x < y, x % R, y % R)
-end
-
 min(x::S, y::BitUnsigned) where S <: BitSigned = ifelse(x < y, x, y % S)
 min(x::BitUnsigned, y::T) where T <: BitSigned = ifelse(x < y, x % T, y)
 
