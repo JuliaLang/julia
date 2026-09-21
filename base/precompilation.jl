@@ -1300,9 +1300,9 @@ precompilation:
 - Packages with `__precompile__(false)` are skipped if they are from loading to
   avoid repeated work on every session.
 - Parallel compilation is controlled by `JULIA_NUM_PRECOMPILE_TASKS` environment variable
-  (defaults to CPU_THREADS + 1, capped at 16, halved on Windows). The total CPU-thread
+  (defaults to EFFECTIVE_CPU_THREADS + 1, capped at 16, halved on Windows). The total CPU-thread
   budget shared across those workers (worker baselines plus native-image codegen threads)
-  is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to CPU_THREADS + 1).
+  is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to EFFECTIVE_CPU_THREADS + 1).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
 # Include only cache files that are ready for workers.
