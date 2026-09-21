@@ -161,7 +161,7 @@ end
 
 function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, ex)
-    if ex.source !== nothing
+    if ex.jl_source !== nothing
         printstyled(io, " @$(ex.jl_source)", color=:light_black)
     end
     prov = provenance(ex)

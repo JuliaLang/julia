@@ -24,7 +24,6 @@ end
 
 const scoped_trim_env = Base.ScopedValues.ScopedValue(ScopedTrimEnv(1))
 
-# Scope updates must keep the abstract-key HAMT traversal statically resolvable.
 function scoped_trim_read()
     return Base.ScopedValues.with(scoped_trim_env => ScopedTrimEnv(2)) do
         scoped_trim_env[].value

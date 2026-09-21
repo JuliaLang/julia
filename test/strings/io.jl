@@ -344,6 +344,8 @@ end
         Meta.isexpr(stmt, :call) || return false
         f = stmt.args[1]
         f isa GlobalRef && (f = getglobal(f.mod, f.name))
+        f isa Core.BindingPartition &&
+            (f = Core.getglobal_partition(Base.partition_owner(f).globalref, f, :unordered))
         return !(f isa Core.Builtin || f isa Core.IntrinsicFunction)
     end
     args = ("got ", 1:3, " vs ", 1, " with ", 2.5, " and ", :s, " and ", 'c')

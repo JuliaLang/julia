@@ -340,6 +340,7 @@ private:
 
     void LiftPhi(State &S, PHINode *Phi);
     void LiftSelect(State &S, SelectInst *SI);
+    void LiftExtractElement(State &S, ExtractElementInst *EEI);
     Value *MaybeExtractScalar(State &S, std::pair<Value*,int> ValExpr, Instruction *InsertBefore);
     SmallVector<Value*, 0> MaybeExtractVector(State &S, Value *BaseVec, Instruction *InsertBefore);
     Value *GetPtrForNumber(State &S, unsigned Num, Instruction *InsertBefore);
@@ -418,7 +419,8 @@ private:
     // Lowers a `julia.safepoint` intrinsic.
     void lowerSafepoint(CallInst *target, Function &F);
 
-    // Lowers a `julia.write_barrier` function.
+    // Lowers a write barrier intrinsic (`julia.object_write_barrier` or a
+    // `julia.field_write_barrier.pN` variant).
     void lowerWriteBarrier(CallInst *target, Function &F);
 
     // Check if the pass should be run

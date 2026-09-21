@@ -202,7 +202,9 @@ function Base.show(io::IO, p::Platform)
     print(io, ", ")
     show(io, os(p))
     print(io, "; ")
-    join(io, ("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", ")
+    # Sort tags so that the output does not depend on `Dict` iteration order
+    other_tags = sort!(filter!(kv -> kv[1] ∉ ("arch", "os"), collect(tags(p))); by=first)
+    join(io, ("$(k) = $(repr(v))" for (k, v) in other_tags), ", ")
     print(io, ")")
 end
 
@@ -579,8 +581,8 @@ function triplet(p::AbstractPlatform)
         str = string(str, "-libstdcxx", libstdcxx_version_.patch)
     end
 
-    # Tack on all extra tags
-    for (tag, val) in tags(p)
+    # Tack on all extra tags, sorted so that the output does not depend on `Dict` iteration order
+    for (tag, val) in sort!(collect(tags(p)); by=first)
         if tag ∈ ("os", "arch", "libc", "call_abi", "libgfortran_version", "libstdcxx_version", "cxxstring_abi", "os_version")
             continue
         end

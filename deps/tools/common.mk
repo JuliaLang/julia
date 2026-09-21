@@ -200,9 +200,10 @@ install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
 ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tar ] && echo exists ))
 # clean depends on uninstall only if the staged file exists
 distclean-$(strip $1) clean-$(strip $1): uninstall-$(strip $1)
-else
+else ifeq (exists, $$(shell [ -e $$(build_prefix)/manifest/$(strip $1) ] && echo exists ))
 # uninstall depends on staging only if the staged file doesn't exist
-# otherwise, uninstall doesn't actually want the file to be updated first
+# but the dep is installed; otherwise, uninstall doesn't actually want
+# the file to be updated first (or has nothing to uninstall)
 uninstall-$(strip $1): | $$(build_staging)/$2.tar
 endif
 

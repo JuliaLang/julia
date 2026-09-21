@@ -529,6 +529,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_nospecialize_single_body(a, b)
+            :nonmeta_should_not_interfere
             @nospecialize b
             (a, b)
         end
@@ -542,6 +543,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_nospecialize_zero_body(a, b, c)
+            :nonmeta_should_not_interfere
             @nospecialize
             (a, b, c)
         end
@@ -584,6 +586,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_body_nospecialize_default(x, y=1)
+            :nonmeta_should_not_interfere
             @nospecialize
             (x, y)
         end
@@ -599,6 +602,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_body_nospecialize_nontrivial_sig(x::T, y::Vector{<:U}=[])::Any where T where U
+            :nonmeta_should_not_interfere
             @nospecialize
             (x, y)
         end
@@ -616,6 +620,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_body_nospecialize_nontrivial_sig2(x::T, y::Vector{<:U}=[])::Any where T where U
+            :nonmeta_should_not_interfere
             @nospecialize x
             (x, y)
         end
@@ -2286,6 +2291,15 @@ end
     @test test_mod.f_generated_return_delete_me() == 4
     Base.delete_binding(test_mod, :delete_me)
     @test_throws UndefVarError test_mod.f_generated_return_delete_me()
+end
+
+@testset "pre-desugared meta-generated" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @eval function meta_generated_form()
+        $(Expr(:meta, :generated, Base.identity))
+        $(Expr(:meta, :generated_only))
+    end
+    """, expr_compat_mode=true) isa Function
 end
 
 @testset "Broadcast" begin

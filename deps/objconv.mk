@@ -7,7 +7,9 @@ $(SRCCACHE)/objconv-$(OBJCONV_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/staticfloat/objconv/archive/refs/tags/v$(OBJCONV_VER).tar.gz
 
 $(BUILDDIR)/objconv/source-extracted: $(SRCCACHE)/objconv-$(OBJCONV_VER).tar.gz
-	cd $(dir $<) && $(TAR) -zxf $(notdir $<)
+	-rm -rf $(dir $@)
+	mkdir -p $(dir $@)
+	$(TAR) -C $(dir $@) --strip-components 1 -zxf $<
 	echo 1 > $@
 
 $(BUILDDIR)/objconv/build-compiled: $(BUILDDIR)/objconv/source-extracted
