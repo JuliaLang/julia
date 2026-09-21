@@ -423,6 +423,8 @@ struct Block {
     size_t total{0};
     size_t avail{0};
 
+    Block() JL_NOTSAFEPOINT = default;
+
     bool can_alloc(size_t size, size_t align) {
         return (avail & (-align)) >= size;
     }
@@ -463,10 +465,13 @@ struct Block {
 struct SplitPtrBlock : public Block {
     char *wr_ptr{nullptr};
     int in_flight{0};
+
+    SplitPtrBlock() JL_NOTSAFEPOINT = default;
 };
 
 class ROBlockMapper {
 public:
+    ROBlockMapper() JL_NOTSAFEPOINT = default;
     // Map a block at the given (runtime) address.
     virtual SplitPtrBlock map(uintptr_t addr, size_t size) = 0;
     virtual Allocation alloc(SplitPtrBlock &block, size_t size, size_t align) = 0;
@@ -477,7 +482,7 @@ public:
 
 class DualBlockMapper : public ROBlockMapper {
 public:
-    static std::unique_ptr<ROBlockMapper> Create()
+    static std::unique_ptr<ROBlockMapper> Create() JL_NOTSAFEPOINT
     {
 #ifdef _OS_WINDOWS_
         return std::unique_ptr<ROBlockMapper>(new DualBlockMapper());
@@ -570,7 +575,7 @@ fail:
 
 protected:
 #ifndef _OS_WINDOWS_
-    DualBlockMapper(intptr_t anon_hdl) : anon_hdl(anon_hdl) {}
+    DualBlockMapper(intptr_t anon_hdl) JL_NOTSAFEPOINT : anon_hdl(anon_hdl) {}
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -597,7 +602,7 @@ private:
 #ifdef _OS_LINUX_
 class SelfMemMapper : public ROBlockMapper {
 public:
-    static std::unique_ptr<ROBlockMapper> Create()
+    static std::unique_ptr<ROBlockMapper> Create() JL_NOTSAFEPOINT
     {
         int fd = get_self_mem_fd();
         if (fd == -1)
@@ -642,7 +647,7 @@ public:
     void cleanup(SplitPtrBlock &block) override {}
 
 protected:
-    SelfMemMapper(int self_fd) : self_fd(self_fd) {}
+    SelfMemMapper(int self_fd) JL_NOTSAFEPOINT : self_fd(self_fd) {}
 
 private:
     int self_fd;
@@ -650,7 +655,7 @@ private:
 #endif // _OS_LINUX_
 
 // Some environment variables to enable testing
-static long getenv_int(const char *name, long def)
+static long getenv_int(const char *name, long def) JL_NOTSAFEPOINT
 {
     char *data = getenv(name);
     if (!data)
@@ -664,9 +669,9 @@ static long getenv_int(const char *name, long def)
 
 class CodeAllocator {
 public:
-    static std::optional<CodeAllocator> Create()
+    static std::optional<CodeAllocator> Create() JL_NOTSAFEPOINT
     {
-        using MapFn = std::unique_ptr<ROBlockMapper> (*)();
+        typedef std::unique_ptr<ROBlockMapper> (*MapFn)() JL_NOTSAFEPOINT;
         std::pair<const char *, MapFn> mappers[] = {
             {"dual", &DualBlockMapper::Create},
 #ifdef _OS_LINUX_
@@ -687,6 +692,9 @@ public:
 
         return CodeAllocator{std::move(rx_mapper)};
     }
+
+    CodeAllocator(CodeAllocator &&) JL_NOTSAFEPOINT = default;
+    ~CodeAllocator() JL_NOTSAFEPOINT = default;
 
     std::pair<Allocation, Allocation> alloc(size_t size_rx, size_t align_rx, size_t size_rw,
                                             size_t align_rw)
@@ -749,7 +757,7 @@ public:
     }
 
 protected:
-    CodeAllocator(std::unique_ptr<ROBlockMapper> rx_mapper)
+    CodeAllocator(std::unique_ptr<ROBlockMapper> rx_mapper) JL_NOTSAFEPOINT
       : rx_mapper(std::move(rx_mapper))
     {
         block_size_bits = getenv_int("JULIA_CGMEMMGR_BLOCK_SIZE", DEFAULT_BLOCK_SIZE);
@@ -822,7 +830,7 @@ class JLJITLinkMemoryManager : public jitlink::JITLinkMemoryManager {
 public:
     class InFlightAlloc;
 
-    JLJITLinkMemoryManager(CodeAllocator Alloc) : Alloc(std::move(Alloc)) {}
+    JLJITLinkMemoryManager(CodeAllocator Alloc) JL_NOTSAFEPOINT : Alloc(std::move(Alloc)) {}
 
     void allocate(const jitlink::JITLinkDylib *JD, jitlink::LinkGraph &G,
                   OnAllocatedFunction OnAllocated) override;
