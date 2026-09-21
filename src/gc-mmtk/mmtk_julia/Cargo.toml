@@ -69,7 +69,7 @@ concurrentimmix = ["mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space", "
 # an LXR build?" -- plan selection, the barrier's slow path -- must test `lxr_base`, not
 # `lxr_lazy` or `lxr`, or the other of the two silently falls through to the default plan
 # and trips the allocator-offset assertion in `mmtk_gc_init`.
-lxr_base = ["mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space", "concurrent_marking"]
+lxr_base = ["mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space", "mmtk/lxr_object_log", "concurrent_marking"]
 # What `MMTK_PLAN=LXR` builds: decrement processing and the mature sweeps run concurrently
 # rather than inside the pause, which is LXR's own configuration.
 lxr_lazy = ["lxr_base"]
