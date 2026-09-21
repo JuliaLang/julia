@@ -606,15 +606,24 @@ fn verify_rc_covers_live_closure() {
                         .to_str()
                         .unwrap_or("?")
                 };
+                let obj_unlogged = <crate::object_model::VMObjectModel as mmtk::vm::ObjectModel<JuliaVM>>::GLOBAL_LOG_BIT_SPEC
+                    .is_unlogged::<JuliaVM>(referrer, Ordering::SeqCst);
+                let field_unlog: u8 = crate::object_model::FIELD_UNLOGGING_SIDE_METADATA_SPEC
+                    .extract_side_spec()
+                    .load_atomic::<u8>(s.to_address(), Ordering::SeqCst);
                 eprintln!(
-                    "[lxr-verify]     referrer of {:?}: {:?} type={} rc={} \
-                     field={} derived={}",
+                    "[lxr-verify]     referrer of {:?}: {:?} type={} rc={} marked={} obj_unlogged={} \
+                     field={} field_unlog={} derived={} target_marked={}",
                     t,
                     referrer,
                     name,
                     lxr.rc.count(referrer),
+                    lxr.is_marked(referrer),
+                    obj_unlogged,
                     s.to_address(),
+                    field_unlog,
                     mmtk::vm::slot::Slot::is_derived(&s),
+                    lxr.is_marked(t),
                 );
             });
         }
