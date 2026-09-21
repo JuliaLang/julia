@@ -39,7 +39,6 @@ public
     is_vec_strided,
     is_contiguous,
     has_vec_strided_layout,
-    has_contiguous_layout,
     unsetindex!,
     unsetindex_atomic!,
 

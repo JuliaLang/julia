@@ -612,9 +612,6 @@ definitions, and are [`is_vec_strided`](@ref Base.is_vec_strided) and
 
 Defaults to `false`.
 
-This function is for specializing on new array types; to check the trait, use
-[`Base.has_contiguous_layout`](@ref) instead.
-
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
@@ -658,20 +655,6 @@ is_strided(::Type{Union{}}) = false
 is_strided(A::AbstractArray) = is_strided(typeof(A))
 
 """
-    Base.has_contiguous_layout(type)::Bool
-
-Check the [`Base.is_contiguous`](@ref) trait. Unlike `is_contiguous`, which is only
-for specializing, this also returns `true` for strided zero-dimensional arrays, which
-have the layout of an `Array` trivially.
-
-!!! compat "Julia 1.14"
-    This function requires at least Julia 1.14.
-"""
-has_contiguous_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
-has_contiguous_layout(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
-has_contiguous_layout(::Type{Union{}}) = false
-
-"""
     Base.has_vec_strided_layout(type)::Bool
 
 Check the [`Base.is_vec_strided`](@ref) trait. Unlike `is_vec_strided`, which is only
@@ -688,7 +671,7 @@ has_vec_strided_layout(::Type{Union{}}) = false
 
 
 function elsize(::Type{A}) where {T,A<:AbstractArray{T}}
-    if has_contiguous_layout(A)
+    if is_contiguous(A)
         elsize(Array{T})
     else
         throw(MethodError(elsize, (A,)))
@@ -715,7 +698,7 @@ julia> strides(A)
 ```
 """
 function strides(x::A) where {A<:AbstractArray}
-    if has_contiguous_layout(A)
+    if is_contiguous(A)
         size_to_strides(1, size(x)...)
     else
         throw(MethodError(strides, (x,)))

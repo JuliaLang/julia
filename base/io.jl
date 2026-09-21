@@ -938,7 +938,7 @@ function _write_array_strided(s::IO, A::AT) where {T, AT<:AbstractArray{T}}
     el_size = elsize(AT)
     array_elsize = elsize(Array{T})
     A_cconv = cconvert(Ptr{T}, A)
-    if has_contiguous_layout(AT)
+    if is_contiguous(AT)
         return GC.@preserve A_cconv unsafe_write(s, unsafe_convert(Ptr{T}, A_cconv), array_elsize * length(A))
     end
     sz::Dims = size(A)
@@ -1064,7 +1064,7 @@ function _read_array_strided!(s::IO, A::AT) where {T, AT<:AbstractArray{T}}
     el_size = elsize(AT)
     array_elsize = elsize(Array{T})
     A_cconv = cconvert(Ptr{T}, A)
-    if has_contiguous_layout(AT)
+    if is_contiguous(AT)
         return GC.@preserve A_cconv unsafe_read(s, unsafe_convert(Ptr{T}, A_cconv), array_elsize * length(A))
     end
     sz::Dims = size(A)
