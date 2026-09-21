@@ -424,6 +424,26 @@ end
     @test annregions("𝟏x", [(1:4, :face, :red)]) ==
         [("𝟏", [(:face, :red)]),
          ("x", [])]
+    # Annotations and subregions that start within a character
+    let str = Base.AnnotatedString("aébc", [(3:3, :face, :red)])
+        regions = collect(Base.eachregion(str)) # Read after the iterator has moved on
+        @test [(s, Tuple.(a)) for (s, a) in regions] == [("a", []), ("é", [(:face, :red)]), ("bc", [])]
+        @test [s for (s, _) in Base.eachregion(str, 3:5)] == ["é", "bc"]
+    end
+    # A subregion starting within a character, whose regions read the same during iteration and after
+    let str = Base.AnnotatedString("aébcdef", [(1:8, :a, 1), (3:5, :b, 2), (5:5, :c, 3), (2:2, :d, 4)])
+        @test [(String(s), Tuple.(a)) for (s, a) in Base.eachregion(str, 3:5)] ==
+            [(String(s), Tuple.(a)) for (s, a) in collect(Base.eachregion(str, 3:5))]
+    end
+    # A string backed by a substring, whose regions are substrings of the same parent
+    @test length(collect(Base.eachregion(Base.AnnotatedString(SubString("xab", 2:3), [(1:1, :a, 1)])))) == 2
+    # Changing a string while its regions are read is unsupported, but memory safe
+    let str = Base.AnnotatedString("abcdef", [(1:2, :a, 1), (3:4, :a, 2), (5:6, :a, 3)])
+        @test count(_ -> (Base.annotate!(str, 1:6, :b, 9); true), Base.eachregion(str)) == 3
+        regions = collect(Base.eachregion(str))
+        empty!(str.annotations)
+        @test_throws BoundsError collect(last(regions)[2])
+    end
 end
 
 @testset "Replacement" begin
@@ -1017,6 +1037,13 @@ end
         @test showable(MIME("text/html"), hilited) && showable(MIME("text/html"), hilited[1])
         @test !showable(MIME("text/html"), SubString(hilited, 1:1))
     end
+    # Regions consumed as they are yielded carry the same annotations as regions held
+    nested = Base.AnnotatedString("abcdef", [(1:6, :a, Mark()), (2:5, :b, Mark()), (3:4, :c, Mark())])
+    streamed = [(String(str), collect(annots)) for (str, annots) in Base.eachregion(nested)]
+    @test streamed == [(String(str), collect(annots)) for (str, annots) in collect(Base.eachregion(nested))]
+    @test map(last, streamed) == [[(label = :a, value = Mark())], [(label = :a, value = Mark()), (label = :b, value = Mark())],
+                                  [(label = :a, value = Mark()), (label = :b, value = Mark()), (label = :c, value = Mark())],
+                                  [(label = :a, value = Mark()), (label = :b, value = Mark())], [(label = :a, value = Mark())]]
     # Escaping keeps the annotations on their (longer) text
     @test sprint(escape_string, Base.AnnotatedString{String, Mark}("a\nb", [(1:1, :m, Mark()), (3:3, :m, Mark())])) == "<a>\\n<b>"
     escaped(s; wrap = identity) = (buf = Base.AnnotatedIOBuffer(); escape_string(wrap(buf), s); read(seekstart(buf), Base.AnnotatedString))
