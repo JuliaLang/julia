@@ -149,6 +149,10 @@ JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_gc_is_globally_enabled(void) JL_NOTSAFEPOINT;
 // Sets a soft limit to Julia's heap.
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) JL_NOTSAFEPOINT;
+// Maps `bytes` of pool page blocks now, populated by the kernel, into the clean page pool,
+// and populates every block mapped from here on, so that a loop whose heap fits the reserve
+// takes no page fault while it runs. Returns the bytes mapped, rounded up to whole blocks.
+JL_DLLEXPORT uint64_t jl_gc_heap_reserve(uint64_t bytes) JL_NOTSAFEPOINT;
 // Runs a GC cycle. This function's parameter determines whether we're running an
 // incremental, full, or automatic (i.e. heuristic driven) collection.
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) JL_CANSAFEPOINT;
