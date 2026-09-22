@@ -399,6 +399,18 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         k === K"toplevel_lambda" || k === K"generated_lambda" ex
     if k == K"Identifier"
         if (mod = ex.mod; !isnothing(mod))
+            # Reuse the top-level global for the same name and layer when it
+            # belongs to `mod`, since both denote the same global variable
+            # (e.g. a compat macro's `function_decl` name, or the `global`
+            # that struct lowering emits for the plain struct name). Only the
+            # top scope is consulted, so this never resolves to a local.
+            bid = get(top_scope(ctx).vars, NameKey(ex), nothing)
+            if !isnothing(bid)
+                b = get_binding(ctx, bid)
+                if b.kind === :global && b.mod === mod
+                    return newleaf(ex, K"BindingId", b.id)
+                end
+            end
             return new_global_binding(ctx, ex, syntax_name(ex), mod)
         end
         b = resolve_name(ctx, ex)
