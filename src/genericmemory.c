@@ -244,7 +244,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
     }
     if (layout->flags.arrayelem_istagged) {
         jl_value_t *owner = jl_genericmemory_owner(dest);
-        jl_gc_wb_genericmemory_copy_tagged(owner, src, src_p, n);
+        jl_gc_wb_genericmemory_copy_tagged(owner, src, srcdata, n);
         memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n);
     }
     else if (layout->first_ptr != -1 || layout->ntaggedptrs > 0) {
@@ -437,7 +437,7 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     if (layout->flags.arrayelem_istagged) {
         _Atomic(uintptr_t) *p = (_Atomic(uintptr_t)*)m.ptr_or_offset;
         // Deletion barrier: snapshot the overwritten reference for SATB collectors.
-        jl_gc_wb(jl_genericmemory_owner(m.mem), NULL);
+        jl_gc_wb(jl_genericmemory_owner(m.mem), p, NULL);
         if (isatomic)
             jl_atomic_store(p, (uintptr_t)0);
         else
@@ -499,9 +499,8 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_RO
         assert(jl_is_uniontype(eltype));
         assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);
         uintptr_t w = jl_tagged_word_encode(eltype, rhs);
-        if (jl_tagged_word_isptr(w))
-            jl_gc_wb(jl_genericmemory_owner(m.mem), (jl_value_t*)w);
         _Atomic(uintptr_t) *p = (_Atomic(uintptr_t)*)data;
+        jl_gc_wb(jl_genericmemory_owner(m.mem), p, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
         if (isatomic)
             jl_atomic_store(p, w);
         else
