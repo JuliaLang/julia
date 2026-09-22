@@ -345,10 +345,10 @@ See also [`LazyLibrary`](@ref), [`LazyLibraryPath`](@ref).
 """
 BundledLazyLibraryPath(subpath) = LazyLibraryPath(PrivateShlibdirGetter(), subpath)
 
-# Print the path pieces as stored, without calling `string()` on them, so that
-# displaying a lazy path never resolves it. Bundled paths show only their subpath.
 function Base.show(io::IO, llp::LazyLibraryPath)
     pieces = llp.pieces
+    # `PrivateShlibdirGetter()` dlopens. Avoid doing so just to `show`
+    # and like `Library`, avoids printing the full path when bundled
     if length(pieces) == 2 && pieces[1] isa PrivateShlibdirGetter
         show(io, pieces[2])
     else
@@ -444,8 +444,7 @@ mutable struct LazyLibrary
     end
 end
 
-# Print the stored path without resolving it: `show` must not trigger the lazy
-# evaluation of the path pieces (e.g. looking up the private shlibdir).
+# Only print the path and avoid printing all the dependencies
 function Base.show(io::IO, ll::LazyLibrary)
     print(io, "LazyLibrary(")
     show(io, ll.path)
