@@ -2149,9 +2149,8 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         int isunion = jl_is_uniontype(ty);
         if (isunion && jl_field_istagged(st, i)) {
             uintptr_t w = jl_tagged_word_encode(ty, rhs);
-            if (jl_tagged_word_isptr(w))
-                jl_gc_wb(v, (jl_value_t*)w);
             _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)v + offs);
+            jl_gc_wb(v, slot, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
             if (isatomic)
                 jl_atomic_store(slot, w);
             else
@@ -2255,9 +2254,8 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
 JL_DLLEXPORT void jl_store_tagged_union_word(jl_value_t *parent, size_t offset, jl_value_t *u, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT
 {
     uintptr_t w = jl_tagged_word_encode(u, rhs);
-    if (jl_tagged_word_isptr(w))
-        jl_gc_wb(parent, (jl_value_t*)w);
     _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)parent + offset);
+    jl_gc_wb(parent, slot, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
     if (isatomic)
         jl_atomic_store(slot, w);
     else
@@ -2269,8 +2267,7 @@ JL_DLLEXPORT void jl_store_tagged_union_word(jl_value_t *parent, size_t offset, 
 jl_value_t *swap_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic)
 {
     uintptr_t w = jl_tagged_word_encode(ty, rhs);
-    if (jl_tagged_word_isptr(w))
-        jl_gc_wb(parent, (jl_value_t*)w);
+    jl_gc_wb(parent, p, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
     uintptr_t r = isatomic ? jl_atomic_exchange(p, w) : jl_atomic_exchange_release(p, w);
     jl_value_t *rv = jl_tagged_word_decode(ty, r);
     if (__unlikely(rv == NULL))
@@ -2294,8 +2291,7 @@ jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *par
         if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
         uintptr_t w = jl_tagged_word_encode(ty, y);
-        if (jl_tagged_word_isptr(w))
-            jl_gc_wb(parent, (jl_value_t*)w);
+        jl_gc_wb(parent, p, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
         if (isatomic ? jl_atomic_cmpswap(p, &r, w) : jl_atomic_cmpswap_release(p, &r, w))
             break;
         jl_gc_safepoint();
@@ -2314,8 +2310,7 @@ jl_value_t *replace_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *pa
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     uintptr_t wexp = jl_tagged_word_encode(ty, expected);
     uintptr_t wnew = jl_tagged_word_encode(ty, rhs);
-    if (jl_tagged_word_isptr(wnew))
-        jl_gc_wb(parent, (jl_value_t*)wnew);
+    jl_gc_wb(parent, p, jl_tagged_word_isptr(wnew) ? (jl_value_t*)wnew : NULL);
     uintptr_t r = wexp;
     int success;
     while (1) {
@@ -2340,8 +2335,7 @@ jl_value_t *replace_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *pa
 int setonce_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic)
 {
     uintptr_t w = jl_tagged_word_encode(ty, rhs);
-    if (jl_tagged_word_isptr(w))
-        jl_gc_wb(parent, (jl_value_t*)w);
+    jl_gc_wb(parent, p, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
     uintptr_t r = 0;
     return isatomic ? jl_atomic_cmpswap(p, &r, w) : jl_atomic_cmpswap_release(p, &r, w);
 }
