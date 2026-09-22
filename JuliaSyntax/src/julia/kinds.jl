@@ -242,7 +242,6 @@ register_kinds!(JuliaSyntax, 0, [
             "abstract"
             "as"
             "doc"
-            "goto"
             "mutable"
             "outer"
             "primitive"
