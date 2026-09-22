@@ -8,7 +8,7 @@ include $(JULIAHOME)/deps/llvm-ver.make
 JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
 JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
 JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
-JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
+JLDFLAGS += $(LINK_LDFLAGS) $(JL_LDFLAGS)
 
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
 #  for gcc/clang, suggested content is:
@@ -19,7 +19,7 @@ FLAGS_COMMON := \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(LIBUV_INC) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
-FLAGS_COMMON += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
+FLAGS_COMMON += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer $(JL_VISIBILITY_FLAGS) -fno-common \
 		 -Wno-comment -Wpointer-arith -Wundef
 
 # GCC-specific flags
