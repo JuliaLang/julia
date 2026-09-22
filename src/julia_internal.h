@@ -428,13 +428,15 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
 
 // -- GC -- //
 
-#define GC_CLEAN  0 // freshly allocated
-#define GC_MARKED 1 // reachable and young
-#define GC_OLD    2 // if it is reachable it will be marked as old
+#define GC_CLEAN  0 // young: allocated since the last sweep
+#define GC_MARKED 1 // young and reachable (during a collection); between collections,
+                    // an old object whose write barrier has fired (it is in the remset)
+#define GC_OLD    2 // old and unmarked: only exists between a full sweep and the end of
+                    // the following mark phase; if it is reachable it is marked as old
 #define GC_IN_IMAGE 4
 #define GC_IN_IMAGE_REMSET 8
 
-#define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
+#define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old (write barrier armed)
 #define GC_IN_IMAGE_NOT_REMSET (GC_IN_IMAGE) // permalloc'd and not yet modified
 
 // data structures for runtime codegen

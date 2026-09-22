@@ -85,7 +85,6 @@ typedef struct _jl_gc_chunk_t {
     void *elem_begin;           // used to scan pointers within objects when marking `ary8` or `ary16`
     void *elem_end;             // used to scan pointers within objects when marking `ary8` or `ary16`
     uint32_t step;              // step-size used when marking objarray
-    uintptr_t nptr;             // (`nptr` & 0x1) if array has young element and (`nptr` & 0x2) if array owner is old
 } jl_gc_chunk_t;
 
 #define GC_CHUNK_BATCH_SIZE (1 << 16)       // maximum number of references that can be processed
@@ -107,10 +106,11 @@ typedef struct _jl_gc_pagemeta_t {
     // Note that before marking or after sweeping there can be live
     // (and young) cells in the page for `!has_marked`
     uint8_t has_marked;
-    // Whether any cell was live and young **before sweeping**.
-    // For a normal sweep (quick sweep that is NOT preceded by a
-    // full sweep) this bit is set iff there are young or newly dead
-    // objects in the page and the page needs to be swept
+    // Whether any cell was allocated from this page since the previous
+    // sweep, i.e. whether the page may hold young cells (live or dead)
+    // **before sweeping**. Every cell surviving a sweep is old, so for a
+    // normal sweep (quick sweep that is NOT preceded by a full sweep)
+    // this bit is set iff the page needs to be swept.
     //
     // For a full sweep, this bit should be ignored
     //
@@ -129,9 +129,11 @@ typedef struct _jl_gc_pagemeta_t {
     // inside the collection (relaxed suffices - the flag-setter's object
     // publication, not the flag, carries the ordering)
     _Atomic(uint8_t) has_weak_processing;
-    // Number of old objects in the page
+    // Number of old (`GC_OLD`) objects in the page that have been marked
+    // since the previous full sweep
     uint16_t nold;
-    // Number of old objects in the page at the end of the previous full sweep
+    // Number of live objects in the page at the end of the previous full
+    // sweep (all of which were left `GC_OLD` by it)
     uint16_t prev_nold;
     // Number of free objects in this page
     // Invalid if pool that owns this page is allocating objects from this page
