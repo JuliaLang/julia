@@ -1452,7 +1452,7 @@ JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *
     tsan_switch_to_ctx(t);
     jl_start_fiber_set(t); // doesn't return
 }
-JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
+JL_NO_ASAN static void NOINLINE jl_start_fiber_set(jl_ucontext_t *t)
 {
 CFI_NORETURN
     char *stk = (char*)t->stkbuf;

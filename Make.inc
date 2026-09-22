@@ -659,6 +659,14 @@ else
 endif
 
 JLDFLAGS := $(RELRO_FLAG)
+# Flags passed to Julia's link rules; Windows invokes the linker directly.
+LINK_LDFLAGS = $(LDFLAGS)
+JL_VISIBILITY_FLAGS := -fvisibility=hidden
+ifeq ($(OS),WINNT)
+# PE exports are selected by the linker. Clang turns hidden visibility into
+# exclusion directives that override even the export map's global patterns.
+JL_VISIBILITY_FLAGS :=
+endif
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
@@ -1716,7 +1724,17 @@ WIN_LD_CRT_END := $(WIN_MINGW_CRT_LIBS) $(WIN_LD_CRT_END_OBJ)
 WIN_LD_STDCXX := $(build_shlibdir)/$(call versioned_libname,libstdc++,6)
 WIN_LD_ATOMIC := $(build_shlibdir)/$(call versioned_libname,libatomic,1)
 WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -lsynchronization $(WIN_LD_ATOMIC) -lole32
-WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32
+DLLTOOL := $(CROSS_COMPILE)dlltool
+ifeq ($(BINARY),64)
+DLLTOOL_MACHINE := i386:x86-64
+else
+DLLTOOL_MACHINE := i386
+endif
+# Julia links its Windows libraries by calling the linker directly, so whatever
+# the compiler driver would have added has to be named here instead, such as the
+# profile runtime of an instrumented build.
+WIN_LD_EXTRA_LIBS ?=
+WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 $(WIN_LD_EXTRA_LIBS)
 OSLIBS += --export-all-symbols --version-script=$(BUILDROOT)/src/julia.expmap \
 	--no-whole-archive $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS)
 # N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
@@ -1741,8 +1759,14 @@ endif # $(OS) == WINNT
 #   4: non-Windows command before -o, 5: non-Windows inputs after output.
 ifeq ($(OS), WINNT)
 WIN_LD_LIBPATHS := -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir)
-link-dll = $(LD) $(WIN_LD_SHARED_FLAGS) $(2) -o $(1) $(3)
-link-exe = $(LD) $(WIN_LD_EXE_FLAGS) $(2) -o $(1) $(3)
+# lld's MinGW driver needs a COFF export definition instead of a version script.
+ifeq ($(WIN_LD_USE_DEF),1)
+WIN_LD = $(PYTHON) $(JULIAHOME)/contrib/windows/link_with_exports.py $(LD)
+else
+WIN_LD = $(LD)
+endif
+link-dll = $(WIN_LD) $(WIN_LD_SHARED_FLAGS) $(2) -o $(1) $(3)
+link-exe = $(WIN_LD) $(WIN_LD_EXE_FLAGS) $(2) -o $(1) $(3)
 else
 WIN_LD_LIBPATHS :=
 link-dll = $(4) -o $(1) $(5)
