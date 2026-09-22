@@ -357,11 +357,15 @@ viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s * Int(step(I[1].parent))
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
     (@inline; Int(first(I[1])) - Int(first(axes1(I[1])))*stride1)
-substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
-    (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
+substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedRange{<:Integer}, Vararg{Any}}) where N =
+    (size_to_strides(strds[1]*Int(step(I[1].parent)), size(I[1])...)..., substrides(tail(strds), tail(I))...)
+
+# The indices of a strided SubArray: scalar positions, ranges with a constant
+# step, and reshaped ranges with a constant step.
+const StridedSubArrayIndex = Union{Integer, AbstractRange{<:Integer}, ReshapedRange{<:Integer}}
 
 # This exists for backwards compatibility, normally the cconvert method below will be used
-function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}) where {S,T,N,P}
     parent = V.parent
     Δmem = if _checkcontiguous(Bool, parent)
         (first_index(V) - firstindex(parent)) * elsize(parent)
@@ -395,7 +399,7 @@ function unsafe_convert(::Type{Ptr{S}}, c::OffsetCConvert{T}) where {S, T}
     Ptr{S}(unsafe_convert(Ptr{T}, c.cconv_parent) + c.byte_offset)
 end
 
-function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}) where {S,T,N,P}
     parent = V.parent
     p = cconvert(Ptr{T}, parent)
     Δmem = if _checkcontiguous(Bool, parent)

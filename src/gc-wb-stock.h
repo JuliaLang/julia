@@ -11,11 +11,11 @@
 extern "C" {
 #endif
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent isa jl_value_t* and ptr isa jl_value_t* or NULL
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */)) // parent is old and not in remset
-        jl_gc_wb_cold(parent, ptr);
+        jl_gc_wb_cold(parent, slot, ptr);
 }
 
 STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
@@ -31,7 +31,18 @@ STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue JL_UNUSED) JL_NOT
     // this is a deletion, so no barrier is required for this GC
 }
 
-STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
+
+// These "special case" stores require no barrier under the stock GC, since the stock GC
+// has a purely generational barrier.
+
+// parent is newly allocated since last safepoint
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// parent is `jl_current_task`
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// ptr is a known old object
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+
+STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     // ptr is an immutable object
     if (__likely(jl_astaggedvalue(parent)->bits.gc != 3 /* GC_OLD_MARKED */))
@@ -46,78 +57,83 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
     const jl_datatype_layout_t *ly = dt->layout;
     if (ly->npointers)
-        jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
+        jl_gc_queue_multiroot((jl_value_t*)parent, dest, ptr, dt);
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) ** dest_pp,
-                                          jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
-                                          size_t* n) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT
 {
-    if (__unlikely(jl_astaggedvalue(dest_owner)->bits.gc == 3 /* GC_OLD_MARKED */ )) {
-        jl_value_t *src_owner = jl_genericmemory_owner(src);
-        size_t done = 0;
-        if (__unlikely(jl_astaggedvalue(dest_owner)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
-            // GC_MARKED optimizations are invalid for generations >= 2
-            jl_gc_queue_root(dest_owner);
-            return;
-        }
-        if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
-            _Atomic(void*) *dest_p = *dest_pp;
-            _Atomic(void*) *src_p = *src_pp;
-            if (dest_p < src_p || dest_p > src_p + (*n)) {
-                for (; done < (*n); done++) { // copy forwards
-                    void *val = jl_atomic_load_relaxed(src_p + done);
-                    jl_atomic_store_release(dest_p + done, val);
-                    // `val` is young or old-unmarked (or dest is image and val is non-image)
-                    if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
-                        jl_gc_queue_root(dest_owner);
-                        ++done;
-                        break;
-                    }
-                }
-                // advance caller's pointers past the elements we just
-                // copied so the trailing memmove_refs picks up where we
-                // left off
-                *src_pp = src_p + done;
-                *dest_pp = dest_p + done;
-            }
-            else {
-                for (; done < (*n); done++) { // copy backwards
-                    void *val = jl_atomic_load_relaxed(src_p + (*n) - done - 1);
-                    jl_atomic_store_release(dest_p + (*n) - done - 1, val);
-                    // `val` is young or old-unmarked (or dest is image and val is non-image)
-                    if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
-                        jl_gc_queue_root(dest_owner);
-                        ++done;
-                        break;
-                    }
-                }
-            }
-            (*n) -= done;
-        }
+    if (__unlikely(jl_astaggedvalue(mod)->bits.gc == 3 /* GC_OLD_MARKED */)) {
+        if (jl_astaggedvalue(mod)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */ ||
+            !(jl_astaggedvalue(from)->bits.gc & 1 /* GC_MARKED */))
+            jl_gc_queue_root((jl_value_t*)mod);
     }
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
+// Maximum number of pointer fields to scan before remembering the owner.
+#define JL_GC_COPY_SCAN_MAX_POINTERS 4
+
+STATIC_INLINE void jl_gc_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) *dest_p,
+                                                  jl_genericmemory_t *src JL_UNUSED, _Atomic(void*) *src_p,
+                                                  size_t n) JL_NOTSAFEPOINT
+{
+    memmove_refs(dest_p, src_p, n);
+    if (n == 0 || __likely(jl_astaggedvalue(dest_owner)->bits.gc != 3 /* GC_OLD_MARKED */))
+        return; // destination is young or remembered, or the copy is empty
+    if (n <= JL_GC_COPY_SCAN_MAX_POINTERS &&
+        __likely(jl_astaggedvalue(dest_owner)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
+        // For small copies into old objects, scan what we just copied and see if all the
+        // elements were old to avoid adding `dest` to the remset, which saves a full scan
+        // of the destination memory at the next GC
+        for (size_t i = 0; i < n; i++) {
+            void *val = jl_atomic_load_relaxed(dest_p + i);
+            if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
+                jl_gc_queue_root(dest_owner);
+                return;
+            }
+        }
+        return;
+    }
+    jl_gc_queue_root(dest_owner);
+    return;
+}
+
+STATIC_INLINE void jl_gc_genericmemory_copy_ptr(const jl_value_t *owner, char *destdata,
+                                          jl_genericmemory_t *src JL_UNUSED, char *srcdata,
                                           size_t n, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    if (__unlikely(jl_astaggedvalue(owner)->bits.gc == 3 /* GC_OLD_MARKED */)) {
-        if (__unlikely(jl_astaggedvalue(owner)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
-            // GC_MARKED optimizations are invalid for generations >= 2
-            jl_gc_queue_root(owner);
-            return;
-        }
-        jl_value_t *src_owner = jl_genericmemory_owner(src);
-        size_t elsz = dt->layout->size;
-        if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
-            dt = (jl_datatype_t*)jl_tparam1(dt);
-            for (size_t done = 0; done < n; done++) { // copy forwards
-                char* s = (char*)src_p+done*elsz;
-                if (*((jl_value_t**)s+dt->layout->first_ptr) != NULL)
-                    jl_gc_queue_multiroot(owner, s, dt);
+    const jl_datatype_layout_t *ly = dt->layout;
+    size_t stride = ly->size / sizeof(void*);
+    _Atomic(void*) *dest_p = (_Atomic(void*)*)destdata;
+    memmove_refs(dest_p, (_Atomic(void*)*)srcdata, n * stride);
+    if (n == 0 || __likely(jl_astaggedvalue(owner)->bits.gc != 3 /* GC_OLD_MARKED */))
+        return; // destination is young or remembered, or the copy is empty
+    if (n * ly->npointers <= JL_GC_COPY_SCAN_MAX_POINTERS &&
+        __likely(jl_astaggedvalue(owner)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */)) {
+        // For small copies into old objects, scan what we just copied and see if all the
+        // elements were old to avoid adding `dest` to the remset, which saves a full scan
+        // of the destination memory at the next GC
+        for (size_t i = 0; i < n; i++) {
+            for (uint32_t j = 0; j < ly->npointers; j++) {
+                size_t offset = jl_ptr_offset(dt, j);
+                void *val = jl_atomic_load_relaxed(dest_p + i * stride + offset);
+                if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
+                    jl_gc_queue_root(owner);
+                    return;
+                }
             }
         }
+        return;
     }
+    jl_gc_queue_root(owner);
+    return;
+}
+
+STATIC_INLINE void jl_gc_genericmemory_clear(const jl_value_t *owner JL_UNUSED,
+                                          jl_genericmemory_t *m JL_UNUSED, char *data,
+                                          size_t nbytes) JL_NOTSAFEPOINT
+{
+    // a clear inserts no references, and this collector records only insertions
+    memset(data, 0, nbytes);
 }
 
 #ifdef __cplusplus

@@ -1762,6 +1762,12 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
                 uuid === nothing && continue
                 if UUID(uuid) == pkg.uuid
+                    if get(entry, "path", nothing) === nothing && get(entry, "git-tree-sha1", nothing) === nothing
+                        # a stdlib entry is loaded from Sys.STDLIB (see `explicit_manifest_uuid_path`), and
+                        # the manifest may have been resolved by a Julia version whose copy of the stdlib
+                        # had different extensions, so take them from the stdlib's own Project.toml
+                        return insert_extension_triggers(Sys.STDLIB, pkg)
+                    end
                     extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     extensions === nothing && return
                     weakdeps = get(Dict{String, Any}, entry, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
@@ -2092,7 +2098,8 @@ function compilecache_freshest_path(pkg::PkgId;
         # gets loaded without further validation (like the precompilation
         # driver) must keep them on, so that a corrupted cache is recompiled
         # rather than reported as loadable
-        verify_checksums::Bool=true)
+        verify_checksums::Bool=true,
+        reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
     isnothing(sourcespec) && error("Cannot locate source for $(repr("text/plain", pkg))")
     @lock require_lock begin
     set_cache = LOADING_CACHE[] === nothing
@@ -2110,7 +2117,7 @@ function compilecache_freshest_path(pkg::PkgId;
     end
     for build_id in try_build_ids
         @label next_path for path_to_try in cachepaths
-            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums)
+            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums, reasons)
             if staledeps === true
                 continue
             end
@@ -3011,12 +3018,12 @@ function __require_prelocked(pkg::PkgId, env)
         end
     end
 
-    if JLOptions().use_compiled_modules == 3
-        error("Precompiled image $pkg not available with flags $(CacheFlags())$(list_reasons(reasons; full=true))")
-    end
-
     # if the module being required was supposed to have a particular version
-    # but it was not handled by the precompile loader, complain
+    # but it was not handled by the precompile loader, complain. This runs before
+    # the strict-mode check: the pinned build id is the one the parent session has
+    # loaded, and once its cache file is gone nothing a worker can do will produce
+    # it again, so the dependent has to be loaded from source in that session
+    # rather than reported as a precompilation failure.
     for (concrete_pkg, concrete_build_id) in _concrete_dependencies
         if pkg == concrete_pkg
             @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
@@ -3026,6 +3033,10 @@ function __require_prelocked(pkg::PkgId, env)
                 throw(PrecompilableError())
             end
         end
+    end
+
+    if JLOptions().use_compiled_modules == 3
+        error("Precompiled image $pkg not available with flags $(CacheFlags())$(list_reasons(reasons; full=true))")
     end
 
     if JLOptions().use_compiled_modules == 1
@@ -3044,7 +3055,7 @@ function __require_prelocked(pkg::PkgId, env)
                     m isa Module && return m
 
                     local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                    @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
+                    @logmsg verbosity "Precompiling $(pkg_log_name(pkg))$(list_reasons(reasons))"
 
                     unlock(require_lock)
                     try
@@ -4465,7 +4476,7 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :pkgimages_disabled      => :actionable  => "native code caching disabled",
     :cpu_target              => :actionable  => "different system or CPU target",
     :ocachefile_missing      => :actionable  => "native code cache file not found",
-    :dep_loaded_incompatible => :actionable  => "different version of dependency already loaded",
+    :dep_loaded_incompatible => :actionable  => "a dependency is already loaded at a different version",
     :dep_missing             => :actionable  => "dependency source file not found",
     :source_path_changed     => :actionable  => "different source file path",
     :dep_identity_changed    => :actionable  => "dependency identifier changed",
@@ -4480,13 +4491,28 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :dep_buildid_mismatch    => :internal    => "different dependency build identifier",
 )
 
+# `:dep_loaded_incompatible` is recorded with the dependency's name appended, so the
+# message can say which package is loaded at a different version than the cache expects.
+const DEP_LOADED_INCOMPATIBLE_PREFIX = "dep_loaded_incompatible:"
+
+function reject_reason(key::Symbol)
+    reason = get(CACHE_REJECT_REASONS, key, nothing)
+    reason === nothing || return reason
+    keystr = String(key)
+    if startswith(keystr, DEP_LOADED_INCOMPATIBLE_PREFIX)
+        name = keystr[length(DEP_LOADED_INCOMPATIBLE_PREFIX)+1:end]
+        return :actionable => "$name is already loaded at a different version"
+    end
+    return :actionable => keystr
+end
+
 function list_reasons(reasons::Dict{Symbol,Int}; full::Bool=false)
     isempty(reasons) && return ""
     actionable = String[]
     wrong_julia = false
     verbose = String[]
     for (key, count) in reasons
-        category, desc = get(CACHE_REJECT_REASONS, key, :actionable => String(key))
+        category, desc = reject_reason(key)
         push!(verbose, "$count for $desc")
         if category === :actionable
             push!(actionable, desc)
@@ -4505,6 +4531,30 @@ function list_reasons(reasons::Dict{Symbol,Int}; full::Bool=false)
     end
 end
 list_reasons(::Nothing; full::Bool=false) = ""
+
+# How a package is named in loading log messages: the bare name when the load path's
+# manifests map it to no other uuid, otherwise name and uuid. An extension is named
+# by its parent, as the precompile driver does.
+function pkg_log_name(pkg::PkgId)
+    triggers = get(EXT_PRIMED, pkg, nothing)
+    triggers === nothing || return pkg_log_name(pkg, triggers[1])
+    uuid = pkg.uuid
+    uuid === nothing && return pkg.name
+    @lock require_lock begin
+        for env in load_path()
+            project_file = env_project_file(env)
+            project_file isa String || continue
+            manifest_file = project_file_manifest_path(project_file)
+            manifest_file === nothing && continue
+            for entry in get(Vector{Any}, get_deps(parsed_toml(manifest_file)), pkg.name)
+                entry_uuid = get(entry::Dict{String, Any}, "uuid", nothing)::Union{String, Nothing}
+                entry_uuid === nothing || UUID(entry_uuid) == uuid || return repr("text/plain", pkg)
+            end
+        end
+    end
+    return pkg.name
+end
+pkg_log_name(ext::PkgId, parent::PkgId) = "$(pkg_log_name(parent)) → $(ext.name)"
 
 function in_package_store(path::String)
     for depot in DEPOT_PATH
@@ -4727,7 +4777,12 @@ end
             end
             M = maybe_root_module(req_key)
             if M isa Module
-                if PkgId(M) == req_key && module_build_id(M) === req_build_id
+                # With `ignore_loaded` the verdict has to reflect the environment rather than the
+                # session: a dependency loaded at the version this cache was built against says
+                # nothing about the version the manifest resolves now, so only sysimage modules,
+                # which cannot differ, are accepted on that basis; everything else is checked below
+                # against its located source and on-disk cache.
+                if PkgId(M) == req_key && module_build_id(M) === req_build_id && (!ignore_loaded || in_sysimage(req_key))
                     depmods[i] = M
                     continue
                 elseif M == Core
@@ -4738,7 +4793,7 @@ end
                     # Used by Pkg.precompile given that there it's ok to precompile different versions of loaded packages
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
-                    record_reason(reasons, :dep_loaded_incompatible)
+                    record_reason(reasons, Symbol(DEP_LOADED_INCOMPATIBLE_PREFIX, req_key.name))
                     return true # Won't be able to fulfill dependency
                 end
             end
@@ -4753,20 +4808,20 @@ end
 
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
-        # or neither
-        if stalecheck
-            for (req_key, req_build_id) in _concrete_dependencies
-                build_id = get(modules, req_key, UInt64(0))
-                if build_id !== UInt64(0)
-                    build_id |= UInt128(checksum) << 64
-                    if build_id === req_build_id
-                        stalecheck = false
-                        break
-                    end
-                    @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
-                    record_reason(reasons, :dep_buildid_mismatch)
-                    return true # cachefile doesn't provide the required version of the dependency
+        # or neither. This is not skipped for a trusted (driver-validated) file:
+        # the driver only checks that the file is fresh, not that it carries the
+        # build id the parent session pinned.
+        for (req_key, req_build_id) in _concrete_dependencies
+            build_id = get(modules, req_key, UInt64(0))
+            if build_id !== UInt64(0)
+                build_id |= UInt128(checksum) << 64
+                if build_id === req_build_id
+                    stalecheck = false
+                    break
                 end
+                @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
+                record_reason(reasons, :dep_buildid_mismatch)
+                return true # cachefile doesn't provide the required version of the dependency
             end
         end
 

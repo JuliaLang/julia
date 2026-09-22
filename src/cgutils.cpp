@@ -454,7 +454,10 @@ static bool isTrackedValue(Value *V) {
     return PT && PT->getAddressSpace() == AddressSpace::Tracked;
 }
 
-static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src, ArrayRef<unsigned> perm_offsets={}) {
+// If `offsets_out` is provided, append the byte offset within `Src` of each
+// returned pointer, in the same order as the result.
+static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src, ArrayRef<unsigned> perm_offsets={},
+                                                   SmallVectorImpl<unsigned> *offsets_out=nullptr) {
     Type *STy = Src->getType();
     auto Tracked = TrackCompositeType(STy);
     SmallVector<Value*, 0> Ptrs;
@@ -482,19 +485,22 @@ static SmallVector<Value*, 0> ExtractTrackedValues(jl_codectx_t &ctx, Value *Src
         if (ignore_field(Idxs))
             continue;
         Value *Elem = ExtractScalar(ctx, Src, STy, Idxs);
-        if (isTrackedValue(Elem)) // ignore addrspace Loaded when it appears
+        if (isTrackedValue(Elem)) { // ignore addrspace Loaded when it appears
             Ptrs.push_back(Elem);
+            if (offsets_out)
+                offsets_out->push_back(getFieldOffset(
+                    ctx.builder.GetInsertBlock()->getModule()->getDataLayout(), STy, Idxs));
+        }
     }
     return Ptrs;
 }
 
-// whether memory in this region cannot be written concurrently, so that
-// non-atomic (rather than unordered) loads and stores are permitted
-static bool region_is_private(jl_aliasinfo_t::Region r)
+// whether this memory cannot be written concurrently, so that non-atomic
+// (rather than unordered) loads and stores are permitted
+static bool ai_is_private(const jl_aliasinfo_t &ai)
 {
-    return r == jl_aliasinfo_t::Region::stack ||
-           r == jl_aliasinfo_t::Region::gcframe ||
-           r == jl_aliasinfo_t::Region::constant;
+    using Region = jl_aliasinfo_t::Region;
+    return ai.isConstant() || ai.region == Region::gcframe;
 }
 
 static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *data_pointer, jl_datatype_t *typ, size_t npointers, const jl_aliasinfo_t &roots_ai, bool isVolatile=false)
@@ -502,7 +508,7 @@ static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *da
     SmallVector<Value*,0> gcroots(npointers);
     if (npointers) {
         Type *T_prjlvalue = ctx.types().T_prjlvalue;
-        bool isprivatemem = isa<AllocaInst>(data_pointer->stripInBoundsOffsets()) || region_is_private(roots_ai.region);
+        bool isprivatemem = isa<AllocaInst>(data_pointer->stripInBoundsOffsets()) || ai_is_private(roots_ai);
         for (size_t i = 0; i < npointers; i++) {
             Value *field_ptr = emit_ptrgep(ctx, data_pointer, jl_ptr_offset(typ, i) * sizeof(jl_value_t*));
             LoadInst *root = ctx.builder.CreateAlignedLoad(T_prjlvalue, field_ptr, Align(sizeof(void*)), isVolatile);
@@ -529,7 +535,7 @@ static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, const jl_
             Type *T_prjlvalue = ctx.types().T_prjlvalue;
             const jl_aliasinfo_t &roots_ai = val.aliasinfo;
             Value *p = maybe_decay_tracked(ctx, data_pointer(ctx, val));
-            bool isprivatemem = isa<AllocaInst>(p->stripInBoundsOffsets()) || region_is_private(roots_ai.region);
+            bool isprivatemem = isa<AllocaInst>(p->stripInBoundsOffsets()) || ai_is_private(roots_ai);
             gcroots.resize(npointers, nullptr);
             for (size_t i = 0; i < npointers; i++) {
                 Value *field_ptr = emit_ptrgep(ctx, p, jl_ptr_offset((jl_datatype_t*)val.typ, i) * sizeof(jl_value_t*));
@@ -1264,13 +1270,10 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
         return;
     ++EmittedMemcpys;
 
-    // the memcpy intrinsic does not allow specifying different alias tags
-    // for the load part (src_ai) and the store part (dst_ai).
-    // since the tbaa lattice has to be a tree we unfortunately have
-    // tbaa(src) ∪ tbaa(dst) = tbaa_root whenever tbaa(src) != tbaa(dst),
-    // while the merged region metadata keeps the intersection of the
-    // regions' noalias sets.
-    auto merged_ai = dst_ai.merge(ctx, src_ai);
+    // the memcpy intrinsic has no way to give the load part (src_ai) and the store
+    // part (dst_ai) different alias info, so one claim must cover both; see
+    // `jl_aliasinfo_t::merge`.
+    auto merged_ai = dst_ai.merge(src_ai);
 #if JL_LLVM_VERSION < 210000
     ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
                              merged_ai.tbaa, merged_ai.tbaa_struct, merged_ai.scope, merged_ai.noalias);
@@ -1353,7 +1356,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         return;
     Value *src;
     std::tie(src, src_ai) = data_pointer_ai(ctx, value_to_pointer(ctx, x));
-    bool isprivatemem = isa<AllocaInst>(src->stripInBoundsOffsets()) || region_is_private(src_ai.region);
+    bool isprivatemem = isa<AllocaInst>(src->stripInBoundsOffsets()) || ai_is_private(src_ai);
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
     size_t shrunken_size = split_value_size(typ).first;
@@ -1467,9 +1470,9 @@ static std::tuple<Value*, jl_gc_roots_t, jl_aliasinfo_t> split_value(jl_codectx_
             return "split::" + std::string(jl_symbol_name(typ->name->name));
         });
         // The alloca contains no pointers (those were split into roots), so this
-        // write-once copy takes the layout tag of what it holds, as the no-copy
+        // write-once copy takes the access tag of what it holds, as the no-copy
         // paths above already do.
-        jl_aliasinfo_t dst_ai = stack_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
+        jl_aliasinfo_t dst_ai = private_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
         split_value_into(ctx, x, x_alignment, alloca, align_dst, dst_ai, false);
         return std::make_tuple(alloca, std::move(roots), dst_ai);
     }
@@ -1496,7 +1499,7 @@ static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned
 }
 
 // Copy `x` to `dst`, where `x` was a split value and dst needs to have a native layout, copying any inlined roots back into their native location.
-// This does not respect roots, so you must call emit_write_multibarrier afterwards.
+// This does not emit a write barrier; callers must supply one when required.
 static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, jl_aliasinfo_t const &dst_ai, Align alignment, bool isVolatileStore)
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
@@ -1509,7 +1512,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
     jl_aliasinfo_t src_ai = x.aliasinfo;
     size_t npointers = typ->layout->npointers;
     size_t shrunken_size = split_value_size(typ).first;
-    bool isprivatemem = isa<AllocaInst>(dst->stripInBoundsOffsets()) || dst_ai.region == jl_aliasinfo_t::Region::stack;
+    bool isprivatemem = isa<AllocaInst>(dst->stripInBoundsOffsets()) || ai_is_private(dst_ai);
     size_t off = 0;
     for (size_t i = 0; true; i++) {
         bool last = i == npointers;
@@ -2423,10 +2426,9 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
     return im1;
 }
 
-static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
-static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
-static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*) JL_CANSAFEPOINT;
-static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x) JL_CANSAFEPOINT;
+static void emit_write_barrier(jl_codectx_t&, Value*, Value*, Value*);
+static void emit_write_multibarrier(jl_codectx_t&, Value *parent, Value *dst, Value *agg, jl_value_t*) JL_CANSAFEPOINT;
+static void emit_write_multibarrier(jl_codectx_t&, Value *parent, Value *dst, const jl_cgval_t&) JL_CANSAFEPOINT;
 
 SmallVector<unsigned, 0> first_ptr(Type *T)
 {
@@ -2540,7 +2542,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
             AllocaInst *lv = emit_static_alloca(ctx, fsz, Align(al));
             setName(ctx.emission_context, lv, "immutable_union");
             // the copy is a private, write-once stack location
-            data_ai = stack_copy_aliasinfo(ctx, ai, jltype);
+            data_ai = private_copy_aliasinfo(ctx, ai, jltype);
             emit_memcpy(ctx, lv, data_ai, ptr, ai, fsz, Align(al), Align(al));
             data = lv;
         }
@@ -2798,13 +2800,13 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             return;
         if (isboxed) {
             // Insertion-barrier optimization: skip when the new value is perm-allocated.
-            // Invalid under SATB (ConcurrentImmix), which must snapshot the old value.
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+            // Invalid under SATB (GC_BARRIER_SNAPSHOT), which must snapshot the old value.
+#ifndef GC_BARRIER_SNAPSHOT
             if (type_is_permalloc(rhs.typ))
                 return;
 #endif
             assert(r != nullptr);
-            emit_write_barrier(ctx, parent, r);
+            emit_write_barrier(ctx, parent, ptr, r);
         }
         else if (r) {
             Value *wbval = r;
@@ -2819,12 +2821,12 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 // pointer-exposing type
                 wbval = emit_unbox(ctx, intcast_eltyp, rhs);
             }
-            emit_write_multibarrier(ctx, parent, wbval, rhs.typ);
+            emit_write_multibarrier(ctx, parent, ptr, wbval, rhs.typ);
         }
         else {
             assert(!isboxed);
             assert(!rhs.inline_roots.empty());
-            emit_write_multibarrier(ctx, parent, rhs);
+            emit_write_multibarrier(ctx, parent, ptr, rhs);
         }
     };
     // For op == StoreKind::Modify the new value isn't known yet; its barrier is
@@ -3470,7 +3472,7 @@ static bool isLoadFromConstGV(LoadInst *LI)
     auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
     assert(load_base); // Static analyzer
     auto gv = dyn_cast<GlobalVariable>(load_base);
-    if (isLoadFromImmut(LI)) {
+    if (isLoadFromRootedRegion(LI)) {
         if (gv)
             return true;
         return isLoadFromConstGV(load_base);
@@ -3499,9 +3501,16 @@ static jl_aliasinfo_t best_field_aliasinfo(jl_codectx_t &ctx, const jl_cgval_t &
         if (idx == 1)
             return ctx.alias().arraysize;
     }
+    // A `const` field of an object that is already a constant global: nothing in this
+    // compilation unit stores to it, so it is described by the immutable `jtbaa_const`
+    // tag alone. That the tag does not alias the containing struct's is fine for the
+    // same reason -- there is no store here for a reader to be reordered against.
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
-        return ctx.alias().constant; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containing struct's tbaa
-                                     //Does the fact that this is marked as constant make this fine?
+        return ctx.alias().constant;
+    // Specify if this specific field is const or not, which helps with later refinements (especially gc-root-lowering).
+    if (ai.region == jl_aliasinfo_t::Region::mutfields)
+        return ai.withRegion(ctx, jl_field_isconst(jt, idx)
+                ? jl_aliasinfo_t::Region::mutconstdata : jl_aliasinfo_t::Region::mutdata);
     return ai;
 }
 
@@ -3663,7 +3672,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             Value *tindex0 = ctx.builder.CreateExtractValue(obj, ArrayRef<unsigned>(ptindex));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
             setNameWithField(ctx.emission_context, tindex, get_objname, jt, idx, Twine(".tindex"));
-            return mark_julia_slot(lv, jfty, tindex, best_aliasinfo(ctx, jfty));
+            return mark_julia_slot(lv, jfty, tindex, union_slot_aliasinfo(ctx, jfty));
         }
         else {
             unsigned st_idx;
@@ -4470,44 +4479,65 @@ static Value *emit_new_bits(jl_codectx_t &ctx, Value *jt, Value *pval)
     return call;
 }
 
-// if ptr is NULL this emits a write barrier _back_
-static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ptr)
+// Slots into Memory data use Loaded pointers; object fields use Derived pointers.
+static void emit_field_write_barrier(jl_codectx_t &ctx, Value *parent, Value *dst,
+                                     ArrayRef<Value*> children, ArrayRef<unsigned> offsets)
 {
-    emit_write_barrier(ctx, parent, ArrayRef<Value*>(ptr));
-}
-
-static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*> ptrs)
-{
-    ++EmittedWriteBarriers;
-    // if there are no child objects we can skip emission
-    if (ptrs.empty())
+    assert(children.size() == offsets.size());
+    if (children.empty())
         return;
-    SmallVector<Value*, 8> decay_ptrs;
-    decay_ptrs.push_back(maybe_decay_untracked(ctx, parent));
-    for (auto ptr : ptrs) {
-        decay_ptrs.push_back(maybe_decay_untracked(ctx, ptr));
+    ++EmittedWriteBarriers;
+    bool loaded = dst->getType()->getPointerAddressSpace() == AddressSpace::Loaded;
+    auto fn = loaded ? jl_field_write_barrier_p13_func : jl_field_write_barrier_p11_func;
+    SmallVector<Value*, 8> args;
+    args.push_back(maybe_decay_untracked(ctx, parent));
+    for (size_t i = 0; i < children.size(); i++) {
+        Value *slot = emit_ptrgep(ctx, dst, offsets[i]);
+        args.push_back(loaded ? slot : decay_derived(ctx, slot));
+        args.push_back(maybe_decay_untracked(ctx, children[i]));
     }
-    ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
+    ctx.builder.CreateCall(prepare_call(fn), args);
 }
 
-static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,
-                                    jl_value_t *jltype)
+static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *slot, Value *child)
 {
-    SmallVector<unsigned,4> perm_offsets;
-    // Insertion-barrier optimization: drop perm-allocated inline fields. Invalid under
-    // SATB (ConcurrentImmix), which must snapshot the overwritten old inline values.
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+    emit_field_write_barrier(ctx, parent, slot, {child}, {0});
+}
+
+static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *dst,
+                                    Value *agg, jl_value_t *jltype)
+{
+    SmallVector<unsigned, 4> perm_offsets;
+    // Permanent children can be skipped by insertion barriers, but not snapshot barriers.
+#ifndef GC_BARRIER_SNAPSHOT
     if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
 #endif
-    auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets);
-    emit_write_barrier(ctx, parent, ptrs);
+    SmallVector<unsigned, 4> offsets;
+    auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets, &offsets);
+    emit_field_write_barrier(ctx, parent, dst, ptrs, offsets);
 }
 
-static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x)
+static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *dst, const jl_cgval_t &x)
 {
-    auto ptrs = get_gc_roots_for(ctx, x, true);
-    emit_write_barrier(ctx, parent, ptrs);
+    auto *dt = (jl_datatype_t*)x.typ;
+    const auto &roots = x.inline_roots;
+    assert(jl_is_concrete_type(x.typ) && roots.size() == dt->layout->npointers);
+    SmallVector<unsigned, 4> perm_offsets;
+#ifndef GC_BARRIER_SNAPSHOT
+    find_perm_offsets(dt, perm_offsets, 0);
+#endif
+    SmallVector<Value*, 4> children;
+    SmallVector<unsigned, 4> offsets;
+    // Match the field order used by recombine_value when storing these roots.
+    for (size_t i = 0; i < roots.size(); i++) {
+        unsigned offset = jl_ptr_offset(dt, i) * ctx.types().sizeof_ptr;
+        if (std::find(perm_offsets.begin(), perm_offsets.end(), offset) != perm_offsets.end())
+            continue;
+        children.push_back(roots.get(ctx, i));
+        offsets.push_back(offset);
+    }
+    emit_field_write_barrier(ctx, parent, dst, children, offsets);
 }
 
 static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
@@ -4575,8 +4605,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             ssize_t promotion_ssa = -1;
             Value *strct;
             // This stack object is a write-once copy of an immutable holding no
-            // pointers (those are split into inline_roots).
-            const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty).withRegion(ctx, jl_aliasinfo_t::Region::stack);
+            // pointers (those are split into inline_roots), and must be eligible for promotion later.
+            const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty);
+            assert(strct_ai.region == jl_aliasinfo_t::Region::immutdata);
             SmallVector<Value*,0> inline_roots;
             if (type_is_ghost(lt)) {
                 strct = nullptr;

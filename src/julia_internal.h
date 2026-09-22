@@ -387,26 +387,6 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 }
 
 
-// this is a version of memcpy that preserves atomic memory ordering
-// which makes it safe to use for objects that can contain memory references
-// without risk of creating pointers out of thin air
-// TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
-//       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
-static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size_t n) JL_NOTSAFEPOINT
-{
-    size_t i;
-    if (dstp < srcp || dstp > srcp + n) {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_release(dstp + i, jl_atomic_load_relaxed(srcp + i));
-        }
-    }
-    else {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_release(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
-        }
-    }
-}
-
 static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, size_t nb) JL_NOTSAFEPOINT
 {
     assert(nb == jl_datatype_size(jl_typeof(src)));
@@ -1051,9 +1031,9 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
 jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *expected, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t *parent, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
-jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic, jl_module_t *mod, jl_sym_t *name) JL_CANSAFEPOINT;
+jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
-jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_binding_t *b, jl_module_t *mod, jl_sym_t *name) JL_CANSAFEPOINT;
+jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
 int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) JL_CANSAFEPOINT;
@@ -1066,7 +1046,7 @@ jl_array_t *jl_get_loaded_modules(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_CANSAFEPOINT;
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
-jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg) JL_CANSAFEPOINT;
+jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg) JL_CANSAFEPOINT;
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
@@ -1109,6 +1089,11 @@ jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e, s
 JL_DLLEXPORT jl_value_t *jl_eval_globalref(jl_globalref_t *g, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_get_globalref_value(jl_globalref_t *gr, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var, size_t world) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_binding_partition_value(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_get_binding_partition_boundp(jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_binding_partition_leaf_value(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_get_leaf_binding_partition(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT, size_t world, int depwarn) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
@@ -1154,6 +1139,7 @@ void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name);
 void jl_module_run_initializer(jl_module_t *m) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_binding_t *b) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_binding_deprecation_check(jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
@@ -1184,8 +1170,23 @@ STATIC_INLINE int jl_bkind_is_some_explicit_import(enum jl_partition_kind kind) 
     return kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
 }
 
+// Whether the partition's restriction is another `jl_binding_t` that an access must still
+// walk to. Its negation is a leaf partition: one whose restriction is the binding's own value or declared type,
+// so an access needs no further resolution.
+// Equivalently, this is `jl_bkind_is_some_import(kind) && !jl_bkind_is_some_constant(kind)`.
+STATIC_INLINE int jl_bkind_is_some_binding_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_IMPLICIT_GLOBAL || jl_bkind_is_some_explicit_import(kind);
+}
+
 STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
     return kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_GUARD;
+}
+
+// Whether the partition is a global variable: one accessed through the binding's own value
+// slot (typed for PARTITION_KIND_GLOBAL, `Any` for a weakly-declared one). Every other kind
+// has its value stored on the partition itself (a constant, a guard) or by another binding (an import).
+STATIC_INLINE int jl_bkind_is_some_global(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_DECLARED;
 }
 
 STATIC_INLINE int jl_bkind_is_some_implicit(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
@@ -1212,16 +1213,11 @@ size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *previous_part, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_binding_t *jl_binding_partition_owner(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 
-struct restriction_kind_pair {
-    jl_binding_t *binding_if_global;
-    jl_value_t *restriction;
-    enum jl_partition_kind kind;
-    int maybe_depwarn;
-};
-JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b JL_PROPAGATES_ROOT, struct restriction_kind_pair *rkp, size_t min_world, size_t max_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT, int *maybe_depwarn, size_t min_world, size_t max_world) JL_CANSAFEPOINT;
+// The value of a primordial constant binding, or NULL if `b` is not one.
+JL_DLLEXPORT jl_value_t *jl_binding_primordial_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+
 void check_safe_newbinding(jl_module_t *m, jl_sym_t *var) JL_CANSAFEPOINT;
 
 STATIC_INLINE int is10digit(char c) JL_NOTSAFEPOINT

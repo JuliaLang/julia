@@ -529,7 +529,7 @@ typedef struct _jl_opaque_closure_t {
 // No lock is required to read these fields, which are set while we have
 // exclusive ownership of the CodeInstance:
 //   def, owner, rettype, exctype, rettype_const, analysis_results,
-//   time_infer_total, time_infer_self
+//   time_infer_total, time_infer_cache_saved, time_infer_self
 
 // flags bits for CodeInstance
 #define JL_CI_FLAGS_SPECPTR_SPECIALIZED      0b0001
@@ -1347,7 +1347,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
     // while svec is supposedly immutable, in practice we sometimes publish it
     // first and set the values lazily. Those users occasionally might need to
     // instead use jl_atomic_store_release here.
-    jl_gc_wb(t, x);
+    jl_gc_wb(t, (void*)((_Atomic(jl_value_t*)*)jl_svec_data(t) + i), x);
     jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
     return (jl_value_t*)x;
 }
@@ -1385,6 +1385,27 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT;
+
+// this is a version of memcpy that preserves atomic memory ordering
+// which makes it safe to use for objects that can contain memory references
+// without risk of creating pointers out of thin air
+// TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
+//       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
+static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size_t n) JL_NOTSAFEPOINT
+{
+    size_t i;
+    if (dstp < srcp || dstp > srcp + n) {
+        for (i = 0; i < n; i++) {
+            jl_atomic_store_release(dstp + i, jl_atomic_load_relaxed(srcp + i));
+        }
+    }
+    else {
+        for (i = 0; i < n; i++) {
+            jl_atomic_store_release(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
+        }
+    }
+}
 
 // write barriers
 
@@ -1405,7 +1426,7 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 // `jl_value_t *` field), and `val` is the new value to store.
 #define jl_gc_write(parent, field, type, val) do { \
     type *_jl_write_val = (val); \
-    jl_gc_wb((parent), _jl_write_val); \
+    jl_gc_wb((parent), (void*)&(field), _jl_write_val); \
     (field) = _jl_write_val; \
 } while (0)
 
@@ -1413,7 +1434,20 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 // `order` is relaxed or release.
 #define jl_gc_write_atomic(parent, field, type, val, order) do { \
     type *_jl_write_val = (val); \
-    jl_gc_wb((parent), _jl_write_val); \
+    jl_gc_wb((parent), (void*)&(field), _jl_write_val); \
+    jl_atomic_store_##order(&(field), _jl_write_val); \
+} while (0)
+
+// Variants for a parent allocated since the last safepoint.
+#define jl_gc_write_fresh(parent, field, type, val) do { \
+    type *_jl_write_val = (val); \
+    jl_gc_wb_fresh((parent), (void*)&(field), _jl_write_val); \
+    (field) = _jl_write_val; \
+} while (0)
+
+#define jl_gc_write_atomic_fresh(parent, field, type, val, order) do { \
+    type *_jl_write_val = (val); \
+    jl_gc_wb_fresh((parent), (void*)&(field), _jl_write_val); \
     jl_atomic_store_##order(&(field), _jl_write_val); \
 } while (0)
 
@@ -2260,7 +2294,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var) JL_CANSAFEPOINT;
 // get binding for assignment
-JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module_t *m, jl_sym_t *s) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *m, jl_sym_t *s) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_existing_strong_gf(jl_binding_t *b JL_PROPAGATES_ROOT, size_t new_world) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) JL_CANSAFEPOINT;
@@ -2270,11 +2304,11 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym
 JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0)) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0)) JL_CANSAFEPOINT;
 void jl_set_initial_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0), int exported) JL_CANSAFEPOINT;
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici) JL_CANSAFEPOINT;

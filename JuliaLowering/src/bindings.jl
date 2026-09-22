@@ -109,7 +109,12 @@ function syntax_id(ex::SyntaxTree)
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo
-    id = x isa SyntaxTree ? syntax_id(x) : x
+    id = if x isa SyntaxTree
+        @jl_assert kind(x) === K"BindingId" x
+        syntax_id(x)
+    else
+        x
+    end
     bindings.info[id]
 end
 

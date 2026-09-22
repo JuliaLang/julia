@@ -73,6 +73,24 @@ end
     @test length(kids) == 2 # kept + escaped; the dead child was spliced out
     @test kept in kids && escaped_tok.source in kids
 
+    # Dead promoted children must be unlinked even if their pages have no young
+    # allocations, before a cancellation walk can reach their freed walk locks.
+    @noinline function make_promoted_children(root, n)
+        promoted = [CancellationTokenSource(CancellationToken(root)) for _ in 1:n]
+        GC.gc(false) # promote the children before allocating their walk locks
+        foreach(cancel!, promoted)
+        return nothing
+    end
+    for _ in 1:20
+        root3 = CancellationTokenSource()
+        kept3 = CancellationTokenSource(CancellationToken(root3))
+        make_promoted_children(root3, 200)
+        GC.gc(false)
+        @test cancel!(root3)
+        # MMTk may retain promoted children until a full collection.
+        @test live_children(root3) == [kept3] skip=!Base.USING_STOCK_GC
+    end
+
     # linked sources: a source with several parents is cancelled by any of
     # them (the graph is a DAG, not just a tree)
     la = CancellationTokenSource()
@@ -222,6 +240,34 @@ end
     GC.gc()
     cancel!(root)
     @test Base.iscancelled(keep)
+
+    # Children dying in the *middle* of a parent's list, mixed with fresh
+    # attachments and with quick and full collections interleaved. A dead
+    # source must survive - intact and still linked - until the unlink pass
+    # runs, so that its neighbours' back-pointers stay valid. A build with
+    # WITH_GC_DEBUG_ENV=1 additionally exercises gc_scrub, which rewrites
+    # dead pool objects that a conservative stack scan happens to find and
+    # must leave these lists alone.
+    for round in 1:40
+        roots = [CancellationTokenSource() for _ in 1:8]
+        for p in roots
+            tok = CancellationToken(p)
+            kids = CancellationTokenSource[CancellationTokenSource(tok) for _ in 1:64]
+            # replace every other child: kills one mid-list and prepends a new one
+            for i in 1:2:length(kids)
+                kids[i] = CancellationTokenSource(tok)
+            end
+            kids = nothing
+            GC.gc(false)
+        end
+        GC.gc(round % 3 == 0)
+        survivor = CancellationTokenSource(CancellationToken(roots[1]))
+        cancel!(roots[1])
+        @test Base.iscancelled(survivor)
+        roots = nothing
+    end
+    GC.gc()
+    GC.gc()
 end
 
 @testset "cancellation source memory accounting" begin
@@ -951,19 +997,30 @@ end
     end
     foreach(wait, ts2)
 
-    # waitall re-arms the same registered entry across completions
+    # waitall reuses its entry and source registration across completions
+    src3 = CancellationTokenSource()
     c3 = Channel{Int}(0)
     ts3 = [@async take!(c3) for _ in 1:3]
-    wa3 = @async waitall(ts3)
+    wa3 = @async waitall(ts3; cancel=CancellationToken(src3))
     @test timedwait(() -> (x = @atomic wa3.waiting_on; x isa Base.WaitEntryN), 10.0) == :ok
     w3 = (@atomic wa3.waiting_on)::Base.WaitEntryN
-    for _ in 1:3
+    for n in 1:2
         put!(c3, 0)
+        @test timedwait(10.0) do
+            (@atomic wa3.waiting_on) === w3 &&
+                count(i -> Base._slot_owner(w3, i) isa Base.ThreadSynchronizer,
+                      1:Base._nslots(w3)) == 3 - n
+        end == :ok
+        @test registry_entries(src3) == [w3]
     end
+    put!(c3, 0)
     done3, remaining3 = fetch(wa3)
     @test length(done3) == 3 && isempty(remaining3)
     @test (@atomic wa3.waiting_on) === nothing
     @test count(i -> Base._slot_owner(w3, i) isa Base.ThreadSynchronizer, 1:Base._nslots(w3)) == 0
+    @test (@atomic :monotonic w3.task) === nothing
+    cancel!(src3)
+    @test isempty(registry_entries(src3))
 end
 
 @testset "level-triggered delivery and shielding" begin
