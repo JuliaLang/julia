@@ -178,6 +178,106 @@ const ISAs_by_family = Dict(
 # Test a CPU feature exists on the currently-running host
 test_cpu_feature(feature::UInt32) = ccall(:jl_test_cpu_feature, Bool, (UInt32,), feature)
 
+# Architectures accepted as the first argument of `@cpu_supports`.
+const _CPU_SUPPORTS_ARCHES = (:x86_64, :aarch64, :riscv64)
+
+# LLVM features of the host architecture that codegen can enable.
+const _codegen_feature_names = OncePerProcess{Set{Symbol}}() do
+    names = ccall(:jl_cpu_codegen_features, Any, ())::String
+    Set{Symbol}(Symbol(name) for name in eachsplit(names, ','; keepempty=false))
+end
+
+# Features a multiversioning clone targeting CPU `name` is compiled with, or
+# `nothing` if `name` is not a known CPU.
+function _cpu_model_features(name::String)
+    result = ccall(:jl_cpu_target_features, Any, (Cstring,), name)
+    result === nothing && return nothing
+    return Symbol[Symbol(f) for f in eachsplit(result::String, ','; keepempty=false)]
+end
+
+function _cpu_supports_name(x)
+    x isa Symbol && return x
+    x isa QuoteNode && x.value isa Symbol && return x.value::Symbol
+    x isa String && return Symbol(x)
+    error("@cpu_supports: expected a literal name (Symbol or String), got $(repr(x))")
+end
+
+"""
+    Base.@cpu_supports arch name1 [name2 ...] -> Bool
+
+Compile-time CPU capability query, ANDed across names. `arch` is a literal
+architecture name (`x86_64`, `aarch64` (or `arm64`), or `riscv64`) that scopes
+the query; each `nameN` is a literal naming an LLVM target feature (`avx2`,
+`fma`, `"sse4.2"`) or a CPU model (`haswell`, `znver4`, `"x86-64-v3"`).
+Strings are required for names that contain `-` or `.`. CPU-model names
+expand to the features a clone targeting that CPU is compiled with. Names
+that are not hardware features usable by Julia code (tuning hints, privileged
+instructions) or CPU models error at macro-expansion time.
+
+The answer is what Julia's code generation enables for the target, which can
+be less than what the hardware supports: features Julia deliberately disables
+(for example `rdrnd`, `rdseed`, `xsaveopt` and, on x86, `avx512bf16`) test false.
+
+On a host whose arch doesn't match the prefix, the call folds to `false`
+at parse time — letting you write cross-arch dispatch in a single source
+file.
+
+Mirrors GCC/Clang's `__builtin_cpu_supports`, folded against the function's
+effective `target-features` / `target-cpu` (so multiversioning clones get
+per-clone answers automatically).
+
+# Patterns
+
+Dispatch — the dead branch is eliminated:
+```julia
+function dot(xs, ys)
+    if @cpu_supports x86_64 avx2 fma
+        ...  # 256-bit path
+    elseif @cpu_supports aarch64 neon
+        ...  # NEON path
+    else
+        ...  # fallback
+    end
+end
+```
+
+Specialized kernel guard — the body after the assert is DCE'd on clones
+that don't satisfy it, so target-specific intrinsics inside never reach
+backend lowering:
+```julia
+function kernel_avx512(xs)
+    @assert @cpu_supports x86_64 avx512f
+    ...
+end
+```
+"""
+macro cpu_supports(args...)
+    length(args) >= 2 ||
+        error("@cpu_supports: usage is `@cpu_supports <arch> <name>...` where <arch> is one of $(join(_CPU_SUPPORTS_ARCHES, ", "))")
+    arch_arg = _cpu_supports_name(args[1])
+    arch = Symbol(normalize_arch(String(arch_arg)))
+    arch in _CPU_SUPPORTS_ARCHES ||
+        error("@cpu_supports: first argument must be one of $(join(_CPU_SUPPORTS_ARCHES, ", ")), got `$arch_arg`")
+    # Names for a foreign architecture can't be validated here.
+    arch === Sys.ARCH || return false
+    known = _codegen_feature_names()
+    features = Symbol[]
+    for arg in args[2:end]
+        name = _cpu_supports_name(arg)
+        if name in known
+            push!(features, name)
+            continue
+        end
+        cpu_features = _cpu_model_features(String(name))
+        cpu_features === nothing && error("@cpu_supports: `$name` is neither a hardware feature nor a CPU model of $arch")
+        isempty(cpu_features) && error("@cpu_supports: CPU model `$name` has no features to test")
+        append!(features, cpu_features)
+    end
+    # One query for all names, so even a large CPU model costs the inliner a single call.
+    query = Symbol(join(sort!(unique!(features)), ','))
+    return :(Core.Intrinsics.cpu_supports($(QuoteNode(query))))
+end
+
 # Normalize some variation in ARCH values (which typically come from `uname -m`)
 function normalize_arch(arch::String)
     arch = lowercase(arch)
