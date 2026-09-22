@@ -399,6 +399,17 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         k === K"toplevel_lambda" || k === K"generated_lambda" ex
     if k == K"Identifier"
         if (mod = ex.mod; !isnothing(mod))
+            # An explicit-module name declared in this thunk (e.g. a
+            # `function_decl` name, see `_find_scope_decls!`) shares that
+            # single non-internal global binding across all of its mentions.
+            # Only undeclared references get a fresh internal binding.
+            bid = get(top_scope(ctx).vars, NameKey(ex), nothing)
+            if !isnothing(bid)
+                b = get_binding(ctx, bid)
+                if b.kind === :global && b.mod === mod
+                    return newleaf(ex, K"BindingId", b.id)
+                end
+            end
             return new_global_binding(ctx, ex, syntax_name(ex), mod)
         end
         b = resolve_name(ctx, ex)
