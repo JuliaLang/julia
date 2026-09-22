@@ -323,9 +323,8 @@ few stack structures that are treated as roots. A type is recognised by the
 annotation alone, so code embedding Julia can mark its own object types the same
 way.
 
-Put the annotation on the struct rather than on a typedef of it. A typedef that
-names a pointer is desugared away before the declaration is inspected, so only
-the annotation on the tag covers every typedef, however many levels deep:
+For a `struct` or C++ `class`, put the annotation on its declaration. This also
+covers pointers to the type, including those declared through typedef aliases:
 
 ```c
 struct JL_GC_TRACKED_TYPE MyObject;
@@ -343,9 +342,20 @@ void example() {
 }
 ```
 
-It applies equally to a C++ `class`. Where there is no tag to annotate -- for
-instance `jl_gc_tracked_buffer_t`, which is a typedef of `void` -- put it on the
-typedef instead, which then also covers every typedef of that typedef.
+For types such as `void` that have no struct or class declaration, annotate a
+non-pointer typedef instead:
+
+```c
+typedef void MyBuffer JL_GC_TRACKED_TYPE;
+typedef MyBuffer MyBufferAlias;
+```
+
+The analyzer tracks both `MyBuffer*` and `MyBufferAlias*`. Julia uses this pattern
+for `jl_gc_tracked_buffer_t`.
+
+Do not annotate a typedef that defines a pointer type, such as `MyValue` above.
+The analyzer follows the pointer to the underlying type before checking
+annotations, so it skips annotations on the pointer typedef.
 
 ## Completeness of analysis
 

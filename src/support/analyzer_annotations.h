@@ -125,11 +125,13 @@
 //   JL_GC_TRACKED_TYPE   The analyzer tracks values of the annotated type for
 //                     rooting, exactly as it tracks a jl_value_t*. Types are
 //                     recognised by this annotation alone, so code outside
-//                     Julia can mark its own object types too. Put it on the
-//                     struct rather than on a typedef of it, so that every
-//                     typedef is covered:
+//                     Julia can mark its own object types too. For a struct or
+//                     class, annotate its declaration to cover all aliases:
 //                         struct JL_GC_TRACKED_TYPE MyObject;
 //                         typedef struct MyObject *MyValue;
+//                     For an alias of void, annotate the typedef:
+//                         typedef void MyBuffer JL_GC_TRACKED_TYPE;
+//                     Annotations on pointer typedefs are ignored.
 //
 // -- Escape hatches (function-like annotations) --
 //

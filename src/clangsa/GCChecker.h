@@ -149,10 +149,9 @@ public:
   };
 
 private:
-  // Strip references, atomics, pointers and arrays to reach the type that
-  // carries a declaration. Note this drops typedef sugar as soon as the
-  // typedef names a pointer: `typedef struct Foo *Bar` reduces to `struct Foo`,
-  // so anything keyed off the declaration must accept the tag as well.
+  // Strip references, atomics, pointers and arrays to reach the underlying type.
+  // This also skips pointer typedefs: `typedef struct Foo *Bar` reduces to
+  // `struct Foo`, so annotations on Bar are not preserved.
   static QualType stripToDeclaredType(QualType QT) {
     if (QT->isReferenceType())
       return stripToDeclaredType(QT->getPointeeType().getUnqualifiedType());
@@ -179,8 +178,8 @@ private:
     return f(TD->getName());
   }
 
-  // True if the type is declared JL_GC_TRACKED_TYPE, on any typedef on the way
-  // to its tag or on the tag itself.
+  // Check for JL_GC_TRACKED_TYPE on the underlying type or its typedef aliases
+  // after stripToDeclaredType has removed pointer typedefs.
   static bool hasGCTrackedAnnotation(QualType QT);
   template <typename callback>
   static SymbolRef walkToRoot(callback f, const ProgramStateRef &State,

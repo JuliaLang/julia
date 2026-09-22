@@ -5,15 +5,12 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-// An embedder's object type. Julia's own types are recognised by name; this
-// one opts in with an attribute instead. It sits on the tag, so both the tag
-// and every typedef of it are covered.
+// Annotating the struct makes pointers to it tracked, including typedef aliases.
 struct JL_GC_TRACKED_TYPE EmbedderBag;
 typedef struct EmbedderBag *EmbedderValue;
 typedef EmbedderValue EmbedderValueAlias;
 
-// Deliberately not annotated, to pin down that the attribute is what does the
-// work and an arbitrary embedder struct is still ignored.
+// Unannotated structs are not tracked.
 struct PlainBox;
 typedef struct PlainBox *PlainValue;
 
@@ -35,8 +32,7 @@ void embedder_rooted_argument(void) {
     JL_GC_POP();
 }
 
-// The annotation is found through a typedef of a typedef, since it lives on
-// the tag both of them resolve to.
+// Both aliases refer to the annotated struct.
 void embedder_alias_is_tracked(void) {
     EmbedderValueAlias v = embedder_alloc();
     embedder_use(v); // expected-warning{{Passing non-rooted value as argument to function that may GC}}
@@ -44,8 +40,7 @@ void embedder_alias_is_tracked(void) {
                      // expected-note@-3{{Started tracking value here}}
 }
 
-// Where there is no tag, the annotation sits on a typedef, and is found
-// through an alias of that typedef too.
+// An annotation on a typedef of void also applies through further aliases.
 typedef void EmbedderBuffer JL_GC_TRACKED_TYPE;
 typedef EmbedderBuffer EmbedderBufferAlias;
 extern EmbedderBufferAlias *buffer_alloc(void);

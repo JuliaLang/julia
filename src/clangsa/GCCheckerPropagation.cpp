@@ -341,9 +341,8 @@ bool GCChecker::hasGCTrackedAnnotation(QualType QT) {
   if (QT.isNull())
     return false;
   QT = stripToDeclaredType(QT);
-  // An attribute belongs to the declaration that spells it, so consult every
-  // redeclaration: a struct annotated where it is defined must still be
-  // recognised in a translation unit that only sees a forward declaration.
+  // Check all declarations visible in this translation unit: the annotation
+  // may be on a forward declaration or on the definition.
   auto AnyRedeclAnnotated = [](const clang::Decl *D) {
     if (!D)
       return false;
@@ -352,8 +351,8 @@ bool GCChecker::hasGCTrackedAnnotation(QualType QT) {
         return true;
     return false;
   };
-  // Check each typedef on the way to the tag, so that an annotated typedef is
-  // also found through a typedef of it.
+  // Follow typedef aliases to find annotations such as the one on
+  // jl_gc_tracked_buffer_t, which is an alias of void.
   for (const TypedefType *TT = QT->getAs<TypedefType>(); TT;
        TT = TT->desugar()->getAs<TypedefType>())
     if (AnyRedeclAnnotated(TT->getDecl()))
@@ -363,8 +362,6 @@ bool GCChecker::hasGCTrackedAnnotation(QualType QT) {
 }
 
 bool GCChecker::isGCTrackedType(QualType QT) {
-  // Every GC-tracked type says so at its own declaration, with
-  // JL_GC_TRACKED_TYPE.
   return hasGCTrackedAnnotation(QT);
 }
 
