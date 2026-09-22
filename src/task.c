@@ -199,6 +199,9 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     *pt = NULL; // clear the gc-root for the target task before copying the stack for saving
     lastt->ctx.copy_stack = nb;
     lastt->sticky = 1;
+#ifdef GC_BARRIER_ON_TASKS
+    jl_gc_wb_object(lastt); // the saved stack is only reachable through `lastt`
+#endif
     memcpy_stack_a16((uint64_t*)buf, (uint64_t*)frame_addr, nb);
 }
 
@@ -466,7 +469,6 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
         jl_stack_context_t copy_ctx;
     } lasttstate;
 
-    jl_gc_notify_task_suspend(lastt);
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
