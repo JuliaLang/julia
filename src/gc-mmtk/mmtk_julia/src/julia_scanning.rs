@@ -30,11 +30,11 @@ const JL_GCFRAME_FINLIST: usize = 3;
 /// All bits used to encode the frame kind.
 const JL_GCFRAME_KIND_MASK: usize = 0x3;
 
-/// Identifies immediate values. Must match gc_is_tagged_pointer in gc-common.h.
-const TAGGED_POINTER_MASK: usize = 0x3;
+/// Identifies immediate values. Must match gc_is_tagged_immediate in gc-common.h.
+const TAGGED_IMMEDIATE_MASK: usize = 0x3;
 
-fn is_tagged_pointer(value: Address) -> bool {
-    value.as_usize() & TAGGED_POINTER_MASK != 0
+fn is_tagged_immediate(value: Address) -> bool {
+    value.as_usize() & TAGGED_IMMEDIATE_MASK != 0
 }
 const OFFSET_OF_INLINED_SPACE_IN_MODULE: usize =
     offset_of!(jl_module_t, usings) + offset_of!(arraylist_t, _space);
@@ -494,7 +494,7 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                     let slot = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
                     let real_addr = get_stack_addr(slot, offset, lb, ub);
                     let value = read_stack(slot, offset, lb, ub);
-                    if !is_tagged_pointer(value) {
+                    if !is_tagged_immediate(value) {
                         process_slot(closure, real_addr);
                     }
                 } else if frame_kind == JL_GCFRAME_FINLIST {
@@ -528,7 +528,7 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                     let real_addr =
                         get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
                     let value = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
-                    if !is_tagged_pointer(value) {
+                    if !is_tagged_immediate(value) {
                         process_slot(closure, real_addr);
                     }
                 }

@@ -2230,7 +2230,7 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
                 new_obj = (jl_value_t *)gc_read_stack(slot, offset, lb, ub);
                 if (new_obj == NULL)
                     continue;
-                if (gc_is_tagged_pointer(new_obj))
+                if (gc_is_tagged_immediate(new_obj))
                     continue;
             }
             else if (frame_kind == JL_GCFRAME_FINLIST) {
@@ -2248,7 +2248,7 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
             }
             else {
                 new_obj = (jl_value_t *)gc_read_stack(&rts[i], offset, lb, ub);
-                if (gc_is_tagged_pointer(new_obj))
+                if (gc_is_tagged_immediate(new_obj))
                     continue;
                 // conservatively check for the presence of any smalltag type, instead of just NULL
                 // in the very unlikely event that codegen decides to root the result of julia.typeof

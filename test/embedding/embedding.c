@@ -50,7 +50,7 @@ static void check_fins_ran(int expected, const char *ctx)
 
 // Tagged immediates must not prevent neighboring roots from being marked.
 // Their finalizers should run only after the roots are popped.
-static void test_tagged_pointer_roots(void)
+static void test_tagged_immediate_roots(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     // Set a high payload bit on either 32-bit or 64-bit platforms.
@@ -70,7 +70,7 @@ static void test_tagged_pointer_roots(void)
         jl_gc_add_ptr_finalizer(ptls, args[1], (void *)tagged_root_finalizer);
         jl_gc_add_ptr_finalizer(ptls, args[4], (void *)tagged_root_finalizer);
         jl_gc_collect(JL_GC_FULL);
-        check_fins_ran(0, "JL_GC_PUSHARGS frame, small tagged pointers");
+        check_fins_ran(0, "JL_GC_PUSHARGS frame, small tagged immediates");
 
         // Large payloads must be skipped just the same, not mistaken for
         // object references.
@@ -78,14 +78,14 @@ static void test_tagged_pointer_roots(void)
         args[2] = (jl_value_t *)(large_imm | 0x2);
         args[3] = (jl_value_t *)(large_imm | 0x3);
         jl_gc_collect(JL_GC_FULL);
-        check_fins_ran(0, "JL_GC_PUSHARGS frame, large tagged pointers");
+        check_fins_ran(0, "JL_GC_PUSHARGS frame, large tagged immediates");
         JL_GC_POP();
     }
     jl_gc_collect(JL_GC_FULL);
     check_fins_ran(2, "after JL_GC_PUSHARGS frame was popped");
     tagged_root_fins_ran = 0;
 
-    // Indirect-layout frame (JL_GC_PUSH3): locals holding tagged pointers.
+    // Indirect-layout frame (JL_GC_PUSH3): locals holding tagged immediates.
     {
         jl_value_t *tagged = (jl_value_t *)0x5;
         jl_value_t *obj = NULL;
@@ -94,12 +94,12 @@ static void test_tagged_pointer_roots(void)
         obj = jl_box_int64(24242424);
         jl_gc_add_ptr_finalizer(ptls, obj, (void *)tagged_root_finalizer);
         jl_gc_collect(JL_GC_FULL);
-        check_fins_ran(0, "JL_GC_PUSH frame, small tagged pointers");
+        check_fins_ran(0, "JL_GC_PUSH frame, small tagged immediates");
 
         tagged = (jl_value_t *)(large_imm | 0x3);
         tagged2 = (jl_value_t *)(large_imm | 0x2);
         jl_gc_collect(JL_GC_FULL);
-        check_fins_ran(0, "JL_GC_PUSH frame, large tagged pointers");
+        check_fins_ran(0, "JL_GC_PUSH frame, large tagged immediates");
         JL_GC_POP();
     }
     jl_gc_collect(JL_GC_FULL);
@@ -281,7 +281,7 @@ int main()
         jl_printf(jl_stderr_stream(), "exception caught from C\n");
     }
 
-    test_tagged_pointer_roots();
+    test_tagged_immediate_roots();
 
     int ret = 0;
     jl_atexit_hook(ret);
