@@ -347,8 +347,8 @@ BundledLazyLibraryPath(subpath) = LazyLibraryPath(PrivateShlibdirGetter(), subpa
 
 function Base.show(io::IO, llp::LazyLibraryPath)
     pieces = llp.pieces
-    # `PrivateShlibdirGetter()` dlopens. Avoid doing so just to `show`
-    # and like `Library`, avoids printing the full path when bundled
+    # `PrivateShlibdirGetter()` dlopens. Avoid doing so in `show`.
+    # Like `Library`, avoids printing the full path when bundled.
     if length(pieces) == 2 && pieces[1] isa PrivateShlibdirGetter
         show(io, pieces[2])
     else
