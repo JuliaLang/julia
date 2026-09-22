@@ -1,0 +1,80 @@
+From c74738e6a59d86db31cff48591adc7f59cace00b Mon Sep 17 00:00:00 2001
+From: Adam Bzowski <adam.bzowski@arm.com>
+Date: Wed, 12 Aug 2026 08:43:53 +0100
+Subject: [PATCH] [BOLT] Avoid unnecessary AArch64 ADR relaxation (#215415)
+
+This is a temporary fix for an AArch64 ADR/LDR relaxation issue. The
+correct treatment likely requires merging AArch64RelaxationPass with
+LongJmpPass, so address materialization and branch/stub insertion can
+use one final layout model.
+
+The relaxation pass currently tries to relax every ADR/LDR in functions
+at least 1 MiB, including same-fragment references in non-simple
+functions. Since BOLT cannot grow non-simple functions without an
+adjacent NOP, this can fail even though the preserved layout leaves the
+original displacement valid.
+
+Skip relaxation for same-fragment references in non-simple functions,
+while retaining the size check for reorderable simple functions.
+---
+ bolt/lib/Passes/AArch64RelaxationPass.cpp     |  8 +++--
+ .../AArch64/adr-relaxation-large-non-simple.s | 30 +++++++++++++++++++
+ 2 files changed, 35 insertions(+), 3 deletions(-)
+ create mode 100644 bolt/test/AArch64/adr-relaxation-large-non-simple.s
+
+diff --git a/bolt/lib/Passes/AArch64RelaxationPass.cpp b/bolt/lib/Passes/AArch64RelaxationPass.cpp
+index 2b7384dc848dd..51260ceadf918 100644
+--- a/bolt/lib/Passes/AArch64RelaxationPass.cpp
++++ b/bolt/lib/Passes/AArch64RelaxationPass.cpp
+@@ -59,10 +59,12 @@ void AArch64RelaxationPass::runOnFunction(BinaryFunction &BF) {
+           continue;
+       }
+ 
+-      // Don't relax ADR/LDR if it points to the same function and is in the
+-      // main fragment and BF initial size is < 1MB.
++      // The layout of a non-simple function is preserved, so references within
++      // the same fragment retain their original in-range displacement. For
++      // simple functions, basic blocks can move, but an initial size below 1MiB
++      // guarantees that internal references remain in range after reordering.
+       const unsigned OneMB = 0x100000;
+-      if (BF.getSize() < OneMB) {
++      if (!BF.isSimple() || BF.getSize() < OneMB) {
+         BinaryFunction *TargetBF = BC.getFunctionForSymbol(Symbol);
+         if (TargetBF == &BF && !BB.isSplit())
+           continue;
+diff --git a/bolt/test/AArch64/adr-relaxation-large-non-simple.s b/bolt/test/AArch64/adr-relaxation-large-non-simple.s
+new file mode 100644
+index 0000000000000..babcdb5304b98
+--- /dev/null
++++ b/bolt/test/AArch64/adr-relaxation-large-non-simple.s
+@@ -0,0 +1,30 @@
++## Check that an ADR targeting the same fragment is not relaxed in a large
++## non-simple function. BOLT preserves the layout of non-simple functions, so
++## the ADR displacement cannot change even when the function is larger than the
++## instruction's 1MiB range.
++
++# RUN: llvm-mc -filetype=obj -triple aarch64-unknown-unknown %s -o %t.o
++# RUN: %clang %cflags %t.o -o %t.exe -Wl,-q
++# RUN: llvm-bolt %t.exe -o %t.bolt --lite=false
++
++  .text
++  .globl _start
++  .type _start, %function
++_start:
++  .cfi_startproc
++.Ladr:
++  adr x1, .Ladr
++  br x0
++
++  // Make the function's code larger than 1MiB. The unknown indirect branch
++  // makes the function non-simple, while the self-referential ADR remains in
++  // range.
++  .rept 0x40000
++  nop
++  .endr
++  ret
++  .cfi_endproc
++  .size _start, .-_start
++
++  // Force BOLT's relocation mode.
++  .reloc 0, R_AARCH64_NONE
