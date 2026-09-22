@@ -12,6 +12,14 @@ version = "0.1.0"
     [deps.Bar.syntax]
     julia_version = "1.14.0-DEV.1886"
 
+[[deps.Baz]]
+path = "Nested/Baz"
+uuid = "ab000000-0000-0000-0000-000000000003"
+version = "0.1.0"
+
+    [deps.Baz.syntax]
+    julia_version = "1.14.0-DEV.1886"
+
 [[deps.Foo]]
 path = "Foo"
 uuid = "ab000000-0000-0000-0000-000000000001"

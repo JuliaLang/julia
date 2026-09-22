@@ -2642,8 +2642,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         // complain, but this is used as rooting storage for normalized types
         // below so it must be rooted properly by the GC
         p = jl_alloc_svec_uninit(ntp);
-        for (size_t i = 0; i < ntp; i++)
-            jl_svecset(p, i, iparams[i]);
+        for (size_t i = 0; i < ntp; i++) {
+            jl_gc_write_fresh(p, jl_svec_data(p)[i], jl_value_t, iparams[i]);
+        }
         iparams = jl_svec_data(p);
     }
     assert(jl_is_svec(p) && iparams == jl_svec_data(p));
@@ -2745,7 +2746,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     ndt->types = NULL; // to be filled in below
     int invalid = 0;
     if (istuple) {
-        ndt->types = p; // TODO: this may need to filter out certain types
+        jl_gc_write(ndt, ndt->types, jl_svec_t, p); // TODO: this may need to filter out certain types
     }
     else if (isnamedtuple) {
         jl_value_t *names_tup = jl_svecref(p, 0);
@@ -3451,8 +3452,8 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     // concurrent first queries compute equal values; the compare-and-swap
     // keeps a single winner
     super = NULL;
+    jl_gc_wb(ndt, (void*)superp, s);
     if (jl_atomic_cmpswap(superp, &super, (jl_datatype_t*)s)) {
-        jl_gc_wb(ndt, (void*)superp, s);
         super = (jl_datatype_t*)s;
     }
     return super;

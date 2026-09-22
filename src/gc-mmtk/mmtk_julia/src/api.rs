@@ -1,5 +1,6 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+use crate::util::PreserveErrno;
 use crate::JuliaVM;
 use crate::JULIA_HEADER_SIZE;
 use crate::MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS;
@@ -131,7 +132,7 @@ pub extern "C" fn mmtk_gc_init(
         // The field unlog table is laid out after the log bit table, so it has its own
         // base. Codegen loads this to key the field-granularity write barrier.
         MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS =
-            crate::object_model::FIELD_LOGGING_SIDE_METADATA_SPEC
+            crate::object_model::FIELD_UNLOGGING_SIDE_METADATA_SPEC
                 .as_spec()
                 .extract_side_spec()
                 .get_starting_address();
@@ -231,6 +232,7 @@ pub extern "C" fn mmtk_notify_task_resume(
             return;
         }
 
+        let _errno = PreserveErrno::new();
         crate::scanning::GC_STACK_SNAPSHOTS.resume_barrier_scan_task(task);
     }
 
@@ -249,6 +251,7 @@ pub extern "C" fn mmtk_alloc(
     offset: usize,
     semantics: AllocationSemantics,
 ) -> Address {
+    let _errno = PreserveErrno::new();
     debug_assert!(
         mmtk::util::conversions::raw_is_aligned(
             size,
@@ -273,6 +276,7 @@ pub extern "C" fn mmtk_alloc_with_options(
     semantics: AllocationSemantics,
     options: AllocationOptions,
 ) -> Address {
+    let _errno = PreserveErrno::new();
     debug_assert!(
         mmtk::util::conversions::raw_is_aligned(
             size,
@@ -298,6 +302,7 @@ pub extern "C" fn mmtk_alloc_large(
     align: usize,
     offset: usize,
 ) -> Address {
+    let _errno = PreserveErrno::new();
     memory_manager::alloc::<JuliaVM>(
         unsafe { &mut *mutator },
         size,
@@ -314,6 +319,7 @@ pub extern "C" fn mmtk_post_alloc(
     bytes: usize,
     semantics: AllocationSemantics,
 ) {
+    let _errno = PreserveErrno::new();
     memory_manager::post_alloc::<JuliaVM>(unsafe { &mut *mutator }, refer, bytes, semantics)
 }
 
@@ -384,6 +390,7 @@ pub extern "C" fn mmtk_is_mapped_address(address: Address) -> bool {
 
 #[no_mangle]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, collection: u8) {
+    let _errno = PreserveErrno::new();
     AtomicIsize::fetch_add(&USER_TRIGGERED_GC, 1, Ordering::SeqCst);
     if !memory_manager::is_collection_enabled(&SINGLETON) {
         AtomicIsize::fetch_add(&USER_TRIGGERED_GC, -1, Ordering::SeqCst);
@@ -478,6 +485,7 @@ pub extern "C" fn mmtk_wait_for_new_gc_epoch(last_seen_epoch: u64) {
 
 #[no_mangle]
 pub extern "C" fn mmtk_add_weak_candidate(reff: ObjectReference) {
+    let _errno = PreserveErrno::new();
     memory_manager::add_weak_candidate(&SINGLETON, reff)
 }
 
@@ -529,6 +537,7 @@ pub static JULIA_MALLOC_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 #[no_mangle]
 pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {
+    let _errno = PreserveErrno::new();
     memory_manager::gc_poll(&SINGLETON, tls);
 }
 
@@ -600,6 +609,7 @@ pub extern "C" fn mmtk_object_reference_write_pre(
     src: ObjectReference,
     target: NullableObjectReference,
 ) {
+    let _errno = PreserveErrno::new();
     let mutator = unsafe { &mut *mutator };
     memory_manager::object_reference_write_pre(
         mutator,
@@ -615,6 +625,7 @@ pub extern "C" fn mmtk_object_reference_write_post(
     src: ObjectReference,
     target: NullableObjectReference,
 ) {
+    let _errno = PreserveErrno::new();
     let mutator = unsafe { &mut *mutator };
     memory_manager::object_reference_write_post(
         mutator,
@@ -632,6 +643,7 @@ pub extern "C" fn mmtk_gc_wb_finalizer_queue(
     mutator: &'static mut Mutator<JuliaVM>,
     queue: *const libc::c_void,
 ) {
+    let _errno = PreserveErrno::new();
     crate::julia_finalizer::wb_finalizer_queue(mutator, queue);
 }
 
@@ -641,6 +653,7 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     src: ObjectReference,
     target: NullableObjectReference,
 ) {
+    let _errno = PreserveErrno::new();
     use mmtk::MutatorContext;
     // A field-granularity barrier cannot use the zero slot below: it would index the
     // per-field unlog bit at address 0. Callers on this path (the C runtime's jl_gc_wb,

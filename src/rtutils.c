@@ -301,12 +301,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh) JL_NO_SAF
     sig_atomic_t old_defer_signal = ptls->defer_signal;
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
+    jl_gc_wb_current_task(ct, (void*)&ct->bound_cancel_token, eh->bound_cancel_token);
     jl_atomic_store_relaxed(&ct->bound_cancel_token, eh->bound_cancel_token);
     ct->bound_cancel_default = eh->bound_cancel_default;
-    jl_gc_wb_current_task(ct, eh->bound_cancel_token);
     jl_atomic_store_release(&ct->reset_ctx, eh->reset_ctx);
     jl_atomic_store_release(&ct->cancel_handler_ctx, eh->cancel_handler_ctx);
-    jl_gc_wb_current_task(ct, eh->scope);
+    jl_gc_wb_current_task(ct, &ct->scope, eh->scope);
     ct->scope = eh->scope;
     small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
@@ -346,12 +346,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh) JL_NO_SAF
 JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
     assert(ct->gcstack == eh->gcstack && "Incorrect GC usage under try catch");
-    jl_gc_wb_current_task(ct, eh->scope);
+    jl_gc_wb_current_task(ct, &ct->scope, eh->scope);
     ct->scope = eh->scope;
     ct->eh = eh->prev;
+    jl_gc_wb_current_task(ct, (void*)&ct->bound_cancel_token, eh->bound_cancel_token);
     jl_atomic_store_relaxed(&ct->bound_cancel_token, eh->bound_cancel_token);
     ct->bound_cancel_default = eh->bound_cancel_default;
-    jl_gc_wb_current_task(ct, eh->bound_cancel_token);
     jl_atomic_store_release(&ct->reset_ctx, eh->reset_ctx);
     jl_atomic_store_release(&ct->cancel_handler_ctx, eh->cancel_handler_ctx);
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
@@ -1043,6 +1043,30 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (ci->owner != jl_nothing) {
             n += jl_printf(out, " (foreign)");
         }
+    }
+    else if (vt == jl_binding_type && ctx.verbosity < JL_STATIC_SHOW_VERBOSITY_FULL) {
+        jl_binding_t *b = (jl_binding_t*)v;
+        n += jl_printf(out, "Binding(");
+        n += jl_static_show_x(out, (jl_value_t*)b->globalref, depth, ctx);
+        n += jl_printf(out, ", value=");
+        n += jl_static_show_x(out, jl_atomic_load_relaxed(&b->value), depth, ctx);
+        n += jl_printf(out, ")");
+        // drops partitions and backedges fields
+    }
+    else if (vt == jl_binding_partition_type && ctx.verbosity < JL_STATIC_SHOW_VERBOSITY_FULL) {
+        jl_binding_partition_t *bp = (jl_binding_partition_t*)v;
+        n += jl_printf(
+            out, "BindingPartition(min_world=0x%zx, max_world=0x%zx, kind=%zx, restriction=",
+            jl_atomic_load_relaxed(&bp->min_world),
+            jl_atomic_load_relaxed(&bp->max_world),
+            bp->kind);
+        n += jl_static_show_x(out, bp->restriction, depth, ctx);
+        // The chain should terminate in a backreference to the owning binding.
+        jl_binding_t *owner = jl_binding_partition_owner(bp);
+        n += jl_printf(out, ", for=");
+        n += jl_static_show_x(out, owner ? (jl_value_t*)owner->globalref : NULL, depth, ctx);
+        n += jl_printf(out, ")");
+        // drops next field
     }
     else if (vt == jl_typename_type) {
         n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth, ctx);

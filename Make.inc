@@ -14,6 +14,17 @@
 # Set to zero to turn off extra precompile (e.g. for the REPL)
 JULIA_PRECOMPILE ?= 1
 
+# Set to 1 to compile coverage instrumentation into the sysimage and the
+# stdlib pkgimages. The resulting images collect coverage without recompiling
+# any image code when run with `--code-coverage` in the default `hit` mode,
+# whatever the scope, but carry the instrumentation overhead in every use.
+# Intended for coverage CI, not for released builds.
+JULIA_COVERAGE_IMAGES ?= 0
+# The generating processes instrument only the images they compile, and the
+# pkgimage workers inherit the setting through `Base.CacheFlags`. Recursively
+# expanded because Make.user is read below.
+JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all)
+
 # Set FORCE_ASSERTIONS to 1 to enable assertions in the C and C++ portions
 # of the Julia code base. You may also want to set LLVM_ASSERTIONS to 1,
 # which will enable assertions in LLVM.
@@ -890,16 +901,13 @@ JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 
 # Use StickyImmix as the default MMTk plan.
 MMTK_PLAN ?= StickyImmix
-# MMTK_SNAPSHOT_BARRIER marks the plans whose write barrier has to observe every
-# overwritten reference, rather than just recording that the parent was modified.
-# ConcurrentImmix needs it for the SATB snapshot and LXR for its decrements. It
-# disables the insertion-barrier optimisations in codegen, which assume that only
-# the newly stored value matters.
+
 # MMTK_CONCURRENT_MARKING marks the plans that mark while the mutator runs, and so
 # need the runtime to notify the binding when a task resumes -- the binding snapshots
 # the task's gcstack so a concurrent mark scans a stable copy rather than a stack the
 # task is actively mutating. It mirrors the binding's `concurrent_marking` cargo
 # feature; the two must be set for the same plans.
+
 # Must specify a supported MMTk plan: Immix, StickyImmix, ConcurrentImmix, or LXR
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
@@ -908,13 +916,13 @@ else ifeq (${MMTK_PLAN},StickyImmix)
 JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 else ifeq (${MMTK_PLAN}, ConcurrentImmix)
-JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_CONCURRENT_MARKING
-JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_CONCURRENT_MARKING
+JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DGC_BARRIER_SNAPSHOT -DMMTK_CONCURRENT_MARKING
+JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DGC_BARRIER_SNAPSHOT -DMMTK_CONCURRENT_MARKING
 else ifeq (${MMTK_PLAN}, LXR)
-# MMTK_FIELD_BARRIER: the barrier records the individual field written rather than
+# GC_BARRIER_FIELD_PRECISE: the barrier records the individual field written rather than
 # just the parent, so codegen keys the fast path on the slot address.
-JCXXFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_FIELD_BARRIER -DMMTK_CONCURRENT_MARKING
-JCFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_FIELD_BARRIER -DMMTK_CONCURRENT_MARKING
+JCXXFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DGC_BARRIER_SNAPSHOT -DGC_BARRIER_FIELD_PRECISE -DMMTK_CONCURRENT_MARKING
+JCFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DGC_BARRIER_SNAPSHOT -DGC_BARRIER_FIELD_PRECISE -DMMTK_CONCURRENT_MARKING
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, ConcurrentImmix, or LXR.")
 endif
@@ -1495,6 +1503,17 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
+# The C library of the target. This only matters on Linux, where it is either glibc
+# (`*-linux-gnu*`) or musl (`*-linux-musl*`) as recorded in the normalized triplet;
+# it is left empty elsewhere.
+ifeq ($(OS),Linux)
+ifneq (,$(findstring musl,$(BB_TRIPLET)))
+LIBC := musl
+else
+LIBC := glibc
+endif
+endif
+
 # CSL_NEXT_GLIBCXX_VERSION is a triple of the symbols representing support for whatever
 # the next libstdc++ version would be. This is used for two things.
 # 1. Whether the system libraries are new enough, if we need to use the libs bundled with CSL
@@ -1679,6 +1698,9 @@ ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
+# When linking LTO bitcode, the debug map points dsymutil at the objects that ld64
+# compiled from it, which ld64 deletes unless told where to keep them.
+LTO_OBJECT_PATH = -Wl,-object_path_lto,$(1).lto
 endif
 
 ifeq ($(OS), WINNT)

@@ -155,7 +155,7 @@ JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
             continue; // toplevel code retains its inferred IR
         if (mi->def.method->source == NULL)
             continue; // optimized opaque closures can't reconstruct their IR
-        jl_atomic_store_release(&ci->inferred, jl_nothing);
+        jl_gc_write_atomic(ci, ci->inferred, jl_value_t, jl_nothing, release);
     }
 }
 
@@ -718,7 +718,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 15;
+static const int JI_FORMAT_VERSION = 16;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
