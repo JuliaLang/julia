@@ -725,6 +725,14 @@ extern int gc_verifying;
 #define gc_verifying (0)
 #endif
 
+// Does this (live or dead-this-cycle) cell hold a cancellation source? Such
+// cells take part in the collector's own weak (unlink-on-death) child lists,
+// so passes that rewrite dead objects in place have to leave them alone.
+STATIC_INLINE int gc_is_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
+{
+    return (v->header & ~(uintptr_t)0xf) == (jl_cancel_source_tag << 4);
+}
+
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
 int jl_gc_debug_check_other(void);
