@@ -1003,3 +1003,22 @@ JuliaLowering.include_string(@__MODULE__, """
    end
 end
 """)
+
+@testset "reserve_module_binding_i" begin
+    m = Module()
+    reserve(basename) = JuliaLowering.reserve_module_binding_i(m, basename)
+    taken(name) = JuliaLowering._get_module_binding(m, Symbol(name)) !== nothing
+    # Sequential reservations hand out the smallest free index and reserve it
+    @test reserve("#f") == "#f##0"
+    @test taken("#f##0")
+    @test [reserve("#f") for _ in 1:5] == ["#f##$i" for i in 1:5]
+    @test reserve("#g") == "#g##0"
+    # A binding reserved out of order is skipped
+    JuliaLowering._get_module_binding(m, Symbol("#f##7"); create=true)
+    names = [reserve("#f") for _ in 1:3]
+    @test allunique(names)
+    @test "#f##7" ∉ names
+    @test all(taken, names)
+    # Probing past the small indices keeps names unique
+    @test allunique([reserve("#h") for _ in 1:300])
+end
