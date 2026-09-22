@@ -197,6 +197,16 @@ end
     run_pg_size_test()
 end
 
+@testset "jl_gc_heap_reserve" begin
+    # The reserve maps whole page blocks, populated, into the clean page pool: it returns
+    # at least what was asked, a second call is not an error, and allocation goes on.
+    reserve(bytes) = ccall(:jl_gc_heap_reserve, UInt64, (UInt64,), bytes)
+    @test reserve(4 << 20) >= 4 << 20
+    @test reserve(4 << 20) >= 4 << 20
+    v = [Ref(i) for i in 1:10_000]
+    @test v[end][] == 10_000
+end
+
 @testset "issue-54275" begin
     issue_54275_test()
 end
