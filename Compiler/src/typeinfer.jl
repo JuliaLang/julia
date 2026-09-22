@@ -870,28 +870,75 @@ function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeIn
     return nothing
 end
 
-function store_backedges(caller::CodeInstance, edges::SimpleVector)
+# Whether the (invokesig, item) backedge at iterator state `upto` already appeared earlier in
+# `edges`. Used instead of a hash table for short edge lists, which is nearly all of them.
+function backedge_seen_before(edges::SimpleVector, upto::Int, @nospecialize(invokesig), @nospecialize(item))
+    backedges = ForwardToBackedgeIterator(edges)
+    next = iterate(backedges)
+    while next !== nothing
+        (invokesig2, item2), i = next
+        i > upto && return false
+        if item2 === item && invokesig2 == invokesig
+            return true
+        end
+        next = iterate(backedges, i)
+    end
+    return false
+end
+
+# Above this many forward edges, dedup with hash tables instead of rescanning the list.
+const STORE_BACKEDGES_SCAN_LIMIT = 64
+
+# `scratch` lets a caller storing many edge lists in a row reuse one set for the long ones.
+function store_backedges(caller::CodeInstance, edges::SimpleVector, scratch::Union{Nothing,IdSet{Any}}=nothing)
     isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
 
     backedges = ForwardToBackedgeIterator(edges)
-    # `Compiler` is loaded before `Set` during bootstrap, so keep the signatures
-    # for each identity-keyed dependency in a small vector.
-    seen = IdDict{Any,Vector{Any}}()
-    for (invokesig, item) in backedges
-        if haskey(seen, item)
-            signatures = seen[item]
-            duplicate_found = false
-            for signature in signatures
-                if signature == invokesig
-                    duplicate_found = true
-                    break
-                end
+    # Nearly all edge lists are short (a median of three backedges), so a quadratic rescan
+    # avoids allocating any hash table for them. Longer lists key plain dispatch edges in an
+    # `IdSet` and `invoke`/`MethodTable` edges by their signatures: almost every such item is
+    # seen with a single signature, so that is stored bare and only promoted to a vector on
+    # the second one.
+    scan = length(edges) <= STORE_BACKEDGES_SCAN_LIMIT
+    plain = nothing
+    invoked = nothing
+    next = iterate(backedges)
+    prev_i = 1
+    while next !== nothing
+        (invokesig, item), i = next
+        if scan
+            duplicate = backedge_seen_before(edges, prev_i, invokesig, item)
+        elseif invokesig === nothing
+            if plain === nothing
+                plain = scratch === nothing ? IdSet{Any}() : empty!(scratch)
             end
-            duplicate_found && continue
-            push!(signatures, invokesig)
+            duplicate = item in plain
+            duplicate || push!(plain, item)
         else
-            seen[item] = Any[invokesig]
+            if invoked === nothing
+                invoked = IdDict{Any,Any}()
+            end
+            signatures = get(invoked, item, nothing)
+            if signatures === nothing
+                invoked[item] = invokesig
+                duplicate = false
+            elseif signatures isa Vector{Any}
+                duplicate = false
+                for signature in signatures
+                    if signature == invokesig
+                        duplicate = true
+                        break
+                    end
+                end
+                duplicate || push!(signatures, invokesig)
+            else
+                duplicate = signatures == invokesig
+                duplicate || (invoked[item] = Any[signatures, invokesig])
+            end
         end
+        prev_i = i
+        next = iterate(backedges, i)
+        duplicate && continue
         if item isa Core.Binding
             maybe_add_binding_backedge!(item, caller)
         elseif item isa MethodTable
