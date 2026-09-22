@@ -509,10 +509,29 @@ function expand_compare_chain(ctx, ex)
     i = 1
 
     while i+2 <= length(terms)
-        chain = if is_dotted(terms[i+1])
-            # if the op starts a dot-chain, just expand it
-            (vector_chain, i) = expand_vector_compare_chain(ctx, ex, terms, i)
-            vector_chain
+        subcomparison = if is_dotted(terms[i+1])
+            lhs = terms[i]
+            op = terms[i+1]
+            rhs = terms[i+2]
+
+            rhs = if kind(rhs) != K"BindingId"
+                rhs_ident = ssavar(ctx, rhs, "rhs_ident")
+                terms[i+2] = rhs_ident
+                @ast ctx rhs [K"block"
+                    @ast ctx rhs [K"=" rhs_ident rhs]
+                    rhs_ident
+                ]
+            else
+                rhs
+            end
+
+            i += 2
+
+            @ast ctx op [K"dotcall"
+                    op[1]
+                    lhs
+                    rhs
+                ]
         else
             dotchain_head = nothing
             # move the first evaluation of a following dot-chain to the top
@@ -536,7 +555,7 @@ function expand_compare_chain(ctx, ex)
         end
 
         comparisons = if isnothing(comparisons)
-            chain
+            subcomparison
         else
             @ast ctx ex [K"dotcall"
             "&"::K"top"
@@ -549,7 +568,7 @@ function expand_compare_chain(ctx, ex)
             # `&` operator. But a simpler option is probably to always
             # use `Base.&` so we do that.
             comparisons
-            chain
+            subcomparison
         ]
         end
     end
@@ -587,55 +606,6 @@ function expand_scalar_compare_chain(ctx, srcref, terms, i)
             comp
         else
             @ast ctx srcref [K"&&"
-                comparisons
-                comp
-            ]
-        end
-        i+=2
-    end
-    (comparisons, i)
-end
-
-function expand_vector_compare_chain(ctx, srcref, terms, i)
-    comparisons = nothing
-
-    while i+2 <= length(terms)
-        lhs = terms[i]
-        op = terms[i+1]
-        rhs = terms[i+2]
-
-        !is_dotted(op) && break
-
-        rhs = if kind(rhs) != K"BindingId"
-            rhs_ident = ssavar(ctx, rhs, "rhs_ident")
-            terms[i+2] = rhs_ident
-            @ast ctx rhs [K"block"
-                @ast ctx rhs [K"=" rhs_ident rhs]
-                rhs_ident
-            ]
-        else
-            rhs
-        end
-
-        comp = @ast ctx op [K"dotcall"
-                op[1]
-                lhs
-                rhs
-            ]
-
-        comparisons = if isnothing(comparisons)
-            comp
-        else
-            @ast ctx srcref [K"dotcall"
-                "&"::K"top"
-                # ^^ NB: Flisp bug. Flisp lowering essentially does
-                #     adopt_scope("&"::K"Identifier", ctx.mod)
-                # here which seems wrong if the comparison chain arose from
-                # a macro in a different module. One fix would be to use
-                #     adopt_scope("&"::K"Identifier", ex)
-                # to get the module of the comparison expression for the
-                # `&` operator. But a simpler option is probably to always
-                # use `Base.&` so we do that.
                 comparisons
                 comp
             ]

@@ -164,11 +164,11 @@ a < b < c(1) .< d .< e
 13  TestMod.<
 14  TestMod.d
 15  (call top.broadcasted %₁₃ %₂ %₁₄)
-16  TestMod.<
-17  TestMod.e
-18  (call top.broadcasted %₁₆ %₁₄ %₁₇)
-19  (call top.broadcasted top.& %₁₅ %₁₈)
-20  (call top.broadcasted top.& %₁₂ %₁₉)
+16  (call top.broadcasted top.& %₁₂ %₁₅)
+17  TestMod.<
+18  TestMod.e
+19  (call top.broadcasted %₁₇ %₁₄ %₁₈)
+20  (call top.broadcasted top.& %₁₆ %₁₉)
 21  (call top.materialize %₂₀)
 22  (return %₂₁)
 
@@ -215,6 +215,32 @@ x .+ (a .< b .< c)
 11  (call top.broadcasted %₁ %₂ %₁₀)
 12  (call top.materialize %₁₁)
 13  (return %₁₂)
+
+########################################
+# Dotted comparison chain after short circuiting scalar comparison (https://github.com/JuliaLang/julia/issues/62454)
+1 < 0 < 2 < identity(3) .< 4
+#---------------------
+1   TestMod.identity
+2   (call %₁ 3)
+3   TestMod.<
+4   0
+5   (call %₃ 1 %₄)
+6   (gotoifnot %₅ label₁₄)
+7   TestMod.<
+8   2
+9   (call %₇ %₄ %₈)
+10  (gotoifnot %₉ label₁₄)
+11  TestMod.<
+12  (= slot₁/if_val (call %₁₁ %₈ %₂))
+13  (goto label₁₅)
+14  (= slot₁/if_val false)
+15  slot₁/if_val
+16  TestMod.<
+17  4
+18  (call top.broadcasted %₁₆ %₂ %₁₇)
+19  (call top.broadcasted top.& %₁₅ %₁₈)
+20  (call top.materialize %₁₉)
+21  (return %₂₀)
 
 ########################################
 # Broadcast with literal_pow

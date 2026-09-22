@@ -227,6 +227,39 @@ end
         test_mod,
         Expr(:comparison, 1, :(Base.FastMath.le_fast), 2,
              :(Base.FastMath.le_fast), 3))
+
+    @test JuliaLowering.include_string(test_mod, """
+    let log = []
+           f(x) = (push!(log, x); x)
+           f(1) < f(2) < f(3)
+           log
+    end
+    """) == [1,2,3]
+
+    @test JuliaLowering.include_string(test_mod, """
+    let log = []
+           f(x) = (push!(log, x); x)
+           f(1) .< f(2) .< f(3)
+           log
+    end
+    """) == [1,2,3]
+
+    @test JuliaLowering.include_string(test_mod, """
+    let log = []
+           f(x) = (push!(log, x); x)
+           f(1) > f(2) < f(3)
+           log
+    end
+    """) == [1,2]
+
+    # https://github.com/JuliaLang/julia/issues/62454
+    @test JuliaLowering.include_string(test_mod, """
+    let log = []
+           f(x) = (push!(log, x); x)
+           f(1) < f(0) < f(2) < f(3) .< f(4)
+           log
+    end
+    """) == [3, 1, 0, 4]
 end
 
 #-------------------------------------------------------------------------------
