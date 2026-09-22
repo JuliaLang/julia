@@ -39,8 +39,6 @@ static void tagged_root_finalizer(void *o)
     tagged_root_fins_ran++;
 }
 
-// Every collection states its expected outcome, so that a premature sweep is
-// caught at the collection that caused it rather than masked by a later one.
 static void check_fins_ran(int expected, const char *ctx)
 {
     if (tagged_root_fins_ran == expected)
@@ -50,23 +48,16 @@ static void check_fins_ran(int expected, const char *ctx)
     exit(1);
 }
 
-// Tagged pointers -- a tag in the low bits with the payload in the remaining
-// ones, e.g. the immediate values of a foreign runtime sharing Julia's GC --
-// may be stored in JL_GC_PUSH*/JL_GC_PUSHARGS roots. The GC must skip them
-// without disturbing the marking of neighboring roots.
-//
-// Detection: a fresh object whose only reference is a frame slot next to a
-// tagged pointer. If marking mishandles the tagged pointer, the object is
-// swept and its finalizer runs while the frame is still pushed.
+// Tagged immediates must not prevent neighboring roots from being marked.
+// Their finalizers should run only after the roots are popped.
 static void test_tagged_pointer_roots(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    // a payload occupying all but the low tag bits, on any pointer width
+    // Set a high payload bit on either 32-bit or 64-bit platforms.
     const uintptr_t large_imm = (uintptr_t)1 << (sizeof(uintptr_t) * CHAR_BIT - 4);
 
-    // Direct-layout frame (JL_GC_PUSHARGS). Every tag value appears, at both
-    // slot parities, and a live root follows a tagged slot of each parity:
-    // mistaking one for a finalizer entry skips the slot after it.
+    // Put live roots after tagged values at both even and odd indices.
+    // Treating an immediate as a finalizer entry would skip the next root.
     {
         jl_value_t **args;
         JL_GC_PUSHARGS(args, 6);

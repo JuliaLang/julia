@@ -189,11 +189,8 @@ end
     @test success(cmd)
 end
 
-# While finalizers run, the list of pending ones is rooted as a GC frame of
-# its own kind, whose slots may carry tags that other frames must not be
-# scanned for. Collecting and walking the stack from inside such a batch has
-# to leave the rest of the list intact.
-# atomic: finalizer batches of different threads may run concurrently
+# GC and backtrace() must handle finalizer-list frames while finalizers run.
+# Counters are atomic because finalizers may run on different threads.
 const FIN_CFUNC_RAN = Threads.Atomic{Int}(0)
 const FIN_JULIA_RAN = Threads.Atomic{Int}(0)
 const FIN_NESTED_RAN = Threads.Atomic{Int}(0)

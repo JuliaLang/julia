@@ -30,12 +30,7 @@ const JL_GCFRAME_FINLIST: usize = 3;
 /// All bits used to encode the frame kind.
 const JL_GCFRAME_KIND_MASK: usize = 0x3;
 
-/// Bits that mark a word as a tagged pointer: a tag in the low bits with the
-/// payload in the remaining ones, e.g. the immediate values of a foreign
-/// runtime sharing Julia's GC. Must match `gc_is_tagged_pointer` in
-/// gc-common.h, which also documents why skipping such a word is sound. Kept
-/// separate from `JL_GCFRAME_KIND_MASK`, which currently has the same value
-/// for unrelated reasons.
+/// Identifies immediate values. Must match gc_is_tagged_pointer in gc-common.h.
 const TAGGED_POINTER_MASK: usize = 0x3;
 
 fn is_tagged_pointer(value: Address) -> bool {
@@ -491,10 +486,6 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
 
         loop {
             let rts = Address::from_mut_ptr(s).shift::<Address>(2);
-            // Dispatch on the frame kind, as gc_mark_stack in gc-stock.c
-            // does. Only JL_GCFRAME_FINLIST slots carry GC_FIN_* tags; in
-            // every other kind a tagged slot value references no heap object
-            // and is skipped.
             let frame_kind = nroots.as_usize() & JL_GCFRAME_KIND_MASK;
             let mut i = 0;
             while i < nr {

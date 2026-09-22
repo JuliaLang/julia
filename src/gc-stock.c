@@ -2222,10 +2222,6 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
     uint32_t nr = nroots >> 2;
     while (1) {
         jl_value_t ***rts = (jl_value_t ***)(((void **)s) + 2);
-        // Dispatch on the frame kind (see JL_GCFRAME_* in julia.h). Only
-        // JL_GCFRAME_FINLIST slots carry GC_FIN_* tags; in every other kind a
-        // tagged slot value references no heap object and is skipped (see
-        // gc_is_tagged_pointer).
         uint32_t frame_kind = nroots & JL_GCFRAME_KIND_MASK;
         for (uint32_t i = 0; i < nr; i++) {
             if (frame_kind == JL_GCFRAME_INDIRECT) {
