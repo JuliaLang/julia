@@ -119,7 +119,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         annotated_target_string = if occursin(";", full_target_string)
             matched_target_string = Base.matched_sysimage_target().name
             join(map(split(full_target_string, ";")) do s
-                occursin(matched_target_string, s) ? styled"{bold:$s}" : styled(s)
+                occursin(matched_target_string, s) ? styled"{underline:$s}" : styled(s)
             end, ";")
         else
             styled(full_target_string)
