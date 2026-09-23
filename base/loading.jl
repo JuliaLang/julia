@@ -2117,13 +2117,12 @@ function compilecache_freshest_path(pkg::PkgId;
     end
     for build_id in try_build_ids
         @label next_path for path_to_try in cachepaths
-            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums, reasons)
+            # Checksums read the whole file, so check them after the deps.
+            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums=false, reasons)
             if staledeps === true
                 continue
             end
-            staledeps, _, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
-            # Record the result so dependents don't check this file again.
-            stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
+            staledeps, ocachefile, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
             # finish checking staledeps module graph
             @label next_dep for dep in staledeps
                 dep isa Module && continue
@@ -2139,6 +2138,9 @@ function compilecache_freshest_path(pkg::PkgId;
                 end
                 continue next_path
             end
+            verify_checksums && checksums_invalid(path_to_try, ocachefile, id_build, reasons) && continue
+            # Record the result so dependents don't check this file again.
+            stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
             try
                 # update timestamp of precompilation file so that it is the first to be tried by code loading
                 touch(path_to_try)
@@ -2311,8 +2313,9 @@ end
     for build_id in try_build_ids
         @label next_path for path_to_try in paths
             trusted = path_to_try === pre
+            # Checksums read the whole file, so check them after the deps.
             staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons,
-                                        stalecheck = stalecheck && !trusted, verify_checksums = !trusted)
+                                        stalecheck = stalecheck && !trusted, verify_checksums = false)
             if staledeps === true
                 continue
             end
@@ -2378,6 +2381,7 @@ end
                     stalecheck && register_root_module(M)
                     return M
                 end
+                !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons) && continue next_path
                 if stalecheck
                     try
                         touch(path_to_try) # update timestamp of precompilation file
@@ -3899,6 +3903,41 @@ function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
     expected_crc_so == crc_so
 end
 
+function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons)
+    if !isvalid_file_crc(io)
+        @debug "Rejecting cache file $cachefile because it has an invalid checksum"
+        record_reason(reasons, :checksum_invalid)
+        return true
+    end
+    if ocachefile !== nothing && !isvalid_pkgimage_crc(io, ocachefile)
+        @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
+        record_reason(reasons, :ocache_checksum_invalid)
+        return true
+    end
+    return false
+end
+
+function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt128, reasons)
+    io = try
+        open(cachefile, "r")
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @debug "Rejecting cache file $cachefile because it could not be opened" isfile(cachefile)
+        return true
+    end
+    try
+        # The file may have been replaced since its header was checked.
+        checksum = isvalid_cache_header(io)
+        if checksum === nothing || UInt128(checksum) != id_build >> 64
+            @debug "Rejecting cache file $cachefile because it changed while being checked"
+            return true
+        end
+        return checksums_invalid(io, cachefile, ocachefile, reasons)
+    finally
+        close(io)
+    end
+end
+
 mutable struct CacheHeaderIncludes
     const id::PkgId
     filename::String
@@ -4854,20 +4893,8 @@ end
             end
         end
 
-        if verify_checksums
-            if !isvalid_file_crc(io)
-                @debug "Rejecting cache file $cachefile because it has an invalid checksum"
-                record_reason(reasons, :checksum_invalid)
-                return true
-            end
-
-            if pkgimage
-                if !isvalid_pkgimage_crc(io, ocachefile::String)
-                    @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
-                    record_reason(reasons, :ocache_checksum_invalid)
-                    return true
-                end
-            end
+        if verify_checksums && checksums_invalid(io, cachefile, ocachefile, reasons)
+            return true
         end
 
         if stale_prefs(prefs_blob)
