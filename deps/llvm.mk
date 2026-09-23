@@ -82,7 +82,10 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS := "-L$(build_shlibdir)" # hacky way to force zlib to be found when linking against libLLVM and sysroot is set
+# Find our zlib/zstd when linking against libLLVM with a sysroot toolchain: `-L` for
+# lld, `-rpath-link` for GNU ld (which does not search `-L` paths for the dependencies
+# of shared libraries).
+LLVM_LDFLAGS := "-L$(build_shlibdir)" "-Wl,-rpath-link,$(build_shlibdir)"
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
