@@ -162,6 +162,8 @@ New library functions
 New library features
 --------------------
 
+* `Float64` implementations of `asin`, `acos`, and two-argument `atan` have improved accuracy.
+  Changes to `atan` performance depend on the input distribution ([#63031]).
 * `IOContext` supports a new boolean `hexunsigned` option that allows for printing unsigned integers in
   decimal instead of hexadecimal ([#60267]).
 * `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags to the
