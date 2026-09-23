@@ -108,6 +108,7 @@ LLVM_MERGEFDATA:=$(STAGE0_BINARIES)merge-fdata
 LLVM_CXXFILT:=$(STAGE0_TOOLS)llvm-cxxfilt
 LLVM_PROFDATA:=$(STAGE0_TOOLS)llvm-profdata
 LLVM_OBJCOPY:=$(STAGE0_TOOLS)llvm-objcopy
+LLVM_DLLTOOL:=$(STAGE0_TOOLS)llvm-dlltool
 
 ifeq ($(USE_BOLT),1)
 # Stop stage 2 after the libraries that BOLT rewrites, so that building the
@@ -179,6 +180,8 @@ STAGE0_EXTRA_FLAGS:=
 # do that, and otherwise the profile constructor is not executed.
 STAGE0_POST = find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
 STAGE1_PLATFORM_FLAGS:=
+# Extra flags for the C++ compiled by stages 1 and 2.
+PLATFORM_CXXFLAGS:=
 # How a stage's own shared libraries are made findable by the tools built
 # during it. 1: that stage's build directory.
 STAGE_PATH =
@@ -204,24 +207,49 @@ LINKER:=$(STAGE0_TOOLS)ld.lld$(EXE)
 # MSYS2's GCC links winpthread through its spec file, which is what its libstdc++
 # expects; clang only does so for -pthread.
 LINKER_FLAGS:=-fuse-ld=lld -pthread
-# The ELF-only flags do not apply to PE/COFF.
-LINK_ONLY_FLAGS:=
-# Apply the export map through a COFF definition for lld's MinGW driver.
-# Keep the caller's linker flags, but not the driver flags added by this flow.
-PLATFORM_FLAGS:="WIN_LD_USE_DEF=1" "LINK_LDFLAGS=$(LDFLAGS)"
 # BinaryBuilder's tools need its compiler support libraries (MSYS2's
 # libstdc++ lacks some of their imports), plus libLLVM's compression DLLs.
 # Place these beside the tools before running any of them. Skip the ELF
 # constructor fixup: COFF's profile runtime registers through .CRT$XCU.
 STAGE0_EXTRA_TARGETS:=install-zlib install-csl
 STAGE0_EXTRA_FLAGS:=USE_BINARYBUILDER_CSL=1
-STAGE0_POST = cp $(STAGE0_BUILD)/usr/bin/*.dll $(STAGE0_TOOLS)
+# The stages compile against the MSYS2 sysroot, but link against and ship those
+# same BinaryBuilder libraries, which BinaryBuilder-built packages also expect at
+# run time. Where the sysroot's headers disagree with them, bind to the latter:
+# - libstdc++ implements std::call_once differently; see the header.
+PLATFORM_CXXFLAGS = -include $(call native_path,$(abspath $(JULIA_ROOT)/contrib/windows/libstdcxx-call-once.h))
+# - winpthreads' headers route nanosleep, clock_gettime, the timed waits etc. to
+#   64-bit time variants that BinaryBuilder's winpthreads lacks. On x86-64 those
+#   are the plain functions, so import them under those names instead, from an
+#   import library that has to precede the sysroot's in every link. It gets a
+#   directory of its own, and is linked by name: a path would not survive MSYS2's
+#   argument conversion into LLVM's CMake flags.
+ifeq ($(HOST_ARCH),x86_64)
+STAGE0_WINPTHREAD_TIME64:=$(STAGE0_BUILD)/usr/lib/winpthread-time64
+WINPTHREAD_TIME64_POST = && mkdir -p $(STAGE0_WINPTHREAD_TIME64) && \
+	$(LLVM_DLLTOOL) -m i386:x86-64 -d $(JULIA_ROOT)/contrib/windows/winpthread-time64.def -l $(STAGE0_WINPTHREAD_TIME64)/libwinpthread-time64.a
+LINK_ONLY_FLAGS = -L$(STAGE0_WINPTHREAD_TIME64) -lwinpthread-time64
+else
+WINPTHREAD_TIME64_POST =
+LINK_ONLY_FLAGS =
+endif
+# Tools built during a stage have to load the libstdc++ they were linked against,
+# so stage 0 also puts it in a directory of its own; see STAGE_PATH.
+STAGE0_LIBSTDCXX:=$(STAGE0_BUILD)/usr/libstdcxx
+STAGE0_POST = cp $(STAGE0_BUILD)/usr/bin/*.dll $(STAGE0_TOOLS) && \
+	mkdir -p $(STAGE0_LIBSTDCXX) && cp $(STAGE0_BUILD)/usr/bin/libstdc++-6.dll $(STAGE0_LIBSTDCXX) \
+	$(WINPTHREAD_TIME64_POST)
+# Apply the export map through a COFF definition for lld's MinGW driver.
+# Keep the caller's linker flags, but not the driver flags added by this flow.
+PLATFORM_FLAGS = "WIN_LD_USE_DEF=1" "LINK_LDFLAGS=$(LDFLAGS) $(LINK_ONLY_FLAGS)"
 # Those direct linker invocations also miss the profile runtime that
 # -fprofile-generate would otherwise have contributed to the link.
 STAGE1_PLATFORM_FLAGS = "WIN_LD_EXTRA_LIBS=$(wildcard $(STAGE0_BUILD)/usr/lib/clang/*/lib/windows/libclang_rt.profile-*.a)"
 # Let newly built tools such as llvm-tblgen find the stage's zstd/zlib DLLs.
-# Append so the sysroot's compiler support libraries retain PATH precedence.
-STAGE_PATH = PATH="$$PATH:$(1)/usr/bin"
+# Append so that the sysroot's own programs, e.g. cc1, keep finding its DLLs.
+# The exception is libstdc++: the sysroot's programs outside its bin directory
+# (which is searched first for those inside it) link libstdc++ statically.
+STAGE_PATH = PATH="$(STAGE0_LIBSTDCXX):$$PATH:$(1)/usr/bin"
 else
 LINKER:=$(STAGE0_TOOLS)ld.lld$(EXE)
 LINKER_FLAGS:=-fuse-ld=lld
@@ -241,7 +269,7 @@ TOOLCHAIN_FLAGS = $\
 	"AR=$(STAGE0_TOOLS)llvm-ar$(EXE)" $\
 	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib$(EXE)" $\
 	"CFLAGS+=$(STAGE_CFLAGS)" $\
-	"CXXFLAGS+=$(STAGE_CXXFLAGS)" $\
+	"CXXFLAGS+=$(STAGE_CXXFLAGS) $(PLATFORM_CXXFLAGS)" $\
 	"LDFLAGS+=$(LINKER_FLAGS) $(LINK_ONLY_FLAGS) $(STAGE_LDFLAGS)" $\
 	$(PLATFORM_FLAGS)
 

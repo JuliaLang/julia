@@ -1,0 +1,17 @@
+; Import the 64-bit time variants that newer winpthreads headers call under the
+; names older winpthreads DLLs export. Only valid where time_t is 64 bits wide,
+; i.e. x86-64. See contrib/optimized/Makefile.
+LIBRARY "libwinpthread-1.dll"
+EXPORTS
+clock_getres64 == clock_getres
+clock_gettime64 == clock_gettime
+clock_nanosleep64 == clock_nanosleep
+clock_settime64 == clock_settime
+nanosleep64 == nanosleep
+pthread_cond_timedwait64 == pthread_cond_timedwait
+pthread_cond_timedwait64_relative_np == pthread_cond_timedwait_relative_np
+pthread_delay64_np == pthread_delay_np
+pthread_mutex_timedlock64 == pthread_mutex_timedlock
+pthread_rwlock_timedrdlock64 == pthread_rwlock_timedrdlock
+pthread_rwlock_timedwrlock64 == pthread_rwlock_timedwrlock
+sem_timedwait64 == sem_timedwait

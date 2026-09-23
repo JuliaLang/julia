@@ -26,7 +26,7 @@ if args[0] == 'configure':
     if p.exists():
         sys.exit('configure called on existing directory')
     (p / 'deps').mkdir(parents=True)
-    recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)" "$(LD)" "$(WIN_LD_USE_DEF)" "$(WIN_LD_EXTRA_LIBS)" "$(LINK_LDFLAGS)"\n'
+    recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)" "$(LD)" "$(WIN_LD_USE_DEF)" "$(WIN_LD_EXTRA_LIBS)" "$(LINK_LDFLAGS)" "$(CXXFLAGS)"\n'
     (p / 'Makefile').write_text(recipe)
     (p / 'deps/Makefile').write_text('%:\n\t@python3 ' + str(root / 'helper.py') + ' install $@ "$(USE_BINARYBUILDER_LLVM)" "$(OS)" "$(USE_BINARYBUILDER_CSL)"\n')
 elif args[0] == 'install' and args[3] == 'WINNT':
@@ -34,6 +34,7 @@ elif args[0] == 'install' and args[3] == 'WINNT':
     (stage / 'usr/bin').mkdir(parents=True, exist_ok=True)
     (stage / 'usr/tools').mkdir(parents=True, exist_ok=True)
     (stage / 'usr/bin/support.dll').write_text('support')
+    (stage / 'usr/bin/libstdc++-6.dll').write_text('libstdc++')
     runtime = stage / 'usr/lib/clang/22/lib/windows'
     runtime.mkdir(parents=True, exist_ok=True)
     (runtime / 'libclang_rt.profile-x86_64.a').write_text('runtime')
@@ -57,6 +58,9 @@ elif args[0] == 'merge':
 elif args[0] == 'fdata':
     assert all('.merged.' not in x and pathlib.Path(x).is_file() for x in args[1:]), args
     print(''.join(pathlib.Path(x).read_text() for x in args[1:]), end='')
+elif args[0] == 'dlltool':
+    assert args[1:3] == ['-m', 'i386:x86-64'] and args[4].endswith('contrib/windows/winpthread-time64.def'), args
+    pathlib.Path(args[args.index('-l') + 1]).write_text('implib')
 elif args[0] == 'bolt':
     if os.getenv('FAIL_BOLT'):
         sys.exit(1)
@@ -74,13 +78,13 @@ class FlowTests(unittest.TestCase):
         shutil.copyfile(SOURCE, self.flow / 'Makefile')
         (self.root / 'helper.py').write_text(HELPER)
         (self.root / 'Makefile').write_text('OS := Linux\nARCH := x86_64\nBINARY := 64\nBUILD_MACHINE := test-triple\nprint-%:\n\t@echo "$*=$($*)"\nconfigure:\n\t@python3 helper.py configure $(O)\n')
-        for name, mode in [('profdata', 'merge'), ('mergefdata', 'fdata'), ('bolt-tool', 'bolt')]:
+        for name, mode in [('profdata', 'merge'), ('mergefdata', 'fdata'), ('bolt-tool', 'bolt'), ('dlltool', 'dlltool')]:
             p = self.root / name
             # profdata already gets 'merge' as the first argument.
             prefix = '' if name == 'profdata' else mode + ' '
             p.write_text('#!/bin/sh\nexec python3 ' + str(self.root / 'helper.py') + ' ' + prefix + '"$@"\n')
             p.chmod(0o755)
-        self.args = ['LLVM_PROFDATA=' + str(self.root / 'profdata'), 'LLVM_MERGEFDATA=' + str(self.root / 'mergefdata'), 'LLVM_BOLT=' + str(self.root / 'bolt-tool')]
+        self.args = ['LLVM_PROFDATA=' + str(self.root / 'profdata'), 'LLVM_MERGEFDATA=' + str(self.root / 'mergefdata'), 'LLVM_BOLT=' + str(self.root / 'bolt-tool'), 'LLVM_DLLTOOL=' + str(self.root / 'dlltool')]
 
     def make(self, *args, ok=True, env=None):
         p = subprocess.run(['make', '--no-print-directory', '-s', '-j4', '-C', str(self.flow), *self.args, *args], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
@@ -116,6 +120,7 @@ class FlowTests(unittest.TestCase):
                         self.assertEqual('-flto=thin' in a[2], lto == '1')
                         self.assertEqual(a[4], 'generic;haswell')
                     self.assertEqual(a[5], '0')
+                    self.assertNotIn('-include', a[10])
                 self.assertTrue(all(a[2] == '1' for d, a in events if a[0] == 'install'))
                 self.assertEqual(any(a[:2] == ['install', 'install-BOLT'] for d, a in events), bolt == '1')
                 if bolt == '1':
@@ -148,16 +153,23 @@ class FlowTests(unittest.TestCase):
         self.assertFalse(any(a[1] == 'install-BOLT' for a in installs))
         stage0 = self.flow / 'toolchain'
         self.assertEqual((stage0 / 'usr/tools/support.dll').read_text(), 'support')
+        self.assertEqual([p.name for p in (stage0 / 'usr/libstdcxx').iterdir()], ['libstdc++-6.dll'])
+        self.assertEqual((stage0 / 'usr/lib/winpthread-time64/libwinpthread-time64.a').read_text(), 'implib')
+        time64 = '-L' + str(stage0 / 'usr/lib/winpthread-time64') + ' -lwinpthread-time64'
         for directory, args in events:
             if args[0] != 'build':
                 continue
             self.assertEqual(args[6], str(stage0 / 'usr/tools/ld.lld.exe'))
             self.assertEqual(args[7], '1')
-            self.assertEqual(args[9], '--no-insert-timestamp')
+            # Both kinds of link take the time64 import library, but compiles do not.
+            self.assertEqual(args[9], '--no-insert-timestamp ' + time64)
+            self.assertIn(time64, args[3])
+            self.assertNotIn('winpthread-time64', args[2] + args[10])
             self.assertIn('-pthread', args[3])
             self.assertNotIn('--undefined-version', args[3])
             self.assertNotIn('--emit-relocs', args[3])
-            self.assertEqual(args[-1]['PATH'], env['PATH'] + ':' + str(self.flow / directory / 'usr/bin'))
+            self.assertEqual(args[-1]['PATH'], ':'.join([str(stage0 / 'usr/libstdcxx'), env['PATH'], str(self.flow / directory / 'usr/bin')]))
+            self.assertIn('-include C:' + str(self.root / 'contrib/windows/libstdcxx-call-once.h'), args[10])
             if directory == 'pgo-instrumented.build':
                 self.assertEqual(args[8], str(stage0 / 'usr/lib/clang/22/lib/windows/libclang_rt.profile-x86_64.a'))
                 self.assertNotIn('-flto', args[2])

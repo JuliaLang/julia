@@ -80,6 +80,10 @@ The flow supports PGO+ThinLTO on macOS and Windows x86-64. On Windows it uses
 BinaryBuilder's Clang and lld's MinGW driver with an MSYS2 mingw64 sysroot.
 Stage 0 places the matching support DLLs beside the tools; the instrumented
 stage supplies Clang's profile runtime to Julia's direct linker invocations.
+The stages link against and ship BinaryBuilder's compiler support libraries
+rather than the sysroot's, so C++ code is compiled for BinaryBuilder's
+`std::call_once` implementation, and winpthreads' 64-bit time functions are
+imported under the names its older DLL exports.
 The runtime export map is applied through a COFF export definition. A discovery
 link identifies exports from the objects and archive members actually used;
 the final link exports the matching names and explicitly exported symbols.
