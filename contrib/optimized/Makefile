@@ -1,5 +1,5 @@
 .PHONY: all clean clean-profiles clean-pgo-profiles clean-bolt-profiles restore-originals delete-originals \
-	print-profile-artifacts top
+	print-profile-artifacts top stage-path
 
 # Abort recipes on the first failed command, including inside loops.
 .SHELLFLAGS := -ec
@@ -184,9 +184,13 @@ STAGE0_EXTRA_FLAGS:=
 # do that, and otherwise the profile constructor is not executed.
 STAGE0_POST = find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
 STAGE1_PLATFORM_FLAGS:=
+# Which C/C++ runtime headers and libraries to build against.
+SYSROOT_FLAGS:=
 # How a stage's own shared libraries are made findable by the tools built
 # during it. 1: that stage's build directory.
 STAGE_PATH =
+# What STAGE_PATH needs set up before a stage.
+STAGE_PATH_SETUP =
 
 # How to drive the toolchain on this platform. Everything else below is
 # platform independent.
@@ -236,12 +240,40 @@ ifneq (,$(LTO_JOBS))
 LINK_ONLY_FLAGS+=-Wl,--thinlto-jobs=$(LTO_JOBS)
 endif
 PLATFORM_FLAGS:=
+# Build against the GCC installation and sysroot of the regular build's C
+# compiler, i.e. the same libstdc++ headers and C library. Left to itself, clang
+# picks the newest GCC under /usr instead, and whatever C library that one uses:
+# BinaryBuilder's build images keep their GCC with an old glibc in /usr/local,
+# next to a newer distribution toolchain that the binaries would then require.
+# Both can also be given explicitly, e.g. for a toolchain that cannot run here.
+ifeq (,$(TOOLCHAIN_GCC_INSTALL_DIR))
+HOST_CC:=$(patsubst CC=%,%,$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-CC))
+ifeq (,$(shell $(HOST_CC) -dM -E -x c /dev/null 2>/dev/null | grep __clang__))
+TOOLCHAIN_GCC_INSTALL_DIR:=$(patsubst %/,%,$(dir $(wildcard $(shell LANG=C $(HOST_CC) -print-libgcc-file-name 2>/dev/null))))
+TOOLCHAIN_SYSROOT:=$(shell $(HOST_CC) -print-sysroot 2>/dev/null)
+endif
+endif
+ifneq (,$(TOOLCHAIN_GCC_INSTALL_DIR))
+SYSROOT_FLAGS:=--gcc-install-dir=$(TOOLCHAIN_GCC_INSTALL_DIR) $(if $(TOOLCHAIN_SYSROOT),--sysroot=$(TOOLCHAIN_SYSROOT))
+# That libstdc++ can be newer than the build machine's, which the tools built
+# during a stage, e.g. llvm-tblgen, then need to run. Expose that library on its
+# own: it can live in a system library directory (e.g. with a distribution GCC),
+# whose other libraries would then take precedence over the stage's own, such as
+# an older libzstd over the one Julia's zstd executable requires.
+STAGE_LIBSTDCXX = $(realpath $(wildcard $(shell $(STAGE0_TOOLS)clang++ $(SYSROOT_FLAGS) -print-file-name=libstdc++.so.6)))
+STAGE_LIBSTDCXX_DIR:=$(STAGE0_BUILD)/libstdcxx
+STAGE_PATH_SETUP = rm -rf $(STAGE_LIBSTDCXX_DIR)$(if $(STAGE_LIBSTDCXX), && mkdir -p $(STAGE_LIBSTDCXX_DIR) && ln -s $(STAGE_LIBSTDCXX) $(STAGE_LIBSTDCXX_DIR)/libstdc++.so.6)
+STAGE_PATH = LD_LIBRARY_PATH="$(STAGE_LIBSTDCXX_DIR)$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"
+endif
 endif
 
+# The toolchain flags go into CC/CXX rather than *FLAGS, because not every part of
+# the build uses those: the loader in cli/, for one, compiles and links with
+# JCFLAGS/JLDFLAGS only.
 TOOLCHAIN_FLAGS = $\
-	"CC=$(STAGE0_TOOLS)clang$(EXE)" $\
+	"CC=$(strip $(STAGE0_TOOLS)clang$(EXE) $(SYSROOT_FLAGS))" $\
 	"BUILD_MACHINE=$(BUILD_MACHINE)" $\
-	"CXX=$(STAGE0_TOOLS)clang++$(EXE)" $\
+	"CXX=$(strip $(STAGE0_TOOLS)clang++$(EXE) $(SYSROOT_FLAGS))" $\
 	"LD=$(LINKER)" $\
 	"AR=$(STAGE0_TOOLS)llvm-ar$(EXE)" $\
 	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib$(EXE)" $\
@@ -284,13 +316,18 @@ endif
 	$(STAGE0_POST)
 	touch $@
 
+# Order-only for the stages below: refreshed on every run, without making them
+# out of date.
+stage-path: stage0
+	$(STAGE_PATH_SETUP)
+
 # Stage 1: an instrumented Julia. Building its system image and package images
 # is the workload that the PGO profile is collected from.
 stage1: STAGE_CFLAGS:=$(PGO_GENERATE_FLAGS) $(PGO_COUNTER_FLAGS)
 stage1: STAGE_CXXFLAGS:=$(PGO_GENERATE_FLAGS) $(PGO_COUNTER_FLAGS)
 stage1: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_GENERATE_FLAGS)
 stage1: export USE_BINARYBUILDER_LLVM=0
-stage1: stage0 | $(STAGE1_BUILD)
+stage1: stage0 | $(STAGE1_BUILD) stage-path
 	@echo "--- Stage 1: instrumented build"
 	# Building the dependencies runs instrumented build tools, e.g. llvm-tblgen,
 	# which share code with libLLVM but not Julia's workload. Keep their
@@ -327,7 +364,7 @@ stage2: $(PGO_PROFILE_FILE)
 else
 stage2: stage0
 endif
-stage2: | $(STAGE2_BUILD)
+stage2: | $(STAGE2_BUILD) stage-path
 	@echo "--- Stage 2: optimized build"
 	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
 	touch $@
@@ -359,7 +396,7 @@ bolt-instrument: bolt-originals
 
 # Build the rest of Julia against the instrumented libraries: the system image
 # and the stdlib package images are the BOLT training workload.
-bolt-train: bolt-instrument
+bolt-train: bolt-instrument | stage-path
 	@echo "--- BOLT: training build"
 	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry
 	# --emit-relocs, or the later BOLT rewrite of it fails.
