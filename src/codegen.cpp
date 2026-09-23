@@ -10162,6 +10162,8 @@ static jl_llvm_functions_t
         ssize_t line0; // if this represents pc=1, then also cover the entry to the function (pc=0)
         bool is_user_code;
         int32_t edgeid;
+        const char *func_name; // identity of the frame's DI scope, with `file`
+        unsigned col;
         bool sameframe(const DebugLineTable &other) const {
             // detect if the line info for this frame is unchanged (equivalent to loc == other.loc ignoring the inlined_at field)
             return other.edgeid == edgeid && other.line == line;
@@ -10174,7 +10176,12 @@ static jl_llvm_functions_t
     topinfo.is_user_code = mod_is_user_mod;
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
+    topinfo.func_name = nullptr;
+    topinfo.col = 0;
     std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
+    // names and files are interned symbol names or literals, so their pointers
+    // identify them; this avoids comparing the strings on every statement
+    DenseMap<std::pair<const char*, const char*>, DISubprogram*> subprogram_ptrs;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
     auto update_lineinfo = [&](size_t outerpc) {
         std::function<bool(jl_debuginfo_t *, jl_value_t *, size_t, size_t, bool)>
@@ -10212,7 +10219,7 @@ static jl_llvm_functions_t
                         info.file = "<missing>";
                     info.is_user_code = frame_is_user_code(modu, info.file);
                     if (debug_enabled) {
-                        StringRef fname = jl_debuginfo_name(func);
+                        const char *fname = jl_debuginfo_name(func);
                         // Encode outermost (codeinstance) debuginfo PC on
                         // innermost frame's DWARF column.  Note "innermost" is
                         // fuzzy given that debuginfo is a tree, but as long as
@@ -10229,30 +10236,48 @@ static jl_llvm_functions_t
                         unsigned col = (lineidx.to == 0 && innermost &&
                                         outerpc <= UINT16_MAX) ?
                             (unsigned)outerpc : 0;
-                        if (new_lineinfo.empty() && info.file == ctx.file) {
+                        info.func_name = fname;
+                        info.col = col;
+                        // Consecutive statements mostly share their outer frames. If
+                        // this frame and everything it is inlined into are unchanged
+                        // from the previous statement, DILocation::get would return
+                        // the same node, so reuse it without the lookups.
+                        size_t k = new_lineinfo.size();
+                        if (k < prev_lineinfo.size()) {
+                            const DebugLineTable &prev = prev_lineinfo[k];
+                            if (prev.func_name == fname && prev.file.data() == info.file.data() &&
+                                prev.line == info.line && prev.col == col && prev.edgeid == info.edgeid &&
+                                (k == 0 || prev_lineinfo[k - 1].loc == new_lineinfo[k - 1].loc))
+                                info.loc = prev.loc;
+                        }
+                        if (!info.loc && new_lineinfo.empty() && (info.file.data() == ctx.file.data() || info.file == ctx.file)) {
                             // if everything matches, emit a toplevel line number
                             info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, SP, NULL);
                         }
-                        else { // otherwise, describe this as an inlining frame
+                        else if (!info.loc) { // otherwise, describe this as an inlining frame
                             DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
-                            DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, info.file)];
-                            if (inl_SP == NULL) {
-                                DIFile *difile = dbuilder.createFile(info.file, ".");
-                                inl_SP = dbuilder.createFunction(difile
-                                                             ,std::string(fname) + ";" // Name
-                                                             ,fname            // LinkageName
-                                                             ,difile           // File
-                                                             ,0                // LineNo
-                                                             ,debugcache.jl_di_func_null_sig // Ty
-                                                             ,0                // ScopeLine
-                                                             ,DINode::FlagZero // Flags
-                                                             ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
-                                                             ,nullptr          // Template Parameters
-                                                             ,nullptr          // Template Declaration
-                                                             ,nullptr          // ThrownTypes
-                                                             );
+                            DISubprogram *&inl_SP_ptr = subprogram_ptrs[std::make_pair(fname, info.file.data())];
+                            if (inl_SP_ptr == NULL) {
+                                DISubprogram *&inl_SP = subprograms[std::make_tuple(StringRef(fname), info.file)];
+                                if (inl_SP == NULL) {
+                                    DIFile *difile = dbuilder.createFile(info.file, ".");
+                                    inl_SP = dbuilder.createFunction(difile
+                                                                 ,std::string(fname) + ";" // Name
+                                                                 ,fname            // LinkageName
+                                                                 ,difile           // File
+                                                                 ,0                // LineNo
+                                                                 ,debugcache.jl_di_func_null_sig // Ty
+                                                                 ,0                // ScopeLine
+                                                                 ,DINode::FlagZero // Flags
+                                                                 ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
+                                                                 ,nullptr          // Template Parameters
+                                                                 ,nullptr          // Template Declaration
+                                                                 ,nullptr          // ThrownTypes
+                                                                 );
+                                }
+                                inl_SP_ptr = inl_SP;
                             }
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, inl_SP, inl_loc);
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, inl_SP_ptr, inl_loc);
                         }
                     }
                     new_lineinfo.push_back(info);
