@@ -150,8 +150,8 @@ New library functions
   valid string indices.
 * `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string of the input string.
 * `asinpi(x)`, `acospi(x)`, `atanpi(y)` and `atanpi(y, x)` compute the inverse trigonometric functions
-  in half-turns, that is `asin(x)/pi` and so on, but accurate to under one ulp where that quotient
-  reaches nearly two. They complete the `sinpi`/`cospi`/`tanpi` family and correspond to the C23 and
+  in half-turns with improved accuracy compared to dividing the corresponding radian results by `pi`.
+  They complete the `sinpi`/`cospi`/`tanpi` family and correspond to the C23 and
   IEEE 754-2019 operations of the same names ([#63031]).
 * `Base.include_mapexprs(mod)` is an unexported, public function returning the non-identity
   `mapexpr` functions used by `include(mapexpr, …)` calls while loading the package rooted at

@@ -328,12 +328,33 @@ end
     return Txy, T(xy-Txy)
 end
 
+"""
+    product_residual(quotient::Float64, denominator::Float64, numerator::Float64)
+
+Compute the compensated residual `numerator - quotient*denominator` for finite operands.
+
+The caller must scale operands to avoid overflow and loss of product residuals to underflow.
+"""
+@inline function product_residual(quotient::Float64, denominator::Float64, numerator::Float64)
+    if Core.Intrinsics.have_fma(Float64)
+        return fma(-quotient, denominator, numerator)
+    end
+    # The fallback uses two_mul and two subtractions, rather than a fully fused operation.
+    # When numerator - product_hi is exact, an exact product split gives a single rounding.
+    product_hi, product_lo = two_mul(quotient, denominator)
+    return (numerator - product_hi) - product_lo
+end
+
 # two-sqrt: returns (hi, lo) with hi + lo ≈ √x to about twice the working
-# precision, for finite x > 0, by one Newton step lo = (x - hi²)/(2hi) off the
-# rounded root. Unlike `two_mul` this is not error-free: x - hi² is exact, but
-# the division rounds once. Uses a hardware fma when available.
+# precision for finite x > 0 when residuals do not underflow.
 @assume_effects :consistent @inline function two_sqrt(x::T) where {T<:IEEEFloat}
     s = Core.Intrinsics.sqrt_llvm(x)
+    # Writing √x = s + e gives x - s² = 2s*e + e².
+    # Since s is the rounded square root, |e|/s is small. Dropping e² gives
+    # the correction (x - s²)/(2s), which differs from e by e²/(2s)
+    # in exact arithmetic, a second-order error in e/s relative to s.
+    # Recover x - s² with an FMA or a split product, not a rounded square alone.
+    # Unlike two_mul, this is an approximation: it omits e² and rounds the division.
     Core.Intrinsics.have_fma(T) && return s, fma_float(-s, s, x)/(2*s)
     s², s²err = two_mul(s, s)
     return s, ((x - s²) - s²err)/(2*s)

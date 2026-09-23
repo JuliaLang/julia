@@ -23,7 +23,8 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_raw_max, clamp, clamp!, two_mul, two_sqrt
+            exponent_raw_max, clamp, clamp!, two_mul, two_sqrt, product_residual,
+            fast_two_sum, fast_two_diff, fast_two_diff_rev
 
 using Core.Intrinsics: sqrt_llvm, min_float, max_float
 

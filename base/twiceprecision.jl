@@ -51,6 +51,43 @@ function canonicalize2(big, little)
 end
 
 """
+    fast_two_sum(big, little)
+
+Return the rounded sum and its residual `(hi, lo)` for `abs(big) >= abs(little)`.
+
+For finite floating-point operands of the same type, round-to-nearest arithmetic
+with gradual underflow and no overflow gives `hi + lo = big + little` exactly
+as an unevaluated sum. The operands may have either sign.
+"""
+@inline fast_two_sum(big, little) = canonicalize2(big, little)
+
+"""
+    fast_two_diff(big, little)
+
+Return the rounded difference and its residual `(hi, lo)` for `abs(big) >= abs(little)`.
+
+Under the arithmetic conditions of [`fast_two_sum`](@ref), the unevaluated sum
+`hi + lo` equals `big - little` exactly. The operands may have either sign.
+"""
+@inline function fast_two_diff(big, little)
+    hi = big - little
+    return hi, (big - hi) - little
+end
+
+"""
+    fast_two_diff_rev(little, big)
+
+Return the rounded difference and its residual `(hi, lo)` for `abs(little) <= abs(big)`.
+
+Under the arithmetic conditions of [`fast_two_sum`](@ref), the unevaluated sum
+`hi + lo` equals `little - big` exactly. The operands may have either sign.
+"""
+@inline function fast_two_diff_rev(little, big)
+    hi = little - big
+    return hi, little - (big + hi)
+end
+
+"""
     zhi, zlo = add12(x, y)
 
 A high-precision representation of `x + y` for floating-point
