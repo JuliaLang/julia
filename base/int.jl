@@ -582,7 +582,7 @@ for op in (:(==), :<, :<=)
         if Core.sizeof(x) < Core.sizeof(y)
             $op(typeof(y)(x), y)
         else
-            (y >= 0) & $op(x, unsigned(y))
+            (y >= 0) & $op(x, unsigned(y) % typeof(x))
         end
     end
 end
