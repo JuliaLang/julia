@@ -236,11 +236,9 @@ static size_t _write_grow(ios_t *s, const char *data, size_t n)
         if (s->bpos + n > s->maxsize) {
             /* TODO: here you might want to add a mechanism for limiting
                the growth of the stream. */
-            newsize = (size_t)(s->maxsize ? s->maxsize * 2 : 8);
-            while (s->bpos + n > newsize)
-                newsize *= 2;
-            if (_buf_realloc(s, newsize) == NULL) {
-                /* no more space; write as much as we can */
+            if ((uint64_t)s->bpos + (uint64_t)n > (uint64_t)SIZE_MAX) {
+                /* no buffer can hold what this write needs, because the size
+                   it needs is not representable; write as much as we can */
                 amt = (size_t)(s->maxsize - s->bpos);
                 if (amt > 0) {
                     memcpy(&s->buf[s->bpos], data, amt);
@@ -248,6 +246,28 @@ static size_t _write_grow(ios_t *s, const char *data, size_t n)
                 s->bpos += amt;
                 s->size = s->maxsize;
                 return amt;
+            }
+            size_t exact = (size_t)(s->bpos + n);
+            newsize = (size_t)(s->maxsize ? s->maxsize * 2 : 8);
+            while (exact > newsize && newsize != 0)
+                newsize *= 2;
+            if (newsize < exact)
+                newsize = exact; /* doubling wrapped; it would loop here forever */
+            /* Doubling buys headroom for later writes. Where it cannot be had,
+               back off halfway at a time rather than dropping to the exact size,
+               which would leave the next write to reallocate the whole buffer. */
+            while (_buf_realloc(s, newsize) == NULL) {
+                if (newsize == exact) {
+                    /* no more space; write as much as we can */
+                    amt = (size_t)(s->maxsize - s->bpos);
+                    if (amt > 0) {
+                        memcpy(&s->buf[s->bpos], data, amt);
+                    }
+                    s->bpos += amt;
+                    s->size = s->maxsize;
+                    return amt;
+                }
+                newsize = exact + (newsize - exact) / 2;
             }
         }
         s->size = s->bpos + n;
