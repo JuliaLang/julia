@@ -2061,6 +2061,10 @@ end
 using StyledStrings, JuliaSyntaxHighlighting
 @testset "Syntax highlighting" begin
     using REPL.StylingPasses
+    # Each pass's annotations are merged once
+    let passes = [Base.AnnotatedString("ab", [(1:1, :face, 1)]), Base.AnnotatedString("ab", [(2:2, :face, 2)])]
+        @test length(Base.annotations(StylingPasses.merge_annotations(passes))) == 2
+    end
     # The passes' strings hold faces, for the static display path
     @test StylingPasses.apply_styling_passes("f(x)",
         StylingPasses.StylingPass[StylingPasses.SyntaxHighlightPass(), StylingPasses.RegionHighlightPass(),

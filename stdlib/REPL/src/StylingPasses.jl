@@ -28,7 +28,7 @@ function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
 
     result = AnnotatedString(annotated_strings[1])
 
-    for source in annotated_strings
+    for source in Iterators.drop(annotated_strings, 1)
         for ann in annotations(source)
             annotate!(result, ann.region, ann.label, ann.value)
         end
