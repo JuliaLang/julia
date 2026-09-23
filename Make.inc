@@ -596,6 +596,11 @@ JCXXFLAGS_CLANG    = $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC      = $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
 DEBUGFLAGS_COMMON  = -O0 -DJL_DEBUG_BUILD -fstack-protector
+ifeq ($(FORCE_ASSERTIONS), 1)
+# The debug objects do not use CXX_DISABLE_ASSERTION, so also set the flag here. Without it,
+# a debug build with FORCE_ASSERTIONS does not run the verification passes.
+DEBUGFLAGS_COMMON += -DJL_VERIFY_PASSES
+endif
 DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
 DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
 
