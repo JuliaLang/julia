@@ -2099,6 +2099,7 @@ function compilecache_freshest_path(pkg::PkgId;
         # driver) must keep them on, so that a corrupted cache is recompiled
         # rather than reported as loadable
         verify_checksums::Bool=true,
+        unverified::Union{Nothing,Set{String}}=nothing,
         reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
     isnothing(sourcespec) && error("Cannot locate source for $(repr("text/plain", pkg))")
     @lock require_lock begin
@@ -2140,7 +2141,7 @@ function compilecache_freshest_path(pkg::PkgId;
                 end
                 continue next_path
             end
-            verify_checksums && checksums_invalid(path_to_try, ocachefile, id_build, reasons) && continue
+            verify_checksums && checksums_invalid(path_to_try, ocachefile, id_build, reasons; unverified) && continue
             # Record the result so dependents don't check this file again.
             stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
             # The first candidate tried is already the one code loading prefers.
@@ -3910,6 +3911,17 @@ function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
     expected_crc_so == crc_so
 end
 
+# Cache files whose checksums passed in this process; a replaced file gets a new key.
+# Only the precompile driver's freshness scan uses it; loading always checks.
+const checksums_valid = Set{NTuple{2, NTuple{5, Float64}}}() # protected by require_lock
+
+file_identity(st::StatStruct) = (Float64(st.device), Float64(st.inode), Float64(st.size), st.mtime, st.ctime)
+
+function checksum_key(io::IOStream, ocachefile::Union{Nothing, String})
+    oid = ocachefile === nothing ? ntuple(_ -> 0.0, 5) : file_identity(stat(ocachefile))
+    return (file_identity(stat(io)), oid)
+end
+
 function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons)
     if !isvalid_file_crc(io)
         @debug "Rejecting cache file $cachefile because it has an invalid checksum"
@@ -3924,7 +3936,9 @@ function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{No
     return false
 end
 
-function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt128, reasons)
+# With `unverified`, a file already in the record passes without being read and is added to `unverified`.
+function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt128, reasons;
+                           unverified::Union{Nothing, Set{String}}=nothing)
     io = try
         open(cachefile, "r")
     catch ex
@@ -3939,9 +3953,36 @@ function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}
             @debug "Rejecting cache file $cachefile because it changed while being checked"
             return true
         end
-        return checksums_invalid(io, cachefile, ocachefile, reasons)
+        unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons)
+        assert_havelock(require_lock)
+        key = checksum_key(io, ocachefile)
+        if key in checksums_valid
+            push!(unverified, cachefile)
+            return false
+        end
+        invalid = checksums_invalid(io, cachefile, ocachefile, reasons)
+        # a saved image must not carry file identities from this machine
+        invalid || generating_output() || push!(checksums_valid, key)
+        return invalid
     finally
         close(io)
+    end
+end
+
+# Checksum a file the driver accepted from the record, before it is trusted without checks.
+function checksums_valid_now(cachefile::String)
+    opath = ocachefile_from_cachefile(cachefile)
+    ocachefile = isfile(opath) ? opath : nothing
+    try
+        open(cachefile, "r") do io
+            key = checksum_key(io, ocachefile)
+            invalid = checksums_invalid(io, cachefile, ocachefile, nothing)
+            invalid && @lock require_lock delete!(checksums_valid, key)
+            return !invalid
+        end
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        return false
     end
 end
 
