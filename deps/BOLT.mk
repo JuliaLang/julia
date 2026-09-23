@@ -64,7 +64,14 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(BOLT_BUILDDIR)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
-$(BOLT_BUILDDIR)/build-configured: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
+# Backport of llvm/llvm-project#215415, which the BOLT_jll build also carries:
+# without it, BOLT cannot rewrite a ThinLTO-built libLLVM on AArch64.
+$(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-aarch64-adr-relaxation-non-simple.patch-applied: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/BOLT-aarch64-adr-relaxation-non-simple.patch
+	echo 1 > $@
+
+$(BOLT_BUILDDIR)/build-configured: $(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-aarch64-adr-relaxation-non-simple.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		$(CMAKE) $(SRCCACHE)/$(BOLT_SRC_DIR)/llvm $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(BOLT_BUILD_CMAKE) \

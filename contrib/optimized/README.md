@@ -9,9 +9,9 @@ make -C contrib/optimized -j8 all
 ```
 
 The result is in `contrib/optimized/optimized.build`. The build first downloads
-clang, lld and LLVM tools from BinaryBuilder, and builds BOLT from source if
-needed. It then builds an instrumented Julia, using the system image and package
-image builds as the PGO workload, and builds Julia again with the resulting
+clang, lld, LLVM tools and (when enabled) BOLT from BinaryBuilder. It then
+builds an instrumented Julia, using the system image and package image builds as
+the PGO workload, and builds Julia again with the resulting
 profile and ThinLTO. With BOLT enabled, it also instruments `libLLVM`,
 `libjulia-internal` and `libjulia-codegen`, builds the system image and package
 images against them, and rewrites the libraries using that profile.

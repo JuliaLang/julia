@@ -169,6 +169,16 @@ class FlowTests(unittest.TestCase):
                 self.assertIn('-flto=thin', args[2])
                 self.assertIn('-fprofile-use=', args[2])
 
+    def test_bolt_flags_per_architecture(self):
+        # cdsplit and the jump table mode are x86-only; BOLT rejects the former
+        # on AArch64 and ignores the latter.
+        target = '--eval=review:;@echo "[$(BOLT_ARGS)][$(BOLT_SPLIT_STRATEGY)]"'
+        for arch, x86_only in [('x86_64', True), ('aarch64', False)]:
+            out = self.make(target, 'review', 'OS=Linux', 'ARCH=' + arch)
+            self.assertEqual('-jump-tables=move' in out, x86_only, out)
+            self.assertEqual('-split-strategy=cdsplit' in out, x86_only, out)
+            self.assertIn('-reorder-blocks=ext-tsp', out)
+
     def test_custom_bolt_profiles(self):
         self.make('bolt-train')
         profile = self.flow / 'profiles/merged.prof'
