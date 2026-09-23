@@ -7252,8 +7252,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
-#ifdef GC_BARRIER_SNAPSHOT
-            // Barrier is needed to snapshot old scope value
+#ifdef GC_BARRIER_ON_TASKS
             emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_to_restore);
 #else
             // No barrier required: old Tasks are implicitly in the GC remset
@@ -7267,7 +7266,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
             ctx.alias().gcframe.decorateInst(
                 ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
-            // NOTE: post-wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
         }
     }
     else if (head == jl_pop_exception_sym) {

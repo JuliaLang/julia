@@ -476,7 +476,7 @@ version = "22.1.8+1"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.15.0+0"
+version = "5.16.0+0"
 
     [deps.libblastrampoline_jll.syntax]
     julia_version = "1.13.0"

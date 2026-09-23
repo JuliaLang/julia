@@ -240,6 +240,34 @@ end
     GC.gc()
     cancel!(root)
     @test Base.iscancelled(keep)
+
+    # Children dying in the *middle* of a parent's list, mixed with fresh
+    # attachments and with quick and full collections interleaved. A dead
+    # source must survive - intact and still linked - until the unlink pass
+    # runs, so that its neighbours' back-pointers stay valid. A build with
+    # WITH_GC_DEBUG_ENV=1 additionally exercises gc_scrub, which rewrites
+    # dead pool objects that a conservative stack scan happens to find and
+    # must leave these lists alone.
+    for round in 1:40
+        roots = [CancellationTokenSource() for _ in 1:8]
+        for p in roots
+            tok = CancellationToken(p)
+            kids = CancellationTokenSource[CancellationTokenSource(tok) for _ in 1:64]
+            # replace every other child: kills one mid-list and prepends a new one
+            for i in 1:2:length(kids)
+                kids[i] = CancellationTokenSource(tok)
+            end
+            kids = nothing
+            GC.gc(false)
+        end
+        GC.gc(round % 3 == 0)
+        survivor = CancellationTokenSource(CancellationToken(roots[1]))
+        cancel!(roots[1])
+        @test Base.iscancelled(survivor)
+        roots = nothing
+    end
+    GC.gc()
+    GC.gc()
 end
 
 @testset "cancellation source memory accounting" begin
