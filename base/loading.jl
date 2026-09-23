@@ -2121,7 +2121,9 @@ function compilecache_freshest_path(pkg::PkgId;
             if staledeps === true
                 continue
             end
-            staledeps, _, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            staledeps, _, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            # Record the result so dependents don't check this file again.
+            stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
             # finish checking staledeps module graph
             @label next_dep for dep in staledeps
                 dep isa Module && continue
