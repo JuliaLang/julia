@@ -2115,8 +2115,10 @@ function compilecache_freshest_path(pkg::PkgId;
             end
         end
     end
+    tried = 0
     for build_id in try_build_ids
         @label next_path for path_to_try in cachepaths
+            tried += 1
             # Checksums read the whole file, so check them after the deps.
             staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums=false, reasons)
             if staledeps === true
@@ -2141,11 +2143,14 @@ function compilecache_freshest_path(pkg::PkgId;
             verify_checksums && checksums_invalid(path_to_try, ocachefile, id_build, reasons) && continue
             # Record the result so dependents don't check this file again.
             stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
-            try
-                # update timestamp of precompilation file so that it is the first to be tried by code loading
-                touch(path_to_try)
-            catch
-                # file might be read-only and then we fail to update timestamp, which is fine
+            # The first candidate tried is already the one code loading prefers.
+            if tried > 1
+                try
+                    # update timestamp of precompilation file so that it is the first to be tried by code loading
+                    touch(path_to_try)
+                catch
+                    # file might be read-only and then we fail to update timestamp, which is fine
+                end
             end
             return path_to_try
         end
@@ -2310,8 +2315,10 @@ end
     # Try the driver's validated cache first; fall back to the normal search.
     pre = get(preresolved_cachefiles, pkg, nothing)
     pre !== nothing && (paths = Iterators.flatten(((pre,), paths)))
+    tried = 0
     for build_id in try_build_ids
         @label next_path for path_to_try in paths
+            tried += 1
             trusted = path_to_try === pre
             # Checksums read the whole file, so check them after the deps.
             staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons,
@@ -2382,7 +2389,7 @@ end
                     return M
                 end
                 !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons) && continue next_path
-                if stalecheck
+                if stalecheck && tried > 1
                     try
                         touch(path_to_try) # update timestamp of precompilation file
                     catch
