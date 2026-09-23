@@ -84,8 +84,11 @@ LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
 # Find our zlib/zstd when linking against libLLVM with a sysroot toolchain: `-L` for
 # lld, `-rpath-link` for GNU ld (which does not search `-L` paths for the dependencies
-# of shared libraries).
-LLVM_LDFLAGS := "-L$(build_shlibdir)" "-Wl,-rpath-link,$(build_shlibdir)"
+# of shared libraries). The latter is ELF-only, as in Make.inc's RPATH.
+LLVM_LDFLAGS := "-L$(build_shlibdir)"
+ifeq (,$(filter $(OS),WINNT emscripten Darwin))
+LLVM_LDFLAGS += "-Wl,-rpath-link,$(build_shlibdir)"
+endif
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
