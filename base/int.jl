@@ -573,12 +573,19 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 (<=)(x::T, y::T) where {T<:BitSigned}   = sle_int(x, y)
 (<=)(x::T, y::T) where {T<:BitUnsigned} = ule_int(x, y)
 
-==(x::BitSigned,   y::BitUnsigned) = (x >= 0) & (unsigned(x) == y)
-==(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x == unsigned(y))
-<( x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <  y)
-<( x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <  unsigned(y))
-<=(x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <= y)
-<=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
+==(x::BitSigned, y::BitUnsigned) = y == x
+<(x::BitSigned, y::BitUnsigned) = !(y <= x)
+<=(x::BitSigned, y::BitUnsigned) = !(y < x)
+
+for op in (:(==), :<, :<=)
+    @eval function $op(x::BitUnsigned, y::BitSigned)
+        if Core.sizeof(x) < Core.sizeof(y)
+            $op(typeof(y)(x), y)
+        else
+            (y >= 0) & $op(x, unsigned(y) % typeof(x))
+        end
+    end
+end
 
 ## integer shifts ##
 
