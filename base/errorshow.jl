@@ -995,19 +995,23 @@ function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_
 end
 
 """
-    _print_hidden_frames(io::IO, trace, hidden, ndigits_max::Int, max_nested_cycles::Int; prefix = nothing)
+    _print_hidden_frames(io::IO, trace, hidden, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int; prefix = nothing)
 
 Print the line standing in for the frames `hidden` names, which lists the modules they came
-from in place of a function and a location.
+from in place of a function and a location. It draws the gutter of the cycle brackets open
+across it, `ncycle_starts` of them opening on it, the way a frame's own line would.
 """
-function _print_hidden_frames(io::IO, trace, hidden, ndigits_max::Int, max_nested_cycles::Int; prefix = nothing)
+function _print_hidden_frames(io::IO, trace, hidden, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int; prefix = nothing)
     named = unique(parentmodule(entry[1]::StackFrame) for entry in view(trace, hidden))
     modules = [m for m in named if m !== nothing]
 
     if prefix !== nothing
         print(io, prefix)
     end
-    print(io, " ", lpad("⋮", ndigits_max + 2 + max_nested_cycles), " ")
+    print(io, " ")
+    printstyled(io, "│" ^ (nactive_cycles - ncycle_starts); color = :light_black)
+    printstyled(io, "┌" ^ ncycle_starts; color = :light_black)
+    print(io, lpad("⋮", ndigits_max + 2 + max_nested_cycles - nactive_cycles), " ")
     printstyled(io, "internal"; color = :light_black, italic = true)
     for (place, m) in enumerate(modules)
         separator = place == 1 ? " @ " : ", "
@@ -1041,30 +1045,24 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
         printed_any = true
     end
 
-    hidden_from = 0
-    function flush_hidden(upto)
-        if hidden_from != 0
+    # the pending run of hidden frames, with the brackets open across it and opening on it
+    run_from = run_to = run_depth = run_starts = 0
+    function flush_hidden()
+        if run_from != 0
             print_separator()
-            _print_hidden_frames(io, trace, hidden_from:upto, ndigits_max, max_nested_cycles; prefix)
-            hidden_from = 0
+            _print_hidden_frames(io, trace, run_from:run_to, ndigits_max, max_nested_cycles, run_depth, run_starts; prefix)
+            run_from = 0
         end
     end
 
     for i in eachindex(trace)
         (frame, n) = trace[i]
+        hidden = kept !== nothing && !kept[i]
 
-        if kept !== nothing && !kept[i]
-            #= A hidden frame still spends its numbers, so that what is shown can be found
-            again in the full trace, and opens no bracket, since a run of hidden frames is
-            never drawn inside one. =#
-            if hidden_from == 0
-                hidden_from = i
-            end
-            frame_counter += n
-            continue
+        # a run of hidden frames ends where a cycle opens, so its line sits wholly inside or outside it
+        if repeated_cycles[1][1] == i || (n > 1 && !hidden)
+            flush_hidden()
         end
-        flush_hidden(i - 1)
-
         ncycle_starts = 0
         while repeated_cycles[1][1] == i
             cycle = popfirst!(repeated_cycles)
@@ -1072,18 +1070,35 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
             ncycle_starts += 1
         end
         if n > 1
-            push!(current_cycles, (i, 1, n, n - 1))
-            ncycle_starts += 1
+            if hidden
+                # a hidden frame repeating on its own draws no bracket, but still spends its numbers
+                frame_counter += n - 1
+            else
+                push!(current_cycles, (i, 1, n, n - 1))
+                ncycle_starts += 1
+            end
         end
         nactive_cycles = length(current_cycles)
 
-        print_separator()
-        print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
+        if hidden
+            if run_from == 0
+                run_from, run_depth, run_starts = i, nactive_cycles, ncycle_starts
+            end
+            run_to = i
+            # and ends where a cycle closes, so the closing line follows the frames it covers
+            if !isempty(current_cycles) && current_cycles[end][1] + current_cycles[end][2] - 1 == i
+                flush_hidden()
+            end
+        else
+            flush_hidden()
+            print_separator()
+            print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
+        end
 
         frame_counter, _nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
         frame_counter += 1
     end
-    flush_hidden(lastindex(trace))
+    flush_hidden()
 end
 
 # Print a stack frame where the module color is determined by looking up the parent module in
@@ -1235,7 +1250,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
 
     kept = nothing
     if stacktrace_abbreviated(io)
-        candidate = _backtrace_user_frames(filtered, repeated_cycles)
+        candidate = _backtrace_user_frames(filtered)
         # hiding every frame says nothing, and hiding none is the trace as it stands
         if any(candidate) && !all(candidate)
             kept = candidate
@@ -1490,23 +1505,18 @@ function _is_julia_source(file::AbstractString)
 end
 
 """
-    _backtrace_user_frames(trace::AbstractVector, repeated_cycles::AbstractVector)
+    _backtrace_user_frames(trace::AbstractVector)
 
 Which frames of `trace` to keep when Julia's own are hidden, as a vector of flags: every
 frame from code its user is working on, plus the frame each contiguous run of them called
-into, which names what rejected the call. A frame that a repetition bracket is drawn around
-is kept regardless, since the bracket is drawn frame by frame and cannot span a gap.
+into, which names what rejected the call.
 """
-function _backtrace_user_frames(trace::AbstractVector, repeated_cycles::AbstractVector)
+function _backtrace_user_frames(trace::AbstractVector)
     kept = [!_is_julia_source(string((entry[1]::StackFrame).file)) for entry in trace]
     # a trace runs innermost-first, so the frame a run of user code called sits below it
     entered = falses(length(kept))
     entered[begin:(end - 1)] .= @view kept[(begin + 1):end]
     kept .|= entered
-    for (start, len, _) in repeated_cycles
-        span = max(firstindex(trace), start):min(lastindex(trace), start + len - 1)
-        kept[span] .= true
-    end
     return kept
 end
 

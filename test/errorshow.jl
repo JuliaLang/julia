@@ -1908,3 +1908,43 @@ end
         @test !Base._is_julia_source(joinpath(depot, "dev", "Example", "src", "Example.jl"))
     end
 end
+
+module RecursiveTraces
+    descend(depth) = depth == 0 ? error("bottom") : only(map(descend, [depth - 1]))
+end
+
+@testset "abbreviated stacktraces inside a repeated cycle" begin
+    trace = try
+        RecursiveTraces.descend(30)
+    catch
+        Base.process_backtrace(stacktrace(catch_backtrace()))
+    end
+    render(io::IO) = (Base.show_backtrace(io, trace); String(take!(io.io)))
+    full = render(IOContext(IOBuffer()))
+    abbreviated = render(IOContext(IOBuffer(), :stacktrace_frames_hidden => Ref(false)))
+
+    # the recursion is still bracketed once, and Base's frames inside it are hidden
+    @test count("┌", abbreviated) == count("╰", abbreviated) == 1
+    @test occursin("repeated 30 times", abbreviated)
+    @test occursin(r"│ +⋮ internal @ Base", abbreviated)
+    @test count("\n", abbreviated) < count("\n", full)
+    numbers(text) = [m[1] for m in eachmatch(r"\[(\d+)\] descend", text)]
+    @test !isempty(numbers(abbreviated)) && numbers(abbreviated) ⊆ numbers(full)
+
+    # a run of hidden frames that a cycle opens or closes on carries the bracket itself
+    entry(name, file) = (Base.StackFrame(name, Symbol(file), 1), 1)
+    synthetic = Any[entry(:u1, "/user/a.jl"), entry(:b2, "b.jl"), entry(:b3, "b.jl"),
+                    entry(:u4, "/user/a.jl"), entry(:b5, "b.jl")]
+    function shown(cycles, kept)
+        io = IOBuffer()
+        Base.show_processed_backtrace(io, synthetic, 20, copy(cycles), 1; print_linebreaks = false, kept)
+        return String(take!(io))
+    end
+    kept = [true, false, false, true, false]
+    opening = shown([(2, 3, 5)], kept)
+    @test occursin(r"┌ +⋮ internal", opening)
+    @test occursin("[4] u4", opening) && occursin("[4] u4", shown([(2, 3, 5)], nothing))
+    closing = shown([(1, 2, 5)], kept)
+    @test occursin(r"│ +⋮ internal\n ╰", closing)
+    @test occursin("[12] u4", closing) && occursin("[12] u4", shown([(1, 2, 5)], nothing))
+end
