@@ -355,9 +355,12 @@ end
     # in exact arithmetic, a second-order error in e/s relative to s.
     # Recover x - s² with an FMA or a split product, not a rounded square alone.
     # Unlike two_mul, this is an approximation: it omits e² and rounds the division.
-    Core.Intrinsics.have_fma(T) && return s, fma_float(-s, s, x)/(2*s)
-    s², s²err = two_mul(s, s)
-    return s, ((x - s²) - s²err)/(2*s)
+    if Core.Intrinsics.have_fma(T)
+        return s, fma_float(-s, s, x)/(2*s)
+    else
+        s², s²err = two_mul(s, s)
+        return s, ((x - s²) - s²err)/(2*s)
+    end
 end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
