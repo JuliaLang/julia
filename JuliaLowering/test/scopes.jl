@@ -426,9 +426,9 @@ function resolve_and_get_bindings(
         mod::Module, ex;
         world::UInt = Base.get_world_counter(),
         soft_scope::Union{Nothing,Bool} = nothing,
-        version = JuliaLowering.JL_NEW_SYNTAX_VERSION,
+        edition = JL_NEW_EDITION,
     )
-    est = JuliaLowering.expr_to_est(ex)
+    est = _force_syntax(ex, mod, edition)
     ex0 = JuliaLowering.rebase_layers(est, mod)
     ex1 = JuliaLowering.expand_forms_1(ex0, world, true)
     ctx2, ex2 = JuliaLowering.expand_forms_2(ex1, world)
@@ -447,13 +447,13 @@ end
     # Definition names pinned to a module via an explicit `mod` (compat-mode
     # macro names, struct names) resolve every mention to the single
     # non-internal global declared for the definition, like other names.
-    for (ex, name, version) in (
-            (:(macro foo(x) x end), "@foo", JuliaLowering.JL_OLD_SYNTAX_VERSION),
-            (:(macro foo end), "@foo", JuliaLowering.JL_OLD_SYNTAX_VERSION),
-            (:(struct Foo; x; Foo(x) = new(x); end), "Foo", JuliaLowering.JL_OLD_SYNTAX_VERSION),
-            (:(struct Foo; x; Foo(x) = new(x); end), "Foo", JuliaLowering.JL_NEW_SYNTAX_VERSION),
+    for (ex, name, edition) in (
+            (:(macro foo(x) x end), "@foo", JL_OLD_EDITION),
+            (:(macro foo end), "@foo", JL_OLD_EDITION),
+            (:(struct Foo; x; Foo(x) = new(x); end), "Foo", JL_OLD_EDITION),
+            (:(struct Foo; x; Foo(x) = new(x); end), "Foo", JL_NEW_EDITION),
         )
-        bindings = resolve_and_get_bindings(Module(), ex; version)
+        bindings = resolve_and_get_bindings(Module(), ex; edition)
         globals = filter(b -> b.name == name && b.kind === :global, bindings)
         @test length(globals) == 1
         @test all(b -> !b.is_internal, globals)
