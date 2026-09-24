@@ -30,6 +30,14 @@ end
 @test_throws ArgumentError Libdl.dlsym_e(C_NULL, :foo)
 @test_throws ArgumentError Libdl.dlpath(C_NULL)
 
+# dlsym can only return nothing when throw_error=false.
+@testset "dlsym return type inference ($S)" for S in (Symbol, String)
+    @test Base.infer_return_type(Libdl.dlsym, Tuple{Ptr{Cvoid}, S}) === Ptr{Cvoid}
+    @test Base.infer_return_type(Tuple{Ptr{Cvoid}, S}) do hnd, s
+        Libdl.dlsym(hnd, s; throw_error=false)
+    end === Union{Nothing, Ptr{Cvoid}}
+end
+
 # Find the library directory by finding the path of libjulia-internal (or libjulia-internal-debug,
 # as the case may be) to get the private library directory
 private_libdir = if Base.DARWIN_FRAMEWORK
