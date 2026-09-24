@@ -102,7 +102,7 @@ lazy_static! {
 type ProcessSlotFn = *const extern "C" fn(closure: Address, slot: Address);
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     pub fn jl_gc_scan_julia_exc_obj(obj: Address, closure: Address, process_slot: ProcessSlotFn);
     pub fn jl_gc_get_stackbase(tid: i16) -> usize;
     pub fn jl_throw_out_of_memory_error();

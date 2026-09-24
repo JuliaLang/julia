@@ -80,9 +80,9 @@ impl JuliaGCTrigger {
     }
 
     fn maybe_force_full_heap(&self, mmtk: &'static MMTK<JuliaVM>) {
-        if let Some(gen) = mmtk.get_plan().generational() {
+        if let Some(gen_plan) = mmtk.get_plan().generational() {
             if self.next_sweep_full.load(Ordering::Relaxed) || GC_ALWAYS_SWEEP_FULL {
-                gen.force_full_heap_collection();
+                gen_plan.force_full_heap_collection();
             }
         }
     }
@@ -253,7 +253,7 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
         let last_collection_full_heap = mmtk
             .get_plan()
             .generational()
-            .is_some_and(|gen| gen.last_collection_full_heap());
+            .is_some_and(|gen_plan| gen_plan.last_collection_full_heap());
         if !mmtk.get_plan().generational().is_some() || last_collection_full_heap {
             self.heap_size_after_last_full_gc
                 .store(heap_size, Ordering::Relaxed);

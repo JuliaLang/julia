@@ -36,7 +36,7 @@ pub extern "C" fn mmtk_gc_init(
     };
 
     // We don't need the env var, as we will overwrite the plan with the defined feature.
-    std::env::remove_var("MMTK_PLAN");
+    unsafe { std::env::remove_var("MMTK_PLAN") };
 
     {
         let mut builder = BUILDER.lock().unwrap();

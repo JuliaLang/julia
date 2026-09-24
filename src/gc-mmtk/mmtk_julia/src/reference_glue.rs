@@ -6,7 +6,7 @@ use mmtk::vm::Finalizable;
 use mmtk::vm::ObjectTracer;
 use mmtk::vm::ReferenceGlue;
 
-extern "C" {
+unsafe extern "C" {
     pub static jl_nothing: *mut jl_value_t;
 }
 
