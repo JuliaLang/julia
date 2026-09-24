@@ -1891,6 +1891,9 @@ markinspected!(queue::CompilationQueue, item) = push!(queue.inspected, item)
 isinspected(queue::CompilationQueue, item) = item in queue.inspected
 Base.isempty(queue::CompilationQueue) = isempty(queue.tocompile)
 
+# Whether static parameter `i` is undefined for every call to `mi`
+sparam_is_undef(mi::MethodInstance, i::Int) = ccall(:jl_sparam_is_undef, Cint, (Any, Csize_t), mi, i - 1) != 0
+
 function has_valid_abi_sparams(mi::MethodInstance)
     isa(mi.specTypes, UnionAll) && return false
     def = mi.def
@@ -1898,9 +1901,8 @@ function has_valid_abi_sparams(mi::MethodInstance)
     unionall_depth(def.sig) == length(mi.sparam_vals) || return false
     for i = 1:length(mi.sparam_vals)
         sp = mi.sparam_vals[i]
-        if isa(sp, SimpleVector) || isvarargtype(sp)
-            return false
-        end
+        isvarargtype(sp) && return false
+        isa(sp, SimpleVector) && !sparam_is_undef(mi, i) && return false
     end
     return true
 end

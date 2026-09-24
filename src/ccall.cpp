@@ -512,6 +512,60 @@ static Value *llvm_type_rewrite(
 
 // --- argument passing and scratch space utilities ---
 
+// Substitute the static parameters with known values into `ty`, leaving the rest to
+// `ctx.spvals_ptr`. Returns NULL after emitting an UndefVarError if `ty` uses one
+// that is undefined for every call.
+static jl_value_t *resolve_static_sparams(jl_codectx_t &ctx, jl_value_t *ty) JL_CANSAFEPOINT
+{
+    jl_method_instance_t *mi = ctx.linfo;
+    if (!jl_is_method(mi->def.method) || !jl_is_unionall(mi->def.method->sig))
+        return ty;
+    jl_unionall_t *env = (jl_unionall_t*)mi->def.method->sig;
+    size_t n = jl_svec_len(mi->sparam_vals);
+    if (n == 0 || (size_t)jl_subtype_env_size((jl_value_t*)env) != n ||
+            !jl_has_typevar_from_unionall(ty, env))
+        return ty;
+    jl_value_t **vals;
+    JL_GC_PUSHARGS(vals, n + 1); // the last slot roots the result
+    jl_unionall_t *ua = env;
+    for (size_t i = 0; i < n; i++, ua = (jl_unionall_t*)ua->body) {
+        if (jl_sparam_is_undef(mi, i) && jl_has_typevar(ty, ua->var)) {
+            undef_var_error_ifnot(ctx, ConstantInt::getFalse(ctx.builder.getContext()), ua->var->name, (jl_value_t*)jl_static_parameter_sym);
+            JL_GC_POP();
+            return NULL;
+        }
+        vals[i] = static_sparam_value(mi, i);
+        if (vals[i] == NULL)
+            vals[i] = (jl_value_t*)ua->var;
+    }
+    jl_value_t *resolved = vals[n] = jl_instantiate_type_in_env(ty, env, vals);
+    jl_temporary_root(ctx, resolved);
+    JL_GC_POP();
+    return resolved;
+}
+
+static jl_svec_t *resolve_static_sparams(jl_codectx_t &ctx, jl_svec_t *types) JL_CANSAFEPOINT
+{
+    jl_svec_t *resolved = types;
+    jl_value_t *ty_resolved = NULL;
+    JL_GC_PUSH2(&resolved, &ty_resolved);
+    for (size_t i = 0; i < jl_svec_len(types); i++) {
+        jl_value_t *ty = jl_svecref(types, i);
+        ty_resolved = resolve_static_sparams(ctx, ty);
+        if (ty_resolved == NULL) {
+            resolved = NULL;
+            break;
+        }
+        if (ty_resolved != ty) {
+            if (resolved == types)
+                resolved = jl_svec_copy(types);
+            jl_svecset(resolved, i, ty_resolved);
+        }
+    }
+    JL_GC_POP();
+    return resolved;
+}
+
 // Returns ctx.types().T_prjlvalue
 static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty) JL_CANSAFEPOINT
 {
@@ -592,6 +646,7 @@ static jl_cgval_t typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, 
             std::string msg = make_errmsg("ccall", argn + 1, "");
             if (!jlto_env || !jl_has_typevar_from_unionall(jlto, jlto_env)) {
                 emit_typecheck(ctx, jvinfo, jlto, msg);
+                return update_julia_type(ctx, jvinfo, jlto);
             }
             else {
                 jl_cgval_t jlto_runtime = mark_julia_type(ctx, runtime_apply_type_env(ctx, jlto), true, jl_any_type);
@@ -608,8 +663,8 @@ static jl_cgval_t typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, 
                 just_emit_type_error(ctx, mark_julia_type(ctx, vx, true, jl_any_type), boxed(ctx, jlto_runtime), msg);
                 ctx.builder.CreateUnreachable();
                 ctx.builder.SetInsertPoint(passBB);
+                return jvinfo; // `jlto` has free type variables, so don't narrow to it
             }
-            return update_julia_type(ctx, jvinfo, jlto);
         }
     }
     return jvinfo;
@@ -1485,8 +1540,8 @@ static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *u
     return true;
 }
 
-static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
-                                          jl_unionall_t *unionall_env, jl_svec_t *sparam_vals,
+static const std::string verify_ccall_sig(jl_value_t *rt, jl_value_t *at,
+                                          jl_unionall_t *unionall_env,
                                           jl_codegen_output_t *ctx,
                                           Type *&lrt, LLVMContext &ctxt,
                                           bool &retboxed, bool &static_rt, bool llvmcall=false) JL_CANSAFEPOINT
@@ -1516,11 +1571,6 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
     }
     else {
         static_rt = retboxed || !jl_has_typevar_from_unionall(rt, unionall_env);
-        if (!static_rt && sparam_vals != NULL && jl_svec_len(sparam_vals) > 0) {
-            rt = jl_instantiate_type_in_env(rt, unionall_env, jl_svec_data(sparam_vals));
-            // `rt` is gc-rooted by the caller
-            static_rt = true;
-        }
     }
 
     return "";
@@ -1643,6 +1693,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ? (jl_unionall_t*)ctx.linfo->def.method->sig
         : NULL;
 
+    rt = resolve_static_sparams(ctx, rt);
+    if (rt)
+        at = (jl_value_t*)resolve_static_sparams(ctx, (jl_svec_t*)at);
+    if (!rt || !at) {
+        JL_GC_POP();
+        return jl_cgval_t();
+    }
+
     if (jl_is_abstract_ref_type(rt)) {
         if (!verify_ref_type(ctx, jl_tparam0(rt), unionall, 0, "ccall")) {
             JL_GC_POP();
@@ -1658,7 +1716,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     std::string err = verify_ccall_sig(
       /* inputs:  */
       rt, at, unionall,
-      ctx.spvals_ptr == NULL ? ctx.linfo->sparam_vals : NULL,
       &ctx.emission_context,
       /* outputs: */
       lrt, ctx.builder.getContext(),
@@ -2134,19 +2191,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         Type *pargty = fargt_sig[ai + sret]; // LLVM coercion type
         bool byRef = byRefList[ai]; // Argument attributes
 
-        // if we know the function sparams, try to fill those in now
-        // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
         jl_value_t *jargty_in_env = jargty;
-        if (ctx.spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
-                jl_svec_len(ctx.linfo->sparam_vals) > 0) {
-            jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx.linfo->sparam_vals));
-            if (jargty_in_env != jargty) {
-                JL_GC_PUSH1(&jargty_in_env);
-                jl_temporary_root(ctx, jargty_in_env);
-                JL_GC_POP();
-            }
-        }
-
         Value *v;
         if (jl_is_abstract_ref_type(jargty)) {
             arg = voidpointer_update(ctx, arg, "ccall: argument to Ref{T} is not a pointer");
