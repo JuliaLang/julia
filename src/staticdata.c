@@ -3531,6 +3531,27 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
             if (ci_not_internal_cache(ci))
                 jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
         }
+        // Also root the inferred-only entries chosen for the method caches. Code inferred
+        // behind a call site that records no edges is not reachable from any caller.
+        if (native_functions) {
+            htable_t compiled;
+            htable_new(&compiled, CIs.len);
+            for (size_t i = 0; i < CIs.len; i++)
+                ptrhash_put(&compiled, CIs.items[i], CIs.items[i]);
+            size_t num_ci_order = 0;
+            jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, NULL);
+            if (num_ci_order) {
+                jl_code_instance_t **ci_order = (jl_code_instance_t**)malloc_s(num_ci_order * sizeof(jl_code_instance_t*));
+                jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, ci_order);
+                for (size_t i = 0; i < num_ci_order; i++) {
+                    jl_code_instance_t *ci = ci_order[i];
+                    if (ptrhash_get(&compiled, ci) == HT_NOTFOUND && ci_not_internal_cache(ci))
+                        jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
+                }
+                free(ci_order);
+            }
+            htable_free(&compiled);
+        }
         arraylist_free(&CIs);
         // Merge foreign & external CIs
         size_t n_ext = jl_array_nrows(ext_foreign_cis);

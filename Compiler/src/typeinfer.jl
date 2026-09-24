@@ -183,6 +183,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             store_backedges(ci, edges)
+            generating_output(true) && record_uninformative_callees!(ci, caller, edges)
         end
         ipo_effects = encode_effects(result.ipo_effects)
         time_now = _time_ns()
@@ -902,6 +903,45 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
         end
     end
     nothing
+end
+
+mutable struct UninformativeCallees
+    @atomic list::Any # `nothing`, or `(caller, callee, rest)`
+end
+
+# While writing a package image, the callers and the inferred callees of their uninformative
+# call sites. These sites record no edges, so the image would otherwise not reach the callee.
+const uninformative_callees = UninformativeCallees(nothing)
+
+function record_uninformative_callees!(caller::CodeInstance, sv::InferenceState, edges::SimpleVector)
+    all_edges = Any[RecordUninformativeEdges()]
+    for i in 1:length(sv.stmt_info)
+        add_edges!(all_edges, sv.stmt_info[i])
+    end
+    length(all_edges) == 1 && return nothing
+    known = IdSet{Any}()
+    for edge in edges
+        push!(known, edge)
+    end
+    for i in 2:length(all_edges)
+        callee = all_edges[i]
+        (callee isa CodeInstance && !(callee in known)) || continue
+        push!(known, callee)
+        modifyfield!(uninformative_callees, :list, push_uninformative_callee, (caller, callee), :sequentially_consistent)
+    end
+    return nothing
+end
+push_uninformative_callee(@nospecialize(list), pair::Tuple{CodeInstance,CodeInstance}) =
+    (pair[1], pair[2], list)
+
+function uninformative_callee_map()
+    map = IdDict{CodeInstance,Vector{CodeInstance}}()
+    list = @atomic uninformative_callees.list
+    while list !== nothing
+        caller, callee, list = list::Tuple{CodeInstance,CodeInstance,Any}
+        push!(get!(() -> CodeInstance[], map, caller), callee)
+    end
+    return map
 end
 
 function compute_edges!(sv::InferenceState)
@@ -2252,6 +2292,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # Skip under `--trim` where inferred-but-not-compiled entries are not useful
     # at runtime without a Compiler / JIT.
     if trim_mode == TRIM_NO
+        uninformative = uninformative_callee_map()
         i = 1
         while i <= length(cis)
             ci = cis[i]::CodeInstance
@@ -2264,6 +2305,12 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                         push!(seen, edge)
                         push!(cis, edge)
                     end
+                end
+            end
+            for callee in get(uninformative, ci, ())
+                if !(callee in seen)
+                    push!(seen, callee)
+                    push!(cis, callee)
                 end
             end
             i += 1
