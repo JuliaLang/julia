@@ -83,6 +83,11 @@
 // case apply -- a method the analyzer already treats as a non-safepoint without
 // an annotation is not flagged.
 //
+// The first-declaration rule also covers JL_GC_TRACKED_TYPE on a struct,
+// class or typedef: the analyzer consults only the declarations visible in the
+// file it analyzes, so an annotation added by a later declaration, e.g. in a
+// .c file, would be missed wherever that declaration is not visible.
+//
 // Usage (see src/Makefile): clang-tidy foo.c --quiet \ -load
 // libFirstDeclAnnotationsPlugin.so \
 // --checks='-*,julia-first-decl-annotations' [--fix] \ -- <compiler flags>
@@ -145,6 +150,10 @@ public:
         // annotations on the override are compared against the overridden
         // methods in checkOverride().
         Finder->addMatcher(cxxMethodDecl(isOverride()).bind("override"), this);
+
+        // Match every type declaration that can carry JL_GC_TRACKED_TYPE.
+        Finder->addMatcher(tagDecl().bind("type"), this);
+        Finder->addMatcher(typedefNameDecl().bind("type"), this);
     }
 
     void check(const MatchFinder::MatchResult &Result) override {
@@ -155,6 +164,8 @@ public:
         else if (const auto *MD =
                      Result.Nodes.getNodeAs<CXXMethodDecl>("override"))
             checkOverride(MD);
+        else if (const auto *TD = Result.Nodes.getNodeAs<TypeDecl>("type"))
+            checkTypeFirstDecl(TD, Result);
     }
 
     void checkFirstDecl(const FunctionDecl *FD,
@@ -240,6 +251,49 @@ public:
         }
     }
 
+    // A JL_GC_TRACKED_TYPE annotation on a later declaration of a struct,
+    // class or typedef belongs on its first declaration. The fix inserts it
+    // after the `struct`/`class` keyword, or after a typedef's name.
+    void checkTypeFirstDecl(const TypeDecl *D,
+                            const MatchFinder::MatchResult &Result) {
+        if (D->isImplicit())
+            return;
+        if (const auto *RD = dyn_cast<CXXRecordDecl>(D))
+            if (RD->getTemplateSpecializationKind() ==
+                TSK_ImplicitInstantiation)
+                return;
+        const auto *First = cast<TypeDecl>(D->getCanonicalDecl());
+        if (First == D)
+            return;
+        SourceManager &SM = Result.Context->getSourceManager();
+        if (SM.isInSystemHeader(First->getLocation()) ||
+            jl_clangsa::isInLLVMHeaderFile(First->getLocation(), SM))
+            return;
+
+        const LangOptions &LO = getLangOpts();
+        SourceLocation InsertLoc =
+            isa<TagDecl>(First)
+                ? endOfToken(cast<TagDecl>(First)->getInnerLocStart(), SM, LO)
+                : endOfToken(First->getLocation(), SM, LO);
+        for (const auto *A : D->attrs()) {
+            if (A->isInherited())
+                continue;
+            std::string Key = attrKey(A);
+            if (Key != "annotate:julia_gc_tracked" || hasAttrLike(First, Key))
+                continue;
+            auto Diag = diag(A->getLocation().isValid() ? A->getLocation()
+                                                        : D->getLocation(),
+                 "Julia annotation \"%0\" is on this declaration of %1 but "
+                 "missing from its first declaration; move it to the first "
+                 "declaration so every file using the type sees it");
+            Diag << attrName(A) << D;
+            for (const FixItHint &F : moveFixes(A, InsertLoc, SM, LO))
+                Diag << F;
+            diag(First->getLocation(), "first declaration is here",
+                 DiagnosticIDs::Note);
+        }
+    }
+
 private:
     // Report any governed Julia attribute that is written on `Later` (a
     // parameter or function from a non-first declaration) but missing from
@@ -265,46 +319,8 @@ private:
             if (Loc.isInvalid())
                 Loc = Later->getLocation();
 
-            // Build a fix that moves the attribute to the first declaration:
-            // copy the exact macro spelling (e.g. "JL_ROOTED_BY_ARG(1)",
-            // "JL_DLLEXPORT") onto the first declaration and delete it where it
-            // is misplaced.
-            //
-            // Only do this when the attribute was written through a macro: its
-            // expansion range is then the single, self-contained macro
-            // invocation token, which is exactly what we want to move. A raw
-            // `__attribute__((visibility("default")))` instead reports a range
-            // covering only the inner `visibility("default")`, with no record of
-            // the enclosing `__attribute__((...))`/`[[...]]`/`__declspec(...)`
-            // syntax (which a sibling attribute may share), so copying or
-            // deleting just that inner part would corrupt the source. For raw
-            // attributes we still report the problem but offer no fix-it; Julia
-            // sources use the macros, so the fix applies in practice. Only offer
-            // the fix when both edits can be expressed against real file
-            // locations.
-            llvm::SmallVector<FixItHint, 2> Fixes;
-            bool FromMacro = A->getRange().getBegin().isMacroID();
-            CharSourceRange Spelling = SM.getExpansionRange(A->getRange());
-            StringRef Text =
-                Spelling.getBegin().isFileID() && Spelling.getEnd().isFileID()
-                    ? Lexer::getSourceText(Spelling, SM, LO)
-                    : StringRef();
-            if (FromMacro && InsertLoc.isValid() && !Text.empty()) {
-                Fixes.push_back(
-                    FixItHint::CreateInsertion(InsertLoc, (" " + Text).str()));
-                // Also drop one preceding space along with the misplaced
-                // annotation so the source does not keep a double space.
-                CharSourceRange Removal = Spelling;
-                SourceLocation B = Spelling.getBegin();
-                if (B.isFileID()) {
-                    bool Invalid = false;
-                    const char *Prev =
-                        SM.getCharacterData(B.getLocWithOffset(-1), &Invalid);
-                    if (!Invalid && Prev && (*Prev == ' ' || *Prev == '\t'))
-                        Removal.setBegin(B.getLocWithOffset(-1));
-                }
-                Fixes.push_back(FixItHint::CreateRemoval(Removal));
-            }
+            llvm::SmallVector<FixItHint, 2> Fixes =
+                moveFixes(A, InsertLoc, SM, LO);
 
             if (ParamIndex < 0) {
                 auto Diag = diag(Loc,
@@ -709,6 +725,50 @@ private:
                 return true;
         }
         return false;
+    }
+
+    // A fix that moves attribute `A` to `InsertLoc` on the first
+    // declaration: copy the exact macro spelling (e.g. "JL_ROOTED_BY_ARG(1)",
+    // "JL_DLLEXPORT") there and delete it where it is misplaced.
+    //
+    // Only do this when the attribute was written through a macro: its
+    // expansion range is then the single, self-contained macro
+    // invocation token, which is exactly what we want to move. A raw
+    // `__attribute__((visibility("default")))` instead reports a range
+    // covering only the inner `visibility("default")`, with no record of
+    // the enclosing `__attribute__((...))`/`[[...]]`/`__declspec(...)`
+    // syntax (which a sibling attribute may share), so copying or
+    // deleting just that inner part would corrupt the source. For raw
+    // attributes we still report the problem but offer no fix-it; Julia
+    // sources use the macros, so the fix applies in practice. Only offer
+    // the fix when both edits can be expressed against real file locations.
+    static llvm::SmallVector<FixItHint, 2>
+    moveFixes(const Attr *A, SourceLocation InsertLoc, SourceManager &SM,
+              const LangOptions &LO) {
+        llvm::SmallVector<FixItHint, 2> Fixes;
+        bool FromMacro = A->getRange().getBegin().isMacroID();
+        CharSourceRange Spelling = SM.getExpansionRange(A->getRange());
+        StringRef Text =
+            Spelling.getBegin().isFileID() && Spelling.getEnd().isFileID()
+                ? Lexer::getSourceText(Spelling, SM, LO)
+                : StringRef();
+        if (FromMacro && InsertLoc.isValid() && !Text.empty()) {
+            Fixes.push_back(
+                FixItHint::CreateInsertion(InsertLoc, (" " + Text).str()));
+            // Also drop one preceding space along with the misplaced
+            // annotation so the source does not keep a double space.
+            CharSourceRange Removal = Spelling;
+            SourceLocation B = Spelling.getBegin();
+            if (B.isFileID()) {
+                bool Invalid = false;
+                const char *Prev =
+                    SM.getCharacterData(B.getLocWithOffset(-1), &Invalid);
+                if (!Invalid && Prev && (*Prev == ' ' || *Prev == '\t'))
+                    Removal.setBegin(B.getLocWithOffset(-1));
+            }
+            Fixes.push_back(FixItHint::CreateRemoval(Removal));
+        }
+        return Fixes;
     }
 
     // Location just past the end of the token at `Loc` (where a following

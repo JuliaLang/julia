@@ -78,7 +78,8 @@ class GCChecker
           check::PostStmt<MemberExpr>,
           check::PostStmt<UnaryOperator>,
           check::Bind,
-          check::Location> {
+          check::Location,
+          check::ASTDecl<Decl>> {
   mutable std::unique_ptr<BugType> BT;
   template <typename callback>
   void report_error(callback f, CheckerContext &C, StringRef message) const;
@@ -151,7 +152,8 @@ public:
 private:
   // Strip references, atomics, pointers and arrays to reach the underlying type.
   // This also skips pointer typedefs: `typedef struct Foo *Bar` reduces to
-  // `struct Foo`, so annotations on Bar are not preserved.
+  // `struct Foo`, so an annotation on Bar is never consulted; checkASTDecl
+  // reports it.
   static QualType stripToDeclaredType(QualType QT) {
     if (QT->isReferenceType())
       return stripToDeclaredType(QT->getPointeeType().getUnqualifiedType());
@@ -362,6 +364,7 @@ public:
   void checkPostStmt(const ArraySubscriptExpr *CE, CheckerContext &C) const;
   void checkPostStmt(const MemberExpr *ME, CheckerContext &C) const;
   void checkPostStmt(const UnaryOperator *UO, CheckerContext &C) const;
+  void checkASTDecl(const Decl *D, AnalysisManager &Mgr, BugReporter &BR) const;
   void checkDerivingExpr(const Expr *Result, const Expr *Parent,
                          CheckerContext &C) const;
 #if LLVM_VERSION_MAJOR >= 22

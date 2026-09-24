@@ -64,3 +64,13 @@ void julia_buffer_is_tracked(void) {
                                             // expected-note@-1{{Passing non-rooted value as argument to function}}
                                             // expected-note@-2{{Started tracking value here}}
 }
+
+// An annotation the analyzer would ignore is reported instead.
+struct PointeeBox;
+typedef struct PointeeBox *AnnotatedPointer JL_GC_TRACKED_TYPE; // expected-warning{{JL_GC_TRACKED_TYPE has no effect on a typedef of a pointer, reference or array type}}
+                                                                 // expected-note@-1{{JL_GC_TRACKED_TYPE has no effect on a typedef of a pointer, reference or array type}}
+typedef AnnotatedPointer AnnotatedPointerArray[2] JL_GC_TRACKED_TYPE; // expected-warning{{JL_GC_TRACKED_TYPE has no effect on a typedef of a pointer, reference or array type}}
+                                                                      // expected-note@-1{{JL_GC_TRACKED_TYPE has no effect on a typedef of a pointer, reference or array type}}
+int tracked_int JL_GC_TRACKED_TYPE; // expected-warning{{JL_GC_TRACKED_TYPE has no effect here}}
+                                    // expected-note@-1{{JL_GC_TRACKED_TYPE has no effect here}}
+

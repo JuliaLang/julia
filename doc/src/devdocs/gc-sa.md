@@ -352,9 +352,10 @@ typedef struct JL_GC_TRACKED_TYPE MyBuffer MyBuffer;
 An annotation on a typedef that is not a pointer type also works, e.g.
 `typedef void MyBuffer JL_GC_TRACKED_TYPE;`.
 
-Do not annotate a typedef that defines a pointer type, such as `MyValue` above.
-The analyzer follows the pointer to the underlying type before checking
-annotations, so it skips annotations on the pointer typedef.
+Misplaced annotations are reported: by the analyzer where the annotation would
+have no effect, such as on a pointer typedef like `MyValue` above, and by the
+`julia-first-decl-annotations` clang-tidy check where it is missing from the
+type's first declaration.
 
 ## Completeness of analysis
 

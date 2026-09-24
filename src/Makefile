@@ -856,7 +856,7 @@ clang-safety-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 TIDY_PLUGIN_NAMES := $(filter-out GCChecker,$(CLANGSA_PLUGIN_NAMES))
 TIDY_PLUGIN_LIBS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(TIDY_PLUGIN_NAMES)))
 TIDY_PLUGINS := $(addprefix -load ,$(TIDY_PLUGIN_LIBS))
-TIDY_CHECKS := -clang-analyzer-*,-clang-diagnostic-*,concurrency-implicit-atomics,julia-first-decl-annotations,julia-static-or-declared
+TIDY_CHECKS := -clang-analyzer-*,-clang-diagnostic-*,clang-diagnostic-ignored-attributes,concurrency-implicit-atomics,julia-first-decl-annotations,julia-static-or-declared
 clang-tidy-%: $(SRCDIR)/%.c $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \

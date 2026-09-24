@@ -33,3 +33,8 @@ void fda_cb_bad(int x) JL_CANSAFEPOINT;
 void uv_fda_fake(int x);
 void fda_take_cb(fda_cb_t cb);
 void fda_take_cansafepoint_cb(void (*cb)(int) JL_CANSAFEPOINT);
+
+struct JL_GC_TRACKED_TYPE fda_tracked_ok;
+struct fda_tracked_late;
+typedef struct fda_tracked_elab fda_tracked_elab_t;
+typedef void fda_tracked_buf_t;
