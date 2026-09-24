@@ -8222,4 +8222,24 @@ function splatted_task_invoke(@nospecialize(rest::Tuple))
 end
 @test Base.infer_return_type(splatted_task_invoke, (Tuple,)) === Tuple{}
 
+# `invoke` with a signature narrower than the method signature must keep the
+# runtime `TypeError` check: the call is neither `nothrow` nor inlinable unless
+# the argument types are known to satisfy the requested signature.
+invoke_narrower_target(::Integer) = 1
+invoke_narrower(x::Integer) = invoke(invoke_narrower_target, Tuple{Int}, x)
+invoke_covered(x::Int) = invoke(invoke_narrower_target, Tuple{Integer}, x)
+@testset "invoke with a signature narrower than the method signature" begin
+    @test Base.infer_return_type(invoke_narrower, (Integer,)) === Int
+    @test Base.infer_exception_type(invoke_narrower, (Integer,)) === TypeError
+    @test !Compiler.is_nothrow(Base.infer_effects(invoke_narrower, (Integer,)))
+    @test !fully_eliminated(invoke_narrower, (Integer,))
+    @test_throws TypeError invoke_narrower(big(1))
+    @test invoke_narrower(1) === 1
+    # when the argument types are known to satisfy the requested signature,
+    # the call is still fully covered
+    @test Base.infer_exception_type(invoke_covered, (Int,)) === Union{}
+    @test Compiler.is_nothrow(Base.infer_effects(invoke_covered, (Int,)))
+    @test fully_eliminated(invoke_covered, (Int,); retval=1)
+end
+
 end # module inference
