@@ -905,15 +905,31 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
     nothing
 end
 
-mutable struct UninformativeCallees
-    @atomic list::Any # `nothing`, or `(caller, callee, rest)`
+struct UninformativeCallee
+    caller::CodeInstance
+    callee::CodeInstance
+    next::Union{Nothing,UninformativeCallee}
 end
 
-# While writing a package image, the callers and the inferred callees of their uninformative
-# call sites. These sites record no edges, so the image would otherwise not reach the callee.
+mutable struct UninformativeCallees
+    @atomic list::Union{Nothing,UninformativeCallee}
+end
+
+# Callers and the code inferred behind their call sites that record no edges. Kept while
+# writing a package image, so that the image can still include that code.
 const uninformative_callees = UninformativeCallees(nothing)
 
 function record_uninformative_callees!(caller::CodeInstance, sv::InferenceState, edges::SimpleVector)
+    # Only a call that taught inference nothing, or a call wrapping other calls, can hide it.
+    hidden = false
+    for info in sv.stmt_info
+        if !(info isa NoCallInfo || info isa MethodMatchInfo || info isa UnionSplitInfo ||
+             info isa GlobalAccessInfo)
+            hidden = true
+            break
+        end
+    end
+    hidden || return nothing
     all_edges = Any[RecordUninformativeEdges()]
     for i in 1:length(sv.stmt_info)
         add_edges!(all_edges, sv.stmt_info[i])
@@ -931,15 +947,15 @@ function record_uninformative_callees!(caller::CodeInstance, sv::InferenceState,
     end
     return nothing
 end
-push_uninformative_callee(@nospecialize(list), pair::Tuple{CodeInstance,CodeInstance}) =
-    (pair[1], pair[2], list)
+push_uninformative_callee(list::Union{Nothing,UninformativeCallee}, pair::Tuple{CodeInstance,CodeInstance}) =
+    UninformativeCallee(pair[1], pair[2], list)
 
 function uninformative_callee_map()
     map = IdDict{CodeInstance,Vector{CodeInstance}}()
-    list = @atomic uninformative_callees.list
-    while list !== nothing
-        caller, callee, list = list::Tuple{CodeInstance,CodeInstance,Any}
-        push!(get!(() -> CodeInstance[], map, caller), callee)
+    node = @atomic uninformative_callees.list
+    while node !== nothing
+        push!(get!(() -> CodeInstance[], map, node.caller), node.callee)
+        node = node.next
     end
     return map
 end
