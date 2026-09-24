@@ -1617,6 +1617,9 @@ function concrete_result_item(result::ConcreteResult,
     # a successful concrete evaluation may retain the `:inaccessiblememonly` taint of the call
     # (see `_concrete_eval_call`), which doesn't matter for replacing it with the constant
     @assert Effects(result.effects; inaccessiblememonly=ALWAYS_TRUE) === EFFECTS_TOTAL
+    # folding the result commits to this method as the call's target, like an `:invoke`
+    add_uninformative_dispatch_edge!(et.edges,
+        target isa CodeInstance ? get_ci_mi(target) : target, info)
     return ConstantCase(quoted(result.result))
 end
 
