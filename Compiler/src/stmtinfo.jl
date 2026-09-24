@@ -660,10 +660,15 @@ was supposed to analyze.
 struct ReturnTypeCallInfo <: CallInfo
     info::CallInfo
 end
-# The inferred result of the wrapped call is observed as a value here, so the edges an
-# uninformative call defers to the optimizer are owed regardless.
-add_edges_impl(edges::Vector{Any}, info::ReturnTypeCallInfo) =
-    add_edges!(edges, info.info isa UninformativeCallInfo ? info.info.info : info.info)
+# A return type query turns the inferred result into a constant, so it needs the edges even
+# of calls that taught inference nothing, however deeply they are nested.
+function add_edges_impl(edges::Vector{Any}, info::ReturnTypeCallInfo)
+    observed = Any[RecordUninformativeEdges()]
+    add_edges!(observed, info.info)
+    for i = 2:length(observed)
+        push!(edges, observed[i])
+    end
+end
 
 """
     info::FinalizerInfo <: CallInfo
