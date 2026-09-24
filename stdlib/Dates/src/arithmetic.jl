@@ -85,7 +85,7 @@ end
 (+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 # `y` as a count of P. Throws an InexactError if `y` is not a whole number of P.
-function timestamp_period_ticks(::Type{P}, y::FixedPeriod) where {P}
+function timestamp_period_ticks(::Type{P}, y::Union{FixedPeriod,TimePeriod}) where {P}
     unit, scale = tons(oneunit(y)), timestamp_scale(P)
     unit >= scale && return value(y) * (unit ÷ scale)
     ticks, remainder = divrem(value(y), scale ÷ unit)
@@ -100,10 +100,10 @@ for op in (:+, :-)
         function ($op)(x::Timestamp{P}, y::Union{Year,Quarter,Month}) where {P}
             ticksperday = timestamp_ticks_per_day(P)
             epochdays = value(($op)(Date(x), y)) - UNIXEPOCHDAYS
-            return Timestamp{P}(UTInstant(P(epochdays * ticksperday + mod(value(x), ticksperday))))
+            return Timestamp{P}(UTInstant(P((epochdays * ticksperday + mod(value(x), ticksperday)) % timestamp_count_type(P))))
         end
-        ($op)(x::Timestamp{P}, y::FixedPeriod) where {P} =
-            Timestamp{P}(UTInstant(P(($op)(value(x), timestamp_period_ticks(P, y)))))
+        ($op)(x::Timestamp{P}, y::Union{FixedPeriod,TimePeriod}) where {P} =
+            Timestamp{P}(UTInstant(P(($op)(value(x), timestamp_period_ticks(P, y)) % timestamp_count_type(P))))
     end
 end
 (+)(y::Period, x::TimeType) = x + y
