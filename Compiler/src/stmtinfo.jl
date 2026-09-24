@@ -660,7 +660,10 @@ was supposed to analyze.
 struct ReturnTypeCallInfo <: CallInfo
     info::CallInfo
 end
-add_edges_impl(edges::Vector{Any}, info::ReturnTypeCallInfo) = add_edges!(edges, info.info)
+# The inferred result of the wrapped call is observed as a value here, so the edges an
+# uninformative call defers to the optimizer are owed regardless.
+add_edges_impl(edges::Vector{Any}, info::ReturnTypeCallInfo) =
+    add_edges!(edges, info.info isa UninformativeCallInfo ? info.info.info : info.info)
 
 """
     info::FinalizerInfo <: CallInfo
