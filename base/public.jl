@@ -36,7 +36,7 @@ public
     require_one_based_indexing,
     memoryindex,
     isstrided,
-    is_vec_strided,
+    islinearstrided,
     is_contiguous,
     is_ptr_loadable,
     is_ptr_storable,

@@ -69,7 +69,7 @@ Base.conj!
 Base.stride
 Base.strides
 Base.isstrided
-Base.is_vec_strided
+Base.islinearstrided
 Base.is_contiguous
 Base.is_ptr_loadable
 Base.is_ptr_storable

@@ -33,8 +33,8 @@ end
 function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
     @test Base.isstrided(typeof(a)) === Base.isstrided(a)
     isbitstype(T) || return
-    Base.is_contiguous(typeof(a)) && @test Base.is_vec_strided(typeof(a))
-    Base.is_vec_strided(typeof(a)) && @test Base.isstrided(a)
+    Base.is_contiguous(typeof(a)) && @test Base.islinearstrided(typeof(a))
+    Base.islinearstrided(typeof(a)) && @test Base.isstrided(a)
     Base.isstrided(a) || return
     @test strides(a) isa NTuple{N, Int}
     @test Base.elsize(a) isa Int
@@ -48,7 +48,7 @@ function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
                 size(a, d) > 1 && @test strides(a)[d]*Base.elsize(a) == expected[d]*Base.elsize(Array{T})
             end
         end
-    elseif Base.is_vec_strided(typeof(a)) && !isempty(a)
+    elseif Base.islinearstrided(typeof(a)) && !isempty(a)
         d0 = findfirst(>(1), size(a))
         if d0 !== nothing
             # dims before d0 are singletons, so this stride is the column-major spacing

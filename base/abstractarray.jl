@@ -607,7 +607,7 @@ type and size: contiguously, in column-major order, with an element spacing of
 `Base.elsize(Array{T})` bytes.
 
 Array types with this trait get default [`strides`](@ref) and [`Base.elsize`](@ref)
-definitions, and are [`is_vec_strided`](@ref Base.is_vec_strided) and
+definitions, and are [`islinearstrided`](@ref Base.islinearstrided) and
 [`isstrided`](@ref Base.isstrided) by default.
 
 Defaults to `false`.
@@ -621,7 +621,7 @@ is_contiguous(::Type{<:Memory}) = true
 is_contiguous(::Type{Union{}}) = false
 
 """
-    Base.is_vec_strided(type)::Bool
+    Base.islinearstrided(type)::Bool
 
 Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays) and additionally isbits
@@ -634,8 +634,8 @@ Defaults to [`Base.is_contiguous`](@ref) of the type.
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-is_vec_strided(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
-is_vec_strided(::Type{Union{}}) = false
+islinearstrided(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
+islinearstrided(::Type{Union{}}) = false
 
 """
     Base.isstrided(type)::Bool
@@ -647,19 +647,19 @@ Return `true` if arrays of this array type follow the
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-isstrided(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
+isstrided(::Type{A}) where {A<:AbstractArray} = islinearstrided(A)::Bool
 isstrided(::Type{Union{}}) = false
 isstrided(A::AbstractArray) = isstrided(typeof(A))
 
 """
     Base.has_vec_strided_layout(type)::Bool
 
-Check the [`Base.is_vec_strided`](@ref) trait. Also return `true` for strided zero- and one-dimensional arrays,
+Check the [`Base.islinearstrided`](@ref) trait. Also return `true` for strided zero- and one-dimensional arrays,
 which are vector strided trivially.
 """
 has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = isstrided(A)::Bool
 has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,1}} = isstrided(A)::Bool
-has_vec_strided_layout(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
+has_vec_strided_layout(::Type{A}) where {A<:AbstractArray} = islinearstrided(A)::Bool
 has_vec_strided_layout(::Type{Union{}}) = false
 
 

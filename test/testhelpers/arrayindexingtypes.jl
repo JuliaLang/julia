@@ -74,7 +74,7 @@ Base.elsize(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Bas
 Base.is_ptr_loadable(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = is_ptr_loadable(A)
 Base.is_ptr_storable(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = is_ptr_storable(A)
 Base.is_contiguous(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_contiguous(A)
-Base.is_vec_strided(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_vec_strided(A)
+Base.islinearstrided(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.islinearstrided(A)
 Base.isstrided(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.isstrided(A)
 
 # An array type with heterogenous axis types

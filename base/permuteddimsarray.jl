@@ -72,7 +72,7 @@ Base.isstrided(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where
 function Base.is_contiguous(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
     Base.is_contiguous(P) && ntuple(identity, Val(N)) === perm
 end
-function Base.is_vec_strided(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
+function Base.islinearstrided(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
     Base.has_vec_strided_layout(P) && ntuple(identity, Val(N)) === perm
 end
 

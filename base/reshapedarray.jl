@@ -420,9 +420,9 @@ end
 function isstrided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}}
     # Some subarrays may be strided even if the
     # parent is not strided
-    is_vec_strided(A) || isstrided(P)
+    islinearstrided(A) || isstrided(P)
 end
-function is_vec_strided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
+function islinearstrided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
     is_contiguous(A) || has_vec_strided_layout(P)
 end
 function is_contiguous(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
@@ -432,7 +432,7 @@ end
 
 is_ptr_loadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_loadable(P)
 is_ptr_storable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_storable(P)
-is_vec_strided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_vec_strided_layout(P)
+islinearstrided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_vec_strided_layout(P)
 is_contiguous(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_contiguous(P)
 
 # Contiguous with the exact byte layout of the equivalent Array and matching elsize
