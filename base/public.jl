@@ -38,7 +38,8 @@ public
     is_strided,
     is_vec_strided,
     is_contiguous,
-    has_vec_strided_layout,
+    is_ptr_loadable,
+    is_ptr_storable,
     unsetindex!,
     unsetindex_atomic!,
 

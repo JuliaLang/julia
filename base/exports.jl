@@ -505,8 +505,6 @@ export
     step,
     stride,
     strides,
-    is_ptr_loadable,
-    is_ptr_storable,
     sum!,
     sum,
     to_indices,

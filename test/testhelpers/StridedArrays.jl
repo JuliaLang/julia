@@ -59,7 +59,7 @@ function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
             end
         end
     end
-    if is_ptr_loadable(a)
+    if Base.is_ptr_loadable(a)
         check_strided_get(a)
     end
     nothing
@@ -75,7 +75,7 @@ function check_strided_get(a::AbstractArray{T,N})::Nothing where {T, N}
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !is_ptr_loadable(a)
+    if !Base.is_ptr_loadable(a)
         error("is_ptr_loadable(a) is false")
     end
     # Putting strided_ptr before the loop means that strided_ptr shouldn't error for empty arrays
@@ -115,7 +115,7 @@ function check_strided_set(a::AbstractArray{T,N}, b::AbstractArray{T,N}, c::Abst
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !is_ptr_storable(a)
+    if !Base.is_ptr_storable(a)
         error("is_ptr_storable(a) is false")
     end
     # Putting strided_ptr before the loop means that strided_ptr shouldn't error for empty arrays

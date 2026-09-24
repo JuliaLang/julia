@@ -71,7 +71,6 @@ Base.strides
 Base.is_strided
 Base.is_vec_strided
 Base.is_contiguous
-Base.has_vec_strided_layout
 Base.is_ptr_loadable
 Base.is_ptr_storable
 ```

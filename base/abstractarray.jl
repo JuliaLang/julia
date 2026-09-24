@@ -631,9 +631,6 @@ Array types with this trait are [`is_strided`](@ref Base.is_strided) by default.
 
 Defaults to [`Base.is_contiguous`](@ref) of the type.
 
-This function is for specializing on new array types; to check the trait, use
-[`Base.has_vec_strided_layout`](@ref) instead.
-
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
@@ -657,12 +654,8 @@ is_strided(A::AbstractArray) = is_strided(typeof(A))
 """
     Base.has_vec_strided_layout(type)::Bool
 
-Check the [`Base.is_vec_strided`](@ref) trait. Unlike `is_vec_strided`, which is only
-for specializing, this also returns `true` for strided zero- and one-dimensional arrays,
+Check the [`Base.is_vec_strided`](@ref) trait. Also return `true` for strided zero- and one-dimensional arrays,
 which are vector strided trivially.
-
-!!! compat "Julia 1.14"
-    This function requires at least Julia 1.14.
 """
 has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
 has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,1}} = is_strided(A)::Bool
