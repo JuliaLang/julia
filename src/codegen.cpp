@@ -5038,7 +5038,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == BUILTIN(memoryrefget) && nargs == 3) {
+    else if ((f == BUILTIN(memoryrefget) || f == BUILTIN(const_memoryrefget)) && nargs == 3) {
+        // only const_memoryrefget loads may carry the current aliasscope (see Base.Experimental.Const)
+        bool isconstload = f == BUILTIN(const_memoryrefget);
         const jl_cgval_t &ref = argv[1];
         jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
         if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type(mty_dt)) {
@@ -5142,7 +5144,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
                 *ret = typed_load(ctx, ptr, nullptr, ety,
                         memorybuf_aliasinfo(ctx, layout),
-                        ctx.noalias().aliasscope.current,
+                        isconstload ? ctx.noalias().aliasscope.current : nullptr,
                         isboxed, Order, maybenull, al);
                 if (needlock) {
                     emit_lockstate_value(ctx, lock, false);
