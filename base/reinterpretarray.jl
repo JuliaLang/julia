@@ -205,11 +205,11 @@ strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = siz
 stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
     k ≤ ndims(A) ? strides(A)[k] : length(A)
 
-function is_ptr_loadable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
-    is_ptr_loadable(P) && array_subpadding(T, S)
+function isunsafeloadable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
+    isunsafeloadable(P) && array_subpadding(T, S)
 end
-function is_ptr_storable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
-    is_ptr_storable(P) && array_subpadding(S, T)
+function isunsafestorable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
+    isunsafestorable(P) && array_subpadding(S, T)
 end
 function isstrided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S,P,IsReshaped}
     if !isstrided(P)

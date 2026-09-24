@@ -59,7 +59,7 @@ function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
             end
         end
     end
-    if Base.is_ptr_loadable(a)
+    if Base.isunsafeloadable(a)
         check_strided_get(a)
     end
     nothing
@@ -75,8 +75,8 @@ function check_strided_get(a::AbstractArray{T,N})::Nothing where {T, N}
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !Base.is_ptr_loadable(a)
-        error("is_ptr_loadable(a) is false")
+    if !Base.isunsafeloadable(a)
+        error("isunsafeloadable(a) is false")
     end
     # Putting strided_ptr before the loop means that strided_ptr shouldn't error for empty arrays
     strided_ptr(a) do a_ptr
@@ -115,8 +115,8 @@ function check_strided_set(a::AbstractArray{T,N}, b::AbstractArray{T,N}, c::Abst
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !Base.is_ptr_storable(a)
-        error("is_ptr_storable(a) is false")
+    if !Base.isunsafestorable(a)
+        error("isunsafestorable(a) is false")
     end
     # Putting strided_ptr before the loop means that strided_ptr shouldn't error for empty arrays
     strided_ptr(a) do a_ptr
@@ -182,8 +182,8 @@ function Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T}
     memoryref(S.data, S.offset)
 end
 Base.isstrided(S::Type{<:Strider}) = true
-Base.is_ptr_loadable(::Type{<:Strider}) = true
-Base.is_ptr_storable(::Type{<:Strider}) = true
+Base.isunsafeloadable(::Type{<:Strider}) = true
+Base.isunsafestorable(::Type{<:Strider}) = true
 
 # Create a type to test strided array interface edge cases.
 # This array is memory backed, but the NonMemStridedArrayCConvert wrapper hides this.
@@ -208,6 +208,6 @@ function Base.elsize(::Type{NonMemStridedArray{T, N}}) where {T, N}
 end
 Base.strides(A::NonMemStridedArray) = strides(A.a)
 Base.isstrided(::Type{<:NonMemStridedArray}) = true
-Base.is_ptr_loadable(::Type{<:NonMemStridedArray}) = true
+Base.isunsafeloadable(::Type{<:NonMemStridedArray}) = true
 
 end # module StridedArrays

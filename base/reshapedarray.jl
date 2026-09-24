@@ -430,8 +430,8 @@ function isdense(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
 end
 
 
-is_ptr_loadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_loadable(P)
-is_ptr_storable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_storable(P)
+isunsafeloadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isunsafeloadable(P)
+isunsafestorable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isunsafestorable(P)
 islinearstrided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_vec_strided_layout(P)
 isdense(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isdense(P)
 

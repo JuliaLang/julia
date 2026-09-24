@@ -38,8 +38,8 @@ public
     isstrided,
     islinearstrided,
     isdense,
-    is_ptr_loadable,
-    is_ptr_storable,
+    isunsafeloadable,
+    isunsafestorable,
     unsetindex!,
     unsetindex_atomic!,
 

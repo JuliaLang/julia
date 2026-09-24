@@ -197,7 +197,7 @@ function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
-is_ptr_loadable(::Type{CodeUnits{UInt8, SubString{String}}}) = true
+isunsafeloadable(::Type{CodeUnits{UInt8, SubString{String}}}) = true
 isdense(::Type{CodeUnits{UInt8, SubString{String}}}) = true
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset

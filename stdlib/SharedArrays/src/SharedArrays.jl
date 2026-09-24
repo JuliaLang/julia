@@ -305,8 +305,8 @@ SharedMatrix(A::Matrix) = SharedArray(A)
 size(S::SharedArray) = S.dims
 elsize(::Type{SharedArray{T,N}}) where {T,N} = elsize(Array{T,N}) # aka fieldtype(T, :s)
 Base.isdense(::Type{<:SharedArray}) = true
-Base.is_ptr_loadable(::Type{<:SharedArray}) = true
-Base.is_ptr_storable(::Type{<:SharedArray}) = true
+Base.isunsafeloadable(::Type{<:SharedArray}) = true
+Base.isunsafestorable(::Type{<:SharedArray}) = true
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
 function local_array_by_id(refid)

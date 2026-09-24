@@ -389,10 +389,10 @@ test_many_wrappers((A1, A2), (identity, wrapper)) do (A1_, A2_)
     A1, A2 = deepcopy(A1_), deepcopy(A2_)
     @test reinterpret(S1, A2)[1] == S1(0, 0)
     @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S1(1, 2))
-    @test !is_ptr_storable(reinterpret(S1, A2))
+    @test !Base.isunsafestorable(reinterpret(S1, A2))
     check_strided_get(reinterpret(S1, A2))
     @test_throws Base.PaddingError reinterpret(S2, A1)[1]
-    @test !is_ptr_loadable(reinterpret(S2, A1))
+    @test !Base.isunsafeloadable(reinterpret(S2, A1))
     check_strided_set(
         reinterpret(S2, deepcopy(A1_)),
         reinterpret(S2, deepcopy(A1_)),
@@ -794,13 +794,13 @@ end
     z = reinterpret(RInt24, zeros(UInt8, 12))
     check_strided_traits(a)
     @test Base.isstrided(a)
-    @test !is_ptr_storable(a)
+    @test !Base.isunsafestorable(a)
     check_strided_get(a)
     b = collect(a)
     @test b == a
     check_strided_traits(b)
-    @test is_ptr_loadable(b)
-    @test is_ptr_storable(b)
+    @test Base.isunsafeloadable(b)
+    @test Base.isunsafestorable(b)
     @test Base.isstrided(b)
     check_strided_get(b)
     c = reinterpret(RAlsoInt24, b)
@@ -810,7 +810,7 @@ end
     for N in 1:4
         local d = reinterpret(NTuple{N,UInt8}, b)
         # b has padding that should not be exposed
-        @test !is_ptr_loadable(d)
+        @test !Base.isunsafeloadable(d)
         @test_throws Base.PaddingError d[1]
         check_strided_traits(d)
         @test Base.isstrided(d)

@@ -71,8 +71,8 @@ Base.strides
 Base.isstrided
 Base.islinearstrided
 Base.isdense
-Base.is_ptr_loadable
-Base.is_ptr_storable
+Base.isunsafeloadable
+Base.isunsafestorable
 ```
 
 ## Broadcast and vectorization

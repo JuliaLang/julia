@@ -408,8 +408,8 @@ perhaps range-types `Ind` of your own design. For more information, see
 | `Base.cconvert(::Type{Ptr{T}}, A)`              |     `A`                                | Return an object that can be converted to the native address of the array with [`Base.unsafe_convert`](@ref) |
 | `Base.islinearstrided(::Type{<:A})`             |     `Base.isdense(A)`                  | Return `true` to declare that the array additionally has evenly spaced elements in column-major order. Implies `Base.isstrided`. |
 | `Base.isdense(::Type{<:A})`                     |     `false`                            | Return `true` to declare that the array additionally has the same memory layout as an `Array`. Implies `Base.islinearstrided` and provides default `strides` and `Base.elsize` definitions. |
-| `is_ptr_loadable(::Type{<:A})`                  |     `false`                            | Return `true` to indicate the element pointer can be used to load elements. |
-| `is_ptr_storable(::Type{<:A})`                  |     `false`                            | Return `true` to indicate the element pointer can be used to store elements. |
+| `Base.isunsafeloadable(::Type{<:A})`            |     `false`                            | Return `true` to declare that `unsafe_load` of a pointer to an `isbits` element is equivalent to `getindex`. |
+| `Base.isunsafestorable(::Type{<:A})`            |     `false`                            | Return `true` to declare that `unsafe_store!` to a pointer to an `isbits` element is equivalent to `setindex!`. |
 
 A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines

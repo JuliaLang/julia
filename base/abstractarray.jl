@@ -562,40 +562,58 @@ end
 ## strided array traits
 
 """
-    is_ptr_loadable(type)::Bool
+    Base.isunsafeloadable(type)::Bool
+    Base.isunsafeloadable(A::AbstractArray)::Bool
 
-Return `true` if a pointer to an `isbits` element in the array type can be used to load that element. Otherwise return `false`.
+Return `true` if reading an element of an array of this type through a pointer is
+equivalent to reading it with [`getindex`](@ref). Otherwise return `false`.
 
-Do not assume `is_ptr_loadable` arrays are strided.
+Precisely, for an array `A` of this type with an `isbits` element type `T`, if `p::Ptr{T}`
+points to the memory of the element `A[i]` (for example, a pointer obtained through the
+[strided array interface](@ref man-interface-strided-arrays)), then `unsafe_load(p)`
+returns a value identical (`===`) to `A[i]`.
 
-See also: [`is_ptr_storable`](@ref).
+This trait does not imply that the array is strided, see [`Base.isstrided`](@ref).
 
-!!! compat "Julia 1.14"
-    This function requires at least Julia 1.14.
-"""
-is_ptr_loadable(::Type{<:AbstractArray}) = false
-is_ptr_loadable(::Type{<:Array}) = true
-is_ptr_loadable(::Type{<:Memory}) = true
-is_ptr_loadable(::Type{Union{}}) = false
-is_ptr_loadable(A::AbstractArray) = is_ptr_loadable(typeof(A))
+Defaults to `false`.
 
-"""
-    is_ptr_storable(type)::Bool
-
-Return `true` if a pointer to an `isbits` element in the array type can be used to store a new element. Otherwise return `false`.
-
-Do not assume `is_ptr_storable` arrays are strided.
-
-See also: [`is_ptr_loadable`](@ref).
+See also [`Base.isunsafestorable`](@ref), [`unsafe_load`](@ref).
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-is_ptr_storable(::Type{<:AbstractArray}) = false
-is_ptr_storable(::Type{<:Array}) = true
-is_ptr_storable(::Type{<:Memory}) = true
-is_ptr_storable(::Type{Union{}}) = false
-is_ptr_storable(A::AbstractArray) = is_ptr_storable(typeof(A))
+isunsafeloadable(::Type{<:AbstractArray}) = false
+isunsafeloadable(::Type{<:Array}) = true
+isunsafeloadable(::Type{<:Memory}) = true
+isunsafeloadable(::Type{Union{}}) = false
+isunsafeloadable(A::AbstractArray) = isunsafeloadable(typeof(A))
+
+"""
+    Base.isunsafestorable(type)::Bool
+    Base.isunsafestorable(A::AbstractArray)::Bool
+
+Return `true` if writing an element of an array of this type through a pointer is
+equivalent to writing it with [`setindex!`](@ref). Otherwise return `false`.
+
+Precisely, for an array `A` of this type with an `isbits` element type `T`, if `p::Ptr{T}`
+points to the memory of the element `A[i]` (for example, a pointer obtained through the
+[strided array interface](@ref man-interface-strided-arrays)), then `unsafe_store!(p, x)`
+has the same effect as `A[i] = x` for any `x::T`.
+
+This trait does not imply that the array is strided, see [`Base.isstrided`](@ref).
+
+Defaults to `false`.
+
+See also [`Base.isunsafeloadable`](@ref), [`unsafe_store!`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+isunsafestorable(::Type{<:AbstractArray}) = false
+isunsafestorable(::Type{<:Array}) = true
+isunsafestorable(::Type{<:Memory}) = true
+isunsafestorable(::Type{Union{}}) = false
+isunsafestorable(A::AbstractArray) = isunsafestorable(typeof(A))
 
 """
     Base.isdense(type)::Bool
