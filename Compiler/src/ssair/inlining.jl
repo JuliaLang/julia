@@ -890,8 +890,8 @@ function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,LocalInfere
 
     # The local result's proof justifies its inferred facts and retained source. The
     # ordinary call edge remains a separate executable target. An uninformative site
-    # consumed no facts, so it owes the edge only if it commits to the result below;
-    # `compileable_specialization` adds its own.
+    # consumed no facts, so it needs these edges only if it commits to the result below.
+    # A direct call emitted for it adds its own.
     uninformative = info isa UninformativeCallInfo
     if !uninformative
         add_inlining_edge!(et, target)
@@ -915,8 +915,8 @@ function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,LocalInfere
         item = compileable_specialization(target, effects, et, info, state)
         if uninformative
             if item !== nothing
-                # The `:invoke` carries the effects inferred here, so certify them; the
-                # dispatch edge came from `compileable_specialization`.
+                # The direct call relies on the effects inferred here, so record their proof.
+                # Its dispatch edge was added when the call was built.
                 add_inference_proof!(et.edges, inference_proof(call_result), target)
             end
         end
@@ -1322,8 +1322,8 @@ end
 
 function extract_indirect_invoke(@nospecialize info::CallInfo)
     info isa MethodResultPure && (info = info.info)
-    # keep the uninformative tag on the returned info, so that the `:invoke` emitted by
-    # `compileable_specialization` still records this site's dispatch dependency
+    # Keep the tag on the returned info, so that the direct call emitted for it still
+    # records this site's dispatch dependency.
     matchinfo = info isa UninformativeCallInfo ? info.info : info
     matchinfo isa MethodMatchInfo || return nothing
     length(matchinfo.edges) == length(matchinfo.results) == 1 || return nothing
