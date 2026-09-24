@@ -762,7 +762,7 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
         nargs = 4
     elseif f === memoryrefnew
         nargs= 3
-    elseif f === memoryrefget || f === Core.const_memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefget || f === const_memoryrefget || f === memoryref_isassigned
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5

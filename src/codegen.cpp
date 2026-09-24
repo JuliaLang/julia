@@ -5039,11 +5039,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
 
     else if ((f == BUILTIN(memoryrefget) || f == BUILTIN(const_memoryrefget)) && nargs == 3) {
-        // `const_memoryrefget` is `memoryrefget` plus the promise that the loaded memory is
-        // not written to inside the enclosing `Expr(:aliasscope)` region, which is expressed by
-        // attaching the active alias scope to the load. Plain `memoryrefget` loads must not be
-        // tagged, since the stores inside the scope are tagged `noalias` with respect to it.
-        const bool isconstload = f == BUILTIN(const_memoryrefget);
+        // only const_memoryrefget loads may carry the current aliasscope (see Base.Experimental.Const)
+        bool isconstload = f == BUILTIN(const_memoryrefget);
         const jl_cgval_t &ref = argv[1];
         jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
         if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type(mty_dt)) {
