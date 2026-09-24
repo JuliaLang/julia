@@ -126,6 +126,7 @@ end
 
 # Accessor functions
 value(dt::TimeType) = dt.instant.periods.value
+value(dt::Timestamp) = value(dt.instant.periods)
 value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)

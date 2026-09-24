@@ -489,7 +489,7 @@ end
     @test Timestamp{Microsecond}(1) == DateTime(1)
     @test_throws ArgumentError Timestamp{Nanosecond}(1)
     @test_throws TypeError Timestamp{Day}
-    @test_throws TypeError Timestamp{TimePeriod}
+    @test Timestamp{TimePeriod} <: Timestamp
     for (coarse, fine) in ((Second, Millisecond), (Millisecond, Microsecond), (Microsecond, Nanosecond))
         T, U = Timestamp{coarse}, Timestamp{fine}
         finevalue = U(1970) + fine(1)
@@ -568,4 +568,75 @@ end
     end
 end
 
+end
+
+module TimestampPeriodExtensionTests
+using Dates, Test
+const TimestampHelpers = Dates
+
+# A primitive Int128 period exercises the count/scale interface without built-in period promotion.
+primitive type TestPicosecond <: Dates.TimePeriod 128 end
+TestPicosecond(x::Real) = reinterpret(TestPicosecond, Int128(x))
+Dates.value(x::TestPicosecond) = reinterpret(Int128, x)
+Base.typemin(::Type{TestPicosecond}) = TestPicosecond(typemin(Int128))
+Base.typemax(::Type{TestPicosecond}) = TestPicosecond(typemax(Int128))
+TimestampHelpers.timestamp_scale(::Type{TestPicosecond}) = 1 // big(1000)
+TimestampHelpers.timestamp_totaldays(::Type{TestPicosecond}, y, m, d) = Dates.totaldays(big(y), m, d)
+Dates.tons(p::TestPicosecond) = Dates.value(p) // big(1000)
+
+@testset "Package-defined Timestamp period" begin
+    T = Timestamp{TestPicosecond}
+    origin = T(2026, 9, 24)
+    x = origin + TestPicosecond(1)
+    @test isbitstype(T) && sizeof(T) == 16
+    @test Dates.value(origin) == Int128(Dates.value(Timestamp(2026, 9, 24))) * 1000
+    @test x - origin === TestPicosecond(1)
+    @test origin < x < origin + Nanosecond(1)
+    @test x - Timestamp(2026, 9, 24) === TestPicosecond(1)
+    @test promote(origin, Timestamp(2026, 9, 24)) == (origin, origin)
+    @test TestPicosecond(1) + origin == x
+    @test x + Month(1) == T(2026, 10, 24) + TestPicosecond(1)
+    @test floor(x, Nanosecond) == origin
+    @test ceil(x, Nanosecond) == origin + Nanosecond(1)
+    @test round(origin + TestPicosecond(500), Nanosecond) == origin + Nanosecond(1)
+    @test floor(origin + TestPicosecond(17), TestPicosecond(10)) == origin + TestPicosecond(10)
+    @test Timestamp{Nanosecond}(origin) == Timestamp(2026, 9, 24)
+    @test_throws InexactError Timestamp{Nanosecond}(x)
+    @test_throws InexactError Time(x)
+    @test DateTime(x) == DateTime(2026, 9, 24)
+    @test Date(x) == Date(2026, 9, 24)
+    @test Date(T(3000)) == Date(3000)
+    @test T(Date(2026, 9, 24)) == origin
+    @test T(DateTime(2026, 9, 24)) == origin
+    @test T(Date(2026, 9, 24), Time(0, 0, 0, 0, 0, 1)) == origin + Nanosecond(1)
+    @test Dates.value(TimestampHelpers.unix2timestamp(T, Int128(10)^20)) == Int128(10)^32
+    @test hash(origin) == hash(Timestamp(2026, 9, 24))
+    @test Dict(origin => 1)[Timestamp(2026, 9, 24)] == 1
+    @test TimestampHelpers.timestamp2unix(origin) isa Float64
+    @test Dates.value(TimestampHelpers.unix2timestamp(T, 1)) == Int128(10)^12
+    @test TimestampHelpers.unix2timestamp(T, 1//2) == convert(T, TestPicosecond(500_000_000_000))
+    @test collect(origin:TestPicosecond(1):origin+TestPicosecond(3)) == [origin + TestPicosecond(i) for i in 0:3]
+    @test typemax(T) + TestPicosecond(1) === typemin(T)
+    @test typemin(T) - TestPicosecond(1) === typemax(T)
+    @test typemax(T) - typemin(T) === TestPicosecond(-1)
+    @test_throws InexactError ceil(typemax(T), Nanosecond)
+    @test_throws InexactError floor(typemin(T), Nanosecond)
+    @test typemin(T) < typemin(Timestamp)
+    @test typemax(T) > typemax(Timestamp)
+    for n in (typemin(Int128), Int128(-1), Int128(0), Int128(1), typemax(Int128))
+        raw = convert(T, TestPicosecond(n))
+        @test Dates.value(raw) === n
+        @test only(reinterpret(Int128, [raw])) === n
+        @test convert(T, convert(TestPicosecond, raw)) === raw
+    end
+    before = convert(T, TestPicosecond(-1))
+    @test Date(before) == Date(1969, 12, 31)
+    @test Dates.nanosecond(before) == 999
+    @test floor(before, Nanosecond) == convert(T, Nanosecond(-1))
+    @test year(T(10^18)) == 10^18
+    @test_throws InexactError Date(T(10^18))
+    @test_throws ArgumentError T(Year(2026), TestPicosecond(1))
+    @test_throws ArgumentError T(TestPicosecond(1))
+    @test isempty(Test.detect_ambiguities(TimestampPeriodExtensionTests; recursive=true))
+end
 end

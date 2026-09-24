@@ -98,9 +98,9 @@ end
 # 0000-01, weeks from Monday 0000-01-03, and other fixed periods from 0000-01-01.
 function timestamp_rounding_value(dt::Timestamp{P}, ns, op::Symbol) where {P}
     ticks, remainder = divrem(ns, timestamp_scale(P))
-    iszero(remainder) && typemin(Int64) <= ticks <= typemax(Int64) ||
+    iszero(remainder) && value(typemin(P)) <= ticks <= value(typemax(P)) ||
         throw(InexactError(op, Timestamp{P}, dt))
-    return Timestamp{P}(UTInstant(P(Int64(ticks))))
+    return Timestamp{P}(UTInstant(P(ticks)))
 end
 
 # Rata Die day of the first day of month `m` of year `y`, as an Int128. A very large
@@ -130,15 +130,13 @@ end
     y, m = yearmonth(dt)
     months = 12y + m - 1
     step = Int128(value(p)) * (p isa Year ? 12 : p isa Quarter ? 3 : 1)
-    # `months` is below 4e12 in magnitude, so if `step` fits in Int64, so do the
-    # multiples of `step` next to `months`. A large Year or Quarter may not fit.
     if step <= typemax(Int64)
         return timestamp_month_bounds(dt, months, Int64(step), upper)
     end
     return timestamp_month_bounds(dt, Int128(months), step, upper)
 end
 
-@inline function timestamp_rounding_bounds(dt::Timestamp, p::FixedPeriod, upper::Bool)
+@inline function timestamp_rounding_bounds(dt::Timestamp, p::Union{FixedPeriod,TimePeriod}, upper::Bool)
     value(p) < 1 && throw(DomainError(p))
     epoch = p isa Week ? WEEKEPOCH : DATEEPOCH
     epochns = Int128(UNIXEPOCHDAYS - epoch) * NS_PER_DAY

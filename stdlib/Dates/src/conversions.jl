@@ -38,7 +38,7 @@ Timestamp{P}(dt::TimeType) where {P} = convert(Timestamp{P}, dt)
 Base.convert(::Type{Timestamp}, dt::Union{Date,DateTime}) = convert(Timestamp{Nanosecond}, dt)
 Base.convert(::Type{Timestamp{P}}, dt::Timestamp{P}) where {P} = dt
 Base.convert(::Type{Timestamp{P}}, dt::Timestamp{Q}) where {P,Q} =
-    Timestamp{P}(UTInstant(convert(P, Q(value(dt)))))
+    Timestamp{P}(UTInstant(P(timestamp_ticks(P, Int128(value(dt)) * timestamp_scale(Q)))))
 
 Base.convert(::Type{DateTime}, dt::Date) = DateTime(UTM(value(dt) * 86400000))
 Base.convert(::Type{Date}, dt::DateTime) = Date(UTD(days(dt)))
@@ -61,10 +61,10 @@ Base.convert(::Type{Date},x::Day)  = Date(Dates.UTInstant(x))  # Converts Rata D
 Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date to Rata Die days
 Base.convert(::Type{Timestamp},x::Nanosecond)  = Timestamp(UTInstant(x))       # Converts Unix nanoseconds to a Timestamp
 # Convert between a Timestamp and its count since the Unix epoch, in any of its units
-Base.convert(::Type{P}, dt::Timestamp{Q}) where {P<:Union{Second,Millisecond,Microsecond,Nanosecond},Q} =
-    convert(P, Q(value(dt)))
-Base.convert(::Type{Timestamp{P}}, x::Union{Second,Millisecond,Microsecond,Nanosecond}) where {P} =
-    Timestamp{P}(UTInstant(convert(P, x)))
+Base.convert(::Type{P}, dt::Timestamp{Q}) where {P<:TimePeriod,Q} =
+    P(timestamp_ticks(P, Int128(value(dt)) * timestamp_scale(Q)))
+Base.convert(::Type{Timestamp{P}}, x::Q) where {P,Q<:TimePeriod} =
+    Timestamp{P}(UTInstant(P(timestamp_ticks(P, Int128(value(x)) * timestamp_scale(Q)))))
 
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
@@ -111,9 +111,13 @@ precision. For exact nanoseconds, use `convert(Timestamp, Nanosecond(ns))`.
 unix2timestamp(x::Real) = unix2timestamp(Timestamp{Nanosecond}, x)
 unix2timestamp(::Type{Timestamp}, x::Real) = unix2timestamp(Timestamp{Nanosecond}, x)
 unix2timestamp(::Type{Timestamp{P}}, x::Real) where {P} =
-    Timestamp{P}(UTInstant(P(trunc(Int64, (1000000000 ÷ timestamp_scale(P)) * x))))
-unix2timestamp(::Type{Timestamp{P}}, x::Integer) where {P} =
-    Timestamp{P}(UTInstant(convert(P, Second(x))))
+    Timestamp{P}(UTInstant(P(trunc(timestamp_count_type(P), (1000000000 ÷ timestamp_scale(P)) * x))))
+function unix2timestamp(::Type{Timestamp{P}}, x::Integer) where {P}
+    scale = 1000000000 ÷ timestamp_scale(P)
+    cld(value(typemin(P)), scale) <= x <= fld(value(typemax(P)), scale) ||
+        throw(InexactError(:unix2timestamp, Timestamp{P}, x))
+    return Timestamp{P}(UTInstant(P(timestamp_count_type(P)(x) * scale)))
+end
 
 """
     timestamp2unix(dt::Timestamp)::Float64
@@ -125,7 +129,7 @@ about microsecond precision; `Dates.value(dt)` is the exact count.
 !!! compat "Julia 1.14"
     This function requires Julia 1.14 or later.
 """
-timestamp2unix(dt::Timestamp{P}) where {P} = value(dt) / (1000000000 ÷ timestamp_scale(P))
+timestamp2unix(dt::Timestamp{P}) where {P} = Float64(value(dt) / (1000000000 ÷ timestamp_scale(P)))
 
 """
     now()::DateTime

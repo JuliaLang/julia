@@ -10,7 +10,7 @@ Base.:(:)(a::T, b::T) where {T<:Date} = (:)(a, Day(1), b)
 guess(a::DateTime, b::DateTime, c) = floor(Int64, (Int128(value(b)) - Int128(value(a))) / toms(c))
 # Integer division keeps step counts above 2^53 exact
 guess(a::T, b::T, c) where {T<:Timestamp} =
-    floor(Int64, div((Int128(value(b)) - value(a)) * timestamp_scale(T), Int128(value(c)) * tons(oneunit(c))))
+    floor(Int64, div(Int128(value(b)) * timestamp_scale(T) - Int128(value(a)) * timestamp_scale(T), Int128(value(c)) * tons(oneunit(c))))
 guess(a::Date, b::Date, c) = Int64(div(value(b - a), days(c)))
 len(a::Time, b::Time, c) = Int64(div(value(b - a), tons(c)))
 function len(a, b, c)
