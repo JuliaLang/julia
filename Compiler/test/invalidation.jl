@@ -539,3 +539,27 @@ let tester_ci(f) = let ci = Base.method_instance(f, (Vector{Any},)).cache
     @test tester_ci(UninformativeCommit.invoke_caller).max_world != typemax(UInt)
     @test tester_ci(UninformativeCommit.inline_caller).max_world != typemax(UInt)
 end
+
+# A call site that inference found uninformative defers its edges to the optimizer, so
+# other conclusions drawn from the call must still record them. Here the callee is
+# effect-free and terminating though not consistent, which lets its caller catch its
+# exceptions and be deleted as dead code; a method with a side effect must invalidate that.
+module UninformativeEffects
+    flag::Bool = true
+    @noinline callee(x) = flag ? x : throw(x)
+    function caller(v::Vector{Any})
+        try
+            callee(v[1])
+        catch
+        end
+        nothing
+    end
+end
+let M = UninformativeEffects, interp = InvalidationTester()
+    Base.return_types(M.caller, (Vector{Any},); interp)
+    ci = Base.method_instance(M.caller, (Vector{Any},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x::Int) = x
+    @test ci.max_world != typemax(UInt)
+end
