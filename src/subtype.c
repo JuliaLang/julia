@@ -4069,25 +4069,6 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     return 0;
 }
 
-// compute if DataType<:t || Union<:t || UnionAll<:t etc.
-int jl_has_intersect_kind_not_type(jl_value_t *t)
-{
-    t = jl_unwrap_unionall(t);
-    if (t == (jl_value_t*)jl_any_type || is_kind_or_anytype(t))
-        return 1;
-    assert(!jl_is_vararg(t));
-    if (jl_is_uniontype(t))
-        return jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->a) ||
-               jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->b);
-    if (jl_is_some_Type(t)) {
-        jl_value_t *T = jl_some_Type_T(t);
-        return jl_is_typevar(T) || is_kind_or_anytype(T);
-    }
-    if (jl_is_typevar(t))
-        return jl_has_intersect_kind_not_type(((jl_tvar_t*)t)->ub);
-    return 0;
-}
-
 
 JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
 {

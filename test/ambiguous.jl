@@ -565,6 +565,65 @@ end
     @test Base.BroadcastStyle(Base.Broadcast.DefaultArrayStyle{1}(), Base.Broadcast.Unknown()) === Base.Broadcast.DefaultArrayStyle{1}()
 end
 
+# An `f(::Type{Union{}}, slurp...)` method lets method insertion skip methods that
+# overlap only through `Union{}`, even for a bounded `Type{<:T}` signature.
+module SlurpPruning
+    for T in (:Real, :AbstractString, :Symbol, :AbstractArray, :AbstractDict, :AbstractSet,
+              :Tuple, :Exception, :IO, :Function, :Module)
+        @eval g(::Type{<:$T}) = 1
+    end
+    g(::Type{Union{}}) = 0
+    g(::Type{Union{}}, slurp...) = error()
+    g(::Type{<:Number}) = 2
+end
+@testset "Union{} slurp prunes bounded Type{<:T} intersections" begin
+    m = which(SlurpPruning.g, (Type{<:Number},))
+    mem = m.interferences
+    sigs = Set(mem[i].sig for i in eachindex(mem) if isassigned(mem, i))
+    G = typeof(SlurpPruning.g)
+    @test sigs == Set([Tuple{G, Type{Union{}}}, Tuple{G, Type{Union{}}, Vararg{Any}},
+                       Tuple{G, Type{<:Real}}])
+end
+
+# The same pruning applies when the `Type{<:T}` bound is a kind or a type wrapper, whose
+# values are still type objects filed by their own names (e.g. `Type{Int} <: DataType`),
+# and those lookups must still find every such method.
+module SlurpKindPruning
+    for T in (:Real, :AbstractString, :Symbol, :Tuple, :Function)
+        @eval g(::Type{<:$T}) = 1
+    end
+    g(::Type{Type{Int}}) = 2
+    g(::Type{Core.TypeEgal{Int}}) = 3
+    g(::Type{Core.TypeofBottom}) = 4
+    g(::Type{<:Core.TypeofBottom}) = 5
+    g(::Type{Type}) = 6
+    g(::Type{DataType}) = 7
+    g(::Type{Union{}}) = 0
+    g(::Type{Union{}}, slurp...) = error()
+    g(::Type{<:DataType}) = 8
+    g(::Type{<:Type{Int}}) = 9
+end
+@testset "Union{} slurp prunes kind-bounded Type{<:T} intersections" begin
+    g = SlurpKindPruning.g
+    G = typeof(g)
+    unrelated = Set(Tuple{G, Type{<:T}} for T in (Real, AbstractString, Symbol, Tuple, Function))
+    for sig in ((Type{<:DataType},), (Type{<:Type{Int}},))
+        mem = which(g, sig).interferences
+        @test isdisjoint(unrelated, (mem[i].sig for i in eachindex(mem) if isassigned(mem, i)))
+    end
+    matches(T) = Set(m.method.sig for m in Base._methods_by_ftype(Tuple{G, T}, -1, Base.get_world_counter()))
+    @test Tuple{G, Type{Type{Int}}} in matches(Type{<:Type{Int}})
+    @test Tuple{G, Type{Core.TypeEgal{Int}}} in matches(Type{<:Type{Int}})
+    @test Tuple{G, Type{Core.TypeEgal{Int}}} in matches(Type{<:DataType})
+    @test Tuple{G, Type{Type}} in matches(Type{Core.AnyType})
+    @test g(Core.TypeofBottom) == 4
+    @test g(Core.AnyType) == 6
+    @test g(Type) == 6
+    @test g(DataType) == 7
+    @test g(Int) == 1
+    @test g(Type{Int}) == 2
+end
+
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
     @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})

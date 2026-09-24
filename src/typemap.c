@@ -73,10 +73,20 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
         return jl_type_extract_name_precise(jl_unwrap_vararg(t1), invariant);
     }
     else if (jl_is_typevar(t1)) {
-        return jl_type_extract_name_precise(((jl_tvar_t*)t1)->ub, 0);
+        jl_value_t *ub = ((jl_tvar_t*)t1)->ub;
+        // as a `Type{T}` parameter, a `T` bounded by a kind or wrapper (whose name
+        // `jl_type_extract_name` folds to `AnyType`) may also be a `Type{...}`, `TypeEgal{...}`
+        // or kind object, which is filed under its own name rather than an ancestor's
+        if (invariant && jl_type_extract_name(ub, 0) == (jl_value_t*)jl_anytype_type->name)
+            return 0;
+        return jl_type_extract_name_precise(ub, 0);
     }
     else if (jl_is_some_Type(t1)) {
         return 1;
+    }
+    else if (t1 == (jl_value_t*)jl_anytype_type && invariant) {
+        // `AnyType == Type`, but `Type` is filed under the `TypeEq` name, below `AnyType`
+        return 0;
     }
     else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type) {
         return 1;
@@ -505,15 +515,49 @@ static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam
         if (!jl_is_datatype(a))
             return tname_intersection(a, bname, 0);
     }
-    else if (jl_is_some_Type(a)) {
-        // a covariant wrapper reaches name buckets via its kind's supertype chain
-        jl_datatype_t *kind = jl_is_typeeq(a) ? jl_typeeq_type : jl_typeegal_type;
-        return tname_intersection_dt(kind, bname, jl_supertype_height(kind));
+    else if (jl_is_some_Type(a) || jl_is_kind(a)) {
+        // a subtype of a covariant wrapper or kind may be another wrapper or kind
+        // (e.g. `TypeEgal{X} <: Type{X}` and `Type{Int} <: DataType`), filed under its own
+        // name, so only the common `AnyType` supertype chain is a safe bound
+        return tname_intersection_dt(jl_anytype_type, bname, jl_supertype_height(jl_anytype_type));
     }
     if (jl_is_datatype(a)) {
         return tname_intersection_dt((jl_datatype_t*)a, bname, jl_supertype_height((jl_datatype_t*)a));
     }
     return 0;
+}
+
+// Classify how `t` can match a type object, as a total query over what `t` must contain.
+// `*by_kind` is set if `t` contains an entire kind (e.g. `DataType <: t`, or `Any`), so a
+// match need not depend on which type object it is. `*by_identity` is set if `t` otherwise
+// intersects some `Type{<:Name}`, so a match depends on the identity of the type object and
+// `Type{...}` signatures can be filtered by name. This could be phrased as subtype queries
+// against each kind, but is cheaper as a walk. Two kinds are not counted: every `Type{<:U}`
+// contains `TypeofBottom`, whose only instance `Union{}` is handled by the separate
+// `exclude_typeofbottom` logic, and an unbounded `Type{T} where T` contains every kind, but
+// its `Any` bound already leaves the name filter with nothing to exclude.
+static void typemap_type_components(jl_value_t *t, int *by_identity, int *by_kind) JL_NOTSAFEPOINT
+{
+    while (1) {
+        t = jl_unwrap_unionall(t);
+        if (jl_is_typevar(t)) {
+            t = ((jl_tvar_t*)t)->ub;
+        }
+        else if (jl_is_uniontype(t)) {
+            typemap_type_components(((jl_uniontype_t*)t)->a, by_identity, by_kind);
+            t = ((jl_uniontype_t*)t)->b;
+        }
+        else {
+            break;
+        }
+    }
+    assert(!jl_is_vararg(t));
+    if (t == (jl_value_t*)jl_any_type || jl_is_kind(t) || t == (jl_value_t*)jl_anytype_type) {
+        *by_kind = 1;
+    }
+    else if (jl_is_some_Type(t)) {
+        *by_identity = 1;
+    }
 }
 
 static int concrete_intersects(jl_value_t *t, jl_value_t *ty, int8_t tparam) JL_CANSAFEPOINT
@@ -724,8 +768,9 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
             jl_value_t *name = NULL;
             // pre-check: optimized pre-intersection test to see if `ty` could intersect with any Type or Kind
             if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any || tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
-                maybe_kind = jl_has_intersect_kind_not_type(ty);
-                maybe_type = maybe_kind || jl_has_intersect_type_not_kind(ty);
+                int by_identity = 0;
+                typemap_type_components(ty, &by_identity, &maybe_kind);
+                maybe_type = by_identity || maybe_kind;
                 if (maybe_type && !maybe_kind) {
                     typetype = jl_unwrap_unionall(ty);
                     typetype = jl_is_some_Type(typetype) ? jl_some_Type_T(typetype) : NULL;
@@ -741,7 +786,8 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
             // First check for intersections with methods defined on Type{T}, where T was a concrete type
             if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any && maybe_type &&
                     (!typetype || jl_has_free_typevars(typetype) || is_cache_leaf(typetype, 1))) { // otherwise cannot contain this particular kind, so don't bother with checking
-                if (!exclude_typeofbottom) {
+                // `Type{typeof(Union{})}` shares this bucket with `Type{Union{}}`, so visit it for that name too
+                if (!exclude_typeofbottom || name == (jl_value_t*)jl_typeofbottom_type->name) {
                     // detect Type{Union{}}, Type{Type{Union{}}}, and Type{typeof(Union{}} and do those early here
                     // otherwise the possibility of encountering `Type{Union{}}` in this intersection may
                     // be forcing us to do some extra work here whenever we see a typevar, even though
@@ -824,7 +870,8 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
             }
             // Next check for intersections with methods defined on Type{T}, where T was not concrete (it might even have been a TypeVar), but had an extractable TypeName
             if (tname != (jl_genericmemory_t*)jl_an_empty_memory_any && maybe_type) {
-                if (!exclude_typeofbottom || (!typetype && jl_isa((jl_value_t*)jl_typeofbottom_type, ty))) {
+                if (!exclude_typeofbottom || name == (jl_value_t*)jl_typeofbottom_type->name ||
+                        (!typetype && jl_isa((jl_value_t*)jl_typeofbottom_type, ty))) {
                     // detect Type{Union{}}, Type{Type{Union{}}}, and Type{typeof(Union{}} and do those early here
                     // otherwise the possibility of encountering `Type{Union{}}` in this intersection may
                     // be forcing us to do some extra work here whenever we see a typevar, even though
