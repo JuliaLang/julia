@@ -1,7 +1,7 @@
 # -*- makefile -*-
 
 BOLT_VER := 23.1.2
-BOLT_JLL_VER := 23.1.2+0
+BOLT_JLL_VER := 23.1.2+1
 
 ## jll artifact
 BOLT_JLL_NAME := BOLT
