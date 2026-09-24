@@ -4049,8 +4049,9 @@ int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)
     return jl_tuple1_isa(child[0], &child[1], cl, pdt);
 }
 
-// returns true if the intersection of `t` and `Type` is non-empty and not a kind
-// this is sufficient to determine if `isa(x, T)` can instead simply check for `typeof(x) <: T`
+// returns true if `t` may match a type object by its identity (a `Type{...}` or
+// `TypeEgal{...}` component), rather than only through a kind it contains in full;
+// if false, `isa(x, t)` can instead simply check for `typeof(x) <: t`
 int jl_has_intersect_type_not_kind(jl_value_t *t)
 {
     t = jl_unwrap_unionall(t);
@@ -4060,10 +4061,10 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     if (jl_is_uniontype(t))
         return jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
                jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
-    if (jl_is_some_Type(t)) {
-        jl_value_t *T = jl_some_Type_T(t);
-        return jl_is_typevar(T) || !is_kind_or_anytype(T);
-    }
+    // even when `T` is a kind, `Type{T}` holds only the type objects equal to `T`,
+    // not every instance of that kind, so `typeof(x) <: t` cannot decide membership
+    if (jl_is_some_Type(t))
+        return 1;
     if (jl_is_typevar(t))
         return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
     return 0;
