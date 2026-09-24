@@ -617,6 +617,7 @@ isunsafestorable(A::AbstractArray) = isunsafestorable(typeof(A))
 
 """
     Base.isdense(type)::Bool
+    Base.isdense(A::AbstractArray)::Bool
 
 Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays) and additionally store
@@ -637,9 +638,11 @@ isdense(::Type{<:AbstractArray}) = false
 isdense(::Type{<:Array}) = true
 isdense(::Type{<:Memory}) = true
 isdense(::Type{Union{}}) = false
+isdense(A::AbstractArray) = isdense(typeof(A))
 
 """
     Base.islinearstrided(type)::Bool
+    Base.islinearstrided(A::AbstractArray)::Bool
 
 Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays) and additionally isbits
@@ -654,6 +657,7 @@ Defaults to [`Base.isdense`](@ref) of the type.
 """
 islinearstrided(::Type{A}) where {A<:AbstractArray} = isdense(A)::Bool
 islinearstrided(::Type{Union{}}) = false
+islinearstrided(A::AbstractArray) = islinearstrided(typeof(A))
 
 """
     Base.isstrided(type)::Bool

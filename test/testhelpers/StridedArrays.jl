@@ -31,16 +31,19 @@ function check_strides_throws(err, a)
 end
 
 function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
-    @test Base.isstrided(typeof(a)) === Base.isstrided(a)
+    for trait in (Base.isstrided, Base.islinearstrided, Base.isdense,
+                  Base.isunsafeloadable, Base.isunsafestorable)
+        @test trait(typeof(a)) === trait(a)
+    end
     isbitstype(T) || return
-    Base.isdense(typeof(a)) && @test Base.islinearstrided(typeof(a))
-    Base.islinearstrided(typeof(a)) && @test Base.isstrided(a)
+    Base.isdense(a) && @test Base.islinearstrided(a)
+    Base.islinearstrided(a) && @test Base.isstrided(a)
     Base.isstrided(a) || return
     @test strides(a) isa NTuple{N, Int}
     @test Base.elsize(a) isa Int
     # A dim with a single index contributes nothing to any element address, so
     # its stride is unconstrained by the layout traits; only check longer dims.
-    if Base.isdense(typeof(a))
+    if Base.isdense(a)
         if !isempty(a)
             # Base.size_to_strides is internal, not public API
             expected = Base.size_to_strides(1, size(a)...)
@@ -48,7 +51,7 @@ function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
                 size(a, d) > 1 && @test strides(a)[d]*Base.elsize(a) == expected[d]*Base.elsize(Array{T})
             end
         end
-    elseif Base.islinearstrided(typeof(a)) && !isempty(a)
+    elseif Base.islinearstrided(a) && !isempty(a)
         d0 = findfirst(>(1), size(a))
         if d0 !== nothing
             # dims before d0 are singletons, so this stride is the column-major spacing
