@@ -1017,9 +1017,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
-    # count nibbles from the logical width, which for a primitive type whose
-    # bit size is not a multiple of 8 is narrower than its byte size
-    m = (top_set_bit(x) + 3) >> 2
+    m = (top_set_bit(x) + 3) ÷ 4 # nibbles = ceil(bits / 4)
     n = neg + max(pad, m)
     str = _string_n(n)
     GC.@preserve str begin
