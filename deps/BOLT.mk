@@ -102,20 +102,22 @@ BOLT_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir) && \
 	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P tools/bolt/cmake_install.cmake
 
+# Use the same target names as the BinaryBuilder install below (and the name of
+# BOLT.version), so that `make install-BOLT` works for either kind of build.
 $(eval $(call staged-install, \
-	bolt,$$(BOLT_SRC_DIR)/build, \
+	BOLT,$$(BOLT_SRC_DIR)/build, \
 	BOLT_INSTALL,,,))
 
-clean-bolt:
+clean-BOLT:
 	-rm -f $(BOLT_BUILDDIR)/build-configured $(BOLT_BUILDDIR)/build-compiled
 	-if [ -d $(BOLT_BUILDDIR) ]; then $(MAKE) -C $(BOLT_BUILDDIR) clean; fi
 
-get-bolt: $(BOLT_SRC_FILE)
-extract-bolt: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
-configure-bolt: $(BOLT_BUILDDIR)/build-configured
-compile-bolt: $(BOLT_BUILDDIR)/build-compiled
-fastcheck-bolt: #none
-check-bolt: $(BOLT_BUILDDIR)/build-checked
+get-BOLT: $(BOLT_SRC_FILE)
+extract-BOLT: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
+configure-BOLT: $(BOLT_BUILDDIR)/build-configured
+compile-BOLT: $(BOLT_BUILDDIR)/build-compiled
+fastcheck-BOLT: #none
+check-BOLT: $(BOLT_BUILDDIR)/build-checked
 
 else # USE_BINARYBUILDER_BOLT
 
