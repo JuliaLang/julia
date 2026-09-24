@@ -729,7 +729,14 @@ method, by inlining it or emitting an `:invoke`; a site left as a dynamic call g
 struct UninformativeCallInfo <: CallInfo
     info::Union{MethodMatchInfo,UnionSplitInfo}
 end
-add_edges_impl(::Vector{Any}, ::UninformativeCallInfo) = nothing
+# Placed first in an edge list to also collect the edges of uninformative call sites.
+struct RecordUninformativeEdges end
+function add_edges_impl(edges::Vector{Any}, info::UninformativeCallInfo)
+    if !isempty(edges) && edges[1] === RecordUninformativeEdges()
+        add_edges!(edges, info.info)
+    end
+    nothing
+end
 nsplit_impl(info::UninformativeCallInfo) = nsplit(info.info)
 getsplit_impl(info::UninformativeCallInfo, idx::Int) = getsplit(info.info, idx)
 getresult_impl(info::UninformativeCallInfo, idx::Int) = getresult(info.info, idx)
