@@ -70,7 +70,7 @@ Base.stride
 Base.strides
 Base.isstrided
 Base.islinearstrided
-Base.is_contiguous
+Base.isdense
 Base.is_ptr_loadable
 Base.is_ptr_storable
 ```

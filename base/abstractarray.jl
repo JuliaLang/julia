@@ -598,7 +598,7 @@ is_ptr_storable(::Type{Union{}}) = false
 is_ptr_storable(A::AbstractArray) = is_ptr_storable(typeof(A))
 
 """
-    Base.is_contiguous(type)::Bool
+    Base.isdense(type)::Bool
 
 Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays) and additionally store
@@ -615,10 +615,10 @@ Defaults to `false`.
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-is_contiguous(::Type{<:AbstractArray}) = false
-is_contiguous(::Type{<:Array}) = true
-is_contiguous(::Type{<:Memory}) = true
-is_contiguous(::Type{Union{}}) = false
+isdense(::Type{<:AbstractArray}) = false
+isdense(::Type{<:Array}) = true
+isdense(::Type{<:Memory}) = true
+isdense(::Type{Union{}}) = false
 
 """
     Base.islinearstrided(type)::Bool
@@ -629,12 +629,12 @@ elements are evenly spaced in memory in column-major order.
 
 Array types with this trait are [`isstrided`](@ref Base.isstrided) by default.
 
-Defaults to [`Base.is_contiguous`](@ref) of the type.
+Defaults to [`Base.isdense`](@ref) of the type.
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-islinearstrided(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
+islinearstrided(::Type{A}) where {A<:AbstractArray} = isdense(A)::Bool
 islinearstrided(::Type{Union{}}) = false
 
 """
@@ -664,7 +664,7 @@ has_vec_strided_layout(::Type{Union{}}) = false
 
 
 function elsize(::Type{A}) where {T,A<:AbstractArray{T}}
-    if is_contiguous(A)
+    if isdense(A)
         elsize(Array{T})
     else
         throw(MethodError(elsize, (A,)))
@@ -691,7 +691,7 @@ julia> strides(A)
 ```
 """
 function strides(x::A) where {A<:AbstractArray}
-    if is_contiguous(A)
+    if isdense(A)
         size_to_strides(1, size(x)...)
     else
         throw(MethodError(strides, (x,)))

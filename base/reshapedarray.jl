@@ -423,21 +423,21 @@ function isstrided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{Stri
     islinearstrided(A) || isstrided(P)
 end
 function islinearstrided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
-    is_contiguous(A) || has_vec_strided_layout(P)
+    isdense(A) || has_vec_strided_layout(P)
 end
-function is_contiguous(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
-    is_contiguous(P)
+function isdense(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
+    isdense(P)
 end
 
 
 is_ptr_loadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_loadable(P)
 is_ptr_storable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_storable(P)
 islinearstrided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_vec_strided_layout(P)
-is_contiguous(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_contiguous(P)
+isdense(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isdense(P)
 
 # Contiguous with the exact byte layout of the equivalent Array and matching elsize
 _checkcontiguous(::Type{Bool}, A::AbstractArray{T}) where {T} =
-    is_contiguous(typeof(A)) && elsize(typeof(A)) == elsize(Array{T})
+    isdense(typeof(A)) && elsize(typeof(A)) == elsize(Array{T})
 # TODO remove this. DenseArray being contiguous was not part of the DenseArray requirements. See CodeUnits.
 _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))

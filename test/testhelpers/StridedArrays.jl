@@ -33,14 +33,14 @@ end
 function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
     @test Base.isstrided(typeof(a)) === Base.isstrided(a)
     isbitstype(T) || return
-    Base.is_contiguous(typeof(a)) && @test Base.islinearstrided(typeof(a))
+    Base.isdense(typeof(a)) && @test Base.islinearstrided(typeof(a))
     Base.islinearstrided(typeof(a)) && @test Base.isstrided(a)
     Base.isstrided(a) || return
     @test strides(a) isa NTuple{N, Int}
     @test Base.elsize(a) isa Int
     # A dim with a single index contributes nothing to any element address, so
     # its stride is unconstrained by the layout traits; only check longer dims.
-    if Base.is_contiguous(typeof(a))
+    if Base.isdense(typeof(a))
         if !isempty(a)
             # Base.size_to_strides is internal, not public API
             expected = Base.size_to_strides(1, size(a)...)

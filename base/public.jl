@@ -37,7 +37,7 @@ public
     memoryindex,
     isstrided,
     islinearstrided,
-    is_contiguous,
+    isdense,
     is_ptr_loadable,
     is_ptr_storable,
     unsetindex!,

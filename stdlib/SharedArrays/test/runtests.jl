@@ -330,7 +330,7 @@ end
 @testset "strided array traits" begin
     S = SharedArray{Float64,2}(rand(3, 4))
     T = typeof(S)
-    @test Base.is_contiguous(T)
+    @test Base.isdense(T)
     @test is_ptr_loadable(T)
     @test is_ptr_storable(T)
     check_strided_traits(S)

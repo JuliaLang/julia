@@ -304,7 +304,7 @@ SharedMatrix(A::Matrix) = SharedArray(A)
 
 size(S::SharedArray) = S.dims
 elsize(::Type{SharedArray{T,N}}) where {T,N} = elsize(Array{T,N}) # aka fieldtype(T, :s)
-Base.is_contiguous(::Type{<:SharedArray}) = true
+Base.isdense(::Type{<:SharedArray}) = true
 Base.is_ptr_loadable(::Type{<:SharedArray}) = true
 Base.is_ptr_storable(::Type{<:SharedArray}) = true
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
