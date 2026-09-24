@@ -381,7 +381,8 @@ Float64
 """
 float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
 float(::Type{T}) where {T<:AbstractFloat} = T
-float(::Type{Union{}}, slurp...) = Union{}
+float(::Type{Union{}}) = Union{}
+float(::Type{Union{}}, slurp...) = throw(MethodError(float, (Union{}, slurp...)))
 
 """
     unsafe_trunc(T, x)
