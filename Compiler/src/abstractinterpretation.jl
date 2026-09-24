@@ -2587,7 +2587,9 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     ti = tienv[1]
     env = tienv[2]::SimpleVector
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
-    match = MethodMatch(ti, env, method, argtype <: method.sig)
+    # `invoke` checks the arguments against the requested signature (`lookupsig`),
+    # which may be narrower than `method.sig`.
+    match = MethodMatch(ti, env, method, argtype <: lookupsig)
     ft′_box = Core.Box(ft′)
     lookupsig_box = Core.Box(lookupsig)
     invokecall = InvokeCall(types)
