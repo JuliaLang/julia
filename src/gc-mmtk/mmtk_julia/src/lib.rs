@@ -72,7 +72,7 @@ lazy_static! {
 pub static mut JULIA_HEADER_SIZE: usize = 0;
 pub static mut JULIA_BUFF_TAG: usize = 0;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static USER_TRIGGERED_GC: AtomicIsize = AtomicIsize::new(0);
 
 lazy_static! {

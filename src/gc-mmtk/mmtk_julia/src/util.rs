@@ -116,7 +116,7 @@ impl jl_ucontext_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_julia_copy_stack_check(c_flag_is_defined: bool) {
     if c_flag_is_defined {
         #[cfg(not(feature = "julia_copy_stack"))]
@@ -127,7 +127,7 @@ pub extern "C" fn mmtk_julia_copy_stack_check(c_flag_is_defined: bool) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_get_possibly_forwarded(object: ObjectReference) -> ObjectReference {
     match object.get_forwarded_object() {
         Some(forwarded) => forwarded,

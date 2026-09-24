@@ -73,13 +73,13 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
 
 // Expose the mutator iterator so they can be used in C.
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_new_mutator_iterator() -> *mut JuliaMutatorIterator<'static> {
     let guard = MUTATORS.read().unwrap();
     Box::into_raw(Box::new(JuliaMutatorIterator::new(guard)))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mmtk_get_next_mutator_tls(
     iter: *mut JuliaMutatorIterator<'static>,
 ) -> OpaquePointer {
@@ -89,7 +89,7 @@ pub unsafe extern "C" fn mmtk_get_next_mutator_tls(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mmtk_close_mutator_iterator(iter: *mut JuliaMutatorIterator<'static>) {
     // The boxed pointer will get dropped
     let _to_drop = unsafe { Box::from_raw(iter) };
