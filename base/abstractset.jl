@@ -345,10 +345,7 @@ function issubset(a, b)
             return issubset(a, Set(b))
         end
     end
-    for elt in a
-        elt in b || return false
-    end
-    return true
+    return all(in(b), a)
 end
 
 """

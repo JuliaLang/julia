@@ -393,10 +393,13 @@ end
 end
 
 @testset "issubset, symdiff, isdisjoint" begin
+    @test ismissing(issubset([1, missing, 3], [1, 2, 3]))
+    @test ismissing(issubset([4], [1, missing, 3]))
     for S in (Set, BitSet, Vector)
         for (l,r) in ((S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2]),     S([3,4])),
+
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2,3]),   S()),
                       (S(),          S()),
