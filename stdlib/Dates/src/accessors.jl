@@ -80,9 +80,6 @@ julia> isoyear(Date(2021, 12, 31))
 ```
 !!! compat "Julia 1.13"
     This function requires Julia 1.13 or later.
-
-!!! compat "Julia 1.14"
-    Support for `Timestamp` requires Julia 1.14 or later.
 """
 function isoyear(dt::Union{DateTime,Timestamp})
     thisyear = Year(dt)
@@ -117,9 +114,6 @@ julia> isoweekdate(Date(2023, 01, 01))
 ```
 !!! compat "Julia 1.13"
     This function requires Julia 1.13 or later.
-
-!!! compat "Julia 1.14"
-    Support for `Timestamp` requires Julia 1.14 or later.
 """
 isoweekdate(dt::Union{DateTime,Timestamp}) = (isoyear(dt).value, week(dt), dayofweek(dt))
 isoweekdate(dt::Date) = isoweekdate(DateTime(dt))
@@ -136,10 +130,9 @@ value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
 days(dt::Timestamp{P}) where {P} = fld(value(dt), timestamp_ticks_per_day(P)) + UNIXEPOCHDAYS
-# time-of-day part of an instant; the unix epoch is midnight-aligned, so
-# fld/mod day arithmetic on Timestamp values works exactly as it does for the
-# Rata Die-anchored DateTime values
-msofday(dt::DateTime) = mod(value(dt), 86400000)
+# Nanoseconds since midnight
+nsofday(dt::Date) = Int64(0)
+nsofday(dt::DateTime) = 1000000 * mod(value(dt), 86400000)
 nsofday(dt::Timestamp{P}) where {P} = mod(value(dt), timestamp_ticks_per_day(P)) * timestamp_scale(P)
 year(dt::TimeType) = year(days(dt))
 quarter(dt::TimeType) = quarter(days(dt))
@@ -156,6 +149,8 @@ second(t::Time) = mod(fld(value(t), 1000000000), Int64(60))
 millisecond(t::Time) = mod(fld(value(t), Int64(1000000)), Int64(1000))
 microsecond(t::Time) = mod(fld(value(t), Int64(1000)), Int64(1000))
 nanosecond(t::Time) = mod(value(t), Int64(1000))
+# The field of `dt` whose unit is `unit` nanoseconds and that wraps after `modulus`
+# units, such as 24 for hours. Fields finer than P are zero.
 @inline timestamp_part(dt::Timestamp{P}, unit, modulus) where {P} =
     unit < timestamp_scale(P) ? Int64(0) :
     mod(fld(value(dt), unit ÷ timestamp_scale(P)), modulus)
@@ -219,9 +214,9 @@ for func in (:day, :dayofmonth)
 end
 
 """
-    hour(dt::Union{DateTime,Timestamp})::Int64
+    hour(dt::DateTime)::Int64
 
-The hour of day of a `DateTime` or `Timestamp` as an [`Int64`](@ref).
+The hour of day of a `DateTime` as an [`Int64`](@ref).
 """
 hour(dt::DateTime)
 
@@ -229,9 +224,9 @@ for func in (:minute, :second, :millisecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::Union{DateTime,Timestamp})::Int64
+            $($name)(dt::DateTime)::Int64
 
-        The $($name) of a `DateTime` or `Timestamp` as an [`Int64`](@ref).
+        The $($name) of a `DateTime` as an [`Int64`](@ref).
         """ $func(dt::DateTime)
     end
 end
@@ -253,7 +248,7 @@ for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(t::Time)::Int64
+            $($name)(t::Union{Time,Timestamp})::Int64
 
         The $($name) of a `Time` or `Timestamp` as an [`Int64`](@ref).
         """ $func(t::Time)

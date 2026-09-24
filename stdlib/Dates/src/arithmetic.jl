@@ -84,7 +84,7 @@ end
 (-)(x::DateTime, y::Period) = return DateTime(UTM(value(x) - toms(y)))
 (+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
-# Fixed-duration arithmetic preserves resolution and wraps in units of P.
+# `y` as a count of P. Throws an InexactError if `y` is not a whole number of P.
 function timestamp_period_ticks(::Type{P}, y::FixedPeriod) where {P}
     unit, scale = tons(oneunit(y)), timestamp_scale(P)
     unit >= scale && return value(y) * (unit ÷ scale)
@@ -92,11 +92,16 @@ function timestamp_period_ticks(::Type{P}, y::FixedPeriod) where {P}
     iszero(remainder) || throw(InexactError(:convert, P, y))
     return ticks
 end
+# Timestamp arithmetic keeps the resolution P and, like DateTime arithmetic, wraps at
+# the ends of the range. Calendar periods change the date like Date arithmetic and
+# keep the time of day.
 for op in (:+, :-)
     @eval begin
-        ($op)(x::Timestamp{P}, y::Union{Year,Quarter,Month}) where {P} =
-            Timestamp{P}(UTInstant(P(((Int128(value(($op)(Date(x), y))) - UNIXEPOCHDAYS) *
-                timestamp_ticks_per_day(P) + nsofday(x) ÷ timestamp_scale(P)) % Int64)))
+        function ($op)(x::Timestamp{P}, y::Union{Year,Quarter,Month}) where {P}
+            ticksperday = timestamp_ticks_per_day(P)
+            epochdays = value(($op)(Date(x), y)) - UNIXEPOCHDAYS
+            return Timestamp{P}(UTInstant(P(epochdays * ticksperday + mod(value(x), ticksperday))))
+        end
         ($op)(x::Timestamp{P}, y::FixedPeriod) where {P} =
             Timestamp{P}(UTInstant(P(($op)(value(x), timestamp_period_ticks(P, y)))))
     end

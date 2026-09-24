@@ -5,7 +5,7 @@ module TimestampTests
 using Test
 using Dates
 
-# Test the nanosecond Timestamp API.
+# The testsets before "Parameterized resolution" use the default Timestamp{Nanosecond}.
 
 @testset "Construction and validation" begin
     ts = Timestamp(2026, 8, 31, 13, 45, 30, 123, 456, 789)
@@ -14,7 +14,7 @@ using Dates
     @test Timestamp(2026, 8) == Timestamp(2026, 8, 1)
     # the unix epoch is the zero instant
     @test Dates.value(Timestamp(1970)) == 0
-    @test Timestamp(Dates.UTN(0)) == Timestamp(1970)
+    @test Timestamp(Dates.UTInstant(Nanosecond(0))) == Timestamp(1970)
     # 24:00 rolls over like DateTime
     @test Timestamp(2026, 8, 31, 24) == Timestamp(2026, 9, 1)
     # AM/PM
@@ -43,13 +43,13 @@ using Dates
     @test Timestamp(2026, 1, 1, 0, 0, 0, 0, 0, 999999999) ==
         Timestamp(2026, 1, 1, 0, 0, 0, 999, 999, 999)
     @test_throws ArgumentError Timestamp(2026, 1, 1, 0, 0, 0, 1, 0, 999999999)
-    # out-of-range instants throw ArgumentError, not overflow silently
+    # out-of-range instants throw an ArgumentError
     @test_throws ArgumentError Timestamp(1677, 9, 20)
     @test_throws ArgumentError Timestamp(2262, 4, 12)
     @test_throws ArgumentError Timestamp(1000)
     @test_throws ArgumentError Timestamp(3000)
     @test_throws ArgumentError Timestamp(Date(3000))
-    # years are bounds-checked before any calendar arithmetic could wrap into range
+    # a year far out of range must not overflow into the valid range
     wrapped_year = Int64(202021879422134420)
     @test Dates.validargs(Timestamp, wrapped_year, Int64(1), Int64(1), zeros(Int64, 6)...) isa ArgumentError
     @test_throws ArgumentError Timestamp(wrapped_year)
@@ -227,8 +227,7 @@ end
     @test round(ts, Second) == Timestamp(2026, 8, 31, 13, 45, 30)
     @test round(ts, Hour) == Timestamp(2026, 8, 31, 14)
     @test_throws DomainError floor(ts, Nanosecond(-1))
-    # rounding to time periods wraps like the arithmetic it is built from, so
-    # results near the ends of the range are right whenever they are representable
+    # rounding near the ends of the range is exact when the result fits
     @test ceil(typemin(Timestamp), Nanosecond(10)) == typemin(Timestamp) + Nanosecond(8)
     @test ceil(typemin(Timestamp), Hour) == Timestamp(1677, 9, 21, 1)
     @test round(typemin(Timestamp), Minute) == Timestamp(1677, 9, 21, 0, 13)
@@ -294,7 +293,7 @@ end
     @test Timestamp(t -> nanosecond(t) == 4, 2026, 8, 31, 10, 0, 0, 0, 0; step=Nanosecond(1)) ==
         Timestamp(2026, 8, 31, 10, 0, 0, 0, 0, 4)
     @test_throws ArgumentError Timestamp(t -> false, 2026, 8, 31; limit=3)
-    # the predicate is validated at the supplied start, including the partial lower-bound year
+    # starts in the first and last years of the range, which are partial years
     @test Timestamp(t -> true, 1677, 9, 21, 0, 12, 43, 145, 225) ==
         Timestamp(1677, 9, 21, 0, 12, 43, 145, 225)
     @test Timestamp(t -> t == typemax(Timestamp), 2262, 4, 11, 23, 47, 16, 854, 775;
@@ -387,7 +386,7 @@ end
     v = [ts, ts + Nanosecond(1)]
     @test reinterpret(Int64, v) == [Dates.value(ts), Dates.value(ts) + 1]
     @test reinterpret(Timestamp{Nanosecond}, reinterpret(Int64, v)) == v
-    @test hash(ts) == hash(Timestamp(Dates.UTN(Dates.value(ts))))
+    @test hash(ts) == hash(Timestamp(Dates.UTInstant(Nanosecond(Dates.value(ts)))))
     @test hash(ts) != hash(ts + Nanosecond(1))
     d = Dict(ts => 1)
     @test d[Timestamp(2026, 8, 31, 13, 45, 30, 123, 456, 789)] == 1
@@ -400,7 +399,7 @@ end
     @test mixed[DateTime(2026, 8, 31)] == 1
 end
 
-# Exercise each resolution, including precision changes and the full Int64 range.
+# Each resolution, conversions between resolutions, and the full Int64 range
 @testset "Parameterized resolution" begin
     units = (Second, Millisecond, Microsecond, Nanosecond)
     scales = (1_000_000_000, 1_000_000, 1_000, 1)
@@ -516,7 +515,7 @@ end
     @test Timestamp{Second}(1970) + Day(200000) === Timestamp{Second}(Date(1970) + Day(200000))
 end
 
-# Large fixed periods wrap in timestamp ticks without overflowing through nanoseconds.
+# Fixed-period arithmetic wraps in units of P; a period finer than P must be exact.
 @testset "Fixed-period arithmetic at each resolution" begin
     for (P, scale) in zip((Second, Millisecond, Microsecond, Nanosecond), (10^9, 10^6, 10^3, 1))
         x = Timestamp{P}(1970) + P(17)
@@ -536,7 +535,7 @@ end
     end
 end
 
-# Rounding checks the selected result without wrapping an intermediate candidate.
+# Rounding throws an InexactError when the result does not fit, instead of wrapping.
 @testset "Rounding at storage limits" begin
     for P in (Second, Millisecond, Microsecond, Nanosecond)
         T = Timestamp{P}

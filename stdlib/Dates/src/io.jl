@@ -158,36 +158,32 @@ for (tok, fn) in zip("uUeE", Any[monthabbr_to_value, monthname_to_value, dayabbr
     end
 end
 
+# Parse the digits of a fractional second as a count of 10^-precision seconds: with
+# precision 9, "5" is 500000000 and "123456789" is 123456789. Digits past `precision`
+# must be zero.
 @inline function tryparsenext_fraction(d::DatePart, str, i, len, precision)
-    digits = 0
-    value = Int64(0)
+    ndigits = 0
+    frac = Int64(0)
     max_digits = max_width(d)
-    @inbounds while i <= len && (max_digits == 0 || digits < max_digits)
+    @inbounds while i <= len && (max_digits == 0 || ndigits < max_digits)
         c, ii = iterate(str, i)::Tuple{Char, Int}
         '0' <= c <= '9' || break
         digit = Int64(c - '0')
-        digits += 1
-        if digits <= precision
-            value = 10value + digit
+        ndigits += 1
+        if ndigits <= precision
+            frac = 10frac + digit
         elseif digit != 0
             return nothing
         end
         i = ii
     end
-    digits >= min_width(d) || return nothing
-    digits < precision && (value *= Int64(10) ^ (precision - digits))
-    return value, i
+    ndigits >= min_width(d) || return nothing
+    ndigits < precision && (frac *= Int64(10) ^ (precision - ndigits))
+    return frac, i
 end
 
-@inline tryparsenext(d::DatePart{'s'}, str, i, len) =
-    tryparsenext_fraction(d, str, i, len, 3)
-
-# Like 's', but reads the digits as a fractional second down to nanosecond
-# resolution: ".5" is 500 milliseconds and ".123456789" is 123456789
-# nanoseconds. Digits past the ninth must be zero.
-@inline function tryparsenext(d::DatePart{'n'}, str, i, len)
-    return tryparsenext_fraction(d, str, i, len, 9)
-end
+@inline tryparsenext(d::DatePart{'s'}, str, i, len) = tryparsenext_fraction(d, str, i, len, 3)
+@inline tryparsenext(d::DatePart{'n'}, str, i, len) = tryparsenext_fraction(d, str, i, len, 9)
 
 ### Format tokens
 
@@ -232,8 +228,12 @@ end
     end
 end
 
-function format_fraction(io, d::DatePart, value, precision)
-    str = rstrip(string(value, pad = precision), '0')
+# Write a fractional second, given as a count of 10^-precision seconds, without
+# trailing zeros and then padded with zeros to the width of the code: 500 milliseconds
+# is "5" under `n` and "500000000" under `nnnnnnnnn`. A fixed-width field keeps only
+# its leading digits.
+function format_fraction(io, d::DatePart, frac, precision)
+    str = rstrip(string(frac, pad = precision), '0')
     if d.fixed && length(str) > d.width
         str = SubString(str, 1, d.width)
     end
@@ -241,17 +241,11 @@ function format_fraction(io, d::DatePart, value, precision)
 end
 
 format(io, d::DatePart{'s'}, dt) = format_fraction(io, d, millisecond(dt), 3)
+format(io, d::DatePart{'n'}, dt) = format_fraction(io, d, subsecond_nanoseconds(dt), 9)
 
-# The fractional second with trailing zeros stripped, then zero-padded on the
-# right to the code's width: 500 milliseconds formats as "5" under `n` and as
-# "500000000" under `nnnnnnnnn`; both parse back to the same value.
-function format(io, d::DatePart{'n'}, dt)
-    format_fraction(io, d, subsecond_nanoseconds(dt), 9)
-end
-
+# Nanoseconds since the start of the second
 subsecond_nanoseconds(dt::DateTime) = 1000000 * millisecond(dt)
-subsecond_nanoseconds(dt::Time) =
-    1000000 * millisecond(dt) + 1000 * microsecond(dt) + nanosecond(dt)
+subsecond_nanoseconds(t::Time) = mod(value(t), 1000000000)
 subsecond_nanoseconds(dt::Timestamp{P}) where {P} =
     mod(value(dt), 1000000000 ÷ timestamp_scale(P)) * timestamp_scale(P)
 
@@ -428,7 +422,9 @@ milliseconds.
 Characters not listed above are normally treated as delimiters between date and time slots.
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
 "y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using
-backslash. The date "1995y01m" would have the format "y\\ym\\m".
+backslash. The date "1995y01m" would have the format "y\\ym\\m". It is safest to escape
+every letter that is meant literally, because new codes can be added (Julia 1.14 added
+`n`) and packages can define their own (TimeZones.jl adds `z` and `Z`).
 
 Note that 12:00AM corresponds to 00:00 (midnight), and 12:00PM corresponds to 12:00 (noon).
 When parsing a time with a `p` specifier, any hour (either `H` or `I`) is interpreted as a 12-hour clock, so the `I` code is mainly useful for output.
@@ -534,10 +530,8 @@ default_format(::Type{DateTime}) = ISODateTimeFormat
 """
     Dates.ISOTimestampFormat
 
-Describes the ISO8601 formatting for a date and time at nanosecond resolution.
-This is the default value for `Dates.format` of a `Timestamp`. The fractional
-second is written with trailing zeros stripped and parsed with up to nanosecond
-precision.
+Describes the ISO8601 formatting for a date and time with up to nanosecond precision.
+This is the default value for `Dates.format` of a `Timestamp`.
 
 # Examples
 ```jldoctest
@@ -580,9 +574,7 @@ julia> Dates.format(Time(12, 0, 43, 1), ISOTimeFormat)
 ```
 
 !!! compat "Julia 1.14"
-    Before Julia 1.14 the fractional second used the millisecond code `s`, so
-    times with sub-millisecond parts did not round-trip through their printed
-    form.
+    Before Julia 1.14, `ISOTimeFormat` was `HH:MM:SS.s`, with millisecond precision.
 """
 const ISOTimeFormat = DateFormat("HH:MM:SS.n")
 default_format(::Type{Time}) = ISOTimeFormat
@@ -800,7 +792,7 @@ following character codes can be used to construct the `format` string:
 | `M`        | 0, 59     | Minute with a minimum width                                  |
 | `S`        | 0, 59     | Second with a minimum width                                  |
 | `s`        | 5, 500    | Fractional second to millisecond precision                   |
-| `n`        | 5, 123456789 | Fractional second, trailing zeros stripped                |
+| `n`        | 5, 123456789 | Fractional second to nanosecond precision                 |
 | `e`        | Mon, Tue  | Abbreviated days of the week                                 |
 | `E`        | Monday    | Full day of week name                                        |
 

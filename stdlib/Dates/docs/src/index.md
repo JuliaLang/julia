@@ -4,9 +4,9 @@
 DocTestSetup = :(using Dates)
 ```
 
-The `Dates` module provides three types for working with dates: [`Date`](@ref),
-[`DateTime`](@ref), and [`Timestamp`](@ref). They provide day precision, millisecond precision, and
-a choice of second, millisecond, microsecond, or nanosecond precision, respectively. All three are subtypes of the abstract
+The `Dates` module provides three types for working with dates: [`Date`](@ref) with day
+precision, [`DateTime`](@ref) with millisecond precision, and [`Timestamp`](@ref) with second,
+millisecond, microsecond, or nanosecond precision. All three are subtypes of the abstract
 [`TimeType`](@ref).
 The motivation for distinct types is simple: some operations are much simpler, both in terms of
 code and mental reasoning, when the complexities of greater precision don't have to be dealt with.
@@ -14,72 +14,58 @@ For example, since the [`Date`](@ref) type only resolves to the precision of a s
 no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer
 time, and leap seconds are unnecessary and avoided.
 
-[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) are immutable [`Int64`](@ref)
-wrappers. The single `instant` field of each type is a `UTInstant{P}` type, which
+[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) are immutable [`Int64`](@ref) wrappers.
+The single `instant` field of each type is a `UTInstant{P}` type, which
 represents a continuously increasing machine timeline based on the UT second [^1]. The
 [`DateTime`](@ref) type is not aware of time zones (*naive*, in Python parlance),
 analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
-compiles the [IANA time zone database](https://www.iana.org/time-zones). [`Date`](@ref),
-[`DateTime`](@ref), and [`Timestamp`](@ref) are based on the
-[ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) standard, which follows the
-proleptic Gregorian calendar.
+compiles the [IANA time zone database](https://www.iana.org/time-zones). All three types are
+based on the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) standard, which follows the proleptic Gregorian calendar.
 One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last
 day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists.
 The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is the day before
 `0001-01-01`, and year `-0001` (yes, negative one for the year) is 2 BC/BCE, year `-0002` is 3
 BC/BCE, etc.
 
-The [`Timestamp`](@ref) family stores an `Int64` count from the Unix epoch
-`1970-01-01T00:00:00`. Choose `Timestamp{Second}`, `Timestamp{Millisecond}`,
-`Timestamp{Microsecond}`, or `Timestamp{Nanosecond}`. Plain `Timestamp(...)`
-constructs a nanosecond timestamp; `Timestamp(ts::Timestamp)` preserves its resolution.
-Each resolution supports
-construction, accessors, arithmetic, rounding, adjusters, ranges, parsing, and formatting.
+A `Timestamp{P}` stores an `Int64` count of `P` since the Unix epoch, `1970-01-01T00:00:00`,
+where the resolution `P` is `Second`, `Millisecond`, `Microsecond`, or `Nanosecond`.
+`Timestamp(...)` without a type parameter creates a `Timestamp{Nanosecond}`. A finer
+resolution covers a shorter range:
 
-| Resolution | Approximate range around 1970 |
-|:-----------|:------------------------------|
-| `Second` | ±292 billion years |
-| `Millisecond` | ±292 million years |
-| `Microsecond` | ±292 thousand years |
-| `Nanosecond` | 1677–2262 |
+| Resolution    | Approximate range         |
+|:--------------|:--------------------------|
+| `Nanosecond`  | 1677 through 2262         |
+| `Microsecond` | 1970 ± 292 thousand years |
+| `Millisecond` | 1970 ± 292 million years  |
+| `Second`      | 1970 ± 292 billion years  |
 
-`Timestamp{Millisecond}` offers the same resolution as `DateTime`, with a Unix
-epoch and a wider supported range. `DateTime` keeps its existing representation
-and API. Use `DateTime` for existing civil-time APIs and `Timestamp{P}` for Unix
-timestamps with an explicit resolution. Use concrete array elements and struct
-fields, such as `Vector{Timestamp{Microsecond}}` and `::Timestamp{Microsecond}`,
-for compact storage; the bare `Timestamp` type is not concrete. Nanosecond value buffers from Arrow or NumPy have the same
-physical layout as `Timestamp{Nanosecond}`; null, sentinel, and timezone handling
-still require care.
+Use `DateTime` when millisecond precision is enough. Use `Timestamp` when you need finer
+precision, or for data that counts from the Unix epoch, such as Arrow and NumPy
+timestamps. The bare `Timestamp` type is not concrete, so for arrays and struct fields,
+use a concrete type such as `Timestamp{Nanosecond}`.
 
-Conversions between timestamp resolutions require exact representation. For example,
-`Timestamp{Second}(Timestamp("2020-01-01T00:00:00.5"))` throws an `InexactError`.
-Use `Timestamp{Second}(floor(ts, Second))` to discard fractional seconds explicitly.
-Rounding throws an `InexactError` if the requested result is outside the type's range
-or is not representable at its resolution.
-Period arithmetic preserves the timestamp resolution and rejects a duration that
-cannot be represented at that resolution, whereas `DateTime` rounds finer durations
-to milliseconds. Mixed timestamp arithmetic promotes
-to the finer resolution and requires both inputs to fit its range.
+Converting to a coarser `Timestamp` resolution, or adding a period finer than `P`,
+throws an `InexactError` if it would lose precision. For example,
+`Timestamp{Second}(Timestamp("2020-01-01T00:00:00.5"))` throws, while
+`Timestamp{Second}(floor(ts, Second))` drops the fraction first. Operations that mix
+resolutions use the finer one.
 
 [^1]:
     The notion of the UT second is actually quite fundamental. There are basically two different notions
     of time generally accepted, one based on the physical rotation of the earth (one full rotation
     = 1 day), the other based on the SI second (a fixed, constant value). These are radically different!
     Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different
-    absolute length depending on the day! Anyway, the fact that [`Date`](@ref),
-    [`DateTime`](@ref), and [`Timestamp`](@ref)
-    are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds
-    and all their complexity can be avoided. This basis of time is formally called [UT](https://en.wikipedia.org/wiki/Universal_Time)
+    absolute length depending on the day! Anyway, the fact that [`Date`](@ref), [`DateTime`](@ref),
+    and [`Timestamp`](@ref) are based on UT seconds is a simplifying, yet honest assumption so that
+    things like leap seconds and all their complexity can be avoided. This basis of time is formally called [UT](https://en.wikipedia.org/wiki/Universal_Time)
     or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every
     day has 24 hours and leads to more natural calculations when working with calendar dates.
 
 ## Constructors
 
-[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) values can be
-constructed by integer or [`Period`](@ref) types, by parsing, or through
-function-based adjuster constructors (more on those later):
+[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) types can be constructed by integer or
+[`Period`](@ref) types, by parsing, or through adjusters (more on those later):
 
 ```jldoctest
 julia> DateTime(2013)
@@ -213,11 +199,10 @@ A full suite of parsing and formatting tests and examples is available in [`stdl
 Finding the length of time between two [`Date`](@ref) or [`DateTime`](@ref) is straightforward
 given their underlying representation as `UTInstant{Day}` and `UTInstant{Millisecond}`, respectively.
 The difference between [`Date`](@ref) is returned in the number of [`Day`](@ref), [`DateTime`](@ref)
-in the number of [`Millisecond`](@ref), and [`Timestamp`](@ref) in the number of
-units of its resolution `P`. Mixed timestamp differences use the finer resolution;
-`DateTime` participates with millisecond resolution. Similarly, comparing [`TimeType`](@ref)
-is a simple matter of comparing the underlying machine instants (which in turn compares the
-internal [`Int64`](@ref) values).
+in the number of [`Millisecond`](@ref), and `Timestamp{P}` in the number of `P`. A difference
+between two types uses the finer resolution, where `DateTime` counts as `Millisecond`.
+Similarly, comparing [`TimeType`](@ref) is a simple matter
+of comparing the underlying machine instants (which in turn compares the internal [`Int64`](@ref) values).
 
 ```jldoctest
 julia> dt = Date(2012,2,29)
