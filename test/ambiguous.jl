@@ -624,6 +624,73 @@ end
     @test g(Type{Int}) == 2
 end
 
+# A slurp method only prunes `Union{}` overlaps for the calls its other arguments cover:
+# `AbstractVector{Int}` and `AbstractVector{Float64}` share a typemap bucket, but
+# `k(Float64[], Union{})` still dispatches to the `X` method.
+module SlurpPrefix
+    abstract type X end
+    k(::AbstractVector{Int}, ::Type{Union{}}, slurp...) = 0
+    k(::AbstractVector{Float64}, ::Type{<:X}) = "X"
+    for i in 1:8
+        Y = Symbol(:Y, i)
+        @eval abstract type $Y end
+        @eval k(::AbstractVector{Int}, ::Type{<:$Y}) = $i
+        @eval k(::AbstractVector{String}, ::Type{<:$Y}) = $i
+    end
+    g(v::AbstractVector, T::Type{<:AbstractString}) = k(v, T)
+end
+@testset "Union{} slurp does not prune calls with uncovered prefix arguments" begin
+    @test SlurpPrefix.k(Float64[], Union{}) == "X"
+    ms = Base._methods_by_ftype(Tuple{typeof(SlurpPrefix.k), AbstractVector, Type{<:AbstractString}},
+                                -1, Base.get_world_counter())
+    @test which(SlurpPrefix.k, (AbstractVector{Float64}, Type{<:SlurpPrefix.X})) in [m.method for m in ms]
+    @test String <: Base.infer_return_type(SlurpPrefix.g, (AbstractVector, Type{<:AbstractString}))
+end
+
+# Fixing the query's argument to `Union{}` drops the only invariant occurrence of `T`, which
+# makes `T` diagonal and loses `k(1, 2.0, Union{})`, which the diagonal slurp method does not
+# cover. `typeintersect` makes this mistake (#63345), so `ml_matches` treats the `X` method as
+# shadowed by the slurp method, and the typemap's `Union{}` pruning check shares it too.
+module SlurpDiagonal
+    abstract type X end
+    k(::T, ::T, ::Type{Union{}}, slurp...) where {T} = 0
+    k(::Any, ::Any, ::Type{<:X}) = "X"
+    for i in 1:8
+        Y = Symbol(:Y, i)
+        @eval abstract type $Y end
+        @eval k(::Any, ::Any, ::Type{<:$Y}, ::Int) = $i
+    end
+end
+@testset "Union{} slurp does not prune calls excluded by its diagonal typevar" begin
+    @test SlurpDiagonal.k(1, 2.0, Union{}) == "X"
+    ms = Base._methods_by_ftype(Tuple{typeof(SlurpDiagonal.k), T, T, Type{<:Ref{T}}} where T,
+                                -1, Base.get_world_counter())
+    @test_broken which(SlurpDiagonal.k, (Any, Any, Type{<:SlurpDiagonal.X})) in [m.method for m in ms]
+end
+
+# A `Type{Union{}}` method without a slurp only prunes `Union{}` overlaps for the calls it
+# covers: not those with a wider later argument, nor those with more arguments.
+module BottomFixedArity
+    abstract type X end
+    k(::Type{Union{}}, ::Int) = 0
+    k(::Type{<:X}, ::Float64) = "X"
+    k(::Type{<:X}, ::Int, ::Int) = "XX"
+    for i in 1:8
+        Y = Symbol(:Y, i)
+        @eval abstract type $Y end
+        @eval k(::Type{<:$Y}, ::String) = $i
+    end
+end
+@testset "Union{} fixed-arity method does not prune calls it does not cover" begin
+    world = Base.get_world_counter()
+    @test BottomFixedArity.k(Union{}, 1.0) == "X"
+    ms = Base._methods_by_ftype(Tuple{typeof(BottomFixedArity.k), Type{<:AbstractString}, Any}, -1, world)
+    @test which(BottomFixedArity.k, (Type{<:BottomFixedArity.X}, Float64)) in [m.method for m in ms]
+    @test BottomFixedArity.k(Union{}, 1, 2) == "XX"
+    ms = Base._methods_by_ftype(Tuple{typeof(BottomFixedArity.k), Type{<:AbstractString}, Int, Vararg{Any}}, -1, world)
+    @test which(BottomFixedArity.k, (Type{<:BottomFixedArity.X}, Int, Int)) in [m.method for m in ms]
+end
+
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
     @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})

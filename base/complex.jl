@@ -190,7 +190,7 @@ Union{Missing, Complex{Int64}}
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
 complex(::Type{Union{}}) = Union{}
-# Keep the slurp signature for bottom-type dispatch pruning (typemap_slurp_search),
+# Keep the slurp signature for bottom-type dispatch pruning,
 # but do not let invalid arities contribute a successful result to inference.
 complex(::Type{Union{}}, slurp...) = throw(MethodError(complex, (Union{}, slurp...)))
 
