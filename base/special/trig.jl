@@ -397,9 +397,9 @@ arc_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
     pio2_lo = 6.12323399573676603587e-17
     s, e = two_sqrt(t)
     whi = 2.0*s
-    wlo = 2.0*muladd(s, arc_tRt(t), e)
+    wlo = muladd(s, arc_tRt(t), e)
     r, rlo = fast_two_diff(pio2_hi, whi)
-    return flipsign(r + (rlo + (pio2_lo - wlo)), x)
+    return flipsign(r + (rlo + muladd(-2.0, wlo, pio2_lo)), x)
 end
 @inline function asin_kernel(t::Float32, x::Float32)
     s = sqrt_llvm(Float64(t))
