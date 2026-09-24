@@ -4069,8 +4069,26 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     return 0;
 }
 
+// whether the bounds of `tv` admit a kind (or `AnyType`) as a value
+static int typevar_may_be_kind(jl_tvar_t *tv) JL_CANSAFEPOINT
+{
+    if (tv->ub == (jl_value_t*)jl_any_type ||
+            jl_has_free_typevars(tv->lb) || jl_has_free_typevars(tv->ub))
+        return 1;
+    jl_value_t *kinds[] = {
+        (jl_value_t*)jl_uniontype_type, (jl_value_t*)jl_datatype_type,
+        (jl_value_t*)jl_unionall_type, (jl_value_t*)jl_typeeq_type,
+        (jl_value_t*)jl_typeegal_type, (jl_value_t*)jl_typeofbottom_type,
+        (jl_value_t*)jl_anytype_type };
+    for (size_t i = 0; i < sizeof(kinds) / sizeof(kinds[0]); i++) {
+        if (jl_subtype(tv->lb, kinds[i]) && jl_subtype(kinds[i], tv->ub))
+            return 1;
+    }
+    return 0;
+}
+
 // compute if DataType<:t || Union<:t || UnionAll<:t etc.
-int jl_has_intersect_kind_not_type(jl_value_t *t)
+int jl_has_intersect_kind_not_type(jl_value_t *t) JL_CANSAFEPOINT
 {
     t = jl_unwrap_unionall(t);
     if (t == (jl_value_t*)jl_any_type || is_kind_or_anytype(t))
@@ -4081,7 +4099,11 @@ int jl_has_intersect_kind_not_type(jl_value_t *t)
                jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->b);
     if (jl_is_some_Type(t)) {
         jl_value_t *T = jl_some_Type_T(t);
-        return jl_is_typevar(T) || is_kind_or_anytype(T);
+        // a bounded `Type{T}` such as `Type{<:Number}` cannot hold a kind, so keep it
+        // out of the kind path (which disables name-based filtering in typemap scans)
+        if (jl_is_typevar(T))
+            return typevar_may_be_kind((jl_tvar_t*)T);
+        return is_kind_or_anytype(T);
     }
     if (jl_is_typevar(t))
         return jl_has_intersect_kind_not_type(((jl_tvar_t*)t)->ub);

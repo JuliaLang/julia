@@ -565,6 +565,26 @@ end
     @test Base.BroadcastStyle(Base.Broadcast.DefaultArrayStyle{1}(), Base.Broadcast.Unknown()) === Base.Broadcast.DefaultArrayStyle{1}()
 end
 
+# An `f(::Type{Union{}}, slurp...)` method lets method insertion skip methods that
+# overlap only through `Union{}`, even for a bounded `Type{<:T}` signature.
+module SlurpPruning
+    for T in (:Real, :AbstractString, :Symbol, :AbstractArray, :AbstractDict, :AbstractSet,
+              :Tuple, :Exception, :IO, :Function, :Module)
+        @eval g(::Type{<:$T}) = 1
+    end
+    g(::Type{Union{}}) = 0
+    g(::Type{Union{}}, slurp...) = error()
+    g(::Type{<:Number}) = 2
+end
+@testset "Union{} slurp prunes bounded Type{<:T} intersections" begin
+    m = which(SlurpPruning.g, (Type{<:Number},))
+    mem = m.interferences
+    sigs = Set(mem[i].sig for i in eachindex(mem) if isassigned(mem, i))
+    G = typeof(SlurpPruning.g)
+    @test sigs == Set([Tuple{G, Type{Union{}}}, Tuple{G, Type{Union{}}, Vararg{Any}},
+                       Tuple{G, Type{<:Real}}])
+end
+
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
     @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})
