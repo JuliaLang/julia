@@ -563,3 +563,20 @@ let M = UninformativeEffects, interp = InvalidationTester()
     @eval M callee(x::Int) = x
     @test ci.max_world != typemax(UInt)
 end
+
+# The `Nothing` branch of this uninformative union split is evaluated concretely and folded
+# into the caller, which commits to the matched method; a more specific method for that
+# branch must invalidate the caller.
+module UninformativeFold
+    Base.@assume_effects :foldable @noinline callee(x) = Base.inferencebarrier(identity)(1)
+    @noinline callee(x::Integer) = Base.inferencebarrier(identity)(x)
+    caller(v::Vector{Union{Nothing,Integer}}) = callee(v[1])
+end
+let M = UninformativeFold, interp = InvalidationTester()
+    Base.return_types(M.caller, (Vector{Union{Nothing,Integer}},); interp)
+    ci = Base.method_instance(M.caller, (Vector{Union{Nothing,Integer}},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(::Nothing) = 2
+    @test ci.max_world != typemax(UInt)
+end
