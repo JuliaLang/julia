@@ -328,6 +328,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     inferidx[] += 1
                     local method = match.method
                     local sig = match.spec_types
+                    # Widening to a compilation signature can erase the proof that
+                    # the original candidate has no possible argument values.
+                    local sigtuple = unwrap_unionall(sig)::DataType
+                    has_valid_argtypes(sigtuple) || continue
                     local mi = specialize_method(match; preexisting=true)
                     local call_result = call_results[edge_idx]
                     if (mi === nothing || !(call_result isa LocalInferenceResult) ||
@@ -668,8 +672,9 @@ function abstract_call_method(interp::AbstractInterpreter,
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
         return Future(MethodCallResult(Any, Any, Effects(), nothing, false, false))
-    all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), sigtuple.parameters) ||
-        return Future(MethodCallResult(Union{}, Any, EFFECTS_THROWS, nothing, false, false)) # catch bad type intersections early
+    # An uninhabited candidate contributes neither values, exceptions, nor effects.
+    has_valid_argtypes(sigtuple) ||
+        return Future(MethodCallResult(Bottom, Bottom, EFFECTS_TOTAL, nothing, false, false))
 
     if is_nospecializeinfer(method)
         sig = get_nospecializeinfer_sig(method, sig, sparams)
@@ -1721,8 +1726,10 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     end
     if isa(tti, Union)
         utis = uniontypes(tti)
-        # refine the Union to remove elements that are not valid tags for objects
-        filter!(@nospecialize(x) -> valid_as_lattice(x, true), utis)
+        # Also discard tuples with an uninhabited required element: the outer
+        # tuple's cached flag need not reflect the validity of its elements.
+        filter!(@nospecialize(x) -> valid_as_lattice(x, true) &&
+            (!(x isa DataType && x.name === Tuple.name) || has_valid_argtypes(x)), utis)
         if length(utis) == 0
             return Future(AbstractIterationResult(Any[], nothing)) # oops, this statement was actually unreachable
         elseif length(utis) == 1
@@ -2587,7 +2594,9 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     ti = tienv[1]
     env = tienv[2]::SimpleVector
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
-    match = MethodMatch(ti, env, method, argtype <: method.sig)
+    # The invoke signature may be narrower than the selected method's signature.
+    # Its argument check can throw even when the method itself is unreachable.
+    match = MethodMatch(ti, env, method, argtype <: lookupsig && argtype <: method.sig)
     ft′_box = Core.Box(ft′)
     lookupsig_box = Core.Box(lookupsig)
     invokecall = InvokeCall(types)

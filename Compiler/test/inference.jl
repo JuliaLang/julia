@@ -8222,4 +8222,50 @@ function splatted_task_invoke(@nospecialize(rest::Tuple))
 end
 @test Base.infer_return_type(splatted_task_invoke, (Tuple,)) === Tuple{}
 
+# aviatesk/JET.jl#564: exclude impossible method matches without losing reachable branches or exceptions.
+module JET564
+struct Required{T,S}
+    x::T
+end
+struct Optional{T,S}
+    x::T
+    Optional{T,S}() where {T,S} = new{T,S}()
+end
+foo(::Required) = 1
+foo(::Required{<:AbstractString}) = 2.0
+foo(::Optional) = 1
+foo(::Optional{<:AbstractString}) = 2.0
+bar(x) = foo(x)
+invoke_target(::Required) = 1
+const INVOKE_SIG = Tuple{Required{<:AbstractString}}
+invoke_mismatch(x::Required) = invoke(invoke_target, INVOKE_SIG, x)
+splat(xs) = identity(xs...)
+end
+
+@testset "uninhabited method matches (JET.jl#564)" begin
+    Required, Optional = JET564.Required, JET564.Optional
+    @testset "impossible candidate does not affect inference" begin
+        T = Required{<:Integer}
+        @test Base.infer_return_type(JET564.bar, (T,)) === Int
+        @test Base.infer_exception_type(JET564.bar, (T,)) === Union{}
+        @test Compiler.is_nothrow(Base.infer_effects(JET564.bar, (T,)))
+    end
+    @testset "undefined fields allow the otherwise impossible branch" begin
+        @test Base.infer_return_type(JET564.bar, (Optional{<:Integer},)) == Union{Int,Float64}
+        @test JET564.bar(Optional{Union{},Nothing}()) === 2.0
+    end
+    @testset "invoke still checks the requested signature" begin
+        T = Required{<:Integer,Nothing}
+        @test Base.infer_exception_type(JET564.invoke_mismatch, (T,)) === TypeError
+        @test !Compiler.is_nothrow(Base.infer_effects(JET564.invoke_mismatch, (T,)))
+        @test_throws TypeError JET564.invoke_mismatch(Required{Int,Nothing}(1))
+    end
+    @testset "splat ignores an uninhabited tuple alternative" begin
+        interp = Compiler.NativeInterpreter(;
+            inf_params=Compiler.InferenceParams(; max_apply_union_enum=0))
+        T = Union{Tuple{Required{Union{}}},Tuple{Int}}
+        @test Base.infer_return_type(JET564.splat, (T,); interp) === Int
+    end
+end
+
 end # module inference

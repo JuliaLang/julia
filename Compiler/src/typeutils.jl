@@ -71,13 +71,23 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     end
     if x isa DataType
         if astag && isstructtype(x)
-            datatype_fieldtypes(x) # force computation of has_concrete_subtype to be updated now
-            return has_concrete_subtype(x)
+            ftypes = datatype_fieldtypes(x)
+            has_concrete_subtype(x) || return false
+            # Partially instantiated types may not have a layout, so their cached
+            # flag can miss a required bottom field. Do not recursively inspect
+            # field types: this check must also terminate for recursive structs.
+            for i in 1:min(length(ftypes), datatype_min_ninitialized(x))
+                ftypes[i] === Bottom && return false
+            end
+            return true
         end
         return true
     end
     return false
 end
+
+has_valid_argtypes(sigtuple::DataType) =
+    all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), sigtuple.parameters)
 
 function valid_typeof_tparam(@nospecialize(t))
     if t === Symbol || t === Module || isbitstype(t)
