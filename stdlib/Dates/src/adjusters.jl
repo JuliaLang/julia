@@ -15,7 +15,7 @@ Base.trunc(dt::DateTime, p::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
 Base.trunc(dt::DateTime, p::Type{Second}) = dt - Millisecond(dt)
 Base.trunc(dt::DateTime, p::Type{Millisecond}) = dt
 
-Base.trunc(dt::Timestamp, ::Type{P}) where {P<:Period} = floor(dt, oneunit(P))
+Base.trunc(dt::Timestamp, ::Type{T}) where {T<:Period} = floor(dt, oneunit(T))
 
 Base.trunc(t::Time, p::Type{Hour}) = Time(Hour(t))
 Base.trunc(t::Time, p::Type{Minute}) = Time(Hour(t), Minute(t))
@@ -48,9 +48,6 @@ Adjusts `dt` to the Monday of its week.
 julia> firstdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-01T00:00:00
 ```
-
-!!! compat "Julia 1.14"
-    This function was generalized from `DateTime` to `AbstractDateTime` in Julia 1.14.
 """
 function firstdayofweek end
 
@@ -67,9 +64,6 @@ Adjusts `dt` to the Sunday of its week.
 julia> lastdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-07T00:00:00
 ```
-
-!!! compat "Julia 1.14"
-    This function was generalized from `DateTime` to `AbstractDateTime` in Julia 1.14.
 """
 function lastdayofweek end
 
@@ -86,9 +80,6 @@ Adjusts `dt` to the first day of its month.
 julia> firstdayofmonth(DateTime("1996-05-20"))
 1996-05-01T00:00:00
 ```
-
-!!! compat "Julia 1.14"
-    This function was generalized from `DateTime` to `AbstractDateTime` in Julia 1.14.
 """
 function firstdayofmonth end
 
@@ -105,9 +96,6 @@ Adjusts `dt` to the last day of its month.
 julia> lastdayofmonth(DateTime("1996-05-20"))
 1996-05-31T00:00:00
 ```
-
-!!! compat "Julia 1.14"
-    This function was generalized from `DateTime` to `AbstractDateTime` in Julia 1.14.
 """
 function lastdayofmonth end
 
@@ -127,9 +115,6 @@ Adjusts `dt` to the first day of its year.
 julia> firstdayofyear(DateTime("1996-05-20"))
 1996-01-01T00:00:00
 ```
-
-!!! compat "Julia 1.14"
-    This function was generalized from `DateTime` to `AbstractDateTime` in Julia 1.14.
 """
 function firstdayofyear end
 
@@ -146,9 +131,6 @@ Adjusts `dt` to the last day of its year.
 julia> lastdayofyear(DateTime("1996-05-20"))
 1996-12-31T00:00:00
 ```
-
-!!! compat "Julia 1.14"
-    This function was generalized from `DateTime` to `AbstractDateTime` in Julia 1.14.
 """
 function lastdayofyear end
 
@@ -171,9 +153,6 @@ julia> firstdayofquarter(DateTime("1996-05-20"))
 julia> firstdayofquarter(DateTime("1996-08-20"))
 1996-07-01T00:00:00
 ```
-
-!!! compat "Julia 1.14"
-    This function was generalized from `DateTime` to `AbstractDateTime` in Julia 1.14.
 """
 function firstdayofquarter end
 
@@ -197,9 +176,6 @@ julia> lastdayofquarter(DateTime("1996-05-20"))
 julia> lastdayofquarter(DateTime("1996-08-20"))
 1996-09-30T00:00:00
 ```
-
-!!! compat "Julia 1.14"
-    This function was generalized from `DateTime` to `AbstractDateTime` in Julia 1.14.
 """
 function lastdayofquarter end
 
@@ -350,9 +326,7 @@ the provided `y, m, d...` arguments, and will be adjusted until `f::Function` re
 `true`. The step size in adjusting can be provided manually through the `step` keyword.
 `limit` provides a limit to the max number of iterations the adjustment API will
 pursue before throwing an error (in the case that `f::Function` is never satisfied).
-The default step is `Day(1)` when only a year or month is supplied. Each
-additional part changes the default to the next finer unit, down to
-`Nanosecond(1)`.
+`Timestamp{P}(f, ...)` works the same way, with a default `step` of at least `P(1)`.
 
 !!! compat "Julia 1.14"
     `Timestamp` requires Julia 1.14 or later.

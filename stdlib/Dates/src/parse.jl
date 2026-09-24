@@ -108,6 +108,7 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
     end
 end
 
+# Every Timestamp{P} parses the same fields
 conversion_translations(::Type{T}) where {T<:TimeType} = CONVERSION_TRANSLATIONS[T]
 conversion_translations(::Type{<:Timestamp}) = CONVERSION_TRANSLATIONS[Timestamp]
 
@@ -149,6 +150,8 @@ If successful, returns a 2-element tuple `(values, pos)`:
     # Unpacks the value tuple returned by `tryparsenext_core` into separate variables.
     value_tuple = Expr(:tuple, value_names...)
 
+    # DateTime has no nanosecond field, so add an `n` field to the milliseconds. It must
+    # be a whole number of milliseconds.
     normalize_fraction = if T === DateTime && Nanosecond in tokens
         quote
             millisecond_from_nanoseconds, nanosecond_remainder =

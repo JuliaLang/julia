@@ -550,7 +550,7 @@ end
                    dateformat"yyyy-mm-dd\THH:MM:SS.n") === nothing
     @test_throws ArgumentError parse(Dates.DateTime, "2020-01-01T00:00:00.000000001",
                                      dateformat"yyyy-mm-dd\THH:MM:SS.n")
-    # sub-millisecond times now round-trip through the default format
+    # sub-millisecond times round-trip through the default format
     t = Dates.Time(12, 0, 0, 123, 456, 789)
     @test string(t) == "12:00:00.123456789"
     @test Dates.Time(string(t)) == t

@@ -242,21 +242,15 @@ Standard library changes
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
-* A new `Timestamp{P}` type represents an instant as an `Int64` count since the Unix epoch,
-  with `Second`, `Millisecond`, `Microsecond`, or `Nanosecond` resolution. Plain `Timestamp(...)`
-  defaults to nanoseconds, covering the years 1677 through 2262; coarser resolutions have wider
-  ranges. Each concrete type is 8 bytes. Conversions between resolutions require exact
-  representation, and promotion selects the finer resolution. It supports accessors, period
-  arithmetic, rounding, adjusters, ranges, parsing, and formatting. It compares directly with
-  `Date` and `DateTime` and supports mixed arithmetic with in-range `DateTime` values ([#62994]).
-* `hash` is now consistent with `==` across `Date`, `DateTime`, and `Timestamp`, so equal instants of
-  different types can be used interchangeably as dictionary keys ([#62994]).
-* A new `n` format code parses and formats fractional seconds with up to nanosecond precision
-  (`.5` is 500 milliseconds, `.123456789` is 123456789 nanoseconds). This is a breaking
-  change for format strings using a literal `n`, which must now be escaped. The default `Time` format now
-  uses it, so `Time` values with sub-millisecond parts round-trip through their printed form;
-  relatedly, the nanosecond argument of the `Time` constructor may now carry a full fractional
-  second (values up to 999999999) as long as the sub-second parts together stay below one second ([#62994]).
+* New `Timestamp{P}` type: a point in time stored as an `Int64` count of `P` (`Second`, `Millisecond`,
+  `Microsecond`, or `Nanosecond`) since the Unix epoch. `Timestamp(...)` creates a
+  `Timestamp{Nanosecond}`, which covers the years 1677 through 2262 ([#62994]).
+* Equal `Date`, `DateTime`, and `Timestamp` values now have equal hashes, as `==` requires ([#62994]).
+* New `n` format code for fractional seconds with up to nanosecond precision. A format that used `n`
+  as a literal character must now escape it with a backslash. The default `Time` format,
+  `ISOTimeFormat`, now uses `n`, so `Time` values with sub-millisecond parts round-trip through
+  `string`. The `ns` argument of `Time` now accepts a whole fractional second, `0` through
+  `999999999` ([#62994]).
 
 #### InteractiveUtils
 

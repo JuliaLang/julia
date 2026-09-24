@@ -90,7 +90,12 @@ function Base.floor(t::Time, p::TimePeriod)
     return Time(Nanosecond(nanoseconds - mod(nanoseconds, value(Nanosecond(p)))))
 end
 
-# Keep rounding candidates wide; only the requested result must fit.
+# Timestamp rounding. The `timestamp_rounding_bounds` methods return the floor and the
+# ceiling of `dt` as Int128 nanoseconds since the Unix epoch (only the floor, twice, if
+# `upper` is false). Int128 keeps a bound outside the Timestamp range from wrapping;
+# `timestamp_rounding_value` throws an InexactError if the chosen bound does not fit
+# in Timestamp{P}. The grids match those of Date and DateTime: months count from
+# 0000-01, weeks from Monday 0000-01-03, and other fixed periods from 0000-01-01.
 function timestamp_rounding_value(dt::Timestamp{P}, ns, op::Symbol) where {P}
     ticks, remainder = divrem(ns, timestamp_scale(P))
     iszero(remainder) && typemin(Int64) <= ticks <= typemax(Int64) ||
@@ -98,8 +103,8 @@ function timestamp_rounding_value(dt::Timestamp{P}, ns, op::Symbol) where {P}
     return Timestamp{P}(UTInstant(P(Int64(ticks))))
 end
 
-# Ordinary calendar years use Int64 arithmetic. Large rounding intervals can
-# place a candidate outside even Date's range, so retain a wide fallback.
+# Rata Die day of the first day of month `m` of year `y`, as an Int128. A very large
+# rounding period can give a year for which `totaldays` overflows Int64.
 @inline function timestamp_rounding_days(y, m)
     if typemin(Int64) ÷ 366 + 1 <= y <= typemax(Int64) ÷ 366 - 1
         return Int128(totaldays(Int64(y), Int64(m), 1))
@@ -107,6 +112,7 @@ end
     return totaldays(Int128(y), m, 1)
 end
 
+# `months` is the month of `dt`, counted from 0000-01, and `step` is the period in months
 @inline function timestamp_month_bounds(dt::Timestamp, months, step, upper::Bool)
     lower = months - mod(months, step)
     fy, fm = fldmod(lower, 12)
@@ -124,8 +130,8 @@ end
     y, m = yearmonth(dt)
     months = 12y + m - 1
     step = Int128(value(p)) * (p isa Year ? 12 : p isa Quarter ? 3 : 1)
-    # Timestamp month counts have magnitude below 4e12. If step fits Int64,
-    # the adjacent multiples fit too; Year and Quarter can require a wider step.
+    # `months` is below 4e12 in magnitude, so if `step` fits in Int64, so do the
+    # multiples of `step` next to `months`. A large Year or Quarter may not fit.
     if step <= typemax(Int64)
         return timestamp_month_bounds(dt, months, Int64(step), upper)
     end
