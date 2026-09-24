@@ -3531,8 +3531,8 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
             if (ci_not_internal_cache(ci))
                 jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
         }
-        // Also root the inferred-only entries chosen for the method caches. Code inferred
-        // behind a call site that records no edges is not reachable from any caller.
+        // Also root the inferred-only entries chosen for the method caches: code behind a call
+        // site that records no edges may not be reachable through any edge.
         if (native_functions) {
             htable_t compiled;
             htable_new(&compiled, CIs.len);
