@@ -324,6 +324,17 @@ end
 @test !args_morespecific(Tuple{DataType}, Tuple{Type{T}} where T<:Integer)
 @test  args_morespecific(Tuple{Type{T}} where T<:Integer, Tuple{DataType})
 @test  args_morespecific(Tuple{Type{Int}}, Tuple{DataType})
+# `Type{X}` is more specific than any kind, including the wrapper kinds of `Type{Int}`
+@test  args_morespecific(Tuple{Type{Type{Int}}}, Tuple{Core.TypeEq})
+@test !args_morespecific(Tuple{Core.TypeEq}, Tuple{Type{Type{Int}}})
+@test  args_morespecific(Tuple{Type{Core.TypeEgal{Int}}}, Tuple{Core.TypeEgal})
+@test !args_morespecific(Tuple{Core.TypeEgal}, Tuple{Type{Core.TypeEgal{Int}}})
+module WrapperKindSpecificity
+    f(::Type{Type{Int}}) = 1
+    f(::Core.TypeEq) = 2
+end
+@test WrapperKindSpecificity.f(Type{Int}) == 1
+@test WrapperKindSpecificity.f(Type{Float64}) == 2
 
 # requires assertions enabled
 let root = NTuple

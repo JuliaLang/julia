@@ -7190,8 +7190,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
             if (sub_msp(b, (jl_value_t*)jl_type_type, (jl_value_t*)jl_type_type, env))
                 return 1;
         }
-        else if (b == (jl_value_t*)jl_datatype_type || b == (jl_value_t*)jl_unionall_type ||
-                 b == (jl_value_t*)jl_uniontype_type) {
+        else if (jl_is_kind(b)) {
+            // including the wrapper kinds: `Type{Type{Int}}` is more specific than `TypeEq`
             return 1;
         }
     }
