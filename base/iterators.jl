@@ -1288,7 +1288,9 @@ IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
-flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}, slurp...) = HasLength() # length==0
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}) = HasLength() # length==0
+flatten_iteratorsize(sz::Union{HasShape, HasLength}, ::Type{Union{}}, slurp...) =
+    throw(MethodError(flatten_iteratorsize, (sz, Union{}, slurp...)))
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
@@ -1300,7 +1302,8 @@ _flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
 
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
-flatten_length(f, T::Type{Union{}}, slurp...) = 0
+flatten_length(f, T::Type{Union{}}) = 0
+flatten_length(f, ::Type{Union{}}, slurp...) = throw(MethodError(flatten_length, (f, Union{}, slurp...)))
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
     return checked_mul(N, length(f.it))
 end

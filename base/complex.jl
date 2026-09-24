@@ -120,7 +120,8 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
-real(::Type{Union{}}, slurp...) = Union{}
+real(::Type{Union{}}) = Union{}
+real(::Type{Union{}}, slurp...) = throw(MethodError(real, (Union{}, slurp...)))
 
 """
     isreal(x)::Bool
@@ -188,7 +189,10 @@ Union{Missing, Complex{Int64}}
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
-complex(::Type{Union{}}, slurp...) = Union{}
+complex(::Type{Union{}}) = Union{}
+# Keep the slurp signature for bottom-type dispatch pruning (typemap_slurp_search),
+# but do not let invalid arities contribute a successful result to inference.
+complex(::Type{Union{}}, slurp...) = throw(MethodError(complex, (Union{}, slurp...)))
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
