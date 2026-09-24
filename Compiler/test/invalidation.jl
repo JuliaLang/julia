@@ -543,7 +543,7 @@ end
 # A call site that inference found uninformative defers its edges to the optimizer, so
 # other conclusions drawn from the call must still record them. Here the callee is
 # effect-free and terminating though not consistent, which lets its caller catch its
-# exceptions and be deleted as dead code; a method with a side effect must invalidate that.
+# exceptions and be deleted as dead code; a new method must invalidate that.
 module UninformativeEffects
     flag::Bool = true
     @noinline callee(x) = flag ? x : throw(x)

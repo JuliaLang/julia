@@ -129,8 +129,8 @@ function is_uninformative_call(state::CallInferenceState, applicable::Vector{Met
     if !(state.rettype === Any && state.exctype === Any && state.slotrefinements === nothing)
         return false
     end
-    # Any known effect lets the caller act on the call (e.g. delete it), even when consistency
-    # is unknown. Only the overlay bit tells the caller nothing here.
+    # Known effects flow into this caller's own effects, which its callers may rely on.
+    # The overlay bit alone tells them nothing.
     if Effects(state.all_effects; nonoverlayed=ALWAYS_TRUE) !== EFFECTS_UNKNOWN
         return false
     end
