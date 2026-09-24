@@ -595,3 +595,18 @@ let M = UninformativeReturnType, interp = InvalidationTester()
     @eval M callee(x) = 1
     @test ci.max_world != typemax(UInt)
 end
+
+# The same holds when the uninformative call is nested inside the queried call.
+module UninformativeReturnTypeApply
+    @noinline callee(x) = Base.inferencebarrier(identity)(x)
+end
+@eval UninformativeReturnTypeApply caller() =
+    $(Compiler.return_type)(Core._apply_iterate, Tuple{typeof(iterate), typeof(callee), Tuple{Any}})
+let M = UninformativeReturnTypeApply, interp = InvalidationTester()
+    Base.return_types(M.caller, (); interp)
+    ci = Base.method_instance(M.caller, ()).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x) = 1
+    @test ci.max_world != typemax(UInt)
+end
