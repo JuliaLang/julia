@@ -2001,6 +2001,8 @@ JL_DLLEXPORT jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_U
 JL_DLLEXPORT jl_value_t *jl_argtype_without_function(jl_value_t *ftypes) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_datatype_t *jl_simd_vector_eltype(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_simd_vector_type(size_t n, jl_datatype_t *el) JL_CANSAFEPOINT;
 
 void register_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
 void deregister_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;

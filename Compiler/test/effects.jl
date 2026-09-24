@@ -1481,6 +1481,46 @@ end
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[UInt, UInt])
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[UInt, UInt])
 @test Compiler.is_nothrow(Base.infer_effects(+, Tuple{Ptr{UInt8}, UInt}))
+# elementwise intrinsics on SIMD vectors
+let I = Core.Intrinsics,
+    V4I64 = NTuple{4,VecElement{Int64}}, V8I64 = NTuple{8,VecElement{Int64}},
+    V4I32 = NTuple{4,VecElement{Int32}}, V4F64 = NTuple{4,VecElement{Float64}},
+    V4U8 = NTuple{4,VecElement{UInt8}}, V8U32 = NTuple{8,VecElement{UInt32}}
+    @test Compiler.intrinsic_nothrow(I.add_int, Any[V4I64, V4I64])
+    @test Compiler.intrinsic_nothrow(I.not_int, Any[V4I64])
+    @test Compiler.intrinsic_nothrow(I.slt_int, Any[V4I64, V4I64])
+    @test Compiler.intrinsic_nothrow(I.add_float, Any[V4F64, V4F64])
+    @test Compiler.intrinsic_nothrow(I.fma_float, Any[V4F64, V4F64, V4F64])
+    @test Compiler.intrinsic_nothrow(I.shl_int, Any[V4I64, V4U8])
+    @test Compiler.intrinsic_nothrow(I.sext_int, Any[Type{V4I64}, V4I32])
+    @test Compiler.intrinsic_nothrow(I.sitofp, Any[Type{V4F64}, V4I32])
+    @test Compiler.intrinsic_nothrow(I.bitcast, Any[Type{V8U32}, V4I64])
+    @test Compiler.intrinsic_nothrow(I.bitcast, Any[Type{NTuple{2,VecElement{UInt64}}}, UInt128])
+    @test Compiler.intrinsic_nothrow(I.bitcast, Any[Type{UInt128}, NTuple{2,VecElement{UInt64}}])
+    @test !Compiler.intrinsic_nothrow(I.add_int, Any[V4I64, V8I64])
+    @test !Compiler.intrinsic_nothrow(I.add_int, Any[V4I64, Int64])
+    @test !Compiler.intrinsic_nothrow(I.add_int, Any[NTuple{4,Int64}, NTuple{4,Int64}])
+    @test !Compiler.intrinsic_nothrow(I.add_float, Any[V4I64, V4I64])
+    @test !Compiler.intrinsic_nothrow(I.shl_int, Any[V4I64, UInt8])
+    @test !Compiler.intrinsic_nothrow(I.shl_int, Any[V4I64, V8I64])
+    @test !Compiler.intrinsic_nothrow(I.checked_sadd_int, Any[V4I64, V4I64])
+    @test !Compiler.intrinsic_nothrow(I.sext_int, Any[Type{V8I64}, V4I32])
+    @test !Compiler.intrinsic_nothrow(I.sext_int, Any[Type{Int64}, V4I32])
+    @test !Compiler.intrinsic_nothrow(I.trunc_int, Any[Type{V4I64}, V4I32])
+    @test !Compiler.intrinsic_nothrow(I.bitcast, Any[Type{V4I32}, V4I64])
+    @test Compiler.cmp_tfunc(Compiler.JLTypeLattice(), V4I64, V4I64) === NTuple{4,VecElement{Bool}}
+    @test Compiler.cmp_tfunc(Compiler.JLTypeLattice(), Int, Int) === Bool
+    # values of inexact type may be SIMD vectors at runtime
+    let Mask = Union{Bool, Tuple{Vararg{VecElement{Bool}}}}
+        @test Compiler.cmp_tfunc(Compiler.JLTypeLattice(), Any, Any) === Mask
+        @test Compiler.cmp_tfunc(Compiler.JLTypeLattice(), NTuple{4,VecElement}, NTuple{4,VecElement}) === Mask
+        @test Compiler.cmp_tfunc(Compiler.JLTypeLattice(), Union{Int,V4I64}, Union{Int,V4I64}) === Mask
+        @test Compiler.cmp_tfunc(Compiler.JLTypeLattice(), Any, V4I64) === NTuple{4,VecElement{Bool}}
+        @test Compiler.cmp_tfunc(Compiler.JLTypeLattice(), Integer, Integer) === Bool
+    end
+    @test Compiler.is_nothrow(Base.infer_effects((x, y) -> Core.Intrinsics.add_int(x, y), (NTuple{4,VecElement{Int64}}, NTuple{4,VecElement{Int64}})))
+    @test Base.infer_return_type((x, y) -> Core.Intrinsics.lt_float(x, y), (NTuple{4,VecElement{Float64}}, NTuple{4,VecElement{Float64}})) === NTuple{4,VecElement{Bool}}
+end
 # effects modeling for atomic intrinsics
 # these functions especially need to be marked !effect_free since they imply synchronization
 for atomicfunc = Any[

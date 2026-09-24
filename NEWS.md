@@ -121,6 +121,9 @@ Compiler/Runtime improvements
   `Core.isdefinedglobal_partition` or `Core.depwarn_partition` builtin function. This does not change the
   meaning of the program, but packages that inspect optimized IR (e.g. from `code_typed`) will encounter
   these new forms. See the "Lowered form" section of the developer documentation for their semantics ([#62452]).
+* The elementwise intrinsics in `Core.Intrinsics` (arithmetic, bitwise, comparison, conversion and `bitcast`
+  intrinsics, but not checked arithmetic) now accept SIMD vectors, i.e. `NTuple{N,VecElement{T}}` for primitive
+  `T`, and compile to LLVM vector instructions, so SIMD code no longer needs `llvmcall` for these operations.
 
 Command-line option changes
 ---------------------------

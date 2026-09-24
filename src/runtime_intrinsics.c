@@ -410,14 +410,32 @@ JL_DLLEXPORT BFLOAT16_TYPE julia__truncdfbf2(double param) JL_NOTSAFEPOINT
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(bitcast, datatype, ty);
-    if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
+    jl_datatype_t *tyel = jl_simd_vector_eltype(ty);
+    jl_datatype_t *vel = jl_simd_vector_eltype(jl_typeof(v));
+    if (!tyel && (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty)))
         jl_error("bitcast: target type not a leaf primitive type");
-    if (!jl_is_primitivetype(jl_typeof(v)))
+    if (!vel && !jl_is_primitivetype(jl_typeof(v)))
         jl_error("bitcast: value not a primitive type");
-    if (jl_datatype_nbits((jl_datatype_t*)jl_typeof(v)) != jl_datatype_nbits((jl_datatype_t*)ty))
+    // SIMD vectors are bitcast as a whole, the size of all lanes together must match
+    size_t tybits = tyel ? jl_nparams(ty) * jl_datatype_nbits(tyel) : jl_datatype_nbits((jl_datatype_t*)ty);
+    size_t vbits = vel ? jl_nparams(jl_typeof(v)) * jl_datatype_nbits(vel) : jl_datatype_nbits((jl_datatype_t*)jl_typeof(v));
+    if (vbits != tybits)
         jl_error("bitcast: argument bitsize does not match bitsize of target type");
     if (ty == jl_typeof(v))
         return v;
+    if ((tyel || vel) && ty != (jl_value_t*)jl_bool_type) {
+        jl_task_t *ct = jl_current_task;
+        size_t sz = jl_datatype_size(ty);
+        jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty);
+        memset(jl_data_ptr(newv), 0, sz);
+        memcpy(jl_data_ptr(newv), jl_data_ptr(v), tybits / 8);
+        if (tyel == jl_bool_type) {
+            // as for scalars, only the low bit of each Bool lane is kept
+            for (size_t i = 0; i < tybits / 8; i++)
+                ((uint8_t*)jl_data_ptr(newv))[i] &= 1;
+        }
+        return newv;
+    }
     if (ty == (jl_value_t*)jl_bool_type)
         return *(uint8_t*)jl_data_ptr(v) & 1 ? jl_true : jl_false;
     return jl_new_bits(ty, jl_data_ptr(v));
@@ -934,13 +952,109 @@ static void jl_##name##bf16(unsigned runtime_nbits, void *pa, void *pb, void *pc
 }
 
 
+// SIMD vectors //
+
+typedef jl_value_t *(*intrinsic_lane_t)(jl_value_t **args) JL_CANSAFEPOINT;
+
+// Intrinsics accept SIMD vectors (`NTuple{N,VecElement{T}}` for primitive `T`, see
+// `jl_simd_vector_eltype`) and apply the scalar intrinsic `lane` to each lane.
+// If `hastype`, args[0] is the target (vector) type of a conversion and `lane` receives its lane type.
+// Returns NULL if the value arguments are not vectors, in which case the caller handles them as scalars.
+static jl_value_t *jl_vector_intrinsic(const char *name, jl_value_t **args, int nargs, int hastype,
+                                       intrinsic_lane_t lane) JL_CANSAFEPOINT
+{
+    int first = hastype ? 1 : 0;
+    jl_value_t *vty = jl_typeof(args[first]);
+    jl_datatype_t *elty[3];
+    assert(nargs <= 3);
+    elty[first] = jl_simd_vector_eltype(vty);
+    if (elty[first] == NULL) {
+        for (int i = 0; i < nargs; i++) {
+            if (jl_simd_vector_eltype(i < first ? args[i] : jl_typeof(args[i])))
+                jl_errorf("%s: cannot mix SIMD vector and scalar arguments", name);
+        }
+        return NULL;
+    }
+    size_t n = jl_nparams(vty);
+    for (int i = 0; i < nargs; i++) {
+        if (i == first)
+            continue;
+        jl_value_t *ti = i < first ? args[i] : jl_typeof(args[i]);
+        elty[i] = jl_simd_vector_eltype(ti);
+        if (elty[i] == NULL)
+            jl_errorf("%s: cannot mix SIMD vector and scalar arguments", name);
+        if (jl_nparams(ti) != n)
+            jl_errorf("%s: SIMD vector arguments must have the same number of lanes", name);
+    }
+    jl_value_t **roots;
+    // lane arguments, then the lane result, then the result vector
+    JL_GC_PUSHARGS(roots, nargs + 2);
+    for (size_t l = 0; l < n; l++) {
+        if (hastype)
+            roots[0] = (jl_value_t*)elty[0];
+        for (int i = first; i < nargs; i++) {
+            size_t offset = jl_field_offset((jl_datatype_t*)jl_typeof(args[i]), l);
+            roots[i] = jl_new_bits((jl_value_t*)elty[i], (char*)jl_data_ptr(args[i]) + offset);
+        }
+        roots[nargs] = lane(roots);
+        jl_datatype_t *rt = (jl_datatype_t*)jl_typeof(roots[nargs]);
+        if (l == 0) {
+            jl_value_t *resty;
+            if (hastype)
+                resty = args[0];
+            else if (rt == elty[first])
+                resty = vty;
+            else
+                resty = jl_simd_vector_type(n, rt);
+            roots[nargs + 1] = resty;
+            jl_task_t *ct = jl_current_task;
+            size_t sz = jl_datatype_size(resty);
+            roots[nargs + 1] = jl_gc_alloc(ct->ptls, sz, resty);
+            memset(jl_data_ptr(roots[nargs + 1]), 0, sz);
+        }
+        jl_datatype_t *resty = (jl_datatype_t*)jl_typeof(roots[nargs + 1]);
+        assert(jl_simd_vector_eltype((jl_value_t*)resty) == rt);
+        memcpy((char*)jl_data_ptr(roots[nargs + 1]) + jl_field_offset(resty, l),
+               jl_data_ptr(roots[nargs]), jl_datatype_size(rt));
+    }
+    jl_value_t *res = roots[nargs + 1];
+    JL_GC_POP();
+    return res;
+}
+
+#define vector_intrinsic_1(name) \
+static jl_value_t *jl_##name##_lane(jl_value_t **args) JL_CANSAFEPOINT \
+{ \
+    return jl_##name(args[0]); \
+}
+#define vector_intrinsic_2(name) \
+static jl_value_t *jl_##name##_lane(jl_value_t **args) JL_CANSAFEPOINT \
+{ \
+    return jl_##name(args[0], args[1]); \
+}
+#define vector_intrinsic_3(name) \
+static jl_value_t *jl_##name##_lane(jl_value_t **args) JL_CANSAFEPOINT \
+{ \
+    return jl_##name(args[0], args[1], args[2]); \
+}
+// return early from an intrinsic entry point if its arguments are SIMD vectors
+#define vector_intrinsic_dispatch(name, hastype, ...) \
+    { \
+        jl_value_t *vargs[] = {__VA_ARGS__}; \
+        jl_value_t *vres = jl_vector_intrinsic(#name, vargs, sizeof(vargs) / sizeof(vargs[0]), hastype, jl_##name##_lane); \
+        if (vres) \
+            return vres; \
+    }
+
 // unary operator generator //
 
 typedef void (*intrinsic_1_t)(unsigned, void*, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_1)
 #define un_iintrinsic(name, u) \
+vector_intrinsic_1(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
+    vector_intrinsic_dispatch(name, 0, a) \
     return jl_iintrinsic_1(a, #name, u##signbitbyte, jl_intrinsiclambda_ty1, name##_list); \
 }
 #define un_iintrinsic_fast(LLVMOP, OP, name, u) \
@@ -965,8 +1079,10 @@ un_iintrinsic(name, u)
 typedef unsigned (*intrinsic_u1_t)(unsigned, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_u1)
 #define uu_iintrinsic(name, u) \
+vector_intrinsic_1(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
+    vector_intrinsic_dispatch(name, 0, a) \
     return jl_iintrinsic_1(a, #name, u##signbitbyte, jl_intrinsiclambda_u1, name##_list); \
 }
 #define uu_iintrinsic_fast(LLVMOP, OP, name, u) \
@@ -1053,8 +1169,10 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
 typedef void (*intrinsic_cvt_t)(jl_datatype_t*, void*, jl_datatype_t*, void*) JL_NOTSAFEPOINT;
 typedef unsigned (*intrinsic_cvt_check_t)(unsigned, unsigned, void*) JL_NOTSAFEPOINT;
 #define cvt_iintrinsic(LLVMOP, name) \
+vector_intrinsic_2(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
 { \
+    vector_intrinsic_dispatch(name, 1, ty, a) \
     return jl_intrinsic_cvt(ty, a, #name, LLVMOP); \
 }
 
@@ -1087,8 +1205,10 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) JL_CANSAFEPOIN
 
 #define un_fintrinsic(OP, name) \
 un_fintrinsic_withtype(OP, name##_withtype) \
+vector_intrinsic_1(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
+    vector_intrinsic_dispatch(name, 0, a) \
     return jl_##name##_withtype(jl_typeof(a), a); \
 }
 
@@ -1127,8 +1247,10 @@ static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const c
 typedef void (*intrinsic_2_t)(unsigned, void*, void*, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_2)
 #define bi_iintrinsic(name, u, cvtb) \
+vector_intrinsic_2(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
+    vector_intrinsic_dispatch(name, 0, a, b) \
     return jl_iintrinsic_2(a, b, #name, u##signbitbyte, jl_intrinsiclambda_2, name##_list, cvtb); \
 }
 #define bi_iintrinsic_cnvtb_fast(LLVMOP, OP, name, u, cvtb) \
@@ -1150,8 +1272,10 @@ bi_iintrinsic(name, u, cvtb)
 typedef int (*intrinsic_cmp_t)(unsigned, void*, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_cmp)
 #define cmp_iintrinsic(name, u) \
+vector_intrinsic_2(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
+    vector_intrinsic_dispatch(name, 0, a, b) \
     return jl_iintrinsic_2(a, b, #name, u##signbitbyte, jl_intrinsiclambda_cmp, name##_list, 0); \
 }
 #define bool_iintrinsic_fast(LLVMOP, OP, name, u) \
@@ -1294,8 +1418,10 @@ static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa
     bi_intrinsic_half(OP, name) \
     bi_intrinsic_ctype(OP, name, 32, float) \
     bi_intrinsic_ctype(OP, name, 64, double) \
+vector_intrinsic_2(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
+    vector_intrinsic_dispatch(name, 0, a, b) \
     jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
     jl_datatype_t *aty = (jl_datatype_t *)ty; \
@@ -1324,8 +1450,10 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     bool_intrinsic_half(OP, name) \
     bool_intrinsic_ctype(OP, name, 32, float) \
     bool_intrinsic_ctype(OP, name, 64, double) \
+vector_intrinsic_2(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
+    vector_intrinsic_dispatch(name, 0, a, b) \
     jl_value_t *ty = jl_typeof(a); \
     jl_datatype_t *aty = (jl_datatype_t *)ty; \
     if (jl_typeof(b) != ty) \
@@ -1353,8 +1481,10 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     ter_intrinsic_half(OP, name) \
     ter_intrinsic_ctype(OP, name, 32, float) \
     ter_intrinsic_ctype(OP, name, 64, double) \
+vector_intrinsic_3(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
 { \
+    vector_intrinsic_dispatch(name, 0, a, b, c) \
     jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
     jl_datatype_t *aty = (jl_datatype_t *)ty; \
@@ -1612,8 +1742,10 @@ bi_iintrinsic_cnvtb_fast(APInt_ashr, ashr_op, ashr_int, , 1)
 static const select_intrinsic_1_t bswap_int_list = {
     APInt_bswap
 };
+vector_intrinsic_1(bswap_int)
 JL_DLLEXPORT jl_value_t *jl_bswap_int(jl_value_t *a)
 {
+    vector_intrinsic_dispatch(bswap_int, 0, a)
     jl_value_t *ty = jl_typeof(a);
     if (!jl_is_primitivetype(ty))
         jl_error("bswap_int: value is not a primitive type");
