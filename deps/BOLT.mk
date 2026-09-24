@@ -71,7 +71,15 @@ $(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-aarch64-adr-relaxation-non-simple.patch-applied
 		patch -p1 -f < $(SRCDIR)/patches/BOLT-aarch64-adr-relaxation-non-simple.patch
 	echo 1 > $@
 
-$(BOLT_BUILDDIR)/build-configured: $(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-aarch64-adr-relaxation-non-simple.patch-applied
+# Backport of llvm/llvm-project#226076, which the BOLT_jll build also carries:
+# without it, rewriting debug info corrupts units with forward DW_FORM_ref_udata
+# references, such as those GNU as generates for libgcc's AArch64 lse.S.
+$(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-dwarf-ref-udata-forward-refs.patch-applied: $(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-aarch64-adr-relaxation-non-simple.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/BOLT-dwarf-ref-udata-forward-refs.patch
+	echo 1 > $@
+
+$(BOLT_BUILDDIR)/build-configured: $(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-dwarf-ref-udata-forward-refs.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		$(CMAKE) $(SRCCACHE)/$(BOLT_SRC_DIR)/llvm $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(BOLT_BUILD_CMAKE) \
