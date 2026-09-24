@@ -580,3 +580,18 @@ let M = UninformativeFold, interp = InvalidationTester()
     @eval M callee(::Nothing) = 2
     @test ci.max_world != typemax(UInt)
 end
+
+# `return_type` observes the inferred result of an uninformative call as a value, so
+# redefining the callee must invalidate the caller.
+module UninformativeReturnType
+    @noinline callee(x) = Base.inferencebarrier(identity)(x)
+end
+@eval UninformativeReturnType caller() = $(Compiler.return_type)(callee, Tuple{Any})
+let M = UninformativeReturnType, interp = InvalidationTester()
+    Base.return_types(M.caller, (); interp)
+    ci = Base.method_instance(M.caller, ()).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x) = 1
+    @test ci.max_world != typemax(UInt)
+end
