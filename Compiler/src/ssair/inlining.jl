@@ -1615,6 +1615,9 @@ function concrete_result_item(result::ConcreteResult,
         return compileable_specialization(target, result.effects, et, info, state)
     end
     @assert result.effects === EFFECTS_TOTAL
+    # folding the result commits to this method as the call's target, like an `:invoke`
+    add_uninformative_dispatch_edge!(et.edges,
+        target isa CodeInstance ? get_ci_mi(target) : target, info)
     return ConstantCase(quoted(result.result))
 end
 
