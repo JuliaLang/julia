@@ -1988,7 +1988,7 @@ struct typemap_intersection_env {
                         // the match verdict and `issubty`
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
-void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
+void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
 
 // -- simplevector.c -- //
 

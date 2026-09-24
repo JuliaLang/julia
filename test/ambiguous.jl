@@ -585,6 +585,29 @@ end
                        Tuple{G, Type{<:Real}}])
 end
 
+# A slurp method only prunes `Union{}` overlaps for the calls its other arguments cover:
+# `AbstractVector{Int}` and `AbstractVector{Float64}` share a typemap bucket, but
+# `k(Float64[], Union{})` still dispatches to the `X` method.
+module SlurpPrefix
+    abstract type X end
+    k(::AbstractVector{Int}, ::Type{Union{}}, slurp...) = 0
+    k(::AbstractVector{Float64}, ::Type{<:X}) = "X"
+    for i in 1:8
+        Y = Symbol(:Y, i)
+        @eval abstract type $Y end
+        @eval k(::AbstractVector{Int}, ::Type{<:$Y}) = $i
+        @eval k(::AbstractVector{String}, ::Type{<:$Y}) = $i
+    end
+    g(v::AbstractVector, T::Type{<:AbstractString}) = k(v, T)
+end
+@testset "Union{} slurp does not prune calls with uncovered prefix arguments" begin
+    @test SlurpPrefix.k(Float64[], Union{}) == "X"
+    ms = Base._methods_by_ftype(Tuple{typeof(SlurpPrefix.k), AbstractVector, Type{<:AbstractString}},
+                                -1, Base.get_world_counter())
+    @test which(SlurpPrefix.k, (AbstractVector{Float64}, Type{<:SlurpPrefix.X})) in [m.method for m in ms]
+    @test String <: Base.infer_return_type(SlurpPrefix.g, (AbstractVector, Type{<:AbstractString}))
+end
+
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
     @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})

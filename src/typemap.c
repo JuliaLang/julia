@@ -659,7 +659,30 @@ static int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
     return 0;
 }
 
-void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
+// Whether `ml` is the dispatch target of every call in `closure->type` whose argument
+// at `offs` is `Union{}`. The typemap level being scanned is shared by other prefix
+// signatures (e.g. `AbstractVector{Int}` and `AbstractVector{Float64}` share a name
+// bucket), so the `Type{Union{}}` slot alone does not show that.
+static int slurp_covers_bottom_calls(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure, size_t offs) JL_CANSAFEPOINT
+{
+    jl_value_t *sig = jl_unwrap_unionall((jl_value_t*)ml->sig);
+    size_t nargs = jl_nparams(sig);
+    jl_svec_t *params = NULL;
+    jl_value_t *bottom_calls = NULL;
+    JL_GC_PUSH2(&params, &bottom_calls);
+    params = jl_alloc_svec(nargs);
+    for (size_t i = 0; i < offs; i++)
+        jl_svecset(params, i, jl_any_type);
+    for (size_t i = offs; i < nargs; i++)
+        jl_svecset(params, i, jl_tparam(sig, i));
+    bottom_calls = (jl_value_t*)jl_apply_tuple_type(params, 1);
+    bottom_calls = jl_type_intersection(closure->type, bottom_calls);
+    int covers = bottom_calls == jl_bottom_type || jl_subtype(bottom_calls, (jl_value_t*)ml->sig);
+    JL_GC_POP();
+    return covers;
+}
+
+void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure) JL_CANSAFEPOINT
 {
     // TODO: we should consider nparams(closure->type) here too, so this optimization
     //      usually works even if the user forgets the `slurp...` argument
@@ -669,7 +692,8 @@ void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_en
         if (nargs > 1 && nargs - 1 == closure->search_slurp) {
             jl_vararg_t *va = (jl_vararg_t*)jl_tparam(sig, nargs - 1);
             assert(jl_is_vararg((jl_value_t*)va));
-            if (va->T == (jl_value_t*)jl_any_type && va->N == NULL) {
+            if (va->T == (jl_value_t*)jl_any_type && va->N == NULL &&
+                    slurp_covers_bottom_calls(ml, closure, nargs - 2)) {
                 // instruct typemap it can set exclude_typeofbottom on parameter nargs
                 // since we found the necessary slurp argument
                 closure->search_slurp = 0;
