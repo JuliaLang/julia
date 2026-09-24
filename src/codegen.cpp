@@ -2665,6 +2665,7 @@ static Type *zext_struct_type(Type *T);
 static Value *zext_struct(jl_codectx_t &ctx, Value *V);
 static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
 static Value *trunc_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
+static Type *julia_memory_access_type(Type *register_type, jl_value_t *jt);
 
 // TODO: in the future, assume all callers will handle the interior pointers separately, and have
 // have zext_struct strip them out, so we aren't saving those to the stack here causing shadow stores
@@ -2672,7 +2673,7 @@ static Value *trunc_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
 static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex) JL_CANSAFEPOINT
 {
     Value *loc;
-    v = zext_struct(ctx, v);
+    v = zext_struct_helper(ctx, v, julia_memory_access_type(v->getType(), typ));
     Align align(julia_alignment(typ));
     // A write-once copy of the value, so it keeps the type's access tag and the
     // `immutdata` region the value has anywhere else.
