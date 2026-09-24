@@ -36,6 +36,7 @@ end
 
 using Documenter
 import LibGit2
+using Logging: with_logger, NullLogger
 
 baremodule GenStdLib end
 
@@ -593,7 +594,7 @@ else
 end
 
 const output_path = joinpath(buildrootdoc, "_build", (render_pdf ? "pdf" : "html"), "en")
-makedocs(
+doc = makedocs(
     source    = joinpath(buildrootdoc, "src"),
     build     = output_path,
     modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
@@ -601,14 +602,39 @@ makedocs(
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
-    checkdocs = :none,
+    checkdocs = :public,
+    checkdocs_ignored_modules = [Pkg], # Pkg has its own manual
+    warnonly  = :missing_docs, # the count is checked below instead
     format    = format,
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     pages     = PAGES,
     remotes   = documenter_stdlib_remotes,
     meta      = Dict(:DocTestSyntax => VERSION),
+    debug     = true, # makes makedocs return the Document for the check below
 )
+
+# Update this when the number of public docstrings missing from the manual changes.
+const known_missing_from_manual = 376
+
+# Documenter skips the document checks when only running doctests.
+if doc.user.doctest ∉ (:fix, :only)
+    # The list was already logged during `makedocs`; only the count is needed here.
+    missing_from_manual = with_logger(NullLogger()) do
+        Documenter.missingdocs(doc)
+    end
+    if missing_from_manual > known_missing_from_manual
+        error("""
+            $(missing_from_manual - known_missing_from_manual) public docstring(s) are not included in the manual \
+            (expected $known_missing_from_manual, found $missing_from_manual). See the `missing_docs` \
+            warning above for the full list, and add the new ones to the manual.""")
+    elseif missing_from_manual < known_missing_from_manual
+        error("""
+            The number of public docstrings missing from the manual has decreased from \
+            $known_missing_from_manual to $missing_from_manual. Update `known_missing_from_manual` \
+            in doc/make.jl to $missing_from_manual.""")
+    end
+end
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)
 for (root, _, files) in walkdir(output_path), file in joinpath.(root, files)
