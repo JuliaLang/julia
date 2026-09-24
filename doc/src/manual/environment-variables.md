@@ -409,6 +409,8 @@ compilation in this Julia process. The value of this variable may be
 ignored if the module is a small module. If left unspecified, the smaller
 of the value of [`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) or half the
 number of logical CPU cores is used in its place.
+On 32-bit platforms the image is still split into this many shards, but they
+are compiled one at a time to bound memory use.
 
 During parallel package precompilation, workers additionally coordinate their
 CPU usage through a shared token pool sized by

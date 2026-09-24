@@ -40,7 +40,7 @@ using Core.Intrinsics, Core.IR
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     TypeEq,
-    _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
+    _apply_iterate, apply_type, compilerbarrier, const_memoryrefget, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
 
@@ -244,8 +244,8 @@ end
 # `[syntax]` entry (and defining over it would error), so skip it then.
 if !isdefined(@__MODULE__, Symbol("#_internal_julia_parse"))
 function var"#_internal_julia_parse"(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    return Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options;
-                                             syntax_version=Base.VersionNumber(1, 14, 0))
+    return Base.JuliaSyntax.core_parser_hook(
+        code, filename, lineno, offset, options, Base.VersionNumber(1, 14, 0))
 end
 end
 

@@ -2316,6 +2316,12 @@ JL_CALLABLE(jl_f_memoryrefget)
     return jl_memoryrefget(m, kind == (jl_value_t*)jl_atomic_sym);
 }
 
+// same as memoryrefget, but codegen tags the load with the current aliasscope (see Base.Experimental.Const)
+JL_CALLABLE(jl_f_const_memoryrefget)
+{
+    return jl_f_memoryrefget(F, args, nargs);
+}
+
 JL_CALLABLE(jl_f_memoryrefset)
 {
     enum jl_memory_order order = jl_memory_order_notatomic;

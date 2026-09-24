@@ -991,13 +991,13 @@ struct VersionedParse
 end
 
 function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    if !isdefined(Base, :JuliaSyntax)
-        if vp.ver === VERSION
-            return Core._parse
-        end
-        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
+    pm = parentmodule(Core._parse)
+    # hack to support old copies of JuliaSyntax
+    if !isdefined(pm, :_has_v1_14_version_hooks) && isdefined(pm, :_has_v1_10_hooks)
+        invokelatest(Core._parse, code, filename, lineno, offset, options)
+    else
+        invokelatest(Core._parse, code, filename, lineno, offset, options, vp.ver)
     end
-    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
 end
 
 function parser_for_active_project()
@@ -2121,7 +2121,9 @@ function compilecache_freshest_path(pkg::PkgId;
             if staledeps === true
                 continue
             end
-            staledeps, _, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            staledeps, _, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            # Record the result so dependents don't check this file again.
+            stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
             # finish checking staledeps module graph
             @label next_dep for dep in staledeps
                 dep isa Module && continue
@@ -2944,7 +2946,7 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Core._parse
+global var"#_internal_julia_parse" = Base.VersionedParse(VERSION)
 global _internal_julia_lower = Core._lower
 
 # Used for version checking of precompiled cache files only
@@ -3141,7 +3143,7 @@ function __require_prelocked(pkg::PkgId, env)
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = Core._parse
+        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)

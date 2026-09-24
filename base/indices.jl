@@ -92,7 +92,8 @@ particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}, slurp...) = IndexLinear()
+IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{Union{}}, slurp...) = throw(MethodError(IndexStyle, (Union{}, slurp...)))
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()

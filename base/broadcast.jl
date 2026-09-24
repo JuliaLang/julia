@@ -34,7 +34,8 @@ that you may be able to leverage; see the
 abstract type BroadcastStyle end
 
 struct Unknown <: BroadcastStyle end
-BroadcastStyle(::Type{Union{}}, slurp...) = Unknown()  # ambiguity resolution
+BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
+BroadcastStyle(::Type{Union{}}, slurp...) = throw(MethodError(BroadcastStyle, (Union{}, slurp...)))
 
 """
 `Broadcast.Style{C}()` defines a [`BroadcastStyle`](@ref) signaling through the type

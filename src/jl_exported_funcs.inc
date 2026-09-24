@@ -166,12 +166,12 @@
     XX(jl_gc_mark_queue_obj) \
     XX(jl_gc_mark_queue_objarray) \
     XX(jl_gc_max_internal_obj_size) \
+    XX(jl_gc_multi_wb_cold) \
     XX(jl_gc_new_weakref) \
     XX(jl_gc_new_weakref_th) \
     XX(jl_gc_num) \
     XX(jl_gc_small_alloc) \
     XX(jl_gc_small_alloc_reset_safe) \
-    XX(jl_gc_queue_multiroot) \
     XX(jl_gc_queue_root) \
     XX(jl_gc_queue_root_reset_safe) \
     XX(jl_gc_safepoint) \
@@ -361,7 +361,6 @@
     XX(jl_obvious_subtype) \
     XX(jl_operator_precedence) \
     XX(jl_parse) \
-    XX(jl_parse_all) \
     XX(jl_parse_opts) \
     XX(jl_pathname_for_handle) \
     XX(jl_pathname_for_symbol) \

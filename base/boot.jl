@@ -1227,7 +1227,7 @@ end
 # Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
 # Core._parse and Core._lower respectively (if they are not `nothing`.)
 
-#    Core._parse(text, filename, lineno, offset, options)
+#    Core._parse(text, filename, lineno, offset, options, version)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
 # it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},

@@ -26,7 +26,8 @@ function compile_JL_sysimage(output_filepath)
     output_object = "$(splitext(output_sysimage)[1])-o.a"
 
     package_root = joinpath(Sys.STDLIB, "..", "..", "JuliaLowering")
-    cmd = `$(JULIA_EXECUTABLE) -C "$(JULIA_CPU_TARGET)" --output-o $(output_object)
+    heaplim = Sys.WORD_SIZE == 32 ? `--heap-size-hint=1000M` : ``
+    cmd = `$(JULIA_EXECUTABLE) -C "$(JULIA_CPU_TARGET)" $(heaplim) --output-o $(output_object)
            --startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $(sysimage)
            -e "Core.include(Base, $(repr(joinpath(package_root, "src", "JuliaLowering.jl"))))"`
     cmd = addenv(

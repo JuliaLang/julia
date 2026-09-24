@@ -223,7 +223,8 @@ function elsize(::Type{Ptr{T}}) where T
     T isa DataType || sizeof(Any) # throws
     return LLT_ALIGN(Core.sizeof(T), datatype_alignment(T))
 end
-elsize(::Type{Union{}}, slurp...) = 0
+elsize(::Type{Union{}}) = 0
+elsize(::Type{Union{}}, slurp...) = throw(MethodError(elsize, (Union{}, slurp...)))
 
 sizeof(a::Array) = length(a) * elsize(typeof(a)) # n.b. this ignores bitsunion bytes, as a historical fact
 
