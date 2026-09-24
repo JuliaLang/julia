@@ -68,7 +68,7 @@ Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
-Base.is_strided
+Base.isstrided
 Base.is_vec_strided
 Base.is_contiguous
 Base.is_ptr_loadable

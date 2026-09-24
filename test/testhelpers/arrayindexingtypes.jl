@@ -75,7 +75,7 @@ Base.is_ptr_loadable(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,
 Base.is_ptr_storable(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = is_ptr_storable(A)
 Base.is_contiguous(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_contiguous(A)
 Base.is_vec_strided(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_vec_strided(A)
-Base.is_strided(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_strided(A)
+Base.isstrided(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.isstrided(A)
 
 # An array type with heterogenous axis types
 struct TestAxis{N}

@@ -417,10 +417,10 @@ end
 # TODO: Views along a constant-step `AbstractRange{<:AbstractCartesianIndex}` are
 # also strided in memory; however, `strides` and `cconvert`
 # do not yet support this.
-function is_strided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}}
+function isstrided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}}
     # Some subarrays may be strided even if the
     # parent is not strided
-    is_vec_strided(A) || is_strided(P)
+    is_vec_strided(A) || isstrided(P)
 end
 function is_vec_strided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
     is_contiguous(A) || has_vec_strided_layout(P)

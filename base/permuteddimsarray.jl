@@ -68,7 +68,7 @@ end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
 Base.is_ptr_loadable(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.is_ptr_loadable(P)::Bool
 Base.is_ptr_storable(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.is_ptr_storable(P)::Bool
-Base.is_strided(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.is_strided(P)::Bool
+Base.isstrided(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.isstrided(P)::Bool
 function Base.is_contiguous(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
     Base.is_contiguous(P) && ntuple(identity, Val(N)) === perm
 end

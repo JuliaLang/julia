@@ -608,7 +608,7 @@ type and size: contiguously, in column-major order, with an element spacing of
 
 Array types with this trait get default [`strides`](@ref) and [`Base.elsize`](@ref)
 definitions, and are [`is_vec_strided`](@ref Base.is_vec_strided) and
-[`is_strided`](@ref Base.is_strided) by default.
+[`isstrided`](@ref Base.isstrided) by default.
 
 Defaults to `false`.
 
@@ -627,7 +627,7 @@ Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays) and additionally isbits
 elements are evenly spaced in memory in column-major order.
 
-Array types with this trait are [`is_strided`](@ref Base.is_strided) by default.
+Array types with this trait are [`isstrided`](@ref Base.isstrided) by default.
 
 Defaults to [`Base.is_contiguous`](@ref) of the type.
 
@@ -638,8 +638,8 @@ is_vec_strided(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
 is_vec_strided(::Type{Union{}}) = false
 
 """
-    Base.is_strided(type)::Bool
-    Base.is_strided(A::AbstractArray)::Bool
+    Base.isstrided(type)::Bool
+    Base.isstrided(A::AbstractArray)::Bool
 
 Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays). Otherwise return `false`.
@@ -647,9 +647,9 @@ Return `true` if arrays of this array type follow the
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-is_strided(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
-is_strided(::Type{Union{}}) = false
-is_strided(A::AbstractArray) = is_strided(typeof(A))
+isstrided(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
+isstrided(::Type{Union{}}) = false
+isstrided(A::AbstractArray) = isstrided(typeof(A))
 
 """
     Base.has_vec_strided_layout(type)::Bool
@@ -657,8 +657,8 @@ is_strided(A::AbstractArray) = is_strided(typeof(A))
 Check the [`Base.is_vec_strided`](@ref) trait. Also return `true` for strided zero- and one-dimensional arrays,
 which are vector strided trivially.
 """
-has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
-has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,1}} = is_strided(A)::Bool
+has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = isstrided(A)::Bool
+has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,1}} = isstrided(A)::Bool
 has_vec_strided_layout(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
 has_vec_strided_layout(::Type{Union{}}) = false
 
@@ -680,7 +680,7 @@ size_to_strides(s) = ()
 
 Return a tuple of the memory strides in each dimension.
 
-See also [`stride`](@ref) and [`is_strided`](@ref).
+See also [`stride`](@ref) and [`isstrided`](@ref).
 
 # Examples
 ```jldoctest

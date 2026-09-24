@@ -211,8 +211,8 @@ end
 function is_ptr_storable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
     is_ptr_storable(P) && array_subpadding(S, T)
 end
-function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S,P,IsReshaped}
-    if !is_strided(P)
+function isstrided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S,P,IsReshaped}
+    if !isstrided(P)
         return false
     end
     if is_contiguous(P)

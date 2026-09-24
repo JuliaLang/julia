@@ -793,7 +793,7 @@ end
     @test length(a) == 3
     z = reinterpret(RInt24, zeros(UInt8, 12))
     check_strided_traits(a)
-    @test Base.is_strided(a)
+    @test Base.isstrided(a)
     @test !is_ptr_storable(a)
     check_strided_get(a)
     b = collect(a)
@@ -801,11 +801,11 @@ end
     check_strided_traits(b)
     @test is_ptr_loadable(b)
     @test is_ptr_storable(b)
-    @test Base.is_strided(b)
+    @test Base.isstrided(b)
     check_strided_get(b)
     c = reinterpret(RAlsoInt24, b)
     check_strided_traits(c)
-    @test Base.is_strided(c)
+    @test Base.isstrided(c)
     check_strided_get(c)
     for N in 1:4
         local d = reinterpret(NTuple{N,UInt8}, b)
@@ -813,7 +813,7 @@ end
         @test !is_ptr_loadable(d)
         @test_throws Base.PaddingError d[1]
         check_strided_traits(d)
-        @test Base.is_strided(d)
+        @test Base.isstrided(d)
         check_strided_set(
             deepcopy(d),
             deepcopy(d),

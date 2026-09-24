@@ -35,7 +35,7 @@ public
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,
-    is_strided,
+    isstrided,
     is_vec_strided,
     is_contiguous,
     is_ptr_loadable,

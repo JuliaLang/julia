@@ -27,15 +27,15 @@ end
 
 function check_strides_throws(err, a)
     @test_throws err strides(a)
-    @test !Base.is_strided(a)
+    @test !Base.isstrided(a)
 end
 
 function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
-    @test Base.is_strided(typeof(a)) === Base.is_strided(a)
+    @test Base.isstrided(typeof(a)) === Base.isstrided(a)
     isbitstype(T) || return
     Base.is_contiguous(typeof(a)) && @test Base.is_vec_strided(typeof(a))
-    Base.is_vec_strided(typeof(a)) && @test Base.is_strided(a)
-    Base.is_strided(a) || return
+    Base.is_vec_strided(typeof(a)) && @test Base.isstrided(a)
+    Base.isstrided(a) || return
     @test strides(a) isa NTuple{N, Int}
     @test Base.elsize(a) isa Int
     # A dim with a single index contributes nothing to any element address, so
@@ -181,7 +181,7 @@ end
 function Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T}
     memoryref(S.data, S.offset)
 end
-Base.is_strided(S::Type{<:Strider}) = true
+Base.isstrided(S::Type{<:Strider}) = true
 Base.is_ptr_loadable(::Type{<:Strider}) = true
 Base.is_ptr_storable(::Type{<:Strider}) = true
 
@@ -207,7 +207,7 @@ function Base.elsize(::Type{NonMemStridedArray{T, N}}) where {T, N}
     Base.elsize(Array{T, N})
 end
 Base.strides(A::NonMemStridedArray) = strides(A.a)
-Base.is_strided(::Type{<:NonMemStridedArray}) = true
+Base.isstrided(::Type{<:NonMemStridedArray}) = true
 Base.is_ptr_loadable(::Type{<:NonMemStridedArray}) = true
 
 end # module StridedArrays
