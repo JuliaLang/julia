@@ -10532,7 +10532,8 @@ static jl_llvm_functions_t
                 }
                 else if (retvalinfo.V) {
                     Align align(returninfo.union_align);
-                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(zext_struct(ctx, retvalinfo.V), sret, align));
+                    Value *unboxed = zext_struct_helper(ctx, retvalinfo.V, julia_memory_access_type(retvalinfo.V->getType(), jlrettype));
+                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(unboxed, sret, align));
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
             }

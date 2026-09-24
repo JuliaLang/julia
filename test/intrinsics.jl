@@ -89,6 +89,8 @@ end
     primitive type TestUInt63 63 end
     primitive type TestInt17 <: Signed 17 end
     primitive type TestInt63 <: Signed 63 end
+    primitive type TestUInt129 129 end
+    primitive type TestP24{T} 24 end
 
     @test Core.bitsizeof(TestUInt24) == 24
     @test Core.bitsizeof(TestUInt40) == 40
@@ -121,6 +123,10 @@ end
     load_tuple17(x::Any) = x::Tuple{TestUInt17,TestUInt17}
     box17(x::TestUInt17) = Ref{Any}(x)[]
     objectid17(x::TestUInt17) = objectid(x) # spills x to a stack slot
+    ret129(x::UInt128) = Core.Intrinsics.zext_int(TestUInt129, x) # returns through sret
+    ccall129(p::Ptr{Cvoid}, x::UInt128) = ccall(p, TestUInt129, (UInt128,), x)
+    # codegen does not know `T`, so it boxes the result with the runtime type
+    ccallp24(@nospecialize(x::Vector{T}), p::Ptr{Cvoid}) where {T} = ccall(p, TestP24{T}, ())
     # Under Revise these `code_llvm` queries can fail in InteractiveUtils'
     # reflective inference path before reaching the odd-bit lowering.
     if !isdefined(Main, :Revise)
@@ -142,6 +148,16 @@ end
         objectid_ir = sprint(io -> code_llvm(io, objectid17, Tuple{TestUInt17};
             debuginfo=:none, optimize=false))
         @test occursin(r"\bstore i32\b", objectid_ir)
+        store129 = Regex("\\bstore i$(8 * sizeof(TestUInt129))\\b")
+        ret_ir = sprint(io -> code_llvm(io, ret129, Tuple{UInt128};
+            debuginfo=:none, optimize=false))
+        @test occursin(store129, ret_ir)
+        ccall_ir = sprint(io -> code_llvm(io, ccall129, Tuple{Ptr{Cvoid}, UInt128};
+            debuginfo=:none, optimize=false))
+        @test occursin(store129, ccall_ir)
+        ccallp24_ir = sprint(io -> code_llvm(io, ccallp24, Tuple{Vector, Ptr{Cvoid}};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", ccallp24_ir)
         bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
             debuginfo=:none, optimize=false))
         @test occursin(r"\bload i24\b", bitcast_ir)
@@ -237,7 +253,6 @@ end
 
     # Runtime intrinsics zero the padding of their results. `@nospecialize`
     # inspects the box as is.
-    primitive type TestUInt129 129 end
     padding(@nospecialize x) = GC.@preserve x [unsafe_load(Ptr{UInt8}(addr(x)), i)
                                                for i in cld(Core.bitsizeof(typeof(x)), 8)+1:sizeof(x)]
     let a = Core.Intrinsics.trunc_int(TestUInt24, 0x00123456),
