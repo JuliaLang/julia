@@ -434,6 +434,21 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, Int) == 1
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, String) == 0
 
+# `Type{K}` for a kind `K` holds only `K` itself (and types equal to it), not every
+# instance of `K`, so `isa` must not reduce to a check of `typeof(x)` in a union
+isa_type_datatype(@nospecialize x) = isa(x, Union{Type{DataType}, Int})
+isa_egal_union(@nospecialize x) = isa(x, Union{Core.TypeEgal{Union}, Int})
+isa_type_anytype(@nospecialize x) = isa(x, Union{Type{Core.AnyType}, Int})
+for (f, T, members) in ((isa_type_datatype, Union{Type{DataType}, Int}, (DataType,)),
+                        (isa_egal_union, Union{Core.TypeEgal{Union}, Int}, (Union,)),
+                        (isa_type_anytype, Union{Type{Core.AnyType}, Int}, (Core.AnyType, Type)))
+    for x in (DataType, Union, UnionAll, Core.AnyType, Type, Int, Float64, 1, 1.0)
+        expected = x === 1 || any(m -> x === m, members)
+        @test isa(x, T) === expected
+        @test f(x) === expected
+    end
+end
+
 # `isType` covers both type-object kinds; use split predicates when exactness matters.
 @test Base.isType(Type{Int})
 @test Base.isType(Core.TypeEgal{Int})
