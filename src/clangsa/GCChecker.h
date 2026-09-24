@@ -163,19 +163,25 @@ private:
     return QT;
   }
 
+  // Whether f holds for a declaration naming the underlying type of QT: one of
+  // its typedef aliases, outermost first, or the struct or class they lead to.
+  template <typename callback>
+  static bool anyDeclInTypeChain(QualType QT, callback f) {
+    if (QT.isNull())
+      return false;
+    QT = stripToDeclaredType(QT);
+    for (const TypedefType *TT = QT->getAs<TypedefType>(); TT;
+         TT = TT->desugar()->getAs<TypedefType>())
+      if (f(TT->getDecl()))
+        return true;
+    const TagDecl *TD = QT->getUnqualifiedDesugaredType()->getAsTagDecl();
+    return TD && f(TD);
+  }
+
   template <typename callback>
   static bool isJuliaType(callback f, QualType QT) {
-    QT = stripToDeclaredType(QT);
-    const TypedefType *TT = QT->getAs<TypedefType>();
-    if (TT) {
-      if (f(TT->getDecl()->getName()))
-        return true;
-    }
-    const TagDecl *TD = QT->getUnqualifiedDesugaredType()->getAsTagDecl();
-    if (!TD) {
-      return false;
-    }
-    return f(TD->getName());
+    return anyDeclInTypeChain(
+        QT, [&](const NamedDecl *D) { return f(D->getName()); });
   }
 
   // Check for JL_GC_TRACKED_TYPE on the underlying type or its typedef aliases

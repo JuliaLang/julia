@@ -338,27 +338,14 @@ static bool isMutexUnlock(StringRef name) {
 
 
 bool GCChecker::hasGCTrackedAnnotation(QualType QT) {
-  if (QT.isNull())
-    return false;
-  QT = stripToDeclaredType(QT);
   // Check all declarations visible in this translation unit: the annotation
   // may be on a forward declaration or on the definition.
-  auto AnyRedeclAnnotated = [](const clang::Decl *D) {
-    if (!D)
-      return false;
+  return anyDeclInTypeChain(QT, [](const clang::Decl *D) {
     for (const clang::Decl *R : D->redecls())
       if (declHasAnnotation(R, "julia_gc_tracked"))
         return true;
     return false;
-  };
-  // Follow typedef aliases to find annotations such as the one on
-  // jl_gc_tracked_buffer_t, which is an alias of void.
-  for (const TypedefType *TT = QT->getAs<TypedefType>(); TT;
-       TT = TT->desugar()->getAs<TypedefType>())
-    if (AnyRedeclAnnotated(TT->getDecl()))
-      return true;
-  return AnyRedeclAnnotated(
-      QT->getUnqualifiedDesugaredType()->getAsTagDecl());
+  });
 }
 
 bool GCChecker::isGCTrackedType(QualType QT) {
