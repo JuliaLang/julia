@@ -55,3 +55,12 @@ void embedder_typedef_alias_is_tracked(void) {
 void unannotated_type_is_not_tracked(void) {
     plain_use(plain_alloc()); // no-warning
 }
+
+// Julia's own buffer type is tracked.
+extern jl_gc_tracked_buffer_t *julia_buffer_alloc(void);
+extern void julia_buffer_use(jl_gc_tracked_buffer_t *b);
+void julia_buffer_is_tracked(void) {
+    julia_buffer_use(julia_buffer_alloc()); // expected-warning{{Passing non-rooted value as argument to function that may GC}}
+                                            // expected-note@-1{{Passing non-rooted value as argument to function}}
+                                            // expected-note@-2{{Started tracking value here}}
+}

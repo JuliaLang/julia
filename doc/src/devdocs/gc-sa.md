@@ -342,16 +342,15 @@ void example() {
 }
 ```
 
-For types such as `void` that have no struct or class declaration, annotate a
-non-pointer typedef instead:
+For memory that has no struct or class type, such as a raw buffer, annotate an
+opaque struct, as Julia does for `jl_gc_tracked_buffer_t`:
 
 ```c
-typedef void MyBuffer JL_GC_TRACKED_TYPE;
-typedef MyBuffer MyBufferAlias;
+typedef struct JL_GC_TRACKED_TYPE MyBuffer MyBuffer;
 ```
 
-The analyzer tracks both `MyBuffer*` and `MyBufferAlias*`. Julia uses this pattern
-for `jl_gc_tracked_buffer_t`.
+An annotation on a typedef that is not a pointer type also works, e.g.
+`typedef void MyBuffer JL_GC_TRACKED_TYPE;`.
 
 Do not annotate a typedef that defines a pointer type, such as `MyValue` above.
 The analyzer follows the pointer to the underlying type before checking

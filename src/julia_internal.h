@@ -712,10 +712,11 @@ const extern uint64_t _jl_buff_tag[3];
 #define jl_buff_tag ((uintptr_t)LLT_ALIGN((uintptr_t)&_jl_buff_tag[1],16))
 JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT;
 
-typedef void jl_gc_tracked_buffer_t JL_GC_TRACKED_TYPE; // For the benefit of the static analyzer
+// A GC-allocated buffer, tracked by the static analyzer
+typedef struct JL_GC_TRACKED_TYPE _jl_gc_tracked_buffer_t jl_gc_tracked_buffer_t;
 STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz) JL_CANSAFEPOINT
 {
-    return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
+    return (jl_gc_tracked_buffer_t*)jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
 jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x) JL_NOTSAFEPOINT;

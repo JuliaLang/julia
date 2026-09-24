@@ -129,8 +129,9 @@
 //                     class, annotate its declaration to cover all aliases:
 //                         struct JL_GC_TRACKED_TYPE MyObject;
 //                         typedef struct MyObject *MyValue;
-//                     For an alias of void, annotate the typedef:
-//                         typedef void MyBuffer JL_GC_TRACKED_TYPE;
+//                     For memory without such a type, annotate an opaque
+//                     struct:
+//                         typedef struct JL_GC_TRACKED_TYPE MyBuffer MyBuffer;
 //                     Annotations on pointer typedefs are ignored.
 //
 // -- Escape hatches (function-like annotations) --
