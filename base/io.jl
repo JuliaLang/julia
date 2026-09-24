@@ -919,13 +919,6 @@ function write(s::IO, A::AbstractArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
-    if is_ptr_loadable(A) && is_strided(A)
-        _write_array_strided(s, A)
-    else
-        _write_array_fallback(s, A)
-    end
-end
-function _write_array_fallback(s::IO, A::AbstractArray)
     nb = 0
     r = Ref{eltype(A)}()
     for a in A
@@ -934,37 +927,36 @@ function _write_array_fallback(s::IO, A::AbstractArray)
     end
     return nb
 end
-function _write_array_strided(s::IO, A::AT) where {T, AT<:AbstractArray{T}}
-    el_size = elsize(AT)
-    array_elsize = elsize(Array{T})
-    A_cconv = cconvert(Ptr{T}, A)
-    if is_contiguous(AT)
-        return GC.@preserve A_cconv unsafe_write(s, unsafe_convert(Ptr{T}, A_cconv), array_elsize * length(A))
+
+function write(s::IO, A::StridedArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(cancel)
+    @cancel_check tok
+    if !isbitstype(eltype(A))
+        error("`write` is not supported on non-isbits arrays")
     end
+    _checkcontiguous(Bool, A) &&
+        return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))
     sz::Dims = size(A)
     st::Dims = strides(A)
     msz, mst, n = merge_adjacent_dim(sz, st)
-    mst_bytes = mst * el_size
-    mst_bytes == array_elsize || return _write_array_fallback(s, A)
-    if n == ndims(A)
-        return GC.@preserve A_cconv unsafe_write(s, unsafe_convert(Ptr{T}, A_cconv), mst_bytes * msz)
-    end
+    mst == 1 || return invoke(write, Tuple{IO, AbstractArray}, s, A)
+    n == ndims(A) &&
+        return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))
     sz′, st′ = tail(sz), tail(st)
     while n > 1
         sz′ = (tail(sz′)..., 1)
         st′ = (tail(st′)..., 0)
         n -= 1
     end
-    GC.@preserve A_cconv begin
+    GC.@preserve A begin
         nb = 0
         iter = CartesianIndices(sz′)
-        p_start = unsafe_convert(Ptr{T}, A_cconv)
         for I in iter
-            local p = p_start
+            p = pointer(A)
             for i in 1:length(sz′)
-                p += el_size * st′[i] * (I[i] - 1)
+                p += elsize(A) * st′[i] * (I[i] - 1)
             end
-            nb += unsafe_write(s, p, mst_bytes * msz)
+            nb += unsafe_write(s, p, elsize(A) * msz)
         end
         return nb
     end
@@ -1016,21 +1008,25 @@ end
 read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
-function read!(s::IO, A::AT; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T, AT<:AbstractArray{T}}
+function read!(s::IO, A::AbstractArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T}
     tok = resolve_cancel_token(cancel)
     @cancel_check tok
-    if !isbitstype(T)
-        for i in eachindex(A)
-            A[i] = read(s, T)
-        end
+    if isbitstype(T) && _checkcontiguous(Bool, A)
+        GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
-        if is_ptr_storable(AT) && is_strided(AT)
-            _read_array_strided!(s, A)
+        if isbitstype(T)
+            r = Ref{T}()
+            for i in eachindex(A)
+                @noinline unsafe_read(s, r, Core.sizeof(r)) # r must be heap-allocated
+                A[i] = r[]
+            end
         else
-            _read_array_fallback!(s, A)
+            for i in eachindex(A)
+                A[i] = read(s, T)
+            end
         end
     end
-    A
+    return A
 end
 
 # bitarray.jl loads before cancellation machinery in bootstrap order, so
@@ -1053,27 +1049,18 @@ function read!(s::IO, B::BitArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
     return B
 end
 
-function _read_array_fallback!(s::IO, A::AbstractArray{T}) where {T}
-    r = Ref{T}()
-    for i in eachindex(A)
-        @noinline unsafe_read(s, r, Core.sizeof(r)) # r must be heap-allocated
-        A[i] = r[]
-    end
-end
-function _read_array_strided!(s::IO, A::AT) where {T, AT<:AbstractArray{T}}
-    el_size = elsize(AT)
-    array_elsize = elsize(Array{T})
-    A_cconv = cconvert(Ptr{T}, A)
-    if is_contiguous(AT)
-        return GC.@preserve A_cconv unsafe_read(s, unsafe_convert(Ptr{T}, A_cconv), array_elsize * length(A))
+function read!(s::IO, A::StridedArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T}
+    tok = resolve_cancel_token(cancel)
+    @cancel_check tok
+    if !isbitstype(T) || _checkcontiguous(Bool, A)
+        return invoke(read!, Tuple{IO, AbstractArray}, s, A)
     end
     sz::Dims = size(A)
     st::Dims = strides(A)
     msz, mst, n = merge_adjacent_dim(sz, st)
-    mst_bytes = mst * el_size
-    mst_bytes == array_elsize || return _read_array_fallback!(s, A)
+    mst == 1 || return invoke(read!, Tuple{IO, AbstractArray}, s, A)
     if n == ndims(A)
-        GC.@preserve A_cconv unsafe_read(s, unsafe_convert(Ptr{T}, A_cconv), mst_bytes * msz)
+        GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
         sz′, st′ = tail(sz), tail(st)
         while n > 1
@@ -1081,18 +1068,18 @@ function _read_array_strided!(s::IO, A::AT) where {T, AT<:AbstractArray{T}}
             st′ = (tail(st′)..., 0)
             n -= 1
         end
-        GC.@preserve A_cconv begin
+        GC.@preserve A begin
             iter = CartesianIndices(sz′)
-            p_start = unsafe_convert(Ptr{T}, A_cconv)
             for I in iter
-                local p = p_start
+                p = pointer(A)
                 for i in 1:length(sz′)
-                    p += el_size * st′[i] * (I[i] - 1)
+                    p += elsize(A) * st′[i] * (I[i] - 1)
                 end
-                unsafe_read(s, p, mst_bytes * msz)
+                unsafe_read(s, p, elsize(A) * msz)
             end
         end
     end
+    return A
 end
 
 function read(io::IO, ::Type{Char})
