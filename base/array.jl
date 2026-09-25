@@ -2498,6 +2498,8 @@ Return `nothing` if there is no such element.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also [`filterfirst`](@ref) to get the element instead of its index.
+
 # Examples
 ```jldoctest
 julia> A = [1, 4, 2, 2]
@@ -3087,7 +3089,12 @@ end
     filterfirst(f, itr)
 
 Get the first element of an iterable collection `itr` for which the
-predicate `f` returns `true.`
+predicate `f` returns `true`. Throw an `ArgumentError` if there is no such
+element, like [`first`](@ref) does for an empty collection; returning
+`nothing` would be ambiguous, since the element itself may be `nothing`.
+
+See also [`findfirst`](@ref) for the index of that element,
+[`Iterators.filter`](@ref).
 
 !!! compat "Julia 1.14"
     This method requires at least Julia 1.14.
@@ -3099,6 +3106,9 @@ julia> filterfirst(>=(5), 2:2:10)
 
 julia> filterfirst(iseven, [1; 2; 3; 4])
 2
+
+julia> filterfirst(isuppercase, "hello World")
+'W': ASCII/Unicode U+0057 (category Lu: Letter, uppercase)
 
 julia> filterfirst(isodd, 2:2:10)
 ERROR: ArgumentError: collection must be non-empty
