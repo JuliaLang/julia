@@ -523,6 +523,9 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             end
             d = args[1]
             args = args[2:end]
+            # This mirrors `expand-ncat` in julia-syntax.scm.
+            # The recursive helpers below call themselves through `@__FUNCTION__` rather than
+            # by name, so that they don't capture themselves and end up boxed.
             is_row(x) = isa(x, Expr) && (x.head === :row || x.head === :nrow)
             function extract_elements(x)
                 if isa(x, Expr)
@@ -530,7 +533,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                         x.head === :row  ? x.args :
                         nothing
                     if eexargs === nothing
-                        return [x]
+                        return Any[x]
                     else
                         return collect(Iterators.flatten((@__FUNCTION__).(eexargs)))
                     end
@@ -552,26 +555,20 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 # Unwrap one level of row/nrow expressions
                 function get_next(x)
                     is_row(x) || return [x]
-                    x.head === :nrow && d == x.args[1] + 1 && return x.args[2:end]
+                    x.head === :nrow && d <= x.args[1] + 1 && return x.args[2:end]
                     x.head === :row && d <= 1 && return x.args
                     return [x]
                 end
-                # Count leaf elements recursively
-                count_leaves(x) = !is_row(x) ? 1 :
-                                  x.head === :nrow ? sum((@__FUNCTION__), @view(x.args[2:end]); init=0) :
-                                  x.head === :row ? sum((@__FUNCTION__), x.args; init=0) : 1
                 # Base cases
                 (d == 0 || (d == 1 && !is_row_first)) && return [[length(a)]]
                 (d == 3 && is_row_first) && return (@__FUNCTION__)(a, is_row_first, 2)
-                # Recursive case: build shape from children
+                # Recursive case: the first entry of each child shape is its number of elements,
+                # and every child shape has the same depth, which depends only on `d`
                 shapes = (@__FUNCTION__).(get_next.(a), is_row_first, d - 1)
-                counts = count_leaves.(a)
+                counts = [s[1][1] for s in shapes]
                 result = [[sum(counts)], counts]
-                # Merge deeper levels from all children
-                max_depth = maximum(length, shapes; init=1)
-                for level in 2:max_depth
-                    level_data = reduce(vcat, (s[level] for s in shapes if level <= length(s)); init=[])
-                    isempty(level_data) || push!(result, level_data)
+                for level in 2:length(shapes[1])
+                    push!(result, reduce(vcat, [s[level] for s in shapes]))
                 end
                 return result
             end
@@ -606,7 +603,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                     reverse!(get_dims(args, is_row_first, d))
                 else
                     # lowering lists the levels innermost first
-                    reverse!(map(x -> tuple(x...), shape))
+                    reverse!(map(x -> Expr(:tuple, x...), shape))
                 end
                 args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; Expr(:tuple, dimsshape...); is_row_first; xs]
                 return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
