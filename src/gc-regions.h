@@ -66,6 +66,16 @@ typedef struct _jl_gc_region_state_t {
 JL_DLLEXPORT int jl_gc_region_set(int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_gc_region_current(void) JL_NOTSAFEPOINT;
 
+// --- the hooks the rest of the runtime calls --------------------------------
+// The census filter: the region of the census that runs now, 0 otherwise.
+extern _Atomic(int) jl_gc_region_census_target;
+STATIC_INLINE int jl_gc_region_census_filter(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&jl_gc_region_census_target);
+}
+// Records a task the census reached outside the region; returns 1 the first
+// time, 0 afterwards.
+int jl_gc_region_census_claim_task(jl_value_t *task) JL_NOTSAFEPOINT;
 // Process and per-heap initialization.
 void jl_gc_region_init(void) JL_NOTSAFEPOINT;
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
@@ -82,6 +92,7 @@ void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
 
 // Without the regions each hook expands to no code, and the runtime
 // compiles to the stock runtime.
+#define jl_gc_region_census_filter() 0
 #define jl_gc_region_init() ((void)0)
 #define jl_gc_region_init_heap(heap) ((void)(heap))
 
