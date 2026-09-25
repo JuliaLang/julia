@@ -192,6 +192,9 @@ function _assert_syntaxtree_node(st::SyntaxTree)
     nothing
 end
 
+# Cyclic references are still possible with children (as they are stored in a
+# mutable vector), but other cycles (e.g. source) should be impossible by
+# construction
 function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree})
     if st in parents
         err = "cycle detected: ["
@@ -202,12 +205,6 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree})
     end
     vr = _assert_syntaxtree_node(st)
     isnothing(vr) || return vr
-    # TODO: Proper traversal along .source and macro prov (need to cache results
-    # to avoid exponential repeated lookups, and figure out how these edges may
-    # form cycles with child edges)
-    st.source === st && return (st, ".source equal to self ID")
-    sc = st.context
-    sc.unexpanded === st && return (st, "unexpanded equal to self")
 
     push!(parents, st)
     is_leaf(st) || for c in children(st)
@@ -738,7 +735,14 @@ function _insert_green(sf::Base.RefValue{SourceFile},
     k = kind(cursor)
     h = kind_to_head(k)
     syntax_flags = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
-    if !is_leaf(cursor)
+    if is_error(k)
+        # the parser leaves unspecified junk in here, so we can't insert the
+        # green tree without making the tree impossible to validate
+        text = sourcefile(source)[byte_range(source)]
+        return @mknode(;head=h, source, context, children=SyntaxTree[
+            @mknode(;head=:value, source, context,
+                    value="$(_token_error_descriptions[k]): `$text`")])
+    elseif !is_leaf(cursor)
         cs = SyntaxList()
         for c in reverse(cursor)
             push!(cs, _insert_green(sf, txtbuf, offset, c, context))
@@ -751,8 +755,6 @@ function _insert_green(sf::Base.RefValue{SourceFile},
                 # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
                 v isa Symbol ? string(v) : v
             end
-        elseif is_error(k)
-            ErrorVal()
         else
             nothing
         end
@@ -800,9 +802,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     valleaf(@nospecialize(v)) =
         @mknode(;head=:value, value=v, source=st, context)
 
-    if k === :error # the parser leaves all sorts of junk in here
-        return @mknode(st; children=nothing)
-    elseif is_leaf(st)
+    if is_leaf(st)
         return if k === :cmdmacroname || k === :strmacroname
             name = lower_identifier_name(syntax_name(st), k)
             symleaf(name)
@@ -1029,7 +1029,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             elseif head(c) === :finally
                 finally_ = only(inner_cs)
             elseif head(c) === :error
-                return @mknode(st; children=cs) # give up
+                return @mknode(c) # give up
             else
                 @assert false "Illegal subclause in `try`"
             end

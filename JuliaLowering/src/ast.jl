@@ -50,24 +50,7 @@ function newleaf(prov::SyntaxTree, k::Symbol, @nospecialize(value))
     context = prov.context
     @jl_assert k === :value || value !== nothing (
         prov, "only Value may contain nothing")
-    if k == :identifier || k == :bindingid || k == :value ||
-        k == :core || k == :top || k == :symbol || k == :globalref ||
-        k == :placeholder || k == :label || k == :symboliclabel ||
-        k == :symbolicgoto
-        @mknode(;head=k, source=prov, context, value)
-    elseif k in (:tombstone, :sourcelocation, :latestworld, :latestworld_if_toplevel,
-                 :softscope, :nothing)
-        @mknode(;head=k, source=prov, context)
-    else
-        val = k == :lambdabindings ? value :
-              k == :slots ? value :
-              k == :ssavalue ? value :
-              k == :slot ? value :
-              k == :static_parameter ? value :
-              k == :version ? value :
-              error("Unexpected leaf kind `$k`")
-        @mknode(;head=k, source=prov, value=val, context)
-    end
+    @mknode(;head=k, context, source=prov, value)
 end
 newleaf(prov::SyntaxTree, k::Symbol) =
     @mknode(;source=prov, context=prov.context, head=k)
@@ -113,7 +96,8 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
         return ex
     end
     var = ssavar(ctx, ex, name)
-    push!(stmts, @mknode(ex; head=:(=), children=SyntaxList(var, ex)))
+    push!(stmts, @mknode(;source=ex, context=ex.context,
+                         head=:(=), children=SyntaxList(var, ex)))
     var
 end
 
