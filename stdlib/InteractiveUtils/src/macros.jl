@@ -535,13 +535,13 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                         return collect(Iterators.flatten((@__FUNCTION__).(eexargs)))
                     end
                 end
-                return x
+                return Any[x]
             end
             function get_is_row_first(x)
                 if isa(x, Expr)
                     if x.head === :nrow
                         x = x.args[2:end]
-                    elseif x.head == :row
+                    elseif x.head === :row
                         return true
                     end
                 end
@@ -553,7 +553,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 function get_next(x)
                     is_row(x) || return [x]
                     x.head === :nrow && d == x.args[1] + 1 && return x.args[2:end]
-                    x.head === :row && (d == 1 || (d == 2 && is_row_first)) && return x.args
+                    x.head === :row && d <= 1 && return x.args
                     return [x]
                 end
                 # Count leaf elements recursively
@@ -596,12 +596,17 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; d; xs]
                 return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
             else
+                if any(x -> isexpr(x, :...), xs)
+                    return Expr(:call, :error, "Splatting ... in an hvncat with multiple dimensions is not supported")
+                end
                 shape = get_shape(args, is_row_first, d)
-                is_balanced = sum(map((x, y) -> sum(map(z -> z - y, x)), shape[2:end], first.(shape[2:end]))) == 0
+                # balanced if every slice along each dimension has the same number of elements
+                is_balanced = all(level -> all(==(first(level)), level), @view(shape[2:end]))
                 dimsshape = if is_balanced
                     reverse!(get_dims(args, is_row_first, d))
                 else
-                    map(x -> tuple(x...), shape)
+                    # lowering lists the levels innermost first
+                    reverse!(map(x -> tuple(x...), shape))
                 end
                 args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; Expr(:tuple, dimsshape...); is_row_first; xs]
                 return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)

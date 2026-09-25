@@ -1062,52 +1062,79 @@ end # module
 end
 
 # PR #45399
-function test_which_expand(expr, expected...)
-    actual = last.(getfield.(expr.args[3].args[2].args[2:end], :args))
-    @test all(actual .== expected)
+# Values of the arguments of the call that a reflection macro analyzes for `ex`
+function which_call_args(ex)
+    args = Any[]
+    function walk(x)
+        x isa Expr || return
+        if x.head === :call && (x.args[1] == :(Core.Typeof) || x.args[1] === GlobalRef(Core, :Typeof))
+            push!(args, Core.eval(@__MODULE__, x.args[2]))
+        else
+            foreach(walk, x.args)
+        end
+    end
+    walk(macroexpand(@__MODULE__, :(@which $ex)))
+    return args
 end
 
+const hvncat_x, hvncat_y, hvncat_z, hvncat_w = 1, 2.0, 0x3, 4//1
+const hvncat_v = [1, 2]
+
 @testset "hvncat/typed_hvncat" begin
-    me = (@macroexpand @which [1;;;])
-    test_which_expand(me, hvncat, 3, 1)
+    # one-dimensional
+    @test which_call_args(:([1;;;])) == [hvncat, 3, 1]
+    @test which_call_args(:([1 ;;;; 3;;;; 9])) == [hvncat, 4, 1, 3, 9]
+    @test which_call_args(:(Int64[1;;;])) == [Base.typed_hvncat, Int64, 3, 1]
+    @test which_call_args(:(Int64[1 ;;;; 3;;;; 9])) == [Base.typed_hvncat, Int64, 4, 1, 3, 9]
+    @test which_call_args(:([string() ;;; string()])) == [hvncat, 3, "", ""]
 
-    me = (@macroexpand @which [1 ;;;; 3;;;; 9])
-    test_which_expand(me, hvncat, 4, 1, 3, 9)
+    # balanced
+    @test which_call_args(:([1 4 ;;; 3 4 ;;; 1 9])) == [hvncat, (1, 2, 3), true, 1, 4, 3, 4, 1, 9]
+    @test which_call_args(:([1 ;; 4 ;;;; 3;; 9])) == [hvncat, (1, 2, 1, 2), false, 1, 4, 3, 9]
+    @test which_call_args(:(Int64[1 4 ;;; 3 4 ;;; 1 9])) == [Base.typed_hvncat, Int64, (1, 2, 3), true, 1, 4, 3, 4, 1, 9]
+    @test which_call_args(:(Int64[1 ;; 4 ;;;; 3;; 9])) == [Base.typed_hvncat, Int64, (1, 2, 1, 2), false, 1, 4, 3, 9]
 
-    me = (@macroexpand @which [1 4 ;;; 3 4 ;;; 1 9])
-    test_which_expand(me, hvncat, Expr(:tuple, 1, 2, 3), true, 1, 4, 3, 4, 1, 9)
+    # ragged
+    @test which_call_args(:([1 4 ;;; 3 4 ;;;; 4])) ==
+        [hvncat, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), true, 1, 4, 3, 4, 4]
+    @test which_call_args(:([1; 4 ;;; 3; 4 ;;;; 4])) ==
+        [hvncat, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), false, 1, 4, 3, 4, 4]
+    @test which_call_args(:([1 2 3 ;;; 4 5; 6 ;;; 7 8; 9])) ==
+        [hvncat, ((3, 2, 1, 2, 1), (3, 3, 3), (9,)), true, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    # row lengths whose deviations from the first row cancel out
+    @test which_call_args(:([1 2; 3; 4 5 6 ;;; 7 8; 9; 10 11 12])) ==
+        [hvncat, ((2, 1, 3, 2, 1, 3), (6, 6), (12,)), true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    @test which_call_args(:(Int64[1; 2 ;; 3 ;; 4; 5; 6])) ==
+        [Base.typed_hvncat, Int64, ((2, 1, 3), (6,)), false, 1, 2, 3, 4, 5, 6]
+    @test which_call_args(:(Int64[1 4 ;;; 3 4 ;;;; 4])) ==
+        [Base.typed_hvncat, Int64, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), true, 1, 4, 3, 4, 4]
+    @test which_call_args(:(Int64[1; 4 ;;; 3; 4 ;;;; 4])) ==
+        [Base.typed_hvncat, Int64, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), false, 1, 4, 3, 4, 4]
 
-    me = (@macroexpand @which [1 ;; 4 ;;;; 3;; 9])
-    test_which_expand(me, hvncat, Expr(:tuple, 1, 2, 1, 2), false, 1, 4, 3, 9)
+    # elements that are not expressions
+    @test which_call_args(:([hvncat_x hvncat_y ;;; hvncat_z hvncat_w])) ==
+        [hvncat, (1, 2, 2), true, hvncat_x, hvncat_y, hvncat_z, hvncat_w]
+    @test which_call_args(:([hvncat_x ;;; hvncat_y])) == [hvncat, 3, hvncat_x, hvncat_y]
+    @test which_call_args(:(["ab" "cd" ;;; "e" "f"])) == [hvncat, (1, 2, 2), true, "ab", "cd", "e", "f"]
+    @test which_call_args(:(["ab" ;;; "cd"])) == [hvncat, 3, "ab", "cd"]
+    @test which_call_args(:([:a ;; :b ;;; :c ;; :d])) == [hvncat, (1, 2, 2), false, :a, :b, :c, :d]
+    @test which_call_args(:([nothing ;;; nothing])) == [hvncat, 3, nothing, nothing]
 
-    me = (@macroexpand @which [1 4 ;;; 3 4 ;;;; 4])
-    test_which_expand(me, hvncat, Expr(:tuple, (5,), (4, 1), (2, 2, 1), (1, 1, 1, 1, 1)), true, 1, 4, 3, 4, 4)
+    # the analyzed call must build the same array as the literal
+    for ex in (:([1 4 ;;; 3 4 ;;; 1 9]), :([1 ;; 4 ;;;; 3;; 9]), :(Int64[1 ;; 4 ;;;; 3;; 9]),
+               :([[1 2] 3 ;;; 4 5 6]), :([[1 2] 3; 4 5 6 ;;; 7 8 9; [10 11] 12]),
+               :([hvncat_x hvncat_y ;;; hvncat_z hvncat_w]), :(["ab" "cd" ;;; "e" "f"]))
+        f, args... = which_call_args(ex)
+        @test f(args...) == Core.eval(@__MODULE__, ex)
+    end
 
-    me = (@macroexpand @which [1; 4 ;;; 3; 4 ;;;; 4])
-    test_which_expand(me, hvncat, Expr(:tuple, (5,), (4, 1), (2, 2, 1), (2, 2, 1)), false, 1, 4, 3, 4, 4)
+    @test (@which [1 2 ;;; 3 4]) == which(hvncat, (Tuple{Int,Int,Int}, Bool, Int, Int, Int, Int))
+    @test (@which [hvncat_x ;;; hvncat_y]) == which(hvncat, (Int, Int, Float64))
 
-
-    me = (@macroexpand @which Int64[1;;;])
-    test_which_expand(me, Base.typed_hvncat, :Int64, 3, 1)
-
-    me = (@macroexpand @which Int64[1 ;;;; 3;;;; 9])
-    test_which_expand(me, Base.typed_hvncat, :Int64, 4, 1, 3, 9)
-
-    me = (@macroexpand @which Int64[1 4 ;;; 3 4 ;;; 1 9])
-    test_which_expand(me, Base.typed_hvncat, :Int64, Expr(:tuple, 1, 2, 3), true, 1, 4, 3, 4, 1, 9)
-
-    me = (@macroexpand @which Int64[1 ;; 4 ;;;; 3;; 9])
-    test_which_expand(me, Base.typed_hvncat, :Int64, Expr(:tuple, 1, 2, 1, 2), false, 1, 4, 3, 9)
-
-    me = (@macroexpand @which Int64[1 4 ;;; 3 4 ;;;; 4])
-    test_which_expand(me, Base.typed_hvncat, :Int64, Expr(:tuple, (5,), (4, 1), (2, 2, 1), (1, 1, 1, 1, 1)), true, 1, 4, 3, 4, 4)
-
-    me = (@macroexpand @which Int64[1; 4 ;;; 3; 4 ;;;; 4])
-    test_which_expand(me, Base.typed_hvncat, :Int64, Expr(:tuple, (5,), (4, 1), (2, 2, 1), (2, 2, 1)), false, 1, 4, 3, 4, 4)
-
-
-    me = (@macroexpand @which [string() ;;; string()])
-    test_which_expand(me, hvncat, 3, :(string()), :(string()))
+    # splatting is only supported by lowering in the one-dimensional case
+    @test (@which [hvncat_v... ;;; hvncat_v...]) == which(hvncat, (Int, Int, Int, Int, Int))
+    @test_throws "Splatting ... in an hvncat with multiple dimensions is not supported" @which [hvncat_v... 1 ;;; 2 3]
+    @test_throws "Splatting ... in an hvncat with multiple dimensions is not supported" @which [hvncat_v... ;; 1 ;;; 2 ;; 3]
 end
 
 let code = """
