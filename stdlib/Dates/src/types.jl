@@ -195,11 +195,10 @@ end
     Timestamp{P}
 
 `Timestamp{P}` represents a point in time according to the proleptic Gregorian
-calendar. The built-in resolutions store an `Int64` count of `P` since the Unix epoch,
-`1970-01-01T00:00:00`, where the resolution `P` is `Second`, `Millisecond`,
-`Microsecond`, or `Nanosecond`. `Timestamp(...)` without a type parameter creates
-a `Timestamp{Nanosecond}`, except that `Timestamp(ts)` returns a timestamp `ts`
-unchanged.
+calendar. It stores a count of `P` since the Unix epoch, `1970-01-01T00:00:00`. The
+built-in resolutions `Second`, `Millisecond`, `Microsecond`, and `Nanosecond` each use
+an `Int64` count. `Timestamp(...)` without a type parameter creates a
+`Timestamp{Nanosecond}`, except that `Timestamp(ts)` returns a timestamp `ts` unchanged.
 
 The resolution sets the range. `Timestamp{Nanosecond}` covers
 `1677-09-21T00:12:43.145224192` through `2262-04-11T23:47:16.854775807`.
@@ -245,17 +244,17 @@ With a built-in resolution, `Timestamp{P}` has the same bits as an Apache Arrow
 directly. NumPy uses `typemin(Int64)` for `NaT` (not a time).
 
 `Dates.value(ts)` returns the count since the Unix epoch, and `convert(P, ts)`
-returns the same count as a `P`. Built-in period constructors return calendar
-fields: for example, `Second(ts)` is the second of the minute, from 0 through 59. `DateTime`
-counts from a different epoch, so `Dates.value(ts)` and `Dates.value(dt)` differ even
-when `ts == dt`.
+returns the same count as a `P`. In contrast, a built-in period type returns a calendar
+field: for example, `Second(ts)` is the second of the minute, from 0 through 59.
+`DateTime` counts from a different epoch, so `Dates.value(ts)` and `Dates.value(dt)`
+differ even when `ts == dt`.
 
-Packages can supply another `TimePeriod` with a different count width or resolution.
-The internal extension helpers use `value`, `typemin`, and `typemax` of that period,
-and an exact `timestamp_scale(P)` in nanoseconds, which may be rational. A period
-whose calendar range exceeds Int64 day calculations can also specialize
-`timestamp_totaldays(P, y, m, d)`. Fractional formatting and parsing are separate
-extensions; the built-in `n` format code has nanosecond precision.
+A package can add a resolution with its own `TimePeriod` type, such as a 128-bit count
+of picoseconds. The type needs methods for `Dates.value`, `typemin`, `typemax`, and
+`Dates.tons`, which gives the length in nanoseconds (a `Rational` for a unit shorter
+than a nanosecond). For years whose day number does not fit in an `Int64`, also add a
+method for `Dates.timestamp_totaldays(P, y, m, d)`. The `n` format code has nanosecond
+precision.
 """
 struct Timestamp{P<:TimePeriod} <: AbstractDateTime
     instant::UTInstant{P}
@@ -266,13 +265,15 @@ Timestamp(args...; kwargs...) = Timestamp{Nanosecond}(args...; kwargs...)
 Timestamp(instant::UTInstant{P}) where {P} = Timestamp{P}(instant)
 Timestamp(ts::Timestamp) = ts
 
-# A period supplies its count storage and exact scale in nanoseconds.
-# Fractional scales permit resolutions finer than Nanosecond.
+# Integer type of a count of P
 timestamp_count_type(::Type{P}) where {P} = typeof(value(zero(P)))
+# Rata Die day number; a package period with a very wide range can compute it in a wider type
 timestamp_totaldays(::Type{P}, y, m, d) where {P} = totaldays(y, m, d)
+# Nanoseconds per unit of P (a Rational below a nanosecond), and units of P per day
 timestamp_scale(::Type{P}) where {P<:Period} = tons(oneunit(P))
 timestamp_scale(::Type{Timestamp{P}}) where {P} = timestamp_scale(P)
 timestamp_ticks_per_day(::Type{P}) where {P} = NS_PER_DAY ÷ timestamp_scale(P)
+# The finer of two resolutions
 timestamp_finer(::Type{P}, ::Type{Q}) where {P,Q} =
     timestamp_scale(P) <= timestamp_scale(Q) ? P : Q
 
@@ -713,7 +714,7 @@ Base.typemin(x::Timestamp) = typemin(typeof(x))
 # Date-DateTime promotion, isless, ==
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.promote_rule(::Type{Date}, ::Type{Timestamp{P}}) where {P} = Timestamp{P}
-# Timestamp promotion picks the finer scale without requiring period promotion
+# Promote to the finer resolution. Package periods may have no period promotion rules.
 Base.promote_rule(::Type{DateTime}, ::Type{Timestamp{P}}) where {P} = Timestamp{timestamp_finer(P, Millisecond)}
 Base.promote_rule(::Type{Timestamp{P}}, ::Type{Timestamp{Q}}) where {P,Q} = Timestamp{timestamp_finer(P, Q)}
 Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
