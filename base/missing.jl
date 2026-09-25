@@ -293,17 +293,18 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     end
     ismissing(ai) && return mapreduce_first(f, op, a1)
     # We know A contains at least two non-missing entries: the result cannot be nothing
-    something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
+    something(_mapreduce_impl_skipmissing(f, op, itr, first(inds), last(inds)))
 end
 
 _mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
 
-mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+# Returns nothing when the input contains only missing values, and Some(x) otherwise.
+# Kept separate from `mapreduce_impl` so this return type doesn't leak into its inference.
+_mapreduce_impl_skipmissing(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
+    _mapreduce_impl_skipmissing(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
-# Returns nothing when the input contains only missing values, and Some(x) otherwise
-@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
+@noinline function _mapreduce_impl_skipmissing(f, op, itr::SkipMissing{<:AbstractArray},
+                                               ifirst::Integer, ilast::Integer, blksize::Int)
     A = itr.x
     if ifirst > ilast
         return nothing
@@ -346,8 +347,8 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
-        v1 = mapreduce_impl(f, op, itr, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, itr, imid+1, ilast, blksize)
+        v1 = _mapreduce_impl_skipmissing(f, op, itr, ifirst, imid, blksize)
+        v2 = _mapreduce_impl_skipmissing(f, op, itr, imid+1, ilast, blksize)
         if v1 === nothing && v2 === nothing
             return nothing
         elseif v1 === nothing
