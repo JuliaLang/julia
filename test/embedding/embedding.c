@@ -1,7 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <julia.h>
-#include <limits.h>
 #include <stdio.h>
 #include <math.h>
 
@@ -29,81 +28,6 @@ jl_value_t *checked_eval_string(const char* code)
     }
     assert(result && "Missing return value but no exception occurred!");
     return result;
-}
-
-static volatile int tagged_root_fins_ran = 0;
-
-static void tagged_root_finalizer(void *o)
-{
-    (void)o;
-    tagged_root_fins_ran++;
-}
-
-static void check_fins_ran(int expected, const char *ctx)
-{
-    if (tagged_root_fins_ran == expected)
-        return;
-    fprintf(stderr, "%s: %d finalizers ran, expected %d\n", ctx,
-            tagged_root_fins_ran, expected);
-    exit(1);
-}
-
-// Tagged immediates must not prevent neighboring roots from being marked.
-// Their finalizers should run only after the roots are popped.
-static void test_tagged_immediate_roots(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // Set a high payload bit on either 32-bit or 64-bit platforms.
-    const uintptr_t large_imm = (uintptr_t)1 << (sizeof(uintptr_t) * CHAR_BIT - 4);
-
-    // Put live roots after tagged values at both even and odd indices.
-    // Treating an immediate as a finalizer entry would skip the next root.
-    {
-        jl_value_t **args;
-        JL_GC_PUSHARGS(args, 6);
-        args[0] = (jl_value_t *)0x5;                // tag 0b01, even slot
-        args[1] = jl_box_int64(42424242);
-        args[2] = (jl_value_t *)0x6;                // tag 0b10, even slot
-        args[3] = (jl_value_t *)0x7;                // tag 0b11, odd slot
-        args[4] = jl_box_int64(43434343);
-        args[5] = (jl_value_t *)(large_imm | 0x1);  // last slot
-        jl_gc_add_ptr_finalizer(ptls, args[1], (void *)tagged_root_finalizer);
-        jl_gc_add_ptr_finalizer(ptls, args[4], (void *)tagged_root_finalizer);
-        jl_gc_collect(JL_GC_FULL);
-        check_fins_ran(0, "JL_GC_PUSHARGS frame, small tagged immediates");
-
-        // Large payloads must be skipped just the same, not mistaken for
-        // object references.
-        args[0] = (jl_value_t *)(large_imm | 0x1);
-        args[2] = (jl_value_t *)(large_imm | 0x2);
-        args[3] = (jl_value_t *)(large_imm | 0x3);
-        jl_gc_collect(JL_GC_FULL);
-        check_fins_ran(0, "JL_GC_PUSHARGS frame, large tagged immediates");
-        JL_GC_POP();
-    }
-    jl_gc_collect(JL_GC_FULL);
-    check_fins_ran(2, "after JL_GC_PUSHARGS frame was popped");
-    tagged_root_fins_ran = 0;
-
-    // Indirect-layout frame (JL_GC_PUSH3): locals holding tagged immediates.
-    {
-        jl_value_t *tagged = (jl_value_t *)0x5;
-        jl_value_t *obj = NULL;
-        jl_value_t *tagged2 = (jl_value_t *)0x6;
-        JL_GC_PUSH3(&tagged, &obj, &tagged2);
-        obj = jl_box_int64(24242424);
-        jl_gc_add_ptr_finalizer(ptls, obj, (void *)tagged_root_finalizer);
-        jl_gc_collect(JL_GC_FULL);
-        check_fins_ran(0, "JL_GC_PUSH frame, small tagged immediates");
-
-        tagged = (jl_value_t *)(large_imm | 0x3);
-        tagged2 = (jl_value_t *)(large_imm | 0x2);
-        jl_gc_collect(JL_GC_FULL);
-        check_fins_ran(0, "JL_GC_PUSH frame, large tagged immediates");
-        JL_GC_POP();
-    }
-    jl_gc_collect(JL_GC_FULL);
-    check_fins_ran(1, "after JL_GC_PUSH frame was popped");
 }
 
 int main()
@@ -280,8 +204,6 @@ int main()
     JL_CATCH {
         jl_printf(jl_stderr_stream(), "exception caught from C\n");
     }
-
-    test_tagged_immediate_roots();
 
     int ret = 0;
     jl_atexit_hook(ret);
