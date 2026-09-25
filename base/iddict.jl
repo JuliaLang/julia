@@ -126,7 +126,7 @@ function delete!(d::IdDict{K}, @nospecialize(key)) where K
 end
 
 function empty!(d::IdDict)
-    d.ht = Memory{Any}(undef, 32)
+    d.ht = memory_for(d, Memory{Any}, 32) # allocated where the dictionary lives (gcregions.jl)
     ht = d.ht
     t = @_gc_preserve_begin ht
     memset(unsafe_convert(Ptr{Cvoid}, ht), 0, sizeof(ht) % UInt)
