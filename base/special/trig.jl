@@ -485,8 +485,11 @@ atan_q(w::Float64) = w*@horner(w,
      -7.69187620504482999495e-02,
      -5.83357013379057348645e-02,
      -3.65315727442169155270e-02)
-atan_p(z::Float32, w::Float32) = z*@horner(w, 3.3333328366f-01,  1.4253635705f-01, 6.1687607318f-02)
-atan_q(w::Float32) = w*@horner(w, -1.9999158382f-01, -1.0648017377f-01)
+# The two-argument Float32 kernels evaluate this fit in Float64.
+atan32_p(z, w) = z*@horner(w, 3.3333328366f-01,  1.4253635705f-01, 6.1687607318f-02)
+atan32_q(w) = w*@horner(w, -1.9999158382f-01, -1.0648017377f-01)
+atan_p(z::Float32, w::Float32) = atan32_p(z, w)
+atan_q(w::Float32) = atan32_q(w)
 @inline function atan_pq(x)
     x² = x*x
     x⁴ = x²*x²
@@ -540,12 +543,7 @@ function atan(x::T) where T<:Union{Float32, Float64}
     copysign(z, xsign)
 end
 # atan2 methods
-ATAN2_PI_LO(::Type{Float32}) = -8.7422776573f-08
-ATAN2_RATIO_BIT_SHIFT(::Type{Float32}) = 23
-ATAN2_RATIO_THRESHOLD(::Type{Float32}) = 26
-
 ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
-ATAN2_RATIO_BIT_SHIFT(::Type{Float64}) = 20
 ATAN2_RATIO_THRESHOLD(::Type{Float64}) = 60
 
 # Eighth scaling keeps the reciprocal of even the largest operand sum normal.
@@ -604,31 +602,41 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     return atan2_kernel(y, x)
 end
 
-@inline function atan2_kernel(y::T, x::T) where T<:Union{Float32,Float64}
-    m = 2*signbit(x) + signbit(y)
-    ypw = poshighword(y)
-    xpw = poshighword(x)
-    # compute y/x for Float32
-    k = reinterpret(Int32, ypw -% xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
+"""
+    atan2_reduce(y::Float32, x::Float32)
 
-    if k > ATAN2_RATIO_THRESHOLD(T) # |y/x| >  threshold
-        z=T(pi)/2+T(0.5)*ATAN2_PI_LO(T)
-        m&=1;
-    elseif x<0 && k < -ATAN2_RATIO_THRESHOLD(T) # 0 > |y|/x > threshold
-        z = zero(T)
-    else #safe to do y/x
-        z = atan(abs(y/x))
-    end
+Reduce finite, nonzero operands to an octant angle in Float64.
 
-    if m == 0
-        return z # atan(+,+)
-    elseif m == 1
-        return -z # atan(-,+)
-    elseif m == 2
-        return T(pi)-(z-ATAN2_PI_LO(T)) # atan(+,-)
-    else # default case m == 3
-        return (z-ATAN2_PI_LO(T))-T(pi) # atan(-,-)
+Return the angle and the index of its quadrant offset.
+"""
+@inline function atan2_reduce(y::Float32, x::Float32)
+    absy, absx = Float64(abs(y)), Float64(abs(x))
+    swapped = absy > absx
+    small, large = minmax(absy, absx)
+    diagonal = small >= ATAN2_REDUCTION_THRESHOLD*large
+    # Float32 operands can neither overflow nor underflow this single Float64 division.
+    ratio = ifelse(diagonal, small - large, small)/ifelse(diagonal, small + large, large)
+    ratio = flipsign(ratio, ifelse(xor(swapped, signbit(x)), -1.0, 1.0))
+    # Clamping keeps ratio⁴ normal, where the polynomial term is negligible anyway.
+    ratio² = max(abs(ratio), 0x1p-200)^2
+    ratio⁴ = ratio²*ratio²
+    angle = muladd(-ratio, atan32_p(ratio², ratio⁴) + atan32_q(ratio⁴), ratio)
+    return angle, 4Int(diagonal) + 2Int(swapped) + Int(signbit(x)) + 1
+end
+
+"""
+    atan2_kernel(y::Float32, x::Float32)
+
+Compute `atan(y, x)` for finite, nonzero inputs.
+"""
+@inline function atan2_kernel(y::Float32, x::Float32)
+    angle, index = atan2_reduce(y, x)
+    @assume_effects :nothrow begin
+        offset = (0.0, Float64(pi), ATAN_INF_HI(Float64), ATAN_INF_HI(Float64),
+                  ATAN_2_O_2_HI(Float64), 3*ATAN_2_O_2_HI(Float64),
+                  ATAN_2_O_2_HI(Float64), 3*ATAN_2_O_2_HI(Float64))[index]
     end
+    return copysign(Float32(offset + angle), y)
 end
 
 """
@@ -1117,20 +1125,17 @@ function atanpi(y::T, x::T) where T<:Union{Float32,Float64}
     return atanpi_kernel(y, x)
 end
 
-@inline function atanpi_kernel(y::T, x::T) where T<:Union{Float32,Float64}
-    ypw = poshighword(y)
-    xpw = poshighword(x)
-    k = reinterpret(Int32, ypw -% xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
+"""
+    atanpi_kernel(y::Float32, x::Float32)
 
-    if k > ATAN2_RATIO_THRESHOLD(T) # |y/x| > threshold
-        z = T(0.5)
-    elseif x < 0 && k < -ATAN2_RATIO_THRESHOLD(T) # 0 > |y|/x > threshold
-        z = zero(T)
-    else # safe to do y/x
-        z = atanpi(abs(y/x))
+Compute `atan(y, x)/π` for finite, nonzero inputs.
+"""
+@inline function atanpi_kernel(y::Float32, x::Float32)
+    angle, index = atan2_reduce(y, x)
+    @assume_effects :nothrow begin
+        offset = (0.0, 1.0, 0.5, 0.5, 0.25, 0.75, 0.25, 0.75)[index]
     end
-
-    return flipsign(signbit(x) ? one(T) - z : z, y)
+    return copysign(Float32(muladd(angle, INV_PI_HI, offset)), y)
 end
 
 """
