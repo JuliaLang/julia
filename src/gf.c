@@ -3488,6 +3488,8 @@ static void JL_NORETURN jl_method_error_bare(jl_value_t *f, jl_value_t *args, si
             size_t world;
         } *pe = (struct jl_method_error*)e,
            ee = {f, args, world};
+        jl_gc_wb_fresh(e, &pe->f, f);
+        jl_gc_wb_fresh(e, &pe->args, args);
         *pe = ee;
         jl_throw(e);
     }

@@ -111,6 +111,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str) JL_
     jl_genericmemory_t *m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tsz, jl_memory_uint8_type);
     m->length = jl_string_len(str);
     m->ptr = jl_string_data(str);
+    jl_gc_wb_fresh(m, &jl_genericmemory_data_owner_field(m), str);
     jl_genericmemory_data_owner_field(m) = str;
     return m;
 }
@@ -317,6 +318,7 @@ jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem
 {
     jl_task_t *ct = jl_current_task;
     jl_genericmemoryref_t *m = (jl_genericmemoryref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_genericmemoryref_t), typ);
+    jl_gc_wb_fresh(m, &m->mem, mem);
     m->mem = mem;
     m->ptr_or_offset = data;
     return m;
@@ -383,6 +385,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
         jl_lock_field((jl_mutex_t*)data);
         memcpy((char*)r, data + LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT), fsz);
         jl_unlock_field((jl_mutex_t*)data);
+        jl_gc_multi_wb_fresh(r, r, (jl_datatype_t*)eltype);
     }
     else {
         // TODO: a finalizer here could make the isunion case not quite right

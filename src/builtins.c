@@ -2193,7 +2193,10 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
     jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
     jl_set_typetagof(tv, jl_tvar_tag, 0);
     tv->name = name;
+    // A bound built inside a GC region window, under a TypeVar made after it
+    jl_gc_wb_fresh(tv, &tv->lb, lb);
     tv->lb = lb;
+    jl_gc_wb_fresh(tv, &tv->ub, ub);
     tv->ub = ub;
     return tv;
 }

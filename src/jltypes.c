@@ -1879,7 +1879,9 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
                 jl_task_t *ct = jl_current_task;
                 t = jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
                 jl_set_typetagof((jl_vararg_t *)t, jl_vararg_tag, 0);
+                jl_gc_wb_fresh(t, &((jl_vararg_t *)t)->T, rT);
                 ((jl_vararg_t *)t)->T = rT;
+                jl_gc_wb_fresh(t, &((jl_vararg_t *)t)->N, vt->N);
                 ((jl_vararg_t *)t)->N = vt->N;
             }
             JL_GC_POP();
@@ -3380,7 +3382,9 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
     if (valid) {
         vm = (jl_vararg_t *)jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
         jl_set_typetagof(vm, jl_vararg_tag, 0);
+        jl_gc_wb_fresh(vm, &vm->T, t);
         vm->T = t;
+        jl_gc_wb_fresh(vm, &vm->N, n);
         vm->N = n;
     }
     JL_GC_POP();
