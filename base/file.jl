@@ -258,24 +258,24 @@ end
 # i.e. loaded DLLs on Windows, are listed in the directory below
 delayed_delete_ref() = joinpath(tempdir(), "julia_delayed_deletes_ref")
 
-# Another process (an antivirus scanner, for example) can hold a file open for a
-# short time, which makes it busy on Windows. Retry policy belongs here and not
-# in libuv, which removed its own retry in libuv#2098.
+# libuv removed its own retry policy in libuv#2098.
+# defering to the applications if needed.
 const FS_RETRY_MAX_ATTEMPTS = 8
-const FS_RETRY_INITIAL_DELAY = 0.01 # seconds
-const FS_RETRY_MAX_DELAY = 0.32     # seconds
+const FS_RETRY_INITIAL_DELAY_MS = 10
+const FS_RETRY_MAX_DELAY_MS = 320
 
 "Run `f` again while it returns `UV_EBUSY`. `f` returns an error code."
 function retry_ebusy(f)
-    delay = FS_RETRY_INITIAL_DELAY
+    delay = FS_RETRY_INITIAL_DELAY_MS
     for attempt = 1:FS_RETRY_MAX_ATTEMPTS
         code = f()
         if code >= 0 || code != Base.UV_EBUSY || attempt == FS_RETRY_MAX_ATTEMPTS
             return code
         end
         # Longer each time, with jitter.
-        sleep(delay * (1 + (Libc.rand() % 100) / 100))
-        delay = min(2delay, FS_RETRY_MAX_DELAY)
+        jitter_delay = delay + (Libc.rand() % delay)
+        sleep(jitter_delay * 1000)
+        delay = min(2delay, FS_RETRY_MAX_DELAY_MS)
     end
 end
 
