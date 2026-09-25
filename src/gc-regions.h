@@ -84,6 +84,9 @@ JL_DLLEXPORT int jl_gc_region_current(void) JL_NOTSAFEPOINT;
 void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
 // The region of an object.
 JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v) JL_NOTSAFEPOINT;
+// The pages of a region on this heap; whether an escape quarantined a region.
+JL_DLLEXPORT int jl_gc_region_pages(int n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_gc_region_quarantined(int n) JL_NOTSAFEPOINT;
 #ifdef WITH_GC_REGION_BARRIER
 // The escape barrier, called by the write barrier while a region is in use.
 JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
