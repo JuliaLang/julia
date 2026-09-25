@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Julia",
+            "includePath": [
+                "${workspaceFolder}/src/**",
+                "${workspaceFolder}/usr/include/**"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "compileCommands": [
+                "${workspaceFolder}/src/compile_commands.json",
+                "${workspaceFolder}/src/flisp/compile_commands.json",
+                "${workspaceFolder}/src/support/compile_commands.json"
+            ]
+        }
+    ],
+    "version": 4,
+    "enableConfigurationSquiggles": true
+}

@@ -18,6 +18,9 @@
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
+#define STR(csym)           #csym
+#define XSTR(csym)          STR(csym)
+
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()
@@ -25,11 +28,13 @@ JuliaPassContext::JuliaPassContext()
 
         tbaa_gcframe(nullptr), tbaa_tag(nullptr),
 
-        pgcstack_getter(nullptr), adoptthread_func(nullptr), gc_flush_func(nullptr),
+        pgcstack_getter(nullptr), adoptthread_func(nullptr), gcroot_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
-        typeof_func(nullptr), write_barrier_func(nullptr), pop_handler_noexcept_func(nullptr),
-        call_func(nullptr), call2_func(nullptr), call3_func(nullptr), module(nullptr)
+        typeof_func(nullptr), blackbox_func(nullptr), object_write_barrier_func(nullptr),
+        field_write_barrier_p11_func(nullptr), field_write_barrier_p13_func(nullptr),
+        pop_handler_noexcept_func(nullptr),
+        call_func(nullptr), call2_func(nullptr), call3_func(nullptr), cancel_point_func(nullptr), module(nullptr)
 {
 }
 
@@ -46,18 +51,22 @@ void JuliaPassContext::initFunctions(Module &M)
 
     pgcstack_getter = M.getFunction("julia.get_pgcstack");
     adoptthread_func = M.getFunction("julia.get_pgcstack_or_new");
-    gc_flush_func = M.getFunction("julia.gcroot_flush");
+    gcroot_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
     gc_loaded_func = M.getFunction("julia.gc_loaded");
     typeof_func = M.getFunction("julia.typeof");
-    write_barrier_func = M.getFunction("julia.write_barrier");
+    blackbox_func = M.getFunction("julia.blackbox");
+    field_write_barrier_p11_func = M.getFunction("julia.field_write_barrier.p11");
+    field_write_barrier_p13_func = M.getFunction("julia.field_write_barrier.p13");
+    object_write_barrier_func = M.getFunction("julia.object_write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
     pop_handler_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
     call_func = M.getFunction("julia.call");
     call2_func = M.getFunction("julia.call2");
     call3_func = M.getFunction("julia.call3");
+    cancel_point_func = M.getFunction("julia.cancellation_point");
 }
 
 void JuliaPassContext::initAll(Module &M)
@@ -85,10 +94,11 @@ llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
             }
         }
     }
-    if (F.getCallingConv() == CallingConv::Swift) {
-        for (auto &arg : F.args()) {
-            if (arg.hasSwiftSelfAttr())
-                return &arg;
+    for (auto &arg : F.args()) {
+        // Check for the "gcstack" attribute
+        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
+        if (attrs.hasAttribute("gcstack")) {
+            return &arg;
         }
     }
     return nullptr;
@@ -129,6 +139,7 @@ namespace jl_intrinsics {
     static const char *POP_GC_FRAME_NAME = "julia.pop_gc_frame";
     static const char *QUEUE_GC_ROOT_NAME = "julia.queue_gc_root";
     static const char *SAFEPOINT_NAME = "julia.safepoint";
+    static const char *OBJECT_WRITE_BARRIER_NAME = "julia.object_write_barrier";
 
     // Annotates a function with attributes suitable for GC allocation
     // functions. Specifically, the return value is marked noalias and nonnull.
@@ -236,11 +247,22 @@ namespace jl_intrinsics {
             return intrinsic;
         });
 
+    const IntrinsicDescription objectWriteBarrier(
+        OBJECT_WRITE_BARRIER_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto FT = FunctionType::get(Type::getVoidTy(ctx), {T_prjlvalue}, true);
+            auto intrinsic = Function::Create(FT, Function::ExternalLinkage, OBJECT_WRITE_BARRIER_NAME);
+            intrinsic->setAttributes(getWriteBarrierAttributes(ctx));
+            return intrinsic;
+        });
+
     const IntrinsicDescription safepoint(
         SAFEPOINT_NAME,
         [](Type *T_size) {
             auto &ctx = T_size->getContext();
-            auto T_psize = T_size->getPointerTo();
+            auto T_psize = PointerType::getUnqual(ctx);
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(ctx),
@@ -258,6 +280,10 @@ namespace jl_well_known {
     static const char *GC_SMALL_ALLOC_NAME = XSTR(jl_gc_small_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
+    static const char *GC_BIG_ALLOC_RESET_SAFE_NAME = XSTR(jl_gc_big_alloc_reset_safe);
+    static const char *GC_SMALL_ALLOC_RESET_SAFE_NAME = XSTR(jl_gc_small_alloc_reset_safe);
+    static const char *GC_QUEUE_ROOT_RESET_SAFE_NAME = XSTR(jl_gc_queue_root_reset_safe);
+    static const char *GC_ALLOC_TYPED_RESET_SAFE_NAME = XSTR(jl_gc_alloc_typed_reset_safe);
 
     using jl_intrinsics::addGCAllocAttributes;
 
@@ -325,5 +351,86 @@ namespace jl_well_known {
                 GC_ALLOC_TYPED_NAME);
             allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
             return addGCAllocAttributes(allocTypedFunc);
+        });
+
+    // Like addGCAllocAttributes, but without the narrowed memory effects:
+    // the reset-safe variants additionally unpublish/republish the current
+    // task's reset context, which is neither argument nor inaccessible
+    // memory.
+    static Function *addResetSafeGCAllocAttributes(Function *target)
+    {
+        auto FnAttrs = AttrBuilder(target->getContext());
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        target->addFnAttrs(FnAttrs);
+        addRetAttr(target, Attribute::NoAlias);
+        addRetAttr(target, Attribute::NonNull);
+        return target;
+    }
+
+    const WellKnownFunctionDescription GCBigAllocResetSafe(
+        GC_BIG_ALLOC_RESET_SAFE_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto bigAllocFunc = Function::Create(
+                FunctionType::get(
+                    T_prjlvalue,
+                    { PointerType::get(ctx, 0), T_size , T_size},
+                    false),
+                Function::ExternalLinkage,
+                GC_BIG_ALLOC_RESET_SAFE_NAME);
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            return addResetSafeGCAllocAttributes(bigAllocFunc);
+        });
+
+    const WellKnownFunctionDescription GCSmallAllocResetSafe(
+        GC_SMALL_ALLOC_RESET_SAFE_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto smallAllocFunc = Function::Create(
+                FunctionType::get(
+                    T_prjlvalue,
+                    { PointerType::get(ctx, 0), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
+                    false),
+                Function::ExternalLinkage,
+                GC_SMALL_ALLOC_RESET_SAFE_NAME);
+            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            return addResetSafeGCAllocAttributes(smallAllocFunc);
+        });
+
+    const WellKnownFunctionDescription GCQueueRootResetSafe(
+        GC_QUEUE_ROOT_RESET_SAFE_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto func = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(ctx),
+                    { T_prjlvalue },
+                    false),
+                Function::ExternalLinkage,
+                GC_QUEUE_ROOT_RESET_SAFE_NAME);
+            return func;
+        });
+
+    const WellKnownFunctionDescription GCAllocTypedResetSafe(
+        GC_ALLOC_TYPED_RESET_SAFE_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto allocTypedFunc = Function::Create(
+                FunctionType::get(
+                    T_prjlvalue,
+                    { PointerType::get(ctx, 0),
+                        T_size,
+                        T_size }, // type
+                    false),
+                Function::ExternalLinkage,
+                GC_ALLOC_TYPED_RESET_SAFE_NAME);
+            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            return addResetSafeGCAllocAttributes(allocTypedFunc);
         });
 }

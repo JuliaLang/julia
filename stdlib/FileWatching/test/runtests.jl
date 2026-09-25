@@ -4,6 +4,8 @@ using Test, FileWatching
 using Base: uv_error, Experimental
 using Base.Filesystem: StatStruct
 
+@test isempty(Test.detect_closure_boxes(FileWatching))
+
 @testset "FileWatching" begin
 
 # This script does the following
@@ -90,7 +92,7 @@ for (i, intvl) in enumerate(intvls)
             sleep(0.1)
         end
         ready = 0
-        # tickle only the odd ones, but test for writablity for everyone
+        # tickle only the odd ones, but test for writability for everyone
         for idx in 1:n
             event = poll_fd(pipe_fds[idx][2], 0.001; readable=true, writable=true)
             @test !event.timedout
@@ -429,7 +431,7 @@ if !Sys.isapple()
                 end
             end
         end
-        @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
+        @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) context=changes
     end
 end
 @test_throws(Base._UVError("FileMonitor (start)", Base.UV_ENOENT),

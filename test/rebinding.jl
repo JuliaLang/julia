@@ -1,22 +1,31 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
+
 module Rebinding
     using Test
     make_foo() = Foo(1)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_GUARD
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_GUARD
     struct Foo
         x::Int
     end
     const defined_world_age = Base.tls_world_age()
     x = Foo(1)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_CONST
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_CONST
     @test !contains(repr(x), "@world")
     Base.delete_binding(@__MODULE__, :Foo)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_GUARD
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_GUARD
     @test contains(repr(x), "@world")
+
+    # Test that it still works if Foo is redefined to a non-type
+    const Foo = 1
+
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_CONST
+    @test contains(repr(x), "@world")
+    Base.delete_binding(@__MODULE__, :Foo)
 
     struct Foo
         x::Int
@@ -82,6 +91,47 @@ module Rebinding
     @test f_return_delete_me_implicit() == 6
     Base.delete_binding(DeleteMeModule, :delete_me_implicit)
     @test_throws UndefVarError f_return_delete_me_implicit()
+end
+
+# Retracting an `export` with `set_binding_visibility!` makes a name stop
+# resolving through `using`, and re-exporting restores it.
+module RebindingVisibility
+    using Test
+
+    module SrcMod
+        export visg
+        visg() = 42
+        public visp
+        visp() = 7
+    end
+    using .SrcMod
+
+    @test Base.isexported(SrcMod, :visg)
+    f_use_visg() = visg()
+    @test f_use_visg() == 42
+
+    # Retract the export: `visg` is still defined in SrcMod but no longer reachable here.
+    Base.set_binding_visibility!(SrcMod, :visg, :none)
+    @test !Base.isexported(SrcMod, :visg)
+    @test !Base.ispublic(SrcMod, :visg)
+    @test :visg ∉ names(SrcMod)
+    @test_throws UndefVarError f_use_visg()
+    @test SrcMod.visg() == 42
+
+    # Re-export and confirm implicit resolution is restored.
+    Base.set_binding_visibility!(SrcMod, :visg, :export)
+    @test Base.isexported(SrcMod, :visg)
+    @test :visg ∈ names(SrcMod)
+    @test f_use_visg() == 42
+
+    # The public flag is independent of export and not world-versioned.
+    @test Base.ispublic(SrcMod, :visp) && !Base.isexported(SrcMod, :visp)
+    Base.set_binding_visibility!(SrcMod, :visp, :none)
+    @test !Base.ispublic(SrcMod, :visp)
+    Base.set_binding_visibility!(SrcMod, :visp, :public)
+    @test Base.ispublic(SrcMod, :visp)
+
+    @test_throws ArgumentError Base.set_binding_visibility!(SrcMod, :visg, :bogus)
 end
 
 module RebindingPrecompile
@@ -197,6 +247,42 @@ module RebindingPrecompile
         end
     end
 
+    precompile_test_harness("export retraction") do load_path
+        write(joinpath(load_path, "RetractExport.jl"),
+              """
+              module RetractExport
+                export retract_me
+                const retract_me = 11
+              end
+              """)
+        Base.compilecache(Base.PkgId("RetractExport"))
+        write(joinpath(load_path, "UseRetractExport.jl"),
+              """
+              module UseRetractExport
+                using RetractExport
+                f_use_retract() = retract_me
+                @assert f_use_retract() == 11
+              end
+              """)
+        Base.compilecache(Base.PkgId("UseRetractExport"))
+        @eval using RetractExport
+        # Retract the export before loading the dependent package
+        invokelatest() do
+            Base.set_binding_visibility!(RetractExport, :retract_me, :none)
+        end
+        @eval using UseRetractExport
+        invokelatest() do
+            @test_throws UndefVarError UseRetractExport.f_use_retract()
+        end
+        # Re-export and confirm resolution is restored
+        invokelatest() do
+            Base.set_binding_visibility!(RetractExport, :retract_me, :export)
+        end
+        invokelatest() do
+            @test UseRetractExport.f_use_retract() == 11
+        end
+    end
+
     finish_precompile_test!()
 end
 
@@ -262,6 +348,66 @@ let test_code =
     @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
 end
 
+# Test the binding-partition machinery across the precompile boundary: cached code
+# whose resolved global reads froze a binding partition must revalidate at load across
+# a flag-only (`export`) partition flip, and must be invalidated when its binding is
+# redirected to a different but identically-typed global partition.
+let test_code =
+    """
+    using Test
+    include("precompile_utils.jl")
+
+    precompile_test_harness("rebinding partition precompile") do load_path
+        write(joinpath(load_path, "RedirectTargets3.jl"),
+              "module RedirectTargets3
+                 module M1
+                   export x
+                   global x::Int = 1
+                 end
+                 module M2
+                   global x::Int = 2
+                 end
+                 global g::Int = 0
+               end")
+        Base.compilecache(Base.PkgId("RedirectTargets3"))
+        write(joinpath(load_path, "RedirectUser3.jl"),
+              "module RedirectUser3
+                 using RedirectTargets3
+                 using RedirectTargets3.M1
+                 getx() = x
+                 getg() = RedirectTargets3.g
+                 precompile(getx, ())
+                 precompile(getg, ())
+               end")
+        Base.compilecache(Base.PkgId("RedirectUser3"))
+        @eval using RedirectTargets3
+        # A flag-only (`export`) partition flip on `g` before the dependent image loads:
+        # revalidation must span it, keeping the cached `getg` valid from before the flip.
+        exported_min = invokelatest() do
+            Core.eval(RedirectTargets3, :(export g))
+            b = convert(Core.Binding, GlobalRef(RedirectTargets3, :g))
+            Base.lookup_binding_partition(Base.get_world_counter(), b).min_world
+        end
+        @eval using RedirectUser3
+        invokelatest() do
+            @test RedirectUser3.getg() === 0
+            ci = Base.method_instance(RedirectUser3.getg, ()).cache
+            @test ci.min_world < exported_min
+            # Redirect the implicit `using` resolution (leaf M1.x) to the identically
+            # typed M2.x: the image-loaded `getx` froze M1.x's partition and must invalidate.
+            @test RedirectUser3.getx() === 1
+            Core.eval(RedirectUser3, :(import RedirectTargets3.M2: x))
+            invokelatest() do
+                @test RedirectUser3.getx() === 2
+            end
+        end
+    end
+
+    finish_precompile_test!()
+    """
+    @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
+end
+
 # Image Globalref smoke test
 module ImageGlobalRefFlag
     using Test
@@ -269,4 +415,422 @@ module ImageGlobalRefFlag
     fnoimage() = x
     @test Base.has_image_globalref(first(methods(fimage)))
     @test !Base.has_image_globalref(first(methods(fnoimage)))
+end
+
+# Test that inference can merge ranges for partitions as long as what's being imported doesn't change
+module RangeMerge
+    using Test
+    using InteractiveUtils
+
+    function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
+        params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
+        d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, "", params)
+        sprint(print, d)
+    end
+
+    global x = 1
+    const after_def_world = Base.get_world_counter()
+    export x
+    f() = x
+    @test f() == 1
+    @test only(methods(f)).specializations.cache.min_world <= after_def_world
+
+    @test !contains(get_llvm(f, Tuple{}), "jl_get_binding_value")
+end
+
+# Test that we invalidate for undefined -> defined transitions (#54733)
+module UndefinedTransitions
+    using Test
+    function foo54733()
+        for i = 1:1_000_000_000
+            bar54733(i)
+        end
+        return 1
+    end
+    @test_throws UndefVarError foo54733()
+    let ci = first(methods(foo54733)).specializations.cache
+        @test !Base.Compiler.is_nothrow(Base.Compiler.decode_effects(ci.ipo_purity_bits))
+    end
+    bar54733(x) = 3x
+    @test foo54733() === 1
+    let ci = first(methods(foo54733)).specializations.cache
+        @test Base.Compiler.is_nothrow(Base.Compiler.decode_effects(ci.ipo_purity_bits))
+    end
+end
+
+# Identical implicit partitions should be merged (#57923)
+for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),)
+    # Test that these both only have two partitions
+    @test isdefined(binding, :partitions)
+    @test binding.partitions.next isa Core.BindingPartition
+    @test !(binding.partitions.next.next isa Core.BindingPartition)
+    # The last partition's `next` is a backreference to the owning binding
+    @test binding.partitions.next.next === binding
+end
+
+# Test various scenarios for implicit partition merging
+module MergeStress
+    for i = 1:5
+        @eval module $(Symbol("M$i"))
+            export x, y
+            const x = 1
+            const y = 2
+        end
+    end
+    const before = Base.get_world_counter()
+    using .M1
+    const afterM1 = Base.get_world_counter()
+    using .M2
+    const afterM2 = Base.get_world_counter()
+    using .M3
+    const afterM3 = Base.get_world_counter()
+    using .M4
+    const afterM4 = Base.get_world_counter()
+    using .M5
+    const afterM5 = Base.get_world_counter()
+end
+
+function count_partitions(b::Core.Binding)
+    n = 0
+    isdefined(b, :partitions) || return n
+    bpart = b.partitions
+    while true
+        n += 1
+        next = bpart.next
+        next isa Core.BindingPartition || break
+        bpart = next
+    end
+    return n
+end
+using Base: invoke_in_world
+
+const xbinding = convert(Core.Binding, GlobalRef(MergeStress, :x))
+function access_and_count(point)
+    invoke_in_world(getglobal(MergeStress, point), getglobal, MergeStress, :x)
+    count_partitions(xbinding)
+end
+
+@test count_partitions(xbinding) == 0
+@test access_and_count(:afterM1) == 1
+# M2 is the first change to the `usings` table after M1. The partitions
+# can and should be merged
+@test access_and_count(:afterM2) == 1
+
+# There is a gap between M2 and M5 - the partitions should not be merged
+@test access_and_count(:afterM5) == 2
+
+# M4 and M5 are adjacent, these partitions should also be merged (in the opposite direction)
+@test access_and_count(:afterM4) == 2
+
+# M3 connects all, so we should have a single partition
+@test access_and_count(:afterM3) == 1
+
+# Test that delete_binding in an outdated world age works
+module BindingTestModule; end
+function create_and_delete_binding()
+    Core.eval(BindingTestModule, :(const x = 1))
+    Base.delete_binding(BindingTestModule, :x)
+end
+create_and_delete_binding()
+@test Base.binding_kind(BindingTestModule, :x) == Base.PARTITION_KIND_GUARD
+
+# Test that we properly invalidate bindings if the value changes, not just the
+# export status (#59272)
+module Invalidate59272
+    using Test
+    module Foo
+        export Bar
+        struct Bar
+        # x
+        end
+    end
+    using .Foo
+    @test isa(Bar(), Foo.Bar)
+    Core.eval(Foo, :(struct Bar; x; end))
+    @test Bar(1) == Foo.Bar(1)
+end
+
+# A primordial constant is immutable except for flag-only changes.
+let w1const = convert(Core.Binding, GlobalRef(Core, :donotdelete))
+    @assert Base.binding_kind(Base.lookup_binding_partition(UInt(1), w1const)) == Base.PARTITION_KIND_CONST
+    @test_throws "builtin constant" Core.eval(Core, :(const donotdelete = 42))
+    @test_throws "builtin constant" Base.delete_binding(Core, :donotdelete)
+    @test @invokelatest(Core.donotdelete) isa Core.Builtin # binding intact
+    @test_throws "builtin constant" Core.eval(Core.Intrinsics, :(const add_int = 42))
+    @test @invokelatest(Core.Intrinsics.add_int) isa Core.IntrinsicFunction # binding intact
+end
+
+# Test that two const-prop'd pseudo `CodeInstance`s for the same `MethodInstance`
+# carrying *different* binding edges are both kept on the caller's edge list, so
+# that redefining either binding properly invalidates the caller (#61745).
+module Invalidate61745
+    using Test
+    module N
+        const foo = "foo_unchanged"
+        const bar = "bar_unchanged"
+    end
+    helper(s::Symbol) = getglobal(N, s)::String
+    caller_both() = helper(:foo) * helper(:bar)
+    @test caller_both() == "foo_unchangedbar_unchanged"
+    Core.eval(N, :(const foo = "foo_changed!"))
+    @test caller_both() == "foo_changed!bar_unchanged"
+    Core.eval(N, :(const bar = "bar_changed!"))
+    @test caller_both() == "foo_changed!bar_changed!"
+end
+
+# Test that a global access which only becomes a `getglobal(::Module, ::Symbol)`
+# after inlining is still invalidated on redefinition (#61745).
+module Invalidate61745_indirect
+    using Test
+    module M
+        const foo = "unchanged"
+    end
+    indirect_access(modref::Module) = Base.getproperty(modref, :foo)::String
+    caller() = indirect_access(M)
+    @test caller() == "unchanged"
+    Core.eval(M, :(const foo = "changed!"))
+    @test caller() == "changed!"
+end
+
+# Test that redirecting a binding to a different typed-global partition with an
+# identical declared type still invalidates code that froze the old partition.
+module RedirectTypedGlobal
+    using Test
+    module M1
+        export x
+        global x::Int = 1
+    end
+    module M2
+        global x::Int = 2
+    end
+    using .M1
+    getx() = x
+    @test getx() === 1
+    # override the implicit `using` resolution (leaf M1.x) with an explicit
+    # import whose leaf (M2.x) is a different binding of the same type
+    import .M2: x
+    invokelatest() do
+        @test getx() === 2
+    end
+end
+
+# Test @reexport
+module ReexportTests
+    using Test
+    using Base.Experimental: @reexport
+
+    # Test dynamic export additions through reexport
+    module Source1
+        export s1
+        s1() = "s1"
+    end
+    module Reexporter1
+        import ..@reexport
+        @reexport using ..Source1
+    end
+    module User1
+        using ..Reexporter1
+    end
+    @test (:s1,) ⊆ names(Reexporter1)
+    @test User1.s1() == "s1"
+    Core.eval(Source1, :(s2() = "s2"; export s2))
+    @test (:s1, :s2) ⊆ names(Reexporter1)
+    @test User1.s2() == "s2"
+
+    # Test reexport syntax, multiple modules
+    module Source2
+        export s3
+        s3() = "s3"
+    end
+    module Reexporter2
+        import ..@reexport
+        @reexport using ..Source2, ..Source1
+    end
+    module User2
+        using ..Reexporter2
+    end
+    @test (:s1, :s3) ⊆ names(Reexporter2)
+    @test User2.s1() == "s1"
+    @test User2.s3() == "s3"
+
+    # Test same name from different modules - one with reexport, one without
+    module Source3
+        export same_name
+        const same_name = 42
+    end
+    module Source4
+        export same_name
+        const same_name = 42
+    end
+    module Reexporter3
+        import ..@reexport
+        using ..Source4  # without reexport
+        @reexport using ..Source3
+    end
+    module User3
+        using ..Reexporter3
+    end
+    @test User3.same_name == 42
+end
+
+# Test some edge cases of the `*global_partition` builtins:
+# notably that calling them with non-leaf partitions re-runs the import walk in the runtime world.
+module PartitionImportTarget
+    export ix
+    global ix::Int = 11
+    global iundef::Int
+end
+module PartitionImportUser
+    using ..PartitionImportTarget           # implicit import of `ix`
+    import ..PartitionImportTarget: iundef  # explicit import
+end
+currentpart(m::Module, s::Symbol) =
+    Base.lookup_binding_partition(Base.get_world_counter(), convert(Core.Binding, GlobalRef(m, s)))
+let grimplicit = GlobalRef(PartitionImportUser, :ix),
+    grexplicit = GlobalRef(PartitionImportUser, :iundef),
+    grleaf = GlobalRef(PartitionImportTarget, :ix),
+    pimplicit = currentpart(PartitionImportUser, :ix),
+    pexplicit = currentpart(PartitionImportUser, :iundef),
+    pleaf = currentpart(PartitionImportTarget, :ix)
+    @test Base.binding_kind(pimplicit) == Base.PARTITION_KIND_IMPLICIT_GLOBAL
+    @test Base.is_some_explicit_imported(Base.binding_kind(pexplicit))
+    @test Base.binding_kind(pleaf) == Base.PARTITION_KIND_GLOBAL
+
+    @test Core.getglobal_partition(grimplicit, pimplicit, :acquire) === 11
+    @test Core.getglobal_partition(grleaf, pleaf, :acquire) === 11
+    @test Core.isdefinedglobal_partition(pimplicit, :acquire)
+    @test !Core.isdefinedglobal_partition(pexplicit, :acquire)
+    # An undefined import names the binding that was asked for, not the one it resolved to.
+    err = try; Core.getglobal_partition(grexplicit, pexplicit, :acquire); catch e; e; end
+    @test err isa UndefVarError && err.var === :iundef && err.scope === PartitionImportUser
+
+    # Stores never follow the import.
+    @test_throws "cannot assign a value to imported variable" Core.setglobal_partition(pimplicit, 22)
+    @test_throws "cannot assign a value to imported variable" Core.swapglobal_partition(pimplicit, 22)
+    @test_throws "cannot assign a value to imported variable" Core.setglobalonce_partition(pimplicit, 22)
+    @test_throws "cannot assign a value to imported variable" Core.replaceglobal_partition(pimplicit, 11, 22)
+    @test_throws "cannot assign a value to imported variable" Core.modifyglobal_partition(pimplicit, +, 22)
+    @test PartitionImportTarget.ix === 11
+
+    # A read through the import observes the target's current value.
+    @test Core.setglobal_partition(pleaf, 12) === 12
+    @test Core.getglobal_partition(grimplicit, pimplicit, :acquire) === 12
+    @test Core.modifyglobal_partition(pleaf, +, 1) === (12 => 13)
+    @test Core.modifyglobal_partition(pleaf, -, 2) === (13 => 11)
+    @test Core.setglobal_partition(pleaf, 11) === 11
+end
+# The same accesses with the partition as an inference constant. The leaf folds to its
+# declared type; the import does not, because inference has no edge to cover the
+# world-dependent walk (and `isdefinedglobal_partition` has no tfunc at all).
+let grimplicit = GlobalRef(PartitionImportUser, :ix),
+    grleaf = GlobalRef(PartitionImportTarget, :ix),
+    pimplicit = currentpart(PartitionImportUser, :ix),
+    pleaf = currentpart(PartitionImportTarget, :ix),
+    fimp = @eval(() -> Core.getglobal_partition($(QuoteNode(grimplicit)), $(QuoteNode(pimplicit)), :acquire)),
+    fleaf = @eval(() -> Core.getglobal_partition($(QuoteNode(grleaf)), $(QuoteNode(pleaf)), :acquire)),
+    dimp = @eval(() -> Core.isdefinedglobal_partition($(QuoteNode(pimplicit)), :acquire))
+    @test Base.infer_return_type(fimp, ()) === Any
+    @test Base.infer_return_type(fleaf, ()) === Int
+    @test fimp() === 11
+    @test fleaf() === 11
+    @test dimp()
+    # and the read still tracks the target it imports
+    @test Core.setglobal_partition(pleaf, 13) === 13
+    @test fimp() === 13
+    @test Core.setglobal_partition(pleaf, 11) === 11
+end
+
+# Whatever the partition's kind, a compiled access answers from the partition it was handed,
+# exactly as the builtin does -- codegen inlines the kinds that are a property of the
+# partition object and leaves the other two (an import, which must be followed at the calling
+# world, and a backdated constant, whose read has a side effect) on the runtime path.
+module PartitionKinds
+    module Inner; export ix; global ix::Int = 11; end
+    using .Inner            # implicit import
+    global decl             # weakly declared, no value
+    global typed::Int = 5
+    const c = 7
+end
+let kinds = (currentpart(PartitionKinds, :ix), currentpart(PartitionKinds, :decl),
+             currentpart(PartitionKinds, :typed), currentpart(PartitionKinds, :c),
+             currentpart(PartitionKinds, :undeclared_name))
+    @test map(Base.binding_kind, kinds) == (Base.PARTITION_KIND_IMPLICIT_GLOBAL,
+        Base.PARTITION_KIND_DECLARED, Base.PARTITION_KIND_GLOBAL, Base.PARTITION_KIND_CONST,
+        Base.PARTITION_KIND_GUARD)
+    attempt(f) = try f() catch e; (typeof(e), e isa UndefVarError ? e.var : nothing) end
+    for p in kinds
+        gr = Base.partition_owner(p).globalref
+        read = @eval(() -> Core.getglobal_partition($(QuoteNode(gr)), $(QuoteNode(p)), :acquire))
+        defined = @eval(() -> Core.isdefinedglobal_partition($(QuoteNode(p)), :acquire))
+        @test attempt(read) == attempt(() -> Core.getglobal_partition(gr, p, :acquire))
+        @test defined() === Core.isdefinedglobal_partition(p, :acquire)
+    end
+end
+# A store writes to the partition it names, so that partition's kind decides whether it is
+# refused and with which error. Declaring the binding later does not change the partition the
+# store named, so the store keeps failing the same way.
+module StaleStoreTarget end
+let pguard = currentpart(StaleStoreTarget, :x),
+    refused = "Global StaleStoreTarget.x does not exist and cannot be assigned."
+    @test Base.binding_kind(pguard) == Base.PARTITION_KIND_GUARD
+    store = @eval(() -> Core.setglobal_partition($(QuoteNode(pguard)), 99))
+    @test_throws refused store()
+    # the binding becomes writable, but only in a newer partition
+    Core.eval(StaleStoreTarget, :(global x::Int = 5))
+    @test Base.binding_kind(currentpart(StaleStoreTarget, :x)) == Base.PARTITION_KIND_GLOBAL
+    @test_throws refused Core.setglobal_partition(pguard, 99)
+    @test_throws refused invokelatest(store)
+    @test invokelatest(getglobal, StaleStoreTarget, :x) === 5
+end
+
+# A module binding is always accessed atomically, and the compiled query reports the failure
+# under the same name the runtime builtin does.
+let p = currentpart(PartitionImportTarget, :ix),
+    msg = "isdefined: module binding cannot be accessed non-atomically"
+    @test_throws ConcurrencyViolationError(msg) Core.isdefinedglobal_partition(p, :not_atomic)
+    @test_throws ConcurrencyViolationError(msg) @eval(() -> Core.isdefinedglobal_partition($(QuoteNode(p)), :not_atomic))()
+end
+
+# A deprecated declared global and a deprecated guard have the same read result (an
+# untyped runtime read with `effect_free` false), but a store to the former is `nothrow`
+# while a store to the latter throws. Deleting the binding must still invalidate code that
+# stores to it: `binding_access_key` carries the binding identity for `DECLARED`.
+module DeprecatedDeclaredDelete
+    global depdecl
+    Base.deprecate(@__MODULE__, :depdecl, 1)
+    # n.b. `global depdecl = v` in a method would upgrade the declaration to a typed
+    # global, which already carries its identity in the key.
+    store_depdecl(v) = (setglobal!(@__MODULE__, :depdecl, v); nothing)
+end
+let m = DeprecatedDeclaredDelete
+    @test Base.binding_kind(m, :depdecl) == Base.PARTITION_KIND_DECLARED
+    @test Base.infer_effects(m.store_depdecl, (Int,)).nothrow
+    @test precompile(m.store_depdecl, (Int,))
+    ci = only(Base.specializations(only(methods(m.store_depdecl)))).cache
+    @test ci.max_world == typemax(UInt)
+    Base.delete_binding(m, :depdecl)
+    @test Base.binding_kind(Base.lookup_binding_partition(Base.get_world_counter(), GlobalRef(m, :depdecl))) ==
+        Base.PARTITION_KIND_GUARD
+    @test ci.max_world != typemax(UInt)
+    @test !Base.invokelatest(Base.infer_effects, m.store_depdecl, (Int,)).nothrow
+end
+
+# A backdated constant acts like an untyped global: inference types it as `Any`, and the
+# optimizer must leave it as a runtime read rather than freezing its partition.
+module BackdatedNotFrozen
+    read_backdated() = backdated_const
+    const before = Base.tls_world_age()
+    const backdated_const = 1
+end
+let m = BackdatedNotFrozen
+    @test Base.binding_kind(Base.lookup_binding_partition(m.before, GlobalRef(m, :backdated_const))) ==
+        Base.PARTITION_KIND_BACKDATED_CONST
+    @test Base.binding_kind(m, :backdated_const) == Base.PARTITION_KIND_CONST
+    src, rt = only(code_typed(m.read_backdated, (); world=m.before))
+    @test rt === Any
+    @test !any(x -> x isa Core.BindingPartition, src.code)
+    @test any(x -> x === GlobalRef(m, :backdated_const), src.code)
+    # and in the current world it is an ordinary constant
+    src, rt = only(code_typed(m.read_backdated, ()))
+    @test rt === Int
 end

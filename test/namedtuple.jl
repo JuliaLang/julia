@@ -163,6 +163,10 @@ end
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
 @test merge((c=0, z=1), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (c=5, z=1, a=4, b=2)
 
+# https://github.com/JuliaLang/julia/issues/59292
+@test merge((; a = 1), Base.Pairs((; b = 2, c = 3), (:b,))) == (a = 1, b = 2)
+@test merge((; a = 1), Base.pairs((; b = 2, c = 3))) == (a = 1, b = 2, c = 3)
+
 @test keys((a=1, b=2, c=3)) == (:a, :b, :c)
 @test keys(NamedTuple()) == ()
 @test keys((a=1,)) == (:a,)
@@ -227,9 +231,9 @@ namedtuple_get_a(x) = x.a
 
 namedtuple_fieldtype_a(x) = fieldtype(typeof(x), :a)
 @test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Union{Type, TypeVar}]
-@test Base.return_types(namedtuple_fieldtype_a, (typeof((b=1,a="")),)) == Any[Type{String}]
+@test Base.return_types(namedtuple_fieldtype_a, (typeof((b=1,a="")),)) == Any[Core.TypeEgal{String}]
 namedtuple_fieldtype__(x, y) = fieldtype(typeof(x), y)
-@test Base.return_types(namedtuple_fieldtype__, (typeof((b=1,a="")),Symbol))[1] >: Union{Type{Int}, Type{String}}
+@test Base.return_types(namedtuple_fieldtype__, (typeof((b=1,a="")),Symbol))[1] >: Union{Core.TypeEgal{Int}, Core.TypeEgal{String}}
 
 namedtuple_nfields(x) = nfields(x) === 0 ? 1 : ""
 @test Union{Int,String} <: Base.return_types(namedtuple_nfields, (NamedTuple,))[1]

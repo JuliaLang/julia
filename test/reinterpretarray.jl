@@ -5,22 +5,31 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
 using .Main.OffsetArrays
 isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
 using .Main: TSlow, WrapperArray
+isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
+using .Main.StridedArrays
 
 tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
 fcviews(a::AbstractArray) = view(a, ntuple(Returns(:),ndims(a)-1)..., axes(a)[end])
 fcviews(a::AbstractArray{<:Any, 0}) = view(a)
+offset_nominal(a::AbstractArray) = OffsetArray(a)
+offset_maybe(a::AbstractArray) = (eltype(a) <: Real) ? a : OffsetArray(a, (1-ndims(A)):2:(ndims(A)-1)...)
 tslow(t::Tuple) = map(tslow, t)
 wrapper(t::Tuple) = map(wrapper, t)
 fcviews(t::Tuple) = map(fcviews, t)
+offset_nominal(t::Tuple) = map(offset_nominal, t)
+offset_maybe(t::Tuple) = map(offset_maybe, t)
 
 test_many_wrappers(testf, A, wrappers) = foreach(w -> testf(w(A)), wrappers)
-test_many_wrappers(testf, A) = test_many_wrappers(testf, A, (identity, tslow, wrapper, fcviews))
+test_many_wrappers(testf, A) = test_many_wrappers(
+    testf, A, (identity, tslow, wrapper, fcviews, offset_nominal, offset_maybe)
+)
 
 A = Int64[1, 2, 3, 4]
 Ars = Int64[1 3; 2 4]
 B = Complex{Int64}[5+6im, 7+8im, 9+10im]
 Av = [Int32[1,2], Int32[3,4]]
+C = view([1,1], [1,2])
 
 test_many_wrappers(Ars, (identity, tslow)) do Ar
     @test @inferred(ndims(reinterpret(reshape, Complex{Int64}, Ar))) == 1
@@ -44,7 +53,7 @@ end
                               " The resulting array would have a non-integral first dimension.") reinterpret(Tuple{Int,Int}, [1,2,3,4,5])
 
 @test_throws ArgumentError("`reinterpret(reshape, Complex{Int64}, a)` where `eltype(a)` is Int64 requires that `axes(a, 1)` (got Base.OneTo(4)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Complex{Int64}, A)
-@test_throws ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got 24) and `sizeof(eltype(a))` (got 16) be an integer multiple of the other") reinterpret(reshape, NTuple{3, Int64}, B)
+@test_throws ArgumentError("`reinterpret(reshape, T, a)` requires that one of `Base.elsize(Array{T})` (got 24) and `Base.elsize(Array{eltype(a)})` (got 16) be an integer multiple of the other") reinterpret(reshape, NTuple{3, Int64}, B)
 @test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(reshape, Vector{Int64}, Ars)
 @test_throws ArgumentError("cannot reinterpret a zero-dimensional `UInt8` array to `UInt16` which is of a larger size") reinterpret(reshape, UInt16, reshape([0x01]))
 
@@ -62,6 +71,44 @@ end
 test_many_wrappers(B) do _B
     @test reinterpret(NTuple{3, Int64}, _B) == [(5,6,7),(8,9,10)]
     @test reinterpret(reshape, Int64, _B) == [5 7 9; 6 8 10]
+end
+
+@testset "setindex! converts before reinterpreting" begin
+    for dims in ((), 1)
+        z = reinterpret(UInt64, fill(1.0, dims))
+        @test z[] == z[1] == 0x3ff0000000000000
+        z[] = Int32(1)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000001
+        z[1] = Int32(2)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000002
+        z[1] = 3//1
+        @test z[] == z[1] == 0x0000000000000003
+        @test_throws InexactError z[] = 3//2
+        @test_throws InexactError z[] = 1.5
+        @test_throws InexactError z[1] = 3//2
+        @test_throws InexactError z[1] = 1.5
+
+        z = reinterpret(UInt64, fill(Int32(16)//Int32(1), dims))
+        @test z[] == z[1] == 0x0000000100000010
+        z[] = Int32(1)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000001
+        z[1] = Int32(2)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000002
+        z[1] = 3//1
+        @test z[] == z[1] == 0x0000000000000003
+        @test_throws InexactError z[] = 3//2
+        @test_throws InexactError z[] = 1.5
+        @test_throws InexactError z[1] = 3//2
+        @test_throws InexactError z[1] = 1.5
+
+        z = reinterpret(Missing, fill(nothing, dims))
+        @test z[] === missing
+        @test z[1] === missing
+        @test_throws "cannot convert" z[] = nothing
+        @test_throws "cannot convert" z[1] = nothing
+        @test z[] === missing
+        @test z[1] === missing
+    end
 end
 
 # setindex
@@ -115,6 +162,18 @@ test_many_wrappers(A3) do A3_
     A3r[CartesianIndex(1,2)] = 300+400im
     @test A3[1,1,2] == 300
     @test A3[2,1,2] == 400
+end
+
+test_many_wrappers(C) do Cr_
+    Cr = deepcopy(Cr_)
+    r = reinterpret(reshape, Tuple{Int, Int}, Cr)
+    @test r == fill((1,1))
+    r[] = (2,2)
+    @test r[] === (2,2)
+    r[1] = (3,3)
+    @test r[1] === (3,3)
+    r[1,1] = (4,4)
+    @test r[1,1] === (4,4)
 end
 
 # same-size reinterpret where one of the types is non-primitive
@@ -182,85 +241,53 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
-function check_strides(A::AbstractArray)
-    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
-    dims = ntuple(identity, ndims(A))
-    map(i -> stride(A, i), dims) == strides(A) || return false
-    # Test strides via value check.
-    for i in eachindex(IndexLinear(), A)
-        A[i] === Base.unsafe_load(pointer(A, i)) || return false
-    end
-    return true
-end
-
 @testset "strides for NonReshapedReinterpretArray" begin
     A = WrapperArray(Array{Int32}(reshape(1:88, 11, 8)))
     for viewax2 in (1:8, 1:2:6, 7:-1:1, 5:-2:1, 2:3:8, 7:-6:1, 3:5:11)
         # dim1 is contiguous
         for T in (Int16, Float32)
-            @test check_strides(reinterpret(T, view(A, 1:8, viewax2)))
+            check_strided_get(reinterpret(T, view(A, 1:8, viewax2)))
         end
         if mod(step(viewax2), 2) == 0
-            @test check_strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+            check_strided_get(reinterpret(Int64, view(A, 1:8, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+            check_strides_throws("Parent's strides", reinterpret(Int64, view(A, 1:8, viewax2)))
         end
         # non-integer-multiplied classified
         if mod(step(viewax2), 3) == 0
-            @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+            check_strided_get(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+            check_strides_throws("Parent's strides", reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         end
         if mod(step(viewax2), 5) == 0
-            @test check_strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+            check_strided_get(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+            check_strides_throws("Parent's strides", reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
         end
         # dim1 is not contiguous
         for T in (Int16, Int64)
-            @test_throws "Parent must" strides(reinterpret(T, view(A, 8:-1:1, viewax2)))
+            check_strides_throws("Parent must", reinterpret(T, view(A, 8:-1:1, viewax2)))
         end
-        @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
+        check_strided_get(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
     end
     # issue 46113
     A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
-    @test check_strides(A)
+    check_strided_get(A)
 end
 
 @testset "strides for ReshapedReinterpretArray" begin
     A = WrapperArray(Array{Int32}(reshape(1:192, 3, 8, 8)))
     for viewax1 in (1:8, 1:2:8, 8:-1:1, 8:-2:1), viewax2 in (1:2, 4:-1:1)
         for T in (Int16, Float32)
-            @test check_strides(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
-            @test check_strides(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
         end
         if mod(step(viewax1), 2) == 0
-            @test check_strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         else
             @test_throws "Parent's strides" strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         end
         @test_throws "Parent must" strides(reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
-    end
-end
-
-@testset "strides" begin
-    a = rand(10)
-    b = view(a,2:2:10)
-    A = rand(10,10)
-    B = view(A, 2:2:10, 2:2:10)
-
-    @test strides(a) == (1,)
-    @test strides(b) == (2,)
-    @test strides(A) == (1,10)
-    @test strides(B) == (2,20)
-
-    for M in (a, b, A, B)
-        @inferred strides(M)
-        strides_M = strides(M)
-
-        for (i, _stride) in enumerate(collect(strides_M))
-            @test _stride == stride(M, i)
-        end
     end
 end
 
@@ -272,7 +299,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 2)
     @test all(a .=== reinterpret(Float64, [Int64(2)])[1])
     @test all(r .=== Int64(2))
-    for badinds in (0, 16, (0,1), (1,0), (6,3), (5,4))
+    for badinds in ((), 0, 16, (0,1), (1,0), (6,3), (5,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -2
     end
@@ -285,7 +312,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 3)
     @test all(a .=== reinterpret(Float64, [(Int32(3), Int32(3))])[1])
     @test all(r .=== Int32(3))
-    for badinds in (0, 31, (0,1), (1,0), (11,3), (10,4))
+    for badinds in ((), 0, 31, (0,1), (1,0), (11,3), (10,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -3
     end
@@ -298,7 +325,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 4)
     @test all(a[1:2:5,:] .=== reinterpret(Float64, [Int64(4)])[1])
     @test all(r .=== Int64(4))
-    for badinds in (0, 10, (0,1), (1,0), (4,3), (3,4))
+    for badinds in ((), 0, 10, (0,1), (1,0), (4,3), (3,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -4
     end
@@ -311,7 +338,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 5)
     @test all(a[1:2:5,:] .=== reinterpret(Float64, [(Int32(5), Int32(5))])[1])
     @test all(r .=== Int32(5))
-    for badinds in (0, 19, (0,1), (1,0), (7,3), (6,4))
+    for badinds in ((), 0, 19, (0,1), (1,0), (7,3), (6,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -5
     end
@@ -320,6 +347,25 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
         @test r[goodinds...] == -5
     end
 end
+
+let a = rand(ComplexF32, 5)
+    r = reinterpret(reshape, Float32, a)
+    ref = Array(r)
+
+    @test all(r .== OffsetArray(r)[:, :, :])
+
+    @test r[1, :, 1]        == ref[1, :]
+    @test r[1, :, 1, 1, 1]  == ref[1, :]
+    @test r[1, :, UInt8(1)] == ref[1, :]
+
+    r[2, :, 1] .= 0f0
+    ref[2,  :] .= 0f0
+    @test r[2, :, 1] == ref[2, :]
+
+    @test r[4] == ref[4]
+    @test_throws BoundsError r[1, :, 2]
+end
+
 let ar = [(1,2), (3,4)]
     arr = reinterpret(reshape, Int, ar)
     @test @inferred(IndexStyle(arr)) == Base.IndexSCartesian2{2}()
@@ -342,8 +388,15 @@ A2 = S2[S2(0, 0)]
 test_many_wrappers((A1, A2), (identity, wrapper)) do (A1_, A2_)
     A1, A2 = deepcopy(A1_), deepcopy(A2_)
     @test reinterpret(S1, A2)[1] == S1(0, 0)
-    @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S2(1, 2))
+    @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S1(1, 2))
+    check_strided_get(reinterpret(S1, A2))
     @test_throws Base.PaddingError reinterpret(S2, A1)[1]
+    check_strided_set(
+        reinterpret(S2, deepcopy(A1_)),
+        reinterpret(S2, deepcopy(A1_)),
+        [S2(1, 2)],
+        (a, b) -> @test(parent(a) == parent(b)),
+    )
     reinterpret(S2, A1)[1] = S2(1, 2)
     @test A1[1] == S1(1, 2)
 end
@@ -464,6 +517,9 @@ end
     @test as isa TSlow{Int,3}
     @test size(as) == (3, 5, 1)
 
+    as = similar(typeof(a),(3, 5, 1))
+    @test as isa TSlow{Float64,3}
+    @test size(as) == (3, 5, 1)
     a = reinterpret(reshape, NTuple{4,Float64}, TSlow(rand(Float64, 4, 4)))
 
     as = similar(a)
@@ -606,4 +662,221 @@ let R = reinterpret(reshape, Float32, ComplexF32[1.0f0+2.0f0*im, 4.0f0+3.0f0*im]
     @test !isassigned(R, 1, 1, 2)
     @test !isassigned(R, 5)
     @test Array(R)::Matrix{Float32} == [1.0f0 4.0f0; 2.0f0 3.0f0]
+end
+
+@testset "issue #54623" begin
+    x = 0xabcdef01234567
+    @test reinterpret(reshape, UInt8, fill(x)) == [0x67, 0x45, 0x23, 0x01, 0xef, 0xcd, 0xab, 0x00]
+    @test reinterpret(reshape, UInt8, [x]) == [0x67; 0x45; 0x23; 0x01; 0xef; 0xcd; 0xab; 0x00;;]
+end
+
+@testset "primitive reinterpret alignment" begin
+    primitive type RUInt24 24 end
+    primitive type RUInt40 40 end
+    primitive type RUInt48 48 end
+    primitive type RUInt17 17 end
+    primitive type RUInt23 23 end
+    primitive type RUInt63 63 end
+
+    @test Base.ispacked(RUInt24)
+    @test Base.ispacked(RUInt40)
+    @test Base.ispacked(RUInt48)
+    @test !Base.datatype_haspadding(RUInt24)
+    @test !Base.datatype_haspadding(RUInt40)
+    @test !Base.datatype_haspadding(RUInt48)
+    @test Base.packedsize(RUInt24) == 3
+    @test Base.packedsize(RUInt40) == 5
+    @test Base.packedsize(RUInt48) == 6
+    @test !Base.ispacked(RUInt17)
+    @test !Base.ispacked(RUInt23)
+    @test !Base.ispacked(RUInt63)
+    @test Base.datatype_haspadding(RUInt17)
+    @test Base.datatype_haspadding(RUInt23)
+    @test Base.datatype_haspadding(RUInt63)
+
+    r24 = reinterpret(RUInt24, (0xaa, 0xbb, 0xcc))
+    @test reinterpret(NTuple{3, UInt8}, r24) === (0xaa, 0xbb, 0xcc)
+
+    r40 = reinterpret(RUInt40, (0x01, 0x02, 0x03, 0x04, 0x05))
+    @test reinterpret(NTuple{5, UInt8}, r40) === (0x01, 0x02, 0x03, 0x04, 0x05)
+
+    r48 = reinterpret(RUInt48, (0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f))
+    @test reinterpret(NTuple{6, UInt8}, r48) === (0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f)
+
+    @test_throws ArgumentError reinterpret(RUInt17, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(RUInt23, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(RUInt63, ntuple(i -> UInt8(i), 8))
+
+    struct RHasUInt17
+        x::RUInt17
+        y::UInt8
+    end
+    struct RHasUnionUInt17
+        x::Union{UInt8, RUInt17}
+    end
+    @test_throws ArgumentError reinterpret(RHasUInt17, (0x01, 0x02, 0x03, 0x04))
+    @test_throws ArgumentError reinterpret(RHasUnionUInt17, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(
+        NTuple{4, UInt8},
+        RHasUInt17(Core.Intrinsics.trunc_int(RUInt17, UInt32(1)), 0x02),
+    )
+
+    # Dense odd-bit arrays use allocation-size strides and reject byte reinterpretation.
+    for (T, W, storage_size, allocation_size) in (
+        (RUInt23, UInt32, 3, 4),
+        (RUInt63, UInt64, 8, 8),
+    )
+        values = Core.Intrinsics.trunc_int.(T, W[1, 2, 3])
+        memory = Memory{T}(undef, 3)
+        memory .= values
+        @test sizeof(T) == storage_size
+        @test Base.elsize(memory) == allocation_size
+        @test Core.Intrinsics.zext_int.(W, memory) == W[1, 2, 3]
+        memory[2] = Core.Intrinsics.trunc_int(T, W(4))
+        @test Core.Intrinsics.zext_int(W, memory[2]) == 4
+
+        array = Array(memory)
+        @test Base.elsize(array) == allocation_size
+        @test Core.Intrinsics.zext_int.(W, array) == W[1, 4, 3]
+        array[3] = Core.Intrinsics.trunc_int(T, W(5))
+        @test Core.Intrinsics.zext_int(W, array[3]) == 5
+
+        @test_throws ArgumentError reinterpret(UInt8, memory)
+        @test_throws ArgumentError reinterpret(UInt8, array)
+        @test_throws ArgumentError reinterpret(T, zeros(UInt8, storage_size))
+    end
+end
+
+@testset "ReinterpretArray with non power of two primitive types" begin
+    primitive type RInt24 24 end
+    primitive type RAlsoInt24 24 end
+    RInt24(x::Int) = Core.Intrinsics.trunc_int(RInt24, x)
+    RAlsoInt24(x::Int) = Core.Intrinsics.trunc_int(RAlsoInt24, x)
+    Base.zero(::Type{RInt24}) = RInt24(0)
+    Base.zero(::Type{RAlsoInt24}) = RAlsoInt24(0)
+
+    # sizeof(T) == sizeof(S):
+    a = zeros(RInt24, 3)
+    b = reinterpret(RAlsoInt24, a)
+    @test Base.elsize(b)*stride(b, 1) == Base.elsize(a)*stride(a, 1) == 4
+    @test length(a) == length(b)
+
+    # View-wrapped parent:
+    v = view(a, 1:2)
+    c = reinterpret(RAlsoInt24, v)
+    @test Base.elsize(c)*stride(c, 1) == 4
+    @test length(c) == 2
+
+    # Reshape-variant:
+    d = reinterpret(reshape, UInt8, zeros(RInt24, 6))
+    @test Base.elsize(d)*stride(d, 1) == sizeof(UInt8)
+    @test size(d) == (4, 6)
+
+    # Array and Memory backing: elementwise path writes to correct data bytes
+    @testset "$T backing: elementwise path writes to correct data bytes" for T in (Array, Memory)
+        local a = T{RInt24}(undef, 2)
+        a[1] = RInt24(0); a[2] = RInt24(0)
+        local b = reinterpret(UInt8, a)
+        @test_throws Base.PaddingError b[1]
+        @test length(b) == 8
+        b[2] = 0xab                     # byte 2 = second data byte of element 1
+        @test a[1] === RInt24(0xab00 % Int)
+        @test a[2] === RInt24(0)
+        b[5] = 0xcd                     # byte 5 = first data byte of element 2
+        @test a[2] === RInt24(0xcd % Int)
+    end
+
+    # check the strided array interface
+    a = reinterpret(RInt24, collect(UInt8, 1:12))
+    @test length(a) == 3
+    z = reinterpret(RInt24, zeros(UInt8, 12))
+    check_strided_get(a)
+    b = collect(a)
+    @test b == a
+    check_strided_get(b)
+    c = reinterpret(RAlsoInt24, b)
+    check_strided_get(c)
+    for N in 1:4
+        local d = reinterpret(NTuple{N,UInt8}, b)
+        # b has padding that should not be exposed
+        @test_throws Base.PaddingError d[1]
+        check_strided_set(
+            deepcopy(d),
+            deepcopy(d),
+            rand(NTuple{N,UInt8}, length(d)),
+            (a, b) -> @test(parent(a) == parent(b)),
+        )
+        check_strided_set(
+            deepcopy(d),
+            deepcopy(d),
+            fill(ntuple(Returns(0x00), N), length(d)),
+            (a, b) -> @test(parent(a) == parent(b) == z),
+        )
+    end
+
+    a = zeros(RInt24, 3)
+    a[1] = RInt24(10)
+    a[2] = RInt24(20)
+    a[3] = RInt24(30)
+    b = reinterpret(RAlsoInt24, a)
+
+    @test b[1] == reinterpret(RAlsoInt24, RInt24(10))
+    @test b[2] == reinterpret(RAlsoInt24, RInt24(20))
+    @test b[3] == reinterpret(RAlsoInt24, RInt24(30))
+
+    b[2] = reinterpret(RAlsoInt24, RInt24(99))
+    @test b[2] == reinterpret(RAlsoInt24, RInt24(99))
+    @test b[1] == reinterpret(RAlsoInt24, RInt24(10))
+    @test b[3] == reinterpret(RAlsoInt24, RInt24(30))
+
+    # Zero dim edge case
+    @test reinterpret(RInt24, fill(Int32(1)))[] === RInt24(1)
+    @test reinterpret(RInt24, fill(RAlsoInt24(1)))[] === RInt24(1)
+    @test_throws Base.PaddingError reinterpret(Int32, fill(RInt24(1)))[]
+    a = fill(RInt24(1))
+    b = reinterpret(Int32, a)
+    b[] = Int32(2)
+    @test a[] === RInt24(2)
+    c = reinterpret(RAlsoInt24, a)
+    c[] = RAlsoInt24(3)
+    @test a[] === RInt24(3)
+
+    # The padding bytes of Tuple{RInt24,RInt24} coincide with the padding bytes of
+    # RInt24, so these reinterprets should be readable and writable.
+    a = [(RInt24(1), RInt24(2)), (RInt24(3), RInt24(4))]
+    b = reinterpret(RInt24, a)
+    @test length(b) == 4
+    @test b[1] === RInt24(1)
+    @test (b[1] = RInt24(5); a[1][1] === RInt24(5))
+    @test Base.array_subpadding(RInt24, Tuple{RInt24, RInt24})
+    @test Base.array_subpadding(Tuple{RInt24, RInt24}, RInt24)
+    @test Base.array_subpadding(Tuple{RInt24}, RInt24)
+    @test Base.array_subpadding(RInt24, Tuple{RInt24})
+end
+
+@testset "issue #62815" begin
+    # Same layout should be readable and writable
+    T = Tuple{
+        Tuple{UInt8,UInt16},
+        Tuple{UInt8,UInt64}
+    }
+    S = Tuple{
+        Tuple{UInt8,UInt16},
+        Tuple{UInt8,Int64}
+    }
+    @test Base.array_subpadding(T, S)
+    @test Base.array_subpadding(S, T)
+
+    # Padding should not be observed
+    struct S_1_3           # 8 bytes, padding at bytes 1:3
+        a::UInt8       # offset 0
+        b::UInt32      # offset 4
+    end
+    struct T_5           # 8 bytes, padding at byte 5
+        a::UInt32      # offset 0
+        b::UInt8       # offset 4
+        c::UInt16      # offset 6
+    end
+    @test !Base.array_subpadding(T_5, S_1_3)
+    @test !Base.array_subpadding(S_1_3, T_5)
 end

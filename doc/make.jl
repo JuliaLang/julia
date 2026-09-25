@@ -1,12 +1,38 @@
+# Get the buildroot and stdlibdir from the make environment to make sure we're
+# generating docs for the current julia source tree, regardless of what julia
+# executable we're using. If these arguments are not passed, fall back to
+# assuming that we're running a just-built version of julia and generating docs
+# in tree.
+let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
+    if i === nothing
+        global const buildrootdoc = @__DIR__
+        global const buildroot = abspath(joinpath(buildrootdoc, ".."))
+    else
+        global const buildroot = first(match(r, ARGS[i]).captures)
+        global const buildrootdoc = joinpath(buildroot, "doc")
+    end
+end
+
+let r = r"stdlibdir=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
+    if i === nothing
+        global const STDLIB_DIR = Sys.STDLIB
+    else
+        global const STDLIB_DIR = first(match(r, ARGS[i]).captures)
+    end
+end
+
 # Install dependencies needed to build the documentation.
-Base.ACTIVE_PROJECT[] = nothing
-empty!(LOAD_PATH)
-push!(LOAD_PATH, @__DIR__, "@stdlib")
+documenter_project_dir = joinpath(@__DIR__, "..", "deps", "jlutilities", "documenter")
 empty!(DEPOT_PATH)
-push!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
-push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
+push!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
+push!(DEPOT_PATH, abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))
 using Pkg
+Pkg.activate(documenter_project_dir)
 Pkg.instantiate()
+
+if "deps" in ARGS
+    exit()
+end
 
 using Documenter
 import LibGit2
@@ -20,9 +46,8 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #552 in Documenter.jl is finished
 const STDLIB_DOCS = []
-const STDLIB_DIR = Sys.STDLIB
 const EXT_STDLIB_DOCS = ["Pkg"]
-cd(joinpath(@__DIR__, "src")) do
+cd(joinpath(buildrootdoc, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
     for dir in readdir(STDLIB_DIR)
@@ -66,7 +91,8 @@ function parse_stdlib_version_file(path)
 end
 # This generates the value that will be passed to the `remotes` argument of makedocs(),
 # by looking through all *.version files in stdlib/.
-documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib"))
+documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib")),
+                                stdlib_build_dir = joinpath(buildrootdoc, "..", "stdlib")
     # Get a list of all *.version files in stdlib/..
     version_files = filter(readdir(stdlib_dir)) do fname
         isfile(joinpath(stdlib_dir, fname)) && endswith(fname, ".version")
@@ -93,7 +119,7 @@ documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "
             versionfile[sha_key]
         end
         # Construct the absolute (local) path to the stdlib package's root directory
-        package_root_dir = joinpath(stdlib_dir, "$(package)-$(package_sha)")
+        package_root_dir = joinpath(stdlib_build_dir, "$(package)-$(package_sha)")
         # Documenter needs package_root_dir to exist --- it's just a sanity check it does on the remotes= keyword.
         # In normal (local) builds, this will be the case, since the Makefiles will have unpacked the standard
         # libraries. However, on CI we do this thing where we actually build docs in a clean worktree, just
@@ -123,7 +149,7 @@ function generate_markdown(basename)
     @assert length(splitted) == 2
     replaced_links = replace(splitted[1], r"\[\#([0-9]*?)\]" => s"[#\g<1>](https://github.com/JuliaLang/julia/issues/\g<1>)")
     write(
-        joinpath(@__DIR__, "src", "$basename.md"),
+        joinpath(buildrootdoc, "src", "$basename.md"),
         """
         ```@meta
         EditURL = "https://github.com/JuliaLang/julia/blob/master/$basename.md"
@@ -131,6 +157,179 @@ function generate_markdown(basename)
         """ * replaced_links)
 end
 generate_markdown("NEWS")
+
+function split_skill_markdown(path)
+    lines = split(read(path, String), '\n'; keepempty=true)
+    if isempty(lines) || strip(lines[1]) != "---"
+        error("Agent Skill $path does not start with YAML frontmatter")
+    end
+    closing = nothing
+    for i in 2:length(lines)
+        if strip(lines[i]) == "---"
+            closing = i
+            break
+        end
+    end
+    closing === nothing && error("Agent Skill $path has no closing frontmatter delimiter")
+    frontmatter = join(lines[2:closing-1], "\n")
+    body = join(lines[closing+1:end], "\n")
+    return frontmatter, replace(body, r"^(\r?\n)+" => "")
+end
+
+function parse_skill_frontmatter(frontmatter, path)
+    metadata = Pair{String,String}[]
+    for line in split(frontmatter, '\n')
+        isempty(strip(line)) && continue
+        parts = split(line, ':'; limit=2)
+        length(parts) == 2 || error("Unable to parse frontmatter line in $path: $line")
+        push!(metadata, strip(parts[1]) => strip(parts[2]))
+    end
+    return metadata
+end
+
+function skill_metadata_value(metadata, key, path)
+    i = findfirst(pair -> first(pair) == key, metadata)
+    i === nothing && error("Agent Skill $path is missing required frontmatter field: $key")
+    return last(metadata[i])
+end
+
+function render_skill_metadata(metadata)
+    lines = ["!!! note \"Agent Skill metadata\""]
+    for (key, value) in metadata
+        rendered = key == "name" ? "`$value`" : value
+        rendered = replace(rendered, "\n" => "\n      ")
+        push!(lines, "    - `$key`: $rendered")
+    end
+    return join(lines, "\n")
+end
+
+function insert_skill_metadata(body, metadata)
+    lines = split(body, '\n'; keepempty=true)
+    if !isempty(lines) && startswith(lines[1], "# ")
+        return string(lines[1], "\n\n", metadata, "\n\n", join(lines[2:end], "\n"))
+    else
+        return string(metadata, "\n\n", body)
+    end
+end
+
+function generate_agent_skill_docs()
+    skills_dir = joinpath(buildrootdoc, "src", "devdocs", "agents", "skills")
+    pages = String[]
+    isdir(skills_dir) || return pages
+    for skill in sort(readdir(skills_dir))
+        skill_dir = joinpath(skills_dir, skill)
+        path = joinpath(skill_dir, "SKILL.md")
+        isfile(path) || continue
+        frontmatter, body = split_skill_markdown(path)
+        metadata = parse_skill_frontmatter(frontmatter, path)
+        name = skill_metadata_value(metadata, "name", path)
+        name == skill || error("Agent Skill $path has name '$name' but its directory is '$skill'")
+        source_rel = "doc/src/devdocs/agents/skills/$skill/SKILL.md"
+        write(
+            joinpath(skill_dir, "index.md"),
+            """
+            ```@meta
+            EditURL = "https://github.com/JuliaLang/julia/blob/master/$source_rel"
+            ```
+
+            """ * insert_skill_metadata(body, render_skill_metadata(metadata)))
+        push!(pages, "devdocs/agents/skills/$skill/index.md")
+    end
+    return pages
+end
+AgentSkillDocs = generate_agent_skill_docs()
+
+# Shared machinery for the generated tab-completion tables in
+# `manual/unicode-input.md` and `manual/emoji-input.md`. The LaTeX and emoji
+# tables are each large enough that rendering both on one page takes the
+# generated HTML past Documenter's `size_threshold`, so they live on separate
+# pages and both call into this module.
+module UnicodeTables
+
+import Markdown
+
+const NBSP = '\u00A0'
+
+# Invert the completion tables: map each completed string to every tab
+# completion sequence that produces it.
+function tab_completions(symbols...)
+    completions = Dict{String, Vector{String}}()
+    for each in symbols, (k, v) in each
+        completions[v] = push!(get!(completions, v, String[]), k)
+    end
+    return completions
+end
+
+# `UnicodeData.txt` is downloaded into the build root by `doc/Makefile`, which
+# is not the directory this file lives in for out-of-tree builds.
+unicode_data_file() = joinpath(Main.buildrootdoc, "UnicodeData.txt")
+
+# Parsed once and shared by every page that renders a table.
+const UNICODE_NAMES = Dict{UInt32, String}()
+
+function unicode_data()
+    isempty(UNICODE_NAMES) || return UNICODE_NAMES
+    open(unicode_data_file()) do unidata
+        for line in readlines(unidata)
+            id, name, desc = split(line, ";")[[1, 2, 11]]
+            codepoint = parse(UInt32, "0x$id")
+            UNICODE_NAMES[codepoint] = titlecase(lowercase(
+                name == "" ? desc : desc == "" ? name : "$name / $desc"))
+        end
+    end
+    return UNICODE_NAMES
+end
+
+# Surround combining characters with no-break spaces (i.e '\u00A0'). Follows the same format
+# for how unicode is displayed on the unicode.org website:
+# https://util.unicode.org/UnicodeJsps/character.jsp?a=0300
+function fix_combining_chars(char)
+    cat = Base.Unicode.category_code(char)
+    return cat == 6 || cat == 8 ? "$NBSP$char$NBSP" : "$char"
+end
+
+function table_entries(completions, unicode_dict)
+    entries = Any[Any[
+        ["Code point(s)"],
+        ["Character(s)"],
+        ["Tab completion sequence(s)"],
+        ["Unicode name(s)"],
+    ]]
+    for (chars, inputs) in sort!(collect(completions), by = first)
+        code_points, unicode_names, characters = String[], String[], String[]
+        for char in chars
+            push!(code_points, "U+$(uppercase(string(UInt32(char), base = 16, pad = 5)))")
+            push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
+            push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
+        end
+        inputs_md = []
+        for (i, input) in enumerate(inputs)
+            i > 1 && push!(inputs_md, ", ")
+            push!(inputs_md, Markdown.Code("", input))
+        end
+        push!(entries, [
+            [join(code_points, " + ")],
+            [join(characters)],
+            inputs_md,
+            [join(unicode_names, " + ")],
+        ])
+    end
+    table = Markdown.Table(entries, [:l, :c, :l, :l])
+    # We also need to wrap the Table in a Markdown.MD "document"
+    return Markdown.MD([table])
+end
+
+"""
+    symbol_table(symbols...)
+
+Render the tab completions in `symbols` (dictionaries mapping a completion
+sequence to the string it expands to, such as `REPL.REPLCompletions.latex_symbols`)
+as a Markdown table, annotated with the code points and Unicode names of each
+completed character.
+"""
+symbol_table(symbols...) = table_entries(tab_completions(symbols...), unicode_data())
+
+end # module UnicodeTables
 
 Manual = [
     "manual/getting-started.md",
@@ -166,13 +365,16 @@ Manual = [
     "manual/code-loading.md",
     "manual/profile.md",
     "manual/stacktraces.md",
+    "manual/memory-management.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
     "manual/style-guide.md",
     "manual/faq.md",
     "manual/noteworthy-differences.md",
     "manual/unicode-input.md",
+    "manual/emoji-input.md",
     "manual/command-line-interface.md",
+    "manual/worldage.md",
 ]
 
 BaseDocs = [
@@ -200,11 +402,21 @@ BaseDocs = [
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
 
+# HACK: get nicer sorting here, even though we don't have the header
+# of the .md files at hand.
+sort!(StdlibDocs, by=function(x)
+    x = replace(x, "stdlib/" => "")
+    startswith(x, "Libdl") && return lowercase("Dynamic Linker")
+    startswith(x, "Test") && return lowercase("Unit Testing")
+    return lowercase(x)
+end)
+
 DevDocs = [
     "Documentation of Julia's Internals" => [
         "devdocs/init.md",
         "devdocs/ast.md",
         "devdocs/types.md",
+        "devdocs/ub.md",
         "devdocs/object.md",
         "devdocs/eval.md",
         "devdocs/callconv.md",
@@ -221,6 +433,7 @@ DevDocs = [
         "devdocs/stdio.md",
         "devdocs/boundscheck.md",
         "devdocs/locks.md",
+        "devdocs/scheduler-wakeup.md",
         "devdocs/offset-arrays.md",
         "devdocs/require.md",
         "devdocs/inference.md",
@@ -229,14 +442,17 @@ DevDocs = [
         "devdocs/aot.md",
         "devdocs/gc-sa.md",
         "devdocs/gc.md",
+        "devdocs/gc-mmtk.md",
         "devdocs/jit.md",
         "devdocs/builtins.md",
         "devdocs/precompile_hang.md",
+        "devdocs/compiler_changes.md",
     ],
     "Developing/debugging Julia's C code" => [
         "devdocs/backtraces.md",
         "devdocs/debuggingtips.md",
         "devdocs/valgrind.md",
+        "devdocs/gc-debug.md",
         "devdocs/external_profilers.md",
         "devdocs/sanitizers.md",
         "devdocs/probes.md",
@@ -250,6 +466,20 @@ DevDocs = [
         "devdocs/build/arm.md",
         "devdocs/build/riscv.md",
         "devdocs/build/distributing.md",
+    ],
+    "Contributor's Guide" => [
+        "devdocs/contributing/code-changes.md",
+        "devdocs/contributing/tests.md",
+        "devdocs/contributing/documentation.md",
+        "devdocs/contributing/jldoctests.md",
+        "devdocs/contributing/patch-releases.md",
+        "devdocs/contributing/formatting.md",
+        "devdocs/contributing/git-workflow.md",
+        "devdocs/contributing/aiagents.md"
+    ],
+    "Agentic Devdocs" => [
+        "Index" => "devdocs/agents/README.md",
+        "Agent Skills" => AgentSkillDocs,
     ]
 ]
 
@@ -275,16 +505,11 @@ end
 
 const use_revise = "revise=true" in ARGS
 if use_revise
-    let revise_env = joinpath(@__DIR__, "deps", "revise")
-        Pkg.activate(revise_env)
-        Pkg.add("Revise"; preserve=Pkg.PRESERVE_NONE)
-        Base.ACTIVE_PROJECT[] = nothing
-        pushfirst!(LOAD_PATH, revise_env)
-    end
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
+    Pkg.instantiate()
 end
 function maybe_revise(ex)
     use_revise || return ex
-    STDLIB_DIR = Sys.STDLIB
     STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
     return quote
         $ex
@@ -345,10 +570,6 @@ DocMeta.setdocmeta!(
     recursive=true, warn=false,
 )
 
-let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
-    global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)
-end
-
 const format = if render_pdf
     Documenter.LaTeX(
         platform = "texplatform=docker" in ARGS ? "docker" : "native"
@@ -371,8 +592,9 @@ else
     )
 end
 
-const output_path = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en")
+const output_path = joinpath(buildrootdoc, "_build", (render_pdf ? "pdf" : "html"), "en")
 makedocs(
+    source    = joinpath(buildrootdoc, "src"),
     build     = output_path,
     modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
@@ -385,6 +607,7 @@ makedocs(
     authors   = "The Julia Project",
     pages     = PAGES,
     remotes   = documenter_stdlib_remotes,
+    meta      = Dict(:DocTestSyntax => VERSION),
 )
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)
@@ -448,31 +671,53 @@ const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
 
 # Hack to make rc docs visible in the version selector
 struct Versions versions end
+Documenter.determine_deploy_subfolder(deploy_decision, ::Versions) = deploy_decision.subfolder
 function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     # Find all available docs
     available_folders = readdir(dir)
     cd(() -> filter!(!islink, available_folders), dir)
     filter!(x -> occursin(Base.VERSION_REGEX, x), available_folders)
 
-    # Look for docs for an "active" release candidate and insert it
-    vnums = [VersionNumber(x) for x in available_folders]
-    master_version = maximum(vnums)
-    filter!(x -> x.major == 1 && x.minor == master_version.minor-1, vnums)
-    rc = maximum(vnums)
-    if !isempty(rc.prerelease) && occursin(r"^rc", rc.prerelease[1])
-        src = "v$(rc)"
-        @assert src ∈ available_folders
-        push!(v.versions, src => src, pop!(v.versions))
+    versions = copy(v.versions)
+
+    # `versions.js` is regenerated by every deployment, including tagged builds and
+    # builds from `release-*` branches, so the development entry must not be derived
+    # from the version that happens to be building (that would make e.g. a 1.13.0-rc
+    # build replace the `v1.14-dev` entry with `v1.13-dev`). Instead, always point it
+    # at the highest `-dev` folder available, i.e. the docs built from master.
+    isdev(x) = (p = VersionNumber(x).prerelease; !isempty(p) && p[1] == "dev")
+    dev_folders = filter(isdev, available_folders)
+    master_version = if isempty(dev_folders)
+        maximum(VersionNumber, available_folders)
+    else
+        master_folder = argmax(VersionNumber, dev_folders)
+        versions[end] = master_folder => master_folder
+        VersionNumber(master_folder)
     end
 
-    return Documenter.Writers.HTMLWriter.expand_versions(dir, v.versions)
+    # Look for docs for an "active" prerelease and insert it. It is enough to look at the
+    # previous minor release family: if the maximum there still carries prerelease data,
+    # then the corresponding release has not happened yet. The `-dev` folders are excluded,
+    # as those hold the development docs of a release branch rather than a prerelease.
+    prereleases = filter(available_folders) do x
+        ver = VersionNumber(x)
+        !isdev(x) && ver.major == master_version.major && ver.minor == master_version.minor-1
+    end
+    if !isempty(prereleases)
+        src = argmax(VersionNumber, prereleases)
+        if !isempty(VersionNumber(src).prerelease)
+            insert!(versions, lastindex(versions), src => src)
+        end
+    end
+
+    return Documenter.Writers.HTMLWriter.expand_versions(dir, versions)
 end
 
 if "deploy" in ARGS
     deploydocs(
         repo = "github.com/JuliaLang/docs.julialang.org.git",
         deploy_config = BuildBotConfig(),
-        target = joinpath(buildroot, "doc", "_build", "html", "en"),
+        target = joinpath(buildrootdoc, "_build", "html", "en"),
         dirname = "en",
         devurl = devurl,
         versions = Versions(["v#.#", devurl => devurl]),

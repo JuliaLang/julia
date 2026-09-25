@@ -26,13 +26,45 @@ let err = nothing
     end
 end
 
+@testset "readdir" begin
+    @test !ispath("does/not/exist")
+    @test !isdir("does/not/exist")
+    @test_throws Base.IOError readdir("does/not/exist")
+    @test_throws Base.IOError readdir("does/not/exist", DirEntry)
+
+    mktempdir() do dir
+        touch(joinpath(dir, "afile.txt"))
+        mkdir(joinpath(dir, "adir"))
+        touch(joinpath(dir, "adir", "bfile.txt"))
+        @test length(readdir(dir)) == 2
+        @test readdir(dir) == basename.(readdir(dir, DirEntry))
+        for p in readdir(dir, join=true)
+            if isdir(p)
+                @test only(readdir(p)) == "bfile.txt"
+            else
+                @test isfile(p)
+                @test p == joinpath(dir, "afile.txt")
+            end
+        end
+        for e in readdir(dir, DirEntry)
+            if isdir(e)
+                @test only(readdir(e)) == "bfile.txt"
+                @test basename(only(readdir(e, DirEntry))) == "bfile.txt"
+            else
+                @test isfile(e)
+                @test basename(e) == "afile.txt"
+            end
+        end
+    end
+end
+
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
-    @test map(o->o.names, Base.Filesystem._readdirx(dirlink)) == map(o->o.names, Base.Filesystem._readdirx(subdir))
-    @test realpath.(Base.Filesystem._readdirx(dirlink)) == realpath.(Base.Filesystem._readdirx(subdir))
+    @test basename.(readdir(dirlink, DirEntry)) == basename.(readdir(subdir, DirEntry))
+    @test realpath.(readdir(dirlink, DirEntry)) == realpath.(readdir(subdir, DirEntry))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -40,7 +72,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
-    @test Base.Filesystem._readdirx(relsubdirlink) == Base.Filesystem._readdirx(subdir2)
+    @test basename.(readdir(relsubdirlink, DirEntry)) == basename.(readdir(subdir2, DirEntry))
+    @test realpath.(readdir(relsubdirlink, DirEntry)) == realpath.(readdir(subdir2, DirEntry))
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -59,7 +92,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
-    @test realpath.(Base.Filesystem._readdirx(new_dir)) == realpath.(Base.Filesystem._readdirx(nedlink))
+    @test realpath.(readdir(new_dir, DirEntry)) == realpath.(readdir(nedlink, DirEntry))
 
     rm(foo_file)
     rm(new_dir)
@@ -260,13 +293,14 @@ no_error_logging(f::Function) =
         @test TEMP_CLEANUP_MAX[] == 3
         local t, f
         temps = String[]
+        npending = 0
         # mktemp is normally cleaned up on completion
         mktemp(d) do path, _
             @test isfile(path)
             t = path
         end
         @test !ispath(t)
-        @test length(TEMP_CLEANUP) == 0
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # mktemp when cleanup is prevented
         no_error_logging() do
@@ -277,19 +311,26 @@ no_error_logging(f::Function) =
                 t = path
             end
         end
+        # Make deleteable again
         chmod(d, 0o700)
         close(f)
-        @test isfile(t)
-        @test length(TEMP_CLEANUP) == 1
-        @test TEMP_CLEANUP_MAX[] == 3
-        push!(temps, t)
+        if Libc.geteuid() == 0
+            # Root can delete anything
+            @test !isfile(t)
+        else
+            npending += 1
+            @test isfile(t)
+            @test length(TEMP_CLEANUP) == npending
+            @test TEMP_CLEANUP_MAX[] == 3
+            push!(temps, t)
+        end
         # mktempdir is normally cleaned up on completion
         mktempdir(d) do path
             @test isdir(path)
             t = path
         end
         @test !ispath(t)
-        @test length(TEMP_CLEANUP) == 1
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # mktempdir when cleanup is prevented
         no_error_logging() do
@@ -301,16 +342,24 @@ no_error_logging(f::Function) =
                 t = path
             end
         end
+        # Make deleteable again
         chmod(d, 0o700)
         close(f)
-        @test isdir(t)
-        @test length(TEMP_CLEANUP) == 2
-        @test TEMP_CLEANUP_MAX[] == 3
-        push!(temps, t)
+        if Libc.geteuid() == 0
+            # Root can delete anything
+            @test !isdir(t)
+        else
+            @test isdir(t)
+            npending += 1
+            @test length(TEMP_CLEANUP) == npending
+            @test TEMP_CLEANUP_MAX[] == 3
+            push!(temps, t)
+        end
         # make one more temp file
         t = mktemp()[1]
+        npending += 1
         @test isfile(t)
-        @test length(TEMP_CLEANUP) == 3
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # nothing has been deleted yet
         for t in temps
@@ -319,8 +368,9 @@ no_error_logging(f::Function) =
         # another temp file triggers purge
         t = mktempdir()
         @test isdir(t)
-        @test length(TEMP_CLEANUP) == 2
-        @test TEMP_CLEANUP_MAX[] == 4
+        npending = 2
+        @test length(TEMP_CLEANUP) == npending
+        @test TEMP_CLEANUP_MAX[] == (Libc.geteuid() == 0 ? 3 : 4)
         # now all the temps are gone
         for t in temps
             @test !ispath(t)
@@ -375,27 +425,20 @@ if Sys.iswindows()
     @test filemode(file) & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
-    function get_umask()
-        umask = ccall(:umask, UInt32, (UInt32,), 0)
-        ccall(:umask, UInt32, (UInt32,), umask)
-        return umask
-    end
-
     mktempdir() do tmpdir
-        umask = get_umask()
         tmpfile=joinpath(tmpdir, "tempfile.txt")
         tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         chmod(tmpfile, 0o777)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         chmod(tmpfile, 0o707)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
@@ -420,6 +463,9 @@ function test_stat_error(stat::Function, pth)
     if stat === lstat && !(pth isa AbstractString)
         return # no lstat for fd handles
     end
+    if Libc.geteuid() == 0
+        return # root bypasses permission checks
+    end
     ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
     @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
     pth isa AbstractString || (pth = Base.INVALID_OS_HANDLE)
@@ -432,7 +478,7 @@ end
             touch("afile")
             try
                 # remove permission to access this folder
-                # to cause cause EACCESS-denied errors
+                # to cause EACCES-denied errors
                 @static if Sys.iswindows()
                     @test ccall((:ImpersonateAnonymousToken, "Advapi32.dll"), stdcall, Cint, (Libc.WindowsRawSocket,),
                                 ccall(:GetCurrentThread, Libc.WindowsRawSocket, ())) != 0
@@ -471,7 +517,7 @@ if Sys.iswindows()
 else
     @test filesize(dir) > 0
 end
-# We need both: one to check passed time, one to comapare file's mtime()
+# We need both: one to check passed time, one to compare file's mtime()
 nowtime = time_ns() / 1e9
 nowwall = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
@@ -550,16 +596,23 @@ function multiple_uv_errors(pfx::AbstractString, codes::AbstractVector{<:Integer
     return [Base._UVError(pfx, code) for code in codes]
 end
 
+read_linux_id_map_max(file) = parse(Int, split(strip(read(file, String)), " ", keepempty = false)[end]) % Cint
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     uid = Libc.geteuid()
     @test stat(file).uid == uid
     @test uid == Libc.getuid()
+    maxuid = maxgid = -1
+    # Containers may have restricted uid/gid ranges
+    if Sys.islinux() && isfile("/proc/self/uid_map")
+        maxuid = read_linux_id_map_max("/proc/self/uid_map")
+        maxgid = read_linux_id_map_max("/proc/self/gid_map")
+    end
     if uid == 0 # root user
-        chown(file, -2, -1)  # Change the file owner to nobody
-        @test stat(file).uid != 0
-        chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
-        @test stat(file).gid != 0
+        chown(file, maxuid-1, -1)  # Change the file owner to nobody
+        @test maxuid == 1 || stat(file).uid != 0
+        chown(file, 0, maxgid-1)  # Change the file group to nogroup (and owner back to root)
+        @test maxgid == 1 || stat(file).gid != 0
         @test stat(file).uid == 0
         @test chown(file, -1, 0) == file
         @test stat(file).gid == 0
@@ -642,7 +695,7 @@ end
     PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/" * "x"^255   # we want a long path on UNIX so that we test buffer resizing in `tempdir`
     # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
     # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
-    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars)
+    # We thus use 260 (with implied trailing slash backslash this then gives 261 chars)
     # NOTE: not the actual max path on UNIX, but true in the Windows case for this function.
     # NOTE: we subtract 9 to account for i = 0:9.
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
@@ -1330,8 +1383,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
                      Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=true))
         # cp
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
+        @test_throws Base._UVError("copyfile", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
+        @test_throws Base._UVError("copyfile", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
         @test_throws Base._UVError("rename($(repr(nonexisting_src)), $(repr(dst)))", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
@@ -1383,7 +1436,7 @@ if !Sys.iswindows()
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
         @test !ispath(d)
-        # comare s, with d_mv
+        # compare s, with d_mv
         @test isfile(s) == isfile(d_mv)
         @test islink(s) == islink(d_mv)
         islink(s) && @test readlink(s) == readlink(d_mv)
@@ -1753,10 +1806,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
-            @test issorted(Base.Filesystem._readdirx())
-            @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
-            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
-            @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
+            @test issorted(readdir(DirEntry))
+            @test basename.(readdir(DirEntry)) == readdir()
+            @test joinpath.(readdir(DirEntry)) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, readdir(DirEntry))
         end
     end
 end
@@ -1864,8 +1917,10 @@ if !Sys.iswindows()
             @test !isdir(joinpath(d, "empty_outer"))
 
             # But a non-empty directory is not
-            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
-            chmod(joinpath(d, "nonempty"), 0o777)
+            if Libc.geteuid() != 0 # root can override permissions
+                @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
+                chmod(joinpath(d, "nonempty"), 0o777)
+            end
             rm(joinpath(d, "nonempty"); recursive=true, force=true)
             @test !isdir(joinpath(d, "nonempty"))
         end
@@ -1933,7 +1988,7 @@ end
                     # Cannot delete the working directory on Windows
                     rm(dir)
                     @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
-                    Base.repl_cmd(@cmd("cd \\~"), io)
+                    Base.repl_cmd(@cmd("cd ~"), io)
                 end
             end
         end
@@ -2020,7 +2075,7 @@ end
         touch(fpath)
         @test ispath(fpath)
 
-        # Test that we can actually set the executable/readable/writeable bit on all platforms.
+        # Test that we can actually set the executable/readable/writable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
@@ -2032,10 +2087,10 @@ end
         chmod(fpath, 0o444)
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
-        @test !Sys.iswritable(fpath)
+        @test !Sys.iswritable(fpath) skip=Libc.getuid() == 0
         chmod(fpath, 0o244)
         @test !Sys.isexecutable(fpath)
-        @test !Sys.isreadable(fpath) skip=Sys.iswindows()
+        @test !Sys.isreadable(fpath) skip=(Sys.iswindows() || Libc.getuid() == 0)
         @test Sys.iswritable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,
@@ -2043,8 +2098,12 @@ end
         if Sys.iswindows()
             chmod(subdir, 0o666)
             @test !Sys.isexecutable(fpath)
-            @test Sys.isreadable(fpath)
+            # Possibly broken (or changed) by libuv commit 84896d52 which applies "other" permissions
+            # to all groups we are not a part of, affecting inherited permissions
+            # https://github.com/JuliaLang/libuv/commit/84896d522a51de50a8090fac56ec19740f5b603e
+            @test_broken Sys.isreadable(fpath)
             @test_skip Sys.iswritable(fpath)
+            chmod(fpath, 0o777)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
@@ -2153,15 +2212,17 @@ Base.joinpath(x::URI50890) = URI50890(x.f)
 end
 
 @testset "diskstat() works" begin
-    # Sanity check assuming disk is smaller than 32PB
-    PB = Int64(2)^44
+    # Sanity check assuming disk is smaller than 32PiB
+    PiB = Int64(2)^50
 
     dstat = diskstat()
-    @test dstat.total < 32PB
+    @test dstat.total < 32PiB
     @test dstat.used + dstat.available == dstat.total
     @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
     # Test diskstat(::AbstractString)
     dstat = diskstat(pwd())
-    @test dstat.total < 32PB
+    @test dstat.total < 32PiB
     @test dstat.used + dstat.available == dstat.total
 end
+
+@test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct

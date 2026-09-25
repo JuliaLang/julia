@@ -21,7 +21,7 @@ const MAX_SPIN_ITERS = 40
 """
     ReentrantLock()
 
-Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
+Create a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
 acquire the lock as many times as required (this is what the "Reentrant" part
 of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
@@ -31,7 +31,7 @@ should naturally be supported, but beware of inverting the try/lock order or
 missing the try block entirely (e.g. attempting to return with the lock still
 held):
 
-This provides a acquire/release memory ordering on lock/unlock calls.
+This provides an acquire/release memory ordering on lock/unlock calls.
 
 ```
 lock(l)
@@ -74,11 +74,11 @@ mutable struct ReentrantLock <: AbstractLock
     #            |            | potentially never getting woken up).
     @atomic havelock::UInt8
     # offset32 = 28, offset64 = 32
-    cond_wait::ThreadSynchronizer # 2 words
-    # offset32 = 36, offset64 = 48
-    # sizeof32 = 20, sizeof64 = 32
+    cond_wait::ThreadSynchronizer # 1 word (mutable, held by reference)
+    # offset32 = 32, offset64 = 40
+    # sizeof32 = 16, sizeof64 = 24
     # now add padding to make this a full cache line to minimize false sharing between objects
-    _::NTuple{Int === Int32 ? 2 : 3, Int}
+    _::NTuple{Int === Int32 ? 3 : 4, Int}
     # offset32 = 44, offset64 = 72 == sizeof+offset
     # sizeof32 = 28, sizeof64 = 56
 
@@ -191,9 +191,13 @@ wait for it to become available.
 
 Each `lock` must be matched by an [`unlock`](@ref).
 """
-@inline function lock(rl::ReentrantLock)
-    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+@inline function lock(rl::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock, cancel::CancelTokenArg)
         Threads.lock_profiling() && Threads.inc_lock_conflict_count()
+        # resolve the scoped default once; a cancelled acquisition throws the
+        # CancellationRequest without the lock held
+        tok = resolve_cancel_token(cancel)
         c = rl.cond_wait
         ct = current_task()
         iteration = 1
@@ -206,6 +210,13 @@ Each `lock` must be matched by an [`unlock`](@ref).
                 if result.success
                     rl.reentrancy_cnt = 0x0000_0001
                     @atomic :release rl.locked_by = ct
+                    # Mirror the park path's refusal (see wait_no_relock): a
+                    # token that got cancelled while we were spinning must
+                    # not hand out the lock - release it and deliver.
+                    if tok !== nothing && iscancelled(tok.source)
+                        unlock(rl)
+                        checkcancel(tok.source)
+                    end
                     return
                 end
                 GC.enable_finalizers()
@@ -236,27 +247,62 @@ Each `lock` must be matched by an [`unlock`](@ref).
             end
 
             # It was locked, so now wait for the unlock to notify us
-            wait_no_relock(c)
+            wait_no_relock(c, tok)
 
             # Loop back and try locking again
             iteration = 1
         end
-    end)(rl)
+    end)(rl, cancel)
     return
 end
 
-function wait_no_relock(c::GenericCondition)
+# ReentrantLock-backed conditions (Threads.Condition) forward `cancel` into
+# the lock acquisition, so operations that resolved a token (or an explicit
+# `nothing` shield) can make their preliminary lock honor it instead of the
+# ambient scope - see e.g. the Channel operations.
+lock(c::GenericCondition{ReentrantLock}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    lock(c.lock; cancel)
+
+function wait_no_relock(c::GenericCondition, tok::MaybeToken)
+    # relock=false: a normal wake returns without retaking the lock (the
+    # notifier's handoff popped our entry), the refusal releases before
+    # throwing (e.g. a token cancelled while we were still spinning and
+    # thus not interruptibly waiting), and the interrupted cleanup retakes
+    # the lock only for its unlink
     ct = current_task()
-    _wait2(c, ct)
-    token = unlockall(c.lock)
-    try
-        return wait()
-    catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
-        rethrow()
+    src = cancel_source(tok)
+    if src === nothing
+        ws = (c,)
+        w = _cached_wait_entry(ct)
+    else
+        ws = (c, SourceWait(src, 0x00))
+        w = _cancel_wait_entry(ct, src, 0x00)
     end
+    if !park!(ws, w, false)
+        # refused at the registration recheck (e.g. a token cancelled
+        # while we were still spinning and thus not interruptibly
+        # waiting): withdraw under the held lock, release, deliver
+        withdraw!(ws, w, WAKE_FIRED)
+        unlock(c.lock)
+        checkcancel(src)
+        error("park fired without a cancelled source")
+    end
+    unlockall(c.lock)
+    # no relock on any path: a normal wake was handed the lock's baton by
+    # the notifying unlock, and an exceptional unwind - possibly the
+    # delivered cancellation itself - must not sleep on locks it does not
+    # need (the cleanup's unlink takes the lock transiently itself)
+    return wait_safe_interrupt(ws, w)
 end
 
+
+_uncancellable_lock(l::ReentrantLock) = lock(l; cancel=nothing)
+
+function relockall_but_one(rl::ReentrantLock, state::UInt32)
+    state == 0x0000_0001 && return nothing
+    relockall(rl, state - 0x0000_0001)
+    return nothing
+end
 
 """
     unlock(lock)
@@ -308,7 +354,11 @@ function unlockall(rl::ReentrantLock)
 end
 
 function relockall(rl::ReentrantLock, n::UInt32)
-    lock(rl)
+    # The reacquire is the cleanup half of a wait whose outcome (including a
+    # cancellation) has already been delivered: it must not itself be
+    # cancellable, or a cancelled scope would throw out of here without the
+    # lock and the caller's queue cleanup would run unlocked.
+    lock(rl; cancel=nothing)
     old = @atomicswap :not_atomic rl.reentrancy_cnt = n
     old == 0x0000_0001 || concurrency_violation()
     return
@@ -324,13 +374,22 @@ available.
 When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
 
-See also: [`@lock`](@ref).
-
 !!! compat "Julia 1.7"
     Using a [`Channel`](@ref) as the second argument requires Julia 1.7 or later.
+
+See also [`@lock`](@ref).
 """
 function lock(f, l::AbstractLock)
     lock(l)
+    try
+        return f()
+    finally
+        unlock(l)
+    end
+end
+
+function lock(f, l::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    lock(l; cancel)
     try
         return f()
     finally
@@ -366,7 +425,7 @@ This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a
 and thus can improve the performance.
 
 !!! compat
-    `@lock` was added in Julia 1.3, and exported in Julia 1.10.
+    `@lock` was added in Julia 1.3, and exported in Julia 1.7.
 """
 macro lock(l, expr)
     quote
@@ -398,9 +457,9 @@ macro lock_nofail(l, expr)
 end
 
 """
-  Lockable(value, lock = ReentrantLock())
+    Lockable(value, lock = ReentrantLock())
 
-Creates a `Lockable` object that wraps `value` and
+Create a `Lockable` object that wraps `value` and
 associates it with the provided `lock`. This object
 supports [`@lock`](@ref), [`lock`](@ref), [`trylock`](@ref),
 [`unlock`](@ref). To access the value, index the lockable object while
@@ -409,7 +468,7 @@ holding the lock.
 !!! compat "Julia 1.11"
     Requires at least Julia 1.11.
 
-## Example
+# Examples
 
 ```jldoctest
 julia> locked_list = Base.Lockable(Int[]);
@@ -431,7 +490,7 @@ Lockable(value) = Lockable(value, ReentrantLock())
 getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
 
 """
-  lock(f::Function, l::Lockable)
+    lock(f::Function, l::Lockable)
 
 Acquire the lock associated with `l`, execute `f` with the lock held,
 and release the lock when `f` returns. `f` will receive one positional
@@ -500,7 +559,7 @@ Create a counting semaphore that allows at most `sem_size`
 acquires to be in use at any time.
 Each acquire must be matched with a release.
 
-This provides a acquire & release memory ordering on acquire/release calls.
+This provides an acquire & release memory ordering on acquire/release calls.
 """
 mutable struct Semaphore
     sem_size::Int
@@ -515,15 +574,23 @@ end
 Wait for one of the `sem_size` permits to be available,
 blocking until one can be acquired.
 """
-function acquire(s::Semaphore)
-    lock(s.cond_wait)
+function acquire(s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    lock(s.cond_wait; cancel)
+    locked = true
     try
-        while s.curr_cnt >= s.sem_size
-            wait(s.cond_wait)
+        if s.curr_cnt >= s.sem_size
+            tok = resolve_cancel_token(cancel)
+            while s.curr_cnt >= s.sem_size
+                # a cancelled wait throws before the permit is taken
+                locked = false
+                wait(s.cond_wait, tok)
+                locked = true
+            end
         end
         s.curr_cnt = s.curr_cnt + 1
     finally
-        unlock(s.cond_wait)
+        locked && unlock(s.cond_wait)
     end
     return
 end
@@ -552,12 +619,42 @@ end
     This method requires at least Julia 1.8.
 
 """
-function acquire(f, s::Semaphore)
-    acquire(s)
+function acquire(f, s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    acquire(s; cancel)
     try
         return f()
     finally
         release(s)
+    end
+end
+
+"""
+    Base.@acquire s::Semaphore expr
+
+Macro version of `Base.acquire(f, s::Semaphore)` but with `expr` instead of `f` function.
+Expands to:
+```julia
+Base.acquire(s)
+try
+    expr
+finally
+    Base.release(s)
+end
+```
+This is similar to using [`acquire`](@ref) with a `do` block, but avoids creating a closure.
+
+!!! compat "Julia 1.13"
+    `Base.@acquire` was added in Julia 1.13
+"""
+macro acquire(s, expr)
+    quote
+        local temp = $(esc(s))
+        Base.acquire(temp)
+        try
+            $(esc(expr))
+        finally
+            Base.release(temp)
+        end
     end
 end
 
@@ -607,22 +704,26 @@ mutable struct Event
     Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
 end
 
-function wait(e::Event)
+function wait(e::Event; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
     if e.autoreset
         (@atomicswap :acquire_release e.set = false) && return
     else
         (@atomic e.set) && return # full barrier also
     end
-    lock(e.notify) # acquire barrier
+    lock(e.notify; cancel) # acquire barrier
+    locked = true
     try
         if e.autoreset
             (@atomicswap :acquire_release e.set = false) && return
         else
             e.set && return
         end
-        wait(e.notify)
+        locked = false
+        wait(e.notify, resolve_cancel_token(cancel))
+        locked = true
     finally
-        unlock(e.notify) # release barrier
+        locked && unlock(e.notify) # release barrier
     end
     nothing
 end
@@ -674,7 +775,10 @@ calls in the same process will return exactly the same value. This is useful in
 code that will be precompiled, as it allows setting up caches or other state
 which won't get serialized.
 
-## Example
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
+# Examples
 
 ```jldoctest
 julia> const global_state = Base.OncePerProcess{Vector{UInt32}}() do
@@ -702,25 +806,27 @@ mutable struct OncePerProcess{T, F} <: Function
 
     function OncePerProcess{T,F}(initializer::F) where {T, F}
         once = new{T,F}(nothing, PerStateInitial, true, initializer, ReentrantLock())
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :value, nothing)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :state, PerStateInitial)
         return once
     end
 end
+OncePerProcess{T}(initializer::Type{U}) where {T, U} = OncePerProcess{T, Type{U}}(initializer)
 OncePerProcess{T}(initializer::F) where {T, F} = OncePerProcess{T, F}(initializer)
+OncePerProcess(initializer::Type{U}) where U = OncePerProcess{Base.promote_op(initializer), Type{U}}(initializer)
 OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeof(initializer)}(initializer)
-@inline function (once::OncePerProcess{T})() where T
+@inline function (once::OncePerProcess{T,F})() where {T,F}
     state = (@atomic :acquire once.state)
     if state != PerStateHasrun
-        (@noinline function init_perprocesss(once, state)
+        (@noinline function init_perprocesss(once::OncePerProcess{T,F}, state::UInt8) where {T,F}
             state == PerStateErrored && error("OncePerProcess initializer failed previously")
             once.allow_compile_time || __precompile__(false)
             lock(once.lock)
             try
                 state = @atomic :monotonic once.state
                 if state == PerStateInitial
+                    ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                        once, :value, nothing)
+                    ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                        once, :state, PerStateInitial)
                     once.value = once.initializer()
                 elseif state == PerStateErrored
                     error("OncePerProcess initializer failed previously")
@@ -762,7 +868,7 @@ end
 
 
 # share a lock/condition, since we just need it briefly, so some contention is okay
-const PerThreadLock = ThreadSynchronizer()
+const PerThreadLock = Threads.SpinLock()
 """
     OncePerThread{T}(init::Function)() -> T
 
@@ -780,9 +886,12 @@ if that behavior is correct within your library's threading-safety design.
     may get deprecated in the future. If initializer yields, the thread running the current
     task after the call might not be the same as the one at the start of the call.
 
-See also: [`OncePerTask`](@ref).
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
-## Example
+See also [`OncePerTask`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> const thread_state = Base.OncePerThread{Vector{UInt32}}() do
@@ -809,23 +918,21 @@ mutable struct OncePerThread{T, F} <: Function
     function OncePerThread{T,F}(initializer::F) where {T, F}
         xs, ss = AtomicMemory{T}(), AtomicMemory{UInt8}()
         once = new{T,F}(xs, ss, initializer)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :xs, xs)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :ss, ss)
         return once
     end
 end
+OncePerThread{T}(initializer::Type{U}) where {T, U} = OncePerThread{T,Type{U}}(initializer)
 OncePerThread{T}(initializer::F) where {T, F} = OncePerThread{T,F}(initializer)
+OncePerThread(initializer::Type{U}) where U = OncePerThread{Base.promote_op(initializer), Type{U}}(initializer)
 OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(initializer)}(initializer)
-@inline (once::OncePerThread)() = once[Threads.threadid()]
-@inline function getindex(once::OncePerThread, tid::Integer)
+@inline (once::OncePerThread{T,F})() where {T,F} = once[Threads.threadid()]
+@inline function getindex(once::OncePerThread{T,F}, tid::Integer) where {T,F}
     tid = Int(tid)
     ss = @atomic :acquire once.ss
     xs = @atomic :monotonic once.xs
     # n.b. length(xs) >= length(ss)
     if tid <= 0 || tid > length(ss) || (@atomic :acquire ss[tid]) != PerStateHasrun
-        (@noinline function init_perthread(once, tid)
+        (@noinline function init_perthread(once::OncePerThread{T,F}, tid::Int) where {T,F}
             local ss = @atomic :acquire once.ss
             local xs = @atomic :monotonic once.xs
             local len = length(ss)
@@ -849,6 +956,12 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                 ss = @atomic :monotonic once.ss
                 xs = @atomic :monotonic once.xs
                 if tid > length(ss)
+                    if length(ss) == 0 # We are the first to initialize
+                        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                            once, :xs, xs)
+                        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                            once, :ss, ss)
+                    end
                     @assert len <= length(ss) <= length(newss) "logical constraint violation"
                     fill_monotonic!(newss, PerStateInitial)
                     xs = copyto_monotonic!(newxs, xs)
@@ -859,7 +972,15 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                 state = @atomic :monotonic ss[tid]
                 while state == PerStateConcurrent
                     # lost race, wait for notification this is done running elsewhere
-                    wait(PerThreadLock) # wait for initializer to finish without releasing this thread
+                    # without releasing this thread
+                    unlock(PerThreadLock)
+                    while state == PerStateConcurrent
+                        # spin loop until ready
+                        ss = @atomic :acquire once.ss
+                        state = @atomic :monotonic ss[tid]
+                        GC.safepoint()
+                    end
+                    lock(PerThreadLock)
                     ss = @atomic :monotonic once.ss
                     state = @atomic :monotonic ss[tid]
                 end
@@ -873,7 +994,6 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                         lock(PerThreadLock)
                         ss = @atomic :monotonic once.ss
                         @atomic :release ss[tid] = PerStateErrored
-                        notify(PerThreadLock)
                         rethrow()
                     end
                     # store result and notify waiters
@@ -882,7 +1002,6 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                     @atomic :release xs[tid] = result
                     ss = @atomic :monotonic once.ss
                     @atomic :release ss[tid] = PerStateHasrun
-                    notify(PerThreadLock)
                 elseif state == PerStateErrored
                     error("OncePerThread initializer failed previously")
                 elseif state != PerStateHasrun
@@ -904,9 +1023,12 @@ end
 Calling a `OncePerTask` object returns a value of type `T` by running the function `initializer`
 exactly once per Task. All future calls in the same Task will return exactly the same value.
 
-See also: [`task_local_storage`](@ref).
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
-## Example
+See also [`task_local_storage`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> const task_state = Base.OncePerTask{Vector{UInt32}}() do
@@ -929,10 +1051,12 @@ false
 mutable struct OncePerTask{T, F} <: Function
     const initializer::F
 
+    OncePerTask{T}(initializer::Type{U}) where {T, U} = new{T,Type{U}}(initializer)
     OncePerTask{T}(initializer::F) where {T, F} = new{T,F}(initializer)
     OncePerTask{T,F}(initializer::F) where {T, F} = new{T,F}(initializer)
+    OncePerTask(initializer::Type{U}) where U = new{Base.promote_op(initializer), Type{U}}(initializer)
     OncePerTask(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(initializer)
 end
-@inline function (once::OncePerTask{T})() where {T}
+@inline function (once::OncePerTask{T,F})() where {T,F}
     get!(once.initializer, task_local_storage(), once)::T
 end

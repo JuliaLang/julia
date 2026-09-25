@@ -26,7 +26,7 @@ extern "C" {
 DLLEXPORT const char *MakeIdentityFunction(jl_value_t* jl_AnyTy) {
     LLVMContext Ctx;
     // FIXME: get TrackedTy via jl_type_to_llvm(Ctx, jl_AnyTy)
-    Type *TrackedTy = PointerType::get(StructType::get(Ctx), AddressSpace::Tracked);
+    Type *TrackedTy = PointerType::get(Ctx, AddressSpace::Tracked);
     Module *M = new llvm::Module("shadow", Ctx);
     Function *F = Function::Create(
         FunctionType::get(

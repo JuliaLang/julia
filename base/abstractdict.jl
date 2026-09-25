@@ -51,7 +51,7 @@ struct ValueIterator{T<:AbstractDict}
 end
 
 function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
-    print(io, T.name.name, " for a ")
+    print(io, nameof(T), " for a ")
     summary(io, iter.dict)
 end
 
@@ -92,7 +92,7 @@ But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
 and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+'\\S'.*\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -118,7 +118,7 @@ But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
 and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -144,7 +144,7 @@ But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
 and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
 Dict{String, Int64} with 3 entries:
   "c" => 3
@@ -185,7 +185,7 @@ pairs(a::AbstractDict) = a
 Create an empty `AbstractDict` container which can accept indices of type `index_type` and
 values of type `value_type`. The second and third arguments are optional and default to the
 input's `keytype` and `valtype`, respectively. (If only one of the two types is specified,
-it is assumed to be the `value_type`, and the `index_type` we default to `keytype(a)`).
+it is assumed to be the `value_type`, and the `index_type` defaults to `keytype(a)`).
 
 Custom `AbstractDict` subtypes may choose which specific dictionary type is best suited to
 return for the given index and value types, by specializing on the three-argument signature.
@@ -207,7 +207,7 @@ Update collection with pairs from the other collections.
 See also [`merge`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
@@ -232,6 +232,7 @@ function merge!(d::AbstractDict, others::AbstractDict...)
     end
     return d
 end
+typeof(merge!).name.max_methods = UInt8(1)
 
 """
     mergewith!(combine, d::AbstractDict, others::AbstractDict...) -> d
@@ -251,7 +252,7 @@ compatibility.
     `mergewith!` requires Julia 1.5 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
@@ -282,6 +283,7 @@ Dict{Int64, Int64} with 3 entries:
 function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
     foldl(mergewith!(combine), others; init = d)
 end
+typeof(mergewith!).name.max_methods = UInt8(1)
 
 function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
     for (k, v) in d2
@@ -332,7 +334,7 @@ value for that key will be the value it has in the last collection listed.
 See also [`mergewith`](@ref) for custom handling of values with the same key.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String, Float64} with 2 entries:
   "bar" => 42.0
@@ -358,11 +360,11 @@ Dict{String, Float64} with 3 entries:
 """
 merge(d::AbstractDict, others::AbstractDict...) =
     merge!(_typeddict(d, others...), others...)
+typeof(merge).name.max_methods = UInt8(1)
 
 """
     mergewith(combine, d::AbstractDict, others::AbstractDict...)
     mergewith(combine)
-    merge(combine, d::AbstractDict, others::AbstractDict...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
@@ -370,14 +372,11 @@ the merged collections. Values with the same key will be combined using the
 combiner function.  The curried form `mergewith(combine)` returns the function
 `(args...) -> mergewith(combine, args...)`.
 
-Method `merge(combine::Union{Function,Type}, args...)` as an alias of
-`mergewith(combine, args...)` is still available for backward compatibility.
-
 !!! compat "Julia 1.5"
     `mergewith` requires Julia 1.5 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String, Float64} with 2 entries:
   "bar" => 42.0
@@ -405,8 +404,7 @@ Dict{Any, Any} with 1 entry:
 mergewith(combine, d::AbstractDict, others::AbstractDict...) =
     mergewith!(combine, _typeddict(d, others...), others...)
 mergewith(combine) = (args...) -> mergewith(combine, args...)
-merge(combine::Callable, d::AbstractDict, others::AbstractDict...) =
-    merge!(combine, _typeddict(d, others...), others...)
+typeof(mergewith).name.max_methods = UInt8(1)
 
 promoteK(K) = K
 promoteV(V) = V
@@ -425,7 +423,7 @@ Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
 Dict{Int64, String} with 3 entries:
   2 => "b"
@@ -467,7 +465,7 @@ Return a copy of `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b")
 Dict{Int64, String} with 2 entries:
   2 => "b"
@@ -660,7 +658,7 @@ of `dict` then it will be converted to the value type if possible and otherwise 
     `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> d = Dict(:a => 1, :b => 2)
 Dict{Symbol, Int64} with 2 entries:
   :a => 1

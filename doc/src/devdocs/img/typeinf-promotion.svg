@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="485" height="210" version="1.1" viewBox="0 0 161.67 70" xmlns="http://www.w3.org/2000/svg">
+ <g transform="translate(-82.026 -119.5)">
+  <rect x="82.026" y="119.5" width="161.67" height="70" fill="#fff"/>
+  <g transform="translate(1.6667 1.6667)">
+   <g>
+    <path d="m90 125h10" fill="none" stroke="#000"/>
+    <path d="m150 125h90" fill="none" stroke="#000"/>
+    <text x="88.028793" y="126.785" fill="#000000" font-family="sans-serif" font-size="5px" xml:space="preserve"><tspan x="88.028793" y="126.785" font-size="5px" text-align="end" text-anchor="end">T1</tspan></text>
+   </g>
+   <path d="m100 120v10" fill="none" stroke="#000"/>
+   <path d="m125 120v10" fill="none" stroke="#000"/>
+   <g fill="none" font-family="sans-serif" stroke="#000000" text-anchor="middle">
+    <text x="100" y="135" font-size="5px" text-align="center" xml:space="preserve"><tspan x="100" y="135" fill="#000000" font-size="5px" stroke="none" text-align="center" text-anchor="middle">acq W</tspan></text>
+    <text x="137.68201" y="125.83799" font-size="4px" text-align="center" xml:space="preserve"><tspan x="137.68201" y="125.83799" fill="#000000" font-size="4px" stroke="none" text-align="center" text-anchor="middle">promote</tspan></text>
+    <text x="175" y="176.49998" font-size="4px" text-align="center" xml:space="preserve"><tspan x="175" y="176.49998" fill="#000000" font-size="4px" stroke="none" text-align="center" text-anchor="middle">new method</tspan></text>
+    <text x="125" y="135" font-size="5px" text-align="center" xml:space="preserve"><tspan x="125" y="135" fill="#000000" font-size="5px" stroke="none" text-align="center" text-anchor="middle">read W</tspan></text>
+   </g>
+   <g fill="none" stroke="#000">
+    <path d="m100 125h20" stroke-dasharray="1, 1"/>
+    <g>
+     <rect x="120" y="120" width="30" height="10"/>
+     <path d="m230 150 10-2e-5"/>
+     <path d="m205 145v10"/>
+    </g>
+   </g>
+   <text x="217.68199" y="148.798" fill="#000000" font-family="sans-serif" font-size="4px" text-align="center" text-anchor="middle" xml:space="preserve"><tspan x="217.68199" y="148.798" text-align="center">promote</tspan><tspan x="217.68199" y="153.798" text-align="center">fail</tspan></text>
+   <g fill="none" stroke="#000">
+    <path d="m135 150 65-1e-5" stroke-dasharray="1, 1"/>
+    <g>
+     <rect x="200" y="145" width="30" height="10"/>
+     <path d="m160 170v10"/>
+     <path d="m190 170v10"/>
+     <rect x="155" y="170" width="40" height="10"/>
+     <path d="m90 150h45"/>
+    </g>
+   </g>
+   <g>
+    <text x="87.616295" y="151.80998" fill="#000000" font-family="sans-serif" font-size="5px" xml:space="preserve"><tspan x="87.616295" y="151.80998" font-size="5px" text-align="end" text-anchor="end">T2</tspan></text>
+    <path d="m90 175h65" fill="none" stroke="#000"/>
+    <text x="87.616295" y="176.80998" fill="#000000" font-family="sans-serif" font-size="5px" xml:space="preserve"><tspan x="87.616295" y="176.80998" font-size="5px" text-align="end" text-anchor="end">T3</tspan></text>
+   </g>
+   <g fill="none">
+    <path d="m135 145v10" stroke="#000"/>
+    <g font-family="sans-serif" font-size="5px" stroke="#000000" text-anchor="middle">
+     <text x="135" y="160" text-align="center" xml:space="preserve"><tspan x="135" y="160" fill="#000000" font-size="5px" stroke="none" text-align="center" text-anchor="middle">acq W</tspan></text>
+     <text x="160" y="185" text-align="center" xml:space="preserve"><tspan x="160" y="185" fill="#000000" font-size="5px" stroke="none" text-align="center" text-anchor="middle">read W</tspan></text>
+     <text x="205" y="160" text-align="center" xml:space="preserve"><tspan x="205" y="160" fill="#000000" font-size="5px" stroke="none" text-align="center" text-anchor="middle">read W+1</tspan></text>
+     <text x="190" y="185" text-align="center" xml:space="preserve"><tspan x="190" y="185" fill="#000000" font-size="5px" stroke="none" text-align="center" text-anchor="middle">rel W+1</tspan></text>
+    </g>
+    <path d="m195 175h45" stroke="#000"/>
+   </g>
+  </g>
+ </g>
+</svg>

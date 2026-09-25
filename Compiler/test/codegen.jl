@@ -4,6 +4,7 @@
 
 using Random
 using InteractiveUtils
+using InteractiveUtils: code_llvm, code_native
 using Libdl
 using Test
 
@@ -21,7 +22,7 @@ end
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
     params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-    d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, "", params)
     sprint(print, d)
 end
 
@@ -133,14 +134,14 @@ if !is_debug_build && opt_level > 0
     # Array
     test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Vector{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize, but do need to check isvector
-    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
+    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic volatile $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
     # Memory
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Any}})), [Iptr])
     # Check that we load the elsize and isunion from the typeof layout
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
     # Primitive Type size should be folded to a constant
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Ptr})), String[])
 
@@ -387,6 +388,40 @@ str = String(take!(io))
 @test occursin("aliasscope", str)
 @test occursin("noalias", str)
 
+# Issue #63129: inside `@aliasscope`, only loads of `Const` arrays may be assumed not to
+# alias the stores in the scope. A recurrence carried through a plain array must be exact.
+function fwd63129!(B, a, n)
+    for l in axes(B, 1)
+        @Base.Experimental.aliasscope begin
+            @inbounds for i in 2:n
+                B[l, i] -= a[i] * B[l, i-1]
+            end
+        end
+    end
+    return B
+end
+function acc63129!(output, input, n)
+    for I in CartesianIndices(output)
+        i, j = I.I
+        @Base.Experimental.aliasscope begin
+            for k in j:n
+                output[I] += input[i, k]
+            end
+        end
+    end
+    return output
+end
+let n = 16, B = rand(4, n), a = rand(n)
+    Bref = copy(B)
+    for l in axes(Bref, 1), i in 2:n
+        Bref[l, i] -= a[i] * Bref[l, i-1]
+    end
+    @test fwd63129!(copy(B), a, n) == Bref
+    input = rand(n, n)
+    ref = [sum(@view input[i, j:n]) for i in 1:n, j in 1:n]
+    @test acc63129!(zeros(n, n), input, n) ≈ ref
+end
+
 # Issue #10208 - Unnecessary boxing for calling objectid
 struct FooDictHash{T}
     x::T
@@ -409,7 +444,10 @@ function g_dict_hash_alloc()
 end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
-@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.1 # less that 10% difference
+# Take the minimum of several runs so that a one-time allocation inside the
+# measured call (e.g. lazy compilation of a call target) does not skew the ratio
+min_dict_hash_alloc(f) = minimum(@allocated(f()) for _ in 1:3)
+@test abs(min_dict_hash_alloc(f_dict_hash_alloc) / min_dict_hash_alloc(g_dict_hash_alloc) - 1) < 0.3
 
 # returning an argument shouldn't alloc a new box
 @noinline f33829(x) = (global called33829 = true; x)
@@ -801,7 +839,8 @@ function f34459(args...)
     Base.pointerset(args[1], 1, 1, 1)
     return
 end
-@test !occursin("jl_f_tuple", get_llvm(f34459, Tuple{Ptr{Int}, Type{Int}}, true, false, false))
+# only the egality type `TypeEgal{Int}` is a ghost that codegen can elide (#61323)
+@test !occursin("jl_f_tuple", get_llvm(f34459, Tuple{Ptr{Int}, Core.TypeEgal{Int}}, true, false, false))
 
 # issue #48394: incorrectly-inferred getproperty shouldn't introduce invalid cgval_t
 #               when dealing with unions of ghost values
@@ -882,7 +921,7 @@ let io = IOBuffer()
     code_llvm(io,foo54166, (Vector{Union{Missing,Int}}, Int, Int), dump_module=true, raw=true)
     str = String(take!(io))
     @test !occursin("jtbaa_unionselbyte", str)
-    @test occursin("jtbaa_arrayselbyte", str)
+    @test occursin("jtbaa_memoryselbyte", str)
 end
 
 ex54166 = Union{Missing, Int64}[missing -2; missing -2];
@@ -950,6 +989,16 @@ for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
     end
 end
 
+# Issue #42326
+primitive type PadAfter64_42326 448 end
+mutable struct CheckPadAfter64_42326
+    a::UInt64
+    pad::PadAfter64_42326
+    b::UInt64
+end
+@test fieldoffset(CheckPadAfter64_42326, 3) == 80
+@test sizeof(CheckPadAfter64_42326) == 96
+
 @noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
 @test f55768(Vector)
 @test f55768(Vector{T} where T)
@@ -1006,4 +1055,209 @@ let
        @noinline copy!([], default_rng_orig)
    end
    nothing
+end
+
+# Test that turning an implicit import into an explicit one doesn't pessimize codegen
+module TurnedIntoExplicit
+    using Test
+    import ..get_llvm
+
+    module ReExportBitCast
+        export bitcast
+        import Base: bitcast
+    end
+    using .ReExportBitCast
+
+    f(x::UInt) = bitcast(Float64, x)
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+
+    import Base: bitcast
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+end
+
+# Test codegen for `isdefinedglobal` of constant (#57872)
+const x57872 = "Hello"
+f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x57872)), x57872) # Extra globalref here to force world age bounds
+@test f57872() == (true, "Hello")
+
+@noinline f_mutateany(@nospecialize x) = x[] = 1
+g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
+@test g_mutateany() === 1
+
+# 58470 tbaa for unionselbyte of heap allocated mutables
+mutable struct Wrapper58470
+    x::Union{Nothing,Int}
+end
+
+function findsomething58470(dict, inds)
+    default = Wrapper58470(nothing)
+    for i in inds
+        x = get(dict, i, default).x
+        if !isnothing(x)
+            return x
+        end
+    end
+    return nothing
+end
+
+let io = IOBuffer()
+    code_llvm(io, findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}, dump_module=true, raw=true, optimize=false)
+    str = String(take!(io))
+    @test !occursin("jtbaa_unionselbyte", str)
+end
+
+let io = IOBuffer()
+    code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
+    str = String(take!(io))
+    @test occursin("julia.field_write_barrier", str)
+end
+
+# Aggregate barriers identify the stored payload's references, including locked elements.
+struct FieldBarrierElement
+    tag::Int
+    a::Any
+    b::Any
+    c::Any
+end
+unset_field_barrier(r, ::Val{order}) where {order} = Core.memoryrefunset!(r, order, false)
+set_field_barrier(r, x, ::Val{order}) where {order} = (Core.memoryrefset!(r, x, order, false); nothing)
+swap_field_barrier(r, x, ::Val{order}) where {order} = Core.memoryrefswap!(r, x, order, false)
+set_object_field_barrier(r, x) = (r[] = x; nothing)
+
+@testset "aggregate field barriers" begin
+    T = FieldBarrierElement
+    function check_slots(ir, slot_as; clear=false)
+        lines = split(ir, '\n')
+        barriers = filter(line -> occursin("call void", line) && occursin("@julia.field_write_barrier", line), lines)
+        @test length(barriers) == 1
+        isempty(barriers) && return
+        slots = [m.captures[1] for m in eachmatch(r"ptr addrspace\((?:11|13)\) (%[^ ,]+), ptr addrspace\(10\)", only(barriers))]
+        @test length(slots) == 3
+        @test occursin("@julia.field_write_barrier.p$slot_as", only(barriers))
+        if clear
+            @test length(collect(eachmatch(r"ptr addrspace\(10\) null", only(barriers)))) == 3
+        end
+        geps = Dict(m.captures[1] => (m.captures[2], parse(Int, m.captures[3]))
+                    for m in eachmatch(r"(%[^ ,]+) = getelementptr(?: inbounds)? i8, ptr addrspace\((?:11|13)\) (%[^ ,]+), i(?:32|64) ([0-9]+)", ir))
+        payloads = String[]
+        offsets = Int[]
+        for slot in slots
+            @test haskey(geps, slot)
+            haskey(geps, slot) || continue
+            payload, offset = geps[slot]
+            push!(payloads, payload)
+            push!(offsets, offset)
+        end
+        @test offsets == [fieldoffset(T, i) for i in 2:4]
+        @test length(unique(payloads)) == 1
+        if clear && !isempty(payloads)
+            @test any(line -> occursin("store ", line) && occursin("zeroinitializer, ptr addrspace(13) $(first(payloads)),", line), lines)
+        end
+    end
+    for (M, order) in ((Memory{T}, :not_atomic), (AtomicMemory{T}, :sequentially_consistent))
+        R = typeof(GenericMemoryRef(M(undef, 0)))
+        check_slots(get_llvm(unset_field_barrier, Tuple{R,Val{order}}, true, false, false), 13; clear=true)
+        for f in (set_field_barrier, swap_field_barrier)
+            check_slots(get_llvm(f, Tuple{R,T,Val{order}}, true, false, false), 13)
+        end
+    end
+    check_slots(get_llvm(set_object_field_barrier, Tuple{Base.RefValue{T},T}, true, false, false), 11)
+end
+
+# Cancellation-token clears and rebinds must barrier the slot before storing it.
+cancellation_binding_barrier(src) = Core.cancellation_point!(src)
+@testset "cancellation binding barriers" begin
+    ir = get_llvm(cancellation_binding_barrier, Tuple{Union{Nothing,Core.CancellationTokenSource}}, true, false, false)
+    lines = split(ir, '\n')
+    barriers = findall(line -> occursin("call void", line) && occursin("@julia.field_write_barrier.p11", line), lines)
+    @test length(barriers) == 2
+    casts = Dict(m.captures[1] => m.captures[2]
+                 for m in eachmatch(r"(%[^ ,]+) = addrspacecast ptr (%[^ ,]+) to ptr addrspace\(11\)", ir))
+    for i in barriers
+        operands = match(r"@julia.field_write_barrier.p11\(ptr addrspace\(10\) [^,]+, ptr addrspace\(11\) ([^,]+), ptr addrspace\(10\) (.*)\)", lines[i])
+        @test operands !== nothing
+        operands === nothing && continue
+        slot, child = operands.captures
+        destination = haskey(casts, slot) ? "ptr $(casts[slot])" : "ptr addrspace(11) $slot"
+        @test occursin("store atomic ptr addrspace(10) $child, $destination", lines[i + 1])
+    end
+end
+
+# Test phi node codegen for union types with inline roots
+function union_phi_inline_roots(x::Bool)
+    if x
+        return ("Q8", 1)
+    else
+        return ("Q10", Ref(5))
+    end
+end
+@test union_phi_inline_roots(true) === ("Q8", 1)
+
+mutable struct AnyBoxEA val::Any end
+function preserve_any_ea(x)
+    b = AnyBoxEA(x)
+    GC.@preserve b begin
+        return b.val
+    end
+end
+function loop_preserve_any_ea(n)
+    s = "v"
+    for _ in 1:n
+        s = preserve_any_ea(s)::String
+    end
+    s
+end
+loop_preserve_any_ea(10)
+@test (@allocated loop_preserve_any_ea(10)) == 0
+
+# blackbox compiles to zero-cost inline asm, not a runtime call
+@testset "blackbox codegen" begin
+    # Scalar blackbox: should produce inline asm, no call
+    blackbox_int(x::Int) = Base.blackbox(x)
+    ir_int = get_llvm(blackbox_int, Tuple{Int})
+    @test !occursin("call ", strip_debug_calls(ir_int)) || occursin("asm", ir_int)
+    @test !occursin("jl_", ir_int)
+
+    # Pointer/boxed blackbox: should produce julia.blackbox intrinsic (lowered to asm after GC)
+    blackbox_str(x::String) = Base.blackbox(x)
+    ir_str = get_llvm(blackbox_str, Tuple{String}, true, false, false)
+    @test occursin("julia.blackbox", ir_str)
+
+    # blackbox preserves value identity at runtime
+    @test Base.blackbox(42) == 42
+    @test Base.blackbox([1,2,3]) == [1,2,3]
+
+    # blackbox does not allocate for isbits types
+    @test (@allocated Base.blackbox(42)) == 0
+
+    # No gc frame needed for scalar blackbox
+    @test !occursin("%gcframe", get_llvm(blackbox_int, Tuple{Int}))
+
+    # Struct blackbox: uses memory clobber for unboxed aggregates
+    struct BlackboxTestStruct
+        a::Float64
+        b::Float64
+    end
+    blackbox_struct(x::BlackboxTestStruct) = Base.blackbox(x)
+    @test blackbox_struct(BlackboxTestStruct(1.0, 2.0)) == BlackboxTestStruct(1.0, 2.0)
+    ir_struct = get_llvm(blackbox_struct, Tuple{BlackboxTestStruct})
+    @test occursin("~{memory}", ir_struct)
+    @test !occursin("jl_", strip_debug_calls(ir_struct))
+
+    # blackbox barriers Julia-level constprop: return type must be Int, not Const(42)
+    @test Base.return_types() do; Base.blackbox(42); end |> only === Int
+end
+
+# sret parameters must have an alignment attribute (required by LLVM LangRef).
+@testset "sret alignment attribute" begin
+    struct SretAlignTest
+        a::Float32
+        b::Float32
+        c::Float32
+    end
+    @noinline f_srettest(x::Float32) = SretAlignTest(x, x+1, x+2)
+    ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
+    @test occursin(r"sret\([^)]+\) align \d+", ir)
 end

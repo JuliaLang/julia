@@ -2,7 +2,6 @@
 
 #define JL_RUNTIME_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
-    XX(jl_add_standard_imports) \
     XX(jl_adopt_thread) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
@@ -22,6 +21,7 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
+    XX(jl_argument_datatypename) \
     XX(jl_array_del_end) \
     XX(jl_array_eltype) \
     XX(jl_array_grow_end) \
@@ -40,6 +40,7 @@
     XX(jl_atomic_store_bits) \
     XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
+    XX(jl_autoinit_and_adopt_thread) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_bitcast) \
@@ -92,12 +93,16 @@
     XX(jl_copy_code_info) \
     XX(jl_cpu_threads) \
     XX(jl_effective_threads) \
+    XX(jl_precompile_jobserver_create) \
+    XX(jl_precompile_jobserver_active) \
+    XX(jl_precompile_jobserver_destroy) \
+    XX(jl_precompile_jobserver_acquire) \
+    XX(jl_precompile_jobserver_release) \
     XX(jl_crc32c_sw) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \
     XX(jl_current_exception) \
     XX(jl_debug_method_invalidation) \
-    XX(jl_defines_or_exports_p) \
     XX(jl_deprecate_binding) \
     XX(jl_dlclose) \
     XX(jl_dlopen) \
@@ -111,7 +116,6 @@
     XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
-    XX(jl_environ) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
@@ -126,11 +130,6 @@
     XX(jl_exit) \
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
-    XX(jl_expand) \
-    XX(jl_expand_stmt) \
-    XX(jl_expand_stmt_with_loc) \
-    XX(jl_expand_with_loc) \
-    XX(jl_expand_with_loc_warn) \
     XX(jl_field_index) \
     XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
@@ -139,18 +138,22 @@
     XX(jl_gc_add_quiescent) \
     XX(jl_gc_allocobj) \
     XX(jl_gc_alloc_typed) \
+    XX(jl_gc_alloc_typed_reset_safe) \
     XX(jl_gc_big_alloc) \
+    XX(jl_gc_big_alloc_reset_safe) \
     XX(jl_gc_collect) \
     XX(jl_gc_conservative_gc_support_enabled) \
     XX(jl_gc_counted_calloc) \
     XX(jl_gc_counted_free_with_size) \
     XX(jl_gc_counted_malloc) \
     XX(jl_gc_counted_realloc_with_old_size) \
+    XX(jl_gmp_counted_free_with_size) \
+    XX(jl_gmp_counted_malloc) \
+    XX(jl_gmp_counted_realloc_with_old_size) \
     XX(jl_gc_diff_total_bytes) \
     XX(jl_gc_enable) \
     XX(jl_gc_enable_conservative_gc_support) \
     XX(jl_gc_enable_finalizers) \
-    XX(jl_gc_external_obj_hdr_size) \
     XX(jl_gc_find_taggedvalue_pool) \
     XX(jl_gc_get_total_bytes) \
     XX(jl_gc_get_max_memory) \
@@ -163,12 +166,14 @@
     XX(jl_gc_mark_queue_obj) \
     XX(jl_gc_mark_queue_objarray) \
     XX(jl_gc_max_internal_obj_size) \
+    XX(jl_gc_multi_wb_cold) \
     XX(jl_gc_new_weakref) \
     XX(jl_gc_new_weakref_th) \
     XX(jl_gc_num) \
     XX(jl_gc_small_alloc) \
-    XX(jl_gc_queue_multiroot) \
+    XX(jl_gc_small_alloc_reset_safe) \
     XX(jl_gc_queue_root) \
+    XX(jl_gc_queue_root_reset_safe) \
     XX(jl_gc_safepoint) \
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \
@@ -181,23 +186,24 @@
     XX(jl_gc_set_max_memory) \
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
-    XX(jl_gdblookup) \
+    XX(jl_gc_wb_cold) \
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \
+    XX(jl_declare_constant_val) \
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
+    XX(jl_gethugepagesize) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
     XX(jl_get_ARCH) \
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
-    XX(jl_get_binding_for_method_def) \
-    XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_get_sysimage_cpu_target) \
     XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
@@ -231,7 +237,6 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
-    XX(jl_method_lookup_by_tt) \
     XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_global_event_loop) \
@@ -243,11 +248,12 @@
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
     XX(jl_init) \
+    XX(jl_init_) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
-    XX(jl_init_with_image__threading) \
-    XX(jl_init__threading) \
+    XX(jl_init_with_image_file) \
+    XX(jl_init_with_image_handle) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -272,6 +278,7 @@
     XX(jl_istopmod) \
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
+    XX(jl_is_compilable) \
     XX(jl_is_const) \
     XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
@@ -287,17 +294,16 @@
     XX(jl_is_unary_and_binary_operator) \
     XX(jl_is_unary_operator) \
     XX(jl_lazy_load_and_lookup) \
-    XX(jl_lisp_prompt) \
     XX(jl_load) \
     XX(jl_load_) \
     XX(jl_load_and_lookup) \
     XX(jl_load_dynamic_library) \
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
+    XX(jl_lower) \
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
-    XX(jl_macroexpand1) \
     XX(jl_malloc) \
     XX(jl_malloc_stack) \
     XX(jl_matching_methods) \
@@ -320,7 +326,6 @@
     XX(jl_module_getloc) \
     XX(jl_module_public) \
     XX(jl_module_public_p) \
-    XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
     XX(jl_module_uuid) \
@@ -336,6 +341,10 @@
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \
+    XX(jl_begin_new_module) \
+    XX(jl_end_new_module) \
+    XX(jl_new_opaque_closure_from_code_info) \
+    XX(jl_new_opaque_closure_from_code_info_in_world) \
     XX(jl_new_primitivetype) \
     XX(jl_new_struct) \
     XX(jl_new_structt) \
@@ -346,26 +355,22 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
-    XX(jl_method_match_to_mi) \
-    XX(jl_get_unspecialized) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
     XX(jl_obvious_subtype) \
     XX(jl_operator_precedence) \
     XX(jl_parse) \
-    XX(jl_parse_all) \
-    XX(jl_parse_input_line) \
     XX(jl_parse_opts) \
-    XX(jl_parse_string) \
     XX(jl_pathname_for_handle) \
+    XX(jl_pathname_for_symbol) \
     XX(jl_pchar_to_array) \
     XX(jl_pchar_to_string) \
     XX(jl_pointerref) \
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
     XX(jl_pop_handler_noexcept) \
-    XX(jl_preload_sysimg_so) \
+    XX(jl_preload_sysimg) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
     XX(jl_print_backtrace) \
@@ -391,11 +396,11 @@
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
     XX(jl_resolve_definition_effects_in_ir) \
+    XX(jl_resolve_typegroup) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
     XX(jl_restore_system_image) \
-    XX(jl_restore_system_image_data) \
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
     XX(jl_running_on_valgrind) \
@@ -425,9 +430,11 @@
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
     XX(jl_spawn) \
+    XX(jl_sparam_slot_value) \
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
     XX(jl_static_show) \
+    XX(jl_safe_static_show) \
     XX(jl_static_show_func_sig) \
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
@@ -463,6 +470,7 @@
     XX(jl_too_many_args) \
     XX(jl_toplevel_eval) \
     XX(jl_toplevel_eval_in) \
+    XX(jl_eval_thunk) \
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
@@ -508,7 +516,9 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
+    XX(jl_wakeup_threadpool) \
     XX(jl_write_compiler_output) \
+    XX(jl_membarrier) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_setjmp) \
@@ -517,16 +527,17 @@
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
-    YY(jl_emit_codeinst_to_jit) \
-    YY(jl_extern_c) \
+    YY(jl_emit_codeinsts_to_jit) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
-    YY(jl_get_llvm_mis) \
+    YY(jl_get_llvm_cis) \
+    YY(jl_get_llvm_mi_cache_order) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
@@ -535,9 +546,13 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_codeinst) \
-    YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
+    YY(jl_decorate_llvm_module) \
     YY(jl_jit_total_bytes) \
+    YY(jl_objcache_disabled_notice) \
+    YY(jl_objcache_kv_get) \
+    YY(jl_objcache_kv_put) \
+    YY(jl_objcache_kv_enabled) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \
@@ -545,17 +560,20 @@
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \
     YY(jl_get_function_id) \
+    YY(jl_struct_to_llvm) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
     YY(jl_jit_abi_converter) \
+    YY(jl_jit_register_ci) \
+    YY(jl_jit_unregister_ci) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
-    YY(JLJITGetExternalJITDylib) \
+    YY(JLJITCreateJITDylib) \
     YY(JLJITAddObjectFile) \
     YY(JLJITAddLLVMIRModule) \
-    YY(JLJITLookup) \
+    YY(JLJITJDLookup) \
     YY(JLJITMangleAndIntern) \
     YY(JLJITGetTripleString) \
     YY(JLJITGetGlobalPrefix) \

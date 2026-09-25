@@ -41,7 +41,7 @@ hello
 ```
 
 The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). If the external command fails to run
-successfully, the run method throws an [`ProcessFailedException`](@ref).
+successfully, the run method throws a [`ProcessFailedException`](@ref).
 
 If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
 can be used instead:
@@ -388,12 +388,12 @@ saturated throughput.
 We strongly encourage you to try all these examples to see how they work.
 
 ## `Cmd` Objects
-The backtick syntax create an object of type [`Cmd`](@ref). Such object may also be constructed directly from
+The backtick syntax creates an object of type [`Cmd`](@ref). Such an object may also be constructed directly from
 an existing `Cmd` or list of arguments:
 
 ```julia
 run(Cmd(`pwd`, dir=".."))
-run(Cmd(["pwd"], detach=true, ignorestatus=true))
+run(Cmd(Cmd(["pwd"]), detach=true, ignorestatus=true))
 ```
 
 This allows you to specify several aspects of the `Cmd`'s execution environment via keyword arguments. For

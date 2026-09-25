@@ -8,6 +8,8 @@ SubStr(s) = SubString("abc$(s)de", firstindex(s) + 3, lastindex(s) + 3)
         @test textwidth(c^3) == w*3
         @test w == @invoke textwidth(c::AbstractChar)
     end
+    @test textwidth('\xc0\xa0') == 1 # overlong
+    @test textwidth('\xf0\x80\x80') == 1 # malformed
     for i in 0x00:0x7f # test all ASCII chars (which have fast path)
         w = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
         c = Char(i)
@@ -65,6 +67,18 @@ end
     @test rpad("⟨k|H₁|k̃⟩", 12) |> textwidth == 12
     @test lpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
+    # wide pad with a remainder: fill whole columns when possible, otherwise
+    # overshoot the requested width
+    @test lpad("x", 6, '🍕') == "🍕🍕🍕x" == lpad("x", 6, "🍕")
+    @test rpad("x", 6, '🍕') == "x🍕🍕🍕" == rpad("x", 6, "🍕")
+    @test lpad('x', 6, '🍕') == "🍕🍕🍕x"
+    @test rpad('x', 6, '🍕') == "x🍕🍕🍕"
+    @test lpad("x", 6, "🍕a") == "🍕a🍕x"
+    @test rpad("x", 6, "🍕a") == "x🍕a🍕"
+    @test lpad("x", 5, "🍕a") == "🍕a🍕x"
+    @test rpad("x", 5, "🍕a") == "x🍕a🍕"
+    @test lpad("x", 7, "a🍕b") == "a🍕ba🍕x"
+    @test rpad("x", 7, "a🍕b") == "xa🍕ba🍕"
     for pad in (rpad, lpad), p in ('\0', "\0", "\0\0", "\u302")
         if ncodeunits(p) == 1
             @test_throws r".*has zero textwidth.*maybe you want.*bytes.*" pad("foo", 10, p)
@@ -176,7 +190,7 @@ end
         @test collect(Iterators.partition("foobars",n))[1]=="foobars"
     end
 
-    # HOWEVER enumerate explicitly slices String "atoms" so `Chars` are returned
+    # HOWEVER enumerate explicitly slices String "atoms" so `Tuple{Int, Char}` pairs are returned
     let v=collect(Iterators.partition(enumerate("foobars"),1))
         @test v==Vector{Tuple{Int64, Char}}[[(1, 'f')],[(2, 'o')],[(3, 'o')],[(4, 'b')],[(5, 'a')],[(6, 'r')], [(7, 's')]]
     end
@@ -707,6 +721,11 @@ end
 
         @test isa(chopprefix(S("foo"), "fo"), SubString)
         @test isa(chopsuffix(S("foo"), "oo"), SubString)
+
+        @test chopprefix(S(""), 'z') == chopsuffix(S(""), 'z') == ""
+        @test chopprefix(S("吃齋"), '🍖') == chopsuffix(S("吃齋"), '🍖') == "吃齋"
+        @test chopprefix(S("äwesome"), 'ä') == "wesome"
+        @test chopsuffix(S("äwesome"), 'e') == "äwesom"
     end
 end
 

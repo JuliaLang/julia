@@ -25,40 +25,59 @@ provided scoped value taking priority over previous definitions.
 
 Let's first look at an example of **lexical** scope. A `let` statement begins
 a new lexical scope within which the outer definition of `x` is shadowed by
-it's inner definition.
+its inner definition.
 
-```julia
+```jldoctest
+julia> x = 1
+1
+
+julia> let x = 5
+           @show x
+       end;
+x = 5
+
+julia> @show x;
 x = 1
-let x = 5
-    @show x # 5
-end
-@show x # 1
 ```
 
 In the following example, since Julia uses lexical scope, the variable `x` in the body
 of `f` refers to the `x` defined in the global scope, and entering a `let` scope does
 not change the value `f` observes.
 
-```julia
+```jldoctest
+julia> x = 1
+1
+
+julia> f() = @show x
+f (generic function with 1 method)
+
+julia> let x = 5
+           f()
+       end;
 x = 1
-f() = @show x
-let x = 5
-    f() # 1
-end
-f() # 1
+
+julia> f();
+x = 1
 ```
 
 Now using a `ScopedValue` we can use **dynamic** scoping.
 
-```julia
-using Base.ScopedValues
+```jldoctest
+julia> using Base.ScopedValues
 
-x = ScopedValue(1)
-f() = @show x[]
-with(x=>5) do
-    f() # 5
-end
-f() # 1
+julia> x = ScopedValue(1)
+ScopedValue{Int64}(1)
+
+julia> f() = @show x[]
+f (generic function with 1 method)
+
+julia> with(x=>5) do
+           f()
+       end;
+x[] = 5
+
+julia> f();
+x[] = 1
 ```
 
 Note that the observed value of the `ScopedValue` is dependent on the execution
@@ -293,7 +312,9 @@ end
 ## API docs
 
 ```@docs
+Base.ScopedValues.AbstractScopedValue
 Base.ScopedValues.ScopedValue
+Base.ScopedValues.LazyScopedValue
 Base.ScopedValues.with
 Base.ScopedValues.@with
 Base.isassigned(::Base.ScopedValues.ScopedValue)
@@ -311,7 +332,7 @@ version of Julia.
 
 ## Design inspiration
 
-This design was heavily inspired by [JEPS-429](https://openjdk.org/jeps/429),
+This design was heavily inspired by [JEP 429](https://openjdk.org/jeps/429),
 which in turn was inspired by dynamically scoped free variables in many Lisp dialects. In particular Interlisp-D and its deep binding strategy.
 
-A prior design discussed was context variables ala [PEPS-567](https://peps.python.org/pep-0567/) and implemented in Julia as [ContextVariablesX.jl](https://github.com/tkf/ContextVariablesX.jl).
+A prior design discussed was context variables à la [PEP 567](https://peps.python.org/pep-0567/) and implemented in Julia as [ContextVariablesX.jl](https://github.com/tkf/ContextVariablesX.jl).

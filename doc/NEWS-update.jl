@@ -5,7 +5,7 @@ NEWS = get(ARGS, 1, "NEWS.md")
 
 s = read(NEWS, String)
 
-m = match(r"\[#[0-9]+\]:", s)
+m = match(r"^\[#[0-9]+\]:"m, s)
 if m !== nothing
     s = s[1:m.offset-1]
 end

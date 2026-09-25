@@ -4,6 +4,9 @@ using Test, Libdl, LibUnwind_jll
 
 @testset "LibUnwind_jll" begin
     if !Sys.isapple() && !Sys.iswindows()
-        @test dlsym(LibUnwind_jll.libunwind_handle, :unw_backtrace; throw_error=false) !== nothing
+        @test dlsym(LibUnwind_jll.libunwind, :unw_backtrace; throw_error=false) !== nothing
     end
+
+    # Preserve the JLLWrappers path compatibility accessor used by packages.
+    @test LibUnwind_jll.get_libunwind_path() == LibUnwind_jll.libunwind_path
 end

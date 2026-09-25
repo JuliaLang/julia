@@ -5,12 +5,12 @@ ITTAPI_GIT_URL := https://github.com/intel/ittapi.git
 ITTAPI_TAR_URL = https://api.github.com/repos/intel/ittapi/tarball/$1
 $(eval $(call git-external,ittapi,ITTAPI,CMakeLists.txt,,$(SRCCACHE)))
 
-ITTAPI_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DITT_API_IPT_SUPPORT= -DITT_API_FORTRAN_SUPPORT=0
+ITTAPI_OPTS := $(CMAKE_COMMON) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DITT_API_IPT_SUPPORT= -DITT_API_FORTRAN_SUPPORT=0
 
 $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(ITTAPI_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(ITTAPI_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured

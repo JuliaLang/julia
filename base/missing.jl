@@ -86,6 +86,8 @@ isequal(::Any, ::Missing) = false
 isless(::Missing, ::Missing) = false
 isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
+ispositive(::Missing) = missing
+isnegative(::Missing) = missing
 isapprox(::Missing, ::Missing; kwargs...) = missing
 isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing
@@ -100,19 +102,14 @@ for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
           :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
 end
-for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
+for f in (:zero, :one, :oneunit)
+    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
     @eval ($f)(::Type{Missing}) = missing
-    @eval function $(f)(::Type{Union{T, Missing}}) where T
-        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-        $f(T)
-    end
+    @eval ($f)(::Type{T}) where {T>:Missing} = $f(nonmissingtype_checked(T))
 end
-for f in (:(Base.float), :(Base.complex))
-    @eval $f(::Type{Missing}) = Missing
-    @eval function $f(::Type{Union{T, Missing}}) where T
-        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-        Union{$f(T), Missing}
-    end
+for f in (:float, :real, :complex)
+    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+    @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype(T)), Missing}
 end
 
 # Binary operators/functions
@@ -129,12 +126,14 @@ div(::Missing, ::Missing, r::RoundingMode) = missing
 div(::Missing, ::Number, r::RoundingMode) = missing
 div(::Number, ::Missing, r::RoundingMode) = missing
 
-min(::Missing, ::Missing) = missing
-min(::Missing, ::Any)     = missing
-min(::Any,     ::Missing) = missing
-max(::Missing, ::Missing) = missing
-max(::Missing, ::Any)     = missing
-max(::Any,     ::Missing) = missing
+for (f, result) in ((:min, missing), (:max, missing), (:minmax, (missing, missing)))
+    @eval begin
+        $f(::Missing, ::Missing) = $result
+        $f(::Missing, ::Any)     = $result
+        $f(::Any,     ::Missing) = $result
+        $f(::Missing) = $result
+    end
+end
 clamp(::Missing, lo, hi) = missing
 
 missing_conversion_msg(@nospecialize T) =

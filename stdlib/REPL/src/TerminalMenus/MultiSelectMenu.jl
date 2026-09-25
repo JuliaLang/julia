@@ -4,7 +4,7 @@
 
     MultiSelectMenu
 
-A menu that allows a user to select a multiple options from a list.
+A menu that allows a user to select multiple options from a list.
 
 # Sample Output
 
@@ -100,7 +100,7 @@ function pick(menu::MultiSelectMenu, cursor::Int)
         push!(menu.selected, cursor)
     end
 
-    return false #break out of the menu
+    return false #do not break out of the menu
 end
 
 function writeline(buf::IOBuffer, menu::MultiSelectMenu{MultiSelectConfig}, idx::Int, iscursor::Bool)

@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-#
 
 const WorkThunk = Any
 # #@eval struct WorkThunk
@@ -7,6 +6,12 @@ const WorkThunk = Any
 #    WorkThunk(work) = new($(Expr(:opaque_closure, :(Tuple{Vector{Tasks}}), :Bool, :Bool, :((tasks) -> work(tasks))))) # @opaque Vector{Tasks}->Bool (tasks)->work(tasks)
 # end
 # (p::WorkThunk)() = p.thunk()
+
+# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
+const InlineCostType = UInt16
+const MAX_INLINE_COST = typemax(InlineCostType)
+const MIN_INLINE_COST = InlineCostType(10)
+const MaybeCompressed = Union{CodeInfo, String}
 
 """
     AbstractInterpreter
@@ -65,14 +70,23 @@ SpecInfo(src::CodeInfo) = SpecInfo(
 A special wrapper that represents a local variable of a method being analyzed.
 This does not participate in the native type system nor the inference lattice, and it thus
 should be always unwrapped to `v.typ` when performing any type or lattice operations on it.
-`v.undef` represents undefined-ness of this static parameter. If `true`, it means that the
+
+`v.undef` represents undefined-ness of this local variable. If `true`, it means that the
 variable _may_ be undefined at runtime, otherwise it is guaranteed to be defined.
 If `v.typ === Bottom` it means that the variable is strictly undefined.
+
+`v.ssadef` represents the "reaching definition" for the variable.
+If zero, then the value comes from an argument.
+If negative, this refers to a "virtual ϕ-block" preceding the given index,
+that would have been inserted as the value of this slot in a truly SSA-form IR.
+If a slot has the same `ssadef` at two different points of execution,
+the slot contents are guaranteed to share identity (`x₀ === x₁`).
 """
 struct VarState
     typ
+    ssadef::Int
     undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
+    VarState(@nospecialize(typ), ssadef::Int, undef::Bool) = new(typ, ssadef, undef)
 end
 
 struct AnalysisResults
@@ -84,6 +98,9 @@ struct AnalysisResults
     # global const NULL_ANALYSIS_RESULTS = NullAnalysisResults()
 end
 const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
+
+# Abstract type for completed call inference results that can be stored in CallInfo
+abstract type InferredCallResult end
 
 """
     result::InferenceResult
@@ -109,20 +126,92 @@ mutable struct InferenceResult
     ipo_effects::Effects              # if inference is finished
     effects::Effects                  # if optimization is finished
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
-    is_src_volatile::Bool             # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
+    cache_world::UInt                 # exact inference world for session-local reuse, or zero
+    tombstone::Bool
+    replacement_ci::Union{Nothing,CodeInstance} # global publication winner selected before optimizer exposure
 
     #=== uninitialized fields ===#
-    ci::CodeInstance                  # CodeInstance if this result may be added to the cache
-    ci_as_edge::CodeInstance          # CodeInstance as the edge representing locally cached result
+    ci::CodeInstance                  # CodeInstance that will contain the result in full
     function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::Union{Nothing,BitVector})
         result = exc_result = src = nothing
         valid_worlds = WorldRange()
         ipo_effects = effects = Effects()
         analysis_results = NULL_ANALYSIS_RESULTS
         return new(mi, argtypes, overridden_by_const, result, exc_result, src,
-            valid_worlds, ipo_effects, effects, analysis_results, #=is_src_volatile=#false)
+            valid_worlds, ipo_effects, effects, analysis_results, zero(UInt),
+            false, nothing)
     end
 end
+
+"""
+    LocalInferenceProof
+
+A dependency certificate for inference work that is not represented by a published
+[`CodeInstance`](@ref). `edges` is an internal forward-edge stream whose entries may
+include other `LocalInferenceProof`s. Keeping those references as a shared graph avoids
+repeatedly copying the transitive dependency closure; the graph is flattened only when a
+result is published as a `CodeInstance`. The type is mutable only to give each proof a
+stable identity; both fields are immutable.
+"""
+mutable struct LocalInferenceProof
+    const valid_worlds::WorldRange
+    const edges::SimpleVector
+    function LocalInferenceProof(valid_worlds::WorldRange, edges::SimpleVector)
+        # Local proofs are not registered with the global invalidation machinery.
+        # Inference states cap their range at the current world counter, and exact-world
+        # local-cache reuse relies on that cap to keep an unregistered proof from
+        # claiming validity in a future world.
+        @assert first(valid_worlds) <= last(valid_worlds) <= get_world_counter()
+        for edge in edges
+            edge_worlds = if edge isa LocalInferenceProof
+                edge.valid_worlds
+            elseif edge isa CodeInstance && edge.min_world <= edge.max_world
+                # Skip a provisional CI (`min_world > max_world`); an SCC fills it
+                # before any proof containing it can escape.
+                WorldRange(edge.min_world, edge.max_world)
+            else
+                continue
+            end
+            @assert (first(edge_worlds) <= first(valid_worlds) &&
+                last(valid_worlds) <= last(edge_worlds))
+        end
+        return new(valid_worlds, edges)
+    end
+end
+
+const InferenceProof = Union{CodeInstance,LocalInferenceProof}
+
+proof_worlds(proof::CodeInstance) = WorldRange(proof.min_world, proof.max_world)
+proof_worlds(proof::LocalInferenceProof) = proof.valid_worlds
+
+"""
+    LocalInferenceResult
+
+The completed, reusable view of an [`InferenceResult`](@ref). `result` owns the inferred
+source and facts, while `proof` certifies them. The executable edge for a particular call
+is deliberately stored separately in its `CallInfo`.
+"""
+struct LocalInferenceResult <: InferredCallResult
+    result::InferenceResult
+    proof::InferenceProof
+    function LocalInferenceResult(result::InferenceResult, proof::InferenceProof, world::UInt)
+        @assert result.result !== nothing "cannot complete an unfinished InferenceResult"
+        @assert !result.tombstone "cannot complete a tombstoned InferenceResult"
+        @assert world in proof_worlds(proof) "inference proof does not cover its cache world"
+        @assert iszero(result.cache_world) || result.cache_world == world
+        result.cache_world = world
+        if proof isa CodeInstance
+            @assert proof.def === result.linfo "CodeInstance proof does not match InferenceResult"
+        else
+            @assert first(proof.valid_worlds) <= last(proof.valid_worlds)
+        end
+        return new(result, proof)
+    end
+end
+
+inference_proof(result::LocalInferenceResult) = result.proof
+
+const InferenceCacheEntry = Union{InferenceResult,LocalInferenceResult}
 function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
     argtypes = matching_cache_argtypes(𝕃, mi)
     return InferenceResult(mi, argtypes, #=overridden_by_const=#nothing)
@@ -141,6 +230,52 @@ function traverse_analysis_results(callback, (;analysis_results)::Union{Inferenc
         analysis_results = analysis_results.next
     end
     return nothing
+end
+
+"""
+    InferenceCache
+
+A cache for local inference work that maintains an index for fast lookups by
+`MethodInstance`. Successful entries are stored as [`LocalInferenceResult`](@ref), while
+raw `InferenceResult` entries are retained only as internal unresolved-cycle or tombstone
+markers for constant propagation. Entries are reused only at their exact `cache_world`;
+their static world range is not itself registered for invalidation while they remain local.
+"""
+struct InferenceCache
+    results::Vector{InferenceCacheEntry}
+    # Index from MethodInstance to indices in `results` where linfo === mi
+    index::IdDict{MethodInstance, Vector{Int}}
+end
+
+InferenceCache() = InferenceCache(Vector{InferenceCacheEntry}(), IdDict{MethodInstance, Vector{Int}}())
+
+function Base.push!(cache::InferenceCache, entry::InferenceCacheEntry)
+    if entry isa InferenceResult
+        @assert (entry.result === nothing || entry.tombstone) "completed InferenceResult must be wrapped before caching"
+    end
+    push!(cache.results, entry)
+    result = entry isa LocalInferenceResult ? entry.result : entry
+    mi = result.linfo
+    idx = length(cache.results)
+    if haskey(cache.index, mi)
+        push!(cache.index[mi], idx)
+    else
+        cache.index[mi] = Int[idx]
+    end
+    return cache
+end
+
+Base.length(cache::InferenceCache) = length(cache.results)
+Base.isempty(cache::InferenceCache) = isempty(cache.results)
+
+Base.iterate(cache::InferenceCache) = iterate(cache.results)
+Base.iterate(cache::InferenceCache, state) = iterate(cache.results, state)
+Base.eltype(::Type{InferenceCache}) = InferenceCacheEntry
+Base.getindex(cache::InferenceCache, i::Int) = cache.results[i]
+
+# Get indices for a specific MethodInstance (returns empty vector if not found)
+function get_indices(cache::InferenceCache, mi::MethodInstance)
+    return get(cache.index, mi, Int[])
 end
 
 """
@@ -190,6 +325,10 @@ Parameters that control abstract interpretation-based type inference operation.
   it will `throw`). Defaults to `false` since this assumption does not hold in Julia's
   semantics for native code execution.
 ---
+- `inf_params.force_enable_inference::Bool = false`\\
+  If `true`, inference will be performed on functions regardless of whether it was disabled
+  at the module level via `Base.Experimental.@compiler_options`.
+---
 """
 struct InferenceParams
     max_methods::Int
@@ -201,6 +340,8 @@ struct InferenceParams
     aggressive_constant_propagation::Bool
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
+    force_enable_inference::Bool
+    cache_owner::Any
 
     function InferenceParams(
         max_methods::Int,
@@ -211,7 +352,10 @@ struct InferenceParams
         ipo_constant_propagation::Bool,
         aggressive_constant_propagation::Bool,
         assume_bindings_static::Bool,
-        ignore_recursion_hardlimit::Bool)
+        ignore_recursion_hardlimit::Bool,
+        force_enable_inference::Bool,
+        @nospecialize(cache_owner),
+    )
         return new(
             max_methods,
             max_union_splitting,
@@ -221,7 +365,10 @@ struct InferenceParams
             ipo_constant_propagation,
             aggressive_constant_propagation,
             assume_bindings_static,
-            ignore_recursion_hardlimit)
+            ignore_recursion_hardlimit,
+            force_enable_inference,
+            cache_owner,
+        )
     end
 end
 function InferenceParams(
@@ -234,7 +381,10 @@ function InferenceParams(
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
-        #=ignore_recursion_hardlimit::Bool=# false);
+        #=ignore_recursion_hardlimit::Bool=# false,
+        #=force_enable_inference::Bool=# false,
+        #=cache_owner=# nothing
+    );
     max_methods::Int = params.max_methods,
     max_union_splitting::Int = params.max_union_splitting,
     max_apply_union_enum::Int = params.max_apply_union_enum,
@@ -243,7 +393,10 @@ function InferenceParams(
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
     assume_bindings_static::Bool = params.assume_bindings_static,
-    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit)
+    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit,
+    force_enable_inference::Bool = params.force_enable_inference,
+    cache_owner = params.cache_owner,
+)
     return InferenceParams(
         max_methods,
         max_union_splitting,
@@ -253,7 +406,10 @@ function InferenceParams(
         ipo_constant_propagation,
         aggressive_constant_propagation,
         assume_bindings_static,
-        ignore_recursion_hardlimit)
+        ignore_recursion_hardlimit,
+        force_enable_inference,
+        cache_owner,
+    )
 end
 
 """
@@ -369,7 +525,7 @@ struct NativeInterpreter <: AbstractInterpreter
     method_table::CachedMethodTable{InternalMethodTable}
 
     # Cache of inference results for this particular interpreter
-    inf_cache::Vector{InferenceResult}
+    inf_cache::InferenceCache
     codegen::IdDict{CodeInstance,CodeInfo}
 
     # Parameters for inference and optimization
@@ -390,7 +546,7 @@ function NativeInterpreter(world::UInt = get_world_counter();
     # incorrect, fail out loudly.
     @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
-    inf_cache = Vector{InferenceResult}() # Initially empty cache
+    inf_cache = InferenceCache() # Initially empty cache
     codegen = IdDict{CodeInstance,CodeInfo}()
     return NativeInterpreter(world, method_table, inf_cache, codegen, inf_params, opt_params)
 end
@@ -400,7 +556,7 @@ InferenceParams(interp::NativeInterpreter) = interp.inf_params
 OptimizationParams(interp::NativeInterpreter) = interp.opt_params
 get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
-cache_owner(interp::NativeInterpreter) = nothing
+cache_owner(interp::NativeInterpreter) = interp.inf_params.cache_owner
 
 engine_reserve(interp::AbstractInterpreter, mi::MethodInstance) = engine_reserve(mi, cache_owner(interp))
 engine_reserve(mi::MethodInstance, @nospecialize owner) = ccall(:jl_engine_reserve, Any, (Any, Any), mi, owner)::CodeInstance
@@ -423,9 +579,14 @@ function add_remark! end
 may_optimize(::AbstractInterpreter) = true
 may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
+may_discard_trees(::NativeInterpreter) =
+    ccall(:jl_get_type_infer_preserve_ir, Int8, ()) == 0
+precompile_keep_ir(::AbstractInterpreter) = false
+precompile_keep_ir(::NativeInterpreter) =
+    ccall(:jl_get_precompile_keep_ir, Int8, ()) != 0
 
 """
-    method_table(interp::AbstractInterpreter) -> MethodTableView
+    method_table(interp::AbstractInterpreter)::MethodTableView
 
 Returns a method table this `interp` uses for method lookup.
 External `AbstractInterpreter` can optionally return `OverlayMethodTable` here
@@ -444,7 +605,7 @@ and may be safely discarded between calls to this function.
 By default, a value of `nothing` is returned indicating that `CodeInstance`s should not be added to the JIT.
 Attempting to execute them via `invoke` will result in an error.
 """
-codegen_cache(interp::AbstractInterpreter) = nothing
+codegen_cache(::AbstractInterpreter) = nothing
 codegen_cache(interp::NativeInterpreter) = interp.codegen
 
 """
@@ -462,6 +623,19 @@ but `AbstractInterpreter` doesn't provide a specific interface for configuring i
 function bail_out_toplevel_call end, function bail_out_call end, function bail_out_apply end
 
 """
+    widen_call_result(interp::AbstractInterpreter, si::StmtInfo, state::CallInferenceState,
+                      sv::AbsIntState) -> Bool
+
+Decide whether to widen `state.rettype` of the currently-inferred call to `Any` before
+returning the result to the enclosing frame. By default this returns
+`call_result_unused(si) && !(state.rettype === Bottom)`: when the call has no SSA consumer,
+precise return type information is locally useless, so widening lets downstream `=== Any`
+short-circuits (e.g. the cycle backedge revisit filter in `update_cycle_worklists!`) elide
+redundant work; `Bottom` is preserved so that always-throw behavior remains observable.
+"""
+function widen_call_result end
+
+"""
     infer_compilation_signature(::AbstractInterpreter)::Bool
 
 For some call sites (for example calls to varargs methods), the signature to be compiled
@@ -476,10 +650,52 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
+"""
+    OverlayCodeCache(globalcache, localcache)
+
+Compatibility wrapper for custom interpreters that keep an executable cache and an
+inference cache together. Executable lookup delegates exclusively to `globalcache`;
+completed local inference results are accessed through `get_inference_cache` instead.
+"""
+struct OverlayCodeCache{Cache}
+    globalcache::Cache
+    localcache::InferenceCache
+end
+
+function setindex!(cache::OverlayCodeCache, ci::CodeInstance, mi::MethodInstance)
+    setindex!(cache.globalcache, ci, mi)
+    return cache
+end
+haskey(cache::OverlayCodeCache, mi::MethodInstance) = haskey(cache.globalcache, mi)
+get(cache::OverlayCodeCache, mi::MethodInstance, default) =
+    get(cache.globalcache, mi, default)
+getindex(cache::OverlayCodeCache, mi::MethodInstance) = getindex(cache.globalcache, mi)
+
+code_cache(interp::AbstractInterpreter, #=extended_range=#::WorldRange) = code_cache(interp)
+
 function code_cache(interp::AbstractInterpreter)
-  cache = InternalCodeCache(cache_owner(interp))
-  worlds = WorldRange(get_inference_world(interp))
-  return WorldView(cache, worlds)
+    return InternalCodeCache(cache_owner(interp), get_inference_world(interp))
+end
+
+function code_cache(interp::NativeInterpreter, extended_range::WorldRange)
+    @assert get_inference_world(interp) in extended_range
+    return InternalCodeCache(cache_owner(interp), extended_range)
+end
+
+function lookup_local_inference_result(interp::AbstractInterpreter, mi::MethodInstance)
+    cache = get_inference_cache(interp)
+    indices = get_indices(cache, mi)
+    world = get_inference_world(interp)
+    for i in length(indices):-1:1
+        cached = cache.results[indices[i]]
+        cached isa LocalInferenceResult || continue
+        result = cached.result
+        result.overridden_by_const === nothing || continue
+        result.cache_world == world || continue
+        world in proof_worlds(cached.proof) || continue
+        return cached
+    end
+    return nothing
 end
 
 get_escape_cache(interp::AbstractInterpreter) = GetNativeEscapeCache(interp)
@@ -497,14 +713,16 @@ function add_edges!(edges::Vector{Any}, info::CallInfo)
 end
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
 getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
-getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)#=::Union{Nothing,ConstResult}=#
+getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)#=::Union{Nothing,InferredCallResult}=#
+getedge(info::CallInfo, idx::Int) = getedge_impl(info, idx)::Union{Nothing,CodeInstance}
 
 add_edges_impl(::Vector{Any}, ::CallInfo) = error("""
     All `CallInfo` is required to implement `add_edges_impl(::Vector{Any}, ::CallInfo)`""")
 nsplit_impl(::CallInfo) = nothing
 getsplit_impl(::CallInfo, ::Int) = error("""
-    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo) -> Int` must implement `getsplit_impl(info::CallInfo, idx::Int) -> MethodLookupResult`
+    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo)::Int` must implement `getsplit_impl(info::CallInfo, idx::Int)::MethodLookupResult`
     in order to correctly opt in to inlining""")
 getresult_impl(::CallInfo, ::Int) = nothing
+getedge_impl(::CallInfo, ::Int) = nothing
 
 @specialize

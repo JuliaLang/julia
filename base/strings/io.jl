@@ -25,7 +25,7 @@ julia> io = IOBuffer();
 
 julia> print(io, "Hello", ' ', :World!)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello World!"
 ```
 """
@@ -42,16 +42,16 @@ end
 function print(io::IO, xs...)
     lock(io)
     try
-        for x in xs
-            print(io, x)
+        # xs[i] might be a known Union, and under --trim that gets split regardless of length.
+        # In contrast, `for x in xs` will fall back to Any for unions longer than 3.
+        for i in 1:nfields(xs)
+            print(io, xs[i])
         end
     finally
         unlock(io)
     end
     return nothing
 end
-
-setfield!(typeof(print).name.mt, :max_args, 10, :monotonic)
 
 """
     println([io::IO], xs...)
@@ -70,13 +70,11 @@ julia> io = IOBuffer();
 
 julia> println(io, "Hello", ',', " world.")
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello, world.\\n"
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
-
-setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 ## conversion of general objects to strings ##
 
 """
@@ -84,10 +82,6 @@ setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
-specifying a property and its value, or a tuple of `Pair` specifying multiple
-properties and their values. `sizehint` suggests the capacity of the buffer (in
-bytes).
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
@@ -116,7 +110,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 function _str_sizehint(x)
@@ -147,12 +141,11 @@ function print_to_string(xs...)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
-    for x in xs
-        print(s, x)
+    for i in 1:nfields(xs)
+        print(s, xs[i])
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
-setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
@@ -165,10 +158,10 @@ function string_with_env(env, xs...)
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
-    for x in xs
-        print(env_io, x)
+    for i in 1:nfields(xs)
+        print(env_io, xs[i])
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 """
@@ -182,7 +175,7 @@ highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
 
-See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
+See also [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
 
 # Examples
 ```jldoctest
@@ -243,8 +236,13 @@ function show(
 end
 
 # optimized methods to avoid iterating over chars
-write(io::IO, s::Union{String,SubString{String}}) =
-    GC.@preserve s (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int
+# (an explicit token is forwarded to unsafe_write, whose cancellable methods
+# accept it; the default sentinel keeps the plain call, which any IO's
+# unsafe_write method supports)
+write(io::IO, s::Union{String,SubString{String}}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    cancel === DEFAULT_CANCEL ?
+        GC.@preserve(s, (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int) :
+        GC.@preserve(s, (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)); cancel) % Int)::Int)
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 """
@@ -298,10 +296,10 @@ Create a read-only `IOBuffer` on the data underlying the given string.
 ```jldoctest
 julia> io = IOBuffer("Haho");
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 ```
 """
@@ -481,8 +479,8 @@ end
     unescape_string(io, s::AbstractString, keep = ())::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
-the escaped string, the second prints the result to `io`.
-The argument `keep` specifies a collection of characters which (along with backlashes) are
+the unescaped string, the second prints the result to `io`.
+The argument `keep` specifies a collection of characters which (along with backslashes) are
 to be kept as they are.
 
 The following escape sequences are recognised:
@@ -589,7 +587,7 @@ julia> v[2]
 0x32
 ```
 """
-macro b_str(s)
+macro b_str(s::String)
     v = codeunits(unescape_string(s))
     QuoteNode(v)
 end
@@ -600,9 +598,9 @@ end
 Create a raw string without interpolation and unescaping.
 The exception is that quotation marks still must be escaped. Backslashes
 escape both quotation marks and other backslashes, but only when a sequence
-of backslashes precedes a quote character. Thus, 2n backslashes followed by
-a quote encodes n backslashes and the end of the literal while 2n+1 backslashes
-followed by a quote encodes n backslashes followed by a quote character.
+of backslashes precedes a quote character. Thus, ``2n`` backslashes followed by
+a quote encode ``n`` backslashes and the end of the literal while ``2n+1`` backslashes
+followed by a quote encode ``n`` backslashes followed by a quote character.
 
 # Examples
 ```jldoctest
@@ -622,7 +620,7 @@ julia> println(raw"\\\\x \\\\\\"")
 macro raw_str(s); s; end
 
 """
-    escape_raw_string(s::AbstractString, delim='"') -> AbstractString
+    escape_raw_string(s::AbstractString, delim='"')::AbstractString
     escape_raw_string(io, s::AbstractString, delim='"')
 
 Escape a string in the manner used for parsing raw string literals.
@@ -678,7 +676,7 @@ end
 ## multiline strings ##
 
 """
-    indentation(str::AbstractString; tabwidth=8) -> (Int, Bool)
+    indentation(str::AbstractString; tabwidth=8) -> (width::Int, empty::Bool)
 
 Calculate the width of leading white space. Return the width and a flag to indicate
 if the string is empty.
@@ -739,7 +737,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
                 col = div(col + tabwidth, tabwidth) * tabwidth
             elseif ch == '\n'
                 # Now we need to output enough indentation
-                for i = 1:col-indent
+                for _ = 1:col-indent
                     print(buf, ' ')
                 end
                 col = 0
@@ -748,7 +746,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
                 cutting = false
                 # Now we need to output enough indentation to get to
                 # correct place
-                for i = 1:col-indent
+                for _ = 1:col-indent
                     print(buf, ' ')
                 end
                 col += 1
@@ -758,7 +756,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             upd = div(col + tabwidth, tabwidth) * tabwidth
             # output the number of spaces that would have been seen
             # with original indentation
-            for i = 1:(upd-col)
+            for _ = 1:(upd-col)
                 print(buf, ' ')
             end
             col = upd
@@ -774,11 +772,11 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     # If we were still "cutting" when we hit the end of the string,
     # we need to output the right number of spaces for the indentation
     if cutting
-        for i = 1:col-indent
+        for _ = 1:col-indent
             print(buf, ' ')
         end
     end
-    String(take!(buf))
+    takestring!(buf)
 end
 
 function String(a::AbstractVector{Char})

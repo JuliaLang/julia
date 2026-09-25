@@ -13,7 +13,7 @@ popfirst!(c::AbstractChannel) = take!(c)
 """
     Channel{T=Any}(size::Int=0)
 
-Constructs a `Channel` with an internal buffer that can hold a maximum of `size` objects
+Construct a `Channel` with an internal buffer that can hold a maximum of `size` objects
 of type `T`.
 [`put!`](@ref) calls on a full channel block until an object is removed with [`take!`](@ref).
 
@@ -61,7 +61,7 @@ Channel(sz=0) = Channel{Any}(sz)
 """
     Channel{T=Any}(func::Function, size=0; taskref=nothing, spawn=false, threadpool=nothing)
 
-Create a new task from `func`, bind it to a new channel of type
+Create a new task from `func`, [`bind`](@ref) it to a new channel of type
 `T` and size `size`, and schedule the task, all in a single call.
 The channel is automatically closed when the task terminates.
 
@@ -213,13 +213,14 @@ end
 
 """
     isopen(c::Channel)
-Determines whether a [`Channel`](@ref) is open for new [`put!`](@ref) operations.
-Notice that a `Channel`` can be closed and still have
-buffered elements which can be consumed with [`take!`](@ref).
+
+Determine whether a [`Channel`](@ref) is open for new [`put!`](@ref) operations.
+Notice that a `Channel` can be closed and still have buffered elements which can be
+consumed with [`take!`](@ref).
 
 # Examples
 
-Buffered channel with task:
+## Buffered channel with task
 ```jldoctest
 julia> c = Channel(ch -> put!(ch, 1), 1);
 
@@ -236,7 +237,7 @@ julia> isready(c)
 false
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel{Int}();
 
@@ -326,9 +327,14 @@ Stacktrace:
 ```
 """
 function bind(c::Channel, task::Task)
-    T = Task(() -> close_chnl_on_taskdone(task, c))
+    # the close hook is cleanup: shield it from the constructing scope's
+    # cancellation, so a bound channel is closed (and its blocked users
+    # released) even when the scope that bound it is cancelled
+    T = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        Task(() -> close_chnl_on_taskdone(task, c))
+    end
     T.sticky = false
-    _wait2(task, T)
+    schedule_on_notify!(task, T)
     return c
 end
 
@@ -344,8 +350,8 @@ of type `Channel{Any}(0)`.
 Returns a tuple, `(Array{Channel}, Array{Task})`, of the created channels and tasks.
 """
 function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
-    @assert length(csizes) == n
-    @assert length(ctypes) == n
+    @assert length(csizes) == n "length(csizes) != n"
+    @assert length(ctypes) == n "length(ctypes) != n"
 
     chnls = map(i -> Channel{ctypes[i]}(csizes[i]), 1:n)
     tasks = Task[ Task(() -> f(chnls...)) for f in funcs ]
@@ -391,10 +397,11 @@ task.
 !!! compat "Julia 1.1"
     `v` now gets converted to the channel's type with [`convert`](@ref) as `put!` is called.
 """
-function put!(c::Channel{T}, v) where T
+function put!(c::Channel{T}, v; cancel::CancelTokenArg=DEFAULT_CANCEL) where T
     check_channel_state(c)
     v = convert(T, v)
-    return isbuffered(c) ? put_buffered(c, v) : put_unbuffered(c, v)
+    cancel = precheck_cancel_arg(cancel)
+    return isbuffered(c) ? put_buffered(c, v, cancel) : put_unbuffered(c, v, cancel)
 end
 
 # Atomically update channel n_avail, *assuming* we hold the channel lock.
@@ -407,16 +414,22 @@ function _increment_n_avail(c, inc)
     @atomic :monotonic c.n_avail_items = newlen
 end
 
-function put_buffered(c::Channel, v)
-    lock(c)
+function put_buffered(c::Channel, v, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    lock(c; cancel)
+    locked = true
     did_buffer = false
     try
         # Increment channel n_avail eagerly (before push!) to count data in the
         # buffer as well as offers from tasks which are blocked in wait().
         _increment_n_avail(c, 1)
-        while length(c.data) == c.sz_max
-            check_channel_state(c)
-            wait(c.cond_put)
+        if length(c.data) == c.sz_max
+            tok = resolve_cancel_token(cancel)
+            while length(c.data) == c.sz_max
+                check_channel_state(c)
+                locked = false
+                wait(c.cond_put, tok)
+                locked = true
+            end
         end
         check_channel_state(c)
         push!(c.data, v)
@@ -424,27 +437,47 @@ function put_buffered(c::Channel, v)
         # notify all, since some of the waiters may be on a "fetch" call.
         notify(c.cond_take, nothing, true, false)
     finally
-        # Decrement the available items if this task had an exception before pushing the
-        # item to the buffer (e.g., during `wait(c.cond_put)`):
+        # Decrement the available items if this task had an exception before
+        # pushing the item to the buffer (e.g., during `wait(c.cond_put)`).
+        # The fixup needs the lock: reacquire (shielded) when a wait-throw
+        # released this frame's level.
+        locked || lock(c; cancel=nothing)
         did_buffer || _increment_n_avail(c, -1)
         unlock(c)
     end
     return v
 end
 
-function put_unbuffered(c::Channel, v)
-    lock(c)
+function put_unbuffered(c::Channel, v, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    lock(c; cancel)
+    locked = true
     taker = try
         _increment_n_avail(c, 1)
-        while isempty(c.cond_take.waitq)
+        tok = resolve_cancel_token(cancel)
+        local taker
+        while true
+            while isempty(c.cond_take.waitq)
+                check_channel_state(c)
+                notify(c.cond_wait)
+                locked = false
+                wait(c.cond_put, tok)
+                locked = true
+            end
             check_channel_state(c)
-            notify(c.cond_wait)
-            wait(c.cond_put)
+            # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
+            w = popfirst!(waitqueue(c.cond_take))
+            t = @atomic :monotonic w.task
+            if t isa Task && claim_wait(t, w)
+                taker = t
+                break
+            end
+            # stale registration: this waiter's wake was already claimed
+            # by an interrupter - drop it and look for the next taker
         end
-        check_channel_state(c)
-        # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
-        popfirst!(c.cond_take.waitq)
+        taker
     finally
+        # the decrement needs the lock (see put_buffered's finally)
+        locked || lock(c; cancel=nothing)
         _increment_n_avail(c, -1)
         unlock(c)
     end
@@ -461,7 +494,7 @@ Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(3) do ch
            foreach(i -> put!(ch, i), 1:3)
@@ -477,21 +510,29 @@ julia> collect(c)  # item is not removed
  3
 ```
 """
-fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
-function fetch_buffered(c::Channel)
-    lock(c)
+function fetch(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    return isbuffered(c) ? fetch_buffered(c, cancel) : fetch_unbuffered(c)
+end
+function fetch_buffered(c::Channel, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    lock(c; cancel)
+    locked = true
     try
-        while isempty(c.data)
-            check_channel_state(c)
-            wait(c.cond_take)
+        if isempty(c.data)
+            tok = resolve_cancel_token(cancel)
+            while isempty(c.data)
+                check_channel_state(c)
+                locked = false
+                wait(c.cond_take, tok)
+                locked = true
+            end
         end
         return c.data[1]
     finally
-        unlock(c)
+        locked && unlock(c)
     end
 end
 fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
-
 
 """
     take!(c::Channel)
@@ -501,7 +542,7 @@ For unbuffered channels, blocks until a [`put!`](@ref) is performed by a differe
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1);
 
@@ -511,7 +552,7 @@ julia> take!(c)
 1
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel(0);
 
@@ -523,46 +564,59 @@ julia> take!(c)
 1
 ```
 """
-take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
-function take_buffered(c::Channel)
-    lock(c)
+function take!(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    return isbuffered(c) ? take_buffered(c, cancel) : take_unbuffered(c, cancel)
+end
+function take_buffered(c::Channel, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    lock(c; cancel)
+    locked = true
     try
-        while isempty(c.data)
-            check_channel_state(c)
-            wait(c.cond_take)
+        if isempty(c.data)
+            tok = resolve_cancel_token(cancel)
+            while isempty(c.data)
+                check_channel_state(c)
+                locked = false
+                wait(c.cond_take, tok)
+                locked = true
+            end
         end
         v = popfirst!(c.data)
         _increment_n_avail(c, -1)
         notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
         return v
     finally
-        unlock(c)
+        locked && unlock(c)
     end
 end
 
 # 0-size channel
-function take_unbuffered(c::Channel{T}) where T
-    lock(c)
+function take_unbuffered(c::Channel{T}, cancel::CancelTokenArg=DEFAULT_CANCEL) where T
+    lock(c; cancel)
+    locked = true
     try
         check_channel_state(c)
         notify(c.cond_put, nothing, false, false)
-        return wait(c.cond_take)::T
+        locked = false
+        v = wait(c.cond_take, resolve_cancel_token(cancel))::T
+        locked = true
+        return v
     finally
-        unlock(c)
+        locked && unlock(c)
     end
 end
 
 """
     isready(c::Channel)
 
-Determines whether a [`Channel`](@ref) has a value stored in it.
+Determine whether a [`Channel`](@ref) has a value stored in it.
 Returns immediately, does not block.
 
 For unbuffered channels, return `true` if there are tasks waiting on a [`put!`](@ref).
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1);
 
@@ -575,7 +629,7 @@ julia> isready(c)
 true
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel();
 
@@ -589,7 +643,6 @@ julia> schedule(task);  # schedule a put! task
 julia> isready(c)
 true
 ```
-
 """
 isready(c::Channel) = n_avail(c) > 0
 isempty(c::Channel) = n_avail(c) == 0
@@ -601,7 +654,7 @@ end
 """
     isfull(c::Channel)
 
-Determines if a [`Channel`](@ref) is full, in the sense
+Determine if a [`Channel`](@ref) is full, in the sense
 that calling `put!(c, some_value)` would have blocked.
 Returns immediately, does not block.
 
@@ -616,7 +669,7 @@ tasks calling `put!` in parallel.
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1); # capacity = 1
 
@@ -629,7 +682,7 @@ julia> isfull(c)
 true
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel(); # capacity = 0
 
@@ -639,7 +692,10 @@ true
 """
 isfull(c::Channel) = n_avail(c) ≥ c.sz_max
 
-lock(c::Channel) = lock(c.cond_take)
+# the `cancel` forward makes the channel operations' preliminary lock
+# acquisitions honor their resolved token (or explicit shield); see
+# lock(::GenericCondition{ReentrantLock})
+lock(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL) = lock(c.cond_take; cancel)
 lock(f, c::Channel) = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
@@ -647,7 +703,7 @@ trylock(c::Channel) = trylock(c.cond_take)
 """
     wait(c::Channel)
 
-Blocks until the `Channel` [`isready`](@ref).
+Block until the `Channel` [`isready`](@ref).
 
 ```jldoctest
 julia> c = Channel(1);
@@ -668,16 +724,23 @@ julia> istaskdone(task)  # task is now unblocked
 true
 ```
 """
-function wait(c::Channel)
+function wait(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
     isready(c) && return
-    lock(c)
+    lock(c; cancel)
+    locked = true
     try
-        while !isready(c)
-            check_channel_state(c)
-            wait(c.cond_wait)
+        if !isready(c)
+            tok = resolve_cancel_token(cancel)
+            while !isready(c)
+                check_channel_state(c)
+                locked = false
+                wait(c.cond_wait, tok)
+                locked = true
+            end
         end
     finally
-        unlock(c)
+        locked && unlock(c)
     end
     nothing
 end

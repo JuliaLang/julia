@@ -17,7 +17,7 @@ function simple()
 end
 
 # CHECK-LABEL: @julia_buildarray
-# CHECK-NOT: julia.write_barrier
+# CHECK-NOT: write_barrier
 # CHECK: gc_queue_root
 function buildarray()
     out = []

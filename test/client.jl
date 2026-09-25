@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base.StackTraces: StackFrame
+
 nested_error_expr = quote
     try
         __not_a_binding__
@@ -56,4 +58,56 @@ end
 @testset "defining `ans` and `err`" begin
     @test eval(:(ans = 1)) == 1
     @test eval(:(err = 1)) == 1
+end
+
+@testset "scrub REPL-related frames" begin
+    repl_bt = [StackFrame(:foo, "foo.jl", 1),
+          StackFrame(:__repl_entry_anysuffix, "client.jl", 2),
+          StackFrame(:bar, "bar.jl", 3)]
+    scrubbed_repl_bt = Base.scrub_repl_backtrace(repl_bt)
+
+    nonrepl_bt = [StackFrame(:foo, "foo.jl", 1),
+          StackFrame(:baz, "baz.jl", 2),
+          StackFrame(:bar, "bar.jl", 3)]
+    scrubbed_nonrepl_bt = Base.scrub_repl_backtrace(nonrepl_bt)
+
+    @test length(scrubbed_repl_bt) == 1
+    @test scrubbed_repl_bt[1].func == :foo
+    @test length(scrubbed_nonrepl_bt) == 3
+
+    # driver entries (script/-e execution) cut like REPL entries, including
+    # the eval/include machinery they run user code through
+    script_bt = [StackFrame(:foo, "foo.jl", 1),
+          StackFrame(Symbol("top-level scope"), "script.jl", 2),
+          StackFrame(:include_string, "loading.jl", 3),
+          StackFrame(:_include, "loading.jl", 4),
+          StackFrame(:__script_entry_include, "client.jl", 5),
+          StackFrame(:exec_options, "client.jl", 6),
+          StackFrame(:_start, "client.jl", 7)]
+    @test [f.func for f in Base.scrub_repl_backtrace(script_bt)] ==
+        [:foo, Symbol("top-level scope")]
+
+    # machinery frames not adjacent to the driver cut belong to user code
+    user_eval_bt = [StackFrame(:foo, "foo.jl", 1),
+          StackFrame(:eval, "boot.jl", 2),
+          StackFrame(Symbol("top-level scope"), "script.jl", 3),
+          StackFrame(:eval, "boot.jl", 4),
+          StackFrame(:__script_entry_eval, "client.jl", 5)]
+    @test [f.func for f in Base.scrub_repl_backtrace(user_eval_bt)] ==
+        [:foo, :eval, Symbol("top-level scope")]
+
+    errio = IOBuffer()
+    lower_errexpr = :(@bad)
+    Base.eval_user_input(errio, lower_errexpr, false)
+    outstr = String(take!(errio))
+    @test occursin("ERROR: LoadError: UndefVarError: `@bad`", outstr)
+    @test !occursin("_repl_entry", outstr)
+    @test !occursin(r"\.[/\\]client.jl", outstr)
+
+    errexpr = :(error("fail"))
+    Base.eval_user_input(errio, errexpr, false)
+    outstr = String(take!(errio))
+    @test occursin("ERROR: fail", outstr)
+    @test !occursin("_repl_entry", outstr)
+    @test !occursin(r"\.[/\\]client.jl", outstr)
 end

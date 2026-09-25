@@ -89,7 +89,7 @@ function commit(repo::GitRepo,
 end
 
 """
-    commit(repo::GitRepo, msg::AbstractString; kwargs...) -> GitHash
+    commit(repo::GitRepo, msg::AbstractString; kwargs...)::GitHash
 
 Wrapper around [`git_commit_create`](https://libgit2.org/libgit2/#HEAD/group/commit/git_commit_create).
 Create a commit in the repository `repo`. `msg` is the commit message. Return the OID of the new commit.
@@ -103,7 +103,7 @@ The keyword arguments are:
     the repository. Not necessarily the same as `author`, for instance if `author` emailed a patch to
     `committer` who committed it.
   * `tree_id::GitHash = GitHash()` is a git tree to use to create the commit, showing its ancestry and relationship with
-    any other history. `tree` must belong to `repo`.
+    any other history. `tree_id` must belong to `repo`.
   * `parent_ids::Vector{GitHash}=GitHash[]` is a list of commits by [`GitHash`](@ref) to use as parent
     commits for the new one, and may be empty. A commit might have multiple parents if it is a merge commit, for example.
 """

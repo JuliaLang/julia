@@ -618,6 +618,25 @@ end
     @test allunique(x for x in [0.0, -0.0] if true)
     @test !allunique([NaN, NaN])
     @test !allunique(x for x in [NaN, NaN] if true)
+    # strings (short path via ncodeunits < 32; longer fall through to generic)
+    @test allunique("")
+    @test allunique("a")
+    @test allunique("é")
+    @test allunique("abcé")
+    @test allunique("αβγδ")
+    @test allunique("𐀀𐀁")
+    @test !allunique("aa")
+    @test !allunique("éé")
+    @test !allunique("abca")
+    @test !allunique("ab" * "c"^40)
+    @test !allunique("x" * "a"^10_000)
+    @test allunique(join('\U1F600' + i for i in 0:599))
+    @test !allunique(join('\U1F600' + i for i in 0:599) * "\U1F600")
+    @test allunique(join('A':'z'))
+    @test allunique(@views "abcd"[1:3])
+    @test !allunique(@views "abca"[1:4])
+    @test allunique(SubString("abcd", 1, 3))
+    @test !allunique(SubString("abca", 1, 4))
     # ranges
     @test allunique(4:7)
     @test allunique(1:1)
@@ -692,6 +711,7 @@ end
     @test allequal(error(x) for x in [1])
     # Empty, but !haslength:
     @test allequal(error(x) for x in 1:3 if false)
+    @test @allocated(allequal((1, 1, 1, 1, 1, 1, 1, 2.0))) == 0
 end
 
 @testset "allequal(f, xs)" begin

@@ -9,8 +9,8 @@
 Elements in a `Set` are unique, as determined by the elements' definition of `isequal`.
 The order of elements in a `Set` is an implementation detail and cannot be relied on.
 
-See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
-[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref)
+See also [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
+[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref).
 
 # Examples
 ```jldoctest; filter = r"^  '.'"ma
@@ -64,7 +64,7 @@ function _Set(itr, ::EltypeUnknown)
     return Set{T}(itr)
 end
 
-empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
+empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = emptymutable(s, U)
 
 # return an empty set with eltype T, which is mutable (can be grown)
 # by default, a Set is returned
@@ -92,19 +92,19 @@ length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 
 """
-    in!(x, s::AbstractSet) -> Bool
+    in!(x, s::AbstractSet)::Bool
 
 If `x` is in `s`, return `true`. If not, push `x` into `s` and return `false`.
 This is equivalent to `in(x, s) ? true : (push!(s, x); false)`, but may have a
 more efficient implementation.
 
-See also: [`in`](@ref), [`push!`](@ref), [`Set`](@ref)
-
 !!! compat "Julia 1.11"
     This function requires at least 1.11.
 
+See also [`in`](@ref), [`push!`](@ref), [`Set`](@ref).
+
 # Examples
-```jldoctest; filter = r"^  [1234]\$"
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> s = Set{Any}([1, 2, 3]); in!(4, s)
 false
 
@@ -169,7 +169,7 @@ copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
-sizehint!(s::Set, newsz; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
+sizehint!(s::Set, newsz::Integer; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
@@ -177,7 +177,7 @@ iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
 
 @propagate_inbounds Iterators.only(s::Set) = Iterators._only(s, first)
 
-# In case the size(s) is smaller than size(t) its more efficient to iterate through
+# In case the size(s) is smaller than size(t) it's more efficient to iterate through
 # elements of s instead and only delete the ones also contained in t.
 # The threshold for this decision boils down to a tradeoff between
 # size(s) * cost(in() + delete!()) ≶ size(t) * cost(delete!())
@@ -200,12 +200,12 @@ end
 """
     unique(itr)
 
-Return an array containing only the unique elements of collection `itr`,
+Return an `AbstractArray` containing only the unique elements of collection `itr`,
 as determined by [`isequal`](@ref) and [`hash`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
-See also: [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
+See also [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -259,12 +259,12 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
     return out
 end
 
-unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
+unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin]:r[begin])
 
 """
     unique(f, itr)
 
-Return an array containing one value from `itr` for each unique value produced by `f`
+Return an `AbstractArray` containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
 
 # Examples
@@ -478,8 +478,8 @@ function unique!(itr)
 end
 
 """
-    allunique(itr) -> Bool
-    allunique(f, itr) -> Bool
+    allunique(itr)::Bool
+    allunique(f, itr)::Bool
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 Or if all of `[f(x) for x in itr]` are distinct, for the second method.
@@ -489,10 +489,10 @@ The precise number of calls is regarded as an implementation detail.
 
 `allunique` may use a specialized implementation when the input is sorted.
 
-See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
-
 !!! compat "Julia 1.11"
     The method `allunique(f, itr)` requires at least Julia 1.11.
+
+See also [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -526,7 +526,7 @@ function _hashed_allunique(C)
     seen = Set{@default_eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
-        for i in OneTo(1000)
+        for _ in OneTo(1000)
             v, s = something(x)
             in!(v, seen) && return false
             x = iterate(C, s)
@@ -544,6 +544,11 @@ end
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+
+# ncodeunits is O(1) and bounds character count; match StridedArray's short cutoff.
+function allunique(s::AbstractString)
+    ncodeunits(s) < 32 ? _indexed_allunique(s) : _hashed_allunique(s)
+end
 
 function allunique(A::StridedArray)
     if length(A) < 32
@@ -602,8 +607,8 @@ function allunique(f::F, t::Tuple) where {F}
 end
 
 """
-    allequal(itr) -> Bool
-    allequal(f, itr) -> Bool
+    allequal(itr)::Bool
+    allequal(f, itr)::Bool
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
 Or if all of `[f(x) for x in itr]` are equal, for the second method.
@@ -611,13 +616,13 @@ Or if all of `[f(x) for x in itr]` are equal, for the second method.
 Note that `allequal(f, itr)` may call `f` fewer than `length(itr)` times.
 The precise number of calls is regarded as an implementation detail.
 
-See also: [`unique`](@ref), [`allunique`](@ref).
-
 !!! compat "Julia 1.8"
     The `allequal` function requires at least Julia 1.8.
 
 !!! compat "Julia 1.11"
     The method `allequal(f, itr)` requires at least Julia 1.11.
+
+See also [`unique`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest
@@ -656,14 +661,36 @@ allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
 
 allequal(f, xs) = allequal(Generator(f, xs))
 
-function allequal(f, xs::Tuple)
-    length(xs) <= 1 && return true
-    f1 = f(xs[1])
-    for x in tail(xs)
-        isequal(f1, f(x)) || return false
+function _allequal_loop(f, xs::Tuple)
+    val = f(xs[1])
+    for i in 2:length(xs)
+        isequal(val, f(xs[i])) || return false
     end
     return true
 end
+
+function allequal(f, xs::Tuple)
+    if @generated
+        n = fieldcount(xs)
+        if n <= 32
+            n <= 1 && return true
+            checks = Expr[:(isequal(val, f(getfield(xs, $i)))) for i in 2:n]
+            expr = foldr((a, b) -> :($a && $b), checks)
+            return quote
+                val = f(getfield(xs, 1))
+                $expr
+            end
+        else
+            return :(return _allequal_loop(f, xs))
+        end
+    else
+        length(xs) <= 1 && return true
+        return _allequal_loop(f, xs)
+    end
+end
+
+allequal(f, ::Tuple{}) = true
+allequal(xs::Tuple) = allequal(identity, xs)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
@@ -717,7 +744,7 @@ If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace`](@ref replace(A, old_new::Pair...)).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
 4-element Vector{Int64}:
  0
@@ -753,7 +780,7 @@ If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d+(\\s+=>\\s+\\d)?\$"m
 julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Vector{Int64}:
  2
@@ -849,7 +876,7 @@ If `count` is specified, then replace at most `count` values in total
     Version 1.7 is required to replace elements of a `Tuple`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Vector{Int64}:
  2
@@ -881,8 +908,8 @@ askey(k, ::AbstractSet) = k
 
 function _replace!(new::Callable, res::Union{AbstractDict,AbstractSet},
                    A::Union{AbstractDict,AbstractSet}, count::Int)
-    @assert res isa AbstractDict && A isa AbstractDict ||
-        res isa AbstractSet && A isa AbstractSet
+    @assert (res isa AbstractDict && A isa AbstractDict ||
+             res isa AbstractSet && A isa AbstractSet) "type mismatch"
     count == 0 && return res
     c = 0
     if res === A # cannot replace elements while iterating over A

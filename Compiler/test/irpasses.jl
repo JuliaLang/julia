@@ -4,6 +4,7 @@ using Test
 using Base.Meta
 using Core.IR
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # domsort
@@ -920,7 +921,7 @@ let # Test that CFG simplify doesn't try to merge every block in a loop into
 end
 
 # `cfg_simplify!` shouldn't error in a presence of `try/catch` block
-let ir = Base.code_ircode(; optimize_until="slot2ssa") do
+let ir = Base.code_ircode(; optimize_until="CC: SLOT2REG") do
         v = try
         catch
         end
@@ -986,19 +987,9 @@ function pi_on_argument(x)
     end
     return -2
 end
-let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
-    nisa = 0, found_pi = false
-    for stmt in code
-        if Meta.isexpr(stmt, :call)
-            callee = stmt.args[1]
-            if (callee === isa || callee === :isa || (isa(callee, GlobalRef) &&
-                                                      callee.name === :isa))
-                nisa += 1
-            end
-        elseif stmt === Core.PiNode(Core.Argument(2), Core.Argument)
-            found_pi = true
-        end
-    end
+let src = code_typed(pi_on_argument, Tuple{Any})[1].first
+    nisa = count(iscall((src, isa)), src.code)
+    found_pi = any(==(Core.PiNode(Core.Argument(2), Core.Argument)), src.code)
     @test nisa == 1
     @test found_pi
 end
@@ -1070,7 +1061,7 @@ let # Test for https://github.com/JuliaLang/julia/issues/43402
     end
 
     refs = map(Core.SSAValue, findall(@nospecialize(x)->Meta.isexpr(x, :new), src.code))
-    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == :(:some_ccall), src.code)
+    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == Expr(:tuple, :(:some_ccall)), src.code)
     @assert some_ccall !== nothing
     stmt = src.code[some_ccall]
     nccallargs = length(stmt.args[3]::Core.SimpleVector)
@@ -1179,7 +1170,10 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
 end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
-@test Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
+
+# We consider a potential deprecation warning an effect, so for completely unknown getglobal,
+# we taint the effect_free bit.
+@test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
 # Test that UseRefIterator gets SROA'd inside of new_to_regular (#44557)
 # expression and new_to_regular offset are arbitrary here, we just want to see the UseRefIterator erased
@@ -1333,6 +1327,19 @@ end
 @test wrap1_wrap1_wrapper(true, 1, 1.0) === 1.0
 @test wrap1_wrap1_wrapper(false, 1, 1.0) === 1
 
+# Regression test for #61740: `sroa_mutables!` previously asserted
+# `widenconst(:type)::DataType`, which broke after #61719 extended
+# `PartialStruct` to wrap parametric (UnionAll) types from `:new`.
+mutable struct MutBox61740{T}
+    const x::Some{Any}
+    y::Int
+    MutBox61740{T}(x, y) where T = new{T}(Some{Any}(x), y)
+end
+read_mutbox61740(box::MutBox61740) = box.x.value
+@test Base.infer_return_type((Type, Int)) do T, x
+    read_mutbox61740(MutBox61740{T}(x, 0))
+end === Int
+
 # Test unswitching-union optimization within SRO Apass
 function sroaunswitchuniontuple(c, x1, x2)
     t = c ? (x1,) : (x2,)
@@ -1382,7 +1389,33 @@ end
 @test foo(true, 1) == 2
 
 # ifelse folding
-@test Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
+# Math functions that should be removable if unused (nothrow + effect-free).
+# Test all IEEEFloat types for single-argument functions.
+@testset "math functions removable if unused: $f($T)" for (f, T) in Iterators.product(
+    (exp, exp2, exp10, expm1, sinh, cosh, tanh, cbrt, frexp, modf, significand, rad2deg, deg2rad),
+    (Float16, Float32, Float64),
+)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+end
+# ldexp takes (T, Int); test all float types
+@testset "ldexp($T, Int) removable if unused" for T in (Float16, Float32, Float64)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(ldexp, (T, Int)))
+end
+# asinh is nothrow for Float32/Float64: non-finite inputs handled early; all log/log1p
+# calls receive positive arguments. Float16 promotes via a separate method.
+@testset "asinh($T) removable if unused" for T in (Float32, Float64)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(asinh, (T,)))
+end
+# hypot(Float32/Float16): _hypot uses sqrt(muladd(x,x,y*y)); argument is always ≥ 0.
+# hypot(Float64) uses a more complex algorithm and is intentionally excluded here.
+@testset "hypot($T, $T) removable if unused" for T in (Float16, Float32)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(hypot, (T, T)))
+end
+# unsafe_trunc(::Type{<:Integer}, ::Float64) is nothrow: the bit-shift result fits
+# within `Int` so `% Int` rather than `Int(...)` keeps the conversion non-throwing.
+@testset "unsafe_trunc($T, Float64) removable if unused" for T in (UInt128, Int128)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(unsafe_trunc, (Type{T}, Float64)))
+end
 @test !Compiler.is_inlineable(code_typed1(exp, (Float64,)))
 @test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))
@@ -1455,7 +1488,7 @@ function f_with_early_try_catch_exit()
     result
 end
 
-let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="compact")))
+let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="CC: SLOT2REG")))
     for i = 1:length(ir.stmts)
         expr = ir.stmts[i][:stmt]
         if isa(expr, PhiCNode)
@@ -1495,13 +1528,12 @@ let code = Any[
     # Simulate the important results from inference
     interp = Compiler.NativeInterpreter()
     sv = Compiler.OptimizationState(mi, src, interp)
-    slot_id = 4
-    for block_id = 3:5
-        # (_4 !== nothing) conditional narrows the type, triggering PiNodes
-        sv.bb_vartables[block_id][slot_id] = VarState(Bool, #= maybe_undef =# false)
-    end
+    # (_4 !== nothing) conditional narrows the type, triggering PiNodes
+    sv.bb_states[#=block_id=#3].vartable[#=slot_id=#4] = VarState(Bool, #=def=#5, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
-    ir = Compiler.convert_to_ircode(src, sv)
+    ir = Compiler.convert_to_ircode!(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
     ir = Compiler.compact!(ir)
 
@@ -1646,8 +1678,7 @@ let code = Any[
     try
         argtypes = Any[Bool]
         ssavaluetypes = Any[Bool, Tuple{Int}, Tuple{Float64}, Tuple{Int}, Int, Any]
-        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
-        Compiler.verify_ir(ir)
+        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes, verify=true)
         Compiler.__set_check_ssa_counts(true)
         ir = Compiler.sroa_pass!(ir)
         Compiler.verify_ir(ir)
@@ -1687,8 +1718,7 @@ let code = Any[
                         Union{Nothing, Tuple{Tuple{Int, Int}, Int}}, Bool, Any, Any,
                         Tuple{Tuple{Int, Int}, Int},
                         Tuple{Int, Int}, Int, Any]
-    ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
-    Compiler.verify_ir(ir)
+    ir = make_ircode(code; slottypes=argtypes, ssavaluetypes, verify=true)
     ir = Compiler.sroa_pass!(ir)
     Compiler.verify_ir(ir)
     ir = Compiler.compact!(ir)
@@ -1852,6 +1882,20 @@ let (ir,rt) = only(Base.code_ircode((Int,)) do y
     @test rt == Union{Nothing,Float64}
 end
 
+# issue #62082: a frame-less (`catch_dest == 0`) EnterNode's scope operand must be
+# renumbered too, else `Core.current_scope()` reads a stale value in the scoped region
+let sval = ScopedValue(1)
+    @noinline observe_scope() = Core.current_scope()
+    function scope_renumber(c::Bool)
+        if c
+            error("x")
+        end
+        @with sval => 2 observe_scope()
+    end
+    @test scope_renumber(false) isa Base.ScopedValues.Scope
+    @test_throws ErrorException scope_renumber(true)
+end
+
 # Test that adce_pass! sets Refined on PhiNode values
 let code = Any[
     # Basic Block 1
@@ -1961,9 +2005,8 @@ let code = Any[
         # block 8
         ReturnNode(2),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Any, Any, Any, Any, Union{}, Union{}])
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Any, Any, Any, Any, Union{}, Union{}], verify=true)
     @test length(ir.cfg.blocks) == 8
-    Compiler.verify_ir(ir)
 
     # Union typed deletion marker in basic block 2
     Compiler.setindex!(ir, nothing, SSAValue(2))
@@ -1981,6 +2024,45 @@ let code = Any[
     @test isdefined(ir[SSAValue(gotoifnot+1)][:inst]::ReturnNode, :val)
 end
 
+# Make sure that PhiNode values containing forward references are eventually updated.
+let code = Any[
+             # block 1
+    #= %1 =# Argument(2),
+    #= %2 =# GotoNode(4),
+             # block 2
+    #= %3 =# GotoNode(4), # will be removed, shifting SSA indices by 1
+             # block 3
+    #= %4 =# PhiNode(Int32[1, 9, 13], Any[SSAValue(1), SSAValue(6), SSAValue(6)]),
+    #= %5 =# GotoNode(6),
+             # block 4
+    #= %6 =# Expr(:call, :add_int, Argument(2), 1),
+    #= %7 =# GotoIfNot(Argument(3), 9),
+             # block 5
+    #= %8 =# ReturnNode(Argument(3)),
+             # block 6
+    #= %9 =# GotoIfNot(Argument(3), 4),
+             # block 7
+    #= %10=# GotoIfNot(Argument(3), 12),
+             # block 8
+    #= %11=# GotoNode(13),
+             # block 9
+    #= %12=# GotoNode(13),
+             # block 10
+    #= %13=# GotoNode(4),
+    ]
+    ssavaluetypes = Any[Int64, Any, Any, Int64, Any, Int64, Any, Int64, Any, Any, Any, Any, Any]
+    slottypes = Any[Any, Int, Bool]
+    ir = make_ircode(code; ssavaluetypes, slottypes, verify=true)
+    @test length(ir.cfg.blocks) == 10
+    ir = Compiler.cfg_simplify!(ir)
+    Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 6
+    phistmt = ir.cfg.blocks[2].stmts[1]
+    phinode = ir[SSAValue(phistmt)][:stmt]
+    @test isa(phinode, PhiNode)
+    @test phinode.values[2] == phinode.values[3] == SSAValue(5)
+end
+
 # https://github.com/JuliaLang/julia/issues/54596
 # finalized object's uses have no postdominator
 let f = (x)->nothing, mi = Base.method_instance(f, (Base.RefValue{Nothing},)), code = Any[
@@ -1995,9 +2077,8 @@ let f = (x)->nothing, mi = Base.method_instance(f, (Base.RefValue{Nothing},)), c
    Expr(:call, Base.getfield, SSAValue(1), :x)
    ReturnNode(SSAValue(6))
 ]
-   ir = make_ircode(code; ssavaluetypes=Any[Base.RefValue{Nothing}, Nothing, Any, Nothing, Any, Nothing, Any])
+   ir = make_ircode(code; ssavaluetypes=Any[Base.RefValue{Nothing}, Nothing, Any, Nothing, Any, Nothing, Any], verify=true)
    inlining = Compiler.InliningState(Compiler.NativeInterpreter())
-   Compiler.verify_ir(ir)
    ir = Compiler.sroa_pass!(ir, inlining)
    Compiler.verify_ir(ir)
 end
@@ -2020,9 +2101,8 @@ let code = Any[
         # block 8
         ReturnNode(nothing),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}])
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}], verify=true)
     @test length(ir.cfg.blocks) == 8
-    Compiler.verify_ir(ir)
 
     # The IR should remain valid after domsorting
     # (esp. including the insertion of new BasicBlocks for any fix-ups)
@@ -2043,6 +2123,26 @@ let src = code_typed1(()) do
     @test count(iscall((src, setfield!)), src.code) == 1
 end
 
+module _Partials_irpasses
+    mutable struct Partial
+        x::String
+        y::Integer
+        z::Any
+        Partial() = new()
+    end
+end
+
+# once `isdefined(p, name)` holds, this information should be kept
+# as a `PartialStruct` over `p` for subsequent constant propagation.
+let src = code_typed1(()) do
+        p = _Partials_irpasses.Partial()
+        invokelatest(identity, p)
+        isdefined(p, :z) && isdefined(p, :x) || return nothing
+        isdefined(p, :x) & isdefined(p, :z)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 2
+end
+
 # optimize `isdefined` away in the presence of a dominating `setfield!`
 let src = code_typed1(()) do
         a = Ref{Any}()
@@ -2052,4 +2152,97 @@ let src = code_typed1(()) do
         a[]
     end
     @test count(iscall((src, isdefined)), src.code) == 0
+end
+# We should successfully fold the default values of a ScopedValue
+const svalconstprop = ScopedValue(1)
+foosvalconstprop() = svalconstprop[]
+
+let src = code_typed1(foosvalconstprop, ())
+    function is_constfield_load(expr)
+        iscall((src, getfield))(expr) && expr.args[3] in (:(:has_default), :(:default))
+    end
+    @test count(is_constfield_load, src.code) == 0
+end
+
+# JuliaLang/julia#58330: propagate SROA type refinements through scoped value reads and comparisons
+const sval58330 = ScopedValue(1)
+struct SROAEgalNonConst
+    x::Any
+end
+
+@testset "SROA type refinement propagation" begin
+    let (ir, _) = only(Base.code_ircode(()) do
+            @with sval58330 => 2 sval58330[]
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+    end
+
+    let (ir, _) = only(Base.code_ircode(()) do
+            with(sval58330 => 2) do
+                sval58330[]
+            end
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === 2
+    end
+
+    let (ir, _) = only(Base.code_ircode(
+            (Bool, Int, Float64, String); optimize_until="CC: SROA") do b, x, y, z
+            local val
+            if b
+                val = SROAEgalNonConst(x)
+            else
+                val = SROAEgalNonConst(y)
+            end
+            val.x === z
+        end)
+        ret = only(filter(isreturn, ir.stmts.stmt))
+        @test singleton_type(Compiler.argextype(ret.val, ir)) === false
+    end
+end
+# JuliaLang/julia #59548
+# Rewrite `Core._apply_iterate` to use `Core.svec` instead of `tuple` to better match
+# the codegen ABI
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, xs...)
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, 1, xs...) # convert tuples represented by `PartialStruct`
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end
+
+# Negative NewSSAValue ids must be preserved during compaction
+function f_57827(op, init, x)
+    v = op(init, x)
+    i = 0
+    while i < 1
+        v = op(v, x)
+        i += 1
+    end
+    return v
+end
+let rf = (acc, x) -> ifelse(x > acc[1], (x,), (acc[1],))
+    @test f_57827(rf, (0.0,), 1) === (1,)
+    ir = first(only(Base.code_ircode(f_57827, (typeof(rf), Tuple{Float64}, Int64); optimize_until="CC: SROA")))
+    @test ir isa Compiler.IRCode
+end
+
+# Test that SROA lifting cache deduplicates phi nodes when multiple
+# getfield calls access the same field of the same phi node.
+struct LiftCachePoint
+    x::Float64
+    y::Float64
+end
+let src = code_typed1((Bool,)) do cond
+        p = cond ? LiftCachePoint(1.0, 2.0) : LiftCachePoint(3.0, 4.0)
+        return abs(p.x) + p.x * 2.0
+    end
+    @test count(isnew, src.code) == 0
+    @test !any(iscall((src, getfield)), src.code)
+    # the lifting cache should deduplicate: only 1 phi for `p.x`, not 2
+    @test count(x -> isa(x, Core.PhiNode), src.code) == 1
 end

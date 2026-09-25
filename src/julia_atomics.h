@@ -68,7 +68,7 @@ enum jl_memory_order {
 /**
  * Thread synchronization primitives:
  *
- * These roughly follows the c11/c++11 memory model and the act as memory
+ * These roughly follow the c11/c++11 memory model and act as memory
  * barriers at both the compiler level and the hardware level.
  * The only exception is the GC safepoint and GC state transitions for which
  * we use only a compiler (signal) barrier and use the signal handler to do the
@@ -190,7 +190,8 @@ T jl_atomic_exchange_explicit(std::atomic<T> *ptr, S desired, std::memory_order 
 {
      return std::atomic_exchange_explicit<T>(ptr, desired, order);
 }
-#define jl_atomic_exchange_release(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_reease)
+#define jl_atomic_exchange_acquire(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_acquire)
+#define jl_atomic_exchange_release(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_release)
 #define jl_atomic_exchange_relaxed(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_relaxed)
 extern "C" {
 #else
@@ -218,6 +219,8 @@ extern "C" {
 // TODO: Maybe add jl_atomic_cmpswap_weak for spin lock
 #  define jl_atomic_exchange(obj, desired)       \
     atomic_exchange(obj, desired)
+#  define jl_atomic_exchange_acquire(obj, desired)      \
+    atomic_exchange_explicit(obj, desired, memory_order_acquire)
 #  define jl_atomic_exchange_release(obj, desired)      \
     atomic_exchange_explicit(obj, desired, memory_order_release)
 #  define jl_atomic_exchange_relaxed(obj, desired)      \
@@ -266,15 +269,17 @@ extern "C" {
 #define _Atomic(T) T
 
 #undef jl_atomic_exchange
+#undef jl_atomic_exchange_acquire
 #undef jl_atomic_exchange_release
 #undef jl_atomic_exchange_relaxed
 #define jl_atomic_exchange(obj, desired) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
             *p__analyzer__ = (desired); \
             temp__analyzer__; \
         }))
+#define jl_atomic_exchange_acquire jl_atomic_exchange
 #define jl_atomic_exchange_release jl_atomic_exchange
 #define jl_atomic_exchange_relaxed jl_atomic_exchange
 
@@ -284,9 +289,9 @@ extern "C" {
 #undef jl_atomic_cmpswap_relaxed
 #define jl_atomic_cmpswap(obj, expected, desired) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
-            __typeof__((expected)) x__analyzer__ = (expected); \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
+            __auto_type x__analyzer__ = (expected); \
             int eq__analyzer__ = memcmp(&temp__analyzer__, x__analyzer__, sizeof(temp__analyzer__)) == 0; \
             if (eq__analyzer__) \
                 *p__analyzer__ = (desired); \
@@ -320,22 +325,22 @@ extern "C" {
 #undef jl_atomic_fetch_or_relaxed
 #define jl_atomic_fetch_add(obj, val) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
             *(p__analyzer__) = temp__analyzer__ + (val); \
             temp__analyzer__; \
         }))
 #define jl_atomic_fetch_and(obj, val) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
             *(p__analyzer__) = temp__analyzer__ & (val); \
             temp__analyzer__; \
         }))
 #define jl_atomic_fetch_or(obj, val) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
             *(p__analyzer__) = temp__analyzer__ | (val); \
             temp__analyzer__; \
         }))

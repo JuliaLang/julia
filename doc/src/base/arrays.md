@@ -32,7 +32,9 @@ Base.StridedMatrix
 Base.StridedVecOrMat
 Base.GenericMemory
 Base.Memory
+Base.Memory(::UndefInitializer, ::Int)
 Base.memoryref
+Base.memoryindex
 Base.Slices
 Base.RowSlices
 Base.ColumnSlices
@@ -104,6 +106,7 @@ Base.prevind
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 Base.copy!
 Base.isassigned
+Base.isassigned(::Tuple, ::Integer)
 Base.Colon
 Base.CartesianIndex
 Base.CartesianIndices

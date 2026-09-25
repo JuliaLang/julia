@@ -16,7 +16,7 @@
 #define PATHLISTSEPSTRING ":"
 #if defined(PATH_MAX)
 #define JL_PATH_MAX PATH_MAX
-#else // many platforms don't have a max path, we define one anyways
+#else // many platforms don't have a max path, we define one anyway
 #define JL_PATH_MAX 1024
 #endif
 #endif

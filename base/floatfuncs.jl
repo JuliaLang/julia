@@ -26,6 +26,8 @@ That is, `maxintfloat` returns the smallest positive integer-valued floating-poi
 `n` such that `n+1` is *not* exactly representable in the type `T`.
 
 When an `Integer`-type value is needed, use `Integer(maxintfloat(T))`.
+
+See also [`typemax`](@ref), [`floatmax`](@ref).
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
@@ -226,16 +228,70 @@ function isapprox(x::Number, y::Number;
          (nans && isnan(x) && isnan(y))
 end
 
+"""
+    _uabsdiff(x::Integer, y::Integer)
+
+Compute the exact absolute difference, widening the result type when necessary.
+"""
+_uabsdiff(x::Integer, y::Integer) = x < y ? y - x : x - y
+
+_uabsdiff(x::Bool, y::BitInteger) = _uabsdiff(oftype(y, x), y)
+_uabsdiff(x::BitInteger, y::Bool) = _uabsdiff(x, oftype(x, y))
+
+function _uabsdiff(x::BitUnsigned, y::BitUnsigned)
+    lo, hi = minmax(x, y)
+    return hi - lo
+end
+function _uabsdiff(x::BitSigned, y::BitSigned)
+    lo, hi = minmax(x, y)
+    # Unsigned subtraction gives the exact distance even across zero.
+    return unsigned(hi) - unsigned(lo)
+end
+
+# Return (m, u, d, carried), where d is the wrapped absolute difference.
+# On carry, m = |x| and the exact difference is m + u.
+function _mixed_uabsdiff(x::BitSigned, y::BitUnsigned)
+    U = promote_type(unsigned(typeof(x)), typeof(y))
+    v, u = x % U, y % U
+    d = ifelse(x < y, u - v, v - u)
+    # For x < 0, the distance is |x| + y, which carries exactly when d < u.
+    return -v, u, d, (x < 0) & (d < u)
+end
+
+function _uabsdiff(x::BitSigned, y::BitUnsigned)
+    m, u, d, carried = _mixed_uabsdiff(x, y)
+    return carried ? widen(m) + widen(u) : d
+end
+_uabsdiff(x::BitUnsigned, y::BitSigned) = _uabsdiff(y, x)
+
+_uabsdiff_le(x::Integer, y::Integer, b::Real) = _uabsdiff(x, y) <= b
+# Keep widening out of the caller to limit code size.
+@noinline _widesum_le(m::T, u::T, b::Real) where {T<:BitUnsigned} = widen(m) + widen(u) <= b
+function _uabsdiff_le(x::BitSigned, y::BitUnsigned, b::Real)
+    m, u, d, carried = _mixed_uabsdiff(x, y)
+    # Widen only if both the distance and the bound exceed typemax(d).
+    carried & (b > typemax(d)) && return _widesum_le(m, u, b)
+    return (d <= b) & !carried
+end
+_uabsdiff_le(x::BitUnsigned, y::BitSigned, b::Real) = _uabsdiff_le(y, x, b)
+
+_scaled_rtol(rtol::Real, scale::Integer) = (rtol * scale, false)
+_scaled_rtol(rtol::BitInteger, scale::BitInteger) = mul_with_overflow(promote(rtol, scale)...)
+
 function isapprox(x::Integer, y::Integer;
                   atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
-    if norm === abs && atol < 1 && rtol == 0
-        return x == y
-    else
-        # We need to take the difference `max` - `min` when comparing unsigned integers.
-        _x, _y = x < y ? (x, y) : (y, x)
-        return norm(_y - _x) <= max(atol, rtol*max(norm(_x), norm(_y)))
+    if norm === abs
+        atol < 1 && rtol == 0 && return x == y
+        # Check equality before forming the bound, since Inf * 0 is NaN.
+        x == y && return true
+        # uabs handles typemin and avoids signed/unsigned promotion.
+        b, overflowed = _scaled_rtol(rtol, max(uabs(x), uabs(y)))
+        # Overflow implies rtol >= 2, hence rtol * max(|x|, |y|) >= |x - y|.
+        return overflowed || _uabsdiff_le(x, y, max(atol, b))
     end
+    return x == y ||
+        norm(_uabsdiff(x, y)) <= max(atol, rtol*max(norm(uabs(x)), norm(uabs(y))))
 end
 
 """
@@ -271,7 +327,7 @@ end
 """
     fma(x, y, z)
 
-Computes `x*y+z` without rounding the intermediate result `x*y`. On some systems this is
+Compute `x*y+z` without rounding the intermediate result `x*y`. On some systems this is
 significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in certain
 algorithms. See [`muladd`](@ref).
 """
@@ -291,21 +347,43 @@ end
 
 """ Splits a Float64 into a hi bit and a low bit where the high bit has 27 trailing 0s and the low bit has 26 trailing 0s"""
 @inline function splitbits(x::Float64)
-    hi = reinterpret(Float64, reinterpret(UInt64, x) & 0xffff_ffff_f800_0000)
+    hi = truncbits(x, 27)
     return hi, x-hi
 end
 
-function twomul(a::Float64, b::Float64)
-    ahi, alo = splitbits(a)
-    bhi, blo = splitbits(b)
-    abhi = a*b
-    blohi, blolo = splitbits(blo)
-    ablo = alo*blohi - (((abhi - ahi*bhi) - alo*bhi) - ahi*blo) + blolo*alo
-    return abhi, ablo
+# two-product: returns (hi, lo) with hi + lo == x*y exactly. Uses a hardware
+# fma when available, otherwise a split-based error-free transformation.
+function two_mul(x::T, y::T) where {T<:Number}
+    xy = x*y
+    xy, fma(x, y, -xy)
+end
+
+@assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
+    if Core.Intrinsics.have_fma(Float64)
+        xy = x*y
+        return xy, fma_float(x, y, -xy)
+    end
+    # fma-free fallback; `fma_emulated` relies on this branch never calling `fma`
+    xhi, xlo = splitbits(x)
+    yhi, ylo = splitbits(y)
+    xy = x*y
+    ylohi, ylolo = splitbits(ylo)
+    xylo = xlo*ylohi - (((xy - xhi*yhi) - xlo*yhi) - xhi*ylo) + ylolo*xlo
+    return xy, xylo
+end
+
+@assume_effects :consistent @inline function two_mul(x::T, y::T) where T<:Union{Float16, Float32}
+    if Core.Intrinsics.have_fma(T)
+        xy = x*y
+        return xy, fma(x, y, -xy)
+    end
+    xy = widen(x)*y
+    Txy = T(xy)
+    return Txy, T(xy-Txy)
 end
 
 function fma_emulated(a::Float64, b::Float64,c::Float64)
-    abhi, ablo = @inline twomul(a,b)
+    abhi, ablo = @inline two_mul(a, b)
     if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
         aandbfinite = isfinite(a) && isfinite(b)
         if !(isfinite(c) && aandbfinite)
@@ -322,7 +400,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             a = reinterpret(Float64, (reinterpret(UInt64, a) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             b = reinterpret(Float64, (reinterpret(UInt64, b) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             c = c_denorm
-            abhi, ablo = twomul(a,b)
+            abhi, ablo = two_mul(a, b)
             # abhi <= 4 -> isfinite(r)      (α)
             r = abhi+c
             # s ≈ 0                         (β)
@@ -339,7 +417,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
                 bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
                 if (bits_lost != 1) ⊻ (sumhiInt&1 == 1)
-                    sumhi = nextfloat(sumhi, cmp(sumlo,0))
+                    sumhi = nextfloat(sumhi, cmp(sumlo, 0))
                 end
             end
             return ldexp(sumhi, bias)

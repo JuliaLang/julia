@@ -2,7 +2,7 @@
 
 Julia package images provide object (native code) caches for Julia packages.
 They are similar to Julia's [system image](@ref dev-sysimg) and support many of the same features.
-In fact the underlying serialization format is the same, and the system image is the base image that the package images are build against.
+In fact the underlying serialization format is the same, and the system image is the base image that the package images are built against.
 
 ## High-level overview
 
@@ -33,8 +33,10 @@ Dynamic libraries on macOS need to link against `-lSystem`. On recent macOS vers
 To that effect we link with `-undefined dynamic_lookup`.
 
 ## [Package images optimized for multiple microarchitectures](@id pkgimgs-multi-versioning)
-Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. If you are in a heterogeneous environment, with a unified cache,
-you can set the environment variable `JULIA_CPU_TARGET=generic` to multi-version the object caches.
+
+Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. This allows creating package caches that can run efficiently on different CPU architectures within the same environment.
+
+See the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable for more information on how to set the CPU target for package images.
 
 ## Flags that impact package image creation and selection
 
@@ -47,3 +49,27 @@ that were created with different flags will be rejected.
 - `--pkgimages`: To allow running without object caching enabled.
 - `-O`, `--optimize`: Reject package images generated for a lower optimization level,
   but allow for higher optimization levels to be loaded.
+- `--code-coverage`, `--code-coverage-mode`: Whether the image carries coverage
+  counters, and their mode, is recorded in the cache identity. A `count` image
+  can serve `hit` mode. The coverage scope is not part of the identity: an
+  instrumented image carries counters for every statement, and the loading
+  process reports only those its scope selects (user code for `user`, files
+  under the tracked path for `@<path>`).
+
+Compatible coverage flags do not override dependency identity checks. Selecting
+a different image for an out-of-scope dependency can require rebuilding its
+dependents as well.
+
+Coverage runs create instrumented package-image variants alongside ordinary
+caches for every loaded package, independently of the requested scope. Thus
+`--code-coverage=@<path>` reuses the same images as `user` and `all`, even for
+packages outside the tracked path. An initial coverage run may need to precompile
+instrumented dependency images; subsequent runs can reuse them across selectors.
+Instrumented package images also work with an ordinary system image. Reports
+include zero counts for instrumented lines that were not executed; precompilation
+workloads do not contribute hits.
+
+Without coverage, ordinary builds reject instrumented package images. A build
+with an instrumented system image also accepts package images with the same
+instrumentation as that system image. Allocation tracking always requires
+recompilation because images do not carry allocation counters.

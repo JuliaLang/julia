@@ -31,13 +31,18 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
-    shell_name = Base.basename(shell[1])
-
-    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
-    cmd.exec .= expanduser.(cmd.exec)
-
+function repl_cmd(cmd::AbstractCmd, out)
+    if !(cmd isa Cmd)
+        # Pipelines and redirects: run directly without shell wrapping.
+        try
+            run(ignorestatus(cmd))
+        catch
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
+        return nothing
+    end
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
@@ -64,26 +69,25 @@ function repl_cmd(cmd, out)
         cd(dir)
         println(out, pwd())
     else
-        @static if !Sys.iswindows()
-            if shell_name == "fish"
-                shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
-            else
-                shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
-            end
+        if !Sys.iswindows()
+            shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
+            shell_escape_cmd = shell_escape_posixly(cmd)
             cmd = `$shell -c $shell_escape_cmd`
         end
         try
             run(ignorestatus(cmd))
         catch
-            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
-            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+            # Julia throws an exception if it can't find the cmd (which may be the shell itself), but the stack trace isn't useful
             lasterr = current_exceptions()
-            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
             invokelatest(display_error, lasterr)
         end
     end
     nothing
 end
+
+repl_cmd(@nospecialize(cmd), out) =
+    throw(ArgumentError("repl_cmd: expected an `AbstractCmd`, got $(typeof(cmd))"))
 
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
@@ -96,17 +100,40 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
+__script_entry_include(mod::Module, path::String) = _include(identity, mod, path)
+__script_entry_include_string(mod::Module, code::String, filename::String) =
+    include_string(mod, code, filename)
+__script_entry_eval(mod::Module, @nospecialize(ex)) = Core.eval(mod, ex)
+
+is_driver_entry(frame) = !frame.from_c &&
+    (startswith(String(frame.func), "__repl_entry") ||
+     startswith(String(frame.func), "__script_entry"))
+
+# `eval`/`include` machinery a driver entry runs user code through; directly
+# above the cut these frames cannot belong to user code
+function is_driver_machinery(frame)
+    frame.from_c && return false
+    mod = parentmodule(frame)
+    (mod === Base || mod === Core || mod === nothing) || return false
+    return frame.func in (:eval, :include_string, :_include, :include)
+end
+
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
-        # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && startswith(String(frame.func), "__repl_entry"), bt)
-        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
+        # remove REPL/driver frames from interactive printing
+        eval_ind = findlast(is_driver_entry, bt)
+        if eval_ind !== nothing
+            deleteat!(bt, eval_ind:length(bt))
+            while !isempty(bt) && is_driver_machinery(bt[end])
+                pop!(bt)
+            end
+        end
     end
     return bt
 end
 scrub_repl_backtrace(stack::ExceptionStack) =
-    ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
+    ExceptionStack(NamedTuple[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
     length(stack) == 1 && length(stack[1].backtrace) ≤ 1 && !isa(stack[1].exception, MethodError)
@@ -127,6 +154,10 @@ function display_error(io::IO, er, bt)
 end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+__repl_entry_client_lower(mod::Module, @nospecialize(ast)) = Meta.lower(mod, ast)
+__repl_entry_client_eval(mod::Module, @nospecialize(ast)) = Core.eval(mod, ast)
+
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
@@ -139,12 +170,18 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
                 istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
-                invokelatest(display_error, errio, lasterr)
-                errcount = 0
-                lasterr = nothing
+                # error display (user-extensible show methods) runs in a
+                # fresh ^C epoch: the failed evaluation's cancelled epoch
+                # must not poison it, and a stuck printout is cancellable
+                try
+                    ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(new_evaluation_cancel_source!()),
+                                       invokelatest(display_error, errio, lasterr))
+                finally
+                    sigint_close_episode!()
+                end
             else
-                ast = Meta.lower(Main, ast)
-                value = Core.eval(Main, ast)
+                ast = __repl_entry_client_lower(Main, ast)
+                value = __repl_entry_client_eval(Main, ast)
                 setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
@@ -176,8 +213,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     nothing
 end
 
-function _parse_input_line_core(s::String, filename::String)
-    ex = Meta.parseall(s, filename=filename)
+function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
+    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -192,18 +229,18 @@ function _parse_input_line_core(s::String, filename::String)
     return ex
 end
 
-function parse_input_line(s::String; filename::String="none", depwarn=true)
+function parse_input_line(s::String; filename::String="none", depwarn=true, mod::Union{Module, Nothing}=nothing)
     # For now, assume all parser warnings are depwarns
     ex = if depwarn
-        _parse_input_line_core(s, filename)
+        _parse_input_line_core(s, filename, mod)
     else
         with_logger(NullLogger()) do
-            _parse_input_line_core(s, filename)
+            _parse_input_line_core(s, filename, mod)
         end
     end
     return ex
 end
-parse_input_line(s::AbstractString) = parse_input_line(String(s))
+parse_input_line(s::AbstractString; kwargs...) = parse_input_line(String(s); kwargs...)
 
 # detect the reason which caused an :incomplete expression
 # from the error message
@@ -223,10 +260,13 @@ function incomplete_tag(ex::Expr)
         return :none
     elseif isempty(ex.args)
         return :other
-    elseif ex.args[1] isa String
-        return fl_incomplete_tag(ex.args[1])
     else
-        return incomplete_tag(ex.args[1])
+        a = ex.args[1]
+        if a isa String
+            return fl_incomplete_tag(a)::Symbol
+        else
+            return incomplete_tag(a)::Symbol
+        end
     end
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
@@ -235,6 +275,20 @@ function exec_options(opts)
     startup               = (opts.startupfile != 2)
     global have_color     = colored_text(opts)
     global is_interactive = (opts.isinteractive != 0)
+
+    # Enable verbose debugging options when requested by other frameworks
+    debug_env_vars = (
+        "RUNNER_DEBUG",   # github actions when UI "debug logging" is enabled
+        "CI_DEBUG_TRACE", # gitlab CI when UI "debug" toggle is enabled
+        "SYSTEM_DEBUG",   # azure pipelines when UI "System diagnostics" is enabled
+    )
+    for v in debug_env_vars
+        if get_bool_env(v, false)
+            Base.TRACE_EVAL = Base.TRACE_EVAL === :full ? :full : :loc # Enable --trace-eval (location only)
+            ENV["JULIA_TEST_VERBOSE"] = "true" # Set JULIA_TEST_VERBOSE for this session
+            break
+        end
+    end
 
     # pre-process command line argument list
     arg_is_program = !isempty(ARGS)
@@ -274,10 +328,6 @@ function exec_options(opts)
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
 
-    # load terminfo in for styled printing
-    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-    global current_terminfo = load_terminfo(term_env)
-
     # load ~/.julia/config/startup.jl file
     if startup
         try
@@ -291,13 +341,13 @@ function exec_options(opts)
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
-            Core.eval(Main, parse_input_line(arg))
+            __script_entry_eval(Main, parse_input_line(arg; mod=Main))
         elseif cmd == 'E'
-            invokelatest(show, Core.eval(Main, parse_input_line(arg)))
+            invokelatest(show, __script_entry_eval(Main, parse_input_line(arg; mod=Main)))
             println()
         elseif cmd == 'm'
             entrypoint = push!(split(arg, "."), "main")
-            Base.eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
+            __script_entry_eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
             if !invokelatest(should_use_main_entrypoint)
                 error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
             end
@@ -305,7 +355,7 @@ function exec_options(opts)
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
-                include(Main, arg)
+                __script_entry_include(Main, arg)
             else
                 # TODO: Move this logic to Distributed and use a callback
                 @sync for p in invokelatest(Main.procs)
@@ -323,9 +373,9 @@ function exec_options(opts)
         end
         try
             if PROGRAM_FILE == "-"
-                include_string(Main, read(stdin, String), "stdin")
+                __script_entry_include_string(Main, read(stdin, String), "stdin")
             else
-                include(Main, PROGRAM_FILE)
+                __script_entry_include(Main, PROGRAM_FILE)
             end
         catch
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
@@ -364,9 +414,9 @@ end
 
 function load_julia_startup()
     global_file = _global_julia_startup_file()
-    (global_file !== nothing) && include(Main, global_file)
+    (global_file !== nothing) && __script_entry_include(Main, global_file)
     local_file = _local_julia_startup_file()
-    (local_file !== nothing) && include(Main, local_file)
+    (local_file !== nothing) && __script_entry_include(Main, local_file)
     return nothing
 end
 
@@ -427,34 +477,41 @@ function run_fallback_repl(interactive::Bool)
     let input = stdin
         if isa(input, File) || isa(input, IOStream)
             # for files, we can slurp in the whole thing at once
-            ex = parse_input_line(read(input, String))
+            ex = parse_input_line(read(input, String); mod=Main)
             if Meta.isexpr(ex, :toplevel)
                 # if we get back a list of statements, eval them sequentially
                 # as if we had parsed them sequentially
                 for stmt in ex.args
                     eval_user_input(stderr, stmt, true)
                 end
-                body = ex.args
             else
                 eval_user_input(stderr, ex, true)
             end
         else
-            while !eof(input)
+            while true
                 if interactive
                     print("julia> ")
                     flush(stdout)
                 end
+                eof(input) && break
                 try
                     line = ""
                     ex = nothing
                     while !eof(input)
                         line *= readline(input, keep=true)
-                        ex = parse_input_line(line)
+                        ex = parse_input_line(line; mod=Main)
                         if !(isa(ex, Expr) && ex.head === :incomplete)
                             break
                         end
                     end
-                    eval_user_input(stderr, ex, true)
+                    # each interactive input is a fresh ^C epoch (an
+                    # evaluation source, so leftovers stay session-sweepable)
+                    try
+                        ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(new_evaluation_cancel_source!()),
+                                           eval_user_input(stderr, ex, true))
+                    finally
+                        sigint_close_episode!()
+                    end
                 catch err
                     isa(err, InterruptException) ? print("\n\n") : rethrow()
                 end
@@ -475,7 +532,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
         repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
         repl.history_file = history_file
     end
-    # Make sure any displays pushed in .julia/config/startup.jl ends up above the
+    # Make sure any displays pushed in .julia/config/startup.jl end up above the
     # REPLDisplay
     d = REPL.REPLDisplay(repl)
     last_active_repl = @isdefined(active_repl) ? active_repl : nothing
@@ -489,7 +546,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
     finally
         popdisplay(d)
         active_repl = last_active_repl
-        active_repl_backend = last_active_repl_backend
+        global active_repl_backend = last_active_repl_backend
     end
     nothing
 end
@@ -535,12 +592,17 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
+const main_parser = Base.ScopedValues.ScopedValue{Any}(Base.VersionedParse(VERSION))
+function var"#_internal_julia_parse"(args...)
+    main_parser[](args...)
+end
+
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err
+export ans, err, var"#_internal_julia_parse"
 end
 
 function should_use_main_entrypoint()
@@ -550,13 +612,80 @@ function should_use_main_entrypoint()
     return true
 end
 
+
+## The interactive session's two-level cancellation-source tree
+#
+# An interactive driver (the REPL backend) runs every evaluation under its
+# own cancellation source, each a child of one long-lived *session* source:
+# cancelling an evaluation's source stops exactly that evaluation (and
+# everything it spawned), while cancelling the session source sweeps every
+# still-running piece of work any evaluation has started - the runaway
+# `@async` from three prompts ago included. Cancellation is monotonic, so a
+# swept session source is retired and the next evaluation starts a fresh
+# session epoch: "everything so far" always means "since the last sweep".
+
+const _session_cancel_source = Ref{Union{Nothing, CancellationTokenSource}}(nothing)
+const _session_cancel_lock = ReentrantLock()
+
+# The current session source, created on first use (and after each sweep).
+function session_cancel_source!()
+    lock(_session_cancel_lock; cancel=nothing)
+    try
+        ses = _session_cancel_source[]
+        if ses === nothing
+            ses = CancellationTokenSource()
+            _session_cancel_source[] = ses
+        end
+        return ses
+    finally
+        unlock(_session_cancel_lock)
+    end
+end
+
+# A fresh source governing one interactive evaluation, linked under the
+# session source.
+new_evaluation_cancel_source!() =
+    CancellationTokenSource(CancellationToken(session_cancel_source!()))
+
+"""
+    Base.cancel_session_work!() -> Bool
+
+Cancel every still-running piece of work started under the current
+interactive session's evaluations (see the session-source tree above) and
+start a fresh session epoch. Returns whether there was a session to sweep.
+The REPL binds this to a repeated `^C` at an empty prompt.
+"""
+function cancel_session_work!()
+    lock(_session_cancel_lock; cancel=nothing)
+    ses = try
+        s = _session_cancel_source[]
+        _session_cancel_source[] = nothing
+        s
+    finally
+        unlock(_session_cancel_lock)
+    end
+    ses === nothing && return false
+    cancel!(ses)
+    return true
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
     local ret = 0
-    try
+    # `--project` has been processed at this point - latch the active project's syntax
+    # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
+    # at each prompt.
+    # The whole foreground execution runs as a ^C episode: a SIGINT (with
+    # exit-on-sigint disabled) cancels the episode token's scope. An
+    # interactive session installs its own per-evaluation episodes later
+    # (see REPL.repl_backend_loop), superseding this one. Deliberately a
+    # standalone root, not a session child - see the `sigint_new_episode!`
+    # docstring.
+    sigint_tok = sigint_new_episode!()
+    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)
@@ -571,10 +700,30 @@ function _start()
             ret = repl_main(ARGS)
         end
         ret === nothing && (ret = 0)
-        ret = Cint(ret)
+        ret = try
+            Cint(ret)
+        catch
+            @error "The return value of `main` should be `nothing` or convertible to `Cint`"
+            Cint(1)
+        end
     catch
         ret = Cint(1)
-        invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
+        # report the error in a fresh ^C epoch (the script's epoch may be
+        # the very cancellation being reported; level-triggered checks in
+        # the printing path would re-throw it mid-report)
+        local errs = scrub_repl_backtrace(current_exceptions())
+        try
+            ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
+                               invokelatest(display_error, errs))
+        catch
+            # The report itself failed - e.g. a further ^C cancelled the
+            # display epoch, or a user-defined `show` method errored. The
+            # exit code already reflects the original failure; leave a bare
+            # note rather than dying with an unhandled exception.
+            Core.print(Core.stderr, "\nSYSTEM: displaying the error report failed\n")
+        finally
+            sigint_close_episode!()
+        end
     end
     if is_interactive && get(stdout, :color, false)
         print(color_normal)
@@ -605,8 +754,8 @@ entrypoint. The precise semantics of the entrypoint depend on the CLI driver.
 In the `julia` driver, if `Main.main` is marked as an entrypoint, it will be automatically called upon
 the completion of script execution.
 
-The `@main` macro may be used standalone or as part of the function definition, though in the latter
-case, parentheses are required. In particular, the following are equivalent:
+The `@main` macro may be used standalone or as part of the function definition.
+The following are equivalent:
 
 ```
 function @main(args)

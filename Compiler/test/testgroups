@@ -9,6 +9,7 @@ inference
 inline
 interpreter_exec
 invalidation
+precompile
 irpasses
 newinterp
 ssair
@@ -16,3 +17,4 @@ tarjan
 validation
 special_loading
 abioverride
+verifytrim

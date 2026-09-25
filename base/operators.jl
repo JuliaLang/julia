@@ -83,8 +83,23 @@ julia> supertype(Vector)
 DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
-supertype(T::DataType) = (@_total_meta; T.super)
-supertype(T::UnionAll) = (@_total_meta; UnionAll(T.var, supertype(T.body)))
+function supertype(T::DataType)
+    @_foldable_meta
+    # force the computation of a deferred supertype (an instantiation of a
+    # self-referential definition materializes its supertype graph lazily,
+    # one level per demand, see issue #61347); idempotent, so still foldable.
+    # The subsequent plain field read keeps `getfield`'s inference precision.
+    ccall(:jl_datatype_compute_super, Ptr{Cvoid}, (Any,), T)
+    return getfield(T, :super)
+end
+function getproperty(T::DataType, s::Symbol)
+    @inline
+    # fill the deferred supertype cache on access, so raw `.super` reads keep
+    # working for instantiations of self-referential definitions (#61347)
+    s === :super && return supertype(T)
+    return getfield(T, s)
+end
+supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
 
@@ -124,7 +139,7 @@ also implement [`<`](@ref) to ensure consistency of comparisons.
 ==
 
 """
-    isequal(x, y) -> Bool
+    isequal(x, y)::Bool
 
 Similar to [`==`](@ref), except for the treatment of floating point numbers
 and of missing values. `isequal` treats all floating-point `NaN` values as equal
@@ -288,12 +303,11 @@ orderings such as [`isless`](@ref).
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
 """
-isunordered(x) = false
+isunordered(_) = false
 isunordered(x::AbstractFloat) = isnan(x)
-isunordered(x::Missing) = true
+isunordered(::Missing) = true
 
 ==(T::Type, S::Type) = (@_total_meta; ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0)
-!=(T::Type, S::Type) = (@_total_meta; !(T == S))
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
 
@@ -319,11 +333,12 @@ false
 ```
 """
 !=(x, y) = !(x == y)
+typeof(!=).name.max_methods = UInt8(1)
 const ≠ = !=
 
 """
-    ===(x,y) -> Bool
-    ≡(x,y) -> Bool
+    ===(x,y)::Bool
+    ≡(x,y)::Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
 them. First the types of `x` and `y` are compared. If those are identical, mutable objects
@@ -423,6 +438,7 @@ true
 ```
 """
 >(x, y) = y < x
+typeof(>).name.max_methods = UInt8(1)
 
 """
     <=(x, y)
@@ -454,6 +470,14 @@ const ≤ = <=
 
 Greater-than-or-equals comparison operator. Falls back to `y <= x`.
 
+# Implementation
+
+New types should prefer to implement [`<=`](@ref) instead of this function,
+and rely on the fallback definition `>=(x, y) = y <= x`.
+
+Furthermore, in many cases it is enough to implement just [`<`](@ref) and
+[`==`](@ref), relying on the fallback definitions of both `<=` and `>=`.
+
 # Examples
 ```jldoctest
 julia> 'a' >= 'b'
@@ -470,6 +494,7 @@ true
 ```
 """
 >=(x, y) = (y <= x)
+typeof(>=).name.max_methods = UInt8(1)
 const ≥ = >=
 
 # this definition allows Number types to implement < instead of isless,
@@ -566,7 +591,7 @@ minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
 The identity function. Returns its argument.
 
-See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
+See also [`one`](@ref), [`oneunit`](@ref), [`LinearAlgebra.I`](@ref).
 
 # Examples
 ```jldoctest
@@ -633,9 +658,9 @@ function afoldl(op, a, bs...)
     end
     return y
 end
-setfield!(typeof(afoldl).name.mt, :max_args, 34, :monotonic)
+setfield!(typeof(afoldl).name, :max_args, Int32(34), :monotonic)
 
-for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
+for op in (:+, :(+%), :*, :(*%), :&, :|, :xor, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
@@ -809,7 +834,7 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
-See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+See also [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -836,7 +861,7 @@ const % = rem
 The quotient from Euclidean (integer) division. Generally equivalent
 to a mathematical operation x/y without a fractional part.
 
-See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
+See also [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -860,68 +885,68 @@ const ÷ = div
 """
     mod1(x, y)
 
-Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
-in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+Equivalent to `rem(x, y, RoundUp) + x*sign(y)`. Returns a value in the range
+``(0, y]`` for positive `y` and ``[-|y|,0)`` for negative `y`.
 
-With integer arguments and positive `y`, this is equal to `mod(x, 1:y)`, and hence natural
-for 1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` is natural for computations with
-offsets or strides.
+With integer arguments and positive `y`, this is equal to `mod(x, 1:y)`, and hence natural for
+1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` is natural for 0-based indexing.
 
-See also [`mod`](@ref), [`fld1`](@ref), [`fldmod1`](@ref).
+See also [`rem`](@ref), [`mod`](@ref), [`cld`](@ref), [`cldmod1`](@ref).
 
 # Examples
 ```jldoctest
 julia> mod1(4, 2)
 2
 
-julia> mod1.(-5:5, 3)'
-1×11 adjoint(::Vector{Int64}) with eltype Int64:
- 1  2  3  1  2  3  1  2  3  1  2
+julia> [-7:7  mod1.(-7:7, 3)]'
+2×15 adjoint(::Matrix{Int64}) with eltype Int64:
+ -7  -6  -5  -4  -3  -2  -1  0  1  2  3  4  5  6  7
+  2   3   1   2   3   1   2  3  1  2  3  1  2  3  1
 
-julia> mod1.([-0.1, 0, 0.1, 1, 2, 2.9, 3, 3.1]', 3)
+julia> mod1.([-0.1  0  0.1  1  2  2.9  3  3.1], 3)
 1×8 Matrix{Float64}:
  2.9  3.0  0.1  1.0  2.0  2.9  3.0  0.1
 ```
 """
-mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
+mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); iszero(m) ? y : m)
 
 
 """
-    fld1(x, y)
+    cldmod1(x, y)
 
-Flooring division, returning a value consistent with `mod1(x,y)`
+Return `(cld(x,y), mod1(x,y))`. For positive integer inputs, this is the (col, row) index
+of the xᵗʰ element in a column major matrix with y rows.
 
-See also [`mod1`](@ref), [`fldmod1`](@ref).
+See also [`cld`](@ref), [`mod1`](@ref), [`divrem`](@ref), [`fldmod`](@ref).
 
 # Examples
 ```jldoctest
-julia> x = 15; y = 4;
+julia> col, row = cldmod1(20, 6)
+(4, 2)
 
-julia> fld1(x, y)
-4
-
-julia> x == fld(x, y) * y + mod(x, y)
+julia> 20 == (col - 1) * 6 + row
 true
 
-julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
-true
+julia> reshape(1:36, 6, 6)
+6×6 reshape(::UnitRange{Int64}, 6, 6) with eltype Int64:
+ 1   7  13  19  25  31
+ 2   8  14  20  26  32
+ 3   9  15  21  27  33
+ 4  10  16  22  28  34
+ 5  11  17  23  29  35
+ 6  12  18  24  30  36
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld((x - m) + y, y))
-function fld1(x::T, y::T) where T<:Integer
-    d = div(x, y)
-    return d + (!signbit(x ⊻ y) & (d * y != x))
-end
+cldmod1(x, y) = (cld(x, y), mod1(x, y))
 
 """
     fldmod1(x, y)
 
-Return `(fld1(x,y), mod1(x,y))`.
+Legacy spelling of `cldmod1(x, y)` for integers.
 
-See also [`fld1`](@ref), [`mod1`](@ref).
+See also [`cldmod1`](@ref).
 """
-fldmod1(x, y) = (fld1(x, y), mod1(x, y))
-
+fldmod1(x, y) = cldmod1(x, y)
 
 """
     widen(x)
@@ -973,7 +998,7 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 |>(x, f) = f(x)
 
 _stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) && !Core.has_free_typevars(T) ? Type{T} : DataType
 
 """
     f = Returns(value)
@@ -1017,7 +1042,7 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
-The last argument to `∘` execute first.
+The last argument to `∘` executes first.
 
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
@@ -1187,12 +1212,26 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
-    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
+    (left, right) = _split_tuple(args, N-1)
+    return f.f(left..., f.x, right...; kws...)
 end
 
 # Special cases for improved constant propagation
 (f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
 (f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
+
+function Base.show(io::IO, fix::Fix{N}) where {N}
+    constr = Fix{N}
+    callable = fix.f
+    fixed_argument = fix.x
+    show(io, constr)
+    print(io, '(')
+    show(io, callable)
+    print(io, ',')
+    print(io, ' ')
+    show(io, fixed_argument)
+    print(io, ')')
+end
 
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
@@ -1342,6 +1381,57 @@ end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
+"""
+    unsplat(f)
+
+Given a function `f` that takes a single tuple argument, return a new function
+that takes any number of arguments and bundles them into a tuple to pass to the
+original function.
+
+That is, the return value is *effectively* equivalent to `(args...) -> f(args)`, except that
+it may use a more specialized function type (such as `f ∘ tuple` via [`∘`](@ref) and [`tuple`](@ref))
+for improved clarity or efficiency, rather than creating a new anonymous function.
+
+`unsplat` is the inverse of [`splat`](@ref): `unsplat(splat(f)) === f` and `splat(unsplat(f)) === f`.
+This operation is also sometimes referred to as "slurp".
+
+# Examples
+```jldoctest
+julia> unsplat(sum)(1, 2, 3)
+6
+
+julia> unsplat(splat(+)) === +
+true
+```
+
+!!! compat "Julia 1.14"
+    `unsplat` requires at least Julia 1.14.
+"""
+unsplat(f) = f ∘ tuple
+unsplat(s::Splat) = s.f
+splat(f::ComposedFunction{<:Any,typeof(tuple)}) = f.outer
+
+"""
+    tap(f)
+
+Create a function that calls `f(x)` and returns `x`.
+
+# Examples
+```jldoctest
+julia> 2 |> sqrt |> tap(println) |> inv
+1.4142135623730951
+0.7071067811865475
+
+julia> "hello" |> uppercase |> tap(Base.Fix1(println, stderr)) |> length
+HELLO
+5
+```
+
+!!! compat "Julia 1.14"
+    `tap` requires at least Julia 1.14.
+"""
+tap(f) = x -> (f(x); x)
+
 ## in and related operators
 
 """
@@ -1357,38 +1447,22 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr::Any)
-    anymissing = false
-    for y in itr
-        v = (y == x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
-        end
-    end
-    return anymissing ? missing : false
-end
+in(x, itr::Any) = any(==(x), itr)
 
 # Specialized variant of in for Tuple, which can generate typed comparisons for each element
 # of the tuple, skipping values that are statically known to be != at compile time.
-in(x, itr::Tuple) = _in_tuple(x, itr, false)
+in(x, itr::Tuple) = _in_tuple(x, itr)
+
 # This recursive function will be unrolled at compiletime, and will not generate separate
 # llvm-compiled specializations for each step of the recursion.
-function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
+function _in_tuple(x, @nospecialize(itr::Tuple), result = false)
     @inline
-    # Base case
-    if isempty(itr)
-        return anymissing ? missing : false
-    end
-    # Recursive case
+    isempty(itr) && return result
     v = (itr[1] == x)
-    if ismissing(v)
-        anymissing = true
-    elseif v
+    if v === true
         return true
     end
-    return _in_tuple(x, tail(itr), anymissing)
+    return _in_tuple(x, tail(itr), result | v)
 end
 
 # fallback to the loop implementation after some number of arguments to avoid inference blowup
@@ -1399,7 +1473,7 @@ const ∈ = in
 ∉(itr) = Fix2(∉, itr)
 
 """
-    ∋(collection, item) -> Bool
+    ∋(collection, item)::Bool
 
 Like [`in`](@ref), but with arguments in reverse order.
 Avoid adding methods to this function; define `in` instead.
@@ -1421,8 +1495,8 @@ a function equivalent to `y -> item in y`.
 ∌(x) = Fix2(∌, x)
 
 """
-    in(item, collection) -> Bool
-    ∈(item, collection) -> Bool
+    in(item, collection)::Bool
+    ∈(item, collection)::Bool
 
 Determine whether an item is in the given collection, in the sense that it is
 [`==`](@ref) to one of the values generated by iterating over the collection.
@@ -1436,13 +1510,14 @@ contains `missing` but not `item`, in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
 Some collections follow a slightly different definition. For example,
-[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements;
-[`Dict`](@ref)s look for `key=>value` pairs, and the `key` is compared using
-[`isequal`](@ref).
+[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
+For [`Dict`](@ref), [`ImmutableDict`](@ref), and [`WeakKeyDict`](@ref),
+`key=>value` membership compares keys using [`isequal`](@ref) and values using
+[`==`](@ref); [`IdDict`](@ref) instead compares keys using [`===`](@ref).
 
 To test for the presence of a key in a dictionary, use [`haskey`](@ref)
-or `k in keys(dict)`. For the collections mentioned above,
-the result is always a `Bool`.
+or `k in keys(dict)`. For the dictionaries mentioned above,
+the result of `haskey(dict, k)` or `k in keys(dict)` is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `items` and `collection` are broadcasted over, which is often not what is intended.
@@ -1452,7 +1527,7 @@ corresponding position in `collection`. To get a vector indicating whether each 
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
+See also [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest
@@ -1494,8 +1569,8 @@ julia> [1, 2] .∈ ([2, 3],)
 in
 
 """
-    ∉(item, collection) -> Bool
-    ∌(collection, item) -> Bool
+    ∉(item, collection)::Bool
+    ∌(collection, item)::Bool
 
 Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
 

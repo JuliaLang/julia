@@ -7,7 +7,6 @@ STATISTIC(NewGCFrameCount, "Number of lowered newGCFrameFunc intrinsics");
 STATISTIC(PushGCFrameCount, "Number of lowered pushGCFrameFunc intrinsics");
 STATISTIC(PopGCFrameCount, "Number of lowered popGCFrameFunc intrinsics");
 STATISTIC(GetGCFrameSlotCount, "Number of lowered getGCFrameSlotFunc intrinsics");
-STATISTIC(GCAllocBytesCount, "Number of lowered GCAllocBytesFunc intrinsics");
 STATISTIC(QueueGCRootCount, "Number of lowered queueGCRootFunc intrinsics");
 STATISTIC(SafepointCount, "Number of lowered safepoint intrinsics");
 
@@ -20,14 +19,16 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     // Create the GC frame.
     IRBuilder<> builder(target);
     auto gcframe_alloca = builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
-    gcframe_alloca->setAlignment(Align(16));
+    // LateLowerGCFrame records any stronger alignment needed by moved allocas.
+    gcframe_alloca->setAlignment(std::max(Align(16), target->getRetAlign().valueOrOne()));
     // addrspacecast as needed for non-0 alloca addrspace
-    auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, T_prjlvalue->getPointerTo(0)));
+    auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
     gcframe->takeName(target);
 
     // Zero out the GC frame.
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
-    builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16), tbaa_gcframe);
+    auto memset_instr = builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16));
+    memset_instr->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 
     target->replaceAllUsesWith(gcframe);
     target->eraseFromParent();
@@ -51,7 +52,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
             builder.CreateAlignedLoad(T_ppjlvalue, pgcstack, Align(sizeof(void*)), "task.gcstack"),
             builder.CreatePointerCast(
                     builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1, "frame.prev"),
-                    PointerType::get(T_ppjlvalue, 0)),
+                    PointerType::get(T_ppjlvalue->getContext(), 0)),
             Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     builder.CreateAlignedStore(
@@ -104,7 +105,11 @@ void FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 {
     ++QueueGCRootCount;
     assert(target->arg_size() == 1);
-    target->setCalledFunction(queueRootFunc);
+    // The site may execute with a reset region published (metadata inherited
+    // from the write barrier CancellationLowering annotated).
+    target->setCalledFunction(target->hasMetadata("julia.reset_region")
+                                  ? queueRootResetSafeFunc
+                                  : queueRootFunc);
 }
 
 void FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
@@ -114,51 +119,6 @@ void FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     Value* signal_page = target->getOperand(0);
     builder.CreateLoad(T_size, signal_page, true);
-    target->eraseFromParent();
-}
-
-void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
-{
-    ++GCAllocBytesCount;
-    assert(target->arg_size() == 3);
-    CallInst *newI;
-
-    IRBuilder<> builder(target);
-    auto ptls = target->getArgOperand(0);
-    auto type = target->getArgOperand(2);
-    uint64_t derefBytes = 0;
-    if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
-        size_t sz = (size_t)CI->getZExtValue();
-        // This is strongly architecture and OS dependent
-        int osize;
-        int offset = jl_gc_classify_pools(sz, &osize);
-        if (offset < 0) {
-            newI = builder.CreateCall(
-                bigAllocFunc,
-                { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
-            if (sz > 0)
-                derefBytes = sz;
-        }
-        else {
-            auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
-            auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize, type });
-            if (sz > 0)
-                derefBytes = sz;
-        }
-    } else {
-        auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
-        // allocTypedFunc does not include the type tag in the allocation size!
-        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
-        derefBytes = sizeof(void*);
-    }
-    newI->setAttributes(newI->getCalledFunction()->getAttributes());
-    unsigned align = std::max((unsigned)target->getRetAlign().valueOrOne().value(), (unsigned)sizeof(void*));
-    newI->addRetAttr(Attribute::getWithAlignment(F.getContext(), Align(align)));
-    if (derefBytes > 0)
-        newI->addDereferenceableRetAttr(derefBytes);
-    newI->takeName(target);
-    target->replaceAllUsesWith(newI);
     target->eraseFromParent();
 }
 
@@ -178,6 +138,9 @@ bool FinalLowerGC::shouldRunFinalGC()
     should_run |= hasUse(*this, jl_intrinsics::GCAllocBytes);
     should_run |= hasUse(*this, jl_intrinsics::queueGCRoot);
     should_run |= hasUse(*this, jl_intrinsics::safepoint);
+    should_run |= (object_write_barrier_func && !object_write_barrier_func->use_empty());
+    should_run |= (field_write_barrier_p11_func && !field_write_barrier_p11_func->use_empty());
+    should_run |= (field_write_barrier_p13_func && !field_write_barrier_p13_func->use_empty());
     return should_run;
 }
 
@@ -185,6 +148,11 @@ bool FinalLowerGC::runOnFunction(Function &F)
 {
     initAll(*F.getParent());
     pgcstack = getPGCstack(F);
+
+    auto gc_alloc_bytes = getOrNull(jl_intrinsics::GCAllocBytes);
+    SmallVector<CallInst*, 0> write_barriers;
+    SmallVector<CallInst*, 0> alloc_bytes;
+
     if (!pgcstack || !shouldRunFinalGC())
         goto verify_skip;
 
@@ -193,7 +161,54 @@ bool FinalLowerGC::runOnFunction(Function &F)
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
+    queueRootResetSafeFunc = getOrDeclare(jl_well_known::GCQueueRootResetSafe);
+    smallAllocResetSafeFunc = getOrDeclare(jl_well_known::GCSmallAllocResetSafe);
+    bigAllocResetSafeFunc = getOrDeclare(jl_well_known::GCBigAllocResetSafe);
+    allocTypedResetSafeFunc = getOrDeclare(jl_well_known::GCAllocTypedResetSafe);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
+
+
+    // The replacement for these may require creating new BasicBlocks
+    // So we process them separately
+    for (auto &BB : F) {
+        for (auto it = BB.begin(); it != BB.end();) {
+            auto *CI = dyn_cast<CallInst>(&*it);
+            if (!CI) {
+                ++it;
+                continue;
+            }
+            Value *callee = CI->getCalledOperand();
+
+            if (isWriteBarrierFunc(callee)) {
+                assert(CI->arg_size() >= 1);
+                write_barriers.push_back(CI);
+            }
+            if (gc_alloc_bytes && callee == gc_alloc_bytes) {
+                assert(CI->arg_size() >= 1);
+                alloc_bytes.push_back(CI);
+            }
+
+            ++it;
+        }
+    }
+
+    if (gc_alloc_bytes) {
+        for (auto CI : alloc_bytes ) {
+            auto newI = lowerGCAllocBytes(CI, F);
+            if (newI != CI) {
+                CI->replaceAllUsesWith(newI);
+                CI->eraseFromParent();
+                continue;
+            }
+        }
+    }
+
+    // Write barriers should always be processed beforehand
+    // since they may insert julia.queue_gc_root intrinsics
+    for (auto CI : write_barriers) {
+        lowerWriteBarrier(CI, F);
+        CI->eraseFromParent();
+    }
 
     // Lower all calls to supported intrinsics.
     for (auto &BB : F) {
@@ -217,7 +232,6 @@ bool FinalLowerGC::runOnFunction(Function &F)
             LOWER_INTRINSIC(getGCFrameSlot, lowerGetGCFrameSlot);
             LOWER_INTRINSIC(pushGCFrame, lowerPushGCFrame);
             LOWER_INTRINSIC(popGCFrame, lowerPopGCFrame);
-            LOWER_INTRINSIC(GCAllocBytes, lowerGCAllocBytes);
             LOWER_INTRINSIC(queueGCRoot, lowerQueueGCRoot);
             LOWER_INTRINSIC(safepoint, lowerSafepoint);
 
@@ -236,6 +250,12 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
             Value *callee = CI->getCalledOperand();
             assert(callee);
+            if (isWriteBarrierFunc(callee)) {
+                errs() << "Final-GC-lowering didn't eliminate all write barriers from '" << F.getName() << "', dumping entire module!\n\n";
+                errs() << *F.getParent() << "\n";
+                abort();
+            }
+
             auto IS_INTRINSIC = [&](auto intrinsic) {
                 auto intrinsic2 = getOrNull(intrinsic);
                 if (intrinsic2 == callee) {
@@ -263,7 +283,7 @@ PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM
 #ifdef JL_VERIFY_PASSES
         assert(!verifyLLVMIR(F));
 #endif
-        return PreservedAnalyses::allInSet<CFGAnalyses>();
+        return PreservedAnalyses::none();
     }
     return PreservedAnalyses::all();
 }

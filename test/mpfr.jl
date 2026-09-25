@@ -35,6 +35,9 @@ import Base.MPFR
 
     @test typeof(BigFloat(1//1)) == BigFloat
     @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
+    rat = 1 // (big(2)^300 + 1)
+    @test BigFloat(rat, RoundDown) < rat < BigFloat(rat, RoundUp)
+    @test BigFloat(-rat, RoundUp) < -rat < BigFloat(-rat, RoundDown)
 
     # BigFloat constructor respects global precision when not specified
     let prec = precision(BigFloat) < 16 ? 256 : precision(BigFloat) ÷ 2
@@ -483,6 +486,16 @@ end
     # issue 15659
     @test (setprecision(53) do; big(1/3); end) < 1//3
 end
+# a throwaway precision type that reaches MPFR's deprecated generic
+# `setprecision(f, ::Type{T}, prec)` fallback
+struct DeprecatedSetprecType end
+const _deprec_setprec = Ref(10)
+Base.precision(::Type{DeprecatedSetprecType}) = _deprec_setprec[]
+Base.setprecision(::Type{DeprecatedSetprecType}, p::Integer) = (_deprec_setprec[] = p)
+@testset "deprecated setprecision(f, ::Type, prec) fallback" begin
+    @test_deprecated setprecision(() -> precision(DeprecatedSetprecType), DeprecatedSetprecType, 5)
+    @test _deprec_setprec[] == 10   # precision was restored afterwards
+end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))
     @test isinteger(BigFloat(12))
@@ -667,16 +680,19 @@ end
         @test string(parse(BigFloat, "0.1")) == "0.10000002"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
     setprecision(40) do
         @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
     setprecision(123) do
         @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
 end
 @testset "eps" begin
@@ -998,7 +1014,7 @@ end
 
     test_show_bigfloat(big"1.23456789", contains_e=false, starts="1.23")
     test_show_bigfloat(big"-1.23456789", contains_e=false, starts="-1.23")
-    test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e+10000")
+    test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e10000")
     test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
     test_show_bigfloat(big"42.0", contains_e=false, starts="42.0")
     test_show_bigfloat(big"420.0", contains_e=false, starts="420.0") # '0's have to be added on the right before point
@@ -1006,10 +1022,10 @@ end
     test_show_bigfloat(big"420000.0", contains_e=false, starts="420000.0")
     test_show_bigfloat(big"654321.0", contains_e=false, starts="654321.0")
     test_show_bigfloat(big"-654321.0", contains_e=false, starts="-654321.0")
-    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e+06")
+    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e6")
     test_show_bigfloat(big"0.000123", contains_e=false, starts="0.000123")
     test_show_bigfloat(big"-0.000123", contains_e=false, starts="-0.000123")
-    test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-05")
+    test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-5")
 
     for to_string in [string,
                       x->sprint(show, x),
@@ -1104,3 +1120,5 @@ end
         @test Base.cconvert(Ref{BigFloat}, x) isa Base.MPFR.BigFloatData
     end
 end
+
+@test_throws FieldError BigFloat(1).notfield = 1

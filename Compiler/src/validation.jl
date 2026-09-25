@@ -8,8 +8,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :static_parameter => 1:1,
     :(&) => 1:1,
     :(=) => 2:2,
-    :method => 1:4,
-    :const => 1:2,
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
@@ -21,9 +19,8 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :boundscheck => 0:1,
     :copyast => 1:1,
     :meta => 0:typemax(Int),
-    :global => 1:1,
-    :globaldecl => 1:2,
     :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects, gc_safe), args..., roots...
+    :foreignglobal => 1:1, # name
     :cfunction => 5:5,
     :isdefined => 1:2,
     :code_coverage_effect => 0:0,
@@ -35,8 +32,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :aliasscope => 0:0,
     :popaliasscope => 0:0,
     :new_opaque_closure => 5:typemax(Int),
-    :import => 1:typemax(Int),
-    :using => 1:typemax(Int),
     :export => 1:typemax(Int),
     :public => 1:typemax(Int),
     :latestworld => 0:0,
@@ -54,8 +49,6 @@ const SLOTFLAGS_MISMATCH = "length(slotnames) < length(slotflags)"
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
 const SSAFLAGS_MISMATCH = "not all SSAValues have a corresponding `ssaflags`"
-const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
-const NON_TOP_LEVEL_GLOBAL = "encountered `Expr` head `:global` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 const INVALID_SIGNATURE_OPAQUE_CLOSURE = "invalid signature of method for opaque closure - `sig` field must always be set to `Tuple`"
@@ -72,11 +65,13 @@ function maybe_validate_code(mi::MethodInstance, src::CodeInfo, kind::String)
         if !isempty(errors)
             for e in errors
                 if mi.def isa Method
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for method ",
-                            mi.def, ": ", e)
+                    println(Core.stderr,
+                            "WARNING: Encountered invalid ", kind,
+                            " code for method ", mi.def, ": ", e)
                 else
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
-                            mi.def, ": ", e)
+                    println(Core.stderr,
+                            "WARNING: Encountered invalid ", kind,
+                            " code for top level expression in ", mi.def, ": ", e)
                 end
             end
             error("")
@@ -87,16 +82,11 @@ end
 function _validate_val!(@nospecialize(x), errors, ssavals::BitSet)
     if isa(x, Expr)
         if x.head === :call || x.head === :invoke || x.head === :invoke_modify
-            f = x.args[1]
-            if f isa GlobalRef && (f.name === :cglobal) && x.head === :call
-                # TODO: these are not yet linearized
-            else
-                for arg in x.args
-                    if !is_valid_argument(arg)
-                        push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
-                    else
-                        _validate_val!(arg, errors, ssavals)
-                    end
+            for arg in x.args
+                if !is_valid_argument(arg)
+                    push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
+                else
+                    _validate_val!(arg, errors, ssavals)
                 end
             end
         end
@@ -123,10 +113,6 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
     for x in c.code
         if isa(x, Expr)
             head = x.head
-            if !is_top_level
-                head === :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
-                head === :global && push!(errors, InvalidCodeError(NON_TOP_LEVEL_GLOBAL))
-            end
             narg_bounds = get(VALID_EXPR_HEADS, head, -1:-1)
             nargs = length(x.args)
             if narg_bounds == -1:-1
@@ -148,9 +134,9 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
                 validate_val!(rhs)
             elseif head === :call || head === :invoke || x.head === :invoke_modify ||
                 head === :gc_preserve_end || head === :meta ||
-                head === :inbounds || head === :foreigncall || head === :cfunction ||
-                head === :const || head === :leave || head === :pop_exception ||
-                head === :method || head === :global || head === :static_parameter ||
+                head === :inbounds || head === :foreigncall || head === :foreignglobal || head === :cfunction ||
+                head === :leave || head === :pop_exception ||
+                head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
                 head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline
                 validate_val!(x)
@@ -183,6 +169,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
         elseif isa(x, SlotNumber)
         elseif isa(x, Argument)
         elseif isa(x, GlobalRef)
+        elseif isa(x, Core.BindingPartition)
         elseif isa(x, LineNumberNode)
         elseif isa(x, PiNode)
         elseif isa(x, PhiCNode)
@@ -225,7 +212,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstanc
         mnargs = 0
     else
         m = mi.def::Method
-        mnargs = m.nargs
+        mnargs = Int(m.nargs)
         n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)
         if m.is_for_opaque_closure
             m.sig === Tuple || push!(errors, InvalidCodeError(INVALID_SIGNATURE_OPAQUE_CLOSURE, (m.sig, m.isva)))
@@ -234,6 +221,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstanc
         end
     end
     if isa(c, CodeInfo)
+        mnargs = Int(c.nargs)
         mnargs > length(c.slotnames) && push!(errors, InvalidCodeError(SLOTNAMES_NARGS_MISMATCH))
         validate_code!(errors, c, is_top_level)
     end
@@ -242,11 +230,11 @@ end
 
 validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
-is_valid_lvalue(@nospecialize(x)) = isa(x, SlotNumber) || isa(x, GlobalRef)
+is_valid_lvalue(@nospecialize(x)) = isa(x, SlotNumber) || isa(x, GlobalRef) || isa(x, Core.BindingPartition)
 
 function is_valid_argument(@nospecialize(x))
     if isa(x, SlotNumber) || isa(x, Argument) || isa(x, SSAValue) ||
-       isa(x, GlobalRef) || isa(x, QuoteNode) || (isa(x, Expr) && is_value_pos_expr_head(x.head))  ||
+       isa(x, GlobalRef) || isa(x, Core.BindingPartition) || isa(x, QuoteNode) ||
        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
        isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
@@ -259,7 +247,7 @@ end
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
     if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call,
-        :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast,
+        :invoke, :invoke_modify, :foreigncall, :foreignglobal, :cfunction, :gc_preserve_begin, :copyast,
         :new_opaque_closure)
         return true
     end

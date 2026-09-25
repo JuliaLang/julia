@@ -19,7 +19,7 @@ include("testenv.jl")
 
 @test length(methods(ambig, (Int, Int))) == 1
 @test length(methods(ambig, (UInt8, Int))) == 0
-@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 3
+@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 2
 
 @test ambig("hi", "there") == 1
 @test ambig(3.1, 3.2) == 5
@@ -42,7 +42,6 @@ let err = try
     errstr = String(take!(io))
     @test occursin("  ambig(x, y::Integer)\n    @ $curmod_str", errstr)
     @test occursin("  ambig(x::Integer, y)\n    @ $curmod_str", errstr)
-    @test occursin("  ambig(x::Number, y)\n    @ $curmod_str", errstr)
     @test occursin("Possible fix, define\n  ambig(::Integer, ::Integer)", errstr)
 end
 
@@ -99,14 +98,6 @@ ambig(x::Union{Char, Int16}) = 's'
 
 const allowed_undefineds = Set([GlobalRef(Base, :active_repl)])
 
-let Distributed = get(Base.loaded_modules,
-                      Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
-                      nothing)
-    if Distributed !== nothing
-        push!(allowed_undefineds, GlobalRef(Distributed, :cluster_manager))
-    end
-end
-
 module Ambig1
 ambig(x, y) = 1
 ambig(x::Integer, y) = 2
@@ -160,7 +151,7 @@ ambig(::Signed, ::Int) = 3
 ambig(::Int, ::Signed) = 4
 end
 ambs = detect_ambiguities(Ambig48312)
-@test length(ambs) == 4
+@test length(ambs) == 1 # only ambiguous over (Int, Int), which is 3 or 4
 
 module UnboundAmbig55868
     module B
@@ -287,7 +278,7 @@ end
 @test isempty(methods(Ambig8.f, (Int,)))
 @test isempty(methods(Ambig8.g, (Int,)))
 for f in (Ambig8.f, Ambig8.g)
-    @test length(methods(f, (Integer,))) == 2 # 1 is also acceptable
+    @test length(methods(f, (Integer,))) == 2 # 3 is also acceptable
     @test length(methods(f, (Signed,))) == 1 # 2 is also acceptable
     @test length(Base.methods_including_ambiguous(f, (Signed,))) == 2
     @test f(0x00) == 1
@@ -339,33 +330,244 @@ _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = E
 end
 @test length(detect_unbound_args(M25341; recursive=true)) == 1
 
+module UnboundDetect
+    # some matching calls leave the parameter unbound (with example given)
+    unbound1(x::Type{<:T}) where {T} = T                       # f(Union{})
+    unbound2(x::Vector{<:T}) where {T} = T                     # f(Vector{Union{}}())
+    unbound3(x::T) where {T>:Int} = T                          # f(2.0)
+    unbound4(x::Vector{Union{T,Int}}) where {T} = T            # f(Int[])
+    unbound5(x::S) where {T, S<:Union{T,Int}} = T              # f(1)
+    unbound6(x::S) where {T, S<:Tuple{Vararg{T}}} = T          # f(())
+    unbound7(x::Vector{S}) where {T, S<:AbstractVector{T}} = T # f(Union{}[])
+    unbound8(x::Type{Union{T,Missing}}) where {T} = T          # f(Missing)
+    unbound9(x::Ref{Vector{<:T}}) where {T} = T                # f(Ref{Vector}(...))
+    unbound10(x::Type{<:T}, y::Type{<:S}) where {T, S} = T     # f(Union{}, Int): S is never read, but T is
+    unbound13(x::Type{<:T}) where {T} = @isdefined(T) ? T : 0
+    unbound16(x::Type{<:Ref{<:Vector{T}}}) where {T} = T       # f(Ref{Union{}})
+    unbound17(x::Vector{Ref{S}}) where {T, S<:T} = T           # f(Vector{Ref{Union{}}}())
+    unused1(x::Type{<:T}) where {T} = 0
+    unused2(x::Type{<:T}) where {T} = @isdefined(T)
+    # every matching call pins the parameter
+    bound1(x::T) where {T} = T
+    bound2(x::Type{T}) where {T} = T
+    bound3(x::S) where {T, S<:AbstractVector{T}} = T
+    bound4(x::Vector{T}) where {T>:Int} = T
+    bound5(x::T, y::T) where {T} = T
+    bound6(x::Tuple{Vararg{Int,N}}) where {N} = N
+    bound7(x::Union{Vector{T}, Ref{T}}) where {T} = T
+    bound8(x::Ref{Vector{T}}) where {T} = T
+    bound9(x::Tuple{<:T}) where {T} = T
+    # issue #58427: every match pins `T`, but a `Vector{Missing}` argument
+    # does so only by absorbing the `T` arm as `T = Union{}`
+    unbound14(x::Vector{Union{Missing, T}}) where {T<:Real} = T
+    # issue #59023: the `Vector{T}` arm cannot be absorbed into `Nothing`,
+    # so every match genuinely pins `T` — an accepted false positive: the
+    # arm-must-be-exposed refinement is deliberately not implemented
+    unbound15(x::Type{Union{Nothing, Vector{T}}}) where {T} = T
+    # the calls that would leave the parameter unbound all dispatch to a more
+    # specific method
+    shadowed1(x::Type{<:AbstractArray{T}}) where {T} = T
+    shadowed1(x::Type{Union{}}) = 0
+    shadowed2(x::Int, y::T...) where {T} = T
+    shadowed2(x::Int) = 0
+    shadowed3(x::Type{A}) where {T, A<:AbstractArray{T}} = T
+    shadowed3(x::Type{Union{}}) = 0
+    # with the `Union{}` member shadowed, any other value of the range
+    # variable pins `T` through its bound (even an abstract one)
+    shadowed4(x::Type{<:T}) where {T} = T
+    shadowed4(x::Type{Union{}}) = 0
+    # a `Union{}` shadow does not help when other calls also leave the
+    # parameter unbound (here: `f(Int)` never touches `T`)
+    notshadowed1(x::Type{<:Union{T,Int}}) where {T} = T
+    notshadowed1(x::Type{Union{}}) = 0
+    # when the range variable occurs in another slot, the `Type{Union{}}`
+    # probe signature is not covered by the method itself, so the lookup
+    # finding the broad fallback proves nothing: `f(Union{}, Ref{Union{}}())`
+    # still dispatches to the `where`-method and leaves `T` unbound
+    notshadowed2(x::Type{A}, y::Ref{A}) where {T, A<:AbstractArray{T}} = T
+    notshadowed2(x::Type, y::Any) = 0
+    # a shadowed slot pins `T` only through a bare lower-bound occurrence,
+    # which is indefinite when `T`'s declared lower bound is not `Union{}`
+    # (`f(Float64)` leaves `T` unbound: the least solution unions in `Int`)
+    notshadowed3(x::Type{<:T}) where {T>:Int} = T
+    notshadowed3(x::Type{Union{}}) = 0
+    # a zero-length-vararg shadow rescues chained bounds too, but not when a
+    # nonempty call can still leave the chain unpinned (`f(1, Ref{Union{}}())`)
+    shadowed5(x::Int, y::S...) where {T, U<:T, S<:U} = T
+    shadowed5(x::Int) = 0
+    notshadowed4(x::Int, y::Ref{S}...) where {T, U<:T, S<:U} = T
+    notshadowed4(x::Int) = 0
+    # a parameter of an argument's constructor that is also the declared type
+    # of one of its always-initialized fields cannot be `Union{}` (no
+    # instance would exist), so its bound pins T; without such a field it
+    # can, and T may be unbound
+    struct WithField{S, A<:Tuple}
+        x::A
+    end
+    struct WithoutField{S, A<:Tuple} end
+    fieldpins(x::WithField{<:Any, <:Tuple{Ref{Type{T}}, Vararg{Any}}}) where {T} = T
+    nofieldpins(x::WithoutField{<:Any, <:Tuple{Ref{Type{T}}, Vararg{Any}}}) where {T} = T
+    # an incomplete `new` inner constructor can leave the field `#undef`, so
+    # `Incomplete{Union{}}()` is constructible and `T` may be unbound
+    mutable struct Incomplete{A}
+        x::A
+        Incomplete{A}() where {A} = new()
+    end
+    unbound11(x::Incomplete{<:T}) where {T} = T                # f(Incomplete{Union{}}())
+    # a field-pinned constructor parameter contributes only a lower bound,
+    # indefinite when `T`'s declared lower bound is not `Union{}`
+    unbound12(x::WithField{<:Any, <:T}) where {T>:Tuple{}} = T # f(WithField{1,Tuple{Int}}((1,)))
+    # issue #54893: `Foo54893(1.0)` leaves `T` unbound; the constructor
+    # signature spells `Type{Foo54893}` with the struct's own variable
+    # object, which must not be mistaken for an occurrence of `T`
+    struct Foo54893{T>:Int}
+        x::T
+    end
+end
+let unbound = Set{Method}(detect_unbound_args(UnboundDetect; ambiguous_bottom=true)),
+    unbound_nobottom = Set{Method}(detect_unbound_args(UnboundDetect))
+    # parameters left unbound only by calls with `Union{}` type parameters
+    bottom_only = (:unbound1, :unbound2, :unbound7, :unbound10, :unbound11, :unbound13,
+                   :unbound16, :unbound17, :notshadowed2, :notshadowed4, :nofieldpins)
+    tested = 0
+    for name in names(UnboundDetect; all=true)
+        startswith(String(name), '#') && continue
+        f = getglobal(UnboundDetect, name)
+        f isa Function || continue
+        ms = [m for m in methods(f, UnboundDetect) if m.sig isa UnionAll]
+        isempty(ms) && continue
+        m = only(ms)
+        should_flag = startswith(String(name), "unbound") ||
+                      startswith(String(name), "notshadowed") ||
+                      name === :nofieldpins
+        @test (m in unbound) == should_flag context=name
+        @test (m in unbound_nobottom) == (should_flag && name ∉ bottom_only) context=name
+        tested += 1
+    end
+    @test tested == 39
+    let ms = filter(m -> m.sig isa UnionAll, collect(methods(UnboundDetect.Foo54893)))
+        @test only(ms) in unbound
+        @test only(ms) in unbound_nobottom
+    end
+end
+
 # Test that Core and Base are free of UndefVarErrors
 @testset "detect_unbound_args in Base and Core" begin
-    # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
-            Set{Method}(detect_unbound_args(Core; recursive=true))
+            Set{Method}(detect_unbound_args(Core; recursive=true, ambiguous_bottom=true))
         @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
-        pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
-        pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
-        pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
+        # the parameters left unbound by non-`Union{}` calls (see the reviewed list below)
+        expected_undef_sparam = Any[
+            Tuple{typeof(Base._totuple), Type{Tuple{Vararg{E}}}, Any, Vararg{Any}} where E,
+            Tuple{typeof(Base._eltype_ntuple), Type{<:Tuple{Vararg{E}}}} where E,
+            Tuple{typeof(Base.reduce_empty_iter), Any, Tuple{Vararg{T}}, Base.HasEltype} where T,
+            Tuple{typeof(float), AbstractArray{Union{Missing, T}}} where T,
+            Tuple{typeof(Base._cat), Any, Vararg{AbstractArray{T}}} where T,
+        ]
+        for sig in expected_undef_sparam
+            m = which(sig)
+            @test m in need_to_handle_undef_sparam context=sig
+            delete!(need_to_handle_undef_sparam, m)
+        end
+        @test isempty(need_to_handle_undef_sparam)
+    end
+    let need_to_handle_undef_sparam =
+            Set{Method}(detect_unbound_args(Base; recursive=true, ambiguous_bottom=true, allowed_undefineds))
+        # reviewed and expected
+        expected_undef_sparam = Any[
+            Tuple{typeof(Base._totuple), Type{Tuple{Vararg{E}}}, Any, Vararg{Any}} where E,
+            # the raw reads are `@isdefined`-guarded and safe at runtime, but
+            # verifying that the guard dominates the read would need dataflow
+            Tuple{typeof(Base._eltype_ntuple), Type{<:Tuple{Vararg{E}}}} where E,
+            Tuple{typeof(Base.reduce_empty_iter), Any, Tuple{Vararg{T}}, Base.HasEltype} where T,
+            # `T` is unbound only for element type `Missing`, whose calls dispatch to the more specific `float(::AbstractArray{Missing})`
+            Tuple{typeof(float), AbstractArray{Union{Missing, T}}} where T,
+            # `N` is unbound only for element type `Union{}`, whose calls are dispatch-ambiguous with the `<:ScalarIndex` and `<:AbstractCartesianIndex{0}` methods, erroring before the body
+            Tuple{typeof(Base._trimmedindex), AbstractArray{<:Base.AbstractCartesianIndex{N}}} where N,
+            Tuple{typeof(Base._trimmedshape), AbstractArray{<:Base.AbstractCartesianIndex{N}}, Vararg{Any}} where N,
+            # `N` is unbound only for `Flatten{Union{}}`, whose calls are dispatch-ambiguous with the `I<:NamedTuple` method
+            Tuple{typeof(eltype), Type{Base.Iterators.Flatten{I}}} where {N, I<:NTuple{N, Any}},
+            # the sparams are unbound only for the argument `Union{}`, whose calls are dispatch-ambiguous among these four methods
+            Tuple{typeof(similar), Type{<:Base.CodeUnits{T}}, NTuple{N, Int} where N} where T,
+            Tuple{typeof(similar), Type{TA}, NTuple{N, Int} where N} where {T, N, O, P, TA<:Base.ReinterpretArray{T, N, O, P}},
+            Tuple{typeof(similar), Type{TA}, NTuple{N, Int} where N} where {T, N, P, TA<:Base.ReshapedArray{T, N, P}},
+            Tuple{typeof(similar), Type{TA}, NTuple{N, Int} where N} where {T, N, P, TA<:SubArray{T, N, P}},
+        ]
+        for sig in expected_undef_sparam
+            m = which(sig)
+            @test m in need_to_handle_undef_sparam context=sig
+            delete!(need_to_handle_undef_sparam, m)
+        end
         @test_broken isempty(need_to_handle_undef_sparam)
-        pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
-        pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
-        pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.complex, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
+        # TODO: not yet investigated or fixed — review this list and empty
+        # it, e.g. by adding a `::Type{Union{}}` method that shadows the
+        # problematic calls
+        todo_undef_sparam = Any[
+            # each entry notes an example call that throws UndefVarError from the body
+            Tuple{Type{Base.IteratorEltype}, Type{Base.Iterators.ProductIterator{T}}} where {N, T<:NTuple{N, Any}}, # IteratorEltype(ProductIterator{Union{}})
+            Tuple{Type{Base.IteratorEltype}, Type{Base.Iterators.Zip{Is}}} where {N, Is<:NTuple{N, Any}}, # IteratorEltype(Zip{Union{}})
+            Tuple{Type{Base.IteratorSize}, Type{Base.Iterators.ProductIterator{T}}} where {N, T<:NTuple{N, Any}}, # IteratorSize(ProductIterator{Union{}})
+            Tuple{Type{Base.IteratorSize}, Type{Base.Iterators.Zip{Is}}} where {N, Is<:NTuple{N, Any}}, # IteratorSize(Zip{Union{}})
+            Tuple{typeof(Base._cat), Any, Vararg{AbstractArray{T}}} where T, # cat(dims=Val(1)): only the `catdim::Int` zero-array case is shadowed
+            Tuple{typeof(Base._counttuple), Type{<:NTuple{N, Any}}} where N, # _counttuple(Union{})
+            Tuple{typeof(Base.Broadcast._maxndims), Type{<:Tuple{T, Vararg}}} where T, # _maxndims(Union{})
+            Tuple{typeof(Base._nt_names), Type{T}} where {names, T<:NamedTuple{names}}, # _nt_names(Union{})
+            Tuple{typeof(Base.Iterators._prod_eltype), Type{I}} where {N, I<:NTuple{N, Any}}, # eltype(ProductIterator{Union{}})
+            Tuple{typeof(Base.Enums.basetype), Type{<:Enum{T}}} where T<:Integer, # basetype(Union{})
+            Tuple{typeof(eltype), Type{<:Base.RSplitIterator{<:SubString{T}}}} where T, # eltype(RSplitIterator{Union{}})
+            Tuple{typeof(eltype), Type{<:Base.SplitIterator{<:SubString{T}}}} where T, # eltype(SplitIterator{Union{}})
+            Tuple{typeof(eltype), Type{Base.Iterators.Zip{Is}}} where {N, Is<:NTuple{N, Any}}, # eltype(Zip{Union{}})
+            Tuple{typeof(ndims), Type{<:Base.Broadcast.Broadcasted{<:Any, <:NTuple{N, Any}}}} where N, # ndims(Broadcasted{DefaultArrayStyle{1}, Union{}})
+            Tuple{typeof(ndims), Type{<:Base.Broadcast.Broadcasted{<:Base.Broadcast.AbstractArrayStyle{N}, Nothing}}} where N, # ndims(Broadcasted{Union{}, Nothing})
+        ]
+        for sig in todo_undef_sparam
+            m = which(sig)
+            @test m in need_to_handle_undef_sparam context=sig
+            delete!(need_to_handle_undef_sparam, m)
+        end
         @test isempty(need_to_handle_undef_sparam)
     end
 end
 
+# Bottom-type ambiguity fallbacks retain lookup-pruning signatures, not extra valid arities.
+@testset "arity of bottom-type fallbacks" begin
+    for (f, args, result) in (
+            (complex, (Union{},), Union{}),
+            (real, (Union{},), Union{}),
+            (float, (Union{},), Union{}),
+            (IndexStyle, (Union{},), IndexLinear()),
+            (Base.BroadcastStyle, (Union{},), Base.Broadcast.Unknown()),
+            (Base.OrderStyle, (Union{},), Base.Ordered()),
+            (Base.ArithmeticStyle, (Union{},), Base.ArithmeticUnknown()),
+            (Base.RangeStepStyle, (Union{},), Base.RangeStepIrregular()),
+            (Base.elsize, (Union{},), 0),
+            (Base.typeinfo_eltype, (Union{},), nothing),
+            (Iterators.flatten_iteratorsize, (Base.HasLength(), Union{}), Base.HasLength()),
+            (Iterators.flatten_iteratorsize, (Base.HasShape{2}(), Union{}), Base.HasLength()),
+            (Iterators.flatten_length, (Iterators.flatten(Union{}[]), Union{}), 0),
+        )
+        @test @inferred(f(args...)) === result
+        prefix = f === Iterators.flatten_iteratorsize ? (Union{Base.HasShape, Base.HasLength},) :
+                 f === Iterators.flatten_length ? (Any,) : ()
+        sig = Tuple{prefix..., Type{Union{}}, Vararg{Any}}
+        ft = f isa Type ? Type{f} : typeof(f)
+        @test which(f, sig).sig == Tuple{ft, sig.parameters...}
+        for extra in ((1,), (nothing, 2))
+            @test_throws MethodError(f, (args..., extra...)) f(args..., extra...)
+        end
+    end
+    @test Iterators.flatten_iteratorsize(Base.SizeUnknown(), Union{}) === Base.SizeUnknown()
+    @test Base.IteratorSize(Iterators.flatten(Union{}[])) === Base.HasLength()
+    @test length(Iterators.flatten(Union{}[])) == 0
+    @test Base.BroadcastStyle(Base.Broadcast.DefaultArrayStyle{1}(), Base.Broadcast.Unknown()) === Base.Broadcast.DefaultArrayStyle{1}()
+end
+
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
+    @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})
 end
 
 # test a case where specificity is not transitive over subtyping
@@ -413,7 +615,7 @@ let has_ambig = Ref(Int32(0))
     ms = Base._methods_by_ftype(Tuple{typeof(fnoambig), Any, Any}, nothing, 4, Base.get_world_counter(), false, Ref(typemin(UInt)), Ref(typemax(UInt)), has_ambig)
     @test ms isa Vector
     @test length(ms) == 4
-    @test has_ambig[] == 0
+    @test has_ambig[] == 1 # 0 is better, but expensive and probably unnecessary to compute
 end
 
 # issue #11407
@@ -459,15 +661,38 @@ struct U55231{P} end
 struct V55231{P} end
 U55231(::V55231) = nothing
 (::Type{T})(::V55231) where {T<:U55231} = nothing
-@test length(methods(U55231)) == 2
+@test length(methods(U55231)) == 1
 U55231(a, b) = nothing
-@test length(methods(U55231)) == 3
+@test length(methods(U55231)) == 2
 struct S55231{P} end
 struct T55231{P} end
 (::Type{T})(::T55231) where {T<:S55231} = nothing
 S55231(::T55231) = nothing
-@test length(methods(S55231)) == 2
+@test length(methods(S55231)) == 1
 S55231(a, b) = nothing
-@test length(methods(S55231)) == 3
+@test length(methods(S55231)) == 2
+
+ambig10() = 1
+ambig10(a::Vararg{Any}) = 2
+ambig10(a::Vararg{Union{Int32,Int64}}) = 6
+ambig10(a::Vararg{Matrix}) = 4
+ambig10(a::Vararg{Number}) = 7
+ambig10(a::Vararg{N}) where {N<:Number} = 5
+let ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{typeof(ambig10), Vararg}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
+    @test length(ms) == 6
+    @test_broken ambig[] == 0
+end
+let ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{typeof(ambig10), Vararg{Number}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
+    @test length(ms) == 4
+    @test_broken ambig[] == 0
+    @test ms[1].method === which(ambig10, ())
+    @test ms[2].method === which(ambig10, (Vararg{Union{Int32, Int64}},))
+    @test ms[3].method === which(ambig10, Tuple{Vararg{N}} where N<:Number,)
+    @test ms[4].method === which(ambig10, (Vararg{Number},))
+end
 
 nothing

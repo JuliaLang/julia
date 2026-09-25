@@ -6,7 +6,7 @@ function Base.length(blob::GitBlob)
 end
 
 """
-    rawcontent(blob::GitBlob) -> Vector{UInt8}
+    rawcontent(blob::GitBlob)::Vector{UInt8}
 
 Fetch the *raw* contents of the [`GitBlob`](@ref) `blob`. This is an
 `Array` containing the contents of the blob, which may be binary or may be Unicode.
@@ -25,7 +25,7 @@ function rawcontent(blob::GitBlob)
 end
 
 """
-    content(blob::GitBlob) -> String
+    content(blob::GitBlob)::String
 
 Fetch the contents of the [`GitBlob`](@ref) `blob`. If the `blob` contains
 binary data (which can be determined using [`isbinary`](@ref)),
@@ -39,7 +39,7 @@ function content(blob::GitBlob)
 end
 
 """
-    isbinary(blob::GitBlob) -> Bool
+    isbinary(blob::GitBlob)::Bool
 
 Use a heuristic to guess if a file is binary: searching for NULL bytes and
 looking for a reasonable ratio of printable to non-printable characters among
@@ -54,7 +54,7 @@ end
 """
     LibGit2.addblob!(repo::GitRepo, path::AbstractString)
 
-Read the file at `path` and adds it to the object database of `repo` as a loose blob.
+Read the file at `path` and add it to the object database of `repo` as a loose blob.
 Return the [`GitHash`](@ref) of the resulting blob.
 
 # Examples
@@ -76,7 +76,7 @@ end
 function Base.show(io::IO, blob::GitBlob)
     if !isbinary(blob)
         conts   = split(content(blob), "\n")
-        showlen = max(length(conts), 3)
+        showlen = min(length(conts), 3)
         println(io, "GitBlob:\nBlob id: ", GitHash(blob), "\nContents:")
         for i in 1:showlen
             println(io, conts[i])

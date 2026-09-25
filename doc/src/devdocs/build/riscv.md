@@ -11,17 +11,9 @@ including the output from `cat /proc/cpuinfo`.
 
 ## Compiling Julia
 
-For now, Julia will need to be compiled entirely from source, i.e., including
-all of its dependencies. This can be accomplished with the following
-`Make.user`:
-
-```make
-USE_BINARYBUILDER := 0
-```
-
-Additionally, it is required to indicate what architecture, and optionally which
-CPU to build for. This can be done by setting the `MARCH` and `MCPU` variables
-in `Make.user`
+To compile Julia for RISC-V, you need to manually indicate what architecture, and
+optionally which CPU to build for. This can be done by setting the `MARCH` and `MCPU`
+variables in `Make.user`
 
 The `MARCH` variable needs to be set to a RISC-V ISA string, which can be found by
 looking at the documentation of your device, or by inspecting `/proc/cpuinfo`. Only
@@ -56,7 +48,7 @@ A native build on a RISC-V device may take a very long time, so it's also
 possible to cross-compile Julia on a faster machine.
 
 First, get a hold of a RISC-V cross-compilation toolchain that provides
-support for C, C++ and Fortran. This can be done by checking-out the
+support for C, C++ and Fortran. This can be done by checking out the
 [riscv-gnu-toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain)
 repository and building it as follows:
 

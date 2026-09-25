@@ -47,7 +47,7 @@ const MARKDOWN_FACES = [
     :markdown_h6 => Face(height=1.05, inherit=:markdown_header),
     :markdown_admonition => Face(weight=:bold),
     :markdown_code => Face(inherit=:code),
-    :markdown_julia_prompt => Face(inherit=:repl_prompt_julia),
+    :markdown_julia_prompt => Face(slant=:italic, foreground=:bright_green, inherit=:repl_prompt_julia),
     :markdown_footnote => Face(inherit=:bright_yellow),
     :markdown_hrule => Face(inherit=:shadow),
     :markdown_inlinecode => Face(inherit=:markdown_code),
@@ -61,7 +61,7 @@ __init__() = foreach(addface!, MARKDOWN_FACES)
 parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 
 """
-    Markdown.parse(markdown::AbstractString) -> MD
+    Markdown.parse(markdown::AbstractString)::MD
 
 Parse `markdown` as Julia-flavored Markdown text and return the corresponding `MD` object.
 
@@ -119,7 +119,7 @@ corresponding [`MD`](@ref) object.
 the manual section on [documentation](@ref man-documentation) for more information.
 
 # Examples
-```
+```jldoctest
 julia> s = doc"f(x) = 2*x"
   f(x) = 2*x
 
@@ -138,12 +138,17 @@ catdoc(md::MD...) = MD(md...)
 
 if Base.generating_output()
     # workload to reduce latency
-    md"""
+    show(devnull, MIME("text/plain"), md"""
     # H1
     ## H2
     ### H3
+    #### H4
+    ##### H5
+    ###### H6
     **bold text**
     *italicized text*
+    ***bold and italicized text***
+    ~~strikethrough effect~~
     > blockquote
     1. First item
     2. Second item
@@ -151,10 +156,18 @@ if Base.generating_output()
     - First item
     - Second item
     - Third item
+        - Indented item
     `code`
     Horizontal Rule
     ---
-    """
+    **[Duck Duck Go](https://duckduckgo.com)**
+    <https://www.markdownguide.org>
+    <fake@example.com>
+    ![The San Juan Mountains are beautiful!](/assets/images/san-juan-mountains.jpg "San Juan Mountains")
+
+    H~2~O
+    X^2^
+    """)
 end
 
 end

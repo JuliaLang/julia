@@ -24,7 +24,7 @@ access the network during the build process, add the following in `Make.user`:
 USE_BINARYBUILDER=0
 ```
 
-Building Julia requires 5GiB if building all dependencies and approximately 4GiB of virtual memory.
+Building Julia requires 5GiB of disk space when building all dependencies and approximately 4GiB of virtual memory.
 
 To perform a parallel build, use `make -j N` and supply the maximum
 number of concurrent processes. If the defaults in the build do not work for you, and
@@ -163,6 +163,7 @@ Building Julia requires that the following software be installed:
 
 - **[GNU make](https://www.gnu.org/software/make)**                — building dependencies.
 - **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
+  - On Linux with g++, the static version of libstdc++ is also required.  If it is unavailable, set `USE_RT_STATIC_LIBSTDCXX=0` in `Make.user`.
 - **[libatomic](https://gcc.gnu.org)**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python](https://www.python.org/)** (>=2.7)          — needed to build LLVM.
 - **[gfortran](https://gcc.gnu.org/fortran/)**                — compiling and linking Fortran libraries.
@@ -175,10 +176,16 @@ Building Julia requires that the following software be installed:
 - **[pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/)**              — needed to build `libgit2` correctly, especially for proxy support.
 - **[powershell](https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview)** (>= 3.0)     — necessary only on Windows.
 - **[which](https://carlowood.github.io/which/)**                   — needed for checking build dependencies.
+- **[diffutils](https://www.gnu.org/software/diffutils/)**                   - `cmp` is used by the makefiles
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
-sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config curl
+sudo apt-get install build-essential libatomic1 python3 gfortran perl wget m4 cmake pkg-config curl
+```
+
+On Red Hat-based distributions (e.g. Fedora, CentOS), you can install them with `yum`:
+```
+sudo dnf install gcc gcc-c++ gcc-gfortran python3 perl wget m4 cmake pkgconfig curl which diffutils libatomic libstdc++-static
 ```
 
 Julia uses the following external libraries, which are automatically
@@ -213,6 +220,53 @@ If you already have one or more of these packages installed on your system, you 
 
 Please be aware that this procedure is not officially supported, as it introduces additional variability into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
+### Building a dependency from a Git checkout
+
+Most dependencies are downloaded as prebuilt BinaryBuilder artifacts (`*_jll`), but many can instead be
+built from a Git checkout — useful for testing a patch or building against an unreleased upstream commit.
+This is driven by `git-external` in
+[`deps/tools/git-external.mk`](https://github.com/JuliaLang/julia/blob/master/deps/tools/git-external.mk).
+Set the following in `Make.user` (or on the `make` command line):
+
+```make
+# 1. prefer the source build over the prebuilt binary for this dep (or USE_BINARYBUILDER=0 for all)
+USE_BINARYBUILDER_LLVM = 0
+# 2. fetch the source with Git (DEPS_GIT=1 for all, or a space-separated list of names)
+DEPS_GIT = llvm
+# 3. optionally override the origin/branch/commit (defaults live in deps/<name>.version and .mk)
+LLVM_GIT_URL = https://github.com/JuliaLang/llvm-project.git
+LLVM_BRANCH = julia-release/18.x
+LLVM_SHA1 = $(LLVM_BRANCH)   # a branch name, tag, or explicit commit hash
+```
+
+`<NAME>` is the upper-cased dependency name (see `deps/*.mk`, e.g. `LLVM`, `LIBUV`). The branch and commit
+come from `<NAME>_BRANCH`/`<NAME>_SHA1` in `deps/<name>.version`. The checkout is a
+[`git worktree`](https://git-scm.com/docs/git-worktree) of a bare mirror cached at
+`deps/srccache/<name>.git` (so it shares that mirror's objects rather than being a full clone), living at
+`deps/srccache/<name>/` on a detached `HEAD` at `<NAME>_SHA1`.
+
+**Rebuilds** are keyed off `deps/<name>.version`: changing *or merely touching* it re-fetches and resets the
+checkout to `<NAME>_SHA1` and reinstalls the dependency. Each build step records progress in a marker file, so
+touching one (or a predecessor) forces that step and everything after it to rerun:
+
+ * `deps/<name>.version` — re-checkout to `<NAME>_SHA1` (`extract-<name>`) and reinstall (`install-<name>`)
+ * `deps/srccache/<name>/source-extracted` — reconfigure (`configure-<name>`)
+ * `deps/scratch/<name>/build-configured` — recompile (`compile-<name>`)
+ * `deps/scratch/<name>/build-compiled` — restage (`stage-<name>`)
+ * `usr/manifest/<name>` — the installed result (also `uninstall-<name>` / `reinstall-<name>`)
+
+`make version-check-<name>` runs on every build to warn when the checkout has local modifications or does not
+match `<NAME>_SHA1`, and `make distclean-<name>` removes the worktree and cached mirror. Not every dependency
+defines every step (e.g. header-only or install-only deps may have no `configure`/`compile` stage), so some of
+these markers and targets may be absent — check `deps/<name>.mk` for the ones a given dependency actually uses.
+
+**To edit in place**, treat `deps/srccache/<name>/` as an ordinary worktree: change files, commit, or `git
+checkout` another commit, then rebuild (`make compile-<name>` / `make install-<name>`). As long as you don't
+touch `deps/<name>.version`, the checkout is never reset to `<NAME>_SHA1`, so local edits survive rebuilds.
+Bumping `<NAME>_SHA1` to record a new commit triggers a fresh checkout on the next extract, but that checkout
+will fail if the worktree is dirty — this is intentional, so that uncommitted changes are never clobbered.
+Commit (or stash) your work first, then update `<NAME>_SHA1`.
+
 ### LLVM
 
 The most complicated dependency is LLVM, for which we require additional patches from upstream (LLVM is not backward compatible).
@@ -220,7 +274,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
+   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance.
@@ -304,6 +358,20 @@ LLVM_ASSERTIONS=1
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
 
+## Building a debug build of Julia
+
+A full debug build of Julia can be built with `make debug`.  This builds a debug
+version of `libjulia` and uses it to bootstrap the compiler, before creating a
+system image with debug symbols enabled.  This can take more than 15 minutes.
+
+Although it may result in some differences, a debug build can be built much
+quicker by bootstrapping from a release build:
+
+```sh
+$ make julia-src-release julia-sysbase-release
+$ make julia-sysimg-debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase.so
+```
+
 ## Building 32-bit Julia on a 64-bit machine
 
 Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine. Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
@@ -325,6 +393,24 @@ From this point, you should
 
 Then add all the [build dependencies](#required-build-tools-and-external-libraries), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
 
+
+## Building Julia with MMTk GC
+
+Julia allows different GC implementations through a GC interface. GC is currently selected at build time,
+so switching between the stock GC and any other GC implementation requires rebuilding Julia.
+
+MMTk is one of the GCs integrated with this interface. The MMTk binding is built from source as part of the Julia build
+and requires a Rust toolchain. The simplest way to build Julia with MMTk is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk make
+```
+
+An example of a more advanced configuration that customizes the plan / GC type is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk MMTK_PLAN=StickyImmix MMTK_MOVING=0 MMTK_BUILD_MODE=release make
+```
+
+The default MMTk build uses the `StickyImmix` plan (similar to Julia's generational mark sweep), and a release build of the Rust binding. Further build options can be set either on the command line or in `Make.user`. For details, see [Julia + MMTk](../gc-mmtk.md).
 
 ## Update the version number of a dependency
 

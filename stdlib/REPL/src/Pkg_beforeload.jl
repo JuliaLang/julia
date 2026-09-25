@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Pkg stuff needed before Pkg has loaded
 
 const Pkg_pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-load_pkg() = Base.require_stdlib(Pkg_pkgid, "REPLExt")
+load_pkg() = Base.require_stdlib(Pkg_pkgid, "REPLExt", REPL)
 
 ## Below here copied/tweaked from Pkg Types.jl so that the dummy Pkg prompt
 # can populate the env correctly before Pkg loads
@@ -52,7 +54,7 @@ function find_root_base_project(start_project::String)
 end
 
 function relative_project_path(project_file::String, path::String)
-    # compute path relative the project
+    # compute path relative to the project
     # realpath needed to expand symlinks before taking the relative path
     return relpath(safe_realpath(abspath(path)), safe_realpath(dirname(project_file)))
 end

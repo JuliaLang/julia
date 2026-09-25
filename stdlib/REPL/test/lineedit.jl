@@ -20,6 +20,72 @@ function new_state()
     LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
 end
 
+# Normal and prefix history search prompts emit one marker pair without changing their width.
+@testset "semantic prompt rendering" begin
+    for markers in (REPL.OSC_133_MARKERS, REPL.OSC_633_MARKERS),
+            enabled in (false, true), color in (false, true)
+        output = IOBuffer()
+        term = FakeTerminal(IOBuffer(), output, IOBuffer(), color)
+        repl = REPL.LineEditREPL(term, color)
+        repl.semantic_prompt_markers = markers
+        repl.options.semantic_prompts = enabled
+        prompt = LineEdit.Prompt("julia> "; repl)
+        prefix_prompt = LineEdit.PrefixHistoryPrompt(prompt.hist, prompt)
+        rendered = color ? Base.text_colors[:bold] * "julia> " * Base.text_colors[:normal] : "julia> "
+        expected = enabled ? markers.prompt_start * rendered * markers.prompt_end : rendered
+        for state in (prompt, LineEdit.init_state(term, prompt), LineEdit.init_state(term, prefix_prompt))
+            @test LineEdit.write_prompt(term, state, color) == 7
+            @test String(take!(output)) == expected
+        end
+        prompt.repl = nothing
+        @test LineEdit.write_prompt(term, prompt, color) == 7
+        @test String(take!(output)) == rendered
+    end
+end
+
+# History search initializes prompt modes added after MIState creation (#61584).
+module HistorySearchDynamicMode
+
+using Test
+using REPL
+import REPL.LineEdit
+import ..FakeTerminals: FakeTerminal
+
+struct MockHistoryFile end
+
+mutable struct MockHistoryProvider <: LineEdit.HistoryProvider
+    history::MockHistoryFile
+    last_buffer::IOBuffer
+    last_mode::Union{Nothing,LineEdit.Prompt}
+    mode_mapping::Dict{Symbol,LineEdit.Prompt}
+end
+
+REPL.histsearch(::MockHistoryFile, args...) = (mode = :pkg, text = "status")
+
+@testset "history search initializes dynamic modes" begin
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    main_mode = LineEdit.Prompt("julia> ")
+    dummy_pkg_mode = LineEdit.Prompt("pkg> ")
+    history = MockHistoryProvider(MockHistoryFile(), IOBuffer(), nothing,
+                                  Dict(:julia => main_mode, :pkg => dummy_pkg_mode))
+    main_mode.hist = dummy_pkg_mode.hist = history
+    interface = LineEdit.ModalInterface(LineEdit.TextInterface[main_mode, dummy_pkg_mode])
+    mistate = LineEdit.init_state(term, interface)
+    mistate.terminal_properties.da1 = Int[]
+
+    pkg_mode = LineEdit.Prompt("(project) pkg> ")
+    pkg_mode.hist = history
+    history.mode_mapping[:pkg] = pkg_mode
+    push!(interface.modes, pkg_mode)
+    @test !haskey(mistate.mode_state, pkg_mode)
+
+    LineEdit.history_search(mistate)
+    @test mistate.current_mode === pkg_mode
+    @test String(take!(copy(LineEdit.buffer(mistate)))) == "status"
+end
+
+end # module HistorySearchDynamicMode
+
 charseek(buf, i) = seek(buf, nextind(content(buf), 0, i+1)-1)
 charpos(buf, pos=position(buf)) = length(content(buf), 1, pos)
 
@@ -525,6 +591,24 @@ end
     @test LineEdit.region(s) == (0=>9)
     @inferred Union{Bool, LineEdit.InputAreaState} LineEdit.edit_shift_move(s, LineEdit.edit_move_right)
     @test LineEdit.region(s) == (2=>9)
+
+    # issue #61377
+    for edit_move in [LineEdit.edit_insert_newline, LineEdit.edit_backspace,
+            LineEdit.edit_move_left, LineEdit.edit_move_right,
+            LineEdit.edit_move_word_left, LineEdit.edit_move_word_right,
+            LineEdit.edit_move_up, LineEdit.edit_move_down]
+        s = new_state()
+        edit_insert(s, "abcd\nefgh\nijkl")
+        s.current_action = :unknown
+        LineEdit.edit_move_up(s)
+        s.current_action = :unknown
+        LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+        s.current_action = :unknown
+        LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+        s.current_action = :unknown
+        edit_move(s)
+        @test !LineEdit.is_region_active(s)
+    end
 end
 
 @testset "tab/backspace alignment feature" begin
@@ -665,7 +749,7 @@ end
     s.last_action = :unknown
     @test transform!(s->LineEdit.edit_yank_pop(s, false), s) == ("ça ≡ nothinga ≡ not", 19, 12)
 
-    # repetition (concatenation of killed strings
+    # repetition (concatenation of killed strings)
     edit_insert(s, "A B  C")
     LineEdit.edit_delete_prev_word(s)
     s.key_repeats = 1
@@ -940,3 +1024,370 @@ end
     strings3 = ["abcdef", "123456\nijklmn"]
     @test getcompletion(strings3) == "\033[0B\nabcdef\n123456\nijklmn\n"
 end
+
+# Test bracket insertion functionality
+@testset "Bracket insertion" begin
+    # Test bracket insertion with a fake REPL that has bracket completion enabled
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    prompt = LineEdit.Prompt("test> ")
+
+    # Build keymap with bracket insertion enabled (as it would be in practice)
+    base_keymaps = Dict{Any,Any}[LineEdit.bracket_insert_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    prompt.keymap_dict = LineEdit.keymap(base_keymaps)
+
+    interface = LineEdit.ModalInterface([prompt])
+    s = LineEdit.init_state(term, interface)
+
+    # Helper to write characters as stdin input
+    write_input(s, str) = for c in str
+        buf = IOBuffer(string(c))
+        LineEdit.match_input(prompt.keymap_dict, s, buf)(s, buf)
+    end
+
+    # Test left bracket at EOF triggers auto-complete
+    write_input(s, "(")
+    @test content(s) == "()"
+    @test position(buffer(s)) == 1
+
+    # Test right bracket skips over matching bracket
+    write_input(s, ")")
+    @test content(s) == "()"
+    @test position(buffer(s)) == 2
+
+    # Test backspace removes both brackets
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(")
+    write_input(s, "\b")
+    @test content(s) == ""
+    @test position(buffer(s)) == 0
+
+    # Test quote insertion at EOF
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"")
+    @test content(s) == "\"\""
+    @test position(buffer(s)) == 1
+
+    # Test quote skip over
+    write_input(s, "\"")
+    @test content(s) == "\"\""
+    @test position(buffer(s)) == 2
+
+    # Test transpose detection - single quote after letter shouldn't auto-complete
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "A")
+    write_input(s, "'")
+    @test content(s) == "A'"
+    @test position(buffer(s)) == 2
+
+    # Test single quote after space should auto-complete
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " ")
+    write_input(s, "'")
+    @test content(s) == " ''"
+    @test position(buffer(s)) == 2
+
+    # Test bracket not inserted when next char is not whitespace
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "x")
+    charseek(buffer(s), 0)
+    write_input(s, "(")
+    @test content(s) == "(x"
+    @test position(buffer(s)) == 1
+
+    # Test all bracket types
+    for (left, right) in (('[', ']'), ('{', '}'))
+        s = LineEdit.init_state(term, interface)
+        write_input(s, string(left))
+        @test content(s) == string(left, right)
+        @test position(buffer(s)) == 1
+        write_input(s, string(right))
+        @test position(buffer(s)) == 2
+        write_input(s, "\b")
+        @test content(s) == string(left)
+        @test position(buffer(s)) == 1
+        write_input(s, "\b")
+        @test content(s) == ""
+        @test position(buffer(s)) == 0
+    end
+
+    # Test all quote types
+    for quote_char in ('`', '"', '\'')
+        s = LineEdit.init_state(term, interface)
+        write_input(s, string(quote_char))
+        @test content(s) == string(quote_char, quote_char)
+        @test position(buffer(s)) == 1
+    end
+
+    # Test nested brackets
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(")
+    write_input(s, "[")
+    @test content(s) == "([])"
+    @test position(buffer(s)) == 2
+    write_input(s, "]")
+    @test position(buffer(s)) == 3
+    write_input(s, ")")
+    @test position(buffer(s)) == 4
+
+    # Test backspace in middle of nested brackets
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(")
+    write_input(s, "{")
+    @test content(s) == "({})"
+    @test position(buffer(s)) == 2
+    write_input(s, "\b")
+    @test content(s) == "()"
+    @test position(buffer(s)) == 1
+
+    # Test triple quotes don't auto-complete
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"")
+    @test content(s) == "\"\""
+    @test position(buffer(s)) == 1
+    write_input(s, "\"")
+    @test content(s) == "\"\""
+    @test position(buffer(s)) == 2
+    write_input(s, "\"")
+    @test content(s) == "\"\"\""
+    @test position(buffer(s)) == 3
+
+    # Test transpose detection for various cases
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "x123")
+    write_input(s, "'")
+    @test content(s) == "x123'"
+    @test position(buffer(s)) == 5
+
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "arr]")
+    write_input(s, "'")
+    @test content(s) == "arr]'"
+    @test position(buffer(s)) == 5
+
+    # Test right bracket insert when not matching
+    s = LineEdit.init_state(term, interface)
+    write_input(s, ")")
+    @test content(s) == ")"
+    @test position(buffer(s)) == 1
+
+    # Test backspace doesn't remove mismatched brackets
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(")
+    write_input(s, "]")
+    charseek(buffer(s), 1)
+    write_input(s, "\b")
+    @test content(s) == "])"
+    @test position(buffer(s)) == 0
+
+    # Test bracket insertion followed by whitespace
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " ")
+    charseek(buffer(s), 0)
+    write_input(s, "(")
+    @test content(s) == "() "
+    @test position(buffer(s)) == 1
+
+    # Test quote behavior: |foo" + " -> "foo" (not ""foo")
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "foo\"")
+    charseek(buffer(s), 0)
+    write_input(s, "\"")
+    @test content(s) == "\"foo\""
+    @test position(buffer(s)) == 1
+
+    # Test quote behavior: foo| + " -> foo" (not foo"")
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "foo")
+    write_input(s, "\"")
+    @test content(s) == "foo\""
+    @test position(buffer(s)) == 4
+
+    # Test quote behavior: foo | + " -> foo ""
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "foo ")
+    write_input(s, "\"")
+    @test content(s) == "foo \"\""
+    @test position(buffer(s)) == 5
+
+    # Test quote behavior: | foo + " -> "" foo (space before foo means double quotes)
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " foo")
+    charseek(buffer(s), 0)
+    write_input(s, "\"")
+    @test content(s) == "\"\" foo"
+    @test position(buffer(s)) == 1
+
+    # Test quote behavior:  | + " -> ""
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " ")
+    write_input(s, "\"")
+    @test content(s) == " \"\""
+    @test position(buffer(s)) == 2
+
+    # Test quote behavior: (|)) + " -> ("")
+    s = LineEdit.init_state(term, interface)
+    write_input(s, ")")
+    charseek(buffer(s), 0)
+    write_input(s, "(")
+    # Buffer is now ()) with cursor at 1
+    write_input(s, "\"")
+    @test content(s) == "(\"\"))"
+    @test position(buffer(s)) == 2
+
+    # Test quote behavior: (|bar) + " -> ("bar)
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(bar)")
+    charseek(buffer(s), 1)
+    write_input(s, "\"")
+    @test content(s) == "(\"bar)"
+    @test position(buffer(s)) == 2
+
+    # Test bracket behavior: "|" + ( -> "()"
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"\"")
+    charseek(buffer(s), 1)
+    write_input(s, "(")
+    @test content(s) == "\"()\""
+    @test position(buffer(s)) == 2
+end
+
+@testset "Conflicting definitions for keyseq" begin
+    @testset "string" begin
+        keymap = Dict{Char, Any}()
+        REPL.LineEdit.add_nested_key!(keymap, "a", "abc")
+        @test keymap == Dict('a' => "abc")
+        expected_msg = "Conflicting definitions for keyseq a within one keymap"
+        @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, "a", "abdef")
+        @test keymap == Dict('a' => "abc")
+    end
+    @testset "char" begin
+        keymap = Dict{Char, Any}()
+        REPL.LineEdit.add_nested_key!(keymap, 'a', "abc")
+        @test keymap == Dict('a' => "abc")
+        expected_msg = "Conflicting definitions for keyseq a within one keymap"
+        @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, 'a', "abdef")
+        @test keymap == Dict('a' => "abc")
+   end
+end
+
+# Test TerminalProperties and DA1 parsing
+@testset "TerminalProperties" begin
+    @testset "receive_da1!" begin
+        # Typical DA1 response body (after \e[? already consumed): "64;1;2;6;22c"
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("64;1;2;6;22c")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == [64, 1, 2, 6, 22]
+
+        # Single parameter
+        props2 = LineEdit.TerminalProperties()
+        io = IOBuffer("1c")
+        LineEdit.receive_da1!(props2, io)
+        @test props2.da1 == [1]
+    end
+
+    @testset "receive_da1! with ^C bail-out" begin
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("64;1\x03")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == [64, 1]
+    end
+
+    @testset "receive_da1! with empty response" begin
+        # Empty response should store empty vector, not remain nothing
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("c")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == Int[]
+    end
+
+    @testset "TerminalProperties default initialization" begin
+        props = LineEdit.TerminalProperties()
+        @test props.da1 === nothing
+    end
+
+    @testset "MIState has terminal_properties" begin
+        s = new_state()
+        @test s.terminal_properties isa LineEdit.TerminalProperties
+        @test s.terminal_properties.da1 === nothing
+    end
+end
+
+# Test OSC colour response parsing (see `query_colors`)
+# The sentinel reply applies the palette to StyledStrings' global colour state, which other
+# tests on the same worker would otherwise see, so restore it afterwards.
+osc_saved_colors = copy(REPL.StyledStrings.FACES.basecolors)
+osc_saved_faces = copy(REPL.StyledStrings.FACES.current[])
+@testset "OSC colour responses" begin
+    RGB(r, g, b) = (; r=UInt8(r), g=UInt8(g), b=UInt8(b))
+    # `awaiting` mirrors a pending `query_colors`, so the sentinel applies the palette.
+    function receive(responses...; awaiting = true)
+        props = LineEdit.TerminalProperties()
+        props.awaiting_colors = awaiting
+        for r in responses
+            LineEdit.receive_osc!(props, IOBuffer(r))
+        end
+        props
+    end
+
+    @testset "interpret_color" begin
+        @test LineEdit.interpret_color("rgb:24/27/30") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:1/2/3") == RGB(0x11, 0x22, 0x33)
+        @test LineEdit.interpret_color("rgb:242/272/303") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:2424/2727/3030") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:24242/2/3") === nothing
+        @test LineEdit.interpret_color("rgba:24/27/30/ff") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("#242730") === nothing
+        @test LineEdit.interpret_color("rgb:24/27") === nothing
+        @test LineEdit.interpret_color("rgb:24/27/30/ff") === nothing
+        @test LineEdit.interpret_color("rgba:24/27/30") === nothing
+        @test LineEdit.interpret_color("rgb:zz/27/30") === nothing
+    end
+
+    @testset "read_osc_response terminators" begin
+        for term in ("\a", "\e\\", "\x9c", "\x03")
+            @test LineEdit.read_osc_response(IOBuffer("10;rgb:24/27/30" * term)) == "10;rgb:24/27/30"
+        end
+        # An unterminated response ends at EOF rather than blocking.
+        @test LineEdit.read_osc_response(IOBuffer("10;rgb:24/27/30")) == "10;rgb:24/27/30"
+    end
+
+    @testset "colour accumulation" begin
+        props = receive("4;1;rgb:ff/00/00\a", "4;2;rgb:00/ff/00\a")
+        @test props.colors == [:red => RGB(0xff, 0, 0), :green => RGB(0, 0xff, 0)]
+        @test receive("4;15;rgb:ff/ff/ff\a").colors == [:bright_white => RGB(0xff, 0xff, 0xff)]
+        # Out-of-range indices and malformed specs are dropped, not stored.
+        @test isempty(receive("4;16;rgb:ff/ff/ff\a").colors)
+        @test isempty(receive("4;0;not-a-color\a").colors)
+        @test isempty(receive("nonsense\a").colors)
+    end
+
+    @testset "foreground/background sentinel" begin
+        props = receive("4;0;rgb:00/00/00\a", "10;rgb:bb/c2/cf\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:black => RGB(0, 0, 0), :foreground => RGB(0xbb, 0xc2, 0xcf),
+                               :background => RGB(0x24, 0x27, 0x30)]
+        props = receive("4;0;rgb:00/00/00\a", "10;rgb:bb/c2/cf\a")
+        @test props.awaiting_colors
+        LineEdit.receive_osc!(props, IOBuffer("11;rgb:24/27/30\a"))
+        @test !props.awaiting_colors
+    end
+
+    @testset "partial response" begin
+        # A terminal that answers only fg/bg still applies its colours.
+        props = receive("10;rgb:bb/c2/cf\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:foreground => RGB(0xbb, 0xc2, 0xcf), :background => RGB(0x24, 0x27, 0x30)]
+        @test !props.awaiting_colors
+        # One that answers only the palette never reaches the sentinel.
+        props = receive("4;0;rgb:00/00/00\a")
+        @test props.awaiting_colors
+        # A malformed sentinel reply still ends the query.
+        props = receive("10;garbage\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:background => RGB(0x24, 0x27, 0x30)]
+        @test !props.awaiting_colors
+        # Responses outside a query are ignored.
+        props = receive("4;1;rgb:ff/00/00\a", awaiting = false)
+        @test isempty(props.colors)
+    end
+end
+merge!(empty!(REPL.StyledStrings.FACES.basecolors), osc_saved_colors)
+merge!(empty!(REPL.StyledStrings.FACES.current[]), osc_saved_faces)

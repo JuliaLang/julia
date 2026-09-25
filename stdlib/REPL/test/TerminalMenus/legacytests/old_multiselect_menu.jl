@@ -31,7 +31,7 @@ TerminalMenus.config(charset=:unicode)
 TerminalMenus.writeLine(buf, multi_menu, 1, true)
 @test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
 
-# Test SDTIN
+# Test STDIN
 multi_menu = MultiSelectMenu(string.(1:10), warn=false)
 @test simulate_input(multi_menu, :enter, :down, :enter, 'd') == Set([1,2])
 multi_menu = MultiSelectMenu(["single option"], warn=false)

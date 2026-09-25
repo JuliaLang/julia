@@ -10,7 +10,7 @@ export GitError
 @enum(Code, GIT_OK          = Cint(0),   # no error
             ERROR           = Cint(-01), # generic error
             ENOTFOUND       = Cint(-03), # requested object could not be found
-            EEXISTS         = Cint(-04), # object exits preventing op
+            EEXISTS         = Cint(-04), # object exists preventing op
             EAMBIGUOUS      = Cint(-05), # more than one object matches
             EBUFS           = Cint(-06), # output buffer too small to hold data
             EUSER           = Cint(-07), # user callback generated error

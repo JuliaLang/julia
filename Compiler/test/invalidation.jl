@@ -3,6 +3,7 @@
 # setup
 # -----
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using Test
@@ -13,12 +14,12 @@ struct InvalidationTester <: Compiler.AbstractInterpreter
     world::UInt
     inf_params::Compiler.InferenceParams
     opt_params::Compiler.OptimizationParams
-    inf_cache::Vector{Compiler.InferenceResult}
+    inf_cache::Compiler.InferenceCache
     function InvalidationTester(;
                                 world::UInt = Base.get_world_counter(),
                                 inf_params::Compiler.InferenceParams = Compiler.InferenceParams(),
                                 opt_params::Compiler.OptimizationParams = Compiler.OptimizationParams(),
-                                inf_cache::Vector{Compiler.InferenceResult} = Compiler.InferenceResult[])
+                                inf_cache::Compiler.InferenceCache = Compiler.InferenceCache())
         return new(world, inf_params, opt_params, inf_cache)
     end
 end
@@ -28,6 +29,61 @@ Compiler.OptimizationParams(interp::InvalidationTester) = interp.opt_params
 Compiler.get_inference_world(interp::InvalidationTester) = interp.world
 Compiler.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
 Compiler.cache_owner(::InvalidationTester) = InvalidationTesterToken()
+
+# Local constprop proofs expose same-module binding dependencies on the published caller.
+module LocalProofBindingInvalidation61752
+    _getproperty(M::Module, s::Symbol) = getglobal(M, s)
+
+    const VALUE = "v1"
+    probe() = _getproperty(LocalProofBindingInvalidation61752, :VALUE)::String
+end
+
+let interp = InvalidationTester()
+    @test Base.infer_return_type(LocalProofBindingInvalidation61752.probe, (); interp) === String
+
+    mi = Base.method_instance(LocalProofBindingInvalidation61752.probe, ())
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world === typemax(UInt)
+
+    binding = convert(Core.Binding,
+        GlobalRef(LocalProofBindingInvalidation61752, :VALUE))
+    @test any(edge -> edge === binding, ci.edges)
+    callee_mi = Base.method_instance(
+        LocalProofBindingInvalidation61752._getproperty, (Module, Symbol))
+    @test any(edge -> edge isa Core.CodeInstance && edge.def === callee_mi, ci.edges)
+
+    world_before = Base.get_world_counter()
+    @eval LocalProofBindingInvalidation61752 const VALUE = "v2"
+    @test ci.max_world != typemax(UInt)
+    @test ci.max_world <= world_before
+end
+
+# Eliding a finalizer registration based on inferred effects must keep the proof
+# for those effects on the caller's CodeInstance.
+module FinalizerEffectInvalidation62338
+    mutable struct Target end
+    callback(::Target) = nothing
+    register(x::Target) = finalizer(callback, x)
+end
+
+let
+    inf_params = Compiler.InferenceParams(
+        ; cache_owner=FinalizerEffectInvalidation62338)
+    interp = Compiler.NativeInterpreter(Base.get_world_counter(); inf_params)
+    mi = Base.method_instance(FinalizerEffectInvalidation62338.register,
+        (FinalizerEffectInvalidation62338.Target,))
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_GET_SOURCE)
+    src = Compiler.ci_get_source(interp, ci)
+    @test !any(iscall((src, Core.finalizer)), src.code)
+    @test ci.max_world == typemax(UInt)
+
+    world_before = Base.get_world_counter()
+    @eval FinalizerEffectInvalidation62338 callback(::Target) =
+        (global callback_ran = true; nothing)
+    @test world_before < Base.get_world_counter()
+    @test ci.max_world < Base.get_world_counter()
+end
 
 # basic functionality test
 # ------------------------
@@ -115,17 +171,16 @@ begin
         @test any(iscall((src, pr48932_callee)), src.code)
     end
 
-    let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee))))
-        # Base.method_instance(pr48932_callee, (Any,))
+    let mi = only(Base.method_instances(pr48932_callee, Tuple, Base.get_world_counter()))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
 
         # In cache due to Base.return_types(pr48932_callee, (Any,))
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
     let mi = Base.method_instance(pr48932_caller, (Int,))
@@ -142,23 +197,59 @@ begin
     # this redefinition below should invalidate the cache of `pr48932_callee` but not that of `pr48932_caller`
     pr48932_callee(x) = (print(GLOBAL_BUFFER, x); nothing)
 
-    @test length(Base.methods(pr48932_callee)) == 2
-    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === first(Base.methods(pr48932_callee))
+    @test length(Base.methods(pr48932_callee)) == 1
+    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === only(Base.methods(pr48932_callee))
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee, Tuple{Any}))))
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_caller))))
         # Base.method_instance(pr48932_callee, (Any,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test_broken ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test_broken ci.max_world == typemax(UInt)
     end
 
     @test isnothing(pr48932_caller(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
+end
+
+begin
+    deduped_callee(x::Int) = @noinline rand(Int)
+    deduped_caller1(x::Int) = @noinline deduped_callee(x)
+    deduped_caller2(x::Int) = @noinline deduped_callee(x)
+
+    # run inference on both `deduped_callerx` and `deduped_callee`
+    let (src, rt) = code_typed((Int,); interp=InvalidationTester()) do x
+            @inline deduped_caller1(x)
+            @inline deduped_caller2(x)
+        end |> only
+        @test rt === Int
+        @test any(isinvoke(:deduped_callee), src.code)
+    end
+
+    # Verify that adding the backedge again does not actually add a new backedge
+    let mi = Base.method_instance(deduped_caller1, (Int,)),
+        ci = mi.cache
+
+        callee_mi = Base.method_instance(deduped_callee, (Int,))
+
+        # Inference should have added the callers to the callee's backedges
+        @test ci in callee_mi.backedges
+
+        # In practice, inference will never end up calling `store_backedges`
+        # twice on the same CodeInstance like this - we only need to check
+        # that de-duplication works for a single invocation
+        N = length(callee_mi.backedges)
+        Core.Compiler.store_backedges(ci, Core.svec(callee_mi, callee_mi))
+        N′ = length(callee_mi.backedges)
+
+        # A single `store_backedges` invocation should de-duplicate any of the
+        # edges it is adding.
+        @test N′ - N == 1
+    end
 end
 
 # we can avoid adding backedge even if the callee's return type is not the top
@@ -187,11 +278,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee_inferable))))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
     let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
@@ -212,11 +303,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test_broken ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test_broken ci.max_world == typemax(UInt)
     end
     @test isnothing(pr48932_caller_unuse(42))
@@ -244,17 +335,17 @@ begin take!(GLOBAL_BUFFER)
         @test any(isinvoke(:pr48932_callee_inlined), src.code)
     end
 
-    let mi = Base.method_instance(pr48932_callee_inlined, (Int,))
+    let mi = only(Base.method_instances(pr48932_callee_inlined, (Any,), Base.get_world_counter()))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
-    let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
+    let mi = only(Base.method_instances(pr48932_caller_inlined, (Int,), Base.get_world_counter()))
         ci = mi.cache
         @test !isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
@@ -265,21 +356,158 @@ begin take!(GLOBAL_BUFFER)
     @test "42" == String(take!(GLOBAL_BUFFER))
 
     # test that we added the backedge from `pr48932_callee_inlined` to `pr48932_caller_inlined`:
-    # this redefinition below should invalidate the cache of `pr48932_callee_inlined` but not that of `pr48932_caller_inlined`
+    # this redefinition below should invalidate the cache of both `pr48932_callee_inlined` and `pr48932_caller_inlined`
     @noinline pr48932_callee_inlined(@nospecialize x) = (print(GLOBAL_BUFFER, x); nothing)
 
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inlined, Tuple{Any}))))
     let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world != typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world != typemax(UInt)
     end
 
     @test isnothing(pr48932_caller_inlined(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
+end
+
+# Issue #57696
+# This test checks for invalidation of recursive backedges. However, unfortunately, the original failure
+# manifestation was an unreliable segfault or an assertion failure, so we don't have a more compact test.
+@test success(`$(Base.julia_cmd()) -e 'Base.typejoin(x, ::Type) = 0; exit()'`)
+
+# Test drop_all_caches functionality
+@testset "drop_all_caches" begin
+    # Run in subprocess to avoid disrupting the main test process
+    script = """
+        # Define test functions
+        drop_cache_test_f(x) = x + 1
+        drop_cache_test_g(x) = drop_cache_test_f(x) * 2
+
+        # Compile the functions and capture stderr
+        drop_cache_test_g(5) == 12 || error("failure")
+
+        println(stderr, "==DROPPING ALL CACHES==")
+
+        # Drop all caches
+        Base.drop_all_caches()
+
+        # Functions should still work (but will be recompiled on next call)
+        drop_cache_test_g(5) == 12 || error("failure")
+
+        println(stderr, "SUCCESS: drop_all_caches test passed")
+        exit(0)
+    """
+
+    io = Pipe()
+    # Run the test in a subprocess because Base.drop_all_caches() is extreme.
+    # Drain stderr concurrently: the trace-compile output can exceed the pipe
+    # buffer, and the child blocks in its atexit uv loop until it is read.
+    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io), wait=false)
+    close(io.in)
+    reader = @async read(io, String)
+    @test success(result)
+    err = fetch(reader)::String
+    # println(err)
+    err_before, err_after = split(err, "==DROPPING ALL CACHES==")
+    @test occursin("SUCCESS: drop_all_caches test passed", err_after)
+    @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
+    @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int}) # recompile", err_after)
+end
+
+# Test that backedge compaction clears mi.backedges when all backedges are removed
+begin
+    pr61102_callee(x) = 2x
+    pr61102_caller(x) = pr61102_callee(x)
+    pr61102_caller(0)
+    callee_mi = Base.method_instance(pr61102_callee, (Int,))
+    @test isdefined(callee_mi, :backedges)
+    pr61102_callee(x::Int) = 3x
+    @test !isdefined(callee_mi, :backedges)
+end
+
+# `Core.TypeName.concrete_only`: inference records no backedge at call sites with
+# non-concrete argument types, so adding a more-specific method later does not
+# invalidate the caller's compiled code
+abstract type COStyle end
+struct CODefStyle <: COStyle end
+struct COFill end
+function co_callee end
+typeof(co_callee).name.concrete_only = true
+co_callee(::COStyle, op, x) = 1
+struct COBox
+    s::COStyle
+    x::Any
+end
+co_caller(b::COBox) = co_callee(b.s, zero, b.x)
+
+# the non-concrete call site gives up to `Any`
+@test Base.return_types((COBox,); interp=InvalidationTester()) do b
+    co_caller(b)
+end |> only === Any
+
+let mi = Base.method_instance(co_caller, (COBox,))
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+end
+
+# add a more-specific method; the caller must remain valid
+co_callee(::CODefStyle, op, x::COFill) = 2
+let mi = Base.method_instance(co_caller, (COBox,))
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+end
+
+# Unit tests for `Compiler.ReinferUtils`
+# --------------------------------------------------------
+
+module BindingRevalidationTest
+    module Flagged
+        const x = 1
+    end
+    module Provider
+        export only_via_using
+        const only_via_using = 2
+    end
+    module Consumer
+    end
+end
+
+# An `export`/`public` flip repartitions a binding without changing what any lookup of it
+# finds, so the access range must still span it.
+let gr = GlobalRef(BindingRevalidationTest.Flagged, :x)
+    b = convert(Core.Binding, gr)
+    w1 = Base.get_world_counter()
+    r1, _ = Compiler.binding_access_range(gr, Compiler.WorldWithRange(w1, Compiler.WorldRange(UInt(1), w1)), false)
+    p1 = b.partitions.min_world
+    Base.set_binding_visibility!(BindingRevalidationTest.Flagged, :x, :export)
+    w2 = Base.get_world_counter()
+    # A new partition really was created ...
+    @test b.partitions.min_world > p1
+    # ... but the access range is unchanged, because the flip does not change the access key.
+    r2, _ = Compiler.binding_access_range(gr, Compiler.WorldWithRange(w2, Compiler.WorldRange(UInt(1), w2)), false)
+    @test Compiler.min_world(r2) == Compiler.min_world(r1)
+end
+
+# A binding that has never been resolved is not short-circuited to "unchanged": the
+# revalidation predicate resolves it, and judges the resolution it gets.
+let RU = Compiler.ReinferUtils
+    gr = GlobalRef(BindingRevalidationTest.Consumer, :only_via_using)
+    b = convert(Core.Binding, gr)
+    @test !isdefined(b, :partitions)
+    @eval BindingRevalidationTest.Consumer using ..Provider
+    @test RU.binding_changed_since_require_world(b, Base.get_world_counter())
+end
+
+# A binding untouched since the require world is unchanged, via the cheap fast path.
+let RU = Compiler.ReinferUtils
+    b = convert(Core.Binding, GlobalRef(Base, :sin))
+    @test b.partitions.min_world <= Base.get_require_world()
+    @test !RU.binding_changed_since_require_world(b, Base.get_world_counter())
 end

@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname, is_function_def, @propagate_inbounds
+using Base: Threads, sync_varname, is_function_def
 using Base: GenericCondition
 using Base.Meta
 
@@ -29,19 +29,28 @@ end
 Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
-@propagate_inbounds Base.getindex(A::Const, i1::Int, I::Int...) = A.a[i1, I...]
+Base.@assume_effects :noub_if_noinbounds function Base.getindex(A::Const, i::Int)
+    @inline
+    @boundscheck Base.checkbounds(A.a, i)
+    return Core.const_memoryrefget(Core.memoryrefnew(getfield(A.a, :ref), i, false), :not_atomic, false)
+end
+function Base.getindex(A::Const, i1::Int, i2::Int, I::Int...)
+    @inline
+    @boundscheck Base.checkbounds(A.a, i1, i2, I...) # generally _to_linear_index requires bounds checking
+    return @inbounds A[Base._to_linear_index(A.a, i1, i2, I...)]
+end
 
 """
     @aliasscope expr
 
-Allows the compiler to assume that all `Const`s are not being modified through stores
+Allow the compiler to assume that all `Const`s are not being modified through stores
 within this scope, even if the compiler can't prove this to be the case.
 
 !!! warning
     Experimental API. Subject to change without deprecation.
 """
 macro aliasscope(body)
-    sym = gensym()
+    sym = :aliasscope_result
     quote
         $(Expr(:aliasscope))
         $sym = $(esc(body))
@@ -51,31 +60,47 @@ macro aliasscope(body)
 end
 
 
-function sync_end(c::Channel{Any})
+function sync_end(c::Channel{Any}, src::Union{Nothing, Base.CancellationTokenSource}=nothing)
     if !isready(c)
         # there must be at least one item to begin with
         close(c)
         return
     end
     nremaining::Int = 0
-    while true
-        event = take!(c)
-        if event === :__completion__
-            nremaining -= 1
-            if nremaining == 0
-                break
-            end
-        else
-            nremaining += 1
-            schedule(Task(()->begin
-                try
-                    wait(event)
-                    put!(c, :__completion__)
-                catch e
-                    close(c, e)
+    try
+        while true
+            event = take!(c)
+            if event === :__completion__
+                nremaining -= 1
+                if nremaining == 0
+                    break
                 end
-            end))
+            else
+                nremaining += 1
+                # The watcher must survive cancellation of the enclosing
+                # scope to deliver the completion (the `cancel` keyword is
+                # part of the waitable interface).
+                schedule(Task(()->begin
+                    try
+                        wait(event; cancel = nothing)
+                        put!(c, :__completion__; cancel = nothing)
+                    catch e
+                        close(c, e)
+                    end
+                end))
+            end
         end
+    catch e
+        # Per this macro's contract the exception (a child failure delivered
+        # via `close(c, e)`, or a cancellation of this block's scope) is
+        # rethrown immediately - we do not wait for the children to finish
+        # dying, but we cancel the block's own source so that all children
+        # observe the cancellation through the token tree.
+        if src !== nothing
+            e isa Base.CancellationRequest ? Base.cancel!(src, e) : Base.cancel!(src)
+        end
+        close(c, e isa Exception ? e : ErrorException("sync_end interrupted"))
+        rethrow()
     end
     close(c)
     nothing
@@ -87,8 +112,9 @@ end
 Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
 `Distributed.@spawnat` and `Distributed.@distributed`
 are complete, or at least one of them has errored. The first exception is immediately
-rethrown. It is the responsibility of the user to cancel any still-running operations
-during error handling.
+rethrown; the block's cancellation scope is cancelled at the same time, so
+still-running operations spawned within observe the failure through their
+cancellation points rather than running unsupervised (they are not awaited).
 
 !!! Note
     This is different to [`@sync`](@ref) in that errors from wrapped tasks are thrown immediately,
@@ -99,10 +125,18 @@ during error handling.
 """
 macro sync(block)
     var = esc(sync_varname)
+    # like Base.@sync, the block runs in a new dynamic scope carrying the
+    # token of a fresh cancellation source; on the fail-fast path (and on
+    # cancellation from outside) the source is cancelled, reaching all
+    # children through the token tree without awaiting them
+    scoped_block = Expr(:tryfinally, esc(block), nothing,
+        :(Base.Scope(Core.current_scope()::Union{Nothing, Base.Scope},
+                     Base.CANCEL_TOKEN => Base.CancellationToken(var"#sync_src#"))))
     quote
-        let $var = Channel(Inf)
-            v = $(esc(block))
-            sync_end($var)
+        let var"#sync_src#" = Base.CancellationTokenSource(Base.default_cancel_token()),
+            $var = Channel(Inf)
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
             v
         end
     end
@@ -163,7 +197,7 @@ macro max_methods(n::Int, fdef::Expr)
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,4}
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={true,false} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -295,18 +329,18 @@ Closest candidates are:
     `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
 function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
-    list = get!(Vector{Any}, _hint_handlers, exct)
-    push!(list, handler)
+    list = get!(Vector{Any}, _hint_handlers, Core.typename(exct))
+    push!(list, (exct, handler))
     return nothing
 end
 
-const _hint_handlers = IdDict{Type,Vector{Any}}()
+const _hint_handlers = IdDict{Core.TypeName,Vector{Any}}()
 
 """
     Experimental.show_error_hints(io, ex, args...)
 
 Invoke all handlers from [`Experimental.register_error_hint`](@ref) for the particular
-exception type `typeof(ex)`. `args` must contain any other arguments expected by
+exception type `typeof(ex)` and all of its supertypes. `args` must contain any other arguments expected by
 the handler for that type.
 
 !!! compat "Julia 1.5"
@@ -315,15 +349,21 @@ the handler for that type.
     This interface is experimental and subject to change or removal without notice.
 """
 function show_error_hints(io, ex, args...)
-    hinters = get(_hint_handlers, typeof(ex), nothing)
-    isnothing(hinters) && return
-    for handler in hinters
-        try
-            @invokelatest handler(io, ex, args...)
-        catch
-            tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
+    @nospecialize
+    ex_supertype = typeof(ex)
+    while ex_supertype != Any
+        hinters = get(_hint_handlers, Core.typename(ex_supertype), Any[])
+        for (exct, handler) in hinters
+            ex isa exct || continue
+            try
+                # TODO: deal with handlers accepting different signatures?
+                @invokelatest handler(io, ex, args...)
+            catch
+                tn = typeof(handler).name
+                @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+            end
         end
+        ex_supertype = supertype(ex_supertype)
     end
 end
 
@@ -332,11 +372,13 @@ include("opaque_closure.jl")
 
 """
     Base.Experimental.@overlay mt def
+    Base.Experimental.@overlay mt begin defs... end
 
 Define a method and add it to the method table `mt` instead of to the global method table.
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
-method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)). The block form
+overlays every definition in the block; definitions may carry docstrings and other macros.
 
 !!! note
     Please be aware that when defining overlay methods using `@overlay`, it is not necessary
@@ -361,8 +403,18 @@ method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
 """
 macro overlay(mt, def)
     inner = Base.unwrap_macrocalls(def)
-    is_function_def(inner) || error("@overlay requires a function definition")
-    overlay_def!(mt, inner)
+    if isexpr(inner, :block)
+        # `@overlay mt begin ... end`: overlay every definition in the block
+        for arg in inner.args
+            isa(arg, LineNumberNode) && continue
+            innerarg = Base.unwrap_macrocalls(arg)
+            is_function_def(innerarg) || error("@overlay requires a function definition")
+            overlay_def!(mt, innerarg)
+        end
+    else
+        is_function_def(inner) || error("@overlay requires a function definition")
+        overlay_def!(mt, inner)
+    end
     return esc(def)
 end
 
@@ -387,7 +439,7 @@ For a detailed definition of `:consistent`-cy, consult the corresponding section
 !!! note
     Note that the requirements for `:consistent`-cy include not only that the return values
     are egal, but also that the manner of termination is the same. However, it's important
-    to aware that when they throw exceptions, the exceptions themselves don't necessarily
+    to be aware that when they throw exceptions, the exceptions themselves don't necessarily
     have to be egal. In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is
     required to also throw one, but the exact exceptions may differ.
 
@@ -459,6 +511,29 @@ without adding them to the global method table.
 :@MethodTable
 
 """
+   Experimental.@make_all_arithmetic_checked()
+
+This macro defines methods that overwrite the base definition of basic arithmetic (+,-,*),
+to use their checked variants instead. Explicitly overflowing arithmetic operators (+%,-%,*%)
+are not affected.
+
+!!! warning
+    This macro is temporary and will likely be replaced by a more complete mechanism in the
+    future. It is subject to change or removal without notice.
+"""
+macro make_all_arithmetic_checked()
+    esc(quote
+        Base.:(-)(x::Base.BitInteger)                         = Base.Checked.checked_neg(x)
+        Base.:(-)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_sub(x, y)
+        Base.:(-)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_sub(x, y)
+        Base.:(+)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_add(x, y)
+        Base.:(+)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_add(x, y)
+        Base.:(*)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_mul(x, y)
+        Base.:(-)(x::Base.AbstractChar, y::Base.AbstractChar)  = Base.Int(x) - Base.Int(y)
+    end)
+end
+
+"""
     Base.Experimental.make_io_thread()
 
 Create a new thread that will run the Julia IO loop. This can potentially reduce the latency of some
@@ -491,7 +566,10 @@ function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
 end
 
 function entrypoint(@nospecialize(argt::Type))
-    ccall(:jl_add_entrypoint, Int32, (Any,), argt)
+    # Only add to entrypoint list if we're generating output and in trim mode
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        Base.Compiler.add_entrypoint(argt)
+    end
     nothing
 end
 
@@ -527,14 +605,14 @@ function task_metrics(b::Bool)
 end
 
 """
-    Base.Experimental.task_running_time_ns(t::Task) -> Union{UInt64, Nothing}
+    Base.Experimental.task_running_time_ns(t::Task)::Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` has spent running.
 This metric is only updated when `t` yields or completes unless `t` is the current task, in
 which it will be updated continuously.
 See also [`Base.Experimental.task_wall_time_ns`](@ref).
 
-Returns `nothing` if task timings are not enabled.
+Return `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! note "This metric is from the Julia scheduler"
@@ -549,21 +627,21 @@ function task_running_time_ns(t::Task=current_task())
     if t == current_task()
         # These metrics fields can't update while we're running.
         # But since we're running we need to include the time since we last started running!
-        return t.running_time_ns + (time_ns() - t.last_started_running_at)
+        return t.running_time_ns +% (time_ns() -% t.last_started_running_at)
     else
         return t.running_time_ns
     end
 end
 
 """
-    Base.Experimental.task_wall_time_ns(t::Task) -> Union{UInt64, Nothing}
+    Base.Experimental.task_wall_time_ns(t::Task)::Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` was runnable.
 This is the time since the task first entered the run queue until the time at which it
 completed, or until the current time if the task has not yet completed.
 See also [`Base.Experimental.task_running_time_ns`](@ref).
 
-Returns `nothing` if task timings are not enabled.
+Return `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! compat "Julia 1.12"
@@ -574,8 +652,8 @@ function task_wall_time_ns(t::Task=current_task())
     start_at = t.first_enqueued_at
     start_at == 0 && return UInt64(0)
     end_at = t.finished_at
-    end_at == 0 && return time_ns() - start_at
-    return end_at - start_at
+    end_at == 0 && return time_ns() -% start_at
+    return end_at -% start_at
 end
 
 # wait_with_timeout
@@ -584,44 +662,13 @@ end
 # specification of a timeout. This is experimental as it will likely
 # be dropped when a cancellation framework is added.
 #
-# The parallel behavior of wait_with_timeout is specified here. There
-# are three concurrent entities that can interact:
-# 1. Task W: the task that calls wait_with_timeout.
-# 2. Task T: the task created to handle a timeout.
-# 3. Task N: the task that notifies the Condition being waited on.
-#
-# Typical flow:
-# - W enters the Condition's wait queue.
-# - W creates T and stops running (calls wait()).
-# - T, when scheduled, waits on a Timer.
-# - Two common outcomes:
-#   - N notifies the Condition.
-#     - W starts running, closes the Timer, sets waiter_left and returns
-#       the notify'ed value.
-#     - The closed Timer throws an EOFError to T which simply ends.
-#   - The Timer expires.
-#     - T starts running and locks the Condition.
-#     - T confirms that waiter_left is unset and that W is still in the
-#       Condition's wait queue; it then removes W from the wait queue,
-#       sets dosched to true and unlocks the Condition.
-#     - If dosched is true, T schedules W with the special :timed_out
-#       value.
-#     - T ends.
-#     - W runs and returns :timed_out.
-#
-# Some possible interleavings:
-# - N notifies the Condition but the Timer expires and T starts running
-#   before W:
-#   - W closing the expired Timer is benign.
-#   - T will find that W is no longer in the Condition's wait queue
-#     (which is protected by a lock) and will not schedule W.
-# - N notifies the Condition; W runs and calls wait on the Condition
-#   again before the Timer expires:
-#   - W sets waiter_left before leaving. When T runs, it will find that
-#     waiter_left is set and will not schedule W.
-#
-# The lock on the Condition's wait queue and waiter_left together
-# ensure proper synchronization and behavior of the tasks involved.
+# Implemented as a `park!` over the condition, the governing cancellation
+# source, and a `Base.TimeoutWait` deadline (see base/park.jl and
+# base/asyncevent.jl): the deadline's claimer arbitrates against notifies
+# and interrupters through the single wake-claim CAS on the waiting
+# task's `waiting_on`, and the non-canonical waitable shape makes the
+# entry cache hand out a fresh, single-use entry - which is exactly what
+# makes the deadline's specific-wait claim sound.
 
 """
     wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
@@ -635,54 +682,166 @@ If `timeout` is specified, cancel the `wait` when it expires and return
 `:timed_out`. The minimum value for `timeout` is 0.001 seconds, i.e. 1
 millisecond.
 """
-function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0,
+                           cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
+    src = Base.cancel_source(tok)
     ct = current_task()
-    Base._wait2(c, ct, first)
-    token = Base.unlockall(c.lock)
-
-    timer::Union{Timer, Nothing} = nothing
-    waiter_left::Union{Threads.Atomic{Bool}, Nothing} = nothing
     if timeout > 0.0
-        timer = Timer(timeout)
-        waiter_left = Threads.Atomic{Bool}(false)
-        # start a task to wait on the timer
-        t = Task() do
-            try
-                wait(timer)
-            catch e
-                # if the timer was closed, the waiting task has been scheduled; do nothing
-                e isa EOFError && return
-            end
-            dosched = false
-            lock(c.lock)
-            # Confirm that the waiting task is still in the wait queue and remove it. If
-            # the task is not in the wait queue, it must have been notified already so we
-            # don't do anything here.
-            if !waiter_left[] && ct.queue === c.waitq
-                dosched = true
-                Base.list_deletefirst!(c.waitq, ct)
-            end
-            unlock(c.lock)
-            # send the waiting task a timeout
-            dosched && schedule(ct, :timed_out)
-        end
-        t.sticky = false
-        Threads._spawn_set_thrpool(t, :interactive)
-        schedule(t)
+        tw = Base.TimeoutWait(timeout)
+        ws = src === nothing ? (c, tw) : (c, Base.SourceWait(src, 0x00), tw)
+    else
+        ws = src === nothing ? (c,) : (c, Base.SourceWait(src, 0x00))
+    end
+    # non-canonical shapes get a fresh entry - exactly what makes the
+    # deadline claimer's specific-wait CAS sound
+    w = Base.acquire_wait_entry!(ct, ws)
+    if !Base.park!(ws, w, first)
+        Base.withdraw!(ws, w, Base.WAKE_FIRED)
+        src === nothing || Base.checkcancel(src)
+        error("park fired without a cancelled source")
+    end
+    lockstate = Base.unlockall(c.lock)
+    r = try
+        Base.wait_safe_interrupt(ws, w)
+    catch
+        Base.relockall(c.lock, lockstate)
+        rethrow()
+    end
+    Base.relockall(c.lock, lockstate)
+    Base.withdraw!(ws, w, Base.WAKE_VALUE)   # closes the timer, retires
+    return r
+end
+
+"""
+    Base.Experimental.@reexport using Module
+
+Automatically re-export all exported names from a module when using it.
+
+# Examples
+
+```jldoctest
+julia> module A
+           export foo
+           foo() = "foo from A"
+       end
+A
+
+julia> module B
+           using Base.Experimental: @reexport
+           @reexport using ..A
+           # Now B exports foo, even though it's defined in A
+       end
+B
+
+julia> using .B
+
+julia> foo()
+"foo from A"
+```
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+macro reexport(ex)
+    if !Meta.isexpr(ex, :using) || isempty(ex.args)
+        error("@reexport must be used with a `using` statement, e.g., `@reexport using MyModule`")
     end
 
-    try
-        res = wait()
-        if timer !== nothing
-            close(timer)
-            waiter_left[] = true
+    # Check for `using Foo: x, y` syntax (not supported)
+    if any(arg -> Meta.isexpr(arg, :(:)), ex.args)
+        error("@reexport does not support `using Module: names` syntax")
+    end
+
+    # Generate _eval_using calls for each module in the using statement
+    calls = Expr(:block)
+    for mod_path in ex.args
+        push!(calls.args, :($(Core._eval_using)($(__module__), $(QuoteNode(mod_path)), $(Base.JL_MODULE_USING_REEXPORT))))
+    end
+    push!(calls.args, Expr(:latestworld))
+    push!(calls.args, :nothing)
+
+    return esc(calls)
+end
+
+struct VersionedLower
+    ver::VersionNumber
+end
+
+function (vp::VersionedLower)(@nospecialize(code), mod::Module,
+                              file="none", line=0, world=typemax(Csize_t), warn=false)
+    if !isdefined(Base, :JuliaLowering)
+        if vp.ver === VERSION
+            return Core._parse
         end
-        return res
-    catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
-        rethrow()
-    finally
-        Base.relockall(c.lock, token)
+        error("JuliaLowering module is required for syntax version $(vp.ver), but it is not loaded.")
+    end
+    Base.JuliaLowering.core_lowering_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
+end
+
+function Base.set_syntax_version(m::Module, ver::VersionNumber)
+    parser = Base.VersionedParse(ver)
+    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
+    #lowerer = VersionedLower(ver)
+    #Core.declare_const(m, :_internal_julia_lower, lowerer)
+    nothing
+end
+
+"""
+    Base.Experimental.@set_syntax_version ver
+
+Sets the syntax version of the current module to `ver`. This overrides settings of `syntax.julia_version` or
+`compat.julia` from Project.toml.
+
+!!! compat "Julia 1.14"
+    This macro was added in Julia 1.14.
+
+!!! warning
+    The new syntax version will take effect only for code parsed after the *invocation* of the result of the macro
+    expansion. This may be unintuitive if the macro is used inside a module body, as the entire module will be parsed
+    before any statements therein are executed, e.g. consider.
+
+    ```
+    @set_syntax_version v"1.13"
+    module ChangeSyntax
+        @set_syntax_version v"1.14"
+        expr1 # Parsed with syntax version 1.13
+     # The call itself is parsed with syntax version 1.13, but the included code is parsed with syntax version 1.14
+        include_string(ChangeSyntax, "expr2")
+        expr3 # Parsed with syntax version 1.13
+    end
+    ```
+
+    For this reason, the Project.toml mechanism is strongly preferred for packages.
+    However, this macro may be useful for scripts or the REPL.
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+macro set_syntax_version(ver)
+    Expr(:call, Base.set_syntax_version, __module__, esc(ver))
+end
+
+"""
+    Base.Experimental.@VERSION ver
+
+This macro provides access to parser (and possibly in the future other frontend component) language version
+information. In particular, `(@VERSION).syntax` provides the syntax version used to parse the location where the macro is invoked.
+
+!!! compat "Julia 1.14"
+    This macro was added in Julia 1.14.
+
+!!! note
+    Calls to this macro have special handling in the parser and the name `@VERSION` is mandatory. At this time, other macros do not
+    have access to source syntax version information.
+"""
+function var"@VERSION"(__source__::Union{LineNumberNode, Core.MacroSource}, __module__::Module)
+    # This macro has special handling in the parser, which puts the current syntax
+    # version into __source__.
+    if isa(__source__, LineNumberNode)
+        return :((; syntax = v"1.13", runtime = VERSION))
+    else
+        return :((; syntax = $(__source__.syntax_ver), runtime = VERSION))
     end
 end
 

@@ -39,6 +39,9 @@ const IR_FLAG_NOUB        = one(UInt32) << 10
 #const IR_FLAG_CONSISTENTOVERLAY = one(UInt32) << 12
 # This statement is :nortcall
 const IR_FLAG_NORTCALL = one(UInt32) << 13
+# This statement is proven :reset_safe
+const IR_FLAG_RESET_SAFE = one(UInt32) << 14
+# Reserved: one(UInt32) << 15 used for RSIIMO below
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
@@ -50,15 +53,21 @@ const IR_FLAG_UNUSED      = one(UInt32) << 17
 const IR_FLAG_EFIIMO      = one(UInt32) << 18
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 19
+# This statement is :reset_safe == RESET_SAFE_IF_INACCESSIBLEMEMONLY
+const IR_FLAG_RSIIMO      = one(UInt32) << 20
 
 const NUM_IR_FLAGS = 3 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
     IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW |
-    IR_FLAG_TERMINATES | IR_FLAG_NOUB | IR_FLAG_NORTCALL
+    IR_FLAG_TERMINATES | IR_FLAG_NOUB | IR_FLAG_NORTCALL | IR_FLAG_RESET_SAFE
 
 const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
 
+# N.B.: RSIIMO is deliberately not included: `has_flag` requires all bits, and
+# nothing consumes an escape-analysis outcome for reset-safety yet. When such
+# a consumer exists, it needs its own (RSIIMO | INACCESSIBLEMEM_OR_ARGMEM)
+# qualification, not membership in this conjunction.
 const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
 has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
@@ -66,7 +75,7 @@ has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 function iscallstmt(@nospecialize stmt)
     stmt isa Expr || return false
     head = stmt.head
-    return head === :call || head === :invoke || head === :foreigncall
+    return head === :call || head === :invoke || head === :foreigncall || head === :foreignglobal
 end
 
 function flags_for_effects(effects::Effects)
@@ -78,6 +87,20 @@ function flags_for_effects(effects::Effects)
         flags |= IR_FLAG_EFFECT_FREE
     elseif is_effect_free_if_inaccessiblememonly(effects)
         flags |= IR_FLAG_EFIIMO
+    end
+    # N.B.: Inference does not yet model `reset_safe` separately from
+    # `effect_free`, so until it does, only statements that are additionally
+    # proven effect-free may be treated as reset-safe (execution can safely
+    # be reset across them, since they have no externally visible effects).
+    # This flag describes the statement's IPO contract only: machinery the
+    # runtime inserts implicitly to execute it (allocation, write barriers,
+    # runtime library calls), whose frames must never be abandoned
+    # asynchronously, is handled separately by eagerly dropping the published
+    # reset context around it (see llvm-cancellation-lowering.cpp).
+    if is_reset_safe(effects) && is_effect_free(effects)
+        flags |= IR_FLAG_RESET_SAFE
+    elseif is_reset_safe_if_inaccessiblememonly(effects) && is_effect_free_if_inaccessiblememonly(effects)
+        flags |= IR_FLAG_RSIIMO
     end
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
@@ -99,36 +122,48 @@ end
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
-# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
-const InlineCostType = UInt16
-const MAX_INLINE_COST = typemax(InlineCostType)
-const MIN_INLINE_COST = InlineCostType(10)
-const MaybeCompressed = Union{CodeInfo, String}
-
-is_inlineable(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+inlining_cost(@nospecialize src) =
+    src isa Union{MaybeCompressed,UInt8} ? ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) : MAX_INLINE_COST
+is_inlineable(@nospecialize src) = inlining_cost(src) != MAX_INLINE_COST
 set_inlineable!(src::CodeInfo, val::Bool) =
     src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
 function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
-    return convert(InlineCostType, x)
+    x = ccall(:jl_encode_inlining_cost, UInt8, (InlineCostType,), x)
+    x = ccall(:jl_decode_inlining_cost, InlineCostType, (UInt8,), x)
+    return x
 end
 
+const SRC_FLAG_DECLARED_INLINE = 0x1
+const SRC_FLAG_DECLARED_NOINLINE = 0x2
+
 is_declared_inline(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 1
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == SRC_FLAG_DECLARED_INLINE
 
 is_declared_noinline(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 2
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == SRC_FLAG_DECLARED_NOINLINE
 
 #####################
 # OptimizationState #
 #####################
 
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
-function src_inlining_policy(interp::AbstractInterpreter,
+
+function src_inlining_policy(interp::AbstractInterpreter, mi::MethodInstance,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
+    # If we have a generator, but we can't invoke it (because argument type information is lacking),
+    # don't inline so we defer its invocation to runtime where we'll have precise type information.
+    if isa(mi.def, Method) && hasgenerator(mi)
+        may_invoke_generator(mi) || return false
+    end
+    return src_inlining_policy(interp, src, info, stmt_flag)
+end
+
+function src_inlining_policy(::AbstractInterpreter,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
+    isa(src, OptimizationState) && (src = src.src)
     if isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable
@@ -141,23 +176,55 @@ end
 
 struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
-    world::UInt
     interp::Interp
+    opt_cache::IdDict{MethodInstance,CodeInstance}
 end
-function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    return InliningState(sv.edges, frame_world(sv), interp)
+function InliningState(sv::InferenceState, interp::AbstractInterpreter,
+                       opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    return InliningState(sv.edges, interp, opt_cache)
 end
-function InliningState(interp::AbstractInterpreter)
-    return InliningState(Any[], get_inference_world(interp), interp)
+function InliningState(interp::AbstractInterpreter,
+                       opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    return InliningState(Any[], interp, opt_cache)
+end
+
+struct OptimizerCache{CodeCache}
+    cache::CodeCache
+    opt_cache::IdDict{MethodInstance,CodeInstance}
+    function OptimizerCache(
+        cache::CodeCache,
+        opt_cache::IdDict{MethodInstance,CodeInstance}) where CodeCache
+        return new{CodeCache}(cache, opt_cache)
+    end
+end
+function get((; cache, opt_cache)::OptimizerCache, mi::MethodInstance, default)
+    if haskey(opt_cache, mi)
+        return opt_cache[mi] # this is incomplete right now, but will be finished (by finish_cycle) before caching anything
+    end
+    return get(cache, mi, default)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
-code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
+function code_cache(state::InliningState)
+    cache = code_cache(state.interp)
+    return OptimizerCache(cache, state.opt_cache)
+end
+
+mutable struct OptimizationResult
+    ir::IRCode
+    inline_flag::UInt8
+    simplified::Bool # indicates whether the IR was processed with `cfg_simplify!`
+end
+
+function simplify_ir!(result::OptimizationResult)
+    result.ir = cfg_simplify!(result.ir)
+    result.simplified = true
+end
 
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
-    ir::Union{Nothing, IRCode}
+    optresult::Union{Nothing, OptimizationResult}
     stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{VarState}
@@ -165,20 +232,22 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     inlining::InliningState{Interp}
     cfg::CFG
     unreachable::BitSet
-    bb_vartables::Vector{Union{Nothing,VarTable}}
+    bb_states::Vector{Union{Nothing,BBEntryState}}
     insert_coverage::Bool
 end
-function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
-    inlining = InliningState(sv, interp)
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
+                           opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    inlining = InliningState(sv, interp, opt_cache)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
-                             sv.unreachable, sv.bb_vartables, sv.insert_coverage)
+                             sv.unreachable, sv.bb_states, sv.insert_coverage)
 end
-function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
+function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter,
+                           opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
-        src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
+        src.ssavaluetypes = Any[ Any for _ = 1:nssavalues ]
     else
         nssavalues = length(src.ssavaluetypes::Vector{Any})
     end
@@ -186,25 +255,25 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     nslots = length(src.slotflags)
     slottypes = src.slottypes
     if slottypes === nothing
-        slottypes = Any[ Any for i = 1:nslots ]
+        slottypes = Any[ Any for _ = 1:nslots ]
     end
-    stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
+    stmt_info = CallInfo[ NoCallInfo() for _ = 1:nssavalues ]
     # cache some useful state computations
     def = mi.def
     mod = isa(def, Method) ? def.module : def
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
-    inlining = InliningState(interp)
+    inlining = InliningState(interp, opt_cache)
     cfg = compute_basic_blocks(src.code)
     unreachable = BitSet()
-    bb_vartables = Union{VarTable,Nothing}[]
-    for block = 1:length(cfg.blocks)
-        push!(bb_vartables, VarState[
-            VarState(slottypes[slot], src.slotflags[slot] & SLOT_USEDUNDEF != 0)
+    nbbstate = zeros(Int, nslots)
+    bb_states = Union{BBEntryState,Nothing}[
+        BBEntryState(VarState[
+            VarState(slottypes[slot], typemin(Int), src.slotflags[slot] & SLOT_USEDUNDEF != 0)
             for slot = 1:nslots
-        ])
-    end
-    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
+        ], nbbstate)
+        for _ = 1:length(cfg.blocks)]
+    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_states, false)
 end
 function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
     world = get_inference_world(interp)
@@ -214,6 +283,7 @@ function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
 end
 
 function argextype end # imported by EscapeAnalysis
+function argextype_widened end # imported by EscapeAnalysis
 function try_compute_field end # imported by EscapeAnalysis
 
 include("ssair/heap.jl")
@@ -225,11 +295,30 @@ include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
+function ir_to_codeinf!(opt::OptimizationState{I}, frame::InferenceState{I}, edges::SimpleVector) where {I<:AbstractInterpreter}
+    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp::I, frame.result, opt.optresult))
+end
+
+function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector, inlining_cost::InlineCostType)
+    src = ir_to_codeinf!(opt, edges)
+    src.inlining_cost = inlining_cost
+    src
+end
+
+function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector)
+    src = ir_to_codeinf!(opt)
+    src.edges = edges
+    src
+end
+
 function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src) = opt
-    src = ir_to_codeinf!(src, opt.ir::IRCode)
-    src.edges = Core.svec(opt.inlining.edges...)
-    opt.ir = nothing
+    (; linfo, src, optresult) = opt
+    if optresult === nothing
+        return src
+    end
+    src = ir_to_codeinf!(src, optresult.ir)
+    opt.optresult = nothing
+    opt.src = src
     maybe_validate_code(linfo, src, "optimized")
     return src
 end
@@ -273,8 +362,8 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     typ, isexact = instanceof_tfunc(atyp, true)
     if !isexact
         atyp = unwrap_unionall(widenconst(atyp))
-        if isType(atyp) && isTypeDataType(atyp.parameters[1])
-            typ = atyp.parameters[1]
+        if isType(atyp) && isTypeDataType(type_parameter(atyp))
+            typ = type_parameter(atyp)
         else
             return (false, false, false)
         end
@@ -315,6 +404,10 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
         # GlobalRef was moved to statement position, it is probably not `const`,
         # so we can't say much about it anyway.
         return (false, false, false)
+    elseif isa(stmt, Core.BindingPartition)
+        # A resolved global read: its effects come from the partition kind.
+        (; effects) = abstract_eval_partition_load(partition_owner(stmt), stmt, false)
+        return (is_consistent(effects), is_removable_if_unused(effects), is_nothrow(effects))
     elseif isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
@@ -327,7 +420,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return (false, false, false)
-            if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
+            if f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
             end
@@ -354,6 +447,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             terminates = is_terminates(effects)
             removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
+        elseif head === :foreignglobal
+            return (false, false, false)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
@@ -394,7 +489,7 @@ function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), 
     end
     if !iscallstmt(stmt)
         # There is a bit of a subtle point here, which is that some non-call
-        # statements (e.g. PiNode) can be UB:, however, we consider it
+        # statements (e.g. PiNode) can be UB, however, we consider it
         # illegal to introduce such statements that actually cause UB (for any
         # input). Ideally that'd be handled at insertion time (TODO), but for
         # the time being just do that here.
@@ -450,7 +545,9 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref_type(x, src)
+        return globalref_rt(x, src)
+    elseif isa(x, Core.BindingPartition)
+        return partition_rt(x)
     elseif isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
         return Any
     elseif isa(x, PiNode)
@@ -459,6 +556,17 @@ function argextype(
         return Const(x)
     end
 end
+
+# `widenconst(argextype(x, src, ...))` without the throwaway `Const` for GlobalRef args.
+@inline function argextype_widened(@nospecialize(x),
+        src::Union{IRCode,IncrementalCompact,CodeInfo}, sptypes::Vector{VarState})
+    isa(x, GlobalRef) && return globalref_rt_widened(x, src)
+    isa(x, Core.BindingPartition) && return partition_rt_widened(x)
+    return widenconst(argextype(x, src, sptypes))
+end
+@inline argextype_widened(@nospecialize(x), ir::IRCode) = argextype_widened(x, ir, ir.sptypes)
+@inline argextype_widened(@nospecialize(x), compact::IncrementalCompact) =
+    argextype_widened(x, compact, compact.ir.sptypes)
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     ssavaluetypes = src.ssavaluetypes
     if ssavaluetypes isa Int
@@ -471,63 +579,12 @@ end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
 
 """
-    finish(interp::AbstractInterpreter, opt::OptimizationState,
-           ir::IRCode, caller::InferenceResult)
+    finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
 
-Post-process information derived by Julia-level optimizations for later use.
-In particular, this function determines the inlineability of the optimized code.
+Called at the end of optimization to store the resulting IR back into the OptimizationState.
 """
-function finish(interp::AbstractInterpreter, opt::OptimizationState,
-                ir::IRCode, caller::InferenceResult)
-    (; src, linfo) = opt
-    (; def, specTypes) = linfo
-
-    force_noinline = is_declared_noinline(src)
-
-    # compute inlining and other related optimizations
-    result = caller.result
-    @assert !(result isa LimitedAccuracy)
-    result = widenslotwrapper(result)
-
-    opt.ir = ir
-
-    # determine and cache inlineability
-    if !force_noinline
-        sig = unwrap_unionall(specTypes)
-        if !(isa(sig, DataType) && sig.name === Tuple.name)
-            force_noinline = true
-        end
-        if !is_declared_inline(src) && result === Bottom
-            force_noinline = true
-        end
-    end
-    if force_noinline
-        set_inlineable!(src, false)
-    elseif isa(def, Method)
-        if is_declared_inline(src) && isdispatchtuple(specTypes)
-            # obey @inline declaration if a dispatch barrier would not help
-            set_inlineable!(src, true)
-        else
-            # compute the cost (size) of inlining this code
-            params = OptimizationParams(interp)
-            cost_threshold = default = params.inline_cost_threshold
-            if ⊑(optimizer_lattice(interp), result, Tuple) && !isconcretetype(widenconst(result))
-                cost_threshold += params.inline_tupleret_bonus
-            end
-            # if the method is declared as `@inline`, increase the cost threshold 20x
-            if is_declared_inline(src)
-                cost_threshold += 19*default
-            end
-            # a few functions get special treatment
-            if def.module === _topmod(def.module)
-                name = def.name
-                if name === :iterate || name === :unsafe_convert || name === :cconvert
-                    cost_threshold += 4*default
-                end
-            end
-            src.inlining_cost = inline_cost(ir, params, cost_threshold)
-        end
-    end
+function finishopt!(::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
+    opt.optresult = OptimizationResult(ir, ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src), false)
     return nothing
 end
 
@@ -650,7 +707,7 @@ GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_ca
 function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,MethodInstance})
     if codeinst isa MethodInstance
         codeinst = get(code_cache, codeinst, nothing)
-        codeinst isa CodeInstance || return false
+        codeinst === nothing && return false
     end
     argescapes = traverse_analysis_results(codeinst) do @nospecialize result
         return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
@@ -658,7 +715,7 @@ function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,Met
     if argescapes !== nothing
         return argescapes
     end
-    effects = decode_effects(codeinst.ipo_purity_bits)
+    effects = codeinst isa CodeInstance ? decode_effects(codeinst.ipo_purity_bits) : codeinst.ipo_effects
     if is_effect_free(effects) && is_inaccessiblememonly(effects)
         # We might not have run EA on simple frames without any escapes (e.g. when optimization
         # is skipped when result is constant-folded by abstract interpretation). If those
@@ -703,10 +760,14 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
     f === nothing && return false
     if f === getfield
         nargs = 4
-    elseif f === memoryrefnew || f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefnew
+        nargs= 3
+    elseif f === memoryrefget || f === const_memoryrefget || f === memoryref_isassigned
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5
+    elseif f === memoryrefunset!
+        nargs = 4
     else
         return false
     end
@@ -790,7 +851,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     stmt = inst[:stmt]
     if !needs_ea_validation
         if !isterminator(stmt) && stmt !== nothing
-            # ignore control flow node – they are not removable on their own and thus not
+            # ignore control flow nodes – they are not removable on their own and thus do not
             # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
             # the whole method invocation
             sv.all_effect_free &= has_flag(flag, IR_FLAG_EFFECT_FREE)
@@ -831,10 +892,14 @@ function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
     if iscall_with_boundscheck(stmt, sv)
-        for i = 1:(length(stmt.args)-1)
+        for i = 1:length(stmt.args)
             val = stmt.args[i]
+            # SSAValue should be the only permitted argument type which can be inconsistent found here.
+            # Others (e.g. GlobalRef) should have been moved to statement position. See stmt_effect_flags.
             if isa(val, SSAValue)
-                stmt_inconsistent |= val.id in inconsistent
+                if i < length(stmt.args)  # not the boundscheck argument (which is last)
+                    stmt_inconsistent |= val.id in inconsistent
+                end
                 count!(tpdum, val)
             end
         end
@@ -861,7 +926,7 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     if isa(stmt, EnterNode)
         # try/catch not yet modeled
         give_up_refinements!(sv)
-        return nothing
+        return true # don't bail out early -- can cause tpdum counts to be off
     end
 
     scan_non_dataflow_flags!(inst, sv)
@@ -907,10 +972,11 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
         end
     end
 
-    # bail out early if there are no possibilities to refine the effects
-    if !any_refinable(sv)
-        return nothing
-    end
+    # Do not bail out early, as this can cause tpdum counts to be off.
+    # # bail out early if there are no possibilities to refine the effects
+    # if !any_refinable(sv)
+    #     return nothing
+    # end
 
     return true
 end
@@ -918,25 +984,24 @@ end
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
     (; ir, inconsistent, tpdum) = sv
 
+    sv.all_retpaths_consistent || return
     scan!(ScanStmt(sv), scanner, false)
+    sv.all_retpaths_consistent || return
     complete!(tpdum); push!(scanner.bb_ip, 1)
     populate_def_use_map!(tpdum, scanner)
 
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
     for def in inconsistent
-        for use in tpdum[def]
-            if !(use in inconsistent)
-                push!(inconsistent, use)
-                append!(stmt_ip, tpdum[use])
-            end
-        end
-    end
+        append!(stmt_ip, tpdum[def])
+   end
     lazydomtree = LazyDomtree(ir)
     while !isempty(stmt_ip)
         idx = popfirst!(stmt_ip)
+        idx in inconsistent && continue # already processed
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
         if iscall_with_boundscheck(stmt, sv)
+            # recompute inconsistent flags for call while skipping boundscheck (last) argument
             any_non_boundscheck_inconsistent = false
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]
@@ -948,19 +1013,18 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             any_non_boundscheck_inconsistent || continue
         elseif isa(stmt, ReturnNode)
             sv.all_retpaths_consistent = false
+            return
         elseif isa(stmt, GotoIfNot)
             bb = block_for_inst(ir, idx)
             cfg = ir.cfg
             blockliveness = BlockLiveness(cfg.blocks[bb].succs, nothing)
             for succ in iterated_dominance_frontier(cfg, blockliveness, get!(lazydomtree))
                 visit_bb_phis!(ir, succ) do phiidx::Int
-                    push!(inconsistent, phiidx)
-                    push!(stmt_ip, phiidx)
+                    phiidx in inconsistent || push!(stmt_ip, phiidx)
                 end
             end
         end
-        sv.all_retpaths_consistent || break
-        append!(inconsistent, tpdum[idx])
+        push!(inconsistent, idx)
         append!(stmt_ip, tpdum[idx])
     end
 end
@@ -979,11 +1043,11 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
     completed_scan = scan!(ScanStmt(sv), scanner, true)
 
     if !completed_scan
-        if sv.all_retpaths_consistent
-            check_inconsistentcy!(sv, scanner)
-        else
+        # finish scanning for all_retpaths_consistent computation
+        check_inconsistentcy!(sv, scanner)
+        if !sv.all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
-            scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
+            scan!(scanner, false) do inst::Instruction, ::Int, ::Int
                 scan_non_dataflow_flags!(inst, sv)
                 # bail out early if there are no possibilities to refine the effects
                 if !any_refinable(sv)
@@ -998,20 +1062,23 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
 end
 
 # run the optimization work
-function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
+function optimize(interp::AbstractInterpreter, opt::OptimizationState{I}, caller::InferenceResult) where {I<:AbstractInterpreter}
+    @zone "CC: OPTIMIZER" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
-    return finish(interp, opt, ir, caller)
+    finishopt!(interp, opt, ir)
+    return nothing
 end
 
-macro pass(name, expr)
+const ALL_PASS_NAMES = String[]
+macro pass(name::String, expr)
     optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
-    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
+    macrocall = :(@zone $name $(esc(expr)))
     macrocall.args[2] = __source__  # `@timeit` may want to use it
+    push!(ALL_PASS_NAMES, name)
     quote
         $macrocall
-        matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
+        matchpass($optimize_until, ($stage += 1), $name) && $(esc(:(@goto __done__)))
     end
 end
 
@@ -1022,29 +1089,392 @@ matchpass(::Nothing, _, _) = false
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
-    optimize_until = nothing,  # run all passes by default
-)
+    optimize_until::Union{Nothing, Int, String} = nothing)  # run all passes by default
+    if optimize_until isa String && !contains_is(ALL_PASS_NAMES, optimize_until)
+        error("invalid `optimize_until` argument, no such optimization pass")
+    elseif optimize_until isa Int && (optimize_until < 1 || optimize_until > length(ALL_PASS_NAMES))
+        error("invalid `optimize_until` argument, no such optimization pass")
+    end
+
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
-    @pass "convert"   ir = convert_to_ircode(ci, sv)
-    @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
+    @pass "CC: CONVERT"   ir = convert_to_ircode!(ci, sv)
+    @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @pass "compact 1" ir = compact!(ir)
-    @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
-    # @timeit "verify 2" verify_ir(ir)
-    @pass "compact 2" ir = compact!(ir)
-    @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    @pass "CC: COMPACT_1" ir = compact!(ir)
+    @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    # @zone "CC: VERIFY 2" verify_ir(ir)
+    @pass "CC: COMPACT_2" ir = compact!(ir)
+    @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
+    @pass "CC: GLOBALS"   ir = reformulate_globals_pass!(ir, sv)
+    @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
     if made_changes
-        @pass "compact 3" ir = compact!(ir, true)
+        @pass "CC: COMPACT_3" ir = compact!(ir, true)
     end
     if is_asserts()
-        @timeit "verify 3" begin
+        @zone "CC: VERIFY_3" begin
             verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
     end
     @label __done__  # used by @pass
+    return ir
+end
+
+# Optimized conversion of a argument type to a singleton value, or nothing
+function _global_call_singleton(@nospecialize(callee), ir::Union{IRCode,IncrementalCompact})
+    isa(callee, QuoteNode) && return callee.value
+    isa(callee, GlobalRef) && return globalref_singleton(callee, ir)
+    isa(callee, Core.BindingPartition) && return partition_singleton(callee)
+    return singleton_type(argextype(callee, ir))
+end
+
+# The atomic-order argument at position `i`.
+function order_arg(stmt::Expr, i::Int, ir::IRCode)
+    a = stmt.args[i]
+    o = _global_call_singleton(a, ir)
+    return isa(o, Symbol) ? QuoteNode(o) : a
+end
+
+# The atomic-order argument at position `i`, which may be absent (reported as returning nothing).
+function optional_order_arg(stmt::Expr, i::Int, ir::IRCode)
+    i > length(stmt.args) && return nothing
+    o = order_arg(stmt, i, ir)
+    return o === nothing ? QuoteNode(nothing) : o
+end
+
+# Recognize a statement that reads a global binding value.
+function recognize_global_read(@nospecialize(stmt), ir::IRCode)
+    if isa(stmt, GlobalRef)
+        return Pair{GlobalRef,Any}(stmt, QuoteNode(:unordered))
+    end
+    isa(stmt, Expr) && stmt.head === :call || return nothing
+    na = length(stmt.args)
+    (na == 3 || na == 4) || return nothing
+    f = _global_call_singleton(stmt.args[1], ir)
+    if f === Core.getglobal
+        M = _global_call_singleton(stmt.args[2], ir)
+        s = _global_call_singleton(stmt.args[3], ir)
+        if isa(M, Module) && isa(s, Symbol)
+            order = na == 4 ? order_arg(stmt, 4, ir) : QuoteNode(:monotonic)
+            return Pair{GlobalRef,Any}(GlobalRef(M, s), order)
+        end
+    elseif f === Core.getfield && na == 3
+        M = _global_call_singleton(stmt.args[2], ir)
+        s = _global_call_singleton(stmt.args[3], ir)
+        if isa(M, Module) && isa(s, Symbol)
+            return Pair{GlobalRef,Any}(GlobalRef(M, s), QuoteNode(:unordered))
+        end
+    end
+    return nothing
+end
+
+# The module and name a store names, taken from the two arguments following the callee at
+# `base` (see `recognize_global_write`), as a `GlobalRef`, or nothing if either is unproven.
+function _global_write_target(stmt::Expr, base::Int, ir::IRCode)
+    M = _global_call_singleton(stmt.args[base+1], ir)
+    s = _global_call_singleton(stmt.args[base+2], ir)
+    (isa(M, Module) && isa(s, Symbol)) ? GlobalRef(M, s) : nothing
+end
+
+# A description of a recognized store to a global binding.
+struct GlobalWriteInfo
+    g::GlobalRef
+    op::Symbol
+    order::Any
+    failorder::Any
+    value::Any
+    cmp::Any
+    # the reduce function's code instance, for a store recognized as an `:invoke_modify`
+    # node; `nothing` for the plain call form.
+    invoke::Any
+end
+
+# Build the reformulated store from GlobalWriteInfo.
+# An `:invoke_modify` store is rebuilt as one, keeping the reduce function's code instance
+# ahead of the call.
+function build_global_write_partition_call(part::Core.BindingPartition, w::GlobalWriteInfo)
+    callee = GlobalRef(Core, w.op)
+    ex = w.invoke === nothing ? Expr(:call, callee, QuoteNode(part)) :
+        Expr(:invoke_modify, w.invoke, callee, QuoteNode(part))
+    (w.op === :replaceglobal_partition || w.op === :modifyglobal_partition) && push!(ex.args, w.cmp)
+    push!(ex.args, w.value)
+    if w.order !== nothing
+        push!(ex.args, w.order)
+        w.failorder === nothing || push!(ex.args, w.failorder)
+    end
+    return ex
+end
+
+# Recognize a statement that writes a global binding through one of the store operator builtins.
+# `modifyglobal!` upgrades like the rest, in both the plain call form and the `:invoke_modify`
+# form the inliner gives it -- the code instance that node carries for the reduce function
+# rides along on the upgraded one.
+function recognize_global_write(@nospecialize(stmt), ir::IRCode)
+    if isexpr(stmt, :call)
+        base = 1
+        invoke = nothing
+    elseif isexpr(stmt, :invoke_modify)
+        base = 2
+        invoke = stmt.args[1]
+    else
+        return nothing
+    end
+    na = length(stmt.args) - base
+    3 <= na <= 6 || return nothing # cheap arity check for the narrowest and widest list accepted below
+    f = _global_call_singleton(stmt.args[base], ir)
+    if f === Core.modifyglobal! && (na == 4 || na == 5)
+        g = _global_write_target(stmt, base, ir)
+        g === nothing && return nothing
+        order = optional_order_arg(stmt, base+5, ir)
+        return GlobalWriteInfo(g, :modifyglobal_partition, order, nothing, stmt.args[base+4], stmt.args[base+3], invoke)
+    elseif invoke !== nothing
+        return nothing # only `modifyglobal!` is invoked this way
+    elseif f === Core.setglobal! && (na == 3 || na == 4)
+        g = _global_write_target(stmt, base, ir)
+        g === nothing && return nothing
+        order = optional_order_arg(stmt, base+4, ir)
+        return GlobalWriteInfo(g, :setglobal_partition, order, nothing, stmt.args[base+3], nothing, nothing)
+    elseif f === Core.swapglobal! && (na == 3 || na == 4)
+        g = _global_write_target(stmt, base, ir)
+        g === nothing && return nothing
+        order = optional_order_arg(stmt, base+4, ir)
+        return GlobalWriteInfo(g, :swapglobal_partition, order, nothing, stmt.args[base+3], nothing, nothing)
+    elseif f === Core.replaceglobal! && (4 <= na <= 6)
+        g = _global_write_target(stmt, base, ir)
+        g === nothing && return nothing
+        order = optional_order_arg(stmt, base+5, ir)
+        failorder = optional_order_arg(stmt, base+6, ir)
+        return GlobalWriteInfo(g, :replaceglobal_partition, order, failorder, stmt.args[base+4], stmt.args[base+3], nothing)
+    elseif f === Core.setglobalonce! && (3 <= na <= 5)
+        g = _global_write_target(stmt, base, ir)
+        g === nothing && return nothing
+        order = optional_order_arg(stmt, base+4, ir)
+        failorder = optional_order_arg(stmt, base+5, ir)
+        return GlobalWriteInfo(g, :setglobalonce_partition, order, failorder, stmt.args[base+3], nothing, nothing)
+    end
+    return nothing
+end
+
+# Recognize a definedness query on a global binding:
+# `isdefinedglobal(M, s[, allow_import[, order]])` or `isdefined(M::Module, s)`.
+# Only an `allow_import === true` query reformulates (it walks imports to the leaf, matching the resolution below).
+# An `allow_import === false` query is left on the runtime path (if not already folded by inference), which is conservatively correct.
+function recognize_global_isdefined(@nospecialize(stmt), ir::IRCode)
+    isa(stmt, Expr) && stmt.head === :call || return nothing
+    na = length(stmt.args)
+    f = _global_call_singleton(stmt.args[1], ir)
+    if f === Core.isdefinedglobal && (3 <= na <= 5)
+        M = _global_call_singleton(stmt.args[2], ir)
+        s = _global_call_singleton(stmt.args[3], ir)
+        (isa(M, Module) && isa(s, Symbol)) || return nothing
+        if na >= 4
+            _global_call_singleton(stmt.args[4], ir) === true || return nothing
+        end
+        order = na == 5 ? order_arg(stmt, 5, ir) : QuoteNode(:unordered)
+        return Pair{GlobalRef,Any}(GlobalRef(M, s), order)
+    elseif f === Core.isdefined && na == 3
+        M = _global_call_singleton(stmt.args[2], ir)
+        s = _global_call_singleton(stmt.args[3], ir)
+        (isa(M, Module) && isa(s, Symbol)) || return nothing
+        return Pair{GlobalRef,Any}(GlobalRef(M, s), QuoteNode(:unordered))
+    end
+    return nothing
+end
+
+# Narrow the validity of the code being optimized to `valid_worlds`, the optimizer's
+# counterpart of `update_valid_age!`. `sv.src` carries the frame's `valid_worlds` at this
+# point (set by `finishinfer!`), and `finish_nocycle`/`finish_cycle` intersect it back into
+# the frame after optimization.
+function narrow_valid_worlds!(sv::OptimizationState, world::UInt, valid_worlds::WorldRange)
+    src = sv.src
+    valid_worlds = intersect(world_range(src), valid_worlds)
+    if !(world in valid_worlds)
+        error("invalid age range update")
+    end
+    src.min_world = first(valid_worlds)
+    src.max_world = last(valid_worlds)
+    return valid_worlds
+end
+
+# Resolve a read of `g` to a leaf `Core.BindingPartition` that fully captures the behavior.
+# Return the leaf partition to use, whether `getglobal` would deprecation-warn for this access,
+# and whether the walk crossed an import (determining the name to use for errors).
+const ResolvedRead = Tuple{Core.BindingPartition,Bool,Bool}
+
+function reformulate_read(g::GlobalRef, sv::OptimizationState, world::UInt, edges::Vector{Any},
+                          cache::IdDict{Core.Binding,Union{ResolvedRead,Nothing}})
+    binding = convert(Core.Binding, g)
+    haskey(cache, binding) && return cache[binding]
+    p = resolve_read(g, binding, world)
+    if p !== nothing
+        push!(edges, binding)
+        valid_worlds, _ = binding_access_range(g, WorldWithRange(world, world_range(sv.src)), false)
+        narrow_valid_worlds!(sv, world, valid_worlds)
+    end
+    cache[binding] = p
+    return p
+end
+
+function resolve_read(g::GlobalRef, binding::Core.Binding, world::UInt)
+    # A world-1 constant (builtin/intrinsic/core type) is immutable: leave it as a bare
+    # `GlobalRef` for codegen to embed directly, with no `BindingPartition` and no edge.
+    world1_const(g) && return nothing
+    partition = lookup_binding_partition(world, binding)
+    leaf_binding, leaf, depwarn = walk_to_leaf_partition_depwarn(binding, partition, world)
+    kind = binding_kind(leaf)
+    # Freeze only what codegen embeds by value (a real constant) or by slot (a typed global,
+    # whose identity `binding_access_key` tracks). A backdated constant is neither: inference
+    # types it as an untyped global, which keeps it as a runtime `getglobal` and also keeps
+    # the backdate admonition.
+    # `PARTITION_KIND_DECLARED` (an untyped `global x`) is notably also omitted here, per the comment in `binding_access_key`.
+    if !(is_defined_const_binding(kind) && kind !== PARTITION_KIND_BACKDATED_CONST) &&
+       kind !== PARTITION_KIND_GLOBAL
+        return nothing
+    end
+    # `leaf_binding !== binding` means the walk crossed an import, so the leaf no longer names
+    # the access the source asked for in UndefVarError. That only matters for a leaf that can
+    # actually be undefined (not a constant).
+    return (leaf, depwarn, kind === PARTITION_KIND_GLOBAL && leaf_binding !== binding)
+end
+
+# The store counterpart of `reformulate_read`.
+# `PARTITION_KIND_DECLARED` (an untyped `global x`) is notably omitted here per the comment in `binding_access_key`.
+function reformulate_write(g::GlobalRef, sv::OptimizationState, world::UInt, edges::Vector{Any},
+                           cache::IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}})
+    binding = convert(Core.Binding, g)
+    haskey(cache, binding) && return cache[binding]
+    partition = lookup_binding_partition(world, binding)
+    p = binding_kind(partition) === PARTITION_KIND_GLOBAL ? partition : nothing
+    if p !== nothing
+        push!(edges, binding)
+        valid_worlds, _ = binding_access_range(g, WorldWithRange(world, world_range(sv.src)), true)
+        narrow_valid_worlds!(sv, world, valid_worlds)
+    end
+    cache[binding] = p
+    return p
+end
+
+# Preserve depwarn effect explicitly.
+function emit_depwarn_partition!(ir::IRCode, idx::Int, p::Core.BindingPartition)
+    insert_node!(ir, idx, NewInstruction(
+        Expr(:call, GlobalRef(Core, :depwarn_partition), QuoteNode(p)), Nothing))
+    return nothing
+end
+
+function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
+    world = get_inference_world(opt.inlining.interp)
+    edges = opt.inlining.edges
+    read_cache = IdDict{Core.Binding,Union{ResolvedRead,Nothing}}()
+    write_cache = IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}}()
+    for idx = 1:length(ir.stmts)
+        inst = ir[SSAValue(idx)]
+        stmt = inst[:stmt]
+        r = recognize_global_read(stmt, ir)
+        if r !== nothing
+            rr = reformulate_read(r.first, opt, world, edges, read_cache)
+            if rr !== nothing
+                (p, depwarn, imported) = rr
+                depwarn && emit_depwarn_partition!(ir, idx, p)
+                # Decide if simple `p` has the right semantics, or needs the full `getglobal_partition` call to preserve semantics.
+                stmt = (r.second !== QuoteNode(:unordered) || imported) ?
+                    Expr(:call, GlobalRef(Core, :getglobal_partition),
+                         QuoteNode(r.first), QuoteNode(p), r.second) : p
+                inst[:stmt] = stmt
+                r.second isa QuoteNode && continue # optimize the loop in the common case
+            end
+            # fall through: a read call may still contain nested `GlobalRef` operands worth rewriting (including for `order`).
+        end
+        d = recognize_global_isdefined(stmt, ir)
+        if d !== nothing
+            rr = reformulate_read(d.first, opt, world, edges, read_cache)
+            if rr !== nothing
+                stmt = Expr(:call, GlobalRef(Core, :isdefinedglobal_partition), QuoteNode(rr[1]), d.second)
+                inst[:stmt] = stmt
+                d.second isa QuoteNode && continue # optimize the loop in the common case
+            end
+            # fall through: as for a read, a non-constant `order` operand may still be a `GlobalRef` worth rewriting.
+        end
+        w = recognize_global_write(stmt, ir)
+        if w !== nothing
+            part = reformulate_write(w.g, opt, world, edges, write_cache)
+            if part !== nothing
+                (part.kind & PARTITION_FLAG_DEPWARN) != 0 && emit_depwarn_partition!(ir, idx, part)
+                # Decide if simple `p = val` has the right semantics, or needs the full call form to preserve all semantics.
+                stmt = (w.op === :setglobal_partition && w.order === nothing) ?
+                    Expr(:(=), part, w.value) : build_global_write_partition_call(part, w)
+                inst[:stmt] = stmt
+            end
+            # An unresolved store keeps the runtime path it came in on: nothing froze, so
+            # there is no partition to name its target with, and every `Core.*_partition`
+            # builtin takes one.
+            # fall through: a write call may still contain other nested `GlobalRef` operands worth rewriting.
+        end
+
+        # `ccall`/`cglobal` name their target with a nested `Expr(:tuple, name, library)`,
+        # with special semantics, since that GlobalRef is permitted to have side-effects and throw,
+        # but we still want to apply the same GlobalRef -> BindingPartition transform optimization.
+        if isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal)
+            target = stmt.args[1]
+            if isexpr(target, :tuple)
+                newargs = nothing
+                for i = 1:length(target.args)
+                    use = target.args[i]
+                    isa(use, GlobalRef) || continue
+                    rr = reformulate_read(use, opt, world, edges, read_cache)
+                    rr === nothing && continue
+                    (p, depwarn, _) = rr
+                    depwarn && continue # skip optimizing since we don't have a good place to put the depwarn node -- this should end up on a cold branch in codegen anyways
+                    if newargs === nothing
+                        newargs = copy(target.args)
+                    end
+                    newargs[i] = p
+                end
+                if newargs !== nothing
+                    newtarget = Expr(:tuple)
+                    newtarget.args = newargs
+                    stmt.args[1] = newtarget
+                    inst[:stmt] = stmt
+                end
+            end
+        end
+
+        # Rewrite (effect-free) `GlobalRef` operands nested inside this statement.
+        urs = userefs(stmt)
+        changed = false
+        for ur in urs
+            use = ur[]
+            if isa(use, GlobalRef)
+                rr = reformulate_read(use, opt, world, edges, read_cache)
+                if rr !== nothing
+                    (p, _, _) = rr
+                    ur[] = p
+                    changed = true
+                end
+            end
+        end
+        if changed
+            inst[:stmt] = urs[]
+        end
+    end
+    return nothing
+end
+
+# Rather than repeat the `bb_saw_latestworld` analysis,
+# skip reformulating any IR that carries a `:latestworld` marker at all.
+# It isn't usually hot code, and usually bails early anyways.
+function has_latestworld(ir::IRCode)
+    for idx = 1:length(ir.stmts)
+        isexpr(ir[SSAValue(idx)][:stmt], :latestworld) && return true
+    end
+    return false
+end
+
+function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
+    has_latestworld(ir) || _reformulate_globals!(ir, opt)
+    # Reflect any narrowing on the IR itself, which inherited the frame's range at conversion.
+    valid_worlds = world_range(opt.src)
+    valid_worlds == ir.valid_worlds || (ir = IRCode(ir, valid_worlds))
     return ir
 end
 
@@ -1096,10 +1526,10 @@ function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
         edge === prev[2] || return true # change to this edge
         linetable = di.linetable
         # check for change to line number here
-        if linetable === nothing || line == 0
+        if !(linetable isa DebugInfo) || line == 0
             line == prevline || return true
         else
-            changed_lineinfo(linetable::DebugInfo, Int(line), Int(prevline)) && return true
+            changed_lineinfo(linetable, Int(line), Int(prevline)) && return true
         end
         # check for change to edge here
         edge == 0 && return false # no edge here
@@ -1109,10 +1539,11 @@ function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
     end
 end
 
-function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
+function convert_to_ircode!(ci::CodeInfo, sv::OptimizationState)
     # Update control-flow to reflect any unreachable branches.
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    ci.code = code = copy_exprargs(ci.code)
+    # ci is always a fresh private copy so we can reuse it here.
+    code = ci.code
     di = DebugInfoStream(sv.linfo, ci.debuginfo, length(code))
     codelocs = di.codelocs
     ssaflags = ci.ssaflags
@@ -1299,11 +1730,10 @@ end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
-    svdef = sv.linfo.def
-    @timeit "domtree 1" domtree = construct_domtree(ir)
+    @zone "CC: DOMTREE_1" domtree = construct_domtree(ir)
     defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
+    @zone "CC: CONSTRUCT_SSA" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
     resize!(ir.argtypes, ci.nargs)
@@ -1346,8 +1776,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
                     cost = T_IFUNC_COST[iidx]
-                    if cost == 0 || nargs < 3 ||
-                       (f === Intrinsics.cglobal || f === Intrinsics.llvmcall) # these hold malformed IR, so argextype will crash on them
+                    if cost == 0 || nargs < 3 || f === Intrinsics.llvmcall
+                        # holds malformed IR, so argextype will crash on it
                         return cost
                     end
                     aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
@@ -1378,13 +1808,16 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
+            elseif (f === Core.memoryrefget || f === Core.const_memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 1 : params.inline_nonleaf_penalty
             elseif f === Core.memoryrefset! && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
-            elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
+            elseif f === Core.memoryrefunset! && length(ex.args) >= 3
+                atyp = argextype(ex.args[2], src, sptypes)
+                return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
+            elseif f === typeassert && isconstType(argextype_widened(ex.args[3], src, sptypes))
                 return 1
             end
             fidx = find_tfunc(f)
@@ -1402,10 +1835,15 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         return params.inline_nonleaf_penalty
     elseif head === :foreigncall
         foreigncall = ex.args[1]
-        if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
-            return 1
+        if isexpr(foreigncall, :tuple, 1)
+            foreigncall = foreigncall.args[1]
+            if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
+                return 1
+            end
         end
         return 20
+    elseif head === :foreignglobal
+        return 1
     elseif head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
@@ -1415,7 +1853,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
         return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
     elseif head === :(=)
-        return statement_cost(ex.args[2], -1, src, sptypes, params)
+        # A resolved store to a global should cost the same or less than the `setglobal!` tfunc declared.
+        lhs = ex.args[1]
+        cost = (isa(lhs, GlobalRef) || isa(lhs, Core.BindingPartition)) ? 3 : 0
+        rhs = ex.args[2]
+        isa(rhs, Expr) && (cost += statement_cost(rhs, -1, src, sptypes, params))
+        return cost
     elseif head === :copyast
         return 100
     end
@@ -1445,7 +1888,7 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
+function inline_cost_model(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
     bodycost = 0
     for i = 1:length(ir.stmts)
         stmt = ir[SSAValue(i)][:stmt]
@@ -1539,17 +1982,16 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
         elseif isa(el, EnterNode)
             tgt = el.catch_dest
-            if tgt != 0
-                was_deleted = labelchangemap[tgt] == typemin(Int)
-                if was_deleted
-                    @assert !isdefined(el, :scope)
-                    body[i] = nothing
+            if tgt != 0 && labelchangemap[tgt] == typemin(Int)
+                @assert !isdefined(el, :scope)
+                body[i] = nothing  # the enclosing catch block was deleted
+            else
+                # renumber the catch destination (tgt == 0 stays frame-less) and the scope operand
+                newdest = tgt == 0 ? 0 : tgt + labelchangemap[tgt]
+                if isdefined(el, :scope) && isa(el.scope, SSAValue)
+                    body[i] = EnterNode(newdest, SSAValue(el.scope.id + ssachangemap[el.scope.id]))
                 else
-                    if isdefined(el, :scope) && isa(el.scope, SSAValue)
-                        body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
-                    else
-                        body[i] = EnterNode(el, tgt + labelchangemap[tgt])
-                    end
+                    body[i] = EnterNode(el, newdest)
                 end
             end
         elseif isa(el, Expr)

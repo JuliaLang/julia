@@ -1,6 +1,7 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(LateLowerGCFrame,FinalLowerGC),verify' -S %s | FileCheck %s --check-prefix=FINAL
 
 @tag = external addrspace(10) global {}, align 16
 
@@ -164,6 +165,21 @@ define {} addrspace(10)* @gclift_switch({} addrspace(13)* addrspace(10)* %input,
   ret {} addrspace(10)* %ret
 }
 
+; Shouldn't hang
+define void @vector_insert(<4 x {} addrspace(10)* > %0, <2 x {} addrspace(10)* > %1) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %2 = call <4 x {} addrspace(10)*> @llvm.vector.insert.v4p10.v2p10(<4 x {} addrspace(10)*> %0, <2 x {} addrspace(10)*> %1, i64 2)
+  ret void
+}
+
+define void @vector_extract(<4 x {} addrspace(10)* > %0, <2 x {} addrspace(10)* > %1) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %2 = call <2 x {} addrspace(10)*> @llvm.vector.extract.v2p10.v4p10(<4 x {} addrspace(10)* > %0, i64 2)
+  ret void
+}
+
 define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
   %v2 = call {}*** @julia.get_pgcstack()
   %e0 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 0
@@ -183,6 +199,90 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
 ; CHECK: store ptr addrspace(10) %l1, ptr [[gc_slot_addr_:%.*]], align 8
 ; CHECK: %r = call i32 @callee_root(ptr addrspace(10) %l0, ptr addrspace(10) %l1)
 ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+
+define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
+; CHECK-LABEL: @insert_element
+  %2 = alloca [10 x i64], i32 1, align 8
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 10)
+; CHECK: [[gc_slot_addr_:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 10)
+  call void null(ptr sret([2 x [5 x ptr addrspace(10)]]) "julia.return_roots"="10" %2, ptr null, ptr addrspace(11) null, ptr null)
+  %4 = insertelement <4 x ptr> zeroinitializer, ptr %2, i32 0
+; CHECK: [[gc_slot_addr_:%.*]] = insertelement <4 x ptr> zeroinitializer, ptr [[gc_slot_addr_:%.*]], i32 0
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret ptr addrspace(10) null
+}
+
+; Vectorization may give tracked-pointer allocas a larger alignment than the
+; usual 16-byte GC frame alignment. Preserve it through both lowering passes.
+define void @overaligned_gc_alloca(<8 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_alloca
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 15)
+; CHECK: %roots = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; FINAL-LABEL: @overaligned_gc_alloca
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 17, align 64
+; FINAL: %roots = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %roots = alloca <8 x ptr addrspace(10)>, align 64
+; CHECK: store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+; FINAL: store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  %root4addr = getelementptr ptr addrspace(10), ptr %roots, i64 4
+; CHECK: %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+; FINAL: %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+  %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+  call void @boxed_simple(ptr addrspace(10) %root4, ptr addrspace(10) %root4)
+  ret void
+}
+
+
+; A callee's alignment requirement must remain true after moving the alloca.
+define void @overaligned_gc_call(<8 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_call
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 14)
+; CHECK: %roots = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; CHECK: call void @aligned_root_array(ptr align 64 %roots)
+; FINAL-LABEL: @overaligned_gc_call
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 16, align 64
+; FINAL: %roots = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+; FINAL: call void @aligned_root_array(ptr align 64 %roots)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %roots = alloca <8 x ptr addrspace(10)>, align 64
+  store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  call void @aligned_root_array(ptr align 64 %roots)
+  ret void
+}
+
+define void @aligned_root_array(ptr align 64 %roots) {
+  %values = load volatile <8 x ptr addrspace(10)>, ptr %roots, align 64
+  ret void
+}
+
+
+; Padding between moved allocas must be included in the frame's root count.
+define void @overaligned_gc_padding(<4 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_padding
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 18)
+; CHECK-DAG: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; CHECK-DAG: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 14)
+; FINAL-LABEL: @overaligned_gc_padding
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 20, align 64
+; FINAL-DAG: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+; FINAL-DAG: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 16
+; FINAL: store <4 x ptr addrspace(10)> %values, ptr %a, align 64
+; FINAL: store <4 x ptr addrspace(10)> %values, ptr %b, align 64
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %a = alloca <4 x ptr addrspace(10)>, align 64
+  %b = alloca <4 x ptr addrspace(10)>, align 64
+  store <4 x ptr addrspace(10)> %values, ptr %a, align 64
+  store <4 x ptr addrspace(10)> %values, ptr %b, align 64
+  call void @aligned_short_root_array(ptr align 64 %a)
+  call void @aligned_short_root_array(ptr align 64 %b)
+  ret void
+}
+
+
+declare void @aligned_short_root_array(ptr align 64)
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}

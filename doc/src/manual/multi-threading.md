@@ -8,7 +8,7 @@ of Julia multi-threading features.
 By default, Julia starts up with 2 threads of execution; 1 worker thread and 1 interactive thread.
 This can be verified by using the command [`Threads.nthreads()`](@ref):
 
-```jldoctest
+```julia
 julia> Threads.nthreads(:default)
 1
 julia> Threads.nthreads(:interactive)
@@ -36,9 +36,10 @@ each threadpool.
     In older versions, this value is ignored.
 
 !!! compat "Julia 1.12"
-    Starting by default with 1 interactive thread, as well as the 1 worker thread, was made as such in Julia 1.12
+    The default number of threads changed in Julia 1.12. Prior versions default to 1 (default thread pool) thread.
+    If the number of threads is set to 1 by either doing `-t1` or `JULIA_NUM_THREADS=1` an interactive thread will not be spawned.
 
-Lets start Julia with 4 threads:
+Let's start Julia with 4 threads:
 
 ```bash
 $ julia --threads 4
@@ -46,7 +47,7 @@ $ julia --threads 4
 
 Let's verify there are 4 threads at our disposal.
 
-```julia-repl
+```jldoctest; filter = r"[0-9]+"
 julia> Threads.nthreads()
 4
 ```
@@ -83,12 +84,14 @@ julia> Threads.threadid()
 
 ### Multiple GC Threads
 
-The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
-of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
+The Garbage Collector (GC) can use multiple threads. The amount used by default matches the compute
+worker threads or can be configured by either the `--gcthreads` command line argument or by using the
 [`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
 
 !!! compat "Julia 1.10"
     The `--gcthreads` command line argument requires at least Julia 1.10.
+
+For more details about garbage collection configuration and performance tuning, see [Memory Management and Garbage Collection](@ref man-memory-management).
 
 ## [Threadpools](@id man-threadpools)
 
@@ -144,6 +147,8 @@ julia> nthreads(:interactive)
 julia> nthreads()
 3
 ```
+!!! note
+    Explicitly asking for 1 thread by doing `-t1` or `JULIA_NUM_THREADS=1` does not add an interactive thread.
 
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
@@ -209,9 +214,9 @@ Note that [`Threads.@threads`](@ref) does not have an optional reduction paramet
 
 ### Using `@threads` without data-races
 
-The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors.
+The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just know that a data race can result in incorrect results and dangerous errors.
 
-Lets say we want to make the function `sum_single` below multithreaded.
+Let's say we want to make the function `sum_single` below multithreaded.
 ```julia-repl
 julia> function sum_single(a)
            s = 0
@@ -274,7 +279,7 @@ depending on the characteristics of the operations.
 Although Julia's threads can communicate through shared memory, it is notoriously difficult to write correct and data-race free multi-threaded code. Julia's
 [`Channel`](@ref)s are thread-safe and may be used to communicate safely. There are also sections below that explain how to use [locks](@ref man-using-locks) and [atomics](@ref man-atomic-operations) to avoid data-races.
 
-In certain cases, Julia is able to detect a detect safety violations, in particular in regards to deadlocks or other known-unsafe operations such as yielding
+In certain cases, Julia is able to detect safety violations, in particular in regards to deadlocks or other known-unsafe operations such as yielding
 to the currently running task. In these cases, a [`ConcurrencyViolationError`](@ref) is thrown.
 
 ### Data-race freedom
@@ -301,7 +306,9 @@ bad_read2(a) # it is NOT safe to access `a` here
 ```
 
 ### [Using locks to avoid data-races](@id man-using-locks)
-An important tool to avoid data-races, and thereby write thread-safe code, is the concept of a "lock". A lock can be locked and unlocked. If a thread has locked a lock, and not unlocked it, it is said to "hold" the lock. If there is only one lock, and we write code the requires holding the lock to access some data, we can ensure that multiple threads will never access the same data simultaneously. Note that the link between a lock and a variable is made by the programmer, and not the program.
+An important tool for avoiding data races, and writing thread-safe code in general, is the concept of a "lock". A lock can be locked and unlocked. If a thread has locked a lock, and not unlocked it, it is said to "hold" the lock. If there is only one lock, and we write code that requires holding the lock to access some data, we can ensure that multiple threads will never access the same data simultaneously.
+
+Note that the link between a lock and a variable is made by the programmer, and not the program. A helper-type [`Base.Lockable`](@ref) exists that helps you associate a lock and a value. This is often more safe than keeping track yourself, and is detailed under [Using Base.Lockable to associate a lock and a value](@ref man-lockable).
 
 For example, we can create a lock `my_lock`, and lock it while we mutate a variable `my_variable`. This is done most simply with the `@lock` macro:
 
@@ -334,15 +341,59 @@ julia> begin
 100
 ```
 
-All three options are equivalent. Note how the final version requires an explicit `try`-block to ensure that the lock is always unlocked, whereas the first two version do this internally. One should always use the lock pattern above when changing data (such as assigning
+All three options are equivalent. Note how the final version requires an explicit `try`-block to ensure that the lock is always unlocked, whereas the first two versions do this internally. One should always use the lock pattern above when changing data (such as assigning
 to a global or closure variable) accessed by other threads. Failing to do this could have unforeseen and serious consequences.
+
+#### [Using Base.Lockable to associate a lock and a value](@id man-lockable)
+As mentioned in the previous section, the helper-type [`Base.Lockable`](@ref) can be used to programmatically ensure the association between a lock and a value. This is generally recommended, as it is both less prone to error and more readable for others compared to having the association only by convention.
+
+Any object can be wrapped in `Base.Lockable`:
+```julia-repl
+julia> my_array = [];
+
+julia> my_locked_array = Base.Lockable(my_array);
+```
+
+If the lock is held, the underlying object can be accessed with the empty indexing notation:
+```julia-repl
+julia> begin
+           lock(my_locked_array)
+           try
+               push!(my_locked_array[], 1)
+           finally
+               unlock(my_locked_array)
+           end
+       end
+1-element Vector{Any}:
+ 1
+```
+
+It is usually easier and safer to pass a function as the first argument to `lock`. The function is applied to the unlocked object, and the locking/unlocking is handled automatically:
+```julia-repl
+julia> lock(x -> push!(x, 2), my_locked_array);
+
+julia> lock(display, my_locked_array)
+2-element Vector{Any}:
+ 1
+ 2
+
+julia> lock(my_locked_array) do x
+           x[1] = π
+           display(x)
+       end
+2-element Vector{Any}:
+ π = 3.1415926535897...
+ 2
+```
 
 ### [Atomic Operations](@id man-atomic-operations)
 
 Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
 [race conditions](https://en.wikipedia.org/wiki/Race_condition). A value (which must be of a primitive
 type) can be wrapped as [`Threads.Atomic`](@ref) to indicate it must be accessed in this way.
-Here we can see an example:
+Here we can see an example using the [`Threads.atomic_add!`](@ref) function; the
+[`@atomic` reference interface](@ref man-atomic-reference) described below is now preferred for
+new code:
 
 ```julia-repl
 julia> i = Threads.Atomic{Int}(0);
@@ -404,6 +455,73 @@ julia> @threads for i in 1:1000
 julia> acc[]
 1000
 ```
+
+#### [The `@atomic` reference interface](@id man-atomic-reference)
+
+While the [`Threads.atomic_add!`](@ref) family of functions shown above is still supported, the
+recommended interface for a single atomic location is the reference form of the
+[`@atomic`](@ref Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap),
+[`@atomicreplace`](@ref Base.@atomicreplace), and [`@atomiconce`](@ref Base.@atomiconce) macros. It
+spells out each operation explicitly, makes read-modify-write updates such as `a[] += 1`
+unambiguously atomic (rather than silently racy), and lets the memory ordering be given as an
+optional first argument (defaulting to `:sequentially_consistent`):
+
+```julia-repl
+julia> a = Threads.Atomic{Int}(0)
+Base.Threads.Atomic{Int64}(0)
+
+julia> @atomic a[] = 10          # atomic store
+10
+
+julia> @atomic a[]               # atomic load
+10
+
+julia> @atomic :monotonic a[]    # atomic load with an explicit memory ordering
+10
+
+julia> @atomic a[] += 1          # atomic read-modify-write, returns the new value
+11
+
+julia> @atomicswap a[] = 0       # atomic exchange, returns the old value
+11
+
+julia> @atomicreplace a[] 0 => 5 # atomic compare-and-swap
+(old = 0, success = true)
+```
+
+The same macros also operate on the elements of an [`AtomicMemory`](@ref) and on `@atomic` struct
+fields (see [Per-field atomics](@ref man-atomics) below), so the same syntax covers scalars,
+arrays, and fields.
+
+The [`Threads.Atomic`](@ref) type is a standalone, [`Ref`](@ref)-like atomic cell. Like `Ref`, it
+is a useful building block and is not going to be removed, but an `@atomic` field of a mutable
+struct (see [Per-field atomics](@ref man-atomics) below) is usually preferable when you have the
+choice, since it avoids the extra indirection.
+
+The `Threads.atomic_*` functions predate these macros and still work, but the macros are the
+recommended way to operate on an atomic cell because they read more clearly and let you choose the
+memory ordering. The table below shows how to translate them. Note that the `atomic_*` functions
+return the **old** value, whereas `@atomic a[] op= v` returns the **new** value and
+`@atomic a[] op v` returns an `old => new` pair (use `.first`/`.second` to recover the individual
+values):
+
+| Legacy call | `@atomic` equivalent |
+|:--- |:--- |
+| `atomic_add!(a, v)` | `@atomic a[] += v` |
+| `atomic_sub!(a, v)` | `@atomic a[] -= v` |
+| `atomic_and!(a, v)` | `@atomic a[] &= v` |
+| `atomic_or!(a, v)` | `@atomic a[] \|= v` |
+| `atomic_xor!(a, v)` | `@atomic a[] ⊻= v` |
+| `atomic_max!(a, v)` | `@atomic a[] max v` |
+| `atomic_min!(a, v)` | `@atomic a[] min v` |
+| `atomic_xchg!(a, v)` | `@atomicswap a[] = v` |
+| `atomic_cas!(a, cmp, new)` | `@atomicreplace a[] cmp => new` |
+
+Storing with the plain `a[] = v` form on a `Threads.Atomic` is deprecated (because uses such as
+`a[] += 1` look atomic but are not); use `@atomic a[] = v` instead.
+
+!!! compat "Julia 1.14"
+    The reference form of the `@atomic` macros on `Threads.Atomic` requires at least Julia 1.14.
 
 
 #### [Per-field atomics](@id man-atomics)

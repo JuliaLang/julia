@@ -70,7 +70,7 @@ end
        ret i32 %3""", Int32, Tuple{Int32, Int32},
         Int32(1), Int32(2))) # llvmcall must be compiled to be called
 
-#Since LLVM 18, LLVM does a best effort to automatically include the intrinsics
+#Since LLVM 18, LLVM makes a best effort to automatically include the intrinsics
 function undeclared_ceil(x::Float64)
     llvmcall("""%2 = call double @llvm.ceil.f64(double %0)
         ret double %2""", Float64, Tuple{Float64}, x)
@@ -143,40 +143,6 @@ function call_jl_errno()
 end
 call_jl_errno()
 
-module ObjLoadTest
-    using Base: llvmcall, @ccallable
-    using Test
-    didcall = false
-    """    jl_the_callback()
-
-    Sets the global didcall when it did the call
-    """
-    @ccallable Cvoid function jl_the_callback()
-        global didcall
-        didcall = true
-        nothing
-    end
-    @test_throws(ErrorException("@ccallable was already defined for this method name"),
-            @eval @ccallable String jl_the_callback(not_the_method::Int) = "other")
-    # Make sure everything up until here gets compiled
-    @test jl_the_callback() === nothing
-    @test jl_the_callback(1) == "other"
-    didcall = false
-    function do_the_call()
-        llvmcall(
-            ("""declare void @jl_the_callback()
-                define void @entry() #0 {
-                0:
-                    call void @jl_the_callback()
-                    ret void
-                }
-                attributes #0 = { alwaysinline }
-            """, "entry"),Cvoid,Tuple{})
-    end
-    do_the_call()
-    @test didcall
-end
-
 # Test for proper parenting
 local foo
 function foo()
@@ -188,26 +154,6 @@ function foo()
     Cvoid, Tuple{})
 end
 code_llvm(devnull, foo, ())
-
-module CcallableRetTypeTest
-    using Base: llvmcall, @ccallable
-    using Test
-    @ccallable function jl_test_returns_float()::Float64
-        return 42
-    end
-    function do_the_call()
-        llvmcall(
-            ("""declare double @jl_test_returns_float()
-                define double @entry() #0 {
-                0:
-                    %1 = call double @jl_test_returns_float()
-                    ret double %1
-                }
-                attributes #0 = { alwaysinline }
-            """, "entry"),Float64,Tuple{})
-    end
-    @test do_the_call() === 42.0
-end
 
 # Issue #48093 - test that non-external globals are not deduplicated
 function kernel()
@@ -272,3 +218,101 @@ s = MyStruct()
 @test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0
+
+function too_few_args(x::Int32, y::Int32)
+    llvmcall("""%3 = add i32 %1, %0
+                ret i32 %3""",
+        Int32,
+        Tuple{Int32, Int32},
+        x)
+end
+@test_throws ErrorException too_few_args(Int32(1), Int32(1))
+
+function too_many_args(x::Int32, y::Int32)
+    llvmcall("""%3 = add i32 %1, %0
+                ret i32 %3""",
+        Int32,
+        Tuple{Int32, Int32},
+        x,y,x)
+end
+@test_throws ErrorException too_many_args(Int32(1), Int32(1))
+
+llvmcall_nothing_arg() = Core.Intrinsics.llvmcall("ret i8 0", Int8, Tuple{Nothing}, nothing)
+@test_throws ErrorException llvmcall_nothing_arg()
+
+# Intrinsics that belong to a different target cannot be selected by the host back-end.
+# LLVM reports that as a fatal error (`LLVM ERROR: Cannot select: intrinsic ...`) and
+# aborts the process, so such code must be rejected during codegen instead. This matters
+# for ahead-of-time compilation (`--output-o`, PackageCompiler.jl, juliac), which compiles
+# every concretely-typed method whether or not it is ever called: GPU packages define
+# methods whose bodies are only valid on the device (JuliaGPU/GPUCompiler.jl#611).
+@testset "intrinsics of another target" begin
+    script = """
+        f_nvvm() = ccall("llvm.nvvm.membar.cta", llvmcall, Cvoid, ())
+        g_nvvm() = Base.llvmcall((\"""
+            declare i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+            define i32 @entry() {
+                %r = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+                ret i32 %r
+            }\""", "entry"), Int32, Tuple{})
+        h_amdgcn() = ccall("llvm.amdgcn.s.barrier", llvmcall, Cvoid, ())
+        for f in (f_nvvm, g_nvvm, h_amdgcn)
+            try
+                f()
+                exit(1)  # ran to completion
+            catch err
+                err isa ErrorException || exit(2)
+                occursin("not available", err.msg) || exit(3)
+            end
+        end
+        exit(0)
+        """
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+    @test success(pipeline(cmd; stderr=devnull))
+end
+
+# The opposite direction: intrinsics of the host target must still be accepted, both as
+# `ccall(..., llvmcall, ...)` and declared in a `Base.llvmcall` module. Only intrinsics
+# that do not require an ISA extension are used, so that this holds on any CPU of the target.
+@testset "intrinsics of the host target" begin
+    @static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+        host_ccall() = ccall("llvm.x86.sse2.pause", llvmcall, Cvoid, ())
+        host_ir() = Base.llvmcall(("""
+            declare void @llvm.x86.sse2.pause()
+            define void @entry() {
+                call void @llvm.x86.sse2.pause()
+                ret void
+            }""", "entry"), Cvoid, Tuple{})
+    elseif Sys.ARCH === :aarch64
+        host_ccall() = ccall("llvm.aarch64.isb", llvmcall, Cvoid, (Int32,), Int32(15))
+        host_ir() = Base.llvmcall(("""
+            declare void @llvm.aarch64.isb(i32)
+            define void @entry() {
+                call void @llvm.aarch64.isb(i32 15)
+                ret void
+            }""", "entry"), Cvoid, Tuple{})
+    elseif Sys.ARCH === :armv7l || Sys.ARCH === :armv6l
+        host_ccall() = ccall("llvm.arm.hint", llvmcall, Cvoid, (Int32,), Int32(0))
+        host_ir() = Base.llvmcall(("""
+            declare void @llvm.arm.hint(i32)
+            define void @entry() {
+                call void @llvm.arm.hint(i32 0)
+                ret void
+            }""", "entry"), Cvoid, Tuple{})
+    elseif Sys.ARCH === :powerpc64le
+        host_ccall() = ccall("llvm.ppc.lwsync", llvmcall, Cvoid, ())
+        host_ir() = Base.llvmcall(("""
+            declare void @llvm.ppc.lwsync()
+            define void @entry() {
+                call void @llvm.ppc.lwsync()
+                ret void
+            }""", "entry"), Cvoid, Tuple{})
+    else
+        # riscv64: every `llvm.riscv.*` intrinsic requires an ISA extension (e.g.
+        # `llvm.riscv.pause` needs Zihintpause, which `generic-rv64` lacks).
+        host_ccall() = nothing
+        host_ir() = nothing
+    end
+    @test host_ccall() === nothing
+    @test host_ir() === nothing
+end

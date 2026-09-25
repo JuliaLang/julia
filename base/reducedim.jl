@@ -45,11 +45,10 @@ end
 initarray!(a::AbstractArray{T}, f, ::Union{typeof(min),typeof(max),typeof(_extrema_rf)},
     init::Bool, src::AbstractArray) where {T} = (init && mapfirst!(f, a, src); a)
 
-for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
+for (Op, initval) in ((:(typeof(and_all)), true), (:(typeof(or_any)), false))
     @eval initarray!(a::AbstractArray, ::Any, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
 end
 
-# reducedim_initarray is called by
 reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
 reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
 
@@ -173,6 +172,10 @@ end
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
 
+reducedim_init(f, op::typeof(and_all), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
+reducedim_init(f, op::typeof(or_any), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)
+
+# These definitions are wrong in general; Cf. JuliaLang/julia#45562
 reducedim_init(f, op::typeof(&), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
 reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)
 
@@ -236,7 +239,7 @@ Extract first entry of slices of array A into existing array R.
 copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
 function mapfirst!(f::F, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N, F}
-    lsiz = check_reducedims(R, A)
+    check_reducedims(R, A)
     t = _firstreducedslice(axes(R), axes(A))
     map!(f, R, view(A, t...))
 end
@@ -256,7 +259,6 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
 
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
-        nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i in eachindex(R)
             r = op(@inbounds(R[i]), mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
@@ -267,7 +269,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     end
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsRt)
-    if reducedim1(R, A)
+    if reducedim1(R)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(axes1(R))
         for IA in CartesianIndices(indsAt)
@@ -323,22 +325,37 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
-mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
+mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims::D=:, init=_InitialValue()) where {D} =
     _mapreduce_dim(f, op, init, A, dims)
 mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kw...) =
     reduce(op, map(f, A, B...); kw...)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
-    mapfoldl_impl(f, op, nt, A)
+function _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon)
+    # equivalent to `mapfoldl_impl(f, op, nt, A)` this logic is expanded here
+    # to work around limitations in inference's recursion heuristic
+    y = iterate(A)
+    y === nothing && return nt
+    v = op(nt, f(y[1]))
+    for x in Iterators.rest(A, y[2])
+        v = op(v, f(x))
+    end
+    return v
+end
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
+_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
     mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
+_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+
+_mapreduce_dim(f, op, nt, R::ReshapedArray, ::Colon) =
+    _mapreduce_dim(f, op, nt, parent(R), :)
+
+_mapreduce_dim(f, op, i::_InitialValue, R::ReshapedArray, ::Colon) =
+    _mapreduce_dim(f, op, i, parent(R), :)
 
 """
     reduce(f, A::AbstractArray; dims=:, [init])
@@ -405,8 +422,8 @@ julia> count(<=(2), A, dims=2)
  0
 ```
 """
-count(A::AbstractArrayOrBroadcasted; dims=:, init=0) = count(identity, A; dims, init)
-count(f, A::AbstractArrayOrBroadcasted; dims=:, init=0) = _count(f, A, dims, init)
+count(A::AbstractArrayOrBroadcasted; dims::D=:, init=0) where {D} = count(identity, A; dims, init)
+count(f, A::AbstractArrayOrBroadcasted; dims::D=:, init=0) where {D} = _count(f, A, dims, init)
 
 _count(f, A::AbstractArrayOrBroadcasted, dims::Colon, init) = _simple_count(f, A, init)
 _count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_sum, A; dims, init)
@@ -867,7 +884,7 @@ julia> all(i -> i > 0, A, dims=2)
  1
 ```
 """
-all(::Function, ::AbstractArray; dims)
+all(f, ::AbstractArray; dims)
 
 """
     all!(r, A)
@@ -883,13 +900,13 @@ julia> A = [true false; true false]
  1  0
  1  0
 
-julia> all!([1; 1], A)
-2-element Vector{Int64}:
+julia> all!(Bool[1; 1], A)
+2-element Vector{Bool}:
  0
  0
 
-julia> all!([1 1], A)
-1×2 Matrix{Int64}:
+julia> all!(Bool[1 1], A)
+1×2 Matrix{Bool}:
  1  0
 ```
 """
@@ -941,7 +958,7 @@ julia> any(i -> i > 0, A, dims=2)
  1
 ```
 """
-any(::Function, ::AbstractArray; dims)
+any(f, ::AbstractArray; dims)
 
 """
     any!(r, A)
@@ -958,13 +975,13 @@ julia> A = [true false; true false]
  1  0
  1  0
 
-julia> any!([1; 1], A)
-2-element Vector{Int64}:
+julia> any!(Bool[1; 1], A)
+2-element Vector{Bool}:
  1
  1
 
-julia> any!([1 1], A)
-1×2 Matrix{Int64}:
+julia> any!(Bool[1 1], A)
+1×2 Matrix{Bool}:
  1  0
 ```
 """
@@ -976,36 +993,36 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
     mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
     @eval begin
         # User-facing methods with keyword arguments
-        @inline ($fname)(a::AbstractArray; dims=:, kw...) = ($_fname)(a, dims; kw...)
-        @inline ($fname)(f, a::AbstractArray; dims=:, kw...) = ($_fname)(f, a, dims; kw...)
+        @inline ($fname)(a::AbstractArray; dims::D=:, kw...) where {D} = ($_fname)(a, dims; kw...)
+        @inline ($fname)(f, a::AbstractArray; dims::D=:, kw...) where {D} = ($_fname)(f, a, dims; kw...)
 
         # Underlying implementations using dispatch
         ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
         ($_fname)(f, a, ::Colon; kw...) = mapreduce($mapf, $op, a; kw...)
+
+        ($_fname)(R::ReshapedArray, ::Colon) = ($fname)(parent(R))
     end
 end
 
-any(a::AbstractArray; dims=:)              = _any(a, dims)
-any(f::Function, a::AbstractArray; dims=:) = _any(f, a, dims)
-_any(a, ::Colon)                           = _any(identity, a, :)
-all(a::AbstractArray; dims=:)              = _all(a, dims)
-all(f::Function, a::AbstractArray; dims=:) = _all(f, a, dims)
-_all(a, ::Colon)                           = _all(identity, a, :)
+any(a::AbstractArray; kw...) = any(identity, a; kw...)
+any(f, a::AbstractArray; dims::D=:) where D = _any(f, a, dims)
+all(a::AbstractArray; kw...) = all(identity, a; kw...)
+all(f, a::AbstractArray; dims::D=:) where D = _all(f, a, dims)
 
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
                     (:maximum, :max), (:minimum, :min),
-                    (:all, :&),       (:any, :|),
+                    (:all, :and_all), (:any, :or_any),
                     (:extrema, :_extrema_rf)]
     fname! = Symbol(fname, '!')
     _fname = Symbol('_', fname)
     mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
     @eval begin
-        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+        $(fname!)(f, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!($mapf, $(op), initarray!(r, $mapf, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
-        $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
-        $(_fname)(f, A, dims; kw...) = mapreduce($mapf, $(op), A; dims=dims, kw...)
+        $(_fname)(A, dims::D; kw...) where {D} = $(_fname)(identity, A, dims; kw...)
+        $(_fname)(f, A, dims::D; kw...) where {D} = mapreduce($mapf, $(op), A; dims=dims, kw...)
     end
 end
 
@@ -1014,7 +1031,7 @@ end
 #
 function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
-    lsiz = check_reducedims(Rval, A)
+    check_reducedims(Rval, A)
     for i = 1:N
         axes(Rval, i) == axes(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
     end
@@ -1025,7 +1042,7 @@ function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     ks = keys(A)
     y = iterate(ks)
     zi = zero(eltype(ks))
-    if reducedim1(Rval, A)
+    if reducedim1(Rval)
         i1 = first(axes1(Rval))
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
@@ -1096,8 +1113,8 @@ julia> findmin(A, dims=2)
 ([1.0; 3.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
-findmin(A::AbstractArray; dims=:) = _findmin(A, dims)
-_findmin(A, dims) = _findmin(identity, A, dims)
+findmin(A::AbstractArray; dims::D=:) where {D} = _findmin(A, dims)
+_findmin(A, dims::D) where {D} = _findmin(identity, A, dims)
 
 """
     findmin(f, A; dims) -> (f(x), index)
@@ -1119,9 +1136,9 @@ julia> findmin(abs2, A, dims=2)
 ([1.0; 0.25;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
-findmin(f, A::AbstractArray; dims=:) = _findmin(f, A, dims)
+findmin(f, A::AbstractArray; dims::D=:) where {D} = _findmin(f, A, dims)
 
-function _findmin(f, A, region)
+function _findmin(f, A, region::D) where {D}
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
@@ -1169,8 +1186,8 @@ julia> findmax(A, dims=2)
 ([2.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2);;])
 ```
 """
-findmax(A::AbstractArray; dims=:) = _findmax(A, dims)
-_findmax(A, dims) = _findmax(identity, A, dims)
+findmax(A::AbstractArray; dims::D=:) where {D} = _findmax(A, dims)
+_findmax(A, dims::D) where {D} = _findmax(identity, A, dims)
 
 """
     findmax(f, A; dims) -> (f(x), index)
@@ -1192,9 +1209,9 @@ julia> findmax(abs2, A, dims=2)
 ([1.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 2);;])
 ```
 """
-findmax(f, A::AbstractArray; dims=:) = _findmax(f, A, dims)
+findmax(f, A::AbstractArray; dims::D=:) where {D} = _findmax(f, A, dims)
 
-function _findmax(f, A, region)
+function _findmax(f, A, region::D) where {D}
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
@@ -1215,10 +1232,10 @@ function _findminmax_inittype(f, A::AbstractArray)
     # Second conditional: handle missing specifically, as most often, f(missing) = missing;
     # certainly, some predicate functions return Bool, but not all.
     # Else, return the type of the transformation.
-    Tr = v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
+    return v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
 end
 
-reducedim1(R, A) = length(axes1(R)) == 1
+reducedim1(R) = length(axes1(R)) == 1
 
 """
     argmin(A; dims) -> indices
@@ -1243,7 +1260,7 @@ julia> argmin(A, dims=2)
  CartesianIndex(2, 1)
 ```
 """
-argmin(A::AbstractArray; dims=:) = findmin(A; dims=dims)[2]
+argmin(A::AbstractArray; dims::D=:) where {D} = findmin(A; dims=dims)[2]
 
 """
     argmax(A; dims) -> indices
@@ -1268,4 +1285,4 @@ julia> argmax(A, dims=2)
  CartesianIndex(2, 2)
 ```
 """
-argmax(A::AbstractArray; dims=:) = findmax(A; dims=dims)[2]
+argmax(A::AbstractArray; dims::D=:) where {D} = findmax(A; dims=dims)[2]

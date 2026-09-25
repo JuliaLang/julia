@@ -378,6 +378,8 @@ for (name, f) in l
         verbose && println("$name readeach...")
         @test collect(readeach(io(), Char)) == Vector{Char}(text)
         @test collect(readeach(io(), UInt8)) == Vector{UInt8}(text)
+        @test eltype(readeach(IOBuffer(), Char)) <: Char
+        @test eltype(readeach(IOBuffer(), UInt8)) <: UInt8
 
         cleanup()
 
@@ -678,7 +680,12 @@ let p = Pipe()
     @test data_read[1:nread] == data[2:nread+1]
     @test read(p.out, 49) == data[end-48:end]
     wait(t)
+
+    closewrite(p)
+    @test !isopen(p.in)
+    @test isopen(p.out)
     close(p)
+    @test !isopen(p.out)
 end
 
 @testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]

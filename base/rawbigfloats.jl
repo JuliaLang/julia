@@ -30,7 +30,7 @@ word_is_nonzero(x::BigFloatData, v::Val) = let x = x
 end
 
 """
-Returns a `Bool` indicating whether the `len` least significant words
+Return a `Bool` indicating whether the `len` least significant words
 of `x` are nonzero.
 """
 function tail_is_nonzero(x::BigFloatData, len::Int, ::Val{:words})
@@ -38,7 +38,7 @@ function tail_is_nonzero(x::BigFloatData, len::Int, ::Val{:words})
 end
 
 """
-Returns a `Bool` indicating whether the `len` least significant bits of
+Return a `Bool` indicating whether the `len` least significant bits of
 the `i`-th (zero-based index) word of `x` are nonzero.
 """
 function tail_is_nonzero(x::BigFloatData, len::Int, i::Int, ::Val{:word})
@@ -47,7 +47,7 @@ function tail_is_nonzero(x::BigFloatData, len::Int, i::Int, ::Val{:word})
 end
 
 """
-Returns a `Bool` indicating whether the `len` least significant bits of
+Return a `Bool` indicating whether the `len` least significant bits of
 `x` are nonzero.
 """
 function tail_is_nonzero(x::BigFloatData, len::Int, ::Val{:bits})
@@ -61,14 +61,14 @@ function tail_is_nonzero(x::BigFloatData, len::Int, ::Val{:bits})
 end
 
 """
-Returns a `Bool` that is the `i`-th (zero-based index) bit of `x`.
+Return a `Bool` that is the `i`-th (zero-based index) bit of `x`.
 """
 function get_elem(x::Unsigned, i::Int, ::Val{:bits}, ::Val{:ascending})
     (x >>> i) % Bool
 end
 
 """
-Returns a `Bool` that is the `i`-th (zero-based index) bit of `x`.
+Return a `Bool` that is the `i`-th (zero-based index) bit of `x`.
 """
 function get_elem(x::BigFloatData, i::Int, ::Val{:bits}, v::Val{:ascending})
     vb = Val(:bits)
@@ -82,7 +82,7 @@ function get_elem(x::BigFloatData, i::Int, ::Val{:bits}, v::Val{:ascending})
 end
 
 """
-Returns an integer of type `R`, consisting of the `len` most
+Return an integer of type `R`, consisting of the `len` most
 significant bits of `x`. If there are less than `len` bits in `x`,
 the least significant bits are zeroed.
 """

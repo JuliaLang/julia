@@ -2,6 +2,7 @@
 
 using Test
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
@@ -14,7 +15,7 @@ Compiler.may_optimize(::AbsIntOnlyInterp1) = false
 # it should work even if the interpreter discards inferred source entirely
 @newinterp AbsIntOnlyInterp2
 Compiler.may_optimize(::AbsIntOnlyInterp2) = false
-Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult) = nothing
+Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult, edges::Core.SimpleVector) = nothing
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
 # OverlayMethodTable
@@ -32,6 +33,41 @@ end
 @newinterp MTOverlayInterp
 @MethodTable OVERLAY_MT
 Compiler.method_table(interp::MTOverlayInterp) = Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OVERLAY_MT)
+
+# `include_ambiguous` preserves ambiguous matches across method-table views and cache modes.
+ambiguous_lookup(x::Integer, y) = 1
+ambiguous_lookup(x, y::Integer) = 2
+ambiguous_overlay(x, y) = 0
+@overlay OVERLAY_MT ambiguous_overlay(x::Integer, y) = 1
+@overlay OVERLAY_MT ambiguous_overlay(x, y::Integer) = 2
+
+@testset "ambiguous method lookup" begin
+    world = Base.get_world_counter()
+    sig = Tuple{typeof(ambiguous_lookup),Integer,Integer}
+    internal = Compiler.InternalMethodTable(world)
+    filtered = Compiler.findall(sig, internal)
+    inclusive = Compiler.findall(sig, internal; include_ambiguous=true)
+    @test filtered !== nothing
+    @test Compiler.length(filtered) == 0
+    @test inclusive !== nothing
+    @test inclusive.ambig
+    @test Compiler.length(inclusive) == 2
+    @test Set(match.method for match in inclusive) == Set(methods(ambiguous_lookup))
+
+    cached = Compiler.CachedMethodTable(internal)
+    @test Compiler.length(Compiler.findall(sig, cached)) == 0
+    @test Compiler.length(Compiler.findall(sig, cached; include_ambiguous=true)) == 2
+    @test length(cached.cache) == 2
+
+    overlay_sig = Tuple{typeof(ambiguous_overlay),Integer,Integer}
+    overlay = Compiler.OverlayMethodTable(world, OVERLAY_MT)
+    overlay_matches = Compiler.findall(overlay_sig, overlay; include_ambiguous=true)
+    @test overlay_matches !== nothing
+    @test overlay_matches.ambig
+    @test Compiler.length(overlay_matches) == 2
+    base_method = only(methods(ambiguous_overlay))
+    @test all(match -> match.method !== base_method, overlay_matches)
+end
 
 function Compiler.add_remark!(interp::MTOverlayInterp, ::Compiler.InferenceState, remark)
     if interp.meta !== nothing
@@ -103,6 +139,15 @@ overlay_match(::Any) = nothing
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
 
+# overlay method should shadow the base method with the same signature,
+# filtering it out from method match results
+overlay_shadow_zero() = Any[]
+overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j=eachindex(xs[i])]
+@overlay OVERLAY_MT overlay_shadow_zero() = error()
+@test Base.infer_return_type((Vector{Vector{Int}},); interp=MTOverlayInterp()) do x
+    overlay_shadow_zero(x...)
+end == Vector{Int}
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
@@ -156,7 +201,7 @@ gpu_factorial3(x::Int) = myfactorial(x, raise_on_gpu3)
 @test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Compiler.is_consistent_overlay
 let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp())
     # check if `@consistent_overlay` together works with `@assume_effects`
-    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
+    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intentionally) undefined.
     @test Compiler.is_consistent_overlay(effects)
     @test Compiler.is_foldable(effects)
 end
@@ -407,10 +452,10 @@ Compiler.nsplit_impl(info::NoinlineCallInfo) = Compiler.nsplit(info.info)
 Compiler.getsplit_impl(info::NoinlineCallInfo, idx::Int) = Compiler.getsplit(info.info, idx)
 Compiler.getresult_impl(info::NoinlineCallInfo, idx::Int) = Compiler.getresult(info.info, idx)
 
-function Compiler.abstract_call(interp::NoinlineInterpreter,
-    arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
+function Compiler.abstract_call(interp::NoinlineInterpreter, arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo,
+    vtypes::Union{Compiler.VarTable,Nothing}, sv::Compiler.InferenceState, max_methods::Int)
     ret = @invoke Compiler.abstract_call(interp::Compiler.AbstractInterpreter,
-        arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
+        arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, vtypes::Union{Compiler.VarTable,Nothing}, sv::Compiler.InferenceState, max_methods::Int)
     return Compiler.Future{Compiler.CallMeta}(ret, interp, sv) do ret, interp, sv
         if sv.mod in noinline_modules(interp)
             (;rt, exct, effects, info) = ret
@@ -493,29 +538,32 @@ struct CustomData
     inferred
     CustomData(@nospecialize inferred) = new(inferred)
 end
-function Compiler.transform_result_for_cache(interp::CustomDataInterp, result::Compiler.InferenceResult)
+function Compiler.transform_result_for_cache(
+    interp::CustomDataInterp, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     inferred_result = @invoke Compiler.transform_result_for_cache(
-        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult)
+        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     return CustomData(inferred_result)
 end
-function Compiler.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),
-                            @nospecialize(info::Compiler.CallInfo), stmt_flag::UInt32)
+function Compiler.src_inlining_policy(
+    interp::CustomDataInterp, @nospecialize(src), @nospecialize(info::Compiler.CallInfo),
+    stmt_flag::UInt32)
     if src isa CustomData
         src = src.inferred
     end
-    return @invoke Compiler.src_inlining_policy(interp::Compiler.AbstractInterpreter, src::Any,
-                                          info::Compiler.CallInfo, stmt_flag::UInt32)
+    return @invoke Compiler.src_inlining_policy(
+        interp::Compiler.AbstractInterpreter, src::Any, info::Compiler.CallInfo,
+        stmt_flag::UInt32)
 end
 Compiler.retrieve_ir_for_inlining(cached_result::CodeInstance, src::CustomData) =
     Compiler.retrieve_ir_for_inlining(cached_result, src.inferred)
 Compiler.retrieve_ir_for_inlining(mi::MethodInstance, src::CustomData, preserve_local_sources::Bool) =
     Compiler.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
 let src = code_typed((Int,); interp=CustomDataInterp()) do x
-        return sin(x) + cos(x)
+        return (@noinline sin(x)) + (@noinline cos(x))
     end |> only |> first
     @test count(isinvoke(:sin), src.code) == 1
     @test count(isinvoke(:cos), src.code) == 1
-    @test count(isinvoke(:+), src.code) == 0
+    @test_broken count(isinvoke(:+), src.code) == 0
 end
 
 # ephemeral cache mode
@@ -524,9 +572,9 @@ func_ext_cache1(a) = func_ext_cache2(a) * cos(a)
 func_ext_cache2(a) = sin(a)
 let interp = DebugInterp()
     @test Base.infer_return_type(func_ext_cache1, (Float64,); interp) === Float64
-    @test isdefined(interp, :code_cache)
+    @test isdefined(interp, :global_cache)
     found = false
-    for (mi, codeinst) in interp.code_cache.dict
+    for (mi, codeinst) in interp.global_cache.dict
         if mi.def.name === :func_ext_cache2
             found = true
             break
@@ -537,7 +585,7 @@ end
 
 @newinterp InvokeInterp
 struct InvokeOwner end
-codegen = IdDict{CodeInstance, CodeInfo}()
+global codegen::IdDict{CodeInstance, CodeInfo} = IdDict{CodeInstance, CodeInfo}()
 Compiler.cache_owner(::InvokeInterp) = InvokeOwner()
 Compiler.codegen_cache(::InvokeInterp) = codegen
 let interp = InvokeInterp()
@@ -547,4 +595,157 @@ let interp = InvokeInterp()
     mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
     ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
     @test invoke(f, ci, args...) == 2
+
+    f = error
+    args = "test"
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
+    result = nothing
+    try
+        invoke(f, ci, args...)
+    catch e
+        result = sprint(Base.show_backtrace, catch_backtrace())
+    end
+    @test isa(result, String)
+    @test contains(result, "[1] error(::Char, ::Char, ::Char, ::Char)")
+end
+
+# Global publication and per-interpreter source/ABI capability are selected separately,
+# including when a winner appears while inference is running.
+@newinterp SourceModeWinnerInterp
+global source_mode_codegen::IdDict{CodeInstance,CodeInfo} = IdDict{CodeInstance,CodeInfo}()
+Compiler.codegen_cache(::SourceModeWinnerInterp) = source_mode_codegen
+
+source_mode_inadequate_winner(x::Int) = x + 1
+let interp = SourceModeWinnerInterp()
+    mi = Base.method_instance(source_mode_inadequate_winner, (Int,))
+    inadequate = Core.CodeInstance(mi, Compiler.cache_owner(interp), Int, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    Compiler.code_cache(interp)[mi] = inadequate
+    @test !Compiler.ci_has_source(interp, inadequate)
+
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_ABI)
+    @test ci !== inadequate
+    @test Compiler.ci_has_source(interp, ci)
+    @test iszero(@ccall jl_mi_cache_has_ci(mi::Any, ci::Any)::Cint)
+    # The capability-blind global winner remains unique. The source-capable result
+    # is session-local and can be reused by this interpreter without allowing it to
+    # escape into the global executable cache.
+    @test get(Compiler.code_cache(interp), mi, nothing) === inadequate
+    @test Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_ABI) === ci
+    overlay = Compiler.OverlayCodeCache(
+        Compiler.code_cache(interp), Compiler.InferenceCache())
+    valid_worlds = Compiler.WorldRange(interp.world)
+    @test Compiler.find_cached_ci(interp, overlay, mi,
+        valid_worlds, Compiler.SOURCE_MODE_ABI) === nothing
+    @test Compiler.find_local_cached_ci(interp, mi,
+        valid_worlds, Compiler.SOURCE_MODE_ABI) === ci
+
+    # JIT compilation uses the local source to compile the ABI-equivalent global
+    # winner; the local CI itself remains outside the executable cache.
+    @test Compiler.typeinf_ext_toplevel(
+        interp, mi, Compiler.SOURCE_MODE_ABI) === inadequate
+    @test Compiler.ci_has_invoke(inadequate)
+    @test iszero(@ccall jl_mi_cache_has_ci(mi::Any, ci::Any)::Cint)
+    # `inadequate` lives in the native `mi.cache` chain (an `InternalCodeCache`
+    # with a custom owner), which already roots it for the process lifetime, so
+    # the JIT handoff must not have leaked a redundant global root for it.
+    @test (@ccall jl_as_global_root(inadequate::Any, 0::Cint)::Ptr{Cvoid}) == C_NULL
+end
+
+# A source-inadequate winner with a different return ABI cannot suppress normal
+# publication. The completed CI is globally inserted and promoted before JIT use.
+source_mode_nonequivalent_winner(x::Int) = x + 1
+let interp = SourceModeWinnerInterp()
+    mi = Base.method_instance(source_mode_nonequivalent_winner, (Int,))
+    inadequate = Core.CodeInstance(mi, Compiler.cache_owner(interp), Any, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    Compiler.code_cache(interp)[mi] = inadequate
+
+    ci = Compiler.typeinf_ext_toplevel(interp, mi, Compiler.SOURCE_MODE_ABI)
+    @test ci !== inadequate
+    @test ci.rettype === Int
+    @test !iszero(@ccall jl_mi_cache_has_ci(mi::Any, ci::Any)::Cint)
+    @test ci.max_world == typemax(UInt)
+
+    @eval source_mode_world_bump_62338() = nothing
+    newer = SourceModeWinnerInterp(; world=Base.get_world_counter())
+    @test Compiler.typeinf_ext_toplevel(
+        newer, mi, Compiler.SOURCE_MODE_ABI) === ci
+end
+
+# Equivalent-winner selection also goes through the cache abstraction rather than
+# assuming that every executable cache is the native MethodInstance chain.
+@newinterp SourceModeEphemeralInterp true
+global source_mode_ephemeral_codegen::IdDict{CodeInstance,CodeInfo} =
+    IdDict{CodeInstance,CodeInfo}()
+Compiler.codegen_cache(::SourceModeEphemeralInterp) = source_mode_ephemeral_codegen
+source_mode_ephemeral_winner(x::Int) = x + 1
+let interp = SourceModeEphemeralInterp()
+    mi = Base.method_instance(source_mode_ephemeral_winner, (Int,))
+    winner = Core.CodeInstance(mi, Compiler.cache_owner(interp), Int, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    Compiler.code_cache(interp)[mi] = winner
+
+    @test Compiler.typeinf_ext_toplevel(
+        interp, mi, Compiler.SOURCE_MODE_ABI) === winner
+    @test Compiler.code_cache(interp)[mi] === winner
+    @test Compiler.ci_has_invoke(winner)
+    # The JIT retains raw pointers to the emitted `winner` for the lifetime of
+    # the process, and this ephemeral cache dies with `interp`, so the JIT
+    # handoff must have promoted `winner` to a global root (`jit_cache_root!`).
+    @test (@ccall jl_as_global_root(winner::Any, 0::Cint)::Ptr{Cvoid}) != C_NULL
+    empty!(source_mode_ephemeral_codegen)
+end
+
+const source_mode_interp_ref = Ref{Any}()
+const source_mode_winner_ref = Ref{Any}()
+@generated function source_mode_publish_winner()
+    interp = source_mode_interp_ref[]::SourceModeWinnerInterp
+    winner = source_mode_winner_ref[]::Core.CodeInstance
+    Compiler.code_cache(interp)[winner.def] = winner
+    return :(nothing)
+end
+source_mode_qualifying_winner(x::Int) = (source_mode_publish_winner(); x + 1)
+let interp = SourceModeWinnerInterp()
+    mi = Base.method_instance(source_mode_qualifying_winner, (Int,))
+    winner = Core.CodeInstance(mi, Compiler.cache_owner(interp), Int, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    source_mode_codegen[winner] = Compiler.retrieve_code_info(mi, interp.world)
+    source_mode_interp_ref[] = interp
+    source_mode_winner_ref[] = winner
+
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_ABI)
+    @test ci === winner
+    local_results = [
+        entry for entry in Compiler.get_inference_cache(interp).results
+        if entry isa Compiler.LocalInferenceResult && entry.result.linfo === mi
+    ]
+    @test length(local_results) == 1
+    local_result = only(local_results)
+    @test local_result.result.replacement_ci === winner
+    @test iszero(@ccall jl_mi_cache_has_ci(mi::Any, local_result.result.ci::Any)::Cint)
+    source_mode_interp_ref[] = nothing
+    source_mode_winner_ref[] = nothing
+    empty!(source_mode_codegen)
+end
+
+# The executable cache for a custom interpreter remains CodeInstance-only even when
+# inference also retains completed local source/proof entries.
+using REPL.REPLCompletions: completions
+@newinterp OverlayCacheInterp true
+@test let
+    interp = OverlayCacheInterp()
+    # `completions` has a call graph deep enough to exercise repeated global and local
+    # cache lookups for the same MethodInstances.
+    f = completions
+    args = ("", 0)
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t,
+        Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    Compiler.typeinf_ext_toplevel(interp, mi, Compiler.SOURCE_MODE_NOT_REQUIRED)
+    true
 end

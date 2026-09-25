@@ -90,13 +90,10 @@ f(x) = (y = h(x); y)
 trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
-    @test frame.func === typeof(func).name.mt.name
-    # broken until #50082 can be addressed
-    mi = isa(frame.linfo, Core.CodeInstance) ? frame.linfo.def : frame.linfo
-    @test mi.def.module === which(func, (Any,)).module broken=inlined
-    @test mi.def === which(func, (Any,)) broken=inlined
-    @test mi.specTypes === Tuple{typeof(func), Int} broken=inlined
-    # line
+    @test frame.func === typeof(func).name.singletonname
+    @test frame.linfo.def.module === which(func, (Any,)).module
+    @test frame.linfo.def === which(func, (Any,))
+    @test frame.linfo.specTypes === Tuple{typeof(func), Int}
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
     @test frame.inlined === inlined
@@ -109,10 +106,10 @@ let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"
 end
-let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
+let li = only(methods(fieldtype)).unspecialized,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == "fieldtype(...) at b:3"
+    @test repr == "fieldtype(::Vararg{Any}) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
@@ -137,7 +134,7 @@ module StackTracesTestMod
     filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
 end
 
-# Test that `removes_frames!` can correctly remove frames from within the module
+# Test that `remove_frames!` can correctly remove frames from within the module
 trace = StackTracesTestMod.unfiltered_stacktrace()
 @test occursin("unfiltered_stacktrace", string(trace))
 
@@ -248,7 +245,7 @@ struct F49231{a,b,c,d,e,f,g} end
         stacktrace(catch_backtrace())
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
-    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0mTuple\e[90m{…}\e[39m\e[0m\e[1m)\e[22m\n\e[90m")
+    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 
     st = try
         F49231{Vector,Val{'}'},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}()(1,2,3)
@@ -256,9 +253,142 @@ struct F49231{a,b,c,d,e,f,g} end
         stacktrace(catch_backtrace())
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,132)))
-    @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n\e[90m")
+    @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
+end
+
+# 33457: generator/comprehension lambda should, at the very least, not surface a
+# nonsense frame
+let st = nothing
+    try
+        [undef_var for _ in 1:10]
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
+end
+
+let st = nothing
+    try
+        collect(undef_var for _ in 1:10)
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
 end
 
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
+end
+
+@testset "Dispatch backtraces" begin
+    # Check that it's possible to capture a backtrace upon entrance to inference
+    # This test ensures that SnoopCompile will continue working
+    # See in particular SnoopCompile/SnoopCompileCore/src/snoop_inference.jl
+    # and the "diagnostics" devdoc.
+    @noinline callee(x::Int) = sin(x)
+    caller(x) = invokelatest(callee, x)
+
+    @test sin(0) == 0  # force compilation of sin(::Int)
+    dispatch_backtraces = []
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), dispatch_backtraces)
+    caller(3)
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), nothing)
+    ln = @__LINE__() - 2
+    fl = Symbol(@__FILE__())
+    @test length(dispatch_backtraces) == 4  # 2 ci-backtrace pairs, stored as 4 separate elements
+    mcallee, mcaller = only(methods(callee)), only(methods(caller))
+    # Extract pairs from the flattened array format: ci at odd indices, backtrace at even indices
+    pairs = [(dispatch_backtraces[i], dispatch_backtraces[i+1]) for i in 1:2:length(dispatch_backtraces)]
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcallee && any(stacktrace(bt)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcaller && any(stacktrace(bt)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+end
+
+global f_parent1_line::Int, f_inner1_line::Int, f_innermost1_line::Int
+function f_parent1(a)
+    x = a
+    return begin
+        @inline f_inner1(x)
+    end
+end; f_parent1_line = (@__LINE__) - 2
+function f_inner1(a)
+    x = a
+    return @inline f_innermost1(x)
+end; f_inner1_line = (@__LINE__) - 1
+f_innermost1(x) = x > 0 ? @noinline(sin(x)) : error("x is negative")
+f_innermost1_line = (@__LINE__) - 1
+let st = try
+        f_parent1(-1)
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    @test any(st) do sf
+        sf.func === :f_parent1 && sf.line == f_parent1_line && sf.linfo isa Core.MethodInstance
+    end
+    @test any(st) do sf
+        sf.func === :f_inner1 && sf.line == f_inner1_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+    @test any(st) do sf
+        sf.func === :f_innermost1 && sf.line == f_innermost1_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+end
+
+global f_parent2_line::Int, f_inner2_line::Int, f_innermost2_line::Int
+function f_parent2(a)
+    x = identity(a)
+    return begin
+        @inline f_inner2(x)
+    end
+end; f_parent2_line = (@__LINE__) - 2
+function f_inner2(a)
+    x = identity(a)
+    return @inline f_innermost2(x)
+end; f_inner2_line = (@__LINE__) - 1
+f_innermost2(x) = x > 0 ? @noinline(sin(x)) : error("x is negative")
+f_innermost2_line = (@__LINE__) - 1
+let st = try
+        f_parent2(-1)
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    @test any(st) do sf
+        sf.func === :f_parent2 && sf.line == f_parent2_line && sf.linfo isa Core.MethodInstance
+    end
+    @test any(st) do sf
+        sf.func === :f_inner2 && sf.line == f_inner2_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+    @test any(st) do sf
+        sf.func === :f_innermost2 && sf.line == f_innermost2_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+end
+
+@inline f_inner3(x) = x > 0 ? x : error("neg: $x")
+function f_parent3(a, b, c, d)
+    s = 0
+    @noinline begin   # keep `+` as invokes so codelocs has `to=0` entries
+        s += a; s += b; s += c; s += d
+    end
+    return f_inner3(s)
+end
+let st = try f_parent3(1, 2, 3, -10) catch; stacktrace(catch_backtrace()) end
+    sf = only(filter(sf -> sf.func === :f_inner3 && sf.inlined, st))
+    @test sf.linfo isa Core.MethodInstance
+    @test sf.linfo.def === which(f_inner3, (Int,))
 end

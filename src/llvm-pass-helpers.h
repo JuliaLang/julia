@@ -3,6 +3,7 @@
 #ifndef LLVM_PASS_HELPERS_H
 #define LLVM_PASS_HELPERS_H
 
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
@@ -52,18 +53,47 @@ struct JuliaPassContext {
     // Intrinsics.
     llvm::Function *pgcstack_getter;
     llvm::Function *adoptthread_func;
-    llvm::Function *gc_flush_func;
+    llvm::Function *gcroot_flush_func;
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
     llvm::Function *pointer_from_objref_func;
     llvm::Function *gc_loaded_func;
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
-    llvm::Function *write_barrier_func;
+    llvm::Function *blackbox_func;
+    llvm::Function *object_write_barrier_func;
+    llvm::Function *field_write_barrier_p11_func;
+    llvm::Function *field_write_barrier_p13_func;
     llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
     llvm::Function *call3_func;
+    llvm::Function *cancel_point_func;
+
+    // Object barriers carry (parent, children...); field barriers carry
+    // (parent, slot, child, ...) with additional (slot, child) pairs.
+    static constexpr unsigned field_wb_slot_arg = 1;
+
+    // Whether `callee` is either address-space variant of the field barrier.
+    bool isFieldWriteBarrier(const llvm::Value *callee) const {
+        return callee && (callee == field_write_barrier_p11_func ||
+                          callee == field_write_barrier_p13_func);
+    }
+
+    // Whether `callee` is one of the write barrier intrinsics above.
+    bool isWriteBarrierFunc(const llvm::Value *callee) const {
+        return callee && (callee == object_write_barrier_func ||
+                          isFieldWriteBarrier(callee));
+    }
+
+    // Skip the parent and, for field barriers, the interleaved slot operands.
+    auto writeBarrierChildren(const llvm::CallInst *call) const {
+        bool field = isFieldWriteBarrier(call->getCalledOperand());
+        return llvm::make_filter_range(llvm::drop_begin(call->args()),
+            [field](const llvm::Use &arg) {
+                return !field || arg.getOperandNo() % 2 == 0;
+            });
+    }
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -85,7 +115,7 @@ struct JuliaPassContext {
 
     // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
     // point of the given function, if there exists such a call.
-    // Otherwise, gets a swiftself argument, if there exists such an argument.
+    // Otherwise, gets a function argument with the 'gcstack' attribute, if there exists such an argument.
     // Otherwise, `nullptr` is returned.
     llvm::Value *getPGCstack(llvm::Function &F) const;
 
@@ -119,7 +149,7 @@ namespace jl_intrinsics {
     // passed as an argument.
     extern const IntrinsicDescription GCAllocBytes;
 
-    // `julia.new_gc_frame`: an intrinsic that creates a new GC frame.
+    // `julia.new_gc_frame`: creates a GC frame, honoring any return alignment attribute.
     extern const IntrinsicDescription newGCFrame;
 
     // `julia.push_gc_frame`: an intrinsic that pushes a GC frame.
@@ -130,6 +160,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // Object barrier used when a transformation discards field locations.
+    extern const IntrinsicDescription objectWriteBarrier;
 
     // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
     extern const IntrinsicDescription safepoint;
@@ -156,6 +189,15 @@ namespace jl_well_known {
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;
+
+    // Reset-safe variants of the above (minus the narrowed memory effects):
+    // used in functions that may carry a published cancellation reset
+    // region, these unpublish/republish the current task's reset context
+    // around the operation (see llvm-cancellation-lowering.cpp).
+    extern const WellKnownFunctionDescription GCBigAllocResetSafe;
+    extern const WellKnownFunctionDescription GCSmallAllocResetSafe;
+    extern const WellKnownFunctionDescription GCQueueRootResetSafe;
+    extern const WellKnownFunctionDescription GCAllocTypedResetSafe;
 }
 
 void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info);

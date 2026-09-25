@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt,LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(AllocOpt,LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 
@@ -25,10 +25,11 @@ define {} addrspace(10)* @return_obj() {
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @return_load
-; CHECK: alloca i64
+; When the element type is known (i64), splitOnStack preserves it
+; CHECK: alloca i64, align 16
 ; CHECK-NOT: @julia.gc_alloc_obj
 ; CHECK-NOT: @jl_gc_small_alloc
-; OPAQUE: call void @llvm.lifetime.start{{.*}}(i64 8, ptr
+; OPAQUE: call void @llvm.lifetime.start{{.*}}(ptr
 ; CHECK-NOT: @tag
 ; CHECK-NOT: @llvm.lifetime.end
 define i64 @return_load(i64 %i) {
@@ -62,11 +63,11 @@ define void @ccall_obj(i8* %fptr) {
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @ccall_ptr
-; CHECK: alloca i64
+; CHECK: alloca i64, align 16
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
 ; CHECK-NOT: @jl_gc_small_alloc
-; OPAQUE: call void @llvm.lifetime.start{{.*}}(i64 8, ptr
+; OPAQUE: call void @llvm.lifetime.start{{.*}}(ptr
 ; OPAQUE: %f = bitcast ptr %fptr to ptr
 ; Currently the GC frame lowering pass strips away all operand bundles
 ; OPAQUE-NEXT: call void %f(ptr
@@ -105,10 +106,10 @@ define void @ccall_unknown_bundle(i8* %fptr) {
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @lifetime_branches
-; CHECK: alloca i64
+; CHECK: alloca i64, align 16
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK: L1:
-; CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(i64 8,
+; CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(ptr
 
 
 ; OPAQUE: %f = bitcast ptr %fptr to ptr
@@ -118,11 +119,11 @@ define void @ccall_unknown_bundle(i8* %fptr) {
 
 ; CHECK: L2:
 ; OPAQUE-NEXT: %f2 = bitcast ptr %fptr to ptr
-; CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(i64 8,
+; CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(ptr
 ; OPAQUE-NEXT: call void %f2(ptr null)
 
 ; CHECK: L3:
-; CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(i64 8,
+; CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(ptr
 define void @lifetime_branches(i8* %fptr, i1 %b, i1 %b2) {
   %pgcstack = call {}*** @julia.get_pgcstack()
   %gcstack = bitcast {}*** %pgcstack to {}**
@@ -166,7 +167,7 @@ define void @object_field({} addrspace(10)* %field) {
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @memcpy_opt
-; CHECK: alloca [16 x i8], align 16
+; CHECK: alloca [2 x i64], align 16
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
 ; CHECK-NOT: @jl_gc_small_alloc

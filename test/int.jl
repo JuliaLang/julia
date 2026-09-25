@@ -118,6 +118,10 @@ end
     @test big"1.0" == BigFloat(1.0)
     @test_throws ArgumentError big"1.0.3"
     @test_throws ArgumentError big"pi"
+
+    @test_throws ArgumentError big"_æ1"
+    @test_throws ArgumentError big"æ_1"
+    @test_throws ArgumentError big"_ææ"
 end
 
 @test round(UInt8, 123) == 123
@@ -357,6 +361,36 @@ end
                 end
             end
         end
+    end
+    # exhaustive UInt8/Int8 tests for mixed signedness
+    for f in (mod, rem)
+        for i in -128:127
+            for j in 0:255
+                if iszero(i)
+                    @test_throws DivideError f(UInt8(j), Int8(i))
+                else
+                    @test f(UInt8(j), Int8(i)) == f(j, i)
+                end
+                if iszero(j)
+                    @test_throws DivideError f(Int8(i), UInt8(j))
+                else
+                    @test f(Int8(i), UInt8(j)) == f(i,j)
+                end
+            end
+        end
+    end
+end
+
+# Check both comparison directions at signed and unsigned limits, including equal values.
+@testset "mixed signedness comparisons" begin
+    for S in Base.BitSigned_types,
+        U in Base.BitUnsigned_types,
+        s in (typemin(S), S(-1), S(0), S(1), typemax(S)),
+        u in (U(0), U(1), typemax(U)),
+        op in (==, <, <=)
+
+        @test op(s, u) === op(BigInt(s), BigInt(u))
+        @test op(u, s) === op(BigInt(u), BigInt(s))
     end
 end
 

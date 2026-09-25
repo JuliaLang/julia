@@ -3,4 +3,5 @@ _build/
 UnicodeData.txt
 src/stdlib/
 src/NEWS.md
+src/devdocs/agents/skills/*/index.md
 

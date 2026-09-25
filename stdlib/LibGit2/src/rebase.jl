@@ -19,7 +19,7 @@ function count(rb::GitRebase)
 end
 
 """
-    current(rb::GitRebase) -> Csize_t
+    current(rb::GitRebase)::Csize_t
 
 Return the index of the current [`RebaseOperation`](@ref). If no operation has
 yet been applied (because the [`GitRebase`](@ref) has been constructed but `next`
@@ -90,7 +90,7 @@ function commit(rb::GitRebase, sig::GitSignature)
 end
 
 """
-    abort(rb::GitRebase) -> Csize_t
+    abort(rb::GitRebase)::Csize_t
 
 Cancel the in-progress rebase, undoing all changes made so far and returning
 the parent repository of `rb` and its working directory to their state before
@@ -105,7 +105,7 @@ function abort(rb::GitRebase)
 end
 
 """
-    finish(rb::GitRebase, sig::GitSignature) -> Csize_t
+    finish(rb::GitRebase, sig::GitSignature)::Csize_t
 
 Complete the rebase described by `rb`. `sig` is a [`GitSignature`](@ref)
 to specify the identity of the user finishing the rebase. Return `0` if the

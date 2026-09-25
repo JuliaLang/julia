@@ -4,6 +4,7 @@
 
 # For curmod_*
 include("testenv.jl")
+using InteractiveUtils: code_llvm
 
 # bits types
 @test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
@@ -42,6 +43,8 @@ truncbool(u) = reinterpret(UInt8, reinterpret(Bool, u))
     @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x0000)
     @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int8, 0x00)
     @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int16, 0x00)
+
+    @test_throws ErrorException("add_float: runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64") Core.Intrinsics.add_float(1, 2)
 end
 
 # issue #4581
@@ -77,6 +80,259 @@ let x, y, f
     @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
 end
 
+@testset "non-standard integer widths" begin
+    primitive type TestUInt24 24 end
+    primitive type TestUInt40 40 end
+    primitive type TestUInt48 48 end
+    primitive type TestUInt5 5 end
+    primitive type TestUInt17 17 end
+    primitive type TestUInt63 63 end
+    primitive type TestInt17 <: Signed 17 end
+    primitive type TestInt63 <: Signed 63 end
+
+    @test Core.bitsizeof(TestUInt24) == 24
+    @test Core.bitsizeof(TestUInt40) == 40
+    @test Core.bitsizeof(TestUInt48) == 48
+    @test Core.bitsizeof(TestUInt5) == 5
+    @test Core.bitsizeof(TestUInt17) == 17
+    @test Core.bitsizeof(TestUInt63) == 63
+
+    x24 = Core.Intrinsics.trunc_int(TestUInt24, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x24) === 0x0000_0000_00aa_9988
+
+    x40 = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x40) === 0x0000_00cc_bbaa_9988
+
+    x48 = Core.Intrinsics.trunc_int(TestUInt48, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x48) === 0x0000_ddcc_bbaa_9988
+
+    x5 = Core.Intrinsics.trunc_int(TestUInt5, UInt16(0xffff))
+    @test Core.Intrinsics.zext_int(UInt16, x5) === 0x001f
+
+    x17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(0xffff_ffff))
+    @test Core.Intrinsics.zext_int(UInt32, x17) === 0x0001_ffff
+
+    # Memory operations use the byte-rounded storage width.
+    load17(p::Ptr{TestUInt17}) = unsafe_load(p)
+    store17(p::Ptr{TestUInt17}, x::TestUInt17) = unsafe_store!(p, x)
+    load_boxed17(x::Any) = Core.Intrinsics.zext_int(UInt32, x::TestUInt17)
+    bitcast17(x::Any) = Core.Intrinsics.bitcast(TestInt17, x::TestUInt17)
+    load_tuple17(x::Any) = x::Tuple{TestUInt17,TestUInt17}
+    # Under Revise these `code_llvm` queries can fail in InteractiveUtils'
+    # reflective inference path before reaching the odd-bit lowering.
+    if !isdefined(Main, :Revise)
+        load_ir = sprint(io -> code_llvm(io, load17, Tuple{Ptr{TestUInt17}};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", load_ir)
+        @test occursin(r"\btrunc i24\b", load_ir)
+        boxed_ir = sprint(io -> code_llvm(io, load_boxed17, Tuple{Any};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", boxed_ir)
+        @test occursin(r"\btrunc i24\b", boxed_ir)
+        store_ir = sprint(io -> code_llvm(io, store17,
+            Tuple{Ptr{TestUInt17}, TestUInt17}; debuginfo=:none, optimize=false))
+        @test occursin(r"\bzext i17\b.*\bto i24\b", store_ir)
+        @test occursin(r"\bstore i24\b", store_ir)
+        bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", bitcast_ir)
+        # Aggregate elements widen elementwise, not just bare primitives. On
+        # 32-bit targets the tuple is returned through sret as a single memcpy
+        # instead, which never materializes the elements.
+        if Sys.WORD_SIZE == 64
+            tuple_ir = sprint(io -> code_llvm(io, load_tuple17, Tuple{Any};
+                debuginfo=:none, optimize=false))
+            @test occursin(r"\bload \[2 x i24\]", tuple_ir)
+            @test occursin(r"\btrunc i24\b", tuple_ir)
+        end
+    end
+
+    # Round-trips through mutable fields, Memory, and field-modification
+    # builtins (the non-atomic typed_store paths in codegen).
+    mutable struct Mut17
+        x::TestUInt17
+    end
+    u17(x) = Core.Intrinsics.trunc_int(TestUInt17, UInt32(x))
+    let m = Mut17(u17(5))
+        setfield!(m, :x, u17(6))
+        @test getfield(m, :x) === u17(6)
+        @test swapfield!(m, :x, u17(7)) === u17(6)
+        @test getfield(m, :x) === u17(7)
+        let r = replacefield!(m, :x, u17(7), u17(8))
+            @test r.success && r.old === u17(7)
+        end
+        @test getfield(m, :x) === u17(8)
+        @test modifyfield!(m, :x, (a, b) -> b, u17(9)).second === u17(9)
+        @test getfield(m, :x) === u17(9)
+    end
+    let mem = Memory{TestUInt17}(undef, 3)
+        for i = 1:3
+            mem[i] = u17(0x1fff0 + i)
+        end
+        @test mem[1] === u17(0x1fff1) && mem[3] === u17(0x1fff3)
+    end
+    let t = (u17(1), u17(0x1ffff))
+        @test t[1] === u17(1) && t[2] === u17(0x1ffff)
+        @test Ref{Any}(t)[] === t
+    end
+
+    # Bits above the logical width belong to nobody: a load must drop them,
+    # even when the memory was written by something other than codegen.
+    let dirty = fill(0xff, 8)
+        GC.@preserve dirty begin
+            p = Ptr{TestUInt17}(pointer(dirty))
+            @test Core.Intrinsics.zext_int(UInt32, unsafe_load(p)) === 0x0001_ffff
+            @test unsafe_load(Ptr{Tuple{TestUInt17,TestUInt17}}(p)) ===
+                (u17(0x1ffff), u17(0x1ffff))
+        end
+    end
+    for (T, mask) in ((TestUInt5, 0x1f), (TestUInt17, 0x0001_ffff),
+                      (TestUInt24, 0x00ff_ffff), (TestUInt40, 0x0000_00ff_ffff_ffff),
+                      (TestUInt63, 0x7fff_ffff_ffff_ffff))
+        dirty = fill(0xff, sizeof(T))
+        v = GC.@preserve dirty ccall(:jl_new_bits, Any, (Any, Ptr{Cvoid}), T, pointer(dirty))
+        @test Core.Intrinsics.zext_int(UInt64, v::T) == mask
+        @test v::T === Core.Intrinsics.trunc_int(T, typemax(UInt64))
+    end
+
+    # A 1-bit primitive is not a Bool: boxing must keep its own type.
+    primitive type TestUInt1 1 end
+    box1(n::UInt8) = Ref{Any}(Core.Intrinsics.trunc_int(TestUInt1, n))[]
+    let one = Ref(0x01)[], zero = Ref(0x00)[]
+        @test box1(one) isa TestUInt1
+        @test box1(one) === Core.Intrinsics.trunc_int(TestUInt1, one)
+        @test box1(one) !== box1(zero)
+    end
+    # Bool keeps boxing to the `jl_true`/`jl_false` singletons, which `===` on
+    # Bool depends on (`jl_pointer_egal`); `===` alone compares by value here,
+    # so check the address. Both boxing paths: plain and via a union.
+    addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+    boxbool(b::Bool) = Ref{Any}(b)[]
+    boxboolunion(x::Union{Bool,Int}) = Ref{Any}(x)[]
+    let t = Ref(true)[], f = Ref(false)[]
+        @test addr(boxbool(t)) === addr(true) && addr(boxbool(f)) === addr(false)
+        @test addr(boxboolunion(t)) === addr(true) && addr(boxboolunion(f)) === addr(false)
+    end
+
+    x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
+    @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
+
+    i17 = Core.Intrinsics.trunc_int(TestInt17, Int32(-1))
+    @test Core.Intrinsics.sext_int(Int32, i17) === Int32(-1)
+    i17min = Core.Intrinsics.trunc_int(TestInt17, Int32(-65536))
+    @test Core.Intrinsics.sext_int(Int32, i17min) === Int32(-65536)
+
+    i63 = Core.Intrinsics.trunc_int(TestInt63, Int64(-1))
+    @test Core.Intrinsics.sext_int(Int64, i63) === Int64(-1)
+
+    @test Core.Intrinsics.bitcast(TestUInt24, x24) === x24
+    @test Core.Intrinsics.bitcast(TestUInt63, i63) === Core.Intrinsics.trunc_int(TestUInt63, typemax(UInt64))
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt24, x40)
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt63, x24)
+
+    function compiled_sitofp(::Type{T}, x) where T
+        Core.Intrinsics.sitofp(Float64, x)::Float64
+    end
+    function compiled_uitofp(::Type{T}, x) where T
+        Core.Intrinsics.uitofp(Float64, x)::Float64
+    end
+    function compiled_fptosi(::Type{T}, x) where T
+        Core.Intrinsics.fptosi(T, x)
+    end
+    function compiled_fptoui(::Type{T}, x) where T
+        Core.Intrinsics.fptoui(T, x)
+    end
+
+    si17 = Core.Intrinsics.trunc_int(TestInt17, Int32(-12345))
+    @test compiled_sitofp(TestInt17, si17) === -12345.0
+    @test compiled_fptosi(TestInt17, -12345.0) === si17
+
+    ui17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(54321))
+    @test compiled_uitofp(TestUInt17, ui17) === 54321.0
+    @test compiled_fptoui(TestUInt17, 54321.0) === ui17
+
+    si63 = Core.Intrinsics.trunc_int(TestInt63, Int64(-(Int64(1) << 52) + 3))
+    @test compiled_sitofp(TestInt63, si63) === -4.503599627370493e15
+    @test compiled_fptosi(TestInt63, -4.503599627370493e15) === si63
+
+    ui63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64((UInt64(1) << 52) + 3))
+    @test compiled_uitofp(TestUInt63, ui63) === 4.503599627370499e15
+    @test compiled_fptoui(TestUInt63, 4.503599627370499e15) === ui63
+
+    chain40 = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0x0000_00aa_bbcc_ddee))
+    chain24 = Core.Intrinsics.trunc_int(TestUInt24, chain40)
+    chain17 = Core.Intrinsics.trunc_int(TestUInt17, chain24)
+    @test Core.Intrinsics.zext_int(UInt64, chain24) === 0x0000_0000_00cc_ddee
+    @test Core.Intrinsics.zext_int(UInt32, chain17) === 0x0000_ddee
+    @test invokelatest(Core.Intrinsics.zext_int, UInt64, x63) === 0x7fff_ffff_ffff_ffff
+
+    ref63 = Ref(ui63)
+    @test ref63[] === ui63
+    ref63[] = x63
+    @test ref63[] === x63
+
+    struct FieldWrap63
+        x::TestUInt63
+        y::UInt8
+    end
+    field_wrap = FieldWrap63(ui63, 0x12)
+    @test field_wrap.x === ui63
+    @test field_wrap.y === 0x12
+
+    struct HashWrap63
+        x::TestUInt63
+    end
+    hw1 = Ref(HashWrap63(Core.Intrinsics.trunc_int(TestUInt63, UInt64(1))))
+    hw2 = Ref(HashWrap63(Core.Intrinsics.trunc_int(TestUInt63, UInt64(1))))
+    GC.@preserve hw1 hw2 begin
+        p2 = Ptr{UInt8}(Base.unsafe_convert(Ptr{HashWrap63}, hw2))
+        unsafe_store!(p2 + 7, unsafe_load(p2 + 7) | 0x80)
+    end
+    @test hw1[] === hw2[]
+    @test hash(hw1[]) == hash(hw2[])
+    @test objectid(hw1[]) == objectid(hw2[])
+
+    primitive type TestBits63 63 end
+    bits63 = Core.Intrinsics.trunc_int(TestBits63, UInt64(0xffff_ffff_ffff_ffff))
+    @test repr(bits63) == "$(curmod_prefix)TestBits63(0x7fffffffffffffff)"
+
+    primitive type TestBits5 5 end
+    primitive type TestBits6 6 end
+    primitive type TestBits7 7 end
+    @test repr(Core.Intrinsics.trunc_int(TestBits5, UInt8(1))) ==
+        "$(curmod_prefix)TestBits5(0x01)"
+    @test repr(Core.Intrinsics.trunc_int(TestBits6, UInt8(1))) ==
+        "$(curmod_prefix)TestBits6(0x01)"
+    @test repr(Core.Intrinsics.trunc_int(TestBits7, UInt8(1))) ==
+        "$(curmod_prefix)TestBits7(0x01)"
+end
+
+# odd-bit primitive integers keep byte-rounded storage but logical bit widths
+primitive type Int63 <: Signed 63 end
+primitive type UInt63 <: Unsigned 63 end
+Int63(x::Int64) = Core.Intrinsics.trunc_int(Int63, x)
+Int63(x::Signed) = Core.Intrinsics.trunc_int(Int63, Int64(x))
+UInt63(x::UInt64) = Core.Intrinsics.trunc_int(UInt63, x)
+Base.Int64(x::Int63) = Core.Intrinsics.sext_int(Int64, x)
+Base.UInt64(x::UInt63) = Core.Intrinsics.zext_int(UInt64, x)
+let x = UInt63(0xc000_ba98_8765_4321), y = Int63(-1)
+    @test sizeof(UInt63) == 8
+    @test Core.bitsizeof(UInt63) == 63
+    @test Core.bitsizeof(x) == 63
+    @test Core.bitsizeof(Int64) == 64
+    @test Core.bitsizeof(1.0) == 64
+    @test UInt64(x) === 0x4000_ba98_8765_4321
+    @test Int64(y) === Int64(-1)
+    @test Int64(Int63(Int32(-1))) === Int64(-1)
+    # Under Revise`, this `code_llvm` query can fail in InteractiveUtils'
+    # reflective inference path before it reaches the actual odd-bit lowering.
+    if !isdefined(Main, :Revise)
+        id_u63(x::UInt63) = x
+        ir = sprint(io -> code_llvm(io, id_u63, Tuple{UInt63}; debuginfo=:none))
+        @test occursin(r"\bi63\b", ir)
+    end
+end
+
 # test nonsensical valid conversions and errors
 
 compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)
@@ -92,7 +348,7 @@ compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)
 @test compiled_addi(true, true) === false
 
 compiled_addf(x, y) = Core.Intrinsics.add_float(x, y)
-@test compiled_addf(C_NULL, C_NULL) === C_NULL
+@test_throws ErrorException compiled_addf(C_NULL, C_NULL)
 @test_throws ErrorException compiled_addf(C_NULL, 1)
 @test compiled_addf(0.5, 5.0e-323) === 0.5
 @test_throws ErrorException compiled_addf(im, im)
@@ -108,6 +364,10 @@ end
     (0x80000000, Int64(0x80000000), -Int64(0x80000000))
 @test compiled_conv(UInt32, UInt64(0xC000_BA98_8765_4321)) ==
     (0x87654321, 0x0000000087654321, 0xffffffff87654321)
+@test compiled_conv(UInt63, UInt64(0xC000_BA98_8765_4321)) ==
+    (UInt63(0x4000_BA98_8765_4321), 0x4000_BA98_8765_4321, 0xC000_BA98_8765_4321)
+@test compiled_conv(Int63, Int64(-1)) ==
+    (Int63(-1), typemax(Int64), -Int64(1))
 @test_throws ErrorException compiled_conv(Bool, im)
 
 function compiled_fptrunc(::Type{T}, x) where T
@@ -129,6 +389,23 @@ end
 # In function: julia_compiled_fptrunc_3480
 # @test compiled_fptrunc(Core.BFloat16, 1.234) === reinterpret(Core.BFloat16, 0b0_01111111_0011110)
 @test compiled_fptrunc(Float32, 1.234) === 1.234f0
+# Float32 to BFloat16 conversion must preserve subnormals (JuliaMath/BFloat16s.jl#125).
+@noinline compiled_bfloat_fptrunc(x::Float32) = Core.Intrinsics.fptrunc(Core.BFloat16, x)
+let x = reinterpret(Float32, 0x00400000) # 2^-127, exactly the bf16 subnormal 0x0040
+    @test reinterpret(UInt16, compiled_bfloat_fptrunc(x)) === 0x0040
+    @test reinterpret(UInt16, compiled_bfloat_fptrunc(-x)) === 0x8040
+end
+@static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+    script = """
+        using InteractiveUtils
+        @noinline f(x::Float32) = Core.Intrinsics.fptrunc(Core.BFloat16, x)
+        code_native(stdout, f, (Float32,); debuginfo=:none, dump_module=false)
+    """
+    for cpu_target in ("native,+avx512bf16,+avx512vl", "native,+avxneconvert")
+        asm = read(`$(Base.julia_cmd(; cpu_target)) --startup-file=no -e $script`, String)
+        @test !occursin("vcvtneps2bf16", asm)
+    end
+end
 @test_throws ErrorException compiled_fptrunc(Float64, 1.234f0)
 @test_throws ErrorException compiled_fptrunc(Int32, 1.234)
 @test_throws ErrorException compiled_fptrunc(Float32, 1234)
@@ -231,6 +508,8 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float 0x1.0000000000001p0 1.25 0x1p-54 0x1.4000000000002p0
+    @test 0x1.0000000000001p0*1.25+0x1p-54 === 0x1.4000000000001p0 # for comparison
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(3.3) true
@@ -245,6 +524,10 @@ end
     @test_intrinsic Core.Intrinsics.uitofp Float64 UInt(3) Float64(3.0)
     @test_intrinsic Core.Intrinsics.fptosi Int Float64(3.3) 3
     @test_intrinsic Core.Intrinsics.fptoui UInt Float64(3.3) UInt(3)
+
+    # #57384
+    @test_intrinsic Core.Intrinsics.fptosi Int 1.5 1
+    @test_intrinsic Core.Intrinsics.fptosi Int128 1.5 Int128(1)
 end
 
 @testset "Float32 intrinsics" begin
@@ -265,6 +548,9 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float Float32(0x1.000002p0) 1.25f0 Float32(0x1p-25) Float32(0x1.400004p0)
+    @test Float32(0x1.000002p0)*1.25f0+Float32(0x1p-25) === Float32(0x1.400002p0) # for comparison
+
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(3.3) true
@@ -303,6 +589,17 @@ end
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float64(3.3) Float16(3.3)
+
+    # #57805 - cases where rounding Float64 -> Float32 -> Float16 would fail
+    #     2^-25 * 0b1.0000000000000000000000000000000000000001 binary
+    #   0 01111100110 0000000000000000000000000000000000000001000000000000
+    #     2^-25 * 0b1.0                                        binary
+    #   0    01100110 00000000000000000000000
+    #     2^-14 * 0b0.0000000001 (subnormal)
+    #   0       00000 0000000001 (correct)
+    #   0       00000 0000000000 (incorrect)
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 0x1.0000000001p-25 Float16(6.0e-8)
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 -0x1.0000000001p-25 Float16(-6.0e-8)
 
     # float_to_half/bfloat_to_float special cases
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Inf32 Inf16
@@ -346,6 +643,8 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float Float16(0x1.004p0) Float16(1.25) Float16(0x1p-12) Float16(0x1.408p0)
+    @test Float16(0x1.004p0)*Float16(1.25)+Float16(0x1p-12) === Float16(0x1.404p0) # for comparison
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true
@@ -371,13 +670,13 @@ end
 end
 
 using Base.Experimental: @force_compile
-@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(:u)) === nothing
-@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(Symbol("u", "x"))) === nothing
-@test_throws ConcurrencyViolationError("invalid atomic ordering") Core.Intrinsics.atomic_fence(Symbol("u", "x")) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(:u, :system)) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(Symbol("u", "x"), :system)) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") Core.Intrinsics.atomic_fence(Symbol("u", "x"), :system) === nothing
 for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :sequentially_consistent)
-    @test Core.Intrinsics.atomic_fence(order) === nothing
-    @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
-    @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
+    @test Core.Intrinsics.atomic_fence(order, :system) === nothing
+    @test (order -> Core.Intrinsics.atomic_fence(order, :system))(order) === nothing
+    @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)), :system)) === nothing
 end
 @test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) === nothing
 @test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) === nothing
@@ -540,3 +839,60 @@ end)()
     f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
     f(C_NULL)
 end
+
+# Test bitcast on union values with inline_roots (split representation)
+@testset "bitcast union with inline_roots" begin
+    struct BitcastMixedGC
+        a::Vector{Int}
+        b::Vector{Int}
+        c::Vector{Float64}
+        d::Int
+    end
+    @noinline function _bitcast_returns_union(x::Int)
+        x == 0 && return BitcastMixedGC(Int[], Int[], Float64[], 0)
+        x == 1 && return UInt(0)
+        x == 2 && return Int(0)
+        x == 3 && return C_NULL
+        return nothing
+    end
+    function _bitcast_trigger(x::Int)
+        val = _bitcast_returns_union(x)
+        return Core.Intrinsics.bitcast(Ptr{Nothing}, val)
+    end
+    @test _bitcast_trigger(1) === Ptr{Nothing}(0)
+    @test _bitcast_trigger(3) === Ptr{Nothing}(0)
+end
+
+# Test unsafe_store! on union values with inline_roots (split representation)
+@testset "pointerset union with inline_roots" begin
+    struct PointersetMixedGC
+        a::Vector{Int}
+        b::Int
+    end
+    @noinline function _pointerset_returns_union(x::Int)
+        x == 0 && return PointersetMixedGC(Int[1,2,3], 42)
+        x == 1 && return UInt(0)
+        return nothing
+    end
+    function _pointerset_trigger(x::Int)
+        val = _pointerset_returns_union(x)::PointersetMixedGC
+        p = Ptr{PointersetMixedGC}(Libc.malloc(2 * sizeof(PointersetMixedGC)))
+        GC.@preserve val begin
+            unsafe_store!(p, val, 1)
+            unsafe_store!(p, val, 2)
+            r1 = unsafe_load(p, 1)
+            r2 = unsafe_load(p, 2)
+        end
+        Libc.free(p)
+        return r1.a, r1.b, r2.a, r2.b
+    end
+    @test _pointerset_trigger(0) == (Int[1,2,3], 42, Int[1,2,3], 42)
+end
+
+# https://github.com/JuliaLang/julia/issues/61436
+tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
+@test tofloat(UInt128(0)) == 0.0
+
+# https://github.com/JuliaLang/julia/issues/61436
+primitive type UIntN256 <: Unsigned 256 end
+@test tofloat(reinterpret(UIntN256, (zeros(UInt8, 32)...,))) == 0.0

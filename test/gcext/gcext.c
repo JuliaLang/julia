@@ -219,7 +219,6 @@ static uint64_t xorshift_rng(void)
 }
 
 static treap_t *bigvals;
-static size_t bigval_startoffset;
 
 // Hooks to allocate and free external objects (bigval_t's).
 
@@ -404,22 +403,23 @@ void stk_push(jl_value_t *s, jl_value_t *v)
     check_stack("push", s);
     dynstack_t *stk = *(dynstack_t **)s;
     if (stk->size < stk->capacity) {
+        jl_gc_wb((jl_value_t *)stk, (void *)&stk->data[stk->size], v);
         stk->data[stk->size++] = v;
-        jl_gc_wb((jl_value_t *)stk, v);
     }
     else {
         dynstack_t *newstk = allocate_stack_mem(stk->capacity * 3 / 2 + 1);
         newstk->size = stk->size;
+        jl_gc_wb_object((jl_value_t *)newstk);
         memcpy(newstk->data, stk->data, sizeof(jl_value_t *) * stk->size);
-        *(dynstack_t **)s = newstk;
         newstk->data[newstk->size++] = v;
         jl_gc_schedule_foreign_sweepfunc(ptls, (jl_value_t *)(newstk));
-        jl_gc_wb_back((jl_value_t *)newstk);
-        jl_gc_wb(s, (jl_value_t *)newstk);
+        // The replaced stack pointer is the field at offset 0 of `s`.
+        jl_gc_wb(s, (void *)s, (jl_value_t *)newstk);
+        *(dynstack_t **)s = newstk;
     }
 }
 
-// Return top value from `s`. Raise error if not empty.
+// Return top value from `s`. Raise error if empty.
 
 jl_value_t *stk_top(jl_value_t *s)
 {
@@ -428,7 +428,7 @@ jl_value_t *stk_top(jl_value_t *s)
     return stk->data[stk->size - 1];
 }
 
-// Pop a value from `s` and return it. Raise error if not empty.
+// Pop a value from `s` and return it. Raise error if empty.
 
 jl_value_t *stk_pop(jl_value_t *s)
 {
@@ -649,8 +649,6 @@ int main()
             module,
             jl_symbol("StackDataLarge"),
             (jl_value_t *)datatype_stack_external);
-    // Remember the offset of external objects
-    bigval_startoffset = jl_gc_external_obj_hdr_size();
     // Run the actual tests
     checked_eval_string(
             "let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"

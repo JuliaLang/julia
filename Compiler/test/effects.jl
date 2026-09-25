@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # Test that the Core._apply_iterate bail path taints effects
@@ -43,6 +45,17 @@ end
     conditionally_call_ambig(b, 1)
     return nothing
 end
+
+# `supertype(::UnionAll)` can throw (its recursion hits `supertype(::Union)` for
+# inputs like `Union{S,T} where {S,T}`), so it must be `:foldable` rather than
+# `:total` and a dead call to it must not be eliminated (issue #61988)
+@test Compiler.is_foldable(Base.infer_effects(supertype, (UnionAll,)))
+@test !Compiler.is_nothrow(Base.infer_effects(supertype, (UnionAll,)))
+@test !fully_eliminated((UnionAll,)) do x
+    supertype(x)
+    return nothing
+end
+@test_throws MethodError (x -> (supertype(x); nothing))(Union{S,T} where {S,T})
 
 # Test that a missing methtable identification gets tainted
 # appropriately
@@ -264,6 +277,9 @@ end |> Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{String}()[]
 end |> Compiler.is_consistent
+@test Base.infer_effects() do
+    Maybe{Some{Base.RefValue{Int}}}()
+end |> Compiler.is_consistent
 let f() = Maybe{String}()[]
     @test Base.return_types() do
         f() # this call should be concrete evaluated
@@ -367,7 +383,7 @@ let effects = Base.infer_effects(f_glob_assign_int, (); optimize=false)
     @test !Compiler.is_effect_free(effects)
     @test Compiler.is_nothrow(effects)
 end
-# effects modeling for for setglobal!
+# effects modeling for setglobal!
 global SETGLOBAL!_NOTHROW::Int = 0
 let effects = Base.infer_effects(; optimize=false) do
         setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
@@ -399,6 +415,17 @@ let effects = Base.infer_effects(setglobal!_nothrow_undefinedyet2)
     @test !Compiler.is_nothrow(effects)
 end
 @test_throws TypeError setglobal!_nothrow_undefinedyet2()
+
+module ExportMutableGlobal
+    global mutable_global_for_setglobal_test::Int = 0
+    export mutable_global_for_setglobal_test
+end
+using .ExportMutableGlobal: mutable_global_for_setglobal_test
+f_assign_imported() = global mutable_global_for_setglobal_test = 42
+let effects = Base.infer_effects(f_assign_imported)
+    @test !Compiler.is_nothrow(effects)
+end
+@test_throws ErrorException f_assign_imported()
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
@@ -914,7 +941,8 @@ unknown_sparam_nothrow1(x::Ref{T}) where T = (T; nothing)
 unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 @test Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Int},)))
 @test Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{<:Integer},)))
-@test !Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type,)))
+@test Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Ref{T}} where {T},)))
+@test Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type,)))
 @test !Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Nothing,)))
 @test !Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Union{Type{Int},Nothing},)))
 @test !Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
@@ -995,6 +1023,19 @@ end
     @isdefined($(gensym("some_undef_symbol")))
 end |> !Compiler.is_consistent
 
+# `@isdefined`-guarded read of a slot whose value is a `MustAlias` must still refine
+# the slot's `undef` info
+function isdefined_alias_loop(t::Tuple)
+    local prev
+    s = ""
+    for x in t
+        @isdefined(prev) && (s = prev)
+        prev = x
+    end
+    return s
+end
+@test Compiler.is_nothrow(Base.infer_effects(isdefined_alias_loop, (Tuple{String,String},)))
+
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)
@@ -1033,9 +1074,13 @@ end |> Compiler.is_nothrow
 # Effects for :compilerbarrier
 f1_compilerbarrier(b) = Base.compilerbarrier(:type, b)
 f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
+f3_compilerbarrier(b) = Base.compilerbarrier(:blackbox, b)
 
 @test !Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
 @test Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))
+# :blackbox is not consistent (prevents CSE/constant-folding) but is nothrow
+@test !Compiler.is_consistent(Base.infer_effects(f3_compilerbarrier, (Bool,)))
+@test Compiler.is_nothrow(Base.infer_effects(f3_compilerbarrier, (Bool,)))
 
 # Optimizer-refined effects
 function f1_optrefine(b)
@@ -1181,8 +1226,8 @@ callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
       Compiler.ALWAYS_FALSE
 
 # noub modeling for memory ops
-let (memoryrefnew, memoryrefget, memoryref_isassigned, memoryrefset!) =
-        (Core.memoryrefnew, Core.memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
+let (memoryrefnew, memoryrefget, const_memoryrefget, memoryref_isassigned, memoryrefset!) =
+        (Core.memoryrefnew, Core.memoryrefget, Core.const_memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
     function builtin_effects(@nospecialize xs...)
         interp = Compiler.NativeInterpreter()
         𝕃 = Compiler.typeinf_lattice(interp)
@@ -1203,6 +1248,10 @@ let (memoryrefnew, memoryrefget, memoryref_isassigned, memoryrefset!) =
     @test Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Int]))
     @test !Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Vararg{Bool}]))
     @test !Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Vararg{Any}]))
+    # `Core.const_memoryrefget` (loads of `Base.Experimental.Const`, #63129) has the same effects
+    @test Compiler.is_noub(builtin_effects(const_memoryrefget, Any[MemoryRef,Symbol,Core.Const(true)]))
+    @test !Compiler.is_noub(builtin_effects(const_memoryrefget, Any[MemoryRef,Symbol,Core.Const(false)]))
+    @test Compiler.is_effect_free(builtin_effects(const_memoryrefget, Any[MemoryRef,Symbol,Bool]))
     @test Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Core.Const(true)]))
     @test !Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Core.Const(false)]))
     @test !Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Bool]))
@@ -1390,3 +1439,247 @@ end == Compiler.EFFECTS_UNKNOWN
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float64])
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Int32}, Float16])
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Int16])
+
+# Float intrinsics require float arguments
+@test Base.infer_effects((Int16,)) do x
+    return Core.Intrinsics.abs_float(x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int32, Int32)) do x, y
+    return Core.Intrinsics.add_float(x, y)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int32, Int32)) do x, y
+    return Core.Intrinsics.add_float(x, y)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64, Int64, Int64)) do x, y, z
+    return Core.Intrinsics.fma_float(x, y, z)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.fptoui(UInt32, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.fptosi(Int32, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.sitofp(Int64, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((UInt64,)) do x
+    return Core.Intrinsics.uitofp(Int64, x)
+end |> !Compiler.is_nothrow
+
+# effects modeling for pointer-related intrinsics
+let effects = Base.infer_effects(Core.Intrinsics.pointerref, Tuple{Vararg{Any}})
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_inaccessiblememonly(effects)
+end
+let effects = Base.infer_effects(Core.Intrinsics.pointerset, Tuple{Vararg{Any}})
+    @test Compiler.is_consistent(effects)
+    @test !Compiler.is_effect_free(effects)
+end
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[Ptr{Int}, UInt])
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[Ptr{Int}, UInt])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[UInt, UInt])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[UInt, UInt])
+@test Compiler.is_nothrow(Base.infer_effects(+, Tuple{Ptr{UInt8}, UInt}))
+# effects modeling for atomic intrinsics
+# these functions especially need to be marked !effect_free since they imply synchronization
+for atomicfunc = Any[
+        Core.Intrinsics.atomic_pointerref,
+        Core.Intrinsics.atomic_pointerset,
+        Core.Intrinsics.atomic_pointerswap,
+        Core.Intrinsics.atomic_pointerreplace,
+        Core.Intrinsics.atomic_fence]
+    @test !Compiler.is_effect_free(Base.infer_effects(atomicfunc, Tuple{Vararg{Any}}))
+end
+
+# effects modeling for intrinsics that can do arbitrary things
+let effects = Base.infer_effects(Core.Intrinsics.llvmcall, Tuple{Vararg{Any}})
+    @test effects == Compiler.Effects()
+end
+let effects = Base.infer_effects(Core.Intrinsics.atomic_pointermodify, Tuple{Vararg{Any}})
+    @test effects == Compiler.Effects()
+end
+
+# JuliaLang/julia#57780
+let effects = Base.infer_effects(Base.unsetindex!, (MemoryRef{String},))
+    @test !Compiler.is_effect_free(effects)
+end
+
+# builtin functions that can do arbitrary things should have the top effects
+@test Base.infer_effects(Core._call_in_world_total, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(Core.invoke_in_world, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(invokelatest, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(invoke, Tuple{Vararg{Any}}) == Compiler.Effects()
+
+bitsizeof_int() = Core.bitsizeof(Int)
+let effects = Base.infer_effects(bitsizeof_int)
+    @test Compiler.is_foldable_nothrow(effects)
+    @test Compiler.is_inaccessiblememonly(effects)
+end
+
+# Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
+let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
+        Core._svec_ref(svec, i)
+    end
+    @test Compiler.is_consistent(effects)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+end
+
+@test Compiler.is_nothrow(Base.infer_effects(length, (Core.SimpleVector,)))
+
+
+# https://github.com/JuliaLang/julia/issues/60009
+function null_offset(offset)
+    Ptr{UInt8}(C_NULL) + offset
+end
+@test null_offset(Int(100)) == Ptr{UInt8}(UInt(100))
+
+# https://github.com/JuliaLang/julia/issues/61435
+function catch_error_61435(f, x)
+    try
+        f(x)
+    catch
+        return :caught
+    end
+end
+let f = (x) -> Core.Intrinsics.sext_int(Int16, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (Int8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
+    @test catch_error_61435(f, Int16(0)) === :caught
+end
+let f = (x) -> Core.Intrinsics.zext_int(UInt16, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (UInt8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (UInt16,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (UInt32,)))
+    @test catch_error_61435(f, UInt16(0)) === :caught
+end
+let f = (x) -> Core.Intrinsics.trunc_int(Int16, x)
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
+    @test Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
+    @test catch_error_61435(f, Int16(0)) === :caught
+end
+
+# Intrinsic width checks use logical primitive widths rather than storage sizes.
+primitive type EffectsUInt17 17 end
+primitive type EffectsUInt23 23 end
+let f = (x) -> Core.Intrinsics.bitcast(EffectsUInt17, x)
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt23,)))
+    @test Base.infer_exception_type(f, (EffectsUInt23,)) === ErrorException
+    @test !fully_eliminated((EffectsUInt23,)) do x
+        f(x)
+        return nothing
+    end
+end
+let f = (x) -> Core.Intrinsics.zext_int(EffectsUInt23, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt17,)))
+end
+let f = (x) -> Core.Intrinsics.sext_int(EffectsUInt23, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt17,)))
+end
+let f = (x) -> Core.Intrinsics.trunc_int(EffectsUInt17, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt23,)))
+end
+
+# issue #57324
+module Issue57324
+struct T <: AbstractVector{Float64}
+    m::Memory{UInt64}
+end
+function f(w)
+    r = Base.OneTo(w.m[1])
+    setindex!(w, 0.0, r[1])
+end
+Base.setindex!(w::T, v, i::Int) = _setindex!(w, i)
+function _setindex!(w, i)
+    w.m[w.m[1]] = 0 > i ? nothing : 0
+    w
+end
+Base.size(::T) = (0,)
+end
+let effects = Base.infer_effects(Issue57324.f, (Issue57324.T,))
+    @test Compiler.is_terminates(effects)
+    @test Compiler.is_notaskstate(effects)
+    @test Compiler.is_nortcall(effects)
+end
+
+# issue #61590
+@test !Compiler.is_consistent(Base.infer_effects(getproperty, (Core.TypeName, Symbol)))
+@test !Compiler.is_consistent(Base.infer_effects(getfield, (Core.TypeName, Symbol)))
+
+# task_result_type effects modeling (should have !consistent effect)
+let effects = Base.infer_effects(Core.task_result_type, (Task,))
+    @test !Compiler.is_consistent(effects)  # !consistent bit should be set
+    @test Compiler.is_effect_free(effects)
+    @test Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+end
+let effects = Base.infer_effects(Core.task_result_type, (Union{Task,Int},))
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+end
+for argtypes in ((), (Int,), (Task, Task))
+    @test !Compiler.is_nothrow(Base.infer_effects(Core.task_result_type, argtypes))
+end
+
+# Core._task effects modeling: creating a task terminates and has no UB, but
+# accesses task state (scope inheritance, parent RNG split) and may throw
+let effects = Base.infer_effects(Core._task, (Function, Int))
+    @test !Compiler.is_consistent(effects)
+    @test !Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+    @test !Compiler.is_notaskstate(effects)
+    @test Compiler.is_noub(effects)
+end
+
+# `Base.Experimental.Const` indexing goes through `Core.const_memoryrefget` (#63129) and must
+# keep the effects of the corresponding `Array` indexing
+let CT = Base.Experimental.Const{Float64,2}
+    @test Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (CT, Int)))
+    @test Compiler.is_effect_free(Base.infer_effects(getindex, (CT, Int)))
+    @test Compiler.is_effect_free(Base.infer_effects(getindex, (CT, Int, Int)))
+end
+
+# Every `*_partition` builtin the reformulation pass emits must have its effects modeled by
+# `builtin_effects`, so that re-deriving the flags of a reformulated statement is no more
+# pessimistic than the `getglobal`/`setglobal!` it replaced.
+module PartitionEffects
+    const c = 42
+    global g::Int = 1
+end
+let 𝕃 = Compiler.SimpleInferenceLattice.instance,
+    Const = Compiler.Const,
+    part(name) = Base.lookup_binding_partition(Base.get_world_counter(),
+                     convert(Core.Binding, GlobalRef(PartitionEffects, name)))
+    for f in (Core.getglobal_partition, Core.setglobal_partition, Core.swapglobal_partition,
+              Core.replaceglobal_partition, Core.setglobalonce_partition,
+              Core.isdefinedglobal_partition, Core.depwarn_partition)
+        @test f in Compiler._EFFECTS_KNOWN_BUILTINS
+    end
+
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :c)), Const(part(:c)), Const(:monotonic)], Int)
+    @test Compiler.is_effect_free(effects)
+    @test Compiler.is_consistent(effects)
+    @test !Compiler.is_nothrow(effects) # the memory order argument may be invalid
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :g)), Const(part(:g)), Const(:monotonic)], Int)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_consistent(effects)
+    # Only a plain store is `:consistent`; the read-modify-write forms return the old value.
+    for f in (Core.setglobal_partition, Core.swapglobal_partition, Core.replaceglobal_partition,
+              Core.setglobalonce_partition)
+        effects = Compiler.builtin_effects(𝕃, f, Any[Const(part(:g)), Int], Int)
+        @test !Compiler.is_effect_free(effects)
+        @test Compiler.is_consistent(effects) === (f === Core.setglobal_partition)
+    end
+    Base.deprecate(PartitionEffects, :c)
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :c)), Const(part(:c)), Const(:monotonic)], Int)
+    @test !Compiler.is_effect_free(effects)
+    Base.deprecate(PartitionEffects, :c, 0)
+end

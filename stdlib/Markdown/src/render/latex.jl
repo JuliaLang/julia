@@ -32,10 +32,11 @@ function latex(io::IO, header::Header{l}) where l
     println(io)
 end
 
-function latex(io::IO, code::Code)
-    if code.language == "styled"
-        code = Code("", String(styled(code.code)))
+function latex(io::IO, code′::Code)
+    if code′.language == "styled"
+        code′ = Code("", String(styled(code′.code)))
     end
+    code = code′
     occursin("\\end{verbatim}", code.code) && error("Cannot include \"\\end{verbatim}\" in a latex code block")
     wrapblock(io, "verbatim") do
         println(io, code.code)
@@ -95,6 +96,7 @@ function latex(io::IO, md::List)
     pad = ndigits(md.ordered + length(md.items)) + 2
     fmt = n -> (isordered(md) ? "[$(rpad("$(n + md.ordered - 1).", pad))]" : "")
     wrapblock(io, "itemize") do
+        # TODO: add support for tight vs. loose lists
         for (n, item) in enumerate(md.items)
             print(io, "\\item$(fmt(n)) ")
             latex(io, item)
@@ -129,6 +131,16 @@ function latexinline(io::IO, md::Italic)
     wrapinline(io, "emph") do
         latexinline(io, md.text)
     end
+end
+
+function latexinline(io::IO, md::Strikethrough)
+    wrapinline(io, "sout") do  # requires the ulem package
+        latexinline(io, md.text)
+    end
+end
+
+function latexinline(io::IO, br::LineBreak)
+    println(io, "\\\\")
 end
 
 function latexinline(io::IO, md::Image)
