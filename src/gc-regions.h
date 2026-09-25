@@ -59,6 +59,21 @@ typedef struct _jl_gc_region_state_t {
     small_arraylist_t mallocarrays;        // memories with malloc'd data of the region
 } jl_gc_region_state_t;
 
+// --- the runtime's own allocations ------------------------------------------
+// What the runtime allocates on behalf of a task outlives any window of the
+// task: it belongs to region 0. A borrow installs region n for the next
+// allocations of the thread and changes no window state; a task must not
+// switch inside one. jl_gc_region_suspend is the borrow of region 0, for
+// the lazily initialized state of Base (lock.jl), whose slow path can park
+// the task: the window stays open, so the task stays on its thread. A zone
+// closes the window and reopens it, so the task may switch inside; the
+// runtime's own work (gf.c, jltypes.c) runs in a zone.
+JL_DLLEXPORT int jl_gc_region_suspend(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_region_resume(int parked) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_gc_region_borrow(int n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_region_unborrow(int lent) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_gc_region_zone_enter(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_region_zone_leave(int saved) JL_NOTSAFEPOINT;
 
 // --- the exported API ------------------------------------------------------
 // Open a window on region n (n = 0 closes it). Returns the region that was
@@ -67,6 +82,8 @@ JL_DLLEXPORT int jl_gc_region_set(int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_gc_region_current(void) JL_NOTSAFEPOINT;
 // Close the window of a task that reaches its end (task.c).
 void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
+// The region of an object.
+JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v) JL_NOTSAFEPOINT;
 #ifdef WITH_GC_REGION_BARRIER
 // The escape barrier, called by the write barrier while a region is in use.
 JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
@@ -92,6 +109,9 @@ int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 // Install a task's parked region on a thread at a task switch.
 void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
+// Install a borrowed region on a thread (jl_gc_region_borrow); the region
+// becomes live on this heap.
+void jl_gc_region_install_borrow(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
 // The brackets of a stock collection: park every open window before it,
 // hand every quarantined region to the stock collector, and install the
 // windows again after it; after each pass, clear the marks the pass left on
@@ -146,6 +166,14 @@ STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) JL_NO
 
 // Without the regions each hook expands to no code, and the runtime
 // compiles to the stock runtime.
+#define jl_gc_region_borrow(n) 0
+#define jl_gc_region_unborrow(lent) ((void)(lent))
+#define jl_gc_region_of(v) 0
+#define jl_gc_region_suspend() 0
+#define jl_gc_region_resume(parked) ((void)(parked))
+#define jl_gc_region_zone_enter() 0
+#define jl_gc_region_zone_leave(saved) ((void)(saved))
+#define jl_gc_region_current() 0
 #define jl_gc_region_close_window(ct) ((void)(ct))
 #define jl_gc_region_task_switch(ptls, lastt, t) ((void)0)
 #define jl_gc_region_finalizers_begin(ptls) 0
