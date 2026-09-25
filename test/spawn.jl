@@ -930,6 +930,16 @@ end
     end
 end
 
+# `kill` by process ID
+let p = run(`$sleepcmd 100`, wait=false)
+    kill(getpid(p), 0) # only checks that the process exists
+    @test_throws Base.IOError kill(getpid(p), typemax(Cint))
+    kill(getpid(p))
+    wait(p)
+    @test !success(p)
+    @test_throws Base.IOError kill(getpid(p))
+end
+
 # Second return of shell_parse
 let s = "   \$abc   "
     @test Base.shell_parse(s)[2] === findfirst('a', s)

@@ -212,6 +212,8 @@ New library features
 * The signal number constants `Base.SIGHUP`, `Base.SIGTERM` etc. are now public and documented, and
   `SIGUSR2`, `SIGALRM`, `SIGCHLD`, `SIGCONT` and `SIGWINCH` were added. `Base.sigrtmin()` and
   `Base.sigrtmax()` give the range of real-time signals where the platform has them ([#63344]).
+* `kill(pid::Integer, signum)` sends a signal to any process by its ID, not only to a `Process`
+  started by Julia ([#63344]).
 * `Base.signal_name(signum)` returns a signal's name, such as `"SIGTERM"` ([#63344]).
 
 Standard library changes
