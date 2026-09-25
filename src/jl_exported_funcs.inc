@@ -426,7 +426,11 @@
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
+    XX(jl_signal_is_reserved) \
     XX(jl_signal_name) \
+    XX(jl_signal_take_pending) \
+    XX(jl_signal_watch_start) \
+    XX(jl_signal_watch_stop) \
     XX(jl_sigrtmax) \
     XX(jl_sigrtmin) \
     XX(jl_spawn) \

@@ -840,11 +840,68 @@ JL_DLLEXPORT const char *jl_signal_name(int sig)
     return jl_signal_names(sig).name;
 }
 
+// Above the largest real-time signal on any supported platform.
+#define JL_MAX_WATCHED_SIGNAL 128
+
+// Counts of the open `SignalCondition`s, all of them and those that replace the usual effect.
+static _Atomic(int) signal_watchers[JL_MAX_WATCHED_SIGNAL + 1];
+static _Atomic(int) signal_interceptors[JL_MAX_WATCHED_SIGNAL + 1];
+static _Atomic(int) signal_pending[JL_MAX_WATCHED_SIGNAL + 1];
+
+// Safe to call from a signal handler. Returns whether the signal's usual effect should be skipped.
+static int jl_notify_signal_watchers(int sig) JL_NOTSAFEPOINT
+{
+    if (sig <= 0 || sig > JL_MAX_WATCHED_SIGNAL || jl_atomic_load_acquire(&signal_watchers[sig]) == 0)
+        return 0;
+    jl_atomic_store_release(&signal_pending[sig], 1);
+    jl_wake_signal_watchers();
+    return jl_atomic_load_relaxed(&signal_interceptors[sig]) > 0;
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
 #include "signals-unix.c"
 #endif
+
+// The following are called with the IO lock held.
+
+JL_DLLEXPORT int jl_signal_watch_start(int sig, int intercept, uv_async_cb cb)
+{
+    if (jl_signal_is_reserved(sig) || sig > JL_MAX_WATCHED_SIGNAL)
+        return UV_EINVAL;
+    jl_init_signal_watchers(cb);
+    // with --handle-signals=no, leave signal dispositions alone and never notify watchers
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON &&
+            jl_atomic_load_relaxed(&signal_watchers[sig]) == 0) {
+        int err = jl_signal_watch_install(sig);
+        if (err != 0)
+            return err;
+    }
+    if (intercept)
+        jl_atomic_fetch_add_relaxed(&signal_interceptors[sig], 1);
+    jl_atomic_fetch_add(&signal_watchers[sig], 1);
+    return 0;
+}
+
+JL_DLLEXPORT void jl_signal_watch_stop(int sig, int intercept)
+{
+    if (intercept)
+        jl_atomic_fetch_add_relaxed(&signal_interceptors[sig], -1);
+    if (jl_atomic_fetch_add(&signal_watchers[sig], -1) == 1 &&
+            jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_signal_watch_uninstall(sig);
+}
+
+// Returns a signal that arrived since it was last returned, or 0 if there is none.
+JL_DLLEXPORT int jl_signal_take_pending(void)
+{
+    for (int sig = 1; sig <= JL_MAX_WATCHED_SIGNAL; sig++) {
+        if (jl_atomic_load_relaxed(&signal_pending[sig]) && jl_atomic_exchange(&signal_pending[sig], 0))
+            return sig;
+    }
+    return 0;
+}
 
 // jl_send_reset_signal is the static per-platform delivery defined by the
 // file included above; `reset_code` becomes the reset point's setjmp return.
