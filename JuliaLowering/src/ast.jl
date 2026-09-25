@@ -51,7 +51,7 @@ Lexical scope ID
 const ScopeId = Int
 
 const DEFAULT_NODE = SyntaxTree(
-    K"None", nothing, nothing, LineNumberNode(0),
+    :none, nothing, nothing, LineNumberNode(0),
     SyntaxContext(JuliaLowering, (0, 0)))
 
 """
@@ -89,7 +89,7 @@ macro mknode(attrs, old)
         push!(seen_attrs, aname)
         out_args[Base.fieldindex(SyntaxTree, aname)] = aval
     end
-    old === DEFAULT_NODE && !((:kind, :source, :context) ⊆ seen_attrs) &&
+    old === DEFAULT_NODE && !((:head, :source, :context) ⊆ seen_attrs) &&
         throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
 
     out = Expr(:let,
@@ -108,52 +108,45 @@ function _debug_check_attrs(x)
     x
 end
 
-function JuliaSyntax.newleaf(prov::SyntaxTree, k::Kind, @nospecialize(value))
+function JuliaSyntax.newleaf(prov::SyntaxTree, k::Symbol, @nospecialize(value))
     context = prov.context
-    @jl_assert k === K"Value" || value !== nothing (
+    @jl_assert k === :value || value !== nothing (
         prov, "only Value may contain nothing")
-    if k == K"Identifier" || k == K"BindingId" || k == K"Value" ||
-        k == K"core" || k == K"top" || k == K"Symbol" || k == K"globalref" ||
-        k == K"Placeholder" || k == K"label" || k == K"symboliclabel" ||
-        k == K"symbolicgoto"
-        @mknode(;kind=k, source=prov, context, value)
-    elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
-                     softscope nothing"
-        @mknode(;kind=k, source=prov, context)
+    if k == :identifier || k == :bindingid || k == :value ||
+        k == :core || k == :top || k == :symbol || k == :globalref ||
+        k == :placeholder || k == :label || k == :symboliclabel ||
+        k == :symbolicgoto
+        @mknode(;head=k, source=prov, context, value)
+    elseif k in (:tombstone, :sourcelocation, :latestworld, :latestworld_if_toplevel,
+                 :softscope, :nothing)
+        @mknode(;head=k, source=prov, context)
     else
-        val = k == K"Integer" ? convert(Int,     value) :
-              k == K"Float"   ? convert(Float64, value) :
-              k == K"String"  ? convert(String,  value) :
-              k == K"Char"    ? convert(Char,    value) :
-              k == K"Bool"    ? value                   :
-              k == K"LambdaBindings" ? value :
-              k == K"Slots" ? value :
-              k == K"SSAValue" ? value :
-              k == K"slot" ? value :
-              k == K"static_parameter" ? value :
-              k == K"VERSION" ? value :
+        val = k == :lambdabindings ? value :
+              k == :slots ? value :
+              k == :ssavalue ? value :
+              k == :slot ? value :
+              k == :static_parameter ? value :
+              k == :version ? value :
               error("Unexpected leaf kind `$k`")
-        @mknode(;kind=k, source=prov, value=val, context)
+        @mknode(;head=k, source=prov, value=val, context)
     end
 end
 
 function syntax_name(st)
-    @jl_assert kind(st) in KSet"""
-    Identifier Placeholder Symbol core top globalref symboliclabel symbolicgoto
-    unknown_head
-    """ st
+    @jl_assert head(st) in (:identifier, :placeholder, :symbol, :core, :top, :globalref,
+                            :symboliclabel, :symbolicgoto) st
     st.value::String
 end
 
 # Convenience functions to create leaf nodes referring to identifiers within
 # the Core and Top modules.
-nothing_(ctx, ex) = newleaf(ex, K"nothing")
+nothing_(ctx, ex) = newleaf(ex, :nothing)
 
 # Assign `ex` to an SSA variable.
 # Return (variable, assignment_node)
 function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
     var = ssavar(ctx, ex, name)
-    assign_var = @mknode(;source=ex, context=ex.context, kind=K"=",
+    assign_var = @mknode(;source=ex, context=ex.context, head=:(=),
                          children=SyntaxList(var, ex))
     var, assign_var
 end
@@ -163,7 +156,7 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
         return ex
     end
     var = ssavar(ctx, ex, name)
-    push!(stmts, newnode(ex, K"=", SyntaxList(var, ex)))
+    push!(stmts, newnode(ex, :(=), SyntaxList(var, ex)))
     var
 end
 
@@ -172,7 +165,7 @@ end
 
 # Fallbacks to give comprehensible error messages for use with the @ast macro
 function _push_nodeid!(::Vector{SyntaxTree}, ex)
-    error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::K\"your_intended_kind\"?`")
+    error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::your_intended_head`?")
 end
 function _push_nodeid!(::Vector{SyntaxTree}, ex::AbstractVector{<:SyntaxTree})
     error("Attempt to use vector as an AST node. Did you mean to splat this? (content: `$(repr(ex))`)")
@@ -192,11 +185,11 @@ function _append_nodeids!(ids::Vector{SyntaxTree}, vals::SyntaxList)
     append!(ids, vals)
 end
 
-function _match_kind(srcref, ex, jl_line)
+function _match_head(srcref, ex, jl_line, leaf::Bool)
     kws = Expr(:parameters)
     seen = Set{Symbol}()
     if Meta.isexpr(ex, :call)
-        kind = ex.args[1]
+        h = ex.args[1]
         args = ex.args[2:end]
         if Meta.isexpr(args[1], :parameters)
             for a in args[1].args
@@ -212,10 +205,11 @@ function _match_kind(srcref, ex, jl_line)
             error("Unexpected srcref argument in `$ex`")
         end
     else
-        kind = ex
+        h = ex
     end
+    leaf && h isa Symbol && (h = QuoteNode(h))
     :source in seen || push!(kws.args, Expr(:kw, :source, srcref))
-    :kind in seen || push!(kws.args, Expr(:kw, :kind, kind))
+    :head in seen || push!(kws.args, Expr(:kw, :head, h))
     :context in seen || push!(kws.args, Expr(
         :kw, :context, Expr(:., srcref, QuoteNode(:context))))
     DEBUG && push!(kws.args, Expr(:kw, :jl_source, jl_line))
@@ -232,15 +226,15 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
             val = nothing
             kindspec = tree.args[1]
         end
-        let kws = _match_kind(srcref, kindspec, jl_line)
+        let kws = _match_head(srcref, kindspec, jl_line, true)
             !isnothing(val) && push!(kws.args, Expr(:kw, :value, val))
             Expr(:macrocall, var"@mknode", jl_line.value, kws)
         end
     elseif Meta.isexpr(tree, :call) && tree.args[1] === :(=>)
         # Leaf node with copied attributes
-        kind = tree.args[3]
+        h = tree.args[3]
         srcref2 = tree.args[2]
-        kws = Expr(:parameters, Expr(:kw, :kind, kind), Expr(:kw, :children, nothing))
+        kws = Expr(:parameters, Expr(:kw, :head, h), Expr(:kw, :children, nothing))
         DEBUG && push!(kws.args, Expr(:kw, :jl_source, jl_line))
         Expr(:macrocall, var"@mknode", jl_line.value, kws, srcref2)
     elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
@@ -265,7 +259,7 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
             end
         end
         push!(child_stmts, :(child_ids))
-        let kws = _match_kind(srcref, flatargs[1], jl_line)
+        let kws = _match_head(srcref, flatargs[1], jl_line, false)
             push!(kws.args, Expr(:kw, :children, children_ex))
             Expr(:macrocall, var"@mknode", jl_line.value, kws)
         end
@@ -297,40 +291,40 @@ Syntactic s-expression shorthand for constructing a `SyntaxTree` AST.
 * `srcref` - Reference to the source code from which this AST was derived.
 
 The `tree` contains syntax of the following forms:
-* `[kind child₁ child₂]` - construct an interior node with children
-* `value :: kind`        - construct a leaf node
-* `ex => kind`           - convert a leaf node to the given `kind`, copying attributes
+* `[:head child₁ child₂]` - construct an interior node with children
+* `value :: head`        - construct a leaf node
+* `ex => :head`          - convert a leaf node to the given head, copying attributes
                            from it and also using `ex` as the source reference.
 * `var := ex`            - Set `var=ssavar(...)` and return an assignment node `\$var=ex`.
                            `var` may be used outside `@ast`
 * `cond ? ex1 : ex2`     - Conditional; `ex1` and `ex2` will be recursively expanded.
                            `if ... end` and `if ... else ... end` also work with this.
 
-Any `kind` can be replaced with an expression of the form
-* `kind(srcref)` - override the source reference for this node and its children
-* `kind(;attr=val)` - set an additional attribute
-* `kind(srcref; attr₁=val₁, attr₂=val₂)` - the general form
+Any `head` can be replaced with an expression of the form
+* `head(srcref)` - override the source reference for this node and its children
+* `head(;attr=val)` - set an additional attribute
+* `head(srcref; attr₁=val₁, attr₂=val₂)` - the general form
 
 
 # Examples
 
 ```
 @ast ctx srcref [
-   K"toplevel"
-   [K"using"
-       [K"importpath"
-           "Base"       ::K"Identifier"(src)
+   :toplevel
+   [:using
+       [:importpath
+           "Base"       ::identifier(src)
        ]
    ]
-   [K"function"
-       [K"call"
-           "eval"       ::K"Identifier"
-           "x"          ::K"Identifier"
+   [:function
+       [:call
+           "eval"       ::identifier
+           "x"          ::identifier
        ]
-       [K"call"
-           "eval"       ::K"core"
-           mn           =>K"Identifier"
-           "x"          ::K"Identifier"
+       [:call
+           "eval"       ::core
+           mn           =>:identifier
+           "x"          ::identifier
        ]
    ]
 ]
@@ -355,29 +349,29 @@ name_hint(name) = JuliaSyntax.CompileHints(:name_hint, name)
 # Predicates and accessors working on expression trees
 
 function is_quoted(ex)
-    kind(ex) in KSet"Symbol quote top core globalref inert
-                     syntaxinert meta inbounds inline noinline loopinfo"
+    head(ex) in (:symbol, :quote, :top, :core, :globalref, :inert,
+                 :syntaxinert, :meta, :inbounds, :inline, :noinline, :loopinfo)
 end
 
 function extension_type(ex)
-    @jl_assert kind(ex) == K"assert" ex
+    @jl_assert head(ex) == :assert ex
     @jl_assert numchildren(ex) >= 1 ex
-    @jl_assert kind(ex[1]) == K"Symbol" ex
+    @jl_assert head(ex[1]) == :symbol ex
     syntax_name(ex[1])
 end
 
 function is_eventually_call(ex::SyntaxTree)
-    k = kind(ex)
-    return k == K"call" || ((k == K"where" || k == K"::") && is_eventually_call(ex[1]))
+    k = head(ex)
+    return k == :call || ((k == :where || k == :(::)) && is_eventually_call(ex[1]))
 end
 
 function find_parameters_ind(exs)
     i = length(exs)
     while i >= 1
-        k = kind(exs[i])
-        if k == K"parameters"
+        k = head(exs[i])
+        if k == :parameters
             return i
-        elseif k != K"do"
+        elseif k != :do
             break
         end
         i -= 1
@@ -394,54 +388,53 @@ function has_parameters(args::AbstractVector)
 end
 
 function any_assignment(exs)
-    any(kind(e) == K"=" for e in exs)
+    any(head(e) == :(=) for e in exs)
 end
 
 function is_valid_modref(ex)
-    return kind(ex) == K"." && kind(ex[2]) == K"Symbol" &&
-           (kind(ex[1]) == K"Identifier" || is_valid_modref(ex[1]))
+    return head(ex) == :. && head(ex[2]) == :symbol &&
+           (head(ex[1]) == :identifier || is_valid_modref(ex[1]))
 end
 
 function is_core_Any(ex)
-    kind(ex) === K"core" && syntax_name(ex) === "Any"
+    head(ex) === :core && syntax_name(ex) === "Any"
 end
 
 function is_simple_atom(ctx, ex)
-    k = kind(ex)
+    k = head(ex)
     # TODO thismodule
-    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) ||
-        k == K"nothing"
+    k == :symbol || k == :value || is_ssa(ctx, ex) || k == :nothing
 end
 
 function is_identifier_like(ex)
-    k = kind(ex)
-    k == K"Identifier" || k == K"BindingId" || k == K"Placeholder"
+    k = head(ex)
+    k == :identifier || k == :bindingid || k == :placeholder
 end
 
 function decl_var(ex)
-    kind(ex) == K"::" ? ex[1] : ex
+    head(ex) == :(::) ? ex[1] : ex
 end
 
 # Given the signature of a `function`, return the symbol that will ultimately
 # be assigned to in local/global scope, if any.
 function assigned_function_name(ex)
-    while kind(ex) == K"where"
+    while head(ex) == :where
         # f() where T
         ex = ex[1]
     end
-    if kind(ex) == K"::" && numchildren(ex) == 2
+    if head(ex) == :(::) && numchildren(ex) == 2
         # f()::T
         ex = ex[1]
     end
-    if kind(ex) != K"call"
+    if head(ex) != :call
         throw(LoweringError(ex, "Expected call syntax in function signature"))
     end
     ex = ex[1]
-    if kind(ex) == K"curly"
+    if head(ex) == :curly
         # f{T}()
         ex = ex[1]
     end
-    if kind(ex) == K"::" || kind(ex) == K"."
+    if head(ex) == :(::) || head(ex) == :.
         # (obj::CallableType)(args)
         # A.b.c(args)
         nothing
@@ -455,14 +448,14 @@ end
 # Remove empty parameters block, eg, in the arg list of `f(x, y;)`
 function remove_empty_parameters(args)
     i = length(args)
-    while i > 0 && kind(args[i]) == K"parameters" && numchildren(args[i]) == 0
+    while i > 0 && head(args[i]) == :parameters && numchildren(args[i]) == 0
         i -= 1
     end
     args[1:i]
 end
 
 function to_symbol(ctx, ex)
-    @ast ctx ex ex=>K"Symbol"
+    @ast ctx ex ex=>:symbol
 end
 
 #-------------------------------------------------------------------------------

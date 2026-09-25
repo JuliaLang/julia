@@ -95,16 +95,16 @@ end
     @test jl_eval(
         test_mod, raw"@legacy_quote_to_syntax :x"; edition=JL_NEW_EDITION) isa SyntaxTree
     @test jl_eval(
-        test_mod, raw"@legacy_quote_to_syntax :x"; edition=JL_NEW_EDITION) |> kind === K"Identifier"
+        test_mod, raw"@legacy_quote_to_syntax :x"; edition=JL_NEW_EDITION) |> head === :identifier
     @test jl_eval(
         test_mod, raw"@legacy_quote_to_syntax :($1)"; edition=JL_NEW_EDITION) isa SyntaxTree
     @test jl_eval(
-        test_mod, raw"@legacy_quote_to_syntax :($1)"; edition=JL_NEW_EDITION) |> kind === K"Value"
+        test_mod, raw"@legacy_quote_to_syntax :($1)"; edition=JL_NEW_EDITION) |> head === :value
 
     @test jl_eval(
         test_mod, raw"@legacy_quote_to_syntax :(x+1)"; edition=JL_NEW_EDITION) isa SyntaxTree
     @test jl_eval(
-        test_mod, raw"@legacy_quote_to_syntax :(x+1)"; edition=JL_NEW_EDITION) |> kind === K"call"
+        test_mod, raw"@legacy_quote_to_syntax :(x+1)"; edition=JL_NEW_EDITION) |> head === :call
 
     # compat mode makes standard quote
     @test jl_eval(
@@ -202,13 +202,13 @@ begin
     end
 end
 """; edition=JL_NEW_EDITION)
-@test ex ≈ @ast_ [K"block"
-    [K"call"
-        "f"::K"Identifier"
-        11::K"Value"
-        [K"call"
-            "g"::K"Identifier"
-            "z"::K"Identifier"
+@test ex ≈ @ast_ [:block
+    [:call
+        "f"::identifier
+        11::value
+        [:call
+            "g"::identifier
+            "z"::identifier
         ]
     ]
 ]
@@ -222,7 +222,7 @@ let
     field_name = @legacy_quote_to_syntax :(a)
     @legacy_quote_to_syntax :(x.\$field_name)
 end
-"""; edition=JL_NEW_EDITION) ≈ @ast_ [K"." "x"::K"Identifier" [K"inert" "a"::K"Identifier"]]
+"""; edition=JL_NEW_EDITION) ≈ @ast_ [:. "x"::identifier [:inert "a"::identifier]]
 @test jl_eval(test_mod, """
 let
     field_name = @legacy_quote_to_syntax :(a)
@@ -324,11 +324,11 @@ let
     @legacy_quote_to_syntax :(f(\$x, \$y, z))
 end
 """; edition=JL_NEW_EDITION)
-@test symbol_interp ≈ @ast_ [K"call"
-    "f"::K"Identifier"
-    "xx"::K"Identifier"
-    "yy"::K"Identifier"
-    "z"::K"Identifier"
+@test symbol_interp ≈ @ast_ [:call
+    "f"::identifier
+    "xx"::identifier
+    "yy"::identifier
+    "z"::identifier
 ]
 @test sourcetext(symbol_interp[2]) == raw"$x"
 @test sourcetext(symbol_interp[3]) == "yy"

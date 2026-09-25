@@ -33,15 +33,15 @@ This is called on the outermost lambda, and recursively processes nested lambdas
 """
 function analyze_def_and_use!(ctx, ex)
     @stm ex begin
-        [K"lambda" _ _ _ body _...] -> begin
+        [:lambda _ _ _ body _...] -> begin
             _analyze_nested_lambdas!(ctx, body)
             _analyze_lambda_vars!(ctx, ex)
         end
-        [K"toplevel_lambda" _ _ _ body _...] -> begin
+        [:toplevel_lambda _ _ _ body _...] -> begin
             _analyze_nested_lambdas!(ctx, body)
             _analyze_lambda_vars!(ctx, ex)
         end
-        [K"generated_lambda" _ _ _ body _...] -> begin
+        [:generated_lambda _ _ _ body _...] -> begin
             _analyze_nested_lambdas!(ctx, body)
             _analyze_lambda_vars!(ctx, ex)
         end
@@ -49,8 +49,8 @@ function analyze_def_and_use!(ctx, ex)
 end
 
 function _analyze_nested_lambdas!(ctx, ex)
-    k = kind(ex)
-    if k in KSet"lambda toplevel_lambda generated_lambda"
+    k = head(ex)
+    if k === :lambda || k === :toplevel_lambda || k === :generated_lambda
         analyze_def_and_use!(ctx, ex)
     elseif !is_leaf(ex) && !is_quoted(ex)
         for child in children(ex)
@@ -177,37 +177,37 @@ end
 
 # Returns whether e contained a symboliclabel
 function du_visit!(ctx, state::DefUseState, e)
-    k = kind(e)
+    k = head(e)
 
-    if k == K"BindingId"
+    if k == :bindingid
         du_mark_used!(state, syntax_id(e))
         return false
 
-    elseif k == K"symboliclabel"
+    elseif k == :symboliclabel
         # Must check BEFORE is_leaf since symboliclabel is a leaf node
         du_kill!(state)
         return true
 
-    elseif k == K"label"
+    elseif k == :label
         du_kill!(state)
         return false
 
-    elseif k in KSet"break symbolicgoto"
+    elseif k === :break || k === :symbolicgoto
         # this kill!() is not required for soundness since these are branch points
         # not merge points, but it's here for parity with flisp
         du_kill!(state)
         return false
 
-    elseif k == K"="
+    elseif k == :(=)
         # Visit RHS first, then record assignment
         has_label = du_visit!(ctx, state, e[2])
         lhs = e[1]
-        if kind(lhs) == K"BindingId"
+        if head(lhs) == :bindingid
             du_assign!(state, syntax_id(lhs))
         end
         return has_label
 
-    elseif k == K"lambda"
+    elseif k == :lambda
         # Check captures from nested lambda
         for (id, is_capt) in lambda_bindings(e[1]).locals_capt
             if is_capt
@@ -217,19 +217,19 @@ function du_visit!(ctx, state::DefUseState, e)
         # Don't recurse into nested lambdas - they have their own analysis
         return false
 
-    elseif k == K"local"
+    elseif k == :local
         # Track local declarations for loop handling
-        # Note: For typed locals like `local x::T`, the K"local" node only
+        # Note: For typed locals like `local x::T`, the :local node only
         # contains the BindingId after desugaring. The type info is in
-        # a separate K"decl" node. So we only need to handle K"BindingId" here.
+        # a separate :decl node. So we only need to handle :bindingid here.
         for child in children(e)
-            if kind(child) == K"BindingId"
+            if head(child) == :bindingid
                 du_declare!(state, syntax_id(child))
             end
         end
         return false
 
-    elseif k == K"decl"
+    elseif k == :decl
         # Don't recurse into decl nodes - the BindingId is just a declaration,
         # not a use. We only need to visit the type expression.
         if numchildren(e) >= 2
@@ -237,9 +237,9 @@ function du_visit!(ctx, state::DefUseState, e)
         end
         return false
 
-    elseif k == K"function_decl"
+    elseif k == :function_decl
         # [function_decl] defines and instantiates the closure type
-        @assert kind(e[1]) == K"BindingId"
+        @assert head(e[1]) == :bindingid
         func_id = syntax_id(e[1])
         func_id in state.seen && return false
         ck = ClosureKey(func_id, state.lambda_id)
@@ -252,11 +252,11 @@ function du_visit!(ctx, state::DefUseState, e)
         end
         return false
 
-    elseif k == K"method_defs"
+    elseif k == :method_defs
         # XXX: the assignment is executed after the body, but flisp also makes
         # the mistake of modelling the assignment as dominating the body, so we
         # introduce boxes if it's corrected.
-        if kind(e[1]) === K"BindingId"
+        if head(e[1]) === :bindingid
             du_assign!(state, syntax_id(e[1]))
         end
         has_label = false
@@ -265,16 +265,16 @@ function du_visit!(ctx, state::DefUseState, e)
         end
         return has_label
 
-    elseif k == K"no_method_defs"
+    elseif k == :no_method_defs
         du_assign!(state, syntax_id(e[1]))
         return false
 
-    elseif k == K"return"
+    elseif k == :return
         has_label = numchildren(e) >= 1 ? du_visit!(ctx, state, e[1]) : false
         du_kill!(state) # not necessary, but included for flisp parity
         return has_label
 
-    elseif k in KSet"if elseif trycatchelse tryfinally"
+    elseif k === :if || k === :elseif || k === :trycatchelse || k === :tryfinally
         prev = copy(state.live)
         has_label = false
         for child in children(e)
@@ -290,7 +290,7 @@ function du_visit!(ctx, state::DefUseState, e)
             return false
         end
 
-    elseif k in KSet"_while _do_while"
+    elseif k === :_while || k === :_do_while
         prev = copy(state.live)
         old_decl = du_enter_loop!(state)
         has_label = false
@@ -306,7 +306,7 @@ function du_visit!(ctx, state::DefUseState, e)
             return false
         end
 
-    elseif k == K"symbolicblock"
+    elseif k == :symbolicblock
         # Skip the first child (break target label) - it's not a @goto target
         # No save/restore needed: the body always executes (break just exits early)
         has_label = false
@@ -316,10 +316,10 @@ function du_visit!(ctx, state::DefUseState, e)
         return has_label
 
     elseif is_leaf(e) || is_quoted(e) ||
-        k in KSet"local always_defined meta inbounds boundscheck noinline
-            loopinfo decl with_static_parameters toplevel_butfirst global
-            globalref constdecl atomic isdefined toplevel module error
-            gc_preserve_begin gc_preserve_end export public inline"
+        k in (:local, :always_defined, :meta, :inbounds, :boundscheck, :noinline,
+              :loopinfo, :decl, :with_static_parameters, :toplevel_butfirst, :global,
+              :globalref, :constdecl, :atomic, :isdefined, :toplevel, :module, :error,
+              :gc_preserve_begin, :gc_preserve_end, :export, :public, :inline)
 
         # Forms that don't interact with locals or affect control flow (likely more than is necessary).
         # flisp: `lambda-opt-ignored-exprs`
@@ -349,11 +349,11 @@ function _analyze_lambda_vars!(ctx::VariableAnalysisContext, ex)
 
     state = DefUseState(lambda_bindings(ex[1]).scope_id, ctx, candidates)
     @stm ex begin
-        [K"lambda" _ _ _ body] -> du_visit!(ctx, state, body)
-        [K"lambda" _ _ _ body rett] -> (du_visit!(ctx, state, body);
+        [:lambda _ _ _ body] -> du_visit!(ctx, state, body)
+        [:lambda _ _ _ body rett] -> (du_visit!(ctx, state, body);
                                       du_visit!(ctx, state, rett))
-        [K"toplevel_lambda" _ _ _ body] -> du_visit!(ctx, state, body)
-        [K"generated_lambda" _ _ _ body] -> du_visit!(ctx, state, body)
+        [:toplevel_lambda _ _ _ body] -> du_visit!(ctx, state, body)
+        [:generated_lambda _ _ _ body] -> du_visit!(ctx, state, body)
     end
 
     for id in union(state.live, state.unused)

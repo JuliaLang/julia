@@ -916,7 +916,7 @@ end
 end
 
 @testset "(AI) struct fields named with underscores" begin
-    # Bug in _defaultctors giving lowering a K"lambda"
+    # Bug in _defaultctors giving lowering a :lambda
     m = Module()
     JuliaLowering.include_string(m, """
         struct TextItem

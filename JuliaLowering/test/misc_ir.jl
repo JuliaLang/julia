@@ -32,7 +32,7 @@ x."b"
 
 ########################################
 # Error: Wrong number of children in `.`
-@ast_ [K"." "x"::K"Identifier" "a"::K"Identifier" 3::K"Integer"]
+@ast_ [:. "x"::identifier "a"::identifier 3::value]
 #---------------------
 LoweringError:
 #= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
@@ -252,7 +252,7 @@ LoweringError:
 ########################################
 # Error: Test AST which has no source form and thus must have been constructed
 # programmatically (eg, a malformed if)
-@ast_ [K"if"]
+@ast_ [:if]
 #---------------------
 LoweringError:
 #= line 1 =# - expected (if cond body) or (if cond body else)

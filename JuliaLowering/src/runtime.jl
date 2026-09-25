@@ -33,7 +33,7 @@ end
 end
 
 # Return the current exception. In JuliaLowering we use this rather than the
-# special form `K"the_exception"` to reduce the number of special forms.
+# special form `:the_exception` to reduce the number of special forms.
 Base.@assume_effects :removable function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end
@@ -71,15 +71,15 @@ end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     is_leaf(st) && return st
-    k = kind(st)
-    inner_depth = k == K"syntaxquote" ? depth + 1 :
-        k == K"syntaxunquote" ? depth - 1 : depth
+    k = head(st)
+    inner_depth = k == :syntaxquote ? depth + 1 :
+        k == :syntaxunquote ? depth - 1 : depth
     cs_out = SyntaxList()
     for c in children(st)
-        if kind(c) == K"syntaxunquote" && inner_depth == 0
+        if head(c) == :syntaxunquote && inner_depth == 0
             tup = vals[val_i[] += 1]::Tuple
             @jl_assert numchildren(c) == 1 st
-            @jl_assert kind(c[1]) === K"..." || length(tup) == 1 st
+            @jl_assert head(c[1]) === :... || length(tup) == 1 st
             for v in tup
                 v2 = !(v isa SyntaxTree) ? expr_to_est(v, c) : v
                 push!(cs_out, v2)
@@ -94,7 +94,7 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     # TODO: copy probably not required if immutable
     st = mktree(st)
     val_i = Ref(0)
-    out = __interpolate_syntax((@ast _ st [K"None" st]), 0, vals, val_i)
+    out = __interpolate_syntax((@ast _ st [:none st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
     @jl_assert numchildren(out) == 1 st
     out[1]
@@ -248,8 +248,8 @@ function bind_docs!(type::Type, docstr, lineno::LineNumberNode; field_docs=Core.
 end
 
 """
-Called in the unfortunate cases (K"call", K".", K"Identifier") where docstrings
-change the semantics of the expressions they annotate, no longer requiring the
+Called in the unfortunate cases (call, ., identifier) where docstrings change
+the semantics of the expressions they annotate, no longer requiring the
 expression to execute.
 """
 function bind_static_docs!(mod::Module, name::Symbol, docstr, lnn::LineNumberNode, sigtypes::Type)
@@ -278,7 +278,7 @@ end
 function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
-        id = newleaf(src, K"Identifier", string(a))
+        id = newleaf(src, :identifier, string(a))
         id = est_to_dst_ident(SyntaxCompatContext(), id) # support placeholders
         id = @mknode(id; context=sc)
         push!(out, id)
@@ -332,9 +332,9 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
     ctx2, ex2 = expand_forms_2(ex1, world)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [K"generated_lambda"
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
+    ex2 = @ast ctx2 ex0 [:generated_lambda
+        [:block _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
+        [:block _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
         ex2
     ]
     ctx3, ex3 = resolve_scopes(ctx2, ex2)

@@ -19,12 +19,12 @@ using .JuliaSyntax: SourceAttrType, sourcetext, SyntaxList,
     JL_OLD_EDITION, JL_NEW_EDITION
 using Base: OLDEST_EDITION
 
-using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError,
+using .JuliaLowering: @ast, Bindings, LoweringError, MacroExpansionError,
     ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,
-    is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
+    head, is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
 
 function _source_node(src)
-    SyntaxTree(K"TOMBSTONE", nothing, nothing, src,
+    SyntaxTree(:tombstone, nothing, nothing, src,
                JuliaSyntax.SyntaxContext(JuliaLowering, JL_NEW_EDITION))
 end
 
@@ -37,7 +37,7 @@ end
 
 #-------------------------------------------------------------------------------
 function _format_as_ast_macro(io, ex, indent)
-    k = kind(ex)
+    k = head(ex)
     kind_str = repr(k)
     if !is_leaf(ex)
         println(io, indent, "[", kind_str)
@@ -47,14 +47,14 @@ function _format_as_ast_macro(io, ex, indent)
         end
         println(io, indent, "]")
     else
-        val_str = if k == K"Identifier" || k == K"core" || k == K"top"
+        val_str = if k == :identifier || k == :core || k == :top
             repr(syntax_name(ex))
-        elseif k == K"BindingId"
+        elseif k == :bindingid
             repr(syntax_id(ex))
         else
             repr(get(ex, :value, nothing))
         end
-        println(io, indent, val_str, "::", kind_str)
+        println(io, indent, val_str, "::", k)
     end
 end
 
@@ -135,7 +135,7 @@ function format_ir_for_test(mod, case)
     @assert !case.is_broken
     ex = parsestmt(SyntaxTree, case.input; version=VersionNumber(JL_NEW_EDITION))
     try
-        if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
+        if (head(ex) == :macrocall && head(ex[1]) == :identifier &&
             syntax_name(ex[1]) == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
@@ -265,7 +265,7 @@ docstrings_equal(d1::Docs.DocStr, d2) = docstrings_equal(Docs.parsedoc(d1), d2)
 function block_reduction_1(is_lowering_error::Function, orig_ex::ST, ex::ST,
                            curr_path = Int[]) where {ST <: SyntaxTree}
     if !is_leaf(ex)
-        if kind(ex) == K"block"
+        if head(ex) == :block
             for i in 1:numchildren(ex)
                 trial_ex = delete_block_child(orig_ex, orig_ex, curr_path, i)
                 if is_lowering_error(trial_ex)
@@ -286,7 +286,7 @@ function block_reduction_1(is_lowering_error::Function, orig_ex::ST, ex::ST,
     return nothing
 end
 
-# Find children of all `K"block"`s in an expression and try deleting them while
+# Find children of all `:block`s in an expression and try deleting them while
 # preserving the invariant `is_lowering_error(reduced) == true`.
 function block_reduction(is_lowering_error, ex)
     reduced = ex
@@ -376,7 +376,6 @@ macro newmod(name="newmod_$(string(__source__))", parentmod=__module__,
         module $(Symbol(name))
         const JuliaLowering = $(JuliaLowering)
         const JuliaSyntax = $(JuliaSyntax)
-        const var"@K_str" = JuliaSyntax.var"@K_str"
         const var"@legacy_quote_to_syntax" = JuliaLowering.var"@legacy_quote_to_syntax"
         $(body...)
         end)
