@@ -91,6 +91,9 @@ JL_DLLEXPORT uint64_t jl_gc_region_unsafe_reset(int n) JL_CANSAFEPOINT;
 void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
 // Free region n on every heap at once, with the world stopped.
 JL_DLLEXPORT uint64_t jl_gc_region_reset_global(int n) JL_CANSAFEPOINT;
+// The region tree: declare the parent of a region before either is used.
+JL_DLLEXPORT int jl_gc_region_declare_parent(int child, int parent) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_gc_region_parent_of(int child) JL_NOTSAFEPOINT;
 // A census frees the dead objects of one region and keeps the live ones:
 // with the world stopped, or cooperatively with every other thread parked
 // GC-safe. The threshold is the page count of the open region past which
