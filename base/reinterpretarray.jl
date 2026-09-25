@@ -256,12 +256,10 @@ end
 # `IndexStyle(a) == IndexLinear()`, it's advantageous to retain pseudo-linear indexing.
 struct IndexSCartesian2{K} <: IndexStyle end   # K = aligned_sizeof(S) ÷ aligned_sizeof(T), a static-sized 2d cartesian iterator
 
-function IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}}
-    style = IndexStyle(A)
-       # a size change invalidates the parent's `IndexSCartesian2` (#63305)
-    style isa IndexSCartesian2 && aligned_sizeof(T) != aligned_sizeof(S) && return IndexCartesian()
-    return style
-end
+# only `IndexLinear` is known to be valid when the axes change (#63305)
+IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} =
+    IndexStyle(A) === IndexLinear() ? IndexLinear() : IndexCartesian()
+
 function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:AbstractArray{S}}
     if aligned_sizeof(T) < aligned_sizeof(S)
         IndexStyle(A) === IndexLinear() && return IndexSCartesian2{aligned_sizeof(S) ÷ aligned_sizeof(T)}()
