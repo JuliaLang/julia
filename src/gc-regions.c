@@ -47,9 +47,26 @@ static size_t region_census_task_count = 0;
 // With debug on, a refused reset reports the roots it found (jl_gc_region_set_debug).
 static int region_debug_checks = 0;
 
+// The phase breakdown of the last census: 0 total ns, 1 stop-the-world ns,
+// 2 mark ns, 3 sweep ns, 4 live cells kept, 5 cells freed, 6 pages walked,
+// 7 pages freed wholesale.
+static _Atomic(uint64_t) region_collect_stats[8];
 
+// A field of the last census, 0 for an index out of range.
+JL_DLLEXPORT uint64_t jl_gc_region_stat(int i) JL_NOTSAFEPOINT
+{
+    return (i >= 0 && i < 8) ? jl_atomic_load_relaxed(&region_collect_stats[i]) : 0;
+}
 
+// The page count of the open region past which the page claim runs a
+// census; 0 = never.
+_Atomic(int) jl_gc_region_census_page_threshold = 0;
 
+// Set the threshold, process-wide; the next page claim of a window reads it.
+JL_DLLEXPORT void jl_gc_region_census_threshold(int pages) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&jl_gc_region_census_page_threshold, pages);
+}
 
 STATIC_INLINE int region_valid(int n) JL_NOTSAFEPOINT
 {
@@ -813,6 +830,81 @@ static void region_census_end(void) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed(&jl_gc_region_census_target, 0);
 }
 
+// The scoped sweep of both census entries. A page without a mark is parked
+// wholesale on the fresh list of the region, in O(1); the pool freelists
+// are rebuilt from the other pages, and the cursor page stays with its
+// cursor, so allocation continues after a census of the open region. Fills
+// stats slots 4..7.
+static int64_t region_scoped_sweep(jl_thread_heap_t *heap, int n)
+{
+    int64_t freed = 0;
+    uint64_t live = 0, pages_walked = 0, pages_wholesale = 0;
+    jl_gc_pool_t *pools = heap->regions[n]->pools;
+    char *bump[JL_GC_N_MAX_POOLS];
+    jl_taggedvalue_t **fl_tail[JL_GC_N_MAX_POOLS];
+    for (int i = 0; i < JL_GC_N_MAX_POOLS; i++) {
+        bump[i] = (char*)pools[i].newpages;
+        pools[i].freelist = NULL;
+        fl_tail[i] = &pools[i].freelist;
+    }
+    // The marks are still set: free the malloc'd data of the dead memories first.
+    region_free_malloced(&heap->regions[n]->mallocarrays, 1);
+    jl_gc_pagemeta_t *kept = NULL;
+    jl_gc_pagemeta_t *kept_tail = NULL;
+    jl_gc_pagemeta_t *pg = heap->regions[n]->pages;
+    while (pg != NULL) {
+        jl_gc_pagemeta_t *next = pg->region_next;
+        int i = pg->pool_n;
+        int osize = pg->osize;
+        char *cell = pg->data + GC_PAGE_OFFSET;
+        size_t ncells = (GC_PAGE_SZ - GC_PAGE_OFFSET) / (size_t)osize;
+        char *end = cell + ncells * (size_t)osize;
+        int is_cursor = (bump[i] != NULL && gc_page_data(bump[i] - 1) == pg->data);
+        if (is_cursor && (char*)bump[i] < end)
+            end = (char*)bump[i];
+        if (!pg->has_marked && !is_cursor) {
+            // Stale metadata is fine on the fresh list; the claim resets it.
+            pg->region_next = heap->regions[n]->fresh_pages;
+            heap->regions[n]->fresh_pages = pg;
+            freed += (int64_t)ncells;
+            pages_wholesale++;
+            pg = next;
+            continue;
+        }
+        for (; cell < end; cell += osize) {
+            jl_taggedvalue_t *tv = (jl_taggedvalue_t*)cell;
+            uintptr_t h = tv->header;
+            if (h & GC_MARKED) {
+                tv->header = h & ~(uintptr_t)(GC_MARKED | GC_OLD);
+                live++;
+            }
+            else {
+                tv->next = NULL;
+                *fl_tail[i] = tv;
+                fl_tail[i] = &tv->next;
+                freed++;
+            }
+        }
+        pg->has_marked = 0;
+        pg->region_next = kept;
+        if (kept == NULL)
+            kept_tail = pg;
+        kept = pg;
+        pages_walked++;
+        pg = next;
+    }
+    heap->regions[n]->pages = kept;
+    heap->regions[n]->pages_tail = kept_tail;
+    heap->regions[n]->n_pages = (uint32_t)pages_walked;
+    heap->regions[n]->n_fresh += (uint32_t)pages_wholesale;
+    for (int i = 0; i < JL_GC_N_MAX_POOLS; i++)
+        *fl_tail[i] = NULL;
+    jl_atomic_store_relaxed(&region_collect_stats[4], live);
+    jl_atomic_store_relaxed(&region_collect_stats[5], (uint64_t)freed);
+    jl_atomic_store_relaxed(&region_collect_stats[6], pages_walked);
+    jl_atomic_store_relaxed(&region_collect_stats[7], pages_wholesale);
+    return freed;
+}
 
 // The mark of a census runs from the execution roots of every thread, so it
 // sets mark bits on the region's objects of other heaps too; the sweep runs
@@ -840,6 +932,17 @@ static void region_clear_marks_on_other_heaps(jl_thread_heap_t *mine, int n) JL_
     }
 }
 
+// Whether a child of region n is live on any heap; the other threads are
+// stopped or parked, so the masks are read without a fence.
+static int region_child_live_on_any_heap(jl_ptls_t *all, int nthreads, int n) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all[t_i];
+        if (ptls2 != NULL && ((ptls2->gc_tls.heap.region_haschild_mask >> n) & 1))
+            return 1;
+    }
+    return 0;
+}
 
 // Move the entries whose object the mark did not reach to `dead`; both
 // lists are then marked, so a dead object lives until its finalizer ran.
@@ -897,9 +1000,155 @@ static void region_census_mark(jl_ptls_t ptls, jl_ptls_t *tls_states, int nthrea
     ptls->gc_tls.heap.remset_nptr = remset_nptr;
 }
 
+// The stop-the-world census of region n; the caller checked the
+// preconditions. Returns the freed cells, or ERACE.
+static int64_t region_census_core(jl_task_t *ct, jl_ptls_t ptls, jl_thread_heap_t *heap, int n) JL_CANSAFEPOINT
+{
+    // Stop the world as jl_gc_collect does; the disable counter is cleared
+    // for the stop and restored after.
+    uint64_t t0 = jl_hrtime();
+    uint32_t saved_disable = jl_atomic_exchange(&jl_gc_disable_counter, 0);
+    int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
+    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
+    if (!jl_safepoint_start_gc(ct)) {
+        jl_atomic_store_release(&jl_gc_disable_counter, saved_disable);
+        jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
+        jl_safepoint_wait_thread_resume(ct);
+        return JL_GC_REGION_ERACE;
+    }
+    jl_fence();
+    gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
+    gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    jl_gc_wait_for_the_world(gc_all_tls_states, gc_n_threads);
+    uint64_t t_stw = jl_hrtime();
 
+    // A child live on another heap holds legal references into this
+    // instance too; the other heaps are readable only now.
+    int64_t freed = region_child_live_on_any_heap(gc_all_tls_states, gc_n_threads, n)
+                    ? (int64_t)JL_GC_REGION_ECHILD : 0;
+    uint64_t t_mark = t_stw, t_sweep = t_stw;
+    if (freed == 0) {
+        region_census_begin(n);
+        region_census_mark(ptls, gc_all_tls_states, gc_n_threads, heap, n, NULL);
+        t_mark = jl_hrtime();
+        freed = region_scoped_sweep(heap, n);
+        region_clear_marks_on_other_heaps(heap, n);
+        t_sweep = jl_hrtime();
+        region_census_end();
+    }
 
+    gc_n_threads = 0;
+    gc_all_tls_states = NULL;
+    jl_safepoint_end_gc();
+    jl_atomic_store_release(&jl_gc_disable_counter, saved_disable);
+    jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
+    jl_safepoint_wait_thread_resume(ct);
+    jl_atomic_store_relaxed(&region_collect_stats[0], t_sweep - t0);
+    jl_atomic_store_relaxed(&region_collect_stats[1], t_stw - t0);
+    jl_atomic_store_relaxed(&region_collect_stats[2], t_mark - t_stw);
+    jl_atomic_store_relaxed(&region_collect_stats[3], t_sweep - t_mark);
+    return freed;
+}
 
+// The stop-the-world census of region n on the calling thread's heap: free
+// the dead objects, keep the live ones. Returns the cells freed, or a
+// refusal code: EINVAL, EQUARANTINED, EFINALIZERS (nothing can run them
+// with the world stopped), ECHILD (the filter drops the child's objects, so
+// a parent object that only the child references would be freed), EBUSY.
+JL_DLLEXPORT int64_t jl_gc_region_collect(int n) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    if (!region_valid(n) || heap->regions[n] == NULL)
+        return JL_GC_REGION_EINVAL;
+    if (__unlikely(jl_gc_region_quarantined(n)))
+        return JL_GC_REGION_EQUARANTINED;
+    if (__unlikely(heap->regions[n]->finalizers.len != 0))
+        return JL_GC_REGION_EFINALIZERS;
+    if (__unlikely((heap->region_haschild_mask >> n) & 1))
+        return JL_GC_REGION_ECHILD;
+    if (heap->current_region != 0 || heap->finalizer_depth != 0 ||
+        jl_atomic_load_relaxed(&region_windows_open) != 0)
+        return JL_GC_REGION_EBUSY;
+    return region_census_core(ct, ptls, heap, n);
+}
+
+// The cooperative census: no stop-the-world, only the caller's execution
+// roots, and every other thread parked GC-safe (EUNSAFE otherwise). No
+// safepoint is reached while the filter is set, so no other collection
+// starts in between. The finalizers of the dead objects run after the
+// sweep, with the filter off; the census keeps the objects for one more
+// cycle. Returns the cells freed, or a refusal code.
+JL_DLLEXPORT int64_t jl_gc_region_collect_coop(int n) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    if (!region_valid(n) || heap->regions[n] == NULL)
+        return JL_GC_REGION_EINVAL;
+    if (__unlikely(jl_gc_region_quarantined(n)))
+        return JL_GC_REGION_EQUARANTINED;
+    if (__unlikely((heap->region_haschild_mask >> n) & 1))
+        return JL_GC_REGION_ECHILD;
+    if (heap->current_region != 0 || heap->finalizer_depth != 0)
+        return JL_GC_REGION_EBUSY;
+
+    uint64_t t0 = jl_hrtime();
+    // One cooperative census at a time: the filter and the task table are
+    // process-wide. The claim is the test and the increment in one act.
+    int zero = 0;
+    if (!jl_atomic_cmpswap(&region_windows_open, &zero, 1))
+        return JL_GC_REGION_EBUSY;
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *all = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all[t_i];
+        if (ptls2 == NULL || ptls2 == ptls)
+            continue;
+        if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_UNSAFE) {
+            jl_atomic_fetch_add_relaxed(&region_windows_open, -1);
+            return JL_GC_REGION_EUNSAFE;
+        }
+    }
+    // Every other thread is parked, so its live-child mask is stable.
+    if (region_child_live_on_any_heap(all, nthreads, n)) {
+        jl_atomic_fetch_add_relaxed(&region_windows_open, -1);
+        return JL_GC_REGION_ECHILD;
+    }
+    uint64_t t_stw = jl_hrtime();
+
+    arraylist_t dead;
+    region_census_begin(n);
+    region_census_mark(ptls, &ptls, 1, heap, n, &dead);
+    uint64_t t_mark = jl_hrtime();
+    int64_t freed = region_scoped_sweep(heap, n);
+    uint64_t t_sweep = jl_hrtime();
+    region_census_end();
+    jl_atomic_fetch_add_relaxed(&region_windows_open, -1);
+
+    jl_atomic_store_relaxed(&region_collect_stats[0], t_sweep - t0);
+    jl_atomic_store_relaxed(&region_collect_stats[1], t_stw - t0);
+    jl_atomic_store_relaxed(&region_collect_stats[2], t_mark - t_stw);
+    jl_atomic_store_relaxed(&region_collect_stats[3], t_sweep - t_mark);
+    region_run_finalizer_list(ct, &dead);
+    return freed;
+}
+
+// The census of the open region, from the page claim past the threshold:
+// the live state stays, the dead cells return. Pending finalizers, a
+// quarantine and a live child fall through to the ordinary claim. Returns 1
+// when a census ran.
+int jl_gc_region_census_open(jl_ptls_t ptls) JL_CANSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    int n = heap->current_region;
+    assert(n > 0 && n < JL_GC_MAX_REGIONS);
+    if (heap->regions[n]->finalizers.len != 0 || jl_gc_region_quarantined(n) ||
+        ((heap->region_haschild_mask >> n) & 1))
+        return 0;
+    return region_census_core(jl_current_task, ptls, heap, n) >= 0;
+}
 
 // --- debug ------------------------------------------------------------------------------
 
