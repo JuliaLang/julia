@@ -34,17 +34,17 @@ end
 mutable struct SyntaxTree
     const head::Symbol
     # Should be considered immutable
-    children::Union{Nothing, Vector{SyntaxTree}}
-    value::Any
-    source::Union{SyntaxTree,SourceRef,LineNumberNode}
+    const children::Union{Nothing, Vector{SyntaxTree}}
+    const value::Any
+    const source::Union{SyntaxTree,SourceRef,LineNumberNode}
     const context::SyntaxContext
-    jl_source::Union{Nothing, LineNumberNode}
+    const jl_source::Union{Nothing, LineNumberNode}
     meta::Union{Nothing, Base.ImmutableDict{Symbol,Any}}
     # TODO: this is rarely used, and should just be part of context
-    mod::Union{Nothing, Module}
+    const mod::Union{Nothing, Module}
     # TODO: this is almost never populated and semantically irrelevant after
     # parsing
-    syntax_flags::UInt16
+    const syntax_flags::UInt16
 end
 
 # A default context corresponding to no expansion
@@ -68,11 +68,6 @@ function with_context(st, sc)
 end
 
 const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
-
-# TODO deprecate
-function setchildren!(id::SyntaxTree, children::AbstractVector{SyntaxTree})
-    setfield!(id, :children, children)
-end
 
 # fallback printing.  TODO: vulnerable to invalidations
 function node_string(ex::SyntaxTree, depth=2)
@@ -181,6 +176,7 @@ function _assert_syntaxtree_node(st::SyntaxTree)
             h === :slots ? (true, Vector) : # Vector{JL.Slot}
             h === :version ? (true, VersionNumber) :
             JuliaSyntax.is_trivia(st) ? (false, Any) : # green tree only
+            Base.isoperator(head(st)) ? (false, Any) : # green tree, TODO remove
                 (return (st, "unrecognized leaf $(h)"))
         if needs_val && !(st.value isa valtype)
             return (st, "needs value ::"*string(valtype))
@@ -281,14 +277,6 @@ function _debug_check_attrs(x)
     assert_syntaxtree(x, false)
     x
 end
-
-function _setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
-    setfield!(ex, name, val)
-    ex
-end
-_setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
-    _setattr!(is_leaf(ex) ? @mknode(ex; children=nothing) :
-    @mknode(ex; children=children(ex)), name, val)
 
 const CompileHints = Base.ImmutableDict{Symbol,Any}
 function setmeta!(st::SyntaxTree, key::Symbol, @nospecialize(val))
@@ -654,45 +642,29 @@ from achieving this, `unalias_nodes` should not allocate new nodes.
 If a `SyntaxList` is given, every resulting tree will be unique with respect to
 each other as well as internally.  A duplicate entry will produce a copied tree.
 """
-unalias_nodes(st::SyntaxTree) =
-    _unalias_nodes(st, Set{SyntaxTree}(), Base.IdSet{Vector{SyntaxTree}}())
+unalias_nodes(st::SyntaxTree) = _unalias_nodes(st, Set{SyntaxTree}())
 
 function unalias_nodes(sl::SyntaxList)
     seen = Set{SyntaxTree}()
-    seen_children = Base.IdSet{Vector{SyntaxTree}}()
-    mapsyntax(st->_unalias_nodes(st, seen, seen_children), sl)
+    mapsyntax(st->_unalias_nodes(st, seen), sl)
 end
 
 function _unalias_copy_tree(old::SyntaxTree)
+    # difference from mktree: don't add to provenance chain
     out = if is_leaf(old)
-        @mknode(old; children=nothing)
+        @mknode(old; source=old.source, children=nothing)
     else
         cs = mapsyntax(_unalias_copy_tree, children(old))
-        @mknode(old; children=cs)
+        @mknode(old; source=old.source, children=cs)
     end
-    # difference from mktree: don't add to provenance chain
-    _setattr!(out, :source, old.source)
 end
 
-function _unalias_nodes(st::SyntaxTree, seen::Set{SyntaxTree},
-                        seen_children::Base.IdSet{Vector{SyntaxTree}})
+function _unalias_nodes(st::SyntaxTree, seen::Set{SyntaxTree})
     if st in seen
         return _unalias_copy_tree(st)
     end
     push!(seen, st)
-    if !is_leaf(st)
-        cs = children(st)
-        if cs in seen_children
-            cs = copy(cs)
-            setchildren!(st, cs)
-        end
-        push!(seen_children, cs)
-        for (i, c) in enumerate(cs)
-            c2 = _unalias_nodes(c, seen, seen_children)
-            c !== c2 && (cs[i] = c2)
-        end
-    end
-    return st
+    mapchildren(c->_unalias_nodes(c, seen), st)
 end
 
 """
@@ -1045,12 +1017,13 @@ function _insert_green(sf::Base.RefValue{SourceFile},
     source = SourceRef(sf, first_byte(cursor), last_byte(cursor))
     k = kind(cursor)
     h = kind_to_head(k)
+    syntax_flags = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
     if !is_leaf(cursor)
         cs = SyntaxList()
         for c in reverse(cursor)
             push!(cs, _insert_green(sf, txtbuf, offset, c, context))
         end
-        st = SyntaxTree(h, reverse!(cs), nothing, source, context)
+        st = @mknode(;head=h, children=reverse!(cs), source, context, syntax_flags)
     else
         v = if is_identifier(k) || is_literal(k) || is_operator(k) || k === K"VERSION"
             let v = parse_julia_literal(
@@ -1063,10 +1036,7 @@ function _insert_green(sf::Base.RefValue{SourceFile},
         else
             nothing
         end
-        st = SyntaxTree(h, nothing, v, source, context)
-    end
-    let f = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
-        f != 0 && _setattr!(st, :syntax_flags, f)
+        st = @mknode(;head=h, children=nothing, value=v, source, context, syntax_flags)
     end
     return st
 end
@@ -1365,11 +1335,12 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             end
             g_out = @mknode(st; children=gen_cs)
             if c !== cs[end]
-                g_out = @mknode(;source=c, context,
+                source = c === cs[begin] ? st : c
+                g_out = @mknode(;source, context,
                                 head=:flatten, children=SyntaxList(g_out))
             end
         end
-        return _setattr!(g_out, :source, st) # outermost provenance
+        return g_out
     elseif k === :filter
         @assert n_cs === 2
         # (filter (iteration is...) cond) => (filter cond is...)
@@ -1579,7 +1550,7 @@ function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
         end
     end
     if unwrap_literal && length(ret_cs) === 1 && is_literal_str(ret_cs[1])
-        return _setattr(ret_cs[1], :source, st)
+        return @mknode(ret_cs[1]; source=st)
     end
     return @mknode(st; children=ret_cs)
 end
