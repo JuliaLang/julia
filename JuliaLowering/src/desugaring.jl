@@ -306,7 +306,8 @@ function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
             [:call "getfield"::core tmp i::value]
         ])
     end
-    newnode(assignment_srcref, :block, stmts)
+    @mknode(;source=assignment_srcref, context=assignment_srcref.context,
+            head=:block, children=stmts)
 end
 
 # Implement destructuring with `lhs` a tuple expression (possibly with
@@ -439,7 +440,7 @@ function expand_property_destruct(ctx, ex)
         ]))
     end
     push!(stmts, @ast ctx rhs1 [:removable rhs1])
-    newnode(ex, :block, stmts)
+    @mknode(;source=ex, context=ex.context, head=:block, children=stmts)
 end
 
 # Expands all cases of general tuple destructuring, eg
@@ -480,7 +481,7 @@ function expand_tuple_destruct(ctx, ex, is_const)
     end
     _destructure(ctx, ex, stmts, lhs, rhs1, is_const)
     push!(stmts, @ast ctx rhs1 [:removable rhs1])
-    newnode(ex, :block, stmts)
+    @mknode(;source=ex, context=ex.context, head=:block, children=stmts)
 end
 
 #-------------------------------------------------------------------------------
@@ -1557,7 +1558,7 @@ function expand_condition(ctx, ex)
         cs = expand_cond_children(ctx, test)
         test = isempty(cs) ? (@ast ctx ex (k === :&&)::value) :
             length(cs) == 1 ? (@ast ctx ex cs[1]) :
-            newnode(test, k, cs)
+            @mknode(;source=test, context=test.context, head=k, children=cs)
     else
         test = expand_forms_2(ctx, test)
     end
@@ -2284,7 +2285,8 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         [:placeholder] -> nothing
         ([:(::) [:identifier] t], when=type_decls) -> let x = ex[1]
             t2 = expand_forms_2(ctx, t)
-            push!(stmts, newnode(ex, :decl, SyntaxList(x, t2)))
+            push!(stmts, @mknode(;source=ex, context=ex.context,
+                                 head=:decl, children=SyntaxList(x, t2)))
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         ([:(::) [:placeholder] t], when=type_decls) -> let
@@ -2351,7 +2353,7 @@ function expand_decls(ctx, ex)
     end
     # flisp quirk: if not a plain `global x` or `local x`, value is readable
     val_nothing && push!(stmts, @ast ctx ex (::nothing))
-    newnode(ex, :block, stmts)
+    @mknode(;source=ex, context=ex.context, head=:block, children=stmts)
 end
 
 # Iterate over the variable names assigned to from a "fancy assignment left hand
@@ -4336,7 +4338,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # structure. For now we attribute to the parent node.
         cond = length(cs) == 2 ?
             cs[1] :
-            newnode(ex, k, cs[1:end-1])
+            @mknode(;source=ex, context=ex.context, head=k, children=cs[1:end-1])
         # This transformation assumes the type assertion `cond::Bool` will be
         # added by a later compiler pass (currently done in codegen)
         if k == :&&

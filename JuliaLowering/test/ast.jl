@@ -12,8 +12,8 @@
     setfield!(bad_st, :children, SyntaxList(bad_st))
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(bad_st)
 
-    cyc_1 = JuliaSyntax.newnode(st, :block, SyntaxList())
-    cyc_2 = JuliaSyntax.newnode(st, :block, SyntaxList(cyc_1))
+    cyc_1 = JuliaSyntax.@mknode(st; head=:block, children=SyntaxList())
+    cyc_2 = JuliaSyntax.@mknode(st; head=:block, children=SyntaxList(cyc_1))
     setfield!(cyc_1, :children, SyntaxList(cyc_2))
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_1)
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_2)
