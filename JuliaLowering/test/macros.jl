@@ -524,9 +524,9 @@ end
 
     JuliaLowering.include_string(test_mod, raw"""
     macro mk_toplevel(x, y, z)
-        JuliaSyntax.newnode(
-            __context__.macrocall, :toplevel,
-            JuliaSyntax.SyntaxList(x, y, z))
+        JuliaLowering.@ast(__context__,
+            __context__.macrocall,
+           [:toplevel x y z])
     end
     macro toplevel_first_child(x)
         x2 = JuliaLowering.macroexpand(x)

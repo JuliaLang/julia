@@ -47,6 +47,14 @@ mutable struct SyntaxTree
     syntax_flags::UInt16
 end
 
+# A default context corresponding to no expansion
+function SyntaxContext(mod::Module, edition::Tuple{Int, Int})
+    SyntaxContext(ScopeLayer(mod, nothing), nothing, edition, false)
+end
+
+const JL_NEW_EDITION = (1, 15)
+const JL_OLD_EDITION = (1, 14)
+
 const IdTag = Int
 
 function SyntaxTree(head::Symbol, children, @nospecialize(value), source, context)
@@ -121,12 +129,166 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
     end
 end
 
+#-------------------------------------------------------------------------------
+# AST creation utilities
+
+# Tree invariants assumed everywhere, including `show`, so fallback printing
+# should be used on failure.  (These checks really belong in the type system.)
+# Failure should only be possible working on internals.
+function assert_syntaxtree(st::SyntaxTree, recursive=true)
+    vr = recursive ? _assert_syntaxtree(st, SyntaxTree[]) :
+        _assert_syntaxtree_node(st)
+    if vr !== nothing
+        err_st, err = vr
+        msg = string("assert_syntaxtree failed: ", node_string(st),
+                     "\n  failing node: ", node_string(err_st),
+                     "\n  reason: ", err)
+        error(msg)
+    end
+    nothing
+end
+
+function _assert_syntaxtree_node(st::SyntaxTree)
+    h = head(st)
+    if is_leaf(st)
+        if h === :globalref && st.mod === nothing
+            return (st, "leaf globalref requires module in .mod")
+        end
+        (needs_val, valtype) =
+            h === :identifier ? (true, String) :
+            h === :value ? (true, Any) :
+            h === :core ? (true, String) :
+            h === :top ? (true, String) :
+            h === :symbol ? (true, String) :
+            h === :globalref ? (true, String) :
+            h === :placeholder ? (false, Any) :
+            h === :bindingid ? (true, IdTag) :
+            h === :label ? (true, Int) :
+            h === :symboliclabel ? (true, String) :
+            h === :symbolicgoto ? (true, String) :
+            h === :slot ? (true, Int) :
+            h === :static_parameter ? (true, Int) :
+            h === :ssavalue ? (true, Int) :
+            h === :nothing ? (false, Any) :
+            h === :tombstone ? (false, Any) :
+            h === :error ? (false, Any) :
+            h === :sourcelocation ? (false, Any) :
+            h === :latestworld ? (false, Any) :
+            h === :latestworld_if_toplevel ? (false, Any) :
+            h === :strmacroname ? (true, String) :
+            h === :cmdmacroname ? (true, String) :
+            h === :lambdabindings ? (true, Any) : # JL.LambdaBindings
+            h === :slots ? (true, Vector) : # Vector{JL.Slot}
+            h === :version ? (true, VersionNumber) :
+            JuliaSyntax.is_trivia(st) ? (false, Any) : # green tree only
+                (return (st, "unrecognized leaf $(h)"))
+        if needs_val && !(st.value isa valtype)
+            return (st, "needs value ::"*string(valtype))
+        end
+    else
+        # Note some kinds can show up as non-leaves too (mostly from Expr)
+        if h in (:identifier, :value, :placeholder, :bindingid, :label, :symbol,
+                 :nothing, :tombstone, :sourcelocation,
+                 :lambdabindings, :slots)
+            return (st, "Found leaf-only kind with children")
+        end
+    end
+    nothing
+end
+
+function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree})
+    if st in parents
+        err = "cycle detected: ["
+        for p in parents
+            err *= "\n" * node_string(p)
+        end
+        return (st, err*"]")
+    end
+    vr = _assert_syntaxtree_node(st)
+    isnothing(vr) || return vr
+    # TODO: Proper traversal along .source and macro prov (need to cache results
+    # to avoid exponential repeated lookups, and figure out how these edges may
+    # form cycles with child edges)
+    st.source === st && return (st, ".source equal to self ID")
+    sc = st.context
+    sc.unexpanded === st && return (st, "unexpanded equal to self")
+
+    push!(parents, st)
+    is_leaf(st) || for c in children(st)
+        vr = _assert_syntaxtree(c, parents)
+        isnothing(vr) || return vr
+    end
+    pop!(parents)
+    nothing
+end
+
+const _DEFAULT_NODE = SyntaxTree(
+    :none, nothing, nothing, LineNumberNode(0),
+    SyntaxContext(Core, (0, 0)))
+
+const DEBUG_LOWERING = true
+
+"""
+    @mknode(old; attr=val...)
+
+Create a node `new` that is an immutable update of `old`, but setting `old` as
+its provenance, and setting jl_source to macrocall's location.  `attrs` may
+override `old`'s fields (so if `old` is not provided, some attrs are required.)
+
+This is the main operation used by syntax transformations in lowering.
+"""
+macro mknode(attrs, old)
+    Base.remove_linenums!(old)
+    Base.remove_linenums!(attrs)
+    old_gs = gensym()
+    if !(isnothing(attrs) || attrs isa Expr && Meta.isexpr(attrs, :parameters))
+        throw(ArgumentError("usage: @mknode(old; attr=val...)"))
+    end
+    out_args = Vector(undef, fieldcount(SyntaxTree))
+    for (i, n) in enumerate(fieldnames(SyntaxTree))
+        out_args[i] = (DEBUG_LOWERING && n === :jl_source) ? __source__ :
+            n === :source ? old_gs :
+            Expr(:(.), old_gs, QuoteNode(n))
+    end
+    seen_attrs = Set{Symbol}()
+    attrs isa Expr && for a in attrs.args
+        (aname, aval) = if Meta.isexpr(a, :(kw), 2) && a.args[1] isa Symbol
+            (a.args[1]::Symbol, a.args[2])
+        elseif a isa Symbol
+            (a, a)
+        else
+            throw(ArgumentError("usage: @mknode(old; attr=val...)"))
+        end
+        aname in seen_attrs && throw(ArgumentError("duplicate attr provided $__source__"))
+        push!(seen_attrs, aname)
+        out_args[Base.fieldindex(SyntaxTree, aname)] = aval
+    end
+    old === _DEFAULT_NODE && !((:head, :source, :context) ⊆ seen_attrs) &&
+        throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
+
+    out = Expr(:let,
+               Expr(:block, Expr(:(=), old_gs, old)),
+               Expr(:block, Expr(:call, SyntaxTree, out_args...)))
+    DEBUG_LOWERING && (out.args[end] = Expr(:call, _debug_check_attrs, out.args[end]))
+    esc(out)
+end
+macro mknode(x)
+    (old, attrs) = Meta.isexpr(x, :parameters) ? (_DEFAULT_NODE, x) : (x, nothing)
+    esc(Expr(:macrocall, var"@mknode", __source__, attrs, old))
+end
+
+function _debug_check_attrs(x)
+    assert_syntaxtree(x, false)
+    x
+end
+
 function _setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
     setfield!(ex, name, val)
     ex
 end
 _setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
-    _setattr!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), name, val)
+    _setattr!(is_leaf(ex) ? @mknode(ex; children=nothing) :
+    @mknode(ex; children=children(ex)), name, val)
 
 const CompileHints = Base.ImmutableDict{Symbol,Any}
 function setmeta!(st::SyntaxTree, key::Symbol, @nospecialize(val))
@@ -137,7 +299,8 @@ function setmeta!(st::SyntaxTree, key::Symbol, @nospecialize(val))
     st
 end
 function setmeta(st::SyntaxTree, key::Symbol, @nospecialize(val))
-    setmeta!(is_leaf(st) ? mkleaf(st) : mknode(st, children(st)), key, val)
+    setmeta!(is_leaf(st) ? @mknode(st; children=nothing) :
+        @mknode(st; children=children(st)), key, val)
 end
 function getmeta(st, name, @nospecialize(default))
     meta = st.meta
@@ -174,14 +337,6 @@ end
 function flags(ex::SyntaxTree)
     ex.syntax_flags
 end
-
-# A default context corresponding to no expansion
-function SyntaxContext(mod::Module, edition::Tuple{Int, Int})
-    SyntaxContext(ScopeLayer(mod, nothing), nothing, edition, false)
-end
-
-const JL_NEW_EDITION = (1, 15)
-const JL_OLD_EDITION = (1, 14)
 
 is_base_layer(sc::SyntaxContext) = (sc.layer::ScopeLayer).escaped === nothing
 
@@ -447,186 +602,12 @@ function mapindex(sl::SyntaxList, i::Int)
     out
 end
 
-#-------------------------------------------------------------------------------
-# AST creation utilities
-
-# Tree invariants assumed everywhere, including `show`, so fallback printing
-# should be used on failure.  (These checks really belong in the type system.)
-# Failure should only be possible working on internals.
-function assert_syntaxtree(st::SyntaxTree, recursive=true)
-    vr = recursive ? _assert_syntaxtree(st, SyntaxTree[]) :
-        _assert_syntaxtree_node(st)
-    if vr !== nothing
-        err_st, err = vr
-        msg = string("assert_syntaxtree failed: ", node_string(st),
-                     "\n  failing node: ", node_string(err_st),
-                     "\n  reason: ", err)
-        error(msg)
-    end
-    nothing
-end
-
-macro mknode end
-
-function _assert_syntaxtree_node(st::SyntaxTree)
-    h = head(st)
-    if is_leaf(st)
-        if h === :globalref && st.mod === nothing
-            return (st, "leaf globalref requires module in .mod")
-        end
-        (needs_val, valtype) =
-            h === :identifier ? (true, String) :
-            h === :value ? (true, Any) :
-            h === :core ? (true, String) :
-            h === :top ? (true, String) :
-            h === :symbol ? (true, String) :
-            h === :globalref ? (true, String) :
-            h === :placeholder ? (false, Any) :
-            h === :bindingid ? (true, IdTag) :
-            h === :label ? (true, Int) :
-            h === :symboliclabel ? (true, String) :
-            h === :symbolicgoto ? (true, String) :
-            h === :slot ? (true, Int) :
-            h === :static_parameter ? (true, Int) :
-            h === :ssavalue ? (true, Int) :
-            h === :nothing ? (false, Any) :
-            h === :tombstone ? (false, Any) :
-            h === :sourcelocation ? (false, Any) :
-            h === :latestworld ? (false, Any) :
-            h === :latestworld_if_toplevel ? (false, Any) :
-            h === :strmacroname ? (true, String) :
-            h === :cmdmacroname ? (true, String) :
-            h === :lambdabindings ? (true, Any) : # JL.LambdaBindings
-            h === :slots ? (true, Vector) : # Vector{JL.Slot}
-            h === :version ? (true, VersionNumber) :
-            JuliaSyntax.is_trivia(st) ? (false, Any) : # green tree only
-                (return (st, "unrecognized leaf $(h)"))
-        if needs_val && !(st.value isa valtype)
-            return (st, "needs value ::"*string(valtype))
-        end
-    else
-        # Note some kinds can show up as non-leaves too (mostly from Expr)
-        if h in (:identifier, :value, :placeholder, :bindingid, :label, :symbol,
-                 :nothing, :tombstone, :sourcelocation,
-                 :lambdabindings, :slots)
-            return (st, "Found leaf-only kind with children")
-        end
-    end
-    nothing
-end
-
-function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree})
-    if st in parents
-        err = "cycle detected: ["
-        for p in parents
-            err *= "\n" * node_string(p)
-        end
-        return (st, err*"]")
-    end
-    vr = _assert_syntaxtree_node(st)
-    isnothing(vr) || return vr
-    # TODO: Proper traversal along .source and macro prov (need to cache results
-    # to avoid exponential repeated lookups, and figure out how these edges may
-    # form cycles with child edges)
-    st.source === st && return (st, ".source equal to self ID")
-    sc = st.context
-    sc.unexpanded === st && return (st, "unexpanded equal to self")
-
-    push!(parents, st)
-    is_leaf(st) || for c in children(st)
-        vr = _assert_syntaxtree(c, parents)
-        isnothing(vr) || return vr
-    end
-    pop!(parents)
-    nothing
-end
-
-const _DEFAULT_NODE = SyntaxTree(
-    :none, nothing, nothing, LineNumberNode(0),
-    SyntaxContext(Core, (0, 0)))
-
-const DEBUG_LOWERING = true
-
-"""
-    @mknode(old; attr=val...)
-
-Create a node `new` that is an immutable update of `old`, but setting `old` as
-its provenance, and setting jl_source to macrocall's location.  `attrs` may
-override `old`'s fields (so if `old` is not provided, some attrs are required.)
-
-This is the main operation used by syntax transformations in lowering.
-"""
-macro mknode(attrs, old)
-    Base.remove_linenums!(old)
-    Base.remove_linenums!(attrs)
-    old_gs = gensym()
-    if !(isnothing(attrs) || attrs isa Expr && Meta.isexpr(attrs, :parameters))
-        throw(ArgumentError("usage: @mknode(old; attr=val...)"))
-    end
-    out_args = Vector(undef, fieldcount(SyntaxTree))
-    for (i, n) in enumerate(fieldnames(SyntaxTree))
-        out_args[i] = (DEBUG_LOWERING && n === :jl_source) ? __source__ :
-            n === :source ? old_gs :
-            Expr(:(.), old_gs, QuoteNode(n))
-    end
-    seen_attrs = Set{Symbol}()
-    attrs isa Expr && for a in attrs.args
-        (aname, aval) = if Meta.isexpr(a, :(kw), 2) && a.args[1] isa Symbol
-            (a.args[1]::Symbol, a.args[2])
-        elseif a isa Symbol
-            (a, a)
-        else
-            throw(ArgumentError("usage: @mknode(old; attr=val...)"))
-        end
-        aname in seen_attrs && throw(ArgumentError("duplicate attr provided $__source__"))
-        push!(seen_attrs, aname)
-        out_args[Base.fieldindex(SyntaxTree, aname)] = aval
-    end
-    old === _DEFAULT_NODE && !((:head, :source, :context) ⊆ seen_attrs) &&
-        throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
-
-    out = Expr(:let,
-               Expr(:block, Expr(:(=), old_gs, old)),
-               Expr(:block, Expr(:call, SyntaxTree, out_args...)))
-    DEBUG_LOWERING && (out.args[end] = Expr(:call, _debug_check_attrs, out.args[end]))
-    esc(out)
-end
-macro mknode(x)
-    (old, attrs) = Meta.isexpr(x, :parameters) ? (_DEFAULT_NODE, x) : (x, nothing)
-    esc(Expr(:macrocall, var"@mknode", __source__, attrs, old))
-end
-
-function _debug_check_attrs(x)
-    assert_syntaxtree(x, false)
-    x
-end
-
-"""
-    newnode(prov::SyntaxTree, head::Symbol, children)
-
-Create a new node with reference to parsed source text `prov`.
-"""
-function newnode(prov::SyntaxTree, h::Symbol, children)
-    SyntaxTree(h, children, nothing, prov, prov.context)
-end
-function newleaf(prov::SyntaxTree, h::Symbol)
-    SyntaxTree(h, nothing, nothing, prov, prov.context)
-end
-
-function mknode(old::SyntaxTree, children)
-    SyntaxTree(old.head, children, old.value, old, old.context,
-               old.jl_source, old.meta, old.mod, old.syntax_flags)
-end
-function mkleaf(old::SyntaxTree)
-    SyntaxTree(old.head, nothing, old.value, old, old.context,
-               old.jl_source, old.meta, old.mod, old.syntax_flags)
-end
 function mktree(old::SyntaxTree)
     if is_leaf(old)
-        mkleaf(old)
+        @mknode(old; children=nothing)
     else
         cs = mapsyntax(mktree, children(old))
-        mknode(old, cs)
+        @mknode(old; children=cs)
     end
 end
 
@@ -656,7 +637,7 @@ function mapchildren(f::Function, ex::SyntaxTree)
         return ex
     end
     cs::SyntaxList
-    ex2 = mknode(ex, cs)
+    ex2 = @mknode(ex; children=cs)
     return ex2
 end
 
@@ -674,7 +655,8 @@ function _copy_ast(id1::SyntaxTree, seen)
     let copied = get(seen, id1, nothing)
         isnothing(copied) || return copied
     end
-    id2 = is_leaf(id1) ? mkleaf(id1) : mknode(id1, children(id1))
+    id2 = is_leaf(id1) ? @mknode(id1; children=nothing) :
+        @mknode(id1; children=children(id1))
     seen[id1] = id2
     if !is_leaf(id1)
         cs = SyntaxTree[]
@@ -719,10 +701,10 @@ end
 
 function _unalias_copy_tree(old::SyntaxTree)
     out = if is_leaf(old)
-        mkleaf(old)
+        @mknode(old; children=nothing)
     else
         cs = mapsyntax(_unalias_copy_tree, children(old))
-        mknode(old, cs)
+        @mknode(old; children=cs)
     end
     # difference from mktree: don't add to provenance chain
     _setattr!(out, :source, old.source)
@@ -1155,13 +1137,17 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     end
 
     k = head(st)
+    context = st.context # without macro expansion, we know this is uniform
     syntax_name(x) = x.value::String
-    symleaf(s::String) = _setattr!(newleaf(st, :identifier), :value, s)
-    core_globalref(s::String) = _setattr!(symleaf(s), :mod, Core)
-    valleaf(@nospecialize(v)) = _setattr!(newleaf(st, :value), :value, v)
+    symleaf(s::String) =
+        @mknode(;head=:identifier, value=s, source=st, context)
+    core_globalref(s::String) =
+        @mknode(;head=:identifier, value=s, source=st, context, mod=Core)
+    valleaf(@nospecialize(v)) =
+        @mknode(;head=:value, value=v, source=st, context)
 
     if k === :error # the parser leaves all sorts of junk in here
-        return mkleaf(st)
+        return @mknode(st; children=nothing)
     elseif is_leaf(st)
         return if k === :cmdmacroname || k === :strmacroname
             name = lower_identifier_name(syntax_name(st), k)
@@ -1176,7 +1162,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             mac = core_globalref(macname)
             arg = valleaf(replace(sourcetext(st), '_'=>""))
             ret_cids = SyntaxList(mac, valleaf(nothing), arg)
-            newnode(st, :macrocall, ret_cids)
+            @mknode(;source=st, context, head=:macrocall, children=ret_cids)
         elseif k === :identifier || k === :value
             st
         elseif st.value isa String
@@ -1199,8 +1185,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (cmdstring _...) => (macrocall Core.@cmd lno joined_str)
         cmd_arg = _string_to_est(st, cs; unwrap_literal=true)
         loc_st = valleaf(source_location(LineNumberNode, st))
-        return newnode(st, :macrocall, SyntaxList(
-            core_globalref("@cmd"), loc_st, cmd_arg))
+        return @mknode(;source=st, context, head=:macrocall,
+                       children=SyntaxList(core_globalref("@cmd"), loc_st, cmd_arg))
     elseif k === :macro_name && n_cs === 1
         # "M.@x" => (. M (macro_name x)) => (. M @x)
         # "@M.x" => (macro_name (. M x)) => (. M @x)
@@ -1214,9 +1200,10 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 head(inner_cs[2]) === :identifier)
                 (lhs, raw_m) = _green_to_est(cs[1], 1, inner_cs[1]), inner_cs[2]
                 mname_s = lower_identifier_name(syntax_name(raw_m), :macro_name)
-                mname = _setattr!(mkleaf(raw_m), :value, mname_s)
-                mname_inert = newnode(raw_m, :inert, SyntaxList(mname))
-                return mknode(inner_st, SyntaxList(lhs, mname_inert))
+                mname = @mknode(raw_m; children=nothing, value=mname_s)
+                mname_inert = @mknode(;source=raw_m, context, head=:inert,
+                                      children=SyntaxList(mname))
+                return @mknode(inner_st; children=SyntaxList(lhs, mname_inert))
             else
                 return _green_to_est(parent, 1, inner_st)
             end
@@ -1230,12 +1217,12 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         op_s = syntax_name(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
-        return newnode(st, Symbol(op_s), SyntaxList(lhs, rhs))
+        return @mknode(;source=st, context, head=Symbol(op_s), children=SyntaxList(lhs, rhs))
     elseif k === :var".op=" && n_cs === 3
         op_s = '.' * syntax_name(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
-        return newnode(st, Symbol(op_s), SyntaxList(lhs, rhs))
+        return @mknode(;source=st, context, head=Symbol(op_s), children=SyntaxList(lhs, rhs))
     elseif k === :var"op=" && n_cs === 1
         # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
         return symleaf(syntax_name(cs[1]) * '=')
@@ -1263,7 +1250,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         if n_cs >= 2 && head(cs[1]) === :cmdmacroname
             ret_cs = _map_green_to_est(st, cs)
             ret_cs[3] = ret_cs[3][3] # node leak
-            return mknode(st, ret_cs)
+            return @mknode(st; children=ret_cs)
         end
         do_ex = head(cs[end]) === :do ? pop!(cs) : nothing
         _reorder_parameters!(cs, 3)
@@ -1288,8 +1275,10 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             if is_prefix_call(st)
                 # (dotcall f args...) => (. f (tuple args...))
                 ret_cs = _map_green_to_est(st, cs)
-                tuple = newnode(st, :tuple, ret_cs[2:end])
-                return newnode(st, :., SyntaxList(ret_cs[1], tuple))
+                tuple = @mknode(;source=st, context,
+                                head=:tuple, children=ret_cs[2:end])
+                return @mknode(;source=st, context,
+                               head=:., children=SyntaxList(ret_cs[1], tuple))
             else
                 # (dotcall + args...) => (call .+ args...)
                 ret_k = :call
@@ -1305,8 +1294,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             lhs = _green_to_est(st, 1, cs[1])
             rhs = _green_to_est(st, 2, cs[2])
             inert_rhs = head(rhs) in (:quote, :inert) ? rhs :
-                newnode(cs[2], :inert, SyntaxList(rhs))
-            return mknode(st, SyntaxList(lhs, inert_rhs))
+                @mknode(;source=cs[2], context,
+                        head=:inert, children=SyntaxList(rhs))
+            return @mknode(st; children=SyntaxList(lhs, inert_rhs))
         elseif n_cs === 1
             # (. x) => (. x) or .x
             # TODO: This is the one place where :parens change the result,
@@ -1385,7 +1375,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             elseif head(c) === :finally
                 finally_ = only(inner_cs)
             elseif head(c) === :error
-                return mknode(st, cs) # give up
+                return @mknode(st; children=cs) # give up
             else
                 @assert false "Illegal subclause in `try`"
             end
@@ -1409,9 +1399,10 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 rest = _map_green_to_est(st, rest; undef_parent=true)
                 pushfirst!(rest, g_out)
             end
-            g_out = mknode(st, gen_cs)
+            g_out = @mknode(st; children=gen_cs)
             if c !== cs[end]
-                g_out = newnode(c, :flatten, SyntaxList(g_out))
+                g_out = @mknode(;source=c, context,
+                                head=:flatten, children=SyntaxList(g_out))
             end
         end
         return _setattr!(g_out, :source, st) # outermost provenance
@@ -1431,20 +1422,23 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (elseif cond body) => (elseif (block cond) body)
         # RGN->Expr block-wraps for linenodes; we do it for parity
         ret_cs = _map_green_to_est(st, cs)
-        ret_cs[1] = newnode(cs[1], :block, SyntaxList(ret_cs[1]))
-        return mknode(st, ret_cs)
+        ret_cs[1] = @mknode(;source=cs[1], context,
+                            head=:block, children=SyntaxList(ret_cs[1]))
+        return @mknode(st; children=ret_cs)
     elseif k === :-> && head(cs[2]) !== :block
         ret_cs = _map_green_to_est(st, cs)
-        ret_cs[2] = newnode(cs[2], :block, SyntaxList(ret_cs[2]))
-        return mknode(st, ret_cs)
+        ret_cs[2] = @mknode(;source=cs[2], context,
+                            head=:block, children=SyntaxList(ret_cs[2]))
+        return @mknode(st; children=ret_cs)
     elseif k === :function && n_cs >= 2 &&
         has_flags(st, SHORT_FORM_FUNCTION_FLAG)
         # (function-= callex body) => (= callex (block body))
         # exception: no block on "x' = y", or if body is already a block
         if head(cs[2]) !== :block && !is_postfix_op_call(cs[1])
             ret_cs = _map_green_to_est(st, cs)
-            ret_cs[2] = newnode(cs[2], :block, SyntaxList(ret_cs[2]))
-            return newnode(st, :(=), ret_cs)
+            ret_cs[2] = @mknode(;source=cs[2], context,
+                                head=:block, children=SyntaxList(ret_cs[2]))
+            return @mknode(;source=st, context, head=:(=), children=ret_cs)
         end
         ret_k = :(=)
     elseif k === :module
@@ -1454,8 +1448,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (quote something_simple) => (inert something_simple)
         ret_c = _green_to_est(st, 1, cs[1])
         return is_leaf(ret_c) && !(ret_c.value isa Bool) ?
-            newnode(st, :inert, SyntaxList(ret_c)) :
-            mknode(st, SyntaxList(ret_c))
+            @mknode(;source=st, context, head=:inert, children=SyntaxList(ret_c)) :
+            @mknode(st; children=SyntaxList(ret_c))
     elseif k === :do
         ret_k = :->
     elseif k === :block
@@ -1467,7 +1461,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         if head(parent) === :let && parent_i === 1 && n_cs === 1
             out = _green_to_est(st, 1, cs[1])
             return head(out) in (:identifier, :(=), :(::)) ? out :
-                mknode(st, SyntaxList(out))
+                @mknode(st; children=SyntaxList(out))
         elseif head(parent) === :struct && parent_i === 3
             cs_tmp = SyntaxList()
             for c in cs
@@ -1482,8 +1476,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (local (tuple a b c)) => (local a b c)
         if head(cs[1]) === :const
             ret_c1_cs = _map_green_to_est(st, preprocessed_green_children(cs[1]))
-            ret_cs = SyntaxList(mknode(st, ret_c1_cs))
-            return mknode(cs[1], ret_cs)
+            ret_cs = SyntaxList(@mknode(st; children=ret_c1_cs))
+            return @mknode(cs[1]; children=ret_cs)
         elseif head(cs[1]) === :tuple
             cs = preprocessed_green_children(cs[1])
         end
@@ -1522,7 +1516,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     # Recurse on `cs`.  If no children change, just return `st`.
     ret_cs = _map_green_to_est(st, cs; kw_in_params)
     return ret_cs == children(st) && ret_k == head(st) ?
-        st : newnode(st, ret_k, ret_cs)
+        st : @mknode(;source=st, head=ret_k, children=ret_cs, context)
 end
 
 function _map_green_to_est(parent::SyntaxTree, cs;
@@ -1562,7 +1556,7 @@ function _reorder_parameters!(cs::SyntaxList, params_pos::Int)
         next_ball_cs = pushfirst!(copy(children(cs[end])), param_ball)
         # `mknode` leaks nodes, but having multiple `parameters` blocks is
         # extremely rare nonsense syntax (`f(a,b;c=d;e)`)
-        param_ball = mknode(cs[end], next_ball_cs)
+        param_ball = @mknode(cs[end]; children=next_ball_cs)
         pop!(cs)
     end
     insert!(cs, params_pos, param_ball)
@@ -1574,8 +1568,9 @@ end
 # Expects preprocessed and rearranged `args`
 function _make_do_expression(st::SyntaxTree, args::SyntaxList, doex::SyntaxTree)
     ret_doex = _green_to_est(st, 0, doex)
-    ret_callex = mknode(st, _map_green_to_est(st, args))
-    return newnode(st, :do, SyntaxList(ret_callex, ret_doex))
+    ret_callex = @mknode(st; children=_map_green_to_est(st, args))
+    return @mknode(;source=st, context=st.context, head=:do,
+                   children=SyntaxList(ret_callex, ret_doex))
 end
 
 # A `string` or `cmdstring` may have multiple literal strings within (from
@@ -1606,8 +1601,8 @@ function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
         elseif cur_str
             write(buf, c.value)
             if !next_str
-                ret_c = newleaf(st, :value)
-                _setattr!(ret_c, :value, String(take!(buf)))
+                ret_c = @mknode(;head=:value, value=String(take!(buf)),
+                                source=st, context=st.context)
                 push!(ret_cs, ret_c)
             end
         else
@@ -1622,5 +1617,5 @@ function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
     if unwrap_literal && length(ret_cs) === 1 && is_literal_str(ret_cs[1])
         return _setattr(ret_cs[1], :source, st)
     end
-    return mknode(st, ret_cs)
+    return @mknode(st; children=ret_cs)
 end

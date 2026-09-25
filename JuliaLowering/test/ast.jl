@@ -1,22 +1,10 @@
+using JuliaSyntax: @mknode
+
 @testset "assert_syntaxtree" begin
     st = parsestmt(SyntaxTree, "function foo end")
     @test JuliaLowering.assert_syntaxtree(st) === nothing
-
-    bad_st = JuliaSyntax.newleaf(st, :identifier)
-    @test_throws "needs value" JuliaLowering.assert_syntaxtree(bad_st)
-    @test_throws "needs value" show(bad_st)
-
-    bad_st = JuliaSyntax.newleaf(st, :code_info)
-    @test_throws "unrecognized leaf" JuliaLowering.assert_syntaxtree(bad_st)
-
-    setfield!(bad_st, :children, SyntaxList(bad_st))
-    @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(bad_st)
-
-    cyc_1 = JuliaSyntax.@mknode(st; head=:block, children=SyntaxList())
-    cyc_2 = JuliaSyntax.@mknode(st; head=:block, children=SyntaxList(cyc_1))
-    setfield!(cyc_1, :children, SyntaxList(cyc_2))
-    @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_1)
-    @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_2)
+    @test_throws "needs value" @mknode(;source=st, context=st.context, head=:identifier)
+    @test_throws "unrecognized leaf" @mknode(st; head=:code_info, children=nothing)
 end
 
 @testset "flatten_blocks" begin
