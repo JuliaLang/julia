@@ -39,8 +39,6 @@ function Base.getindex(A::Const, i1::Int, i2::Int, I::Int...)
     @boundscheck Base.checkbounds(A.a, i1, i2, I...) # generally _to_linear_index requires bounds checking
     return @inbounds A[Base._to_linear_index(A.a, i1, i2, I...)]
 end
-# `Const` does not support pointer conversion, so it does not follow the strided array interface
-Base.isdense(::Type{<:Const}) = false
 
 """
     @aliasscope expr

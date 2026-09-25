@@ -568,11 +568,13 @@ Return `true` if reading an element of an array of this type through a pointer i
 equivalent to reading it with [`getindex`](@ref). Otherwise return `false`.
 
 Precisely, for an array `A` of this type with an `isbits` element type `T`, if `p::Ptr{T}`
-points to the memory of the element `A[i]` (for example, a pointer obtained through the
-[strided array interface](@ref man-interface-strided-arrays)), then `unsafe_load(p)`
+points to the memory of the element `A[i]`, then `unsafe_load(p)`
 returns a value identical (`===`) to `A[i]`.
 
-This trait does not imply that the array is strided, see [`Base.isstrided`](@ref).
+This trait does not imply that the array is strided. If the array type is also
+[`isstrided`](@ref Base.isstrided), arrays of this type with an `isbits` element type
+must provide a pointer to their elements through `Base.cconvert` and `Base.unsafe_convert`,
+as described in the [strided array interface](@ref man-interface-strided-arrays).
 
 Defaults to `false`.
 
@@ -594,11 +596,13 @@ Return `true` if writing an element of an array of this type through a pointer i
 equivalent to writing it with [`setindex!`](@ref). Otherwise return `false`.
 
 Precisely, for an array `A` of this type with an `isbits` element type `T`, if `p::Ptr{T}`
-points to the memory of the element `A[i]` (for example, a pointer obtained through the
-[strided array interface](@ref man-interface-strided-arrays)), then `unsafe_store!(p, x)`
+points to the memory of the element `A[i]`, then `unsafe_store!(p, x)`
 has the same effect as `A[i] = x` for any `x::T`.
 
-This trait does not imply that the array is strided, see [`Base.isstrided`](@ref).
+This trait does not imply that the array is strided. If the array type is also
+[`isstrided`](@ref Base.isstrided), arrays of this type with an `isbits` element type
+must provide a pointer to their elements through `Base.cconvert` and `Base.unsafe_convert`,
+as described in the [strided array interface](@ref man-interface-strided-arrays).
 
 Defaults to `false`.
 
@@ -616,11 +620,14 @@ isunsafestorable(A::AbstractArray) = isunsafestorable(typeof(A))
 """
     Base.isdense(type)::Bool
 
-Return `true` if arrays of this array type follow the
-[strided array interface](@ref man-interface-strided-arrays) and additionally store
-isbits elements in memory in the same layout as an [`Array`](@ref) of the same element
+Return `true` if arrays of this array type are [`isstrided`](@ref Base.isstrided)
+and additionally store isbits elements in the same layout as an [`Array`](@ref) of the same element
 type and size: contiguously, in column-major order, with an element spacing of
 `Base.elsize(Array{T})` bytes.
+
+Like the other layout traits, this only describes where elements are stored, not how that
+storage can be accessed. It does not imply that the elements can be accessed through a
+pointer, see [`Base.isunsafeloadable`](@ref) and [`Base.isunsafestorable`](@ref).
 
 Array types with this trait get default [`strides`](@ref) and [`Base.elsize`](@ref)
 definitions, and are [`islinearstrided`](@ref Base.islinearstrided) and
@@ -642,9 +649,8 @@ isdense(A::AbstractArray) = isdense(typeof(A))
 """
     Base.islinearstrided(type)::Bool
 
-Return `true` if arrays of this array type follow the
-[strided array interface](@ref man-interface-strided-arrays) and additionally isbits
-elements are evenly spaced in memory in column-major order.
+Return `true` if arrays of this array type are [`isstrided`](@ref Base.isstrided)
+and additionally isbits elements are evenly spaced in column-major order.
 
 Array types with this trait are [`isstrided`](@ref Base.isstrided) by default.
 
@@ -661,7 +667,13 @@ islinearstrided(A::AbstractArray) = islinearstrided(typeof(A))
     Base.isstrided(type)::Bool
 
 Return `true` if arrays of this array type follow the
-[strided array interface](@ref man-interface-strided-arrays). Otherwise return `false`.
+[strided array interface](@ref man-interface-strided-arrays): the location of each
+element in the array's storage is described by [`strides`](@ref) and [`Base.elsize`](@ref).
+Otherwise return `false`.
+
+The storage does not need to be accessible through a `Ptr`; for example, it could be
+GPU memory. Pointer access is declared separately with [`Base.isunsafeloadable`](@ref)
+and [`Base.isunsafestorable`](@ref).
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.

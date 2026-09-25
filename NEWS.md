@@ -183,12 +183,17 @@ New library functions
   `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
   image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
   original transform when an `include(mapexpr, …)`-ed file is edited.
-* New trait functions `Base.isstrided`, `Base.islinearstrided`, and `Base.isdense`
-  report whether an array type follows the strided array interface, and if so, whether its elements are
-  evenly spaced in column-major order or laid out exactly like an `Array`. `Base.isunsafeloadable` and
-  `Base.isunsafestorable` report whether reading or writing elements through a pointer is equivalent to
-  `getindex` or `setindex!`. Array types that set `Base.isdense` get default `strides` and `Base.elsize`
-  methods ([#60964]).
+* New trait functions `Base.isstrided`, `Base.islinearstrided`, and `Base.isdense` describe the
+  memory layout of an array type: whether `strides` and `Base.elsize` give the location of each element,
+  whether the elements are also evenly spaced in column-major order, and whether they are also laid out
+  exactly like an `Array`. They describe only the layout, not how the storage is accessed, so they also
+  apply to arrays that cannot be accessed through a `Ptr`, such as GPU arrays. `Base.isdense` defaults to
+  `true` for subtypes of `DenseArray`, and array types with this trait get default `strides` and
+  `Base.elsize` methods ([#60964]).
+* New trait functions `Base.isunsafeloadable` and `Base.isunsafestorable` declare that reading or
+  writing an element through a `Ptr` is equivalent to `getindex` or `setindex!`. A strided array type with
+  either trait must also provide a pointer to its elements through `Base.cconvert` and `Base.unsafe_convert`
+  ([#60964]).
 
 New library features
 --------------------
