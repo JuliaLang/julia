@@ -429,7 +429,7 @@ end
      1 | 2
     """
     @test latex(table) ==
-        "\\begin{tabular}\n{r | r}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
+        "\\begin{tabular}\n{l | l}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
 
     # mime output
     @test sprint(show, "text/plain", book) ==
@@ -616,7 +616,7 @@ end
     a  | b
     ---|---
     1  | 2""" == MD(Table(Any[["a","b"],
-                              ["1","2"]], [:r, :r]))
+                              ["1","2"]], [:l, :l]))
 
     @test md"""
     | a  |  b | c |
@@ -625,7 +625,7 @@ end
                                                       Any[["d",Code("gh"),"hg"],
                                                           ["hgh",Bold("jhj"),"ge"],
                                                           "f"]],
-                                                  [:l, :r, :r]))
+                                                  [:l, :r, :l]))
     @test md"""
     |   | b |
     |:--|--:|
@@ -672,6 +672,13 @@ end
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
     @test Markdown.html(table) == """<table><tr><th align="left">a</th><th align="right">b</th></tr><tr><td align="left"><code>x | y</code></td><td align="right">2</td></tr></table>\n"""
+
+    # a delimiter cell with no colon means no alignment, which GFM renders left-aligned
+    table = Markdown.parse("|a|b|c|d|\n|---|:--|--:|:-:|\n|1|2|3|4|").content[1]
+    @test table.align == [:l, :l, :r, :c]
+    @test Markdown.parse(Markdown.plain(table)).content[1].align == table.align
+    @test Markdown.html(Markdown.parse("|a|\n|---|\n|1|")) ==
+        """<table><tr><th align="left">a</th></tr><tr><td align="left">1</td></tr></table>\n"""
 end
 
 @testset "LaTeX extension" begin
