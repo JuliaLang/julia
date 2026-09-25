@@ -7,7 +7,7 @@
     @test_throws "needs value" show(bad_st)
 
     bad_st = JuliaSyntax.newleaf(st, :code_info)
-    @test_throws "unrecognized leaf kind" JuliaLowering.assert_syntaxtree(bad_st)
+    @test_throws "unrecognized leaf" JuliaLowering.assert_syntaxtree(bad_st)
 
     setfield!(bad_st, :children, SyntaxList(bad_st))
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(bad_st)

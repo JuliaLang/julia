@@ -41,72 +41,9 @@ collected later.
 current_lambda_bindings(::AbstractLoweringContext) = nothing
 
 """
-Unique symbolic identity for a variable, constant, label, or other entity
-"""
-const IdTag = Int
-
-"""
 Lexical scope ID
 """
 const ScopeId = Int
-
-const DEFAULT_NODE = SyntaxTree(
-    :none, nothing, nothing, LineNumberNode(0),
-    SyntaxContext(JuliaLowering, (0, 0)))
-
-"""
-    @mknode(old; attr=val...)
-
-Create a node `new` that is an immutable update of `old`, but setting `old` as
-its provenance, and setting jl_source to macrocall's location.  `attrs` may
-override `old`'s fields (so if `old` is not provided, some attrs are required.)
-
-This is the main operation used by syntax transformations in lowering.
-"""
-macro mknode(attrs, old)
-    Base.remove_linenums!(old)
-    Base.remove_linenums!(attrs)
-    old_gs = gensym()
-    if !(isnothing(attrs) || attrs isa Expr && Meta.isexpr(attrs, :parameters))
-        throw(ArgumentError("usage: @mknode(old; attr=val...)"))
-    end
-    out_args = Vector(undef, fieldcount(SyntaxTree))
-    for (i, n) in enumerate(fieldnames(SyntaxTree))
-        out_args[i] = (DEBUG && n === :jl_source) ? __source__ :
-            n === :source ? old_gs :
-            Expr(:(.), old_gs, QuoteNode(n))
-    end
-    seen_attrs = Set{Symbol}()
-    attrs isa Expr && for a in attrs.args
-        (aname, aval) = if Meta.isexpr(a, :(kw), 2) && a.args[1] isa Symbol
-            (a.args[1]::Symbol, a.args[2])
-        elseif a isa Symbol
-            (a, a)
-        else
-            throw(ArgumentError("usage: @mknode(old; attr=val...)"))
-        end
-        aname in seen_attrs && throw(ArgumentError("duplicate attr provided $__source__"))
-        push!(seen_attrs, aname)
-        out_args[Base.fieldindex(SyntaxTree, aname)] = aval
-    end
-    old === DEFAULT_NODE && !((:head, :source, :context) ⊆ seen_attrs) &&
-        throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
-
-    out = Expr(:let,
-               Expr(:block, Expr(:(=), old_gs, old)),
-               Expr(:block, Expr(:call, SyntaxTree, out_args...)))
-    DEBUG && (out.args[end] = Expr(:call, _debug_check_attrs, out.args[end]))
-    esc(out)
-end
-macro mknode(x)
-    (old, attrs) = Meta.isexpr(x, :parameters) ? (DEFAULT_NODE, x) : (x, nothing)
-    esc(Expr(:macrocall, var"@mknode", __source__, attrs, old))
-end
-
-function _debug_check_attrs(x)
-    assert_syntaxtree(x, false)
-    x
-end
 
 function JuliaSyntax.newleaf(prov::SyntaxTree, k::Symbol, @nospecialize(value))
     context = prov.context

@@ -20,9 +20,12 @@ using .JuliaSyntax: @stm, SourceAttrType, SourceRef,
     CompileHints, source_location, sourcefile, sourceref, mapindex, mktree,
     ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
     syntax_module, edition, is_flisp_compat, adopt_scope,
-    remove_scope, fill_context, JL_NEW_EDITION, JL_OLD_EDITION
+    remove_scope, fill_context, JL_NEW_EDITION, JL_OLD_EDITION,
+    assert_syntaxtree, @mknode, DEBUG_LOWERING, IdTag
 
-const DEBUG = true
+const DEBUG = DEBUG_LOWERING
+# const DEBUG = isdefinedglobal(Base, :DEBUG_LOWERING) ?
+#     Base.DEBUG_LOWERING : true
 
 # Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
 # where `Core.MacroSource` is not defined.

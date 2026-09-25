@@ -47,6 +47,8 @@ mutable struct SyntaxTree
     syntax_flags::UInt16
 end
 
+const IdTag = Int
+
 function SyntaxTree(head::Symbol, children, @nospecialize(value), source, context)
     SyntaxTree(head, children, value, source, context,
                nothing, nothing, nothing, UInt16(0))
@@ -447,6 +449,157 @@ end
 
 #-------------------------------------------------------------------------------
 # AST creation utilities
+
+# Tree invariants assumed everywhere, including `show`, so fallback printing
+# should be used on failure.  (These checks really belong in the type system.)
+# Failure should only be possible working on internals.
+function assert_syntaxtree(st::SyntaxTree, recursive=true)
+    vr = recursive ? _assert_syntaxtree(st, SyntaxTree[]) :
+        _assert_syntaxtree_node(st)
+    if vr !== nothing
+        err_st, err = vr
+        msg = string("assert_syntaxtree failed: ", node_string(st),
+                     "\n  failing node: ", node_string(err_st),
+                     "\n  reason: ", err)
+        error(msg)
+    end
+    nothing
+end
+
+macro mknode end
+
+function _assert_syntaxtree_node(st::SyntaxTree)
+    h = head(st)
+    if is_leaf(st)
+        if h === :globalref && st.mod === nothing
+            return (st, "leaf globalref requires module in .mod")
+        end
+        (needs_val, valtype) =
+            h === :identifier ? (true, String) :
+            h === :value ? (true, Any) :
+            h === :core ? (true, String) :
+            h === :top ? (true, String) :
+            h === :symbol ? (true, String) :
+            h === :globalref ? (true, String) :
+            h === :placeholder ? (false, Any) :
+            h === :bindingid ? (true, IdTag) :
+            h === :label ? (true, Int) :
+            h === :symboliclabel ? (true, String) :
+            h === :symbolicgoto ? (true, String) :
+            h === :slot ? (true, Int) :
+            h === :static_parameter ? (true, Int) :
+            h === :ssavalue ? (true, Int) :
+            h === :nothing ? (false, Any) :
+            h === :tombstone ? (false, Any) :
+            h === :sourcelocation ? (false, Any) :
+            h === :latestworld ? (false, Any) :
+            h === :latestworld_if_toplevel ? (false, Any) :
+            h === :strmacroname ? (true, String) :
+            h === :cmdmacroname ? (true, String) :
+            h === :lambdabindings ? (true, Any) : # JL.LambdaBindings
+            h === :slots ? (true, Vector) : # Vector{JL.Slot}
+            h === :version ? (true, VersionNumber) :
+            JuliaSyntax.is_trivia(st) ? (false, Any) : # green tree only
+                (return (st, "unrecognized leaf $(h)"))
+        if needs_val && !(st.value isa valtype)
+            return (st, "needs value ::"*string(valtype))
+        end
+    else
+        # Note some kinds can show up as non-leaves too (mostly from Expr)
+        if h in (:identifier, :value, :placeholder, :bindingid, :label, :symbol,
+                 :nothing, :tombstone, :sourcelocation,
+                 :lambdabindings, :slots)
+            return (st, "Found leaf-only kind with children")
+        end
+    end
+    nothing
+end
+
+function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree})
+    if st in parents
+        err = "cycle detected: ["
+        for p in parents
+            err *= "\n" * node_string(p)
+        end
+        return (st, err*"]")
+    end
+    vr = _assert_syntaxtree_node(st)
+    isnothing(vr) || return vr
+    # TODO: Proper traversal along .source and macro prov (need to cache results
+    # to avoid exponential repeated lookups, and figure out how these edges may
+    # form cycles with child edges)
+    st.source === st && return (st, ".source equal to self ID")
+    sc = st.context
+    sc.unexpanded === st && return (st, "unexpanded equal to self")
+
+    push!(parents, st)
+    is_leaf(st) || for c in children(st)
+        vr = _assert_syntaxtree(c, parents)
+        isnothing(vr) || return vr
+    end
+    pop!(parents)
+    nothing
+end
+
+const _DEFAULT_NODE = SyntaxTree(
+    :none, nothing, nothing, LineNumberNode(0),
+    SyntaxContext(Core, (0, 0)))
+
+const DEBUG_LOWERING = true
+
+"""
+    @mknode(old; attr=val...)
+
+Create a node `new` that is an immutable update of `old`, but setting `old` as
+its provenance, and setting jl_source to macrocall's location.  `attrs` may
+override `old`'s fields (so if `old` is not provided, some attrs are required.)
+
+This is the main operation used by syntax transformations in lowering.
+"""
+macro mknode(attrs, old)
+    Base.remove_linenums!(old)
+    Base.remove_linenums!(attrs)
+    old_gs = gensym()
+    if !(isnothing(attrs) || attrs isa Expr && Meta.isexpr(attrs, :parameters))
+        throw(ArgumentError("usage: @mknode(old; attr=val...)"))
+    end
+    out_args = Vector(undef, fieldcount(SyntaxTree))
+    for (i, n) in enumerate(fieldnames(SyntaxTree))
+        out_args[i] = (DEBUG_LOWERING && n === :jl_source) ? __source__ :
+            n === :source ? old_gs :
+            Expr(:(.), old_gs, QuoteNode(n))
+    end
+    seen_attrs = Set{Symbol}()
+    attrs isa Expr && for a in attrs.args
+        (aname, aval) = if Meta.isexpr(a, :(kw), 2) && a.args[1] isa Symbol
+            (a.args[1]::Symbol, a.args[2])
+        elseif a isa Symbol
+            (a, a)
+        else
+            throw(ArgumentError("usage: @mknode(old; attr=val...)"))
+        end
+        aname in seen_attrs && throw(ArgumentError("duplicate attr provided $__source__"))
+        push!(seen_attrs, aname)
+        out_args[Base.fieldindex(SyntaxTree, aname)] = aval
+    end
+    old === _DEFAULT_NODE && !((:head, :source, :context) ⊆ seen_attrs) &&
+        throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
+
+    out = Expr(:let,
+               Expr(:block, Expr(:(=), old_gs, old)),
+               Expr(:block, Expr(:call, SyntaxTree, out_args...)))
+    DEBUG_LOWERING && (out.args[end] = Expr(:call, _debug_check_attrs, out.args[end]))
+    esc(out)
+end
+macro mknode(x)
+    (old, attrs) = Meta.isexpr(x, :parameters) ? (_DEFAULT_NODE, x) : (x, nothing)
+    esc(Expr(:macrocall, var"@mknode", __source__, attrs, old))
+end
+
+function _debug_check_attrs(x)
+    assert_syntaxtree(x, false)
+    x
+end
 
 """
     newnode(prov::SyntaxTree, head::Symbol, children)
