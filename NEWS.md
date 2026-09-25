@@ -209,6 +209,9 @@ New library features
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
 * The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
   heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
+* New public but unexported type `Base.SignalCondition` lets a program wait for, or run a callback on,
+  signals such as `SIGTERM` and `SIGHUP`. While it is open it replaces the signal's usual effect, and
+  calling `close` on it restores that effect ([#63344]).
 * The signal number constants `Base.SIGHUP`, `Base.SIGTERM` etc. are now public and documented, and
   `SIGUSR2`, `SIGALRM`, `SIGCHLD`, `SIGCONT` and `SIGWINCH` were added. `Base.sigrtmin()` and
   `Base.sigrtmax()` give the range of real-time signals where the platform has them ([#63344]).

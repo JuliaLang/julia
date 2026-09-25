@@ -1092,8 +1092,12 @@ static void jl_sigsetset(sigset_t *sset)
         sigaddset(sset, *sig);
 }
 
-#ifdef HAVE_KEVENT
 static void sigint_handler(int sig);
+
+#ifdef HAVE_KEVENT
+// Whether the listener gets signals from kqueue, which needs them ignored.
+static _Atomic(int) kqueue_signals = 0;
+
 static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 {
     if (*sigqueue == -1)
@@ -1224,6 +1228,107 @@ static void do_profile(void) JL_NOTSAFEPOINT
 }
 #endif
 
+// These signals are blocked on every thread, so an installed handler (such as libuv's) runs from here.
+static int forward_to_installed_handler(int sig) JL_NOTSAFEPOINT
+{
+    struct sigaction sa;
+    if (sigaction(sig, NULL, &sa) != 0)
+        return 0;
+    // Our own handlers for these signals take `siginfo_t`, except for SIGINT's.
+    if ((sa.sa_flags & SA_SIGINFO) || sa.sa_handler == SIG_DFL || sa.sa_handler == SIG_IGN ||
+            sa.sa_handler == sigint_handler)
+        return 0;
+    // Block signals as the kernel would, or a nested signal could deadlock on libuv's lock.
+    sigset_t all, old;
+    sigfillset(&all);
+    pthread_sigmask(SIG_SETMASK, &all, &old);
+    sa.sa_handler(sig);
+    pthread_sigmask(SIG_SETMASK, &old, NULL);
+    return 1;
+}
+
+JL_DLLEXPORT int jl_signal_is_reserved(int sig)
+{
+    switch (sig) {
+    case SIGILL:
+    case SIGABRT:
+    case SIGFPE:
+    case SIGSEGV:
+    case SIGBUS:
+    case SIGTRAP:
+    case SIGSYS:
+    case SIGPIPE:
+    case SIGKILL:
+    case SIGSTOP:
+#if !defined(HAVE_MACH)
+    case SIGUSR2: // thread suspension
+#endif
+        return 1;
+    default:
+#ifdef SIGRTMIN
+        // Signals below SIGRTMIN are kept by the C library or unused.
+        if (sig >= 32 && sig < SIGRTMIN)
+            return 1;
+#endif
+#ifdef SIGRTMAX
+        // FreeBSD's NSIG counts only the old signals, not the real-time ones.
+        return sig <= 0 || sig > SIGRTMAX;
+#else
+        return sig <= 0 || sig >= NSIG;
+#endif
+    }
+}
+
+// Keeps signal dispositions still while the listener checks them.
+static pthread_mutex_t sigint_disposition_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// libuv resets a signal to the default when its last watcher stops, so put back what we need.
+static void restore_signal_disposition(int sig)
+{
+    struct sigaction sa;
+    if (sigaction(sig, NULL, &sa) != 0 || (sa.sa_flags & SA_SIGINFO) || sa.sa_handler != SIG_DFL)
+        return;
+    if (sig == SIGINT) {
+        if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON) {
+            memset(&sa, 0, sizeof(sa));
+            sigemptyset(&sa.sa_mask);
+            sa.sa_handler = sigint_handler;
+            sigaction(SIGINT, &sa, NULL);
+        }
+        return;
+    }
+#ifdef HAVE_KEVENT
+    // With kqueue, a signal left at the default stays pending, and ignoring it discards it.
+    if (!jl_atomic_load_relaxed(&kqueue_signals))
+        return;
+    for (const int *s = sigwait_sigs; *s; s++) {
+        if (*s == sig) {
+            signal(sig, SIG_IGN);
+            return;
+        }
+    }
+#endif
+}
+
+JL_DLLEXPORT int jl_start_signal_watcher(uv_signal_t *handle, uv_signal_cb cb, int sig)
+{
+    pthread_mutex_lock(&sigint_disposition_lock);
+    int err = uv_signal_start(handle, cb, sig);
+    pthread_mutex_unlock(&sigint_disposition_lock);
+    return err;
+}
+
+// Called with the IO lock held, which also covers starting a watcher.
+void jl_close_signal_watcher(uv_signal_t *handle, uv_close_cb cb)
+{
+    int sig = handle->signum;
+    pthread_mutex_lock(&sigint_disposition_lock);
+    uv_close((uv_handle_t*)handle, cb);
+    if (sig != 0)
+        restore_signal_disposition(sig);
+    pthread_mutex_unlock(&sigint_disposition_lock);
+}
+
 // SIGRTMIN and SIGRTMAX can be run-time values, so they cannot be Julia constants.
 JL_DLLEXPORT int jl_sigrtmin(void)
 {
@@ -1265,6 +1370,9 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             for (const int *sig = sigwait_sigs; *sig; sig++)
                 signal(*sig, SIG_DFL);
         }
+        else {
+            jl_atomic_store_relaxed(&kqueue_signals, 1);
+        }
     }
 #endif
     while (1) {
@@ -1279,6 +1387,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 perror("signal kevent");
             }
             if (nevents != 1) {
+                jl_atomic_store_relaxed(&kqueue_signals, 0);
                 close(sigqueue);
                 sigqueue = -1;
                 for (const int *sig = sigwait_sigs; *sig; sig++)
@@ -1311,9 +1420,15 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #endif
 #endif
+        pthread_mutex_lock(&sigint_disposition_lock);
+        int forwarded = !profile && forward_to_installed_handler(sig);
+        int ignored = !forwarded && sig == SIGINT && jl_ignore_sigint();
+        pthread_mutex_unlock(&sigint_disposition_lock);
+        if (forwarded)
+            continue;
 
         if (sig == SIGINT) {
-            if (jl_ignore_sigint()) {
+            if (ignored) {
                 continue;
             }
             else if (exit_on_sigint) {

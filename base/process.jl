@@ -580,7 +580,8 @@ function run(cmds::AbstractCmd, args...; wait::Bool = true, cancel::CancelTokenA
 end
 
 # some common signal numbers that are usually available on all platforms
-# and might be useful as arguments to `kill` or testing against `Process.termsignal`
+# and might be useful as arguments to `kill`, testing against `Process.termsignal`,
+# or `SignalCondition`
 const SIGHUP   = 1
 const SIGINT   = 2
 const SIGQUIT  = 3 # !windows
@@ -600,8 +601,9 @@ for sig in (:SIGHUP, :SIGINT, :SIGQUIT, :SIGKILL, :SIGUSR1, :SIGUSR2, :SIGPIPE, 
     doc = """
         Base.$sig
 
-    The number of `$sig` on this platform, for use with [`kill`](@ref), or to compare with the
-    `termsignal` of a process.
+    The number of `$sig` on this platform, for use with [`kill`](@ref) and
+    [`SignalCondition`](@ref), or to compare with the `termsignal` of a process. The table
+    under [`SignalCondition`](@ref) lists which signals each platform has.
     """
     if sig === :SIGINFO
         doc *= """

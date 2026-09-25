@@ -441,6 +441,9 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             req->handle = (uv_stream_t*)handle;
             jl_uv_flush_close_callback(req, 0);
         }
+        else if (handle->type == UV_SIGNAL) {
+            jl_close_signal_watcher((uv_signal_t*)handle, &jl_uv_closeHandle);
+        }
         else {
             uv_close(handle, &jl_uv_closeHandle);
         }
