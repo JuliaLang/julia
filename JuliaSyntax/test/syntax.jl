@@ -1,6 +1,6 @@
 using .JuliaSyntax: SyntaxTree, SyntaxList, @stm, prov, prov_end, provenance,
     macro_prov, macro_prov_end, flattened_provenance, sourceref,
-    unexpanded_sourceref, mktree, copy_ast,
+    unexpanded_sourceref, mktree,
     unalias_nodes, annotate_parent!, _setattr!, getmeta, SyntaxContext,
     ScopeLayer, children
 
@@ -156,38 +156,6 @@ end
 end
 
 @testset "SyntaxTree utils" begin
-    @testset "copy_ast, mktree" begin
-        # A one-child tree whose root also has a provenance chain of its own
-        leaf = tnode(3)
-        st2 = @mknode(tnode(1); head=:block, children=SyntaxList(leaf))
-        st = @mknode(st2)   # st.source === st2
-
-        stcopy = copy_ast(st)
-        @test stcopy !== st
-        @test st ≈ stcopy
-        @test stcopy[1] !== st[1]
-        # `.source` chains are copied too
-        @test prov(stcopy) !== prov(st)
-        @test prov(st) ≈ prov(stcopy)
-
-        # Every node is copied at most once, so aliasing is preserved
-        shared = tnode(1)
-        aliased = @mknode(tnode(0); head=:block, children=SyntaxList(shared, shared))
-        acopy = copy_ast(aliased)
-        @test aliased ≈ acopy
-        @test acopy[1] !== shared
-        @test acopy[1] === acopy[2]
-
-        # Unlike copy_ast, mktree extends the provenance chain rather than
-        # copying it
-        stcopy2 = mktree(st)
-        @test stcopy2 !== st
-        @test st ≈ stcopy2
-        @test stcopy2[1] !== st[1]
-        @test stcopy2.source === st
-        @test stcopy2[1].source === st[1]
-    end
-
     @testset "unalias_nodes" begin
         # 1 -+-> 2 -+
         #    |      +-> 4

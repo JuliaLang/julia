@@ -642,42 +642,6 @@ function mapchildren(f::Function, ex::SyntaxTree)
 end
 
 """
-Recursively copy AST `ex` into `ctx`.  Every node in `ex` should be copied at
-most once.
-
-TODO: Likely unnecessary with immutable tree
-"""
-function copy_ast(ex::SyntaxTree)
-    _copy_ast(ex, Dict{SyntaxTree, SyntaxTree}())
-end
-
-function _copy_ast(id1::SyntaxTree, seen)
-    let copied = get(seen, id1, nothing)
-        isnothing(copied) || return copied
-    end
-    id2 = is_leaf(id1) ? @mknode(id1; children=nothing) :
-        @mknode(id1; children=children(id1))
-    seen[id1] = id2
-    if !is_leaf(id1)
-        cs = SyntaxTree[]
-        for cid in children(id1)
-            push!(cs, _copy_ast(cid, seen))
-        end
-        setchildren!(id2, cs)
-    end
-    src1 = id1.source
-    if src1 isa SyntaxTree
-        src2 =  _copy_ast(src1, seen)
-        _setattr!(id2, :source, src2)
-    elseif !isnothing(src1)
-        _setattr!(id2, :source, src1)
-    else
-        throw("bad source?")
-    end
-    return id2
-end
-
-"""
     unalias_nodes(st::SyntaxTree)
 
 Return a tree where each descendent of `st` has exactly one parent in `st`.  The
