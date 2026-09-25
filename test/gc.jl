@@ -240,6 +240,9 @@ if Base.GC_REGIONS
         run_gctest("gc/regions_tree.jl")
         run_gctest("gc/regions_stores.jl")
         run_gctest("gc/regions_safety.jl")
+        run_gctest("gc/regions_containers.jl")
+        run_gctest("gc/regions_heaps.jl")
+        run_gctest("gc/regions_many.jl")
     end
 else
     @info "GC regions: not built (WITH_GC_REGIONS=0), the regions tests are skipped"
