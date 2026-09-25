@@ -381,7 +381,8 @@ Float64
 """
 float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
 float(::Type{T}) where {T<:AbstractFloat} = T
-float(::Type{Union{}}, slurp...) = Union{}
+float(::Type{Union{}}) = Union{}
+float(::Type{Union{}}, slurp...) = throw(MethodError(float, (Union{}, slurp...)))
 
 """
     unsafe_trunc(T, x)
@@ -713,14 +714,18 @@ See also: [`Inf`](@ref), [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 isinf(x::IEEEFloat) = abs(x) === oftype(x, Inf)
 
-#=
-`decompose(x)`: non-canonical decomposition of rational values as `num*2^pow/den`.
+"""
+    Base.decompose(x::Real) -> (num::Integer, pow::Integer, den::Integer)
 
-The decompose function is the point where rational-valued numeric types that support
-hashing hook into the hashing protocol. `decompose(x)` should return three integer
-values `num, pow, den`, such that the value of `x` is mathematically equal to
+Return three integer values `num, pow, den`, such that the value of `x` is
+mathematically equal to
 
     num*2^pow/den
+
+The decompose function is the point where rational-valued `Real` subtypes that support
+hashing hook into the hashing protocol. It also provides the generic definitions of
+[`isfinite`](@ref) and [`isinf`](@ref) for `Real` subtypes, and it is used to compare
+`AbstractFloat` values against [`Rational`](@ref) values.
 
 The decomposition need not be canonical in the sense that it just needs to be *some*
 way to express `x` in this form, not any particular way – with the restriction that
@@ -732,8 +737,9 @@ Special values:
  - `x` is zero: `num` should be zero and `den` should have the same sign as `x`
  - `x` is infinite: `den` should be zero and `num` should have the same sign as `x`
  - `x` is not a number: `num` and `den` should both be zero
-=#
 
+See also [`hash`](@ref).
+"""
 decompose(x::Integer) = x, 0, 1
 
 function decompose(x::Float16)::NTuple{3,Int}

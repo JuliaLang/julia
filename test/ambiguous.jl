@@ -532,6 +532,39 @@ end
     end
 end
 
+# Bottom-type ambiguity fallbacks retain lookup-pruning signatures, not extra valid arities.
+@testset "arity of bottom-type fallbacks" begin
+    for (f, args, result) in (
+            (complex, (Union{},), Union{}),
+            (real, (Union{},), Union{}),
+            (float, (Union{},), Union{}),
+            (IndexStyle, (Union{},), IndexLinear()),
+            (Base.BroadcastStyle, (Union{},), Base.Broadcast.Unknown()),
+            (Base.OrderStyle, (Union{},), Base.Ordered()),
+            (Base.ArithmeticStyle, (Union{},), Base.ArithmeticUnknown()),
+            (Base.RangeStepStyle, (Union{},), Base.RangeStepIrregular()),
+            (Base.elsize, (Union{},), 0),
+            (Base.typeinfo_eltype, (Union{},), nothing),
+            (Iterators.flatten_iteratorsize, (Base.HasLength(), Union{}), Base.HasLength()),
+            (Iterators.flatten_iteratorsize, (Base.HasShape{2}(), Union{}), Base.HasLength()),
+            (Iterators.flatten_length, (Iterators.flatten(Union{}[]), Union{}), 0),
+        )
+        @test @inferred(f(args...)) === result
+        prefix = f === Iterators.flatten_iteratorsize ? (Union{Base.HasShape, Base.HasLength},) :
+                 f === Iterators.flatten_length ? (Any,) : ()
+        sig = Tuple{prefix..., Type{Union{}}, Vararg{Any}}
+        ft = f isa Type ? Type{f} : typeof(f)
+        @test which(f, sig).sig == Tuple{ft, sig.parameters...}
+        for extra in ((1,), (nothing, 2))
+            @test_throws MethodError(f, (args..., extra...)) f(args..., extra...)
+        end
+    end
+    @test Iterators.flatten_iteratorsize(Base.SizeUnknown(), Union{}) === Base.SizeUnknown()
+    @test Base.IteratorSize(Iterators.flatten(Union{}[])) === Base.HasLength()
+    @test length(Iterators.flatten(Union{}[])) == 0
+    @test Base.BroadcastStyle(Base.Broadcast.DefaultArrayStyle{1}(), Base.Broadcast.Unknown()) === Base.Broadcast.DefaultArrayStyle{1}()
+end
+
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
     @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})

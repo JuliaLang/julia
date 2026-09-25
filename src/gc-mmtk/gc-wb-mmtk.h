@@ -69,18 +69,17 @@ STATIC_INLINE void jl_gc_wb(const void *parent, void *slot JL_UNUSED, const void
     mmtk_gc_wb_fast(parent, ptr);
 }
 
-STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
+STATIC_INLINE void jl_gc_wb_object(const void *parent) JL_NOTSAFEPOINT // parent isa jl_value_t*
 {
-    mmtk_gc_wb_fast(ptr, (void*)0);
+    mmtk_gc_wb_fast(parent, (void*)0);
 }
 
 STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 
 STATIC_INLINE void jl_gc_wb_current_task(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
-#ifdef GC_BARRIER_SNAPSHOT
+    // GC_BARRIER_ON_TASKS: tasks are not treated specially by this GC
     mmtk_gc_wb_fast(parent, ptr);
-#endif
 }
 
 STATIC_INLINE void jl_gc_wb_knownold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT

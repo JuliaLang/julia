@@ -1195,6 +1195,15 @@ end
     @test Base.IndexStyle(rand(3, 3), [1; 2; 3]) == IndexLinear()
 end
 
+# The bottom-type fallback must not add IndexLinear to binary style inference.
+@testset "bottom-type IndexStyle inference" begin
+    @test Base.infer_return_type(IndexStyle, (Any, IndexCartesian)) === IndexCartesian
+    @test IndexStyle(IndexLinear(), IndexLinear()) === IndexLinear()
+    @test IndexStyle(IndexLinear(), IndexCartesian()) === IndexCartesian()
+    @test IndexStyle(IndexCartesian(), IndexLinear()) === IndexCartesian()
+    @test IndexStyle(IndexCartesian(), IndexCartesian()) === IndexCartesian()
+end
+
 @testset "promote_shape for Tuples and Dims" begin
     @test promote_shape((2, 1), (2,)) == (2, 1)
     @test_throws DimensionMismatch promote_shape((2, 3), (2,))

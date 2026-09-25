@@ -2623,15 +2623,15 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (intcast) {
         ctx.builder.CreateAlignedStore(instr, intcast, Align(alignment));
         instr = nullptr;
-    }
-    if (maybe_null_if_boxed) {
-        if (intcast)
+        // The pointers in `intcast` are stored as an integer, so the slot does not root
+        // them: reload the value with its pointer-exposing type to keep them tracked.
+        if (CountTrackedPointers(intcast->getAllocatedType()).count > 0)
             instr = ctx.builder.CreateAlignedLoad(intcast->getAllocatedType(), intcast, Align(alignment));
+    }
+    if (maybe_null_if_boxed && instr) {
         Value *first_ptr = isboxed ? instr : extract_first_ptr(ctx, instr);
         if (first_ptr)
             null_pointer_check(ctx, first_ptr, nullcheck);
-        if (intcast && !first_ptr)
-            instr = nullptr;
     }
     if (jltype == (jl_value_t*)jl_bool_type) { // "freeze" undef memory to a valid value
         // NOTE: if we zero-initialize arrays, this optimization should become valid

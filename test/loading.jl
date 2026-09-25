@@ -81,6 +81,17 @@ mktempdir() do dir
             @test Base.isfile_casesensitive(true_filename)
             @test !Base.isfile_casesensitive(lowered_filename)
 
+            # check that case-sensitivity is preserved for relative paths with ghost directories.
+            # Windows resolves `..` before looking at the disk, so there the file exists; elsewhere it does not.
+            ghost_path = joinpath("nonexistent", "..", true_filename)
+            @test Base.isfile_casesensitive(ghost_path) == isfile(ghost_path) == Sys.iswindows()
+            @test !Base.isfile_casesensitive(joinpath("nonexistent", "..", lowered_filename))
+
+            # check that case-sensitivity is preserved for relative paths with real directories:
+            mkdir("realdir")
+            @test Base.isfile_casesensitive(joinpath("realdir", "..", true_filename))
+            @test !Base.isfile_casesensitive(joinpath("realdir", "..", lowered_filename))
+
             # check that case-sensitivity only applies to basename of a path:
             if isfile(lowered_filename) # case-insensitive filesystem
                 mkdir("cAsEtEsT")
@@ -2362,6 +2373,14 @@ module M58272_to end
        @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == v"1.13"
     end
     include_world_age()
+
+    # A module parsed in a v"1.13" module should also be v"1.13"
+    let m = Module(:NoSlotParent)
+        Base.set_syntax_version(m, v"1.13")
+        include_string(m, "module NoSlot end")
+        noslot = invokelatest(getglobal, m, :NoSlot)
+        @test invokelatest(include_string, noslot, "Base.Experimental.@VERSION").syntax == v"1.13"
+    end
 end
 
 @testset "require_stdlib with isolated depot" begin

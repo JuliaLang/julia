@@ -2147,16 +2147,46 @@ function match_try(ex)
     (try_, catch_, else_, finally_)
 end
 
+function _symboliclabel_defs(st, labels=Set{NameKey}())
+    if kind(st) === K"symboliclabel"
+        push!(labels, NameKey(st))
+    elseif !(is_leaf(st) || is_quoted(st))
+        for c in children(st)
+            _symboliclabel_defs(c, labels)
+        end
+    end
+    labels
+end
+function _symboliclabel_refs(st, labels=Vector{SyntaxTree}())
+    if kind(st) === K"symbolicgoto"
+        push!(labels, st)
+    elseif !(is_leaf(st) || is_quoted(st))
+        for c in children(st)
+            _symboliclabel_refs(c, labels)
+        end
+    end
+    labels
+end
+function error_if_unmatched_symbolicgoto(ctx, st, hint)
+    refs = _symboliclabel_refs(st)
+    isempty(refs) && return nothing
+    defs = _symboliclabel_defs(st)
+    unmatched = nothing
+    for r in refs
+        NameKey(r) in defs || (unmatched = r)
+    end
+    isnothing(unmatched) || throw(LoweringError(
+        unmatched, "`goto` out of $hint block is not permitted with `finally`"))
+end
+
 function expand_try(ctx, ex)
     (try_, catch_, else_, finally_) = match_try(ex)
-
     if !isnothing(finally_)
-        # TODO: check unmatched symbolic gotos in try.
-        # TODO: Disallow @goto from try/catch/else blocks when there's a finally clause
+        error_if_unmatched_symbolicgoto(ctx, try_, "a `try`")
+        !isnothing(catch_) && error_if_unmatched_symbolicgoto(ctx, catch_, "a `catch`")
+        !isnothing(else_) && error_if_unmatched_symbolicgoto(ctx, else_, "an `else`")
     end
-
     try_body = @ast ctx try_ [K"scope_block" [K"neutral_scope"] try_]
-
     if isnothing(catch_)
         try_block = try_body
     else

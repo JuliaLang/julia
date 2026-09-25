@@ -5038,7 +5038,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == BUILTIN(memoryrefget) && nargs == 3) {
+    else if ((f == BUILTIN(memoryrefget) || f == BUILTIN(const_memoryrefget)) && nargs == 3) {
+        // only const_memoryrefget loads may carry the current aliasscope (see Base.Experimental.Const)
+        bool isconstload = f == BUILTIN(const_memoryrefget);
         const jl_cgval_t &ref = argv[1];
         jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
         if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type(mty_dt)) {
@@ -5142,7 +5144,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
                 *ret = typed_load(ctx, ptr, nullptr, ety,
                         memorybuf_aliasinfo(ctx, layout),
-                        ctx.noalias().aliasscope.current,
+                        isconstload ? ctx.noalias().aliasscope.current : nullptr,
                         isboxed, Order, maybenull, al);
                 if (needlock) {
                     emit_lockstate_value(ctx, lock, false);
@@ -7252,8 +7254,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
-#ifdef GC_BARRIER_SNAPSHOT
-            // Barrier is needed to snapshot old scope value
+#ifdef GC_BARRIER_ON_TASKS
             emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_to_restore);
 #else
             // No barrier required: old Tasks are implicitly in the GC remset
@@ -7267,7 +7268,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
             ctx.alias().gcframe.decorateInst(
                 ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
-            // NOTE: post-wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
         }
     }
     else if (head == jl_pop_exception_sym) {

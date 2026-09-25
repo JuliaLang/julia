@@ -4,3 +4,5 @@
 /*.obj
 /*.pdb
 /*.lto
+/*.def
+/*.strip

@@ -95,6 +95,9 @@ public
     uabs,
     mul_hi,
 
+# Numbers
+    decompose,
+
 # C interface
     cconvert,
     unsafe_convert,

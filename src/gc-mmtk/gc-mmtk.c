@@ -1020,11 +1020,6 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
     sweep_mtarraylist_buffers();
 }
 
-void jl_gc_notify_task_suspend(jl_task_t *task) JL_NOTSAFEPOINT
-{
-    jl_gc_wb_back(task);
-}
-
 void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
 {
 #ifdef MMTK_PLAN_CONCURRENTIMMIX
@@ -1471,15 +1466,13 @@ JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOIN
     mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
 }
 
-JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, parent, ptr);
+    mmtk_unreachable();
 }
 
-JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, void *dest JL_UNUSED, const void *stored,
-                                        struct _jl_datatype_t *dt) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_gc_multi_wb_cold(const struct _jl_value_t *parent JL_UNUSED, void *dest JL_UNUSED,
+                                        const void *stored JL_UNUSED, struct _jl_datatype_t *dt JL_UNUSED) JL_NOTSAFEPOINT
 {
     mmtk_unreachable();
 }

@@ -566,7 +566,8 @@ end
 # returning Any, as this would cause incorrect printing in e.g. `Vector[Any[1]]`,
 # because eltype(Vector) == Any so `Any` wouldn't be printed in `Any[1]`)
 typeinfo_eltype(typeinfo) = nothing # element type not precisely known
-typeinfo_eltype(typeinfo::Type{Union{}}, slurp...) = nothing
+typeinfo_eltype(typeinfo::Type{Union{}}) = nothing
+typeinfo_eltype(::Type{Union{}}, slurp...) = throw(MethodError(typeinfo_eltype, (Union{}, slurp...)))
 typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)
