@@ -3407,6 +3407,18 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         return Union{}
     end
 
+    # The modify operation is an arbitrary user-provided function.
+    f === Intrinsics.atomic_pointermodify && return Any
+
+    if (f === Intrinsics.atomic_fence || f === Intrinsics.atomic_pointerref ||
+        f === Intrinsics.atomic_pointerset || f === Intrinsics.atomic_pointerswap ||
+        f === Intrinsics.atomic_pointerreplace)
+        # Invalid orderings throw `ConcurrencyViolationError`, badly-typed arguments
+        # `TypeError`, and unsupported element types or sizes, or an invalid syncscope,
+        # `ErrorException`.
+        return Union{ConcurrencyViolationError, TypeError, ErrorException}
+    end
+
     # The remaining intrinsics are math/bits/comparison intrinsics.
     # All the non-floating point intrinsics work on primitive values of the same type.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
