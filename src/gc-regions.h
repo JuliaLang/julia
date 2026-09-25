@@ -80,8 +80,17 @@ JL_DLLEXPORT void jl_gc_region_zone_leave(int saved) JL_NOTSAFEPOINT;
 // current, or a refusal code.
 JL_DLLEXPORT int jl_gc_region_set(int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_gc_region_current(void) JL_NOTSAFEPOINT;
+// Free every object of region n on the calling thread's heap, after a check
+// that no execution root references into it. Returns the number of pages the
+// region held, or a refusal code.
+JL_DLLEXPORT uint64_t jl_gc_region_reset(int n) JL_CANSAFEPOINT;
+// The same, without the check and without its pause. A reference from a
+// stack slot, a register or a parked task's stack is left dangling.
+JL_DLLEXPORT uint64_t jl_gc_region_unsafe_reset(int n) JL_CANSAFEPOINT;
 // Close the window of a task that reaches its end (task.c).
 void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
+// Free region n on every heap at once, with the world stopped.
+JL_DLLEXPORT uint64_t jl_gc_region_reset_global(int n) JL_CANSAFEPOINT;
 // The region of an object.
 JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v) JL_NOTSAFEPOINT;
 // The pages of a region on this heap; whether an escape quarantined a region.
