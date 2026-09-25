@@ -1224,6 +1224,25 @@ static void do_profile(void) JL_NOTSAFEPOINT
 }
 #endif
 
+// SIGRTMIN and SIGRTMAX can be run-time values, so they cannot be Julia constants.
+JL_DLLEXPORT int jl_sigrtmin(void)
+{
+#ifdef SIGRTMIN
+    return SIGRTMIN;
+#else
+    return -1;
+#endif
+}
+
+JL_DLLEXPORT int jl_sigrtmax(void)
+{
+#ifdef SIGRTMAX
+    return SIGRTMAX;
+#else
+    return -1;
+#endif
+}
+
 static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 {
     sigset_t sset;

@@ -429,6 +429,9 @@
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
+    XX(jl_signal_name) \
+    XX(jl_sigrtmax) \
+    XX(jl_sigrtmin) \
     XX(jl_spawn) \
     XX(jl_sparam_slot_value) \
     XX(jl_specializations_get_linfo) \

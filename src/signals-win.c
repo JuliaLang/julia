@@ -706,6 +706,16 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
+JL_DLLEXPORT int jl_sigrtmin(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT int jl_sigrtmax(void)
+{
+    return -1;
+}
+
 static TIMECAPS timecaps;
 static HANDLE hBtThread = 0;
 static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
