@@ -984,6 +984,10 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
 {
     int flags;
     int fd;
+    // The mode of the created file is (mode & ~umask), which resolves with
+    // default umask to u=rw,g=r,o=r
+    int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+
     if (!(rd || wr)) {
         // must specify read and/or write
         errno = EINVAL;
@@ -993,9 +997,6 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
 
-    // The mode of the created file is (mode & ~umask), which resolves with
-    // default umask to u=rw,g=r,o=r
-    int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     do {
 #if defined(_OS_WINDOWS_)
 
