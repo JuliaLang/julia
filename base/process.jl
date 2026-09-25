@@ -581,14 +581,91 @@ end
 
 # some common signal numbers that are usually available on all platforms
 # and might be useful as arguments to `kill` or testing against `Process.termsignal`
-const SIGHUP  = 1
-const SIGINT  = 2
-const SIGQUIT = 3 # !windows
-const SIGKILL = 9
-const SIGUSR1 = Sys.isapple() ? 30 : 10 # !windows
-const SIGPIPE = 13 # !windows
-const SIGTERM = 15
-const SIGINFO = 29 # apple/BSD only; use SIGUSR1 on linux
+const SIGHUP   = 1
+const SIGINT   = 2
+const SIGQUIT  = 3 # !windows
+const SIGKILL  = 9
+const SIGUSR1  = Sys.isbsd() ? 30 : 10 # !windows
+const SIGUSR2  = Sys.isbsd() ? 31 : 12 # !windows
+const SIGPIPE  = 13 # !windows
+const SIGALRM  = 14 # !windows
+const SIGTERM  = 15
+const SIGCHLD  = Sys.isbsd() ? 20 : 17 # !windows
+const SIGCONT  = Sys.isbsd() ? 19 : 18 # !windows
+const SIGWINCH = 28
+const SIGINFO  = 29 # apple/BSD only; use SIGUSR1 on linux
+
+for sig in (:SIGHUP, :SIGINT, :SIGQUIT, :SIGKILL, :SIGUSR1, :SIGUSR2, :SIGPIPE, :SIGALRM,
+            :SIGTERM, :SIGCHLD, :SIGCONT, :SIGWINCH, :SIGINFO)
+    doc = """
+        Base.$sig
+
+    The number of `$sig` on this platform, for use with [`kill`](@ref), or to compare with the
+    `termsignal` of a process.
+    """
+    if sig === :SIGINFO
+        doc *= """
+
+        Linux has no `SIGINFO`, and 29 is `SIGIO` there.
+        """
+    end
+    @eval @doc $doc $sig
+end
+
+"""
+    Base.sigrtmin()
+
+Return the number of the first real-time signal that programs may use, which C calls
+`SIGRTMIN`. Real-time signals are numbered from `sigrtmin()` to [`sigrtmax()`](@ref Base.sigrtmax),
+so C's `SIGRTMIN+n` is `Base.sigrtmin() + n`. The value depends on the C library, and can be
+decided at run time. Throws an error on platforms without real-time signals, such as macOS
+and Windows.
+"""
+function sigrtmin()
+    sig = ccall(:jl_sigrtmin, Cint, ())
+    sig < 0 && error("real-time signals are not available on this platform")
+    return Int(sig)
+end
+
+"""
+    Base.signal_name(signum::Integer)::Union{String,Nothing}
+
+Return the name of signal `signum` on this platform, such as `"SIGTERM"`, or `nothing` if it
+has none. Real-time signals are named from [`sigrtmin`](@ref Base.sigrtmin), as in
+`"SIGRTMIN+2"`.
+
+# Examples
+```julia
+julia> Base.signal_name(Base.SIGTERM)
+"SIGTERM"
+
+julia> p = run(`sleep 10`, wait=false); kill(p); wait(p); Base.signal_name(p.termsignal)
+"SIGTERM"
+```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+function signal_name(signum::Integer)
+    typemin(Cint) <= signum <= typemax(Cint) || return nothing
+    name = ccall(:jl_signal_name, Cstring, (Cint,), signum)
+    name == C_NULL || return unsafe_string(name)
+    rtmin = ccall(:jl_sigrtmin, Cint, ())
+    0 < rtmin <= signum <= ccall(:jl_sigrtmax, Cint, ()) || return nothing
+    return "SIGRTMIN+$(signum - rtmin)"
+end
+
+"""
+    Base.sigrtmax()
+
+Return the number of the last real-time signal, which C calls `SIGRTMAX`. See
+[`sigrtmin`](@ref Base.sigrtmin).
+"""
+function sigrtmax()
+    sig = ccall(:jl_sigrtmax, Cint, ())
+    sig < 0 && error("real-time signals are not available on this platform")
+    return Int(sig)
+end
 
 function test_success(proc::Process)
     @assert process_exited(proc) "process did not exit successfully"
