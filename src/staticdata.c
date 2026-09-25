@@ -2986,6 +2986,32 @@ static int jl_prune_internal_mtable(jl_methtable_t *mt, void *env)
     return 1;
 }
 
+// Write a section to the image. The first `skip` bytes of `sec` are not copied:
+// Used only when sysimg is written; every other caller passes 0.
+//
+// If the image stream cannot be grown to fit the section, fail rather than return
+// with a truncated section.
+static void write_section(ios_t *f, ios_t *sec, size_t align, size_t skip, const char *name) JL_CANSAFEPOINT
+{
+    size_t payload = sec->size - skip;
+    // write_uint writes sizeof(uintptr_t) bytes
+    size_t payload_start = LLT_ALIGN(ios_pos(f) + sizeof(uintptr_t), align);
+    write_uint(f, payload);
+    write_padding(f, LLT_ALIGN(ios_pos(f), align) - ios_pos(f));
+    ios_seek(sec, skip);
+    ios_copyall(f, sec);
+    if ((size_t)ios_pos(f) != payload_start + payload) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: failed to write system image: the %s section needs %" PRIu64 " bytes at offset %" PRIu64 " "
+            "but the stream reached only %" PRIu64 " (out of memory)\n",
+            name, (uint64_t)payload, (uint64_t)payload_start, (uint64_t)ios_pos(f)
+        );
+        jl_exit(1);
+    }
+    ios_close(sec);
+}
+
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
@@ -3297,25 +3323,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     // step 3: combine all of the sections into one file
     assert(ios_pos(f) % JL_CACHE_BYTE_ALIGNMENT == 0);
     ssize_t sysimg_offset = ios_pos(f);
-    write_uint(f, sysimg.size - sizeof(uintptr_t));
-    ios_seek(&sysimg, sizeof(uintptr_t));
-    ios_copyall(f, &sysimg);
-    size_t sysimg_size = s.s->size;
-    assert(ios_pos(f) - sysimg_offset == sysimg_size);
-    ios_close(&sysimg);
-
-    write_uint(f, const_data.size);
-    // realign stream to max-alignment for data
-    write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
-    ios_seek(&const_data, 0);
-    ios_copyall(f, &const_data);
-    ios_close(&const_data);
-
-    write_uint(f, symbols.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-    ios_seek(&symbols, 0);
-    ios_copyall(f, &symbols);
-    ios_close(&symbols);
+    size_t sysimg_size = s.s->size; // write_section closes the stream
+    write_section(f, &sysimg, 1, sizeof(uintptr_t), "sysimg"); // align 1: `f` is already cache-aligned; skip sizeof(uintptr_t): write_section will write the actual size
+    write_section(f, &const_data, JL_CACHE_BYTE_ALIGNMENT, 0, "const_data"); // realign stream to max-alignment for data
+    write_section(f, &symbols, 8, 0, "symbols");
 
     // Prepare and write the relocations sections, now that the rest of the image is laid out
     char *base = &f->buf[0];
@@ -3331,23 +3342,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_write_arraylist(s.relocs, &s.fixup_types);
     }
     jl_write_arraylist(s.relocs, &s.fixup_objs);
-    write_uint(f, relocs.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-    ios_seek(&relocs, 0);
-    ios_copyall(f, &relocs);
-    ios_close(&relocs);
+    write_section(f, &relocs, 8, 0, "relocs");
 
-    write_uint(f, gvar_record.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-    ios_seek(&gvar_record, 0);
-    ios_copyall(f, &gvar_record);
-    ios_close(&gvar_record);
+    write_section(f, &gvar_record, 8, 0, "gvar_record");
 
-    write_uint(f, fptr_record.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-    ios_seek(&fptr_record, 0);
-    ios_copyall(f, &fptr_record);
-    ios_close(&fptr_record);
+    write_section(f, &fptr_record, 8, 0, "fptr_record");
 
     { // step 4: record locations of special roots
         write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
