@@ -22,6 +22,7 @@ public
     ImmutableDict,
     OneTo,
     Pairs,
+    SignalCondition,
     LogRange,
     UUID,
 

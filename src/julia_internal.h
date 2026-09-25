@@ -963,6 +963,7 @@ void restore_signals(void) JL_NOTSAFEPOINT;
 #ifndef _OS_WINDOWS_
 void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT;
 #endif
+void jl_close_signal_watcher(uv_signal_t *handle, uv_close_cb cb);
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;

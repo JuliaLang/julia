@@ -492,6 +492,8 @@ Base.Timer(::Function, ::Real)
 Base.Timer
 Base.AsyncCondition
 Base.AsyncCondition(::Function)
+Base.SignalCondition
+Base.SignalCondition(::Function, ::Integer)
 ```
 
 ## Reflection
