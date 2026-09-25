@@ -65,6 +65,8 @@ typedef struct _jl_gc_region_state_t {
 // current, or a refusal code.
 JL_DLLEXPORT int jl_gc_region_set(int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_gc_region_current(void) JL_NOTSAFEPOINT;
+// Close the window of a task that reaches its end (task.c).
+void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT;
 #ifdef WITH_GC_REGION_BARRIER
 // The escape barrier, called by the write barrier while a region is in use.
 JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
@@ -103,6 +105,14 @@ void jl_gc_region_mark_finalizer_lists(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 void jl_gc_region_init(void) JL_NOTSAFEPOINT;
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
 
+// At a task switch: save the region of the leaving task, install the region
+// of the arriving one.
+STATIC_INLINE void jl_gc_region_task_switch(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t *t) JL_NOTSAFEPOINT
+{
+    lastt->region = ptls->gc_tls.heap.current_region;
+    if (t->region != lastt->region)
+        jl_gc_region_install_task(ptls, t->region);
+}
 
 // The brackets of a finalizer list: region 0 is installed while it runs, no
 // window opens on the thread, and no region entry runs. `begin` returns the
@@ -136,6 +146,8 @@ STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) JL_NO
 
 // Without the regions each hook expands to no code, and the runtime
 // compiles to the stock runtime.
+#define jl_gc_region_close_window(ct) ((void)(ct))
+#define jl_gc_region_task_switch(ptls, lastt, t) ((void)0)
 #define jl_gc_region_finalizers_begin(ptls) 0
 #define jl_gc_region_finalizers_end(ptls, parked) ((void)(parked))
 #define jl_gc_region_add_finalizer(ptls, v, f) 0
