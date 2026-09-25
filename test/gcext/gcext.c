@@ -633,8 +633,7 @@ static void test_tagged_immediate_roots(void)
         jl_gc_collect(JL_GC_FULL);
         check_fins_ran(0, "JL_GC_PUSHARGS frame, small tagged immediates");
 
-        // Large payloads must be skipped just the same, not mistaken for
-        // object references.
+        // Large payloads must not be mistaken for object pointers either.
         args[0] = (jl_value_t *)(large_imm | 0x1);
         args[2] = (jl_value_t *)(large_imm | 0x2);
         args[3] = (jl_value_t *)(large_imm | 0x3);
@@ -736,9 +735,8 @@ int main()
             "  include(\"LocalTest.jl\")\n"
             "end");
 
-    // Turn off the conservative task scanner: it would find the frame slots on
-    // this stack by itself, which hides a root the precise scan skipped and can
-    // keep objects alive after their frame is popped.
+    // The conservative task scanner would find the frame slots on this stack by
+    // itself and keep their objects alive, so disable it for this test.
     jl_gc_set_cb_task_scanner(task_scanner, 0);
     test_tagged_immediate_roots();
     jl_gc_set_cb_task_scanner(task_scanner, 1);

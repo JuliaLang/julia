@@ -204,12 +204,10 @@ fin_nested_callback(@nospecialize(_)) = (Threads.atomic_add!(FIN_NESTED_RAN, 1);
 fin_collect_callback(@nospecialize(_)) = (GC.gc(true); nothing)
 fin_backtrace_callback(@nospecialize(_)) = (FIN_BACKTRACE_FRAMES[] = length(backtrace()); nothing)
 
-# `@noinline` and a separate frame so the registered objects are unreachable
-# by the time the caller collects.
+# Not inlined, so that the objects are unreachable once this returns.
 @noinline function register_finalizer_batch(n)
     for i in 1:n
-        # `@cfunction` entries and Julia closures are tagged differently in
-        # the finalizer list, so both must appear in the same batch
+        # mix @cfunction finalizers, which are tagged in the list, with untagged Julia ones
         finalizer(isodd(i) ? FIN_CFUNC_PTR : fin_julia_callback, Ref(i))
     end
     finalizer(fin_collect_callback, Ref(0))
@@ -232,7 +230,7 @@ end
     GC.gc(true)
     @test FIN_CFUNC_RAN[] == count(isodd, 1:n)
     @test FIN_JULIA_RAN[] == count(iseven, 1:n)
-    # explicit `finalize` from inside a finalizer, i.e. a nested batch
+    # finalize() called from a finalizer runs a nested batch
     @test FIN_NESTED_RAN[] == 1
     # stack walking works while a finalizer-list frame is installed
     @test FIN_BACKTRACE_FRAMES[] > 0

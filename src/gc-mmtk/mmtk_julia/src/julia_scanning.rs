@@ -17,20 +17,15 @@ use crate::jl_gc_scan_julia_exc_obj;
 
 const JL_MAX_TAGS: usize = 64; // from vm/julia/src/jl_exports.h
 
-// The low bits of `jl_gcframe_t.nroots` hold the frame kind, the rest the
-// number of roots. These must match the `JL_GCFRAME_*` defines in julia.h.
-/// Slots hold object pointers (`JL_GC_PUSHARGS`, codegen).
+// Frame kinds in the low bits of `jl_gcframe_t.nroots`. Must match the
+// JL_GCFRAME_* defines in julia.h.
 const JL_GCFRAME_DIRECT: usize = 0;
-/// Slots hold the addresses of local `jl_value_t *` variables (`JL_GC_PUSH1..8`).
 const JL_GCFRAME_INDIRECT: usize = 1;
-/// Direct roots of an interpreter frame.
 const JL_GCFRAME_INTERP: usize = 2;
-/// An in-flight finalizer list, the only kind whose slots may carry `GC_FIN_*` tags.
 const JL_GCFRAME_FINLIST: usize = 3;
-/// All bits used to encode the frame kind.
 const JL_GCFRAME_KIND_MASK: usize = 0x3;
 
-/// Identifies immediate values. Must match gc_is_tagged_immediate in gc-common.h.
+// Must match gc_is_tagged_immediate in gc-common.h.
 const TAGGED_IMMEDIATE_MASK: usize = 0x3;
 
 fn is_tagged_immediate(value: Address) -> bool {
@@ -498,8 +493,6 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                         process_slot(closure, real_addr);
                     }
                 } else if frame_kind == JL_GCFRAME_FINLIST {
-                    // in-flight finalizer list pushed as a GC frame by
-                    // jl_gc_run_finalizers_in_list
                     let real_addr =
                         get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
 
@@ -524,7 +517,6 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                     debug_assert!(
                         frame_kind == JL_GCFRAME_DIRECT || frame_kind == JL_GCFRAME_INTERP
                     );
-                    // slots hold object pointers
                     let real_addr =
                         get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
                     let value = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
