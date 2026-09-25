@@ -633,8 +633,8 @@ Dates.tons(p::TestPicosecond) = Dates.value(p) // big(1000)
     @test Date(before) == Date(1969, 12, 31)
     @test Dates.nanosecond(before) == 999
     @test floor(before, Nanosecond) == convert(T, Nanosecond(-1))
-    @test year(T(10^18)) == 10^18
-    @test_throws InexactError Date(T(10^18))
+    @test year(T(Int64(10)^18)) == Int64(10)^18
+    @test_throws InexactError Date(T(Int64(10)^18))
     @test_throws ArgumentError T(Year(2026), TestPicosecond(1))
     @test_throws ArgumentError T(TestPicosecond(1))
     @test isempty(Test.detect_ambiguities(TimestampPeriodExtensionTests; recursive=true))
