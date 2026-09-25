@@ -207,17 +207,17 @@ function hash(x::Real, h::UInt)
     num == 0 && return hash(ifelse(den > 0, 0.0, -0.0), h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
 
-    # normalize decomposition
-    if den < 0
-        num = -num
-        den = -den
-    end
+    # normalize decomposition, first remove factors of 2 so den is odd, then fix sign.
+    # This avoids overflow because odd numbers cannot be typemin (which is a power of 2)
     num_z = trailing_zeros(num)
-
     num >>= num_z
     den_z = trailing_zeros(den)
     den >>= den_z
     pow += num_z - den_z
+    if den < 0
+        num = -num
+        den = -den
+    end
     # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be non-negative.
     if den == 1
