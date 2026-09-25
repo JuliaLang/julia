@@ -567,7 +567,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
             end
         end
         push!(stmts, locals_dict)
-        newnode(ex, :block, stmts)
+        @mknode(ex; head=:block, children=stmts)
     elseif k == :thisfunction
         lam = enclosing_lambda(ctx, scope::ScopeInfo).node_id
         self_arg = lam[1][1]

@@ -45,7 +45,8 @@ Lexical scope ID
 """
 const ScopeId = Int
 
-function JuliaSyntax.newleaf(prov::SyntaxTree, k::Symbol, @nospecialize(value))
+# TODO: this is now redundant; replace calls with @mknode
+function newleaf(prov::SyntaxTree, k::Symbol, @nospecialize(value))
     context = prov.context
     @jl_assert k === :value || value !== nothing (
         prov, "only Value may contain nothing")
@@ -68,6 +69,8 @@ function JuliaSyntax.newleaf(prov::SyntaxTree, k::Symbol, @nospecialize(value))
         @mknode(;head=k, source=prov, value=val, context)
     end
 end
+newleaf(prov::SyntaxTree, k::Symbol) =
+    @mknode(;source=prov, context=prov.context, head=k)
 
 function syntax_name(st)
     @jl_assert head(st) in (:identifier, :placeholder, :symbol, :core, :top, :globalref,
@@ -93,7 +96,7 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
         return ex
     end
     var = ssavar(ctx, ex, name)
-    push!(stmts, newnode(ex, :(=), SyntaxList(var, ex)))
+    push!(stmts, @mknode(ex; head=:(=), children=SyntaxList(var, ex)))
     var
 end
 

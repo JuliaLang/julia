@@ -750,7 +750,7 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
                 syms)...
            ]
         [:boundscheck x] -> @mknode(st; children=SyntaxList())
-        [:inbounds [:identifier]] -> newnode(st, :inbounds_pop, SyntaxList())
+        [:inbounds [:identifier]] -> @mknode(st; head=:inbounds_pop, children=SyntaxList())
         [:core x] -> newleaf(st, :core, syntax_name(x))
         [:top x] -> newleaf(st, :top, syntax_name(x))
         [:static_parameter x] -> newleaf(st, :static_parameter, x.value::IdTag)
