@@ -2429,6 +2429,11 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*, Value*);
 static void emit_write_multibarrier(jl_codectx_t&, Value *parent, Value *dst, Value *agg, jl_value_t*) JL_CANSAFEPOINT;
 static void emit_write_multibarrier(jl_codectx_t&, Value *parent, Value *dst, const jl_cgval_t&) JL_CANSAFEPOINT;
+#ifdef WITH_GC_REGION_BARRIER
+static void emit_region_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
+static SmallVector<Value*,0> tracked_values_of(jl_codectx_t&, const jl_cgval_t&, jl_value_t*) JL_CANSAFEPOINT;
+static void emit_region_write_barrier_fields(jl_codectx_t&, Value*, jl_datatype_t*) JL_CANSAFEPOINT;
+#endif
 
 SmallVector<unsigned, 0> first_ptr(Type *T)
 {
@@ -4140,6 +4145,10 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
                         box = emit_allocobj(ctx, jt, true);
                         setName(ctx.emission_context, box, "unionbox");
                         init_bits_cgval(ctx, box, vinfo_r);
+#ifdef WITH_GC_REGION_BARRIER
+                        // The copy stores the pointer fields of the value into the fresh box: the region check
+                        emit_region_write_barrier(ctx, box, tracked_values_of(ctx, vinfo_r, (jl_value_t*)jt));
+#endif
                     }
                 }
                 tempBB = ctx.builder.GetInsertBlock(); // could have changed
@@ -4295,6 +4304,10 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 box = emit_allocobj(ctx, (jl_datatype_t*)jt, true);
                 setName(ctx.emission_context, box, arg_typename);
                 init_bits_cgval(ctx, box, vinfo);
+#ifdef WITH_GC_REGION_BARRIER
+                // The copy stores the pointer fields of the value into the fresh box: the region check
+                emit_region_write_barrier(ctx, box, tracked_values_of(ctx, vinfo, jt));
+#endif
             }
         }
     }
@@ -4498,6 +4511,59 @@ static void emit_field_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ds
     }
     ctx.builder.CreateCall(prepare_call(fn), args);
 }
+
+#ifdef WITH_GC_REGION_BARRIER
+// The escape barrier of the GC regions alone (gc-regions.h), for the stores
+// into a fresh object: one call covers every child of the object.
+static void emit_region_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*> ptrs)
+{
+    if (ptrs.empty())
+        return;
+    SmallVector<Value*, 8> decay_ptrs;
+    decay_ptrs.push_back(maybe_decay_untracked(ctx, parent));
+    for (auto ptr : ptrs) {
+        decay_ptrs.push_back(maybe_decay_untracked(ctx, ptr));
+    }
+    ctx.builder.CreateCall(prepare_call(jl_region_write_barrier_func), decay_ptrs);
+}
+
+// The tracked pointers that a copy of the unboxed value `x` of the concrete
+// immutable type `jt` into a fresh object stores: a constant stores none,
+// and a boxed `x` is read back through its box, as the copy reads it.
+static SmallVector<Value*,0> tracked_values_of(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *jt) JL_CANSAFEPOINT
+{
+    if (x.constant || x.isghost || !jl_is_concrete_immutable(jt) || jl_is_pointerfree(jt))
+        return {};
+    if (!x.inline_roots.empty()) {
+        SmallVector<Value*,0> roots;
+        for (size_t i = 0; i < x.inline_roots.size(); i++)
+            roots.push_back(x.inline_roots.get(ctx, i));
+        return roots;
+    }
+    Type *T = julia_type_to_llvm(ctx, jt);
+    Value *agg = emit_unbox(ctx, T, x);
+    return ExtractTrackedValues(ctx, agg);
+}
+
+// The region barrier for a fresh object of type `jt` that a memcpy from a
+// raw pointer filled: the children are its pointer fields, read back under
+// the alias tag of the copy, so the loads stay after it.
+static void emit_region_write_barrier_fields(jl_codectx_t &ctx, Value *parent, jl_datatype_t *jt) JL_CANSAFEPOINT
+{
+    if (!jt->layout || jt->layout->npointers == 0)
+        return;
+    Value *derived = decay_derived(ctx, parent);
+    jl_aliasinfo_t ai = best_aliasinfo(ctx, (jl_value_t*)jt);
+    SmallVector<Value*, 8> ptrs;
+    for (uint32_t j = 0; j < jt->layout->npointers; j++) {
+        Value *fld = emit_ptrgep(ctx, derived, jl_ptr_offset(jt, j) * sizeof(void*));
+        LoadInst *load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, fld, Align(sizeof(void*)));
+        ai.decorateInst(load);
+        ptrs.push_back(load);
+    }
+    emit_region_write_barrier(ctx, parent, ptrs);
+}
+#endif
 
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *slot, Value *child)
 {
@@ -4844,6 +4910,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             }
         }
         // TODO: verify that nargs <= nf (currently handled by front-end)
+#ifdef WITH_GC_REGION_BARRIER
+        SmallVector<Value*, 8> region_children;
+#endif
         for (size_t i = 0; i < nargs; i++) {
             jl_cgval_t rhs = argv[i];
             bool need_wb; // set to true if the store might cause the allocation of a box newer than the struct
@@ -4857,7 +4926,24 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             if (rhs.typ == jl_bottom_type)
                 return jl_cgval_t();
             emit_setfield(ctx, sty, strctinfo, i, rhs, jl_cgval_t(), need_wb, AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, nullptr, StoreKind::Set, nullptr, "new");
+#ifdef WITH_GC_REGION_BARRIER
+            // A boxed child, and the pointers of an inline field, are stored
+            // with no barrier: the region check covers them.
+            if (jl_field_isptr(sty, i)) {
+                if (rhs.isboxed)
+                    region_children.push_back(boxed(ctx, rhs));
+            }
+            else {
+                auto ptrs = tracked_values_of(ctx, rhs, ft);
+                region_children.append(ptrs.begin(), ptrs.end());
+            }
+#endif
         }
+#ifdef WITH_GC_REGION_BARRIER
+        // The fresh parent needs no generational barrier, but a child may
+        // belong to a younger region: the region barrier alone, once.
+        emit_region_write_barrier(ctx, boxed(ctx, strctinfo), region_children);
+#endif
         return strctinfo;
     }
     else {
