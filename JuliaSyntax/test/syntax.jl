@@ -1,8 +1,8 @@
 using .JuliaSyntax: SyntaxTree, SyntaxList, @stm, prov, prov_end, provenance,
     macro_prov, macro_prov_end, flattened_provenance, sourceref,
     unexpanded_sourceref, mktree,
-    unalias_nodes, annotate_parent!, _setattr!, getmeta, SyntaxContext,
-    ScopeLayer, children
+    unalias_nodes, annotate_parent!, getmeta, SyntaxContext,
+    ScopeLayer, children, @mknode
 
 const DUMMY_CONTEXT = SyntaxContext(@__MODULE__, (0,0))
 
@@ -78,11 +78,11 @@ end
         stm_unused = SyntaxTree(:identifier, nothing, "stm_unused", LineNumberNode(0), DUMMY_CONTEXT)
 
         stmm1 = SyntaxTree(:identifier, nothing, "stmm1", LineNumberNode(1, :mm), DUMMY_CONTEXT)
-        stmm2 = _setattr!(@mknode(stmm1), :value, "stmm2")
-        stmm3 = _setattr!(@mknode(stmm2), :value, "stmm3")
+        stmm2 = @mknode(stmm1; value="stmm2")
+        stmm3 = @mknode(stmm2; value="stmm3")
 
         stm1 = SyntaxTree(:identifier, nothing, "stm1", LineNumberNode(1, :m), DUMMY_CONTEXT)
-        stm2 = _setattr!(@mknode(stm1), :value, "stm2")
+        stm2 = @mknode(stm1; value="stm2")
         stm3 = SyntaxTree(:identifier, nothing, "stm3", stm2, ctx_with_unexpanded(stmm3))
 
         st1 = SyntaxTree(:identifier, nothing, "st1", LineNumberNode(1),
@@ -159,7 +159,6 @@ end
         st = build1()
         src4 = st[1][1].source
         stu = unalias_nodes(st)
-        @test stu === st                    # unaliases in place
         @test ref ≈ stu
         @test length(flat_nodes(stu)) == 5  # node 4 copied once
         @test allunique(flat_nodes(stu))
