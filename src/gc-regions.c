@@ -245,6 +245,313 @@ static void region_free_malloced(small_arraylist_t *lst, int only_unmarked) JL_N
     lst->len = l;
 }
 
+// --- the brackets around a stock collection ----------------------------------------
+// A stock collection runs with region 0 installed on every thread: the
+// brackets park the windows and install them again. After each pass the
+// marks the pass left on region pages are cleared: the mark walks region
+// objects like any other, the clear keeps the bits clean for the census,
+// and a second pass of a full collection must traverse them again.
+
+// The hand-over of a quarantined region to the stock collector, on one heap,
+// with the world stopped: the pages lose their tag, and the sweep of this
+// collection treats them like any other page. The cells past a bump cursor
+// and the wholly dead fresh pages get zero headers, so that the sweep reads
+// them as free. The finalizers and the malloc'd memories go to the lists of
+// the thread. The region state stays allocated and empty, so a window still
+// open on the region allocates into new pages.
+static void region_handover_heap(jl_ptls_t ptls2, int n) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+    jl_gc_region_state_t *rs = heap->regions[n];
+    if (rs == NULL)
+        return;
+    for (int i = 0; i < JL_GC_N_MAX_POOLS; i++) {
+        char *bump = (char*)rs->pools[i].newpages;
+        if (bump != NULL) {
+            jl_gc_pagemeta_t *pg = page_metadata(gc_page_data(bump - 1));
+            size_t osize = pg->osize;
+            char *end = pg->data + GC_PAGE_OFFSET + ((GC_PAGE_SZ - GC_PAGE_OFFSET) / osize) * osize;
+            for (char *c = bump; c < end; c += osize)
+                ((jl_taggedvalue_t*)c)->header = 0;
+        }
+        rs->pools[i].freelist = NULL;
+        rs->pools[i].newpages = NULL;
+    }
+    for (size_t k = 0; k < rs->finalizers.len; k++)
+        arraylist_push(&ptls2->finalizers, rs->finalizers.items[k]);
+    rs->finalizers.len = 0;
+    for (size_t k = 0; k < rs->mallocarrays.len; k++)
+        small_arraylist_push(&ptls2->gc_tls_common.heap.mallocarrays, rs->mallocarrays.items[k]);
+    rs->mallocarrays.len = 0;
+    jl_gc_pagemeta_t *next;
+    for (jl_gc_pagemeta_t *pg = rs->pages; pg != NULL; pg = next) {
+        next = pg->region_next;
+        pg->region_next = NULL;
+        pg->region_n = 0;
+    }
+    for (jl_gc_pagemeta_t *pg = rs->fresh_pages; pg != NULL; pg = next) {
+        next = pg->region_next;
+        pg->region_next = NULL;
+        pg->region_n = 0;
+        memset(pg->data + GC_PAGE_OFFSET, 0, GC_PAGE_SZ - GC_PAGE_OFFSET);
+    }
+    rs->pages = rs->pages_tail = rs->fresh_pages = NULL;
+    rs->n_pages = rs->n_fresh = 0;
+}
+
+void jl_gc_region_prepare_stock_collection(void) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        heap->saved_region = heap->current_region;
+        if (heap->current_region != 0)
+            jl_gc_region_install_task(ptls2, 0);
+    }
+    uint64_t q = jl_atomic_load_relaxed(&region_quarantined_mask);
+    if (__unlikely(q != 0)) {
+        for (int n = 1; n < JL_GC_MAX_REGIONS; n++) {
+            if (!((q >> n) & 1))
+                continue;
+            for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+                if (gc_all_tls_states[t_i] != NULL)
+                    region_handover_heap(gc_all_tls_states[t_i], n);
+            }
+        }
+        jl_atomic_fetch_and_relaxed(&region_quarantined_mask, ~q);
+    }
+}
+
+void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        for (int n = 1; n < JL_GC_MAX_REGIONS; n++) {
+            if (heap->regions[n] == NULL)
+                continue;
+            for (jl_gc_pagemeta_t *pg = heap->regions[n]->pages; pg != NULL; pg = pg->region_next) {
+                if (!pg->has_marked)
+                    continue;
+                int osize = pg->osize;
+                char *cell = pg->data + GC_PAGE_OFFSET;
+                char *end = pg->data + GC_PAGE_SZ;
+                for (; cell + osize <= end; cell += osize)
+                    ((jl_taggedvalue_t*)cell)->header &= ~(uintptr_t)(GC_MARKED | GC_OLD);
+                pg->has_marked = 0;
+                pg->has_young = 0;
+                pg->nold = 0;
+                pg->prev_nold = 0;
+            }
+        }
+    }
+}
+
+void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        if (heap->saved_region != 0)
+            jl_gc_region_install_task(ptls2, heap->saved_region);
+    }
+}
+
+// The region finalizer lists are roots of the stock mark, like the thread
+// lists.
+void jl_gc_region_mark_finalizer_lists(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        for (int n = 1; n < JL_GC_MAX_REGIONS; n++)
+            if (heap->regions[n] != NULL)
+                gc_mark_finlist(mq, &heap->regions[n]->finalizers, 0);
+    }
+}
+
+// --- windows -----------------------------------------------------------------------
+
+// Point the allocator at a pool array. The JIT passes the offset of a pool
+// of norm_pools in the TLS; pool_base + offset is the same pool of `pools`.
+STATIC_INLINE void region_use_pools(jl_thread_heap_t *heap, jl_gc_pool_t *pools) JL_NOTSAFEPOINT
+{
+    heap->active_pools = pools;
+    heap->pool_base = (char*)pools - offsetof(jl_tls_states_t, gc_tls.heap.norm_pools);
+}
+
+// The state of a region on a heap, allocated at the first use of the region
+// on that heap and never freed; zeroed memory is the empty state of all but
+// the pool sizes and the two lists.
+static void region_lazy_init(jl_thread_heap_t *heap, int n) JL_NOTSAFEPOINT
+{
+    if (n == 0 || heap->regions[n] != NULL)
+        return;
+    jl_gc_region_state_t *rs = (jl_gc_region_state_t*)calloc_s(sizeof(jl_gc_region_state_t));
+    for (int i = 0; i < JL_GC_N_MAX_POOLS; i++)
+        rs->pools[i].osize = heap->norm_pools[i].osize;
+    small_arraylist_new(&rs->mallocarrays, 0);
+    arraylist_new(&rs->finalizers, 0);
+    heap->regions[n] = rs;
+}
+
+// A region is live from its first window after a reset; its parent gains a
+// live child.
+static void region_mark_live(jl_thread_heap_t *heap, int n) JL_NOTSAFEPOINT
+{
+    if (n == 0 || (heap->region_live_mask & ((uint64_t)1 << n)))
+        return;
+    heap->region_live_mask |= (uint64_t)1 << n;
+    int p = region_parent[n];
+    if (heap->region_child_count[p]++ == 0)
+        heap->region_haschild_mask |= (uint64_t)1 << p;
+}
+
+// A reset ends the life of a region; its parent loses a live child.
+static void region_mark_empty(jl_thread_heap_t *heap, int n) JL_NOTSAFEPOINT
+{
+    if (n == 0 || !(heap->region_live_mask & ((uint64_t)1 << n)))
+        return;
+    heap->region_live_mask &= ~((uint64_t)1 << n);
+    int p = region_parent[n];
+    if (--heap->region_child_count[p] == 0)
+        heap->region_haschild_mask &= ~((uint64_t)1 << p);
+}
+
+// Open a window on region n, or close it (n = 0): the switch is one pointer
+// store, and the inlined allocation path is untouched. Returns the region
+// that was current; EINVAL for a bad number, EBUSY while finalizers run on
+// this thread.
+JL_DLLEXPORT int jl_gc_region_set(int n) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_thread_heap_t *heap = &ct->ptls->gc_tls.heap;
+    int old = heap->current_region;
+    if (n < 0 || n >= JL_GC_MAX_REGIONS)
+        return JL_GC_REGION_EINVAL;
+    if (n == old)
+        return old;
+    if (n != 0 && heap->finalizer_depth != 0)
+        return JL_GC_REGION_EBUSY;
+    // A quarantined region frees nothing again; a window on it would fill
+    // memory that nothing reclaims.
+    if (__unlikely(n != 0 && jl_gc_region_quarantined(n)))
+        return JL_GC_REGION_EQUARANTINED;
+#ifdef WITH_GC_REGION_BARRIER
+    if (__unlikely(!jl_atomic_load_relaxed(&jl_gc_region_barrier_on)))
+        jl_atomic_store_release(&jl_gc_region_barrier_on, 1);
+#endif
+    region_lazy_init(heap, n);
+    region_mark_live(heap, n);
+    // An open window pins the task to the thread that holds the region's
+    // pages; the close restores the stickiness.
+    if (old == 0 && n != 0) {
+        jl_atomic_fetch_add_relaxed(&region_windows_open, 1);
+        ct->sticky_before_region = ct->sticky;
+        ct->sticky = 1;
+    }
+    else if (n == 0 && old != 0) {
+        jl_atomic_fetch_add_relaxed(&region_windows_open, -1);
+        ct->sticky = ct->sticky_before_region;
+    }
+    region_use_pools(heap, (n == 0) ? heap->norm_pools : heap->regions[n]->pools);
+    heap->current_region = (uint8_t)n;
+    return old;
+}
+
+// The region of the open window on the calling thread, 0 when none is open.
+JL_DLLEXPORT int jl_gc_region_current(void) JL_NOTSAFEPOINT
+{
+    return jl_current_task->ptls->gc_tls.heap.current_region;
+}
+
+// Install the parked region of a task at a task switch; the window count
+// is untouched.
+void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    region_lazy_init(heap, n);
+    region_use_pools(heap, (n == 0) ? heap->norm_pools : heap->regions[n]->pools);
+    heap->current_region = (uint8_t)n;
+}
+
+// Install a borrowed region on this thread. A borrow can bring a region to
+// a heap that never opened a window on it; the region becomes live there,
+// so its parent cannot be reset while the borrowed buffer lives.
+void jl_gc_region_install_borrow(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    region_lazy_init(heap, n);
+    region_mark_live(heap, n);
+    region_use_pools(heap, (n == 0) ? heap->norm_pools : heap->regions[n]->pools);
+    heap->current_region = (uint8_t)n;
+}
+
+// A borrow brackets one allocation and changes no window state; a task must
+// not switch inside one.
+JL_DLLEXPORT int jl_gc_region_borrow(int n) JL_NOTSAFEPOINT
+{
+    if (n < 0 || n >= JL_GC_MAX_REGIONS)
+        return JL_GC_REGION_EINVAL;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int lent = ptls->gc_tls.heap.current_region;
+    if (lent != n)
+        jl_gc_region_install_borrow(ptls, n);
+    return lent;
+}
+
+JL_DLLEXPORT void jl_gc_region_unborrow(int lent) JL_NOTSAFEPOINT
+{
+    if (lent >= 0 && lent != jl_current_task->ptls->gc_tls.heap.current_region)
+        jl_gc_region_install_task(jl_current_task->ptls, lent);
+}
+
+// The borrow of region 0, for the runtime's own allocations on behalf of a
+// task that holds a window.
+JL_DLLEXPORT int jl_gc_region_suspend(void) JL_NOTSAFEPOINT
+{
+    return jl_gc_region_borrow(0);
+}
+
+JL_DLLEXPORT void jl_gc_region_resume(int parked) JL_NOTSAFEPOINT
+{
+    jl_gc_region_unborrow(parked);
+}
+
+// A region-0 zone closes the window and opens it again after, so the task
+// may switch inside; a refusal of the reopen leaves the window closed.
+JL_DLLEXPORT int jl_gc_region_zone_enter(void) JL_NOTSAFEPOINT
+{
+    return jl_gc_region_set(0);
+}
+
+JL_DLLEXPORT void jl_gc_region_zone_leave(int saved) JL_NOTSAFEPOINT
+{
+    if (saved > 0)
+        jl_gc_region_set(saved);
+}
+
+// Close the window of a task that ends (jl_finish_task); only a close lowers
+// the process-wide count of open windows.
+void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ct->ptls->gc_tls.heap;
+    if (__likely(heap->current_region == 0))
+        return;
+    jl_atomic_fetch_add_relaxed(&region_windows_open, -1);
+    ct->sticky = ct->sticky_before_region;
+    ct->region = 0;
+    jl_gc_region_install_task(ct->ptls, 0);
+}
+
 #ifdef __cplusplus
 }
 #endif
