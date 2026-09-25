@@ -227,6 +227,21 @@ end
     cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no --gc-sweep-always-full -e $prog`
     @test success(cmd)
 end
+
+# The GC regions (src/gc-regions.h), built with WITH_GC_REGIONS=1. Each
+# script exits 1 at its first failed check, so `success` is the assertion.
+if Base.GC_REGIONS
+    Base.GC_REGION_BARRIER || @info "GC regions: built without the escape barrier (WITH_GC_REGION_BARRIER=0), the escape cases are skipped"
+    @testset "regions" begin
+        run_gctest("gc/regions_window.jl")
+        run_gctest("gc/regions_escape.jl")
+        run_gctest("gc/regions_lifetime.jl")
+        run_gctest("gc/regions_stores.jl")
+        run_gctest("gc/regions_safety.jl")
+    end
+else
+    @info "GC regions: not built (WITH_GC_REGIONS=0), the regions tests are skipped"
+end
 end
 
 @testset "Base.GC docstrings" begin
