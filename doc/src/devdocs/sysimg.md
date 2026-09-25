@@ -150,6 +150,35 @@ Commit the updated headers and update Julia's cpufeatures dependency. A
 `static_assert` in `src/processor.cpp` checks `TARGET_TABLES_LLVM_VERSION_MAJOR`
 against Julia's LLVM version, so mismatches are caught at build time.
 
+## [A pre-relocated system image](@id sysimg-prelink)
+
+Loading a system image maps it and then applies its relocations, which writes
+almost every page of the image and is most of the cost of `jl_init`. When the
+image is linked into a program that is not position-independent, it is at the
+same address at every start, so the relocation can be done once, at build time,
+and its result written into the program file.
+
+* `--sysimage-prelink={yes|no}`, given to the process that writes an image,
+  reserves room for the residual list: the pointers a file cannot hold. Without
+  it the image is unchanged.
+* `--output-prelinked <file>`, given to a program that holds such an image,
+  restores it, writes the program with the restored image to `<file>`, and
+  exits. The program is copied through `/proc/self/exe`, so this is Linux only.
+
+A start of the written file applies the residual list, fills the global
+variable slots, registers the native code, and runs the fixup list. It reads
+neither relocation list and neither memory reference list; a change that adds
+work to those passes must add it to the residual list as well.
+
+The residual list holds every pointer whose target is outside the program: the
+objects the runtime creates before it reads the image, and the entry points of
+`libjulia-internal`, which a pre-relocated image reaches through thunks of its
+own.
+
+The runtime refuses, with a message and exit code 1: an image pre-relocated for
+another address, an image without native code, an image with several code
+variants, and a second pre-relocation.
+
 ## Trimming
 
 System images are typically quite large, since Base includes a lot of functionality, and by
