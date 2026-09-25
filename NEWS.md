@@ -181,6 +181,12 @@ New library functions
   `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
   image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
   original transform when an `include(mapexpr, …)`-ed file is edited.
+* New trait functions `Base.isstrided`, `Base.islinearstrided`, and `Base.isdense`
+  report whether an array type follows the strided array interface, and if so, whether its elements are
+  evenly spaced in column-major order or laid out exactly like an `Array`. `Base.isunsafeloadable` and
+  `Base.isunsafestorable` report whether reading or writing elements through a pointer is equivalent to
+  `getindex` or `setindex!`. Array types that set `Base.isdense` get default `strides` and `Base.elsize`
+  methods ([#60964]).
 
 New library features
 --------------------
