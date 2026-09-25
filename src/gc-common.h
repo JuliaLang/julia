@@ -194,15 +194,15 @@ extern jl_mutex_t finalizers_lock;
 #define GC_FIN_COBJ_TAG  2
 #define GC_FIN_TAG_MASK  3
 
-// `jl_gc_run_finalizers_in_list` roots an in-flight finalizer list by pushing
-// it as a GC frame of kind `JL_GCFRAME_FINLIST` (see julia.h), the only kind
-// whose slots may carry `GC_FIN_*` tags. In every other frame kind a tagged
-// slot value is skipped; see `gc_is_tagged_immediate` below.
+// jl_gc_run_finalizers_in_list pushes its list of finalizers as a GC frame.
+// The entries may carry GC_FIN_* tags, so that frame has a kind of its own.
 #define JL_GC_ENCODE_PUSHFINLIST(n) ((((size_t)(n)) << 2) | JL_GCFRAME_FINLIST)
 
-// Outside finalizer lists, values with either low bit set are immediates,
-// not heap references, and are skipped during marking. Julia heap objects
-// are at least 4-byte aligned. Tagged heap references are not supported.
+// In any other GC frame, a value with either of the two low bits set is an
+// immediate rather than an object reference, and is not marked. Reserving
+// these two bits requires objects to be 4-byte aligned, which holds on 32-bit
+// platforms as well; objects are in fact 16-byte aligned (JL_HEAP_ALIGNMENT).
+// Tagged object pointers are not supported.
 STATIC_INLINE int gc_is_tagged_immediate(const void *v) JL_NOTSAFEPOINT
 {
     return ((uintptr_t)v & 0x3) != 0;
