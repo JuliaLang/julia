@@ -698,6 +698,75 @@ end
     @test which(BottomFixedArity.k, (Type{<:BottomFixedArity.X}, Int, Int)) in [m.method for m in ms]
 end
 
+# A method that admits only `Union{}` but is not spelled `Type{Union{}}` still wins the
+# `Union{}` calls, so lookups that prune on a `Type{Union{}}` method agree with dispatch:
+# `M` and `U` beat the slurp method as strict subtypes and must also beat the pruned `P`s, and
+# a covering method found in `targ` must not hide the more specific `N` keyed in `tname`.
+module BottomSpellings
+    f(::AbstractVector, ::Type{Union{}}, slurp...) = :S
+    f(::AbstractVector, ::T) where {T<:Core.TypeofBottom} = :M
+    f(::AbstractVector{Int}, ::Type{<:AbstractString}) = :P
+    f(::AbstractVector, ::Type{T}, ::Vector{T}) where {T<:Union{}} = :N
+    f(::AbstractVector{Int}, ::Type{<:AbstractString}, ::Vector{Union{}}) = :P
+    f(::AbstractVector, ::Union{Core.TypeofBottom, Type{T}}, ::Vector{T}, ::Int) where {T<:Union{}} = :U
+    f(::AbstractVector{Int}, ::Type{<:AbstractString}, ::Vector{Union{}}, ::Int) = :P
+    for i in 1:5
+        @eval f(::AbstractVector{Val{$i}}, ::Type{<:AbstractString}) = $i
+    end
+end
+@testset "Union{} pruning agrees with dispatch for other spellings of Union{}" begin
+    f = BottomSpellings.f
+    for (args, winner) in (((Int[], Union{}), :M), ((Int[], Union{}, Union{}[]), :N),
+                           ((Int[], Union{}, Union{}[], 1), :U))
+        @test f(args...) === winner
+        tt = Tuple{Vector{Int}, Type{Union{}}, map(typeof, args[3:end])...}
+        @test invoke(f, tt, args...) === winner
+        @test which(f, tt) === which(f, Tuple{Vector{Int}, Core.TypeofBottom, tt.parameters[3:end]...})
+    end
+end
+
+# `P` admits only `Union{}` at the first argument, so it should beat `S` there,
+# so make sure it ends up in the right bucket to not get skipped
+module BottomSpellingsEarlier
+    f(::Union{DataType, Type{Union{}}}, ::Type{Union{}}, x...) = :S
+    f(::T, ::Type{<:Integer}) where {T<:Type{Union{}}} = :P
+    for i in 1:6
+        @eval f(::DataType, ::Val{$i}) = $i
+    end
+end
+@testset "Union{} pruning does not skip a method that admits only Union{} earlier" begin
+    f = BottomSpellingsEarlier.f
+    tt = Tuple{Type{Union{}}, Type{Union{}}}
+    @test f(Union{}, Union{}) === :P
+    @test invoke(f, tt, Union{}, Union{}) === :P
+    @test which(f, tt) === which(f, Tuple{Core.TypeofBottom, Core.TypeofBottom})
+end
+
+# `typeof(Union{}) == Type{Union{}}`, so a `Type{typeof(Union{})}` method, which is filed with
+# the `Type{Union{}}` methods, must be found for every spelling of that type object.
+module TypeofBottomSpellings
+    for T in (:Real, :AbstractString, :Symbol, :Tuple, :Function, :IO, :Exception)
+        @eval f(::Type{<:$T}, x...) = 0
+    end
+    f(::Type{Core.TypeofBottom}) = 1
+    f(::Type{Core.TypeofBottom}, ::Any) = 2
+end
+@testset "Type{typeof(Union{})} methods match other spellings of typeof(Union{})" begin
+    f = TypeofBottomSpellings.f
+    F = typeof(f)
+    @test f(Core.TypeofBottom) == 1
+    @test f(Type{Union{}}) == 1
+    @test f(Type{T} where T<:Union{}) == 1
+    matches(T) = [m.method for m in Base._methods_by_ftype(T, -1, Base.get_world_counter())]
+    m1 = which(f, (Type{Core.TypeofBottom},))
+    for T in (Core.TypeEgal{Type{Union{}}}, Union{Type{Core.TypeofBottom}, Int},
+              Union{Core.TypeEgal{Type{Union{}}}, Int})
+        @test m1 in matches(Tuple{F, T})
+    end
+    # a parameter that cannot be `Union{}` can still be `typeof(Union{})`
+    @test which(f, (Type{Core.TypeofBottom}, Any)) in matches(Tuple{F, Type{T}, T} where T)
+end
+
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
     @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})
