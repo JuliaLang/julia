@@ -199,6 +199,9 @@ disabled a run touching a word character on its outer side can neither open nor
 close, so that `foo_bar_` is left alone while `_foo_bar_baz_` still emphasises
 across its inner underscores.
 Escaped delimiters are not yet supported.
+
+Code spans are passed over whole, so a delimiter inside one doesn't close
+the run.
 """
 function parse_inline_wrapper(stream::IO, delimiter::AbstractString;
                               rep::Bool = false, intraword::Bool = true)
@@ -219,7 +222,21 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString;
 
         buffer = IOBuffer()
         for char in readeach(stream, Char)
-            write(buffer, char)
+            if char == '\\' && !eof(stream) && peek(stream, Char) in "\\`"
+                # an escaped backtick can't open a code span
+                write(buffer, char, read(stream, Char))
+            elseif char == '`'
+                # code spans bind more tightly than emphasis, so copy a whole
+                # span through: a delimiter inside it can't close this one
+                skip(stream, -1)
+                start = position(stream)
+                read_code_span(stream) === nothing && skip(stream, 1)
+                stop = position(stream)
+                seek(stream, start)
+                write(buffer, read(stream, stop - start))
+            else
+                write(buffer, char)
+            end
             if !(isspace(char) || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
