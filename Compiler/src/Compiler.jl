@@ -245,7 +245,7 @@ end
 if !isdefined(@__MODULE__, Symbol("#_internal_julia_parse"))
 function var"#_internal_julia_parse"(code, filename::String, lineno::Int, offset::Int, options::Symbol)
     return Base.JuliaSyntax.core_parser_hook(
-        code, filename, lineno, offset, options, Base.VersionNumber(1, 14, 0))
+        code, filename, lineno, offset, options, (1, 14))
 end
 end
 

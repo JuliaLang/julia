@@ -743,5 +743,7 @@ const ver_regs =
     Regex("^[\\s]*$version[\\s]*?\\s-\\s[\\s]*?$version[\\s]*\$") => hyphen_interval, # 0.7 - 1.3
 ]
 
-# Interaction with language edition
+# Interaction with language edition: there is at most one edition per minor
+# version, and any version should specify some default edition.
 EditionNumber(v::VersionNumber) = (Int(v.major), Int(v.minor))
+VersionedParse(v::VersionNumber) = VersionedParse(EditionNumber(v))
