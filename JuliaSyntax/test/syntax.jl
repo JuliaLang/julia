@@ -1,6 +1,6 @@
 using .JuliaSyntax: SyntaxTree, SyntaxList, @stm, prov, prov_end, provenance,
     macro_prov, macro_prov_end, flattened_provenance, sourceref,
-    unexpanded_sourceref, newnode, mkleaf, mknode, mktree, copy_ast,
+    unexpanded_sourceref, mktree, copy_ast,
     unalias_nodes, annotate_parent!, _setattr!, getmeta, SyntaxContext,
     ScopeLayer, children
 
@@ -51,8 +51,8 @@ end
     @testset "prov, prov_end, provenance, sourceref" begin
         # st3 <- st2 <- st1, with st3 referring to source text
         st3 = tnode(3)
-        st2 = mkleaf(st3)
-        st1 = mkleaf(st2)
+        st2 = @mknode(st3)
+        st1 = @mknode(st2)
 
         @test prov(st1) === st2
         @test prov(prov(st1)) === st3
@@ -78,11 +78,11 @@ end
         stm_unused = SyntaxTree(:identifier, nothing, "stm_unused", LineNumberNode(0), DUMMY_CONTEXT)
 
         stmm1 = SyntaxTree(:identifier, nothing, "stmm1", LineNumberNode(1, :mm), DUMMY_CONTEXT)
-        stmm2 = _setattr!(mkleaf(stmm1), :value, "stmm2")
-        stmm3 = _setattr!(mkleaf(stmm2), :value, "stmm3")
+        stmm2 = _setattr!(@mknode(stmm1), :value, "stmm2")
+        stmm3 = _setattr!(@mknode(stmm2), :value, "stmm3")
 
         stm1 = SyntaxTree(:identifier, nothing, "stm1", LineNumberNode(1, :m), DUMMY_CONTEXT)
-        stm2 = _setattr!(mkleaf(stm1), :value, "stm2")
+        stm2 = _setattr!(@mknode(stm1), :value, "stm2")
         stm3 = SyntaxTree(:identifier, nothing, "stm3", stm2, ctx_with_unexpanded(stmm3))
 
         st1 = SyntaxTree(:identifier, nothing, "st1", LineNumberNode(1),
@@ -151,8 +151,8 @@ end
     @testset "copy_ast, mktree" begin
         # A one-child tree whose root also has a provenance chain of its own
         leaf = tnode(3)
-        st2 = newnode(tnode(1), :block, SyntaxList(leaf))
-        st = mknode(st2, children(st2))   # st.source === st2
+        st2 = @mknode(tnode(1); head=:block, children=SyntaxList(leaf))
+        st = @mknode(st2)   # st.source === st2
 
         stcopy = copy_ast(st)
         @test stcopy !== st
@@ -164,7 +164,7 @@ end
 
         # Every node is copied at most once, so aliasing is preserved
         shared = tnode(1)
-        aliased = newnode(tnode(0), :block, SyntaxList(shared, shared))
+        aliased = @mknode(tnode(0); head=:block, children=SyntaxList(shared, shared))
         acopy = copy_ast(aliased)
         @test aliased ≈ acopy
         @test acopy[1] !== shared
