@@ -336,6 +336,19 @@ end
 @test WrapperKindSpecificity.f(Type{Int}) == 1
 @test WrapperKindSpecificity.f(Type{Float64}) == 2
 
+# a parameter that admits only `Union{}` ranks first however it is spelled, including a
+# typevar bounded by `Union{}` or `TypeofBottom` that is also used elsewhere
+for bottom in (Tuple{Type{T}, Integer, Vector{T}} where T<:Union{},
+               Tuple{Type{T}, Integer, Vector{S}} where {S<:Union{}, T<:S},
+               Tuple{S, Integer, Vector{S}} where S<:Core.TypeofBottom,
+               Tuple{S, Integer} where S<:Type{Union{}},
+               Tuple{Union{Core.TypeofBottom, Type{T}}, Integer, Vector{T}} where T<:Union{},
+               Tuple{S, Integer, Vector{S}, Vector{T}} where {T<:Union{}, S<:Union{Core.TypeofBottom, Type{T}}})
+    other = Tuple{Type{<:AbstractString}, Int, Vararg{Vector{Union{}}}}
+    @test  args_morespecific(bottom, other)
+    @test !args_morespecific(other, bottom)
+end
+
 # requires assertions enabled
 let root = NTuple
     N = root.var

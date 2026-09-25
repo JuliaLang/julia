@@ -860,11 +860,15 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         exclude_typeofbottom = !jl_parameter_includes_bottom(typetype);
                 }
             }
+            // Whether to visit the `Type{Union{}}` buckets, decided before either is searched: they
+            // hold the methods that can win the query's `Union{}` calls, so a covering method found
+            // in one lets the other `Type{...}` buckets be skipped, but never these. `Type{typeof(Union{})}`
+            // shares these buckets with `Type{Union{}}`, so visit them for that name too.
+            int visit_bottom = !exclude_typeofbottom || name == (jl_value_t*)jl_typeofbottom_type->name;
             // First check for intersections with methods defined on Type{T}, where T was a concrete type
             if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any && maybe_type &&
                     (!typetype || jl_has_free_typevars(typetype) || is_cache_leaf(typetype, 1))) { // otherwise cannot contain this particular kind, so don't bother with checking
-                // `Type{typeof(Union{})}` shares this bucket with `Type{Union{}}`, so visit it for that name too
-                if (!exclude_typeofbottom || name == (jl_value_t*)jl_typeofbottom_type->name) {
+                if (visit_bottom) {
                     // detect Type{Union{}}, Type{Type{Union{}}}, and Type{typeof(Union{}} and do those early here
                     // otherwise the possibility of encountering `Type{Union{}}` in this intersection may
                     // be forcing us to do some extra work here whenever we see a typevar, even though
@@ -947,8 +951,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
             }
             // Next check for intersections with methods defined on Type{T}, where T was not concrete (it might even have been a TypeVar), but had an extractable TypeName
             if (tname != (jl_genericmemory_t*)jl_an_empty_memory_any && maybe_type) {
-                if (!exclude_typeofbottom || name == (jl_value_t*)jl_typeofbottom_type->name ||
-                        (!typetype && jl_isa((jl_value_t*)jl_typeofbottom_type, ty))) {
+                if (visit_bottom || (!typetype && jl_isa((jl_value_t*)jl_typeofbottom_type, ty))) {
                     // detect Type{Union{}}, Type{Type{Union{}}}, and Type{typeof(Union{}} and do those early here
                     // otherwise the possibility of encountering `Type{Union{}}` in this intersection may
                     // be forcing us to do some extra work here whenever we see a typevar, even though
@@ -1672,6 +1675,13 @@ static void jl_typemap_level_insert_(
             jl_datatype_t *super = a0 ? (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper) : jl_any_type;
             jl_typename_t *name = super->name;
             jl_typemap_memory_insert_(map, &cache->tname, (jl_value_t*)name, newrec, (jl_value_t*)cache, 1, offs, NULL);
+            return;
+        }
+        if (jl_is_typeofbottom_param(t1)) {
+            // A parameter that admits only `Union{}`, such as `T<:Type{Union{}}`,
+            // ranks above every other in specificity, and must not get skipped by the filter
+            // logic, even if the above code didn't notice it shares that specificity rule.
+            jl_typemap_memory_insert_(map, &cache->tname, (jl_value_t*)jl_typeofbottom_type->name, newrec, (jl_value_t*)cache, 1, offs, NULL);
             return;
         }
         a0 = jl_type_extract_name(t1, 0);
