@@ -73,7 +73,7 @@ function Base.isdense(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {
     Base.isdense(P) && ntuple(identity, Val(N)) === perm
 end
 function Base.islinearstrided(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
-    Base.has_vec_strided_layout(P) && ntuple(identity, Val(N)) === perm
+    Base._islinearstrided_or_trivial(P) && ntuple(identity, Val(N)) === perm
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}

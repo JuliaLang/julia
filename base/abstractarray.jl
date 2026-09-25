@@ -671,16 +671,15 @@ isstrided(::Type{Union{}}) = false
 isstrided(A::AbstractArray) = isstrided(typeof(A))
 
 """
-    Base.has_vec_strided_layout(type)::Bool
+    Base._islinearstrided_or_trivial(type)::Bool
 
 Check the [`Base.islinearstrided`](@ref) trait. Also return `true` for strided zero- and one-dimensional arrays,
-which are vector strided trivially.
+which are trivially linear strided.
 """
-has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = isstrided(A)::Bool
-has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,1}} = isstrided(A)::Bool
-has_vec_strided_layout(::Type{A}) where {A<:AbstractArray} = islinearstrided(A)::Bool
-has_vec_strided_layout(::Type{Union{}}) = false
-
+_islinearstrided_or_trivial(::Type{A}) where {T,A<:AbstractArray{T,0}} = isstrided(A)::Bool
+_islinearstrided_or_trivial(::Type{A}) where {T,A<:AbstractArray{T,1}} = isstrided(A)::Bool
+_islinearstrided_or_trivial(::Type{A}) where {A<:AbstractArray} = islinearstrided(A)::Bool
+_islinearstrided_or_trivial(::Type{Union{}}) = false
 
 function elsize(::Type{A}) where {T,A<:AbstractArray{T}}
     if isdense(A)
@@ -699,7 +698,7 @@ size_to_strides(s) = ()
 
 Return a tuple of the memory strides in each dimension.
 
-See also [`stride`](@ref) and [`isstrided`](@ref).
+See also [`stride`](@ref) and [`Base.isstrided`](@ref).
 
 # Examples
 ```jldoctest

@@ -184,7 +184,7 @@ end
 function Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T}
     memoryref(S.data, S.offset)
 end
-Base.isstrided(S::Type{<:Strider}) = true
+Base.isstrided(::Type{<:Strider}) = true
 Base.isunsafeloadable(::Type{<:Strider}) = true
 Base.isunsafestorable(::Type{<:Strider}) = true
 

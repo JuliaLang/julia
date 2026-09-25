@@ -423,16 +423,15 @@ function isstrided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{Stri
     islinearstrided(A) || isstrided(P)
 end
 function islinearstrided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
-    isdense(A) || has_vec_strided_layout(P)
+    isdense(A) || _islinearstrided_or_trivial(P)
 end
 function isdense(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
     isdense(P)
 end
 
-
 isunsafeloadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isunsafeloadable(P)
 isunsafestorable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isunsafestorable(P)
-islinearstrided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_vec_strided_layout(P)
+islinearstrided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = _islinearstrided_or_trivial(P)
 isdense(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isdense(P)
 
 # Contiguous with the exact byte layout of the equivalent Array and matching elsize
