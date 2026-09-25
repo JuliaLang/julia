@@ -65,18 +65,12 @@ const DS6 = 1.58969099521155010221e-10
 
 Compute the sine on the interval [-π/4; π/4].
 """
-@assume_effects :consistent @inline function sin_kernel(y::DoubleFloat64)
+@inline function sin_kernel(y::DoubleFloat64)
     y² = y.hi*y.hi
     y⁴ = y²*y²
-    return if Core.Intrinsics.have_fma(Float64)
-        r = muladd(y²*y⁴, @horner(y², DS5, DS6), @horner(y², DS2, DS3, DS4))
-        y³ = y²*y.hi
-        y.hi - muladd(-y³, DS1, muladd(y², muladd(-y³, r, 0.5*y.lo), -y.lo))
-    else
-        r  = @horner(y², DS2, DS3, DS4) + y²*y⁴*@horner(y², DS5, DS6)
-        y³ = y²*y.hi
-        y.hi - ((y²*(0.5*y.lo - y³*r) - y.lo) - y³*DS1)
-    end
+    y³ = y²*y.hi
+    r = muladd(y²*y⁴, @horner(y², DS5, DS6), @horner(y², DS2, DS3, DS4))
+    return y.hi - muladd(-y³, DS1, muladd(y², muladd(-y³, r, 0.5*y.lo), -y.lo))
 end
 @inline function sin_kernel(y::Float64)
     y² =  y*y
@@ -317,12 +311,7 @@ end
         #     tan(y) = 1 - 2*(tan(y) - (tan(y)^2)/(1+tan(y)))
         #            ≈ 1 - 2*(P(z) - (P(z)^2)/(1+P(z)))
         # where z = y-π/4.
-        @assume_effects :consistent begin
-            if Core.Intrinsics.have_fma(Float64)
-                return flipsign(muladd(-2.0, yhi-(Px^2/(k+Px)-r), k), y.hi)
-            end
-            return flipsign(k - 2*(yhi-(Px^2/(k+Px)-r)), y.hi)
-        end
+        return flipsign(muladd(-2.0, yhi-(Px^2/(k+Px)-r), k), y.hi)
     end
     if k == 1
         # Else, we simply return w = P(y) if k == 1 (integer multiple from argument
@@ -437,12 +426,8 @@ function asin(x::T) where T<:Union{Float32, Float64}
         # arc_tRt(0) is 0, so tiny |x| returns x unchanged
         return muladd(x, arc_tRt(x*x), x)
     end
-    # else 1/2 <= |x| < 1
-    t = @assume_effects :consistent if Core.Intrinsics.have_fma(T)
-        muladd(T(-0.5), absx, T(0.5))
-    else
-        (T(1.0) - absx)/2
-    end
+    # else 1/2 <= |x| < 1, where (1 - |x|)/2 is exact, fused or not
+    t = muladd(T(-0.5), absx, T(0.5))
     return asin_kernel(t, x)
 end
 
@@ -864,14 +849,10 @@ function acos(x::T) where T <: Union{Float32, Float64}
         acos_domain_error(x) # see 5) above
     elseif absx < T(1.0)/2 # see 1) above
         # tiny |x| collapses this to pi/2
-        correction = @assume_effects :consistent if T === Float64 && Core.Intrinsics.have_fma(Float64)
-            fma(-x, arc_tRt(x*x), PIO2_LO(T))
-        else
-            PIO2_LO(T) - x*arc_tRt(x*x)
-        end
+        correction = muladd(-x, arc_tRt(x*x), PIO2_LO(T))
         return PIO2_HI(T) - (x - correction)
     end
-    z = (T(1.0) - absx)*T(0.5)
+    z = muladd(T(-0.5), absx, T(0.5))
     zRz = arc_tRt(z)
     s, e = two_sqrt(z)
     if x < T(0.0) # see 2) above
@@ -977,8 +958,8 @@ function asinpi(x::Float64)
         # asin(x)/π = (x/π)*(1 + x²R(x²))
         return scale_divpi(x, arc_tRt(x*x))
     end
-    # else 1/2 <= |x| < 1, where asin(|x|)/π = 1/2 - acos(|x|)/π
-    hi, lo = acospi_kernel((1.0 - absx)/2)
+    # else 1/2 <= |x| < 1, where asin(|x|)/π = 1/2 - acos(|x|)/π and (1 - |x|)/2 is exact
+    hi, lo = acospi_kernel(muladd(-0.5, absx, 0.5))
     r, rlo = fast_two_diff(0.5, hi)
     return copysign(r + (rlo - lo), x)
 end
@@ -1021,12 +1002,7 @@ function acospi(x::Float64)
         r, rlo = fast_two_diff(0.5, hi)
         return r + (rlo - a)
     end
-    reduced = @assume_effects :consistent if Core.Intrinsics.have_fma(Float64)
-        muladd(-0.5, absx, 0.5)
-    else
-        (1.0 - absx)/2
-    end
-    hi, lo = acospi_kernel(reduced)
+    hi, lo = acospi_kernel(muladd(-0.5, absx, 0.5))
     x > 0.0 && return hi + lo
     # acos(x)/π = 1 - acos(|x|)/π for x < 0
     r, rlo = fast_two_diff(1.0, hi)
