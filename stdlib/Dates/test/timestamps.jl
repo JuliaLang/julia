@@ -268,7 +268,7 @@ end
         Timestamp(2026, 9, 3, 13, 45, 30, 123, 456, 789)
     @test toprev(d -> dayofweek(d) == Dates.Friday, ts) ==
         Timestamp(2026, 8, 28, 13, 45, 30, 123, 456, 789)
-    # function-based adjuster constructors, mirroring DateTime's arity ladder
+    # function-based adjuster constructors, with DateTime's default step per argument count
     starts = (
         (2026,),
         (2026, 8),
@@ -574,7 +574,7 @@ module TimestampPeriodExtensionTests
 using Dates, Test
 const TimestampHelpers = Dates
 
-# A primitive Int128 period exercises the count/scale interface without built-in period promotion.
+# A package-defined 128-bit picosecond period with no period promotion rules
 primitive type TestPicosecond <: Dates.TimePeriod 128 end
 TestPicosecond(x::Real) = reinterpret(TestPicosecond, Int128(x))
 Dates.value(x::TestPicosecond) = reinterpret(Int128, x)
