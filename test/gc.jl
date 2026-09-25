@@ -236,6 +236,7 @@ if Base.GC_REGIONS
         run_gctest("gc/regions_window.jl")
         run_gctest("gc/regions_escape.jl")
         run_gctest("gc/regions_lifetime.jl")
+        run_gctest("gc/regions_census.jl")
         run_gctest("gc/regions_stores.jl")
         run_gctest("gc/regions_safety.jl")
     end
