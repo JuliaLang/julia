@@ -355,6 +355,7 @@ Base.success
 Base.process_running
 Base.process_exited
 Base.kill(::Base.Process, ::Integer)
+Base.kill(::Integer, ::Integer)
 Base.SIGHUP
 Base.SIGINT
 Base.SIGQUIT
