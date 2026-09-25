@@ -7114,6 +7114,60 @@ struct NewExctInference
 end
 @test Base.infer_exception_type(NewExctInference, (Float64,)) == TypeError
 
+# exception types of atomic intrinsics (#63357)
+function atomic_load_invalid_order(p::Ptr{Int})
+    try
+        unsafe_load(p, :release)
+        return false
+    catch e
+        return e isa ConcurrencyViolationError
+    end
+end
+function atomic_fence_invalid_order()
+    try
+        Core.Intrinsics.atomic_fence(:unordered, :system)
+        return nothing
+    catch e
+        return e
+    end
+end
+@testset "exception types of atomic intrinsics" begin
+    buf = Int[0]
+    @test GC.@preserve buf atomic_load_invalid_order(pointer(buf))
+    @test Base.infer_return_type(atomic_fence_invalid_order, ()) >: ConcurrencyViolationError
+    @test atomic_fence_invalid_order() isa ConcurrencyViolationError
+
+    # the inferred exception type must cover what is thrown at run time, and only widen
+    # to `Any` when the call involves arbitrary code
+    U = Union{ConcurrencyViolationError, TypeError, ErrorException}
+    for (f, E, maxexct) in Any[
+            (p -> unsafe_load(p, :release), ConcurrencyViolationError, U),
+            (p -> unsafe_load(p, Base.inferencebarrier(:release)::Symbol), ConcurrencyViolationError, Any),
+            (p -> unsafe_store!(p, 1, :acquire), ConcurrencyViolationError, U),
+            (p -> unsafe_swap!(p, 1, :unordered), ConcurrencyViolationError, U),
+            (p -> unsafe_modify!(p, +, 1, :unordered), ConcurrencyViolationError, Any),
+            (p -> unsafe_replace!(p, 0, 1, :sequentially_consistent, :release), ConcurrencyViolationError, U),
+            (p -> unsafe_replace!(p, 0, 1, :monotonic, :acquire), ConcurrencyViolationError, U),
+            (p -> Core.Intrinsics.atomic_fence(:unordered, :system), ConcurrencyViolationError, U),
+            (p -> Core.Intrinsics.atomic_fence(:acquire, :invalid), ErrorException, U),
+            (p -> Core.Intrinsics.atomic_pointerref(p, 1), TypeError, U),
+            (p -> Core.Intrinsics.atomic_pointerset(p, 1.0, :release), TypeError, U),
+            (p -> unsafe_load(Ptr{NTuple{3,UInt8}}(p), :acquire), ErrorException, U)]
+        exct = Base.infer_exception_type(f, (Ptr{Int},))
+        @test E <: exct <: maxexct
+        ex = try
+            GC.@preserve buf f(pointer(buf))
+            nothing
+        catch e
+            e
+        end
+        @test ex isa E
+        @test ex isa exct
+    end
+    @test Compiler.builtin_exct(Compiler.SimpleInferenceLattice.instance,
+        Core.Intrinsics.atomic_pointermodify, Any[Ptr{Int}, typeof(+), Int, Symbol], Pair{Int,Int}) === Any
+end
+
 # semi-concrete interpretation accuracy
 # https://github.com/JuliaLang/julia/issues/50037
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
