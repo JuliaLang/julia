@@ -876,6 +876,16 @@ g(1)
 g(2)
 g(3)
 
+# closure cfunction types that use static parameters at run time (#27813)
+function cfunction_sparam_env(::Union{Nothing,Ref{S}}, x::T, y::U) where {S,T,U}
+    cf = @cfunction identity Ref{U} (Ref{U},)
+    GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Ref{U}, (Ref{U},), y)
+end
+@test cfunction_sparam_env(nothing, 1, Int32(7)) === Int32(7)
+@test cfunction_sparam_env(nothing, 1, "s") === "s"
+cfunction_undef_sparam_env(::Union{Nothing,Ref{S}}) where {S} = @cfunction(identity, Ptr{Cvoid}, (Ptr{S},))
+@test_throws UndefVarError(:S, :static_parameter) cfunction_undef_sparam_env(nothing)
+
 verbose && println("Testing cfunction roundtrip: ")
 
 cf64 = 2.84+5.2im

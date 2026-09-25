@@ -8572,11 +8572,7 @@ static Function *gen_cfun_wrapper(
                 ctx.builder.CreateBr(afterBB);
                 isanyBB = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.SetInsertPoint(notanyBB);
-                jl_cgval_t runtime_dt_val = mark_julia_type(ctx, runtime_dt, true, jl_any_type);
-                Value *isrtboxed = // (!jl_is_datatype(runtime_dt) || !jl_is_concrete_datatype(runtime_dt) || jl_is_mutable_datatype(runtime_dt))
-                    emit_guarded_test(ctx, emit_exactly_isa(ctx, runtime_dt_val, jl_datatype_type), true, [&] () {
-                            return ctx.builder.CreateOr(ctx.builder.CreateNot(emit_isconcrete(ctx, runtime_dt)), emit_datatype_mutabl(ctx, runtime_dt));
-                    });
+                Value *isrtboxed = ctx.builder.CreateIsNull(runtime_dt);
                 ctx.builder.CreateCondBr(isrtboxed, boxedBB, unboxedBB);
                 ctx.builder.SetInsertPoint(boxedBB);
                 Value *p2 = track_pjlvalue(ctx, val);
@@ -8878,7 +8874,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
                  literal_pointer_val(ctx, (jl_value_t*)fill),
                  F,
                  closure_types ? literal_pointer_val(ctx, (jl_value_t*)unionall_env) : Constant::getNullValue(ctx.types().T_pjlvalue),
-                 closure_types ? decay_derived(ctx, ctx.spvals_ptr) : ConstantPointerNull::get(ctx.builder.getPtrTy(AddressSpace::Derived))
+                 closure_types ? emit_ptrgep(ctx, decay_derived(ctx, ctx.spvals_ptr), sizeof(jl_svec_t)) : ConstantPointerNull::get(ctx.builder.getPtrTy(AddressSpace::Derived))
              });
         outboxed = true;
     }
