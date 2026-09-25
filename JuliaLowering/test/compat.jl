@@ -102,9 +102,9 @@ end
     # TODO: `@ast_` escaping is broken
     unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
     local st_wrappers = Function[
-        x->(@ast _ unused (x::K"Value"))
-        x->(@ast _ unused [K"inert" x::K"Value"])
-        x->(@ast _ unused [K"function" x::K"Value"])
+        x->(@ast _ unused (x::value))
+        x->(@ast _ unused [:inert x::value])
+        x->(@ast _ unused [:function x::value])
     ]
 
     @testset "every basic case" begin
@@ -122,14 +122,14 @@ end
     end
 
     @testset "special cases: Value implicitly quotes AST nodes" begin
-        @test JL.est_to_expr(@ast_ :foo::K"Value") ==
-            JL.est_to_expr(@ast_ [K"inert" "foo"::K"Identifier"]) ==
+        @test JL.est_to_expr(@ast_ :foo::value) ==
+            JL.est_to_expr(@ast_ [:inert "foo"::identifier]) ==
             QuoteNode(:foo)
-        @test JL.est_to_expr(@ast_ Expr(:call, 1)::K"Value") ==
-            JL.est_to_expr(@ast_ [K"inert" [K"call" 1::K"Value"]]) ==
+        @test JL.est_to_expr(@ast_ Expr(:call, 1)::value) ==
+            JL.est_to_expr(@ast_ [:inert [:call 1::value]]) ==
             QuoteNode(Expr(:call, 1))
-        @test JL.est_to_expr(@ast_ QuoteNode(Expr(:call, 1))::K"Value") ==
-            JL.est_to_expr(@ast_ [K"inert" [K"inert" [K"call" 1::K"Value"]]]) ==
+        @test JL.est_to_expr(@ast_ QuoteNode(Expr(:call, 1))::value) ==
+            JL.est_to_expr(@ast_ [:inert [:inert [:call 1::value]]]) ==
             QuoteNode(QuoteNode(Expr(:call, 1)))
     end
 
@@ -183,16 +183,16 @@ end
         st = JuliaLowering.expr_to_est(ex, LineNumberNode(1))
 
         # sanity: ensure we're testing the tree we expect
-        @test st ≈ @ast_ [K"block"
-            [K"try"
-                [K"block"
-                    "maybe"::K"Identifier"
-                    "lots"::K"Identifier"
-                    "of"::K"Identifier"
-                    "lines"::K"Identifier"
+        @test st ≈ @ast_ [:block
+            [:try
+                [:block
+                    "maybe"::identifier
+                    "lots"::identifier
+                    "of"::identifier
+                    "lines"::identifier
                 ]
-                "exc"::K"Identifier"
-                [K"block" "y"::K"Identifier"]
+                "exc"::identifier
+                [:block "y"::identifier]
             ]
         ]
 
@@ -214,10 +214,10 @@ end
                       Expr(:call, :f),
                       :body))
         )
-        @test st_shortfunc ≈ @ast_ [K"block"
-            [K"="
-                [K"call" "f"::K"Identifier"]
-                "body"::K"Identifier"
+        @test st_shortfunc ≈ @ast_ [:block
+            [:(=)
+                [:call "f"::identifier]
+                "body"::identifier
             ]
         ]
         @test let lnn = st_shortfunc[1][1].source; lnn isa LineNumberNode && lnn.line === 11; end
@@ -231,10 +231,10 @@ end
                            LineNumberNode(22),
                            :body)))
         )
-        @test st_shortfunc_2 ≈ @ast_ [K"block"
-            [K"="
-                [K"call" "f"::K"Identifier"]
-                [K"block" "body"::K"Identifier"]
+        @test st_shortfunc_2 ≈ @ast_ [:block
+            [:(=)
+                [:call "f"::identifier]
+                [:block "body"::identifier]
             ]
         ]
         @test let lnn = st_shortfunc_2[1][1].source; lnn isa LineNumberNode && lnn.line === 22; end
@@ -518,13 +518,13 @@ end
 end
 
 @testset "Expr(:ssavalue) conversion" begin
-    # Expr(:ssavalue, N) should be converted to [K"ssavalue" N::K"Value"]
+    # Expr(:ssavalue, N) should be converted to [:ssavalue N::value]
     st = JuliaLowering.expr_to_est(Expr(:ssavalue, 0))
-    @test kind(st) === K"ssavalue"
+    @test head(st) === :ssavalue
     @test st[1].value == 0
 
     st = JuliaLowering.expr_to_est(Expr(:ssavalue, 42))
-    @test kind(st) === K"ssavalue"
+    @test head(st) === :ssavalue
     @test st[1].value == 42
 
     # Roundtrip: ssavalue should convert back to Expr(:ssavalue, N)

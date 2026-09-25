@@ -910,7 +910,7 @@ let op_mod = Module(:opmod, false)
 end
 
 @testset "jl_assert" begin
-    st = @ast_ [K"function" "foo"::K"Identifier"]
+    st = @ast_ [:function "foo"::identifier]
     if JL.DEBUG
         err = try
             JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), (st, "error message 2"))
