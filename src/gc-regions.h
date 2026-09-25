@@ -96,6 +96,12 @@ JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v) JL_NOTSAFEPOINT;
 // The pages of a region on this heap; whether an escape quarantined a region.
 JL_DLLEXPORT int jl_gc_region_pages(int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_gc_region_quarantined(int n) JL_NOTSAFEPOINT;
+// With debug on, a refused reset reports the execution roots that reference
+// the region. jl_gc_region_check runs the root check alone and returns the
+// count; jl_gc_region_verify checks the page chains of a region.
+JL_DLLEXPORT void jl_gc_region_set_debug(int on) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int64_t jl_gc_region_check(int n) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_gc_region_verify(int n) JL_NOTSAFEPOINT;
 #ifdef WITH_GC_REGION_BARRIER
 // The escape barrier, called by the write barrier while a region is in use.
 JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;

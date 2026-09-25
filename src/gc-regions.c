@@ -784,6 +784,357 @@ JL_DLLEXPORT uint64_t jl_gc_region_reset_global(int n) JL_CANSAFEPOINT
     return result;
 }
 
+// --- the census ------------------------------------------------------------------------
+// A census collects one region alone: a mark from the execution roots with
+// the census filter set, which claims only objects of the region and the
+// tasks, then a sweep of the region's pages. Globals, the remembered sets
+// and the other regions are not walked: under the reference rule they hold
+// no reference into the region, and the quarantine keeps the rule.
+
+// The claim of a task outside the region, called by gc_scoped_claim.
+int jl_gc_region_census_claim_task(jl_value_t *task) JL_NOTSAFEPOINT
+{
+    if (ptrhash_has(&region_census_tasks, task))
+        return 0;
+    ptrhash_put(&region_census_tasks, task, task);
+    region_census_task_count++;
+    return 1;
+}
+
+static void region_census_begin(int n) JL_NOTSAFEPOINT
+{
+    htable_reset(&region_census_tasks, region_census_task_count);
+    region_census_task_count = 0;
+    jl_atomic_store_relaxed(&jl_gc_region_census_target, n);
+}
+
+static void region_census_end(void) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&jl_gc_region_census_target, 0);
+}
+
+
+// The mark of a census runs from the execution roots of every thread, so it
+// sets mark bits on the region's objects of other heaps too; the sweep runs
+// on the calling heap alone. Clear those bits, or the next census on that
+// heap reads a dead cell as live.
+static void region_clear_marks_on_other_heaps(jl_thread_heap_t *mine, int n) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        if (heap == mine || heap->regions[n] == NULL)
+            continue;
+        for (jl_gc_pagemeta_t *pg = heap->regions[n]->pages; pg != NULL; pg = pg->region_next) {
+            if (!pg->has_marked)
+                continue;
+            int osize = pg->osize;
+            char *cell = pg->data + GC_PAGE_OFFSET;
+            char *end = pg->data + GC_PAGE_SZ;
+            for (; cell + osize <= end; cell += osize)
+                ((jl_taggedvalue_t*)cell)->header &= ~(uintptr_t)(GC_MARKED | GC_OLD);
+            pg->has_marked = 0;
+        }
+    }
+}
+
+
+// Move the entries whose object the mark did not reach to `dead`; both
+// lists are then marked, so a dead object lives until its finalizer ran.
+static void region_split_dead_finalizers(arraylist_t *lst, arraylist_t *dead) JL_NOTSAFEPOINT
+{
+    arraylist_new(dead, 0);
+    size_t j = 0, len = lst->len;
+    void **items = lst->items;
+    for (size_t i = 0; i < len; i += 2) {
+        jl_value_t *obj = (jl_value_t*)(((uintptr_t)items[i]) & ~(uintptr_t)3);
+        if (gc_marked(jl_astaggedvalue(obj)->bits.gc)) {
+            items[j] = items[i];
+            items[j + 1] = items[i + 1];
+            j += 2;
+        }
+        else {
+            arraylist_push(dead, items[i]);
+            arraylist_push(dead, items[i + 1]);
+        }
+    }
+    lst->len = j;
+}
+
+// The mark of a census from the execution roots of the given threads, with
+// the filter set by the caller. The scanned-byte counters and the remset of
+// the marking thread are restored afterwards: the task scan of the stock
+// mark pushes an old task to the remset, and a stock collection that finds
+// a task there first sets no page metadata for it, so the page would be
+// swept with the live task in it. The truncation removes exactly the pushes
+// of the census.
+static void region_census_mark(jl_ptls_t ptls, jl_ptls_t *tls_states, int nthreads,
+                               jl_thread_heap_t *heap, int n, arraylist_t *dead)
+{
+    jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
+    size_t scanned = ptls->gc_tls.gc_cache.scanned_bytes;
+    size_t perm_scanned = ptls->gc_tls.gc_cache.perm_scanned_bytes;
+    size_t remset_len = ptls->gc_tls.heap.remset.len;
+    int remset_nptr = ptls->gc_tls.heap.remset_nptr;
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = tls_states[t_i];
+        if (ptls2 != NULL)
+            gc_queue_execution_roots(mq, ptls2);
+    }
+    gc_mark_loop_serial(ptls);
+    if (dead != NULL) {
+        region_split_dead_finalizers(&heap->regions[n]->finalizers, dead);
+        gc_mark_finlist(mq, &heap->regions[n]->finalizers, 0);
+        gc_mark_finlist(mq, dead, 0);
+        gc_mark_loop_serial(ptls);
+    }
+    ptls->gc_tls.gc_cache.scanned_bytes = scanned;
+    ptls->gc_tls.gc_cache.perm_scanned_bytes = perm_scanned;
+    assert(ptls->gc_tls.heap.remset.len >= remset_len);
+    ptls->gc_tls.heap.remset.len = remset_len;
+    ptls->gc_tls.heap.remset_nptr = remset_nptr;
+}
+
+
+
+
+
+// --- debug ------------------------------------------------------------------------------
+
+// Turn the report of the root check on or off, process-wide; the check
+// itself always runs.
+JL_DLLEXPORT void jl_gc_region_set_debug(int on) JL_NOTSAFEPOINT
+{
+    region_debug_checks = on;
+}
+
+// Count the marked cells of region n on one heap after a census mark, each
+// an object an execution root still references, and clear the marks.
+static int64_t region_count_marked(jl_thread_heap_t *heap, int n)
+{
+    int64_t violations = 0;
+    jl_gc_pool_t *pools = heap->regions[n]->pools;
+    char *bump[JL_GC_N_MAX_POOLS];
+    for (int i = 0; i < JL_GC_N_MAX_POOLS; i++)
+        bump[i] = (char*)pools[i].newpages;
+    for (jl_gc_pagemeta_t *pg = heap->regions[n]->pages; pg != NULL; pg = pg->region_next) {
+        int i = pg->pool_n;
+        int osize = pg->osize;
+        char *cell = pg->data + GC_PAGE_OFFSET;
+        size_t ncells = (GC_PAGE_SZ - GC_PAGE_OFFSET) / (size_t)osize;
+        char *end = cell + ncells * (size_t)osize;
+        if (bump[i] != NULL && gc_page_data(bump[i] - 1) == pg->data &&
+            (char*)bump[i] < end)
+            end = (char*)bump[i];
+        for (; cell < end; cell += osize) {
+            jl_taggedvalue_t *tv = (jl_taggedvalue_t*)cell;
+            uintptr_t h = tv->header;
+            if (h & GC_MARKED) {
+                tv->header = h & ~(uintptr_t)(GC_MARKED | GC_OLD);
+                if (region_debug_checks && violations < 8) {
+                    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(jl_valueof(tv));
+                    jl_safe_printf("REGION-RESET-CHECK: live reference into region %d: %p type=%s\n",
+                                   n, (void*)jl_valueof(tv),
+                                   jl_symbol_name(vt->name->name));
+                }
+                violations++;
+            }
+        }
+        pg->has_marked = 0;
+    }
+    return violations;
+}
+
+// The root scan of the checked reset and of jl_gc_region_check: a census
+// mark from the execution roots of every thread, then the count and the
+// clear of the marks on this heap, and the clear on the other heaps, where
+// a stale mark would make the next check refuse. Returns the count.
+static int64_t region_root_scan(jl_ptls_t ptls, jl_thread_heap_t *heap, int n) JL_CANSAFEPOINT
+{
+    region_census_begin(n);
+    region_census_mark(ptls, gc_all_tls_states, gc_n_threads, heap, n, NULL);
+    int64_t violations = region_count_marked(heap, n);
+    region_clear_marks_on_other_heaps(heap, n);
+    region_census_end();
+    return violations;
+}
+
+// The root scan of the global reset: one mark, then the count on every
+// heap's instance of the region. The same preconditions.
+static int64_t region_root_scan_global(jl_ptls_t ptls, int n)
+{
+    region_census_begin(n);
+    region_census_mark(ptls, gc_all_tls_states, gc_n_threads, &ptls->gc_tls.heap, n, NULL);
+    int64_t violations = 0;
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 != NULL && ptls2->gc_tls.heap.regions[n] != NULL)
+            violations += region_count_marked(&ptls2->gc_tls.heap, n);
+    }
+    region_census_end();
+    return violations;
+}
+
+// The root check alone: stop the world, mark from the execution roots with
+// the filter, count the marked cells of the region and clear them. Returns
+// the count, or a refusal code.
+JL_DLLEXPORT int64_t jl_gc_region_check(int n) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    if (!region_valid(n) || heap->regions[n] == NULL)
+        return 0;
+    if (heap->current_region != 0 || heap->finalizer_depth != 0 ||
+        jl_atomic_load_relaxed(&region_windows_open) != 0)
+        return JL_GC_REGION_EBUSY;
+
+    uint32_t saved_disable = jl_atomic_exchange(&jl_gc_disable_counter, 0);
+    int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
+    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
+    if (!jl_safepoint_start_gc(ct)) {
+        jl_atomic_store_release(&jl_gc_disable_counter, saved_disable);
+        jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
+        jl_safepoint_wait_thread_resume(ct);
+        return JL_GC_REGION_ERACE;
+    }
+    jl_fence();
+    gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
+    gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    jl_gc_wait_for_the_world(gc_all_tls_states, gc_n_threads);
+
+    int64_t violations = region_root_scan(ptls, heap, n);
+
+    gc_n_threads = 0;
+    gc_all_tls_states = NULL;
+    jl_safepoint_end_gc();
+    jl_atomic_store_release(&jl_gc_disable_counter, saved_disable);
+    jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
+    jl_safepoint_wait_thread_resume(ct);
+    return violations;
+}
+
+// Check the page chains of region n: every chained page carries tag n and
+// a page-map entry, the cursors point into tagged pages, and the
+// allocated-page stack agrees with the chains. Returns the error count, or
+// EINVAL.
+JL_DLLEXPORT int jl_gc_region_verify(int n) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    if (!region_valid(n))
+        return JL_GC_REGION_EINVAL;
+    if (heap->regions[n] == NULL)
+        return 0;
+    int errors = 0;
+    uint64_t chain_len = 0;
+    for (jl_gc_pagemeta_t *pg = heap->regions[n]->pages; pg != NULL; pg = pg->region_next) {
+        chain_len++;
+        if (pg->region_n != n) {
+            jl_safe_printf("REGION-VERIFY: chained page %p tag %d, expected %d\n",
+                           (void*)pg->data, (int)pg->region_n, n);
+            errors++;
+        }
+        jl_gc_pagemeta_t *meta = page_metadata(pg->data);
+        if (meta != pg) {
+            jl_safe_printf("REGION-VERIFY: page %p map meta %p != chained %p\n",
+                           (void*)pg->data, (void*)meta, (void*)pg);
+            errors++;
+        }
+        if (chain_len > 1000000) {
+            jl_safe_printf("REGION-VERIFY: chain does not terminate\n");
+            errors++;
+            break;
+        }
+    }
+    uint64_t fresh_len = 0;
+    for (jl_gc_pagemeta_t *fp = heap->regions[n]->fresh_pages; fp != NULL; fp = fp->region_next) {
+        fresh_len++;
+        if (fp->region_n != n) {
+            jl_safe_printf("REGION-VERIFY: fresh page %p tag %d, expected %d\n",
+                           (void*)fp->data, (int)fp->region_n, n);
+            errors++;
+        }
+        if (fresh_len > 1000000) {
+            jl_safe_printf("REGION-VERIFY: fresh chain does not terminate\n");
+            errors++;
+            break;
+        }
+    }
+    const jl_gc_pool_t *pools = heap->regions[n]->pools;
+    for (int i = 0; i < JL_GC_N_MAX_POOLS; i++) {
+        jl_taggedvalue_t *fl = pools[i].newpages;
+        if (fl != NULL) {
+            jl_gc_pagemeta_t *meta = page_metadata((char*)fl - 1);
+            if (meta == NULL || meta->region_n != n) {
+                jl_safe_printf("REGION-VERIFY: pool %d newpages %p on page tag %d\n",
+                               i, (void*)fl, meta ? (int)meta->region_n : -1);
+                errors++;
+            }
+        }
+        if (pools[i].freelist != NULL) {
+            jl_gc_pagemeta_t *meta = page_metadata((char*)pools[i].freelist);
+            if (meta == NULL || meta->region_n != n) {
+                jl_safe_printf("REGION-VERIFY: pool %d freelist head %p on page tag %d\n",
+                               i, (void*)pools[i].freelist,
+                               meta ? (int)meta->region_n : -1);
+                errors++;
+            }
+        }
+    }
+    uint64_t in_allocd = 0;
+    for (jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls->gc_tls.page_metadata_allocd.bottom);
+         pg != NULL; pg = pg->next) {
+        if (pg->region_n == n)
+            in_allocd++;
+    }
+    if (in_allocd != chain_len + fresh_len) {
+        jl_safe_printf("REGION-VERIFY: chain %llu + fresh %llu pages, allocd sees %llu tagged\n",
+                       (unsigned long long)chain_len,
+                       (unsigned long long)fresh_len,
+                       (unsigned long long)in_allocd);
+        errors++;
+    }
+    return errors;
+}
+
+// The region of an object, from its page tag; an object without page
+// metadata (big, malloc'd, permanent, foreign) belongs to region 0.
+JL_DLLEXPORT int jl_gc_region_of(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_gc_pagemeta_t *meta = page_metadata((char*)jl_astaggedvalue(v));
+    if (meta == NULL)
+        return 0;
+    return (int)meta->region_n;
+}
+
+// --- initialization ----------------------------------------------------------------------
+
+void jl_gc_region_init(void) JL_NOTSAFEPOINT
+{
+    uint64_t up = 0;
+    for (int r = 0; r < JL_GC_MAX_REGIONS; r++) {
+        region_parent[r] = (r == 0) ? 0 : (uint8_t)(r - 1);
+        up |= (uint64_t)1 << r;                  // {0,...,r}
+        jl_atomic_store_relaxed(&region_uptree[r], up);
+    }
+    htable_new(&region_census_tasks, 0);
+}
+
+void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT
+{
+    heap->current_region = 0;
+    heap->saved_region = 0;
+    heap->finalizer_depth = 0;
+    region_use_pools(heap, heap->norm_pools);
+    memset(heap->regions, 0, sizeof(heap->regions)); // no region has state yet
+    heap->region_live_mask = 0;
+    heap->region_haschild_mask = 0;
+    memset(heap->region_child_count, 0, sizeof(heap->region_child_count));
+}
+
 #ifdef __cplusplus
 }
 #endif
