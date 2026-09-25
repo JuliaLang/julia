@@ -328,6 +328,8 @@ end
     return Txy, T(xy-Txy)
 end
 
+# The branches seem to differ only when the residual or the product's low word is
+# subnormal, so `:consistent` seems to be justified for all relevant use cases.
 """
     product_residual(quotient::Float64, denominator::Float64, numerator::Float64)
 
@@ -335,14 +337,15 @@ Compute the compensated residual `numerator - quotient*denominator` for finite o
 
 The caller must scale operands to avoid overflow and loss of product residuals to underflow.
 """
-@inline function product_residual(quotient::Float64, denominator::Float64, numerator::Float64)
+@assume_effects :consistent @inline function product_residual(quotient::Float64, denominator::Float64, numerator::Float64)
     if Core.Intrinsics.have_fma(Float64)
         return fma(-quotient, denominator, numerator)
+    else
+        # The fallback uses two_mul and two subtractions, rather than a fully fused operation.
+        # When numerator - product_hi is exact, an exact product split gives a single rounding.
+        product_hi, product_lo = two_mul(quotient, denominator)
+        return (numerator - product_hi) - product_lo
     end
-    # The fallback uses two_mul and two subtractions, rather than a fully fused operation.
-    # When numerator - product_hi is exact, an exact product split gives a single rounding.
-    product_hi, product_lo = two_mul(quotient, denominator)
-    return (numerator - product_hi) - product_lo
 end
 
 # two-sqrt: returns (hi, lo) with hi + lo ≈ √x to about twice the working

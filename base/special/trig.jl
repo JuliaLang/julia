@@ -65,12 +65,18 @@ const DS6 = 1.58969099521155010221e-10
 
 Compute the sine on the interval [-π/4; π/4].
 """
-@inline function sin_kernel(y::DoubleFloat64)
+@assume_effects :consistent @inline function sin_kernel(y::DoubleFloat64)
     y² = y.hi*y.hi
     y⁴ = y²*y²
-    r  = @horner(y², DS2, DS3, DS4) + y²*y⁴*@horner(y², DS5, DS6)
-    y³ = y²*y.hi
-    y.hi-((y²*(0.5*y.lo-y³*r)-y.lo)-y³*DS1)
+    return if Core.Intrinsics.have_fma(Float64)
+        r = muladd(y²*y⁴, @horner(y², DS5, DS6), @horner(y², DS2, DS3, DS4))
+        y³ = y²*y.hi
+        y.hi - muladd(-y³, DS1, muladd(y², muladd(-y³, r, 0.5*y.lo), -y.lo))
+    else
+        r  = @horner(y², DS2, DS3, DS4) + y²*y⁴*@horner(y², DS5, DS6)
+        y³ = y²*y.hi
+        y.hi - ((y²*(0.5*y.lo - y³*r) - y.lo) - y³*DS1)
+    end
 end
 @inline function sin_kernel(y::Float64)
     y² =  y*y
@@ -156,7 +162,7 @@ cos_kernel(x::Float32) = cos_kernel(DoubleFloat32(x))
     y² = y.hi*y.hi
     y⁴ = y²*y²
     r = @horner(y², -0.001388676377460993, 2.439044879627741e-5)
-    Float32(((1.0+y²*C0) + y⁴*C1) + (y⁴*y²)*r)
+    Float32(muladd(y⁴*y², r, muladd(y⁴, C1, muladd(y², C0, 1.0))))
 end
 
 ### sincos methods
@@ -301,9 +307,9 @@ end
     # Precompute y³
     y³ = y² * yhi
     # Calculate  P(y)-y-T1*y³ =  y⁵*r + y⁵*v  = y²(y³*(r+v))
-    r = ylo + y² * (y³ * (r + v) + ylo)
+    r = muladd(y², muladd(y³, r + v, ylo), ylo)
     # Calculate P(y)-y = r+T1*y³
-    r += 3.33333333333334091986e-01*y³
+    r = muladd(3.33333333333334091986e-01, y³, r)
     # Calculate w = r+y = P(y)
     Px = yhi + r
     if abs(y.hi) >= 0.6744
@@ -311,7 +317,12 @@ end
         #     tan(y) = 1 - 2*(tan(y) - (tan(y)^2)/(1+tan(y)))
         #            ≈ 1 - 2*(P(z) - (P(z)^2)/(1+P(z)))
         # where z = y-π/4.
-        return (signbit(y.hi) ? -1.0 : 1.0)*(k - 2*(yhi-(Px^2/(k+Px)-r)))
+        @assume_effects :consistent begin
+            if Core.Intrinsics.have_fma(Float64)
+                return flipsign(muladd(-2.0, yhi-(Px^2/(k+Px)-r), k), y.hi)
+            end
+            return flipsign(k - 2*(yhi-(Px^2/(k+Px)-r)), y.hi)
+        end
     end
     if k == 1
         # Else, we simply return w = P(y) if k == 1 (integer multiple from argument
@@ -404,7 +415,7 @@ end
 @inline function asin_kernel(t::Float32, x::Float32)
     s = sqrt_llvm(Float64(t))
     tRt = arc_tRt(t) # rational approximation
-    flipsign(Float32(pi/2 - 2*(s + s*tRt)), x)
+    flipsign(Float32(muladd(-2.0, muladd(s, tRt, s), pi/2)), x)
 end
 
 @noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x| > 1."))
@@ -427,7 +438,11 @@ function asin(x::T) where T<:Union{Float32, Float64}
         return muladd(x, arc_tRt(x*x), x)
     end
     # else 1/2 <= |x| < 1
-    t = (T(1.0) - absx)/2
+    t = @assume_effects :consistent if Core.Intrinsics.have_fma(T)
+        muladd(T(-0.5), absx, T(0.5))
+    else
+        (T(1.0) - absx)/2
+    end
     return asin_kernel(t, x)
 end
 
@@ -841,13 +856,18 @@ function acos(x::T) where T <: Union{Float32, Float64}
         acos_domain_error(x) # see 5) above
     elseif absx < T(1.0)/2 # see 1) above
         # tiny |x| collapses this to pi/2
-        return PIO2_HI(T) - (x - (PIO2_LO(T) - x*arc_tRt(x*x)))
+        correction = @assume_effects :consistent if T === Float64 && Core.Intrinsics.have_fma(Float64)
+            fma(-x, arc_tRt(x*x), PIO2_LO(T))
+        else
+            PIO2_LO(T) - x*arc_tRt(x*x)
+        end
+        return PIO2_HI(T) - (x - correction)
     end
     z = (T(1.0) - absx)*T(0.5)
     zRz = arc_tRt(z)
     s, e = two_sqrt(z)
     if x < T(0.0) # see 2) above
-        return ACOS_PI(T) - T(2.0)*(s + (zRz*s + (e - PIO2_LO(T))))
+        return muladd(T(-2.0), s + (zRz*s + (e - PIO2_LO(T))), ACOS_PI(T))
     else # see 3) above
         # With √z ≈ s + e, acos(x) = 2asin(√z) ≈ 2*(s + e + s*R(z)) for x > 0.5.
         return T(2.0)*(s + muladd(zRz, s, e))
@@ -872,9 +892,6 @@ const ATANPI_3_O_2_HI = 0.3128329581890012      # (atan(1.5)/π).hi
 const ATANPI_3_O_2_LO = -1.4076885713501453e-17 # (atan(1.5)/π).lo
 # atan(1.0)/π and atan(Inf)/π are exactly 0.25 and 0.5
 
-# Conservative input cutoff for avoiding underflow in split-product residuals.
-const DIVPI_SMALL_X = ldexp(floatmin(Float64), precision(Float64) + 1)
-
 """
     divpi(x)
 
@@ -883,10 +900,7 @@ Compute `x/π` using compensated multiplication by a split `1/π`.
 Correct rounding is not guaranteed.
 """
 @inline function divpi(x::Float64)
-    Core.Intrinsics.have_fma(Float64) && return fma(x, INV_PI_HI, x*INV_PI_LO)
-    abs(x) < DIVPI_SMALL_X && return fma(x, INV_PI_HI, x*INV_PI_LO)
-    hi, lo = two_mul(x, INV_PI_HI)
-    return hi + muladd(x, INV_PI_LO, lo)
+    return fma(x, INV_PI_HI, x*INV_PI_LO)
 end
 
 """
@@ -897,13 +911,8 @@ Compute `(x + x*t)/π` using compensated multiplication by a split `1/π`, for `
 Correct rounding is not guaranteed.
 """
 @inline function scale_divpi(x::Float64, t::Float64)
-    # x*INV_PI_HI has to reach the addition unrounded, which is what the outer
-    # fma gives. Hardware without an fma recovers the low word instead.
-    Core.Intrinsics.have_fma(Float64) &&
-        return fma(x, INV_PI_HI, x*fma(t, INV_PI_HI, INV_PI_LO))
-    abs(x) < DIVPI_SMALL_X && return fma(x, INV_PI_HI, x*fma(t, INV_PI_HI, INV_PI_LO))
-    hi, lo = two_mul(x, INV_PI_HI)
-    return hi + muladd(hi, t, muladd(x, INV_PI_LO, lo))
+    # x*INV_PI_HI has to reach the addition unrounded, which is why the outer fma is used.
+    return fma(x, INV_PI_HI, x*muladd(t, INV_PI_HI, INV_PI_LO))
 end
 
 """
@@ -1004,7 +1013,12 @@ function acospi(x::Float64)
         r, rlo = fast_two_diff(0.5, hi)
         return r + (rlo - a)
     end
-    hi, lo = acospi_kernel((1.0 - absx)/2)
+    reduced = @assume_effects :consistent if Core.Intrinsics.have_fma(Float64)
+        muladd(-0.5, absx, 0.5)
+    else
+        (1.0 - absx)/2
+    end
+    hi, lo = acospi_kernel(reduced)
     x > 0.0 && return hi + lo
     # acos(x)/π = 1 - acos(|x|)/π for x < 0
     r, rlo = fast_two_diff(1.0, hi)

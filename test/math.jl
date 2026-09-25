@@ -2162,10 +2162,19 @@ end
     for T = Any[Float16, Float32, Float64]
         @testset let T = T
             for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
-                        asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
+                        asin, atan, acos, asinpi, atanpi, acospi, sinh, cosh, tanh, asinh, acosh, atanh,
+                        exp, exp2, exp10, expm1]
                 @testset let f = f,
                              rt = Base.infer_return_type(f, (T,)),
                              effects = Base.infer_effects(f, (T,))
+                    @test rt != Union{}
+                    @test Core.Compiler.is_foldable(effects)
+                end
+            end
+            for f = Any[atan, atanpi]
+                @testset let f = f,
+                             rt = Base.infer_return_type(f, (T,T)),
+                             effects = Base.infer_effects(f, (T,T))
                     @test rt != Union{}
                     @test Core.Compiler.is_foldable(effects)
                 end
