@@ -2081,9 +2081,13 @@ JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots)
     if (nslots > UINT32_MAX ||
         nslots > (SIZE_MAX - sizeof(jl_wait_entry_t)) / sizeof(jl_wait_slot_t))
         jl_error("WaitEntryN: too many slots");
+    // A wait entry is linked from the task, a region-0 object: it is made in
+    // region 0 whatever GC region window the task holds (gc-regions.h).
+    int parked_region = jl_gc_region_suspend();
     jl_wait_entry_t *w = (jl_wait_entry_t*)jl_gc_alloc(
         ct->ptls, sizeof(jl_wait_entry_t) + nslots * sizeof(jl_wait_slot_t),
         jl_wait_entry_type);
+    jl_gc_region_resume(parked_region);
     jl_set_typetagof(w, jl_wait_entry_tag, 0);
     jl_atomic_store_relaxed(&w->task, task);
     w->nslots = (uint32_t)nslots;
