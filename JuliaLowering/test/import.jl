@@ -165,7 +165,6 @@ end
     Core.eval(call_mod, :(const Defs = $defs_mod))
     Core.eval(defs_mod, :(import JuliaLowering, JuliaLowering.@legacy_quote_to_syntax))
     Core.eval(defs_mod, :(const var"@ast" = $(JuliaLowering.var"@ast")))
-    Core.eval(defs_mod, :(const var"@K_str" = $(JuliaSyntax.var"@K_str")))
 
     # old-style macros: hygienic plain name vs escaped argument
     fl_eval(defs_mod, :(macro old_pub_plain(); Expr(:public, :op_hyg); end))
@@ -176,8 +175,8 @@ end
     # new-style macros: hygienic name (from syntaxquote) vs argument
     jl_eval(defs_mod, raw"""
         macro new_exp_plain(); @legacy_quote_to_syntax quote export ne_hyg end; end
-        macro new_pub_arg(name); @ast __context__ __context__.macrocall [K"public" name]; end
-        macro new_exp_arg(name); @ast __context__ __context__.macrocall [K"export" name]; end
+        macro new_pub_arg(name); @ast __context__ __context__.macrocall [:public name]; end
+        macro new_exp_arg(name); @ast __context__ __context__.macrocall [:export name]; end
     """; edition=JL_NEW_EDITION)
     Core.@latestworld
 
@@ -303,7 +302,7 @@ end
     # an all-underscore name is a genuine (write-only) binding here rather than a
     # discard -- matching flisp, which binds `_` for `import X as _`,
     # `using X: a as _` and `using X: _`. Previously the desugaring assert
-    # `kind(spec[2]) == K"Identifier"` crashed on the `K"Placeholder"` rename
+    # `head(spec[2]) == :identifier` crashed on the `:placeholder` rename
     # target (e.g. SymbolicRegression's `using ConstructionBase: ... as _`).
     U = JuliaLowering.include_string(test_mod, """
     module Uroot

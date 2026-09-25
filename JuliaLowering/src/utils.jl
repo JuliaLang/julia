@@ -4,39 +4,39 @@ attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
 attrsummary(name, value::Module) = "$name=$value"
 
 function _value_string(ex)
-    k = kind(ex)
-    str = k == K"Identifier"  ? syntax_name(ex)           :
-          k == K"Placeholder" ? syntax_name(ex)           :
-          k == K"SSAValue"    ? "%"                   :
-          k == K"BindingId"   ? "#"                   :
-          k == K"label"       ? "label"               :
-          k == K"nothing"     ? "core.nothing"        :
-          k == K"core"        ? "core.$(syntax_name(ex))" :
-          k == K"top"         ? "top.$(syntax_name(ex))"  :
-          k == K"Symbol"      ? ":$(syntax_name(ex))" :
-          k == K"globalref"   ? "$(ex.mod).$(syntax_name(ex))" :
-          k == K"slot"        ? "slot" :
-          k == K"Slots"       ? "Slots" :
-          k == K"LambdaBindings" ? "LambdaBindings" :
-          k == K"latestworld" ? "latestworld" :
-          k == K"static_parameter" ? "static_parameter" :
-          k == K"symboliclabel" ? "label:$(syntax_name(ex))" :
-          k == K"symbolicgoto" ? "goto:$(syntax_name(ex))" :
-          k == K"SourceLocation" ?
+    k = head(ex)
+    str = k == :identifier  ? syntax_name(ex)           :
+          k == :placeholder ? syntax_name(ex)           :
+          k == :ssavalue    ? "%"                   :
+          k == :bindingid   ? "#"                   :
+          k == :label       ? "label"               :
+          k == :nothing     ? "core.nothing"        :
+          k == :core        ? "core.$(syntax_name(ex))" :
+          k == :top         ? "top.$(syntax_name(ex))"  :
+          k == :symbol      ? ":$(syntax_name(ex))" :
+          k == :globalref   ? "$(ex.mod).$(syntax_name(ex))" :
+          k == :slot        ? "slot" :
+          k == :slots       ? "Slots" :
+          k == :lambdabindings ? "LambdaBindings" :
+          k == :latestworld ? "latestworld" :
+          k == :static_parameter ? "static_parameter" :
+          k == :symboliclabel ? "label:$(syntax_name(ex))" :
+          k == :symbolicgoto ? "goto:$(syntax_name(ex))" :
+          k == :sourcelocation ?
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-              k == K"Value" ?
+              k == :value ?
               (ex.value isa SourceRef ?
               "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
               ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
-              ex.value !== nothing ? repr(ex.value) : "::K\"$(untokenize(k))\""
+              ex.value !== nothing ? repr(ex.value) : "::$k"
 
-    if kind(ex) in KSet"BindingId slot SSAValue static_parameter label"
+    if head(ex) in (:bindingid, :slot, :ssavalue, :static_parameter, :label)
         idstr = subscript_str(syntax_id(ex))
         str = "$(str)$idstr"
     end
-    if k == K"slot" || k == K"BindingId"
+    if k == :slot || k == :bindingid
         for p in provenance(ex)
-            if kind(p) == K"Identifier"
+            if head(p) == :identifier
                 str = "$(str)/$(syntax_name(p))"
                 break
             end
@@ -45,20 +45,19 @@ function _value_string(ex)
     return str
 end
 
-# Within JL, K"Placeholder" is used for never-read identifiers, but this magic
+# Within JL, :placeholder is used for never-read identifiers, but this magic
 # symbol is used in the IR (its write-only properties are enforced in codegen).
 const UNUSED = "#unused#"
 
 function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
-    nodestr = kind(ex) === K"unknown_head" ? ("unknown_head:"*syntax_name(ex)) :
-        !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
+    nodestr = !is_leaf(ex) ? "[$(string(head(ex)))]" : _value_string(ex)
 
     treestr = rpad(string(indent, nodestr), 40)
     if show_kinds && is_leaf(ex)
-        treestr = treestr*" :: "*string(kind(ex))
+        treestr = treestr*" :: "*string(head(ex))
     end
 
-    std_attrs = Set([:value,:kind,:syntax_flags,:source,:context])
+    std_attrs = Set([:value,:head,:syntax_flags,:source,:context])
     attrstr = join([attrsummary(n, getproperty(ex, n))
                     for n in fieldnames(typeof(ex)) if n ∉ std_attrs &&
                         getproperty(ex, n) !== nothing], ",")
@@ -86,13 +85,9 @@ function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
 end
 function _show_syntax_tree_sexpr(io, ex)
     if is_leaf(ex)
-        if JuliaSyntax.is_error(ex)
-            print(io, "(", untokenize(head(ex)), ")")
-        else
-            print(io, _value_string(ex))
-        end
+        print(io, _value_string(ex))
     else
-        print(io, "(", untokenize(head(ex)))
+        print(io, "(", string(head(ex)))
         for n in children(ex)
             print(io, ' ')
             _show_syntax_tree_sexpr(io, n)
@@ -193,10 +188,10 @@ function showprov(io::IO, exs::AbstractVector;
         if i > 1
             print(io, "\n\n")
         end
-        k = kind(ex)
+        k = head(ex)
         ex_note = !isnothing(note) ? note :
-            i > 1 && k == K"macrocall"  ? "in macro expansion" :
-            i > 1 && k == K"$"          ? "interpolated here"  :
+            i > 1 && k == :macrocall  ? "in macro expansion" :
+            i > 1 && k == :$          ? "interpolated here"  :
             "in source"
         highlight(io, sr; note=ex_note, highlight_kwargs...)
 
@@ -219,31 +214,31 @@ function subscript_str(i)
 end
 
 function _deref_ssa(stmts, ex)
-    while kind(ex) == K"SSAValue"
+    while head(ex) == :ssavalue
         ex = stmts[syntax_id(ex)]
     end
     ex
 end
 
 function _is_define_method_call(e)
-    kind(e) == K"call" && numchildren(e) >= 1 &&
-        kind(e[1]) == K"core" && syntax_name(e[1]) == "define_method"
+    head(e) == :call && numchildren(e) >= 1 &&
+        head(e[1]) == :core && syntax_name(e[1]) == "define_method"
 end
 
 function _find_method_lambda(ex0, name)
-    ex = kind(ex0) === K"thunk" ? ex0[1] : ex0
-    @jl_assert kind(ex) == K"code_info" ex
+    ex = head(ex0) === :thunk ? ex0[1] : ex0
+    @jl_assert head(ex) == :code_info ex
     # Heuristic search through outer thunk for the method in question.
     stmts = children(ex[2])
     for e in stmts
         if _is_define_method_call(e) && numchildren(e) == 5
             # define_method(module, fname, sig, lam)
             sig = _deref_ssa(stmts, e[4])
-            @jl_assert kind(sig) == K"call" ex
+            @jl_assert head(sig) == :call ex
             arg_types = _deref_ssa(stmts, sig[2])
-            @jl_assert kind(arg_types) == K"call" ex
+            @jl_assert head(arg_types) == :call ex
             self_type = _deref_ssa(stmts, arg_types[2])
-            if kind(self_type) == K"globalref" && occursin(name, syntax_name(self_type))
+            if head(self_type) == :globalref && occursin(name, syntax_name(self_type))
                 return e[5]
             end
         end
@@ -251,7 +246,7 @@ function _find_method_lambda(ex0, name)
 end
 
 function print_ir(io::IO, ex, method_filter=nothing)
-    @jl_assert kind(ex) == K"code_info" || kind(ex) == K"thunk" ex
+    @jl_assert head(ex) == :code_info || head(ex) == :thunk ex
     if !isnothing(method_filter)
         filtered = _find_method_lambda(ex, method_filter)
         if isnothing(filtered)
@@ -266,10 +261,10 @@ end
 # TODO: JuliaLowering-the-module should always print the same way, ignoring parent modules
 function _print_ir(io::IO, ex0, indent)
     added_indent = "    "
-    (ex, is_toplevel_thunk) = kind(ex0) === K"thunk" ? (ex0[1],true) : (ex0,false)
-    @jl_assert ((kind(ex) == K"lambda" || kind(ex) == K"code_info")
-                && kind(ex[2]) == K"block") ex
-    if !is_toplevel_thunk && kind(ex) == K"code_info"
+    (ex, is_toplevel_thunk) = head(ex0) === :thunk ? (ex0[1],true) : (ex0,false)
+    @jl_assert ((head(ex) == :lambda || head(ex) == :code_info)
+                && head(ex[2]) == :block) ex
+    if !is_toplevel_thunk && head(ex) == :code_info
         slots = ex[1].value
         print(io, indent, "slots: [")
         for (i,slot) in enumerate(slots)
@@ -296,7 +291,7 @@ function _print_ir(io::IO, ex0, indent)
             # define_method(module, fname, sig, lam)
             print(io, indent, lno, " (call core.define_method ",
                   string(e[2]), " ", string(e[3]), " ", string(e[4]))
-            if kind(e[5]) == K"lambda" || kind(e[5]) == K"code_info"
+            if head(e[5]) == :lambda || head(e[5]) == :code_info
                 println(io)
                 print(io, indent, "    --- code_info")
                 println(io)
@@ -304,7 +299,7 @@ function _print_ir(io::IO, ex0, indent)
             else
                 println(io, " ", string(e[5]), ")")
             end
-        elseif kind(e) == K"opaque_closure_method"
+        elseif head(e) == :opaque_closure_method
             @jl_assert numchildren(e) == 5 e
             print(io, indent, lno, " --- opaque_closure_method ")
             for i=1:4
@@ -312,7 +307,7 @@ function _print_ir(io::IO, ex0, indent)
             end
             println(io)
             _print_ir(io, e[5], indent*added_indent)
-        elseif kind(e) == K"code_info"
+        elseif head(e) == :code_info
             println(io, indent, lno, " --- ", "code_info")
             _print_ir(io, e, indent*added_indent)
         else
@@ -338,15 +333,15 @@ else
 end
 
 function _flatten_blocks(st::SyntaxTree)
-    if kind(st) === K"block"
+    if head(st) === :block
         out = SyntaxList()
         for c in children(st)
             append!(out, _flatten_blocks(c))
         end
         # special case: an empty final block has value nothing
-        if (length(children(st)) > 0 && kind(st[end]) === K"block" &&
+        if (length(children(st)) > 0 && head(st[end]) === :block &&
             numchildren(st[end]) == 0)
-            push!(out, @ast _ st[end] (::K"nothing"))
+            push!(out, @ast _ st[end] (::nothing))
         end
         return out
     elseif is_quoted(st)
@@ -358,7 +353,7 @@ end
 
 # Splat the contents of any block in `st` whose parent is also a block
 function flatten_blocks(st::SyntaxTree)
-    if kind(st) === K"block"
+    if head(st) === :block
         @mknode(st; children=_flatten_blocks(st))
     elseif is_quoted(st)
         st
@@ -377,7 +372,7 @@ function renumber_assigned_ssavalues(ctx, st)
 end
 function _find_assigned_ssavars!(ctx, ssamap, st)
     (is_leaf(st) || is_quoted(st)) && return
-    if kind(st) == K"=" && kind(st[1]) == K"BindingId"
+    if head(st) == :(=) && head(st[1]) == :bindingid
         b = get_binding(ctx, st[1])
         b.is_ssa || return
         ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
@@ -385,9 +380,9 @@ function _find_assigned_ssavars!(ctx, ssamap, st)
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
 end
 function _replace_binding_ids(ctx, ssamap, st)
-    if kind(st) == K"BindingId"
+    if head(st) == :bindingid
         id = get(ssamap, syntax_id(st), nothing)
-        isnothing(id) ? st : newleaf(st, K"BindingId", id)
+        isnothing(id) ? st : newleaf(st, :bindingid, id)
     elseif is_leaf(st) || is_quoted(st)
         st
     else

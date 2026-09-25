@@ -525,7 +525,7 @@ end
     JuliaLowering.include_string(test_mod, raw"""
     macro mk_toplevel(x, y, z)
         JuliaSyntax.newnode(
-            __context__.macrocall, K"toplevel",
+            __context__.macrocall, :toplevel,
             JuliaSyntax.SyntaxList(x, y, z))
     end
     macro toplevel_first_child(x)
@@ -745,9 +745,9 @@ world2 = Base.get_world_counter()
 
 call_world_arg_test = JuliaLowering.rebase_layers(JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()"), test_mod)
     @test JuliaLowering.expand_forms_1(call_world_arg_test, world1, true) ≈
-        @ast_ 1::K"Value"
+        @ast_ 1::value
     @test JuliaLowering.expand_forms_1(call_world_arg_test, world2, true) ≈
-        @ast_ 2::K"Value"
+        @ast_ 2::value
 
 JuliaLowering.include_string(test_mod, """
 f_throw(x) = throw(x)
@@ -1058,7 +1058,7 @@ end
     end
     isglobal_chk(1)
     """; edition) === (true, true, false, false)
-    # with K"Placeholder"s
+    # with `:placeholder` nodes
     @test jl_eval(test_mod, """
     __ = 1
     function isglobal_chk(___)
@@ -1448,20 +1448,20 @@ end
     let x = @legacy_quote_to_syntax :(hi)
         @legacy_quote_to_syntax :(A.$x)
     end
-    """) ≈ @ast_ [K"."
-        "A"::K"Identifier"
-        [K"inert" "hi"::K"Identifier"]
+    """) ≈ @ast_ [:.
+        "A"::identifier
+        [:inert "hi"::identifier]
     ]
     # module
     @test JuliaLowering.include_string(test_mod, raw"""
     let x = @legacy_quote_to_syntax :(AA)
         @legacy_quote_to_syntax :(module $x end)
     end
-    """) ≈ @ast_ [K"module"
-        VersionNumber(JL_NEW_EDITION)::K"Value"
-        true::K"Value"
-        "AA"::K"Identifier"
-        [K"block"]
+    """) ≈ @ast_ [:module
+        VersionNumber(JL_NEW_EDITION)::value
+        true::value
+        "AA"::identifier
+        [:block]
     ]
 
     # In macro expansion, require that expressions passed in as macro
@@ -1514,7 +1514,7 @@ end
             $init
             ($y, x)
         end)
-        @ast _ q [K"syntaxinert" q]
+        @ast _ q [:syntaxinert q]
     end
     """)
     code = JuliaLowering.include_string(test_mod, """@make_quoted_code(x="outer x", x)""")

@@ -1323,7 +1323,7 @@ end
         @test test_mod.f_vararg_dots_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
         @test test_mod.f_vararg_dots_kws(1, 2, 3; foo=1)[3][:foo] == 1
 
-        # Vararg-annotated positional args carrying a default value (`K"kw"`-wrapped
+        # Vararg-annotated positional args carrying a default value (`:kw`-wrapped
         # in the AST), both named and anonymous.
         JuliaLowering.include_string(test_mod, """
         function f_vararg_default_kws(y, args::Vararg{Int,N}=1; k=1) where {N}
@@ -2198,7 +2198,7 @@ end
         test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x1,first)
     @test jl_eval(
         test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
-            @ast_ [K"tuple" [K"inert" "x1"::K"Identifier"] "first"::K"Identifier"]
+            @ast_ [:tuple [:inert "x1"::identifier] "first"::identifier]
 
     genfunc_quote_s = """
     begin
@@ -2219,7 +2219,7 @@ end
         test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x2,generated)
     @test jl_eval(
         test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
-            @ast_ [K"tuple" [K"inert" "x2"::K"Identifier"] "generated"::K"Identifier"]
+            @ast_ [:tuple [:inert "x2"::identifier] "generated"::identifier]
 
     genfunc_quote_s = """
     begin
@@ -2237,7 +2237,7 @@ end
         test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x4,after)
     @test jl_eval(
         test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
-            @ast_ [K"tuple" [K"inert" "x4"::K"Identifier"] "after"::K"Identifier"]
+            @ast_ [:tuple [:inert "x4"::identifier] "after"::identifier]
 
     genfunc_quote_s = raw"""
     begin
@@ -2258,10 +2258,10 @@ end
         test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :((:x1,first),nongen)
     @test jl_eval(
         test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
-            @ast_ [K"tuple" [K"tuple"
-                             [K"inert" "x1"::K"Identifier"]
-                             "first"::K"Identifier"]
-                   "nongen"::K"Identifier"]
+            @ast_ [:tuple [:tuple
+                             [:inert "x1"::identifier]
+                             "first"::identifier]
+                   "nongen"::identifier]
 
     genfunc_quote_s = raw"""
     begin

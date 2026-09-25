@@ -115,32 +115,32 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         ex = top_ex
     end
 
-    k = kind(ex)
-    if !(k in KSet"toplevel module")
+    k = head(ex)
+    if k !== :toplevel && k !== :module
         ex = rebase_layers(ex, mod)
         ex = expand_forms_1(ex, world, true)
-        k = kind(ex)
+        k = head(ex)
     end
-    if k == K"toplevel"
+    if k == :toplevel
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter, mod, world; soft_scope)
-    elseif k == K"module"
+    elseif k == :module
         (version, notbare, mname, body) = @stm ex begin
-            [K"module" version nb_st mname body] ->
+            [:module version nb_st mname body] ->
                 (version.value, nb_st.value, mname, body)
-            [K"module" nb_st mname body] ->
+            [:module nb_st mname body] ->
                 (nothing, nb_st.value, mname, body)
         end
-        if kind(mname) != K"Identifier"
+        if head(mname) != :identifier
             throw(LoweringError(mname, "Expected module name"))
         end
         newmod_name = Symbol(syntax_name(mname))
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
-    elseif k === K"thunk" && numchildren(ex) == 1
+    elseif k === :thunk && numchildren(ex) == 1
         return Core.svec(:thunk, Expr(:thunk, ex[1].value))
-    elseif (k === K"error" || k === K"incomplete") && numchildren(ex) == 1
+    elseif (k === :error || k === :incomplete) && numchildren(ex) == 1
         err = ex[1].value
         throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
@@ -389,7 +389,7 @@ end
 
 # A single pass over all IR to collect unique byte/line positions and CodeInfos
 function collect_locs!(node_sources, codeinfos, top_sf, st)
-    if kind(st) === K"code_info"
+    if head(st) === :code_info
         push!(codeinfos, st)
         # TODO: macro_source is ignored for now
         get!(node_sources, st, _di_pos(st))
@@ -417,7 +417,7 @@ function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
                            top_sbt::Union{String, Nothing},
                            node_sources::Dict{SyntaxTree, Tuple{Int32, Int32}},
                            spans::Vector{Tuple{Int32, Int32}})
-    @jl_assert kind(st) === K"code_info" st
+    @jl_assert head(st) === :code_info st
     locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[2]))
         for c in children(st[2])
             if top_sbt isa String # precise provenance
@@ -439,9 +439,9 @@ function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
                                     numchildren(st[2])::Csize_t)::String)))
 end
 
-# Populate `.debuginfo` on all K"code_info" in `st`
+# Populate `.debuginfo` on all :code_info in `st`
 function add_debuginfo!(st::SyntaxTree)
-    @jl_assert kind(st) === K"code_info" st
+    @jl_assert head(st) === :code_info st
     node_sources = Dict{SyntaxTree, Tuple{Int32, Int32}}()
     codeinfos = SyntaxList()
     top_sf = _di_sourcefile(st)
@@ -471,7 +471,7 @@ end
 
 # flisp: jl_new_code_info_from_ir (method.c)
 function compute_ssaflags(st::SyntaxTree)
-    @jl_assert kind(st) == K"block" st
+    @jl_assert head(st) == :block st
     stmts = children(st)
     out = zeros(UInt32, length(stmts))
     inline_flags = Vector{Bool}()
@@ -488,17 +488,17 @@ function compute_ssaflags(st::SyntaxTree)
     for (i, stmt) in enumerate(stmts)
         is_flag_stmt = true
         @stm stmt begin
-            [K"inbounds" [K"Value"]] -> stmt[1].value::Bool ?
+            [:inbounds [:value]] -> stmt[1].value::Bool ?
                 (inbounds_depth += 1) : # push
                 (inbounds_depth = 0)    # clear
-            [K"inbounds_pop"] -> (inbounds_depth = max(0, inbounds_depth-1))
-            [K"boundscheck" _...] -> nothing
-            [K"inline" [K"Value"]] -> stmt[1].value::Bool ?
+            [:inbounds_pop] -> (inbounds_depth = max(0, inbounds_depth-1))
+            [:boundscheck _...] -> nothing
+            [:inline [:value]] -> stmt[1].value::Bool ?
                 push!(inline_flags, true) : checked_pop!(inline_flags)
-            [K"noinline" [K"Value"]] -> stmt[1].value::Bool ?
+            [:noinline [:value]] -> stmt[1].value::Bool ?
                 push!(inline_flags, false) : checked_pop!(inline_flags)
-            [K"purity"] -> checked_pop!(purity_flags)
-            [K"purity" _ _...] -> push!(
+            [:purity] -> checked_pop!(purity_flags)
+            [:purity _ _...] -> push!(
                 purity_flags,
                 UInt32(purity_expr_to_flags(stmt)) << Core.Compiler.NUM_IR_FLAGS)
             _ -> is_flag_stmt = false
@@ -622,63 +622,61 @@ separates the development of JuliaLowering.jl from the evolution of the Julia
 runtime itself.
 """
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
-    @jl_assert kind(ex) in KSet"thunk code_info" ex
-    add_debuginfo!(kind(ex) === K"thunk" ? ex[1] : ex)
+    @jl_assert head(ex) === :thunk || head(ex) === :code_info ex
+    add_debuginfo!(head(ex) === :thunk ? ex[1] : ex)
     _to_lowered_expr(ex)
 end
 
 function _to_lowered_expr(ex::SyntaxTree)
-    k = kind(ex)
-    if is_literal(k)
-        ex.value
-    elseif k == K"nothing"
+    k = head(ex)
+    if k == :nothing
         nothing
-    elseif k == K"core"
+    elseif k == :core
         GlobalRef(Core, Symbol(syntax_name(ex)))
-    elseif k == K"top"
+    elseif k == :top
         GlobalRef(Base, Symbol(syntax_name(ex)))
-    elseif k == K"globalref"
+    elseif k == :globalref
         GlobalRef(ex.mod::Module, Symbol(syntax_name(ex)))
-    elseif k == K"Identifier"
+    elseif k == :identifier
         # TODO: assert false (only reachable from simdloop?)
         Symbol(syntax_name(ex))
-    elseif k == K"SourceLocation"
+    elseif k == :sourcelocation
         QuoteNode(source_location(LineNumberNode, ex))
-    elseif k == K"Symbol"
+    elseif k == :symbol
         QuoteNode(Symbol(syntax_name(ex)))
-    elseif k == K"slot"
+    elseif k == :slot
         Core.SlotNumber(syntax_id(ex))
-    elseif k == K"static_parameter"
+    elseif k == :static_parameter
         Expr(:static_parameter, syntax_id(ex))
-    elseif k == K"SSAValue"
+    elseif k == :ssavalue
         Core.SSAValue(syntax_id(ex))
-    elseif k == K"return"
+    elseif k == :return
         v = _to_lowered_expr(ex[1])
         @jl_assert Base.Compiler.is_valid_return(v) ex
         Core.ReturnNode(v)
-    elseif k == K"inert"
+    elseif k == :inert
         est_to_expr(ex)
-    elseif k == K"syntaxinert"
+    elseif k == :syntaxinert
         ex[1]
-    elseif k == K"code_info"
+    elseif k == :code_info
         to_code_info(ex)
-    elseif k == K"Value"
+    elseif k == :value
         @jl_assert !isa_lowering_ast_node(ex.value) (
             ex, string("smuggling AST through Value is asking for trouble; ",
                        "find a SyntaxTree representation"))
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
-    elseif k == K"goto"
+    elseif k == :goto
         Core.GotoNode(syntax_id(ex[1]))
-    elseif k == K"gotoifnot"
+    elseif k == :gotoifnot
         Core.GotoIfNot(_to_lowered_expr(ex[1]), syntax_id(ex[2]))
-    elseif k == K"enter"
+    elseif k == :enter
         catch_idx = syntax_id(ex[1])
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2]))
-    elseif k == K"newvar"
+    elseif k == :newvar
         Core.NewvarNode(_to_lowered_expr(ex[1]))
-    elseif k == K"opaque_closure_method"
+    elseif k == :opaque_closure_method
         args = map(_to_lowered_expr, children(ex))
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
@@ -686,67 +684,62 @@ function _to_lowered_expr(ex::SyntaxTree)
         @jl_assert arg4 isa QuoteNode ex
         args[4] = arg4.value
         Expr(:opaque_closure_method, args...)
-    elseif k == K"meta"
+    elseif k == :meta
         args = Any[_to_lowered_expr(e) for e in children(ex)]
-        # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
+        # Unpack :symbol QuoteNode as `Expr(:meta)` requires an identifier here.
         arg1 = args[1]
         @jl_assert (arg1 isa QuoteNode) ex
         args[1] = arg1.value
         Expr(:meta, args...)
-    elseif k == K"foreignsymbol"
-        @jl_assert kind(ex[1]) == K"tuple" ex
+    elseif k == :foreignsymbol
+        # foreignsymbol wraps the first argument of a foreigncall /
+        # foreignglobal when it should not be lowered (and should mostly be
+        # treated as :inert), but requires scope resolution and special
+        # conversion to Expr.
+        @jl_assert head(ex[1]) == :tuple ex
         _foreignsymbol_expr(ex[1])
-    elseif k == K"static_eval"
+    elseif k == :static_eval
         @jl_assert numchildren(ex) == 1 ex
         _to_lowered_expr(ex[1])
-    elseif k == K"cfunction"
-        # For a scope-resolved callable (`K"static_eval"`), drop the module tag
+    elseif k == :cfunction
+        # For a scope-resolved callable (`:static_eval`), drop the module tag
         # and emit a bare Symbol so `method.c` resolves it in the method's
         # module at eval time, matching Base `@cfunction`'s runtime semantics.
         ret = Expr(:cfunction)
         for (i, e) in enumerate(children(ex))
-            if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
+            if i == 2 && head(e) == :static_eval && head(e[1]) == :globalref
                 push!(ret.args, QuoteNode(Symbol(syntax_name(e[1]))))
             else
                 push!(ret.args, _to_lowered_expr(e))
             end
         end
         return ret
-    elseif k in KSet"inline noinline inbounds inbounds_pop purity"
+    elseif k in (:inline, :noinline, :inbounds, :inbounds_pop, :purity)
         # only used in compute_ssaflags (see method.c)
         nothing
     else
-        # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
-        #
-        # call invoke static_parameter `=` method struct_type abstract_type
-        # primitive_type global const new splatnew isdefined
-        # enter leave pop_exception inbounds boundscheck loopinfo copyast meta
-        # lambda
-        head = k == K"call"      ? :call       :
-               k == K"new"       ? :new        :
-               k == K"splatnew"  ? :splatnew   :
-               k == K"="         ? :(=)        :
-               k == K"leave"     ? :leave      :
-               k == K"isdefined" ? :isdefined  :
-               k == K"loopinfo"  ? :loopinfo   :
-               k == K"thunk"     ? :thunk      :
-               k == K"boundscheck"       ? :boundscheck       :
-               k == K"latestworld"       ? :latestworld       :
-               k == K"pop_exception"     ? :pop_exception     :
-               k == K"captured_local"    ? :captured_local    :
-               k == K"gc_preserve_begin" ? :gc_preserve_begin :
-               k == K"gc_preserve_end"   ? :gc_preserve_end   :
-               k == K"foreigncall"       ? :foreigncall       :
-               k == K"foreignglobal"     ? :foreignglobal     :
-               k == K"cfunction"         ? :cfunction         :
-               k == K"aliasscope"        ? :aliasscope        :
-               k == K"popaliasscope"     ? :popaliasscope     :
-               k == K"new_opaque_closure" ? :new_opaque_closure :
-               nothing
-        if isnothing(head)
-            throw(LoweringError(ex, "Unhandled form for kind $k"))
-        end
-        ret = Expr(head)
+        k == :call ||
+            k == :new ||
+            k == :splatnew ||
+            k == :(=) ||
+            k == :leave ||
+            k == :isdefined ||
+            k == :loopinfo ||
+            k == :thunk ||
+            k == :boundscheck ||
+            k == :latestworld ||
+            k == :pop_exception ||
+            k == :captured_local ||
+            k == :gc_preserve_begin ||
+            k == :gc_preserve_end ||
+            k == :foreigncall ||
+            k == :foreignglobal ||
+            k == :cfunction ||
+            k == :aliasscope ||
+            k == :popaliasscope ||
+            k == :new_opaque_closure ||
+            throw(LoweringError(ex, "Unknown syntax form $k"))
+        ret = Expr(k)
         for e in children(ex)
             push!(ret.args, _to_lowered_expr(e))
         end
@@ -756,12 +749,10 @@ end
 
 # ultra-permissive conversion allowing unlowered structure, but lowered leaves
 function _foreignsymbol_expr(ex)
-    if is_leaf(ex) || kind(ex) == K"inert"
+    if is_leaf(ex) || head(ex) == :inert
         _to_lowered_expr(ex)
     else
-        k = kind(ex)
-        Expr(Symbol((k === K"unknown_head" ? syntax_name(ex) : untokenize(k))::String),
-             map(_foreignsymbol_expr, children(ex))...)
+        Expr(head(ex), map(_foreignsymbol_expr, children(ex))...)
     end
 end
 
@@ -854,7 +845,7 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
     end
     st = parseall(SyntaxTree, code; filename, version=VersionNumber(version),
                   ignore_warnings=true)
-    @jl_assert kind(st) === K"toplevel" st
+    @jl_assert head(st) === :toplevel st
     if mapexpr !== identity
         # TODO: Is there any way to support provenance here?
         local last = nothing

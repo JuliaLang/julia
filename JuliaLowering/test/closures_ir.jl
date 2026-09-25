@@ -1162,10 +1162,10 @@ end
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)
-@ast_ [K"generated_lambda"
-    [K"block"]
-    [K"block"]
-    [K"->" [K"tuple"] [K"block"]]
+@ast_ [:generated_lambda
+    [:block]
+    [:block]
+    [:-> [:tuple] [:block]]
 ]
 #---------------------
 LoweringError:

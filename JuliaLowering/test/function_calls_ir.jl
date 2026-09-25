@@ -68,7 +68,7 @@ x^42.0
 
 ########################################
 # Error: Call with no function name
-@ast_ [K"call"]
+@ast_ [:call]
 #---------------------
 LoweringError:
 #= line 1 =# - malformed `call`

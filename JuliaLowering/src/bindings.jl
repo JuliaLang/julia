@@ -104,13 +104,13 @@ function add_binding(bindings::Bindings, binding)
 end
 
 function syntax_id(ex::SyntaxTree)
-    @jl_assert kind(ex) in KSet"BindingId SSAValue slot static_parameter label" ex
+    @jl_assert head(ex) in (:bindingid, :ssavalue, :slot, :static_parameter, :label) ex
     ex.value::IdTag
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo
     id = if x isa SyntaxTree
-        @jl_assert kind(x) === K"BindingId" x
+        @jl_assert head(x) === :bindingid x
         syntax_id(x)
     else
         x
@@ -127,7 +127,7 @@ function _new_binding(bindings::Bindings, srcref::SyntaxTree,
     # A binding is only useful when it shows up in the tree, so create its tree
     # node eagerly and share it among uses (see `binding_ex`)
     bid = next_binding_id(bindings)
-    ex = @ast _ srcref bid::K"BindingId"
+    ex = @ast _ srcref bid::bindingid
     b = BindingInfo(bindings, name, kind, ex; kws...)
     return b
 end
@@ -142,7 +142,7 @@ end
 function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
                            kind=:local, kws...)
     @jl_assert kind === :local || kind === :argument srcref
-    nameref = newleaf(srcref, K"Identifier", name)
+    nameref = newleaf(srcref, :identifier, name)
     b = _new_binding(ctx.bindings, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
     if !isnothing(lbindings)
@@ -152,7 +152,7 @@ function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
 end
 
 function new_global_binding(ctx::AbstractLoweringContext, srcref, name, mod; kws...)
-    nameref = newleaf(srcref, K"Identifier", name)
+    nameref = newleaf(srcref, :identifier, name)
     binding_ex(ctx, _new_binding(
         ctx.bindings, nameref, name, :global; is_internal=true, mod=mod, kws...))
 end
@@ -173,7 +173,7 @@ struct NameKey
 end
 
 function NameKey(ex::SyntaxTree)
-    @jl_assert kind(ex) in KSet"Identifier symboliclabel symbolicgoto" ex
+    @jl_assert head(ex) in (:identifier, :symboliclabel, :symbolicgoto) ex
     NameKey(syntax_name(ex), (ex.context.layer)::ScopeLayer)
 end
 
@@ -202,6 +202,6 @@ function init_lambda_binding(bindings::LambdaBindings, b::BindingInfo, capt::Boo
 end
 
 function lambda_bindings(st::SyntaxTree)
-    @jl_assert kind(st) === K"LambdaBindings" st
+    @jl_assert head(st) === :lambdabindings st
     st.value::LambdaBindings
 end

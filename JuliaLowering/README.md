@@ -73,7 +73,7 @@ JuliaLowering uses a new type for syntax (`SyntaxTree`), which is similar to the
 existing `Expr`, but:
 1. Every node is of the same type.  With `expr::Expr`, you may have
    `expr.args[1]::Symbol` with `string(expr.args[1]) === "foo"`.  In
-   JuliaLowering, the equivalent would be `kind(syntax[1]) === K"Identifier"`
+   JuliaLowering, the equivalent would be `head(syntax[1]) === :identifier`
    with `syntax_name(syntax[1]) === "foo"`.
 2. For code provenance reasons, it contains a reference to the syntax it was
    lowered from.  This forms a linked list back to either a LineNumberNode (if
