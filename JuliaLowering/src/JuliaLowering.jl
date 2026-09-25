@@ -12,16 +12,18 @@ else
     using JuliaSyntax
 end
 
-using .JuliaSyntax: @stm, SourceAttrType, SourceRef,
+using .JuliaSyntax: SourceAttrType, SourceRef,
     SyntaxList, SyntaxTree, byte_range, children, filename, first_byte,
     flattened_provenance, head, highlight,
     is_leaf, last_byte, mapchildren, mapsyntax,
     node_string, numchildren, provenance, setmeta, setmeta!, getmeta,
-    CompileHints, source_location, sourcefile, sourceref, mapindex, mktree,
+    CompileHints, source_location, sourcefile, sourceref,
     ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
     syntax_module, edition, is_flisp_compat, adopt_scope,
     remove_scope, fill_context, JL_NEW_EDITION, JL_OLD_EDITION,
     assert_syntaxtree, @mknode, DEBUG_LOWERING, IdTag
+    # source_line_range, unexpanded_sourceref, source_line, filename, macro_prov,
+    # _printstyled, CompileHints, parsestmt, ParseStream, parse!, build_tree
 
 const DEBUG = DEBUG_LOWERING
 # const DEBUG = isdefinedglobal(Base, :DEBUG_LOWERING) ?
