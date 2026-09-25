@@ -76,6 +76,17 @@ STATIC_INLINE int jl_gc_region_census_filter(void) JL_NOTSAFEPOINT
 // Records a task the census reached outside the region; returns 1 the first
 // time, 0 afterwards.
 int jl_gc_region_census_claim_task(jl_value_t *task) JL_NOTSAFEPOINT;
+// Install a task's parked region on a thread at a task switch.
+void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
+// The brackets of a stock collection: park every open window before it,
+// hand every quarantined region to the stock collector, and install the
+// windows again after it; after each pass, clear the marks the pass left on
+// region pages.
+void jl_gc_region_prepare_stock_collection(void) JL_NOTSAFEPOINT;
+void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT;
+void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT;
+// Mark every region finalizer list as a root of the stock collection.
+void jl_gc_region_mark_finalizer_lists(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 // Process and per-heap initialization.
 void jl_gc_region_init(void) JL_NOTSAFEPOINT;
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
@@ -93,6 +104,10 @@ void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
 // Without the regions each hook expands to no code, and the runtime
 // compiles to the stock runtime.
 #define jl_gc_region_census_filter() 0
+#define jl_gc_region_mark_finalizer_lists(mq) ((void)(mq))
+#define jl_gc_region_clear_stock_marks() ((void)0)
+#define jl_gc_region_prepare_stock_collection() ((void)0)
+#define jl_gc_region_finish_stock_collection() ((void)0)
 #define jl_gc_region_init() ((void)0)
 #define jl_gc_region_init_heap(heap) ((void)(heap))
 

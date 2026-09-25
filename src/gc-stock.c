@@ -784,6 +784,15 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
     gc_num.freecall++;
 }
 
+#ifdef WITH_GC_REGIONS
+// The reset and the census of a region free the malloc'd data of a memory
+// through this entry (gc-regions.c).
+void gc_region_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
+{
+    jl_gc_free_memory(m, isaligned);
+}
+#endif
+
 static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
 {
     gc_time_mallocd_memory_start();
@@ -3629,6 +3638,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
             if (ptls2 != NULL)
                 gc_mark_finlist(mq, &ptls2->finalizers, 0);
         }
+        // The finalizer lists of the regions are roots too (gc-regions.h).
+        jl_gc_region_mark_finalizer_lists(mq);
         gc_mark_finlist(mq, &finalizer_list_marked, orig_marked_len);
         // "Flush" the mark stack before flipping the reset_age bit
         // so that the objects are not incorrectly reset.
@@ -3718,6 +3729,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_verify_tags();
         gc_sweep_pool();
         sweep_weak_processing();
+        // Region pages are not swept: clear the marks this pass left on them.
+        jl_gc_region_clear_stock_marks();
     }
 
     JL_PROBE_GC_SWEEP_END();
@@ -4090,12 +4103,16 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
+        // Every thread runs the collection with region 0 installed, and a
+        // quarantined region becomes stock pages (gc-regions.h).
+        jl_gc_region_prepare_stock_collection();
         if (_jl_gc_collect(ptls, collection)) {
             // recollect
             int ret = _jl_gc_collect(ptls, JL_GC_AUTO);
             (void)ret;
             assert(!ret);
         }
+        jl_gc_region_finish_stock_collection();
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 
