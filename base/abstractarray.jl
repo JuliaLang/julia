@@ -563,7 +563,6 @@ end
 
 """
     Base.isunsafeloadable(type)::Bool
-    Base.isunsafeloadable(A::AbstractArray)::Bool
 
 Return `true` if reading an element of an array of this type through a pointer is
 equivalent to reading it with [`getindex`](@ref). Otherwise return `false`.
@@ -590,7 +589,6 @@ isunsafeloadable(A::AbstractArray) = isunsafeloadable(typeof(A))
 
 """
     Base.isunsafestorable(type)::Bool
-    Base.isunsafestorable(A::AbstractArray)::Bool
 
 Return `true` if writing an element of an array of this type through a pointer is
 equivalent to writing it with [`setindex!`](@ref). Otherwise return `false`.
@@ -617,7 +615,6 @@ isunsafestorable(A::AbstractArray) = isunsafestorable(typeof(A))
 
 """
     Base.isdense(type)::Bool
-    Base.isdense(A::AbstractArray)::Bool
 
 Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays) and additionally store
@@ -629,20 +626,21 @@ Array types with this trait get default [`strides`](@ref) and [`Base.elsize`](@r
 definitions, and are [`islinearstrided`](@ref Base.islinearstrided) and
 [`isstrided`](@ref Base.isstrided) by default.
 
-Defaults to `false`.
+Defaults to `true` for subtypes of [`DenseArray`](@ref), and `false` otherwise.
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
 isdense(::Type{<:AbstractArray}) = false
-isdense(::Type{<:Array}) = true
+isdense(::Type{<:DenseArray}) = true
+# Atomic memory may require extra padding
+isdense(::Type{<:GenericMemory}) = false
 isdense(::Type{<:Memory}) = true
 isdense(::Type{Union{}}) = false
 isdense(A::AbstractArray) = isdense(typeof(A))
 
 """
     Base.islinearstrided(type)::Bool
-    Base.islinearstrided(A::AbstractArray)::Bool
 
 Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays) and additionally isbits
@@ -661,7 +659,6 @@ islinearstrided(A::AbstractArray) = islinearstrided(typeof(A))
 
 """
     Base.isstrided(type)::Bool
-    Base.isstrided(A::AbstractArray)::Bool
 
 Return `true` if arrays of this array type follow the
 [strided array interface](@ref man-interface-strided-arrays). Otherwise return `false`.
@@ -739,6 +736,9 @@ julia> stride(A,3)
 ```
 """
 function stride(A::AbstractArray, k::Integer)
+    if isdense(A) && k > ndims(A)
+        return length(A)
+    end
     st = strides(A)
     k ≤ ndims(A) && return st[k]
     ndims(A) == 0 && return 1

@@ -30,6 +30,8 @@ Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
 @propagate_inbounds Base.getindex(A::Const, i1::Int, I::Int...) = A.a[i1, I...]
+# `Const` does not support pointer conversion, so it does not follow the strided array interface
+Base.isdense(::Type{<:Const}) = false
 
 """
     @aliasscope expr

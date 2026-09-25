@@ -7,7 +7,7 @@ module SharedArrays
 
 using Mmap, Distributed, Random
 
-import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_internal,
+import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal,
              show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, cconvert
 import Base: Array
 import Random
@@ -303,8 +303,6 @@ SharedVector(A::Vector) = SharedArray(A)
 SharedMatrix(A::Matrix) = SharedArray(A)
 
 size(S::SharedArray) = S.dims
-elsize(::Type{SharedArray{T,N}}) where {T,N} = elsize(Array{T,N}) # aka fieldtype(T, :s)
-Base.isdense(::Type{<:SharedArray}) = true
 Base.isunsafeloadable(::Type{<:SharedArray}) = true
 Base.isunsafestorable(::Type{<:SharedArray}) = true
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
