@@ -380,6 +380,12 @@ STATIC_INLINE void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, si
 
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls) JL_CANSAFEPOINT
 {
+#ifdef WITH_GC_REGIONS
+    // Past the census threshold, a census of the open region instead of a
+    // stock collection (gc-regions.h).
+    if (__unlikely(ptls->gc_tls.heap.current_region != 0) && jl_gc_region_maybe_census(ptls))
+        return;
+#endif
     if (jl_atomic_load_relaxed(&gc_heap_stats.heap_size) >= jl_atomic_load_relaxed(&gc_heap_stats.heap_target) || jl_gc_debug_check_other()) {
         jl_gc_collect(JL_GC_AUTO);
     }

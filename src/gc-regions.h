@@ -139,6 +139,9 @@ void jl_gc_region_clear_stock_marks(void) JL_NOTSAFEPOINT;
 void jl_gc_region_finish_stock_collection(void) JL_NOTSAFEPOINT;
 // Mark every region finalizer list as a root of the stock collection.
 void jl_gc_region_mark_finalizer_lists(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
+// The census of the open region, run from the page claim past the threshold.
+int jl_gc_region_census_open(jl_ptls_t ptls) JL_CANSAFEPOINT;
+extern _Atomic(int) jl_gc_region_census_page_threshold;
 // Process and per-heap initialization.
 void jl_gc_region_init(void) JL_NOTSAFEPOINT;
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
@@ -174,6 +177,19 @@ STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) JL_NO
         jl_gc_region_install_task(ptls, parked);
 }
 
+// On the page claim of an open window: a census of the open region once its
+// page count passed the threshold. Inline, because the claim path is hot.
+STATIC_INLINE int jl_gc_region_maybe_census(jl_ptls_t ptls) JL_CANSAFEPOINT
+{
+    int threshold = jl_atomic_load_relaxed(&jl_gc_region_census_page_threshold);
+    if (__likely(threshold <= 0))
+        return 0;
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    assert(heap->current_region != 0 && heap->regions[heap->current_region] != NULL);
+    if ((int)heap->regions[heap->current_region]->n_pages < threshold)
+        return 0;
+    return jl_gc_region_census_open(ptls);
+}
 
 
 #ifdef __cplusplus
