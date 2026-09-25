@@ -76,6 +76,14 @@ STATIC_INLINE int jl_gc_region_census_filter(void) JL_NOTSAFEPOINT
 // Records a task the census reached outside the region; returns 1 the first
 // time, 0 afterwards.
 int jl_gc_region_census_claim_task(jl_value_t *task) JL_NOTSAFEPOINT;
+// Registers a finalizer of a region object on the list of its region;
+// returns 1 when v is a region object of this thread. A registration from
+// another thread quarantines the region and returns 0, so the finalizer
+// goes to the thread's own list.
+int jl_gc_region_add_finalizer(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
+// Tracks a memory with malloc'd data on the list of its region; returns 1
+// when m is a region object.
+int jl_gc_region_track_malloced(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 // Install a task's parked region on a thread at a task switch.
 void jl_gc_region_install_task(jl_ptls_t ptls, int n) JL_NOTSAFEPOINT;
 // The brackets of a stock collection: park every open window before it,
@@ -92,6 +100,27 @@ void jl_gc_region_init(void) JL_NOTSAFEPOINT;
 void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
 
 
+// The brackets of a finalizer list: region 0 is installed while it runs, no
+// window opens on the thread, and no region entry runs. `begin` returns the
+// parked region for `end`; the depth is per thread, because a finalizer does
+// not switch tasks.
+STATIC_INLINE int jl_gc_region_finalizers_begin(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    int parked = heap->current_region;
+    if (parked != 0)
+        jl_gc_region_install_task(ptls, 0);
+    heap->finalizer_depth++;
+    return parked;
+}
+
+STATIC_INLINE void jl_gc_region_finalizers_end(jl_ptls_t ptls, int parked) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    heap->finalizer_depth--;
+    if (parked != 0)
+        jl_gc_region_install_task(ptls, parked);
+}
 
 
 
@@ -103,6 +132,10 @@ void jl_gc_region_init_heap(jl_thread_heap_t *heap) JL_NOTSAFEPOINT;
 
 // Without the regions each hook expands to no code, and the runtime
 // compiles to the stock runtime.
+#define jl_gc_region_finalizers_begin(ptls) 0
+#define jl_gc_region_finalizers_end(ptls, parked) ((void)(parked))
+#define jl_gc_region_add_finalizer(ptls, v, f) 0
+#define jl_gc_region_track_malloced(ptls, m, isaligned) 0
 #define jl_gc_region_census_filter() 0
 #define jl_gc_region_mark_finalizer_lists(mq) ((void)(mq))
 #define jl_gc_region_clear_stock_marks() ((void)0)
