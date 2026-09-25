@@ -1536,11 +1536,18 @@ function _prepend!(a::Vector, ::IteratorSize, iter)
 end
 
 """
-    resize!(a::Vector, n::Integer) -> a
+    resize!(a::Vector, n::Integer; first::Bool=false) -> a
 
 Resize `a` to contain `n` elements. If `n` is smaller than the current collection
 length, the first `n` elements will be retained. If `n` is larger, the new elements are not
 guaranteed to be initialized.
+
+If `first` is true, then the new elements are inserted at the start of the collection. In
+this case, if `n` is smaller than the current collection length, the last `n` elements will
+be retained.
+
+!!! compat "Julia 1.14"
+    The `first` argument was added in Julia 1.14.
 
 # Examples
 ```jldoctest
@@ -1565,19 +1572,19 @@ julia> a[1:6]
  1
 ```
 """
-function resize!(a::Vector, nl_::Integer)
+function resize!(a::Vector, nl_::Integer; first::Bool=false)
     nl = Int(nl_)::Int
     l = length(a)
     if nl > l
         # Since l is positive, if nl > l, both are positive, and so nl-l is also
         # positive. But the compiler does not know that, so we mask out top bit.
         # This allows the compiler to skip the check
-        _growend!(a, (nl-l) & typemax(Int))
+        first ? _growbeg!(a, (nl-l) & typemax(Int)) : _growend!(a, (nl-l) & typemax(Int))
     elseif nl != l
         if nl < 0
             _throw_argerror("new length must be ≥ 0")
         end
-        _deleteend!(a, l-nl)
+        first ? _deletebeg!(a, l-nl) : _deleteend!(a, l-nl)
     end
     return a
 end
