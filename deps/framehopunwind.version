@@ -1,9 +1,8 @@
 # -*- makefile -*-
 
 ## jll artifact (JuliaBinaryWrappers/LibFramehopUnwind_jll.jl) ##
-# TODO: rebuild the JLL with the source fixes pinned below; v0.1.2 predates them.
 FRAMEHOPUNWIND_JLL_NAME := LibFramehopUnwind
-FRAMEHOPUNWIND_JLL_VER := 0.1.2+0
+FRAMEHOPUNWIND_JLL_VER := 0.1.3+0
 
 ## source build ##
 FRAMEHOPUNWIND_BRANCH=main
