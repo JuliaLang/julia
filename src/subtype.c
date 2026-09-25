@@ -556,14 +556,37 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
 
 // type utilities
 
+// Whether every type `T` may take is `Union{}`, through typevar upper bounds and unions
+static int is_bottom_bound(jl_value_t *T) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (jl_is_typevar(T)) {
+            T = ((jl_tvar_t*)T)->ub;
+        }
+        else if (jl_is_uniontype(T)) {
+            if (!is_bottom_bound(((jl_uniontype_t*)T)->a))
+                return 0;
+            T = ((jl_uniontype_t*)T)->b;
+        }
+        else {
+            return T == jl_bottom_type;
+        }
+    }
+}
+
+// Whether `t` is `==` to `TypeofBottom`: `Type{Union{}}`, or `Type{T}` with `T <: Union{}`
+// (directly or through the bounds of other typevars), which forces `T == Union{}` but which
+// method definition cannot normalize away when `T` is also used elsewhere. Callers may
+// substitute `TypeofBottom` for `t`, even in invariant positions.
 static int is_typeofbottom_typealias(jl_value_t *t) JL_NOTSAFEPOINT
 {
     if (t == NULL)
         return 0;
     if (jl_typeofbottom_type == NULL)
         return 0;
-    return t == (jl_value_t*)jl_typeofbottom_type ||
-           (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type);
+    if (t == (jl_value_t*)jl_typeofbottom_type)
+        return 1;
+    return jl_is_typeeq(t) && is_bottom_bound(jl_typeeq_T(t));
 }
 
 static jl_value_t *normalize_typeofbottom_typealias(jl_value_t *t) JL_NOTSAFEPOINT
@@ -7095,6 +7118,35 @@ static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env)
     return 0;
 }
 
+// Whether the signature parameter `t` admits `Union{}` as its only argument, so that
+// `tuple_cmp_typeofbottom` ranks it above any other parameter. This must accept every `t` that
+// subtyping proves `<: Type{Union{}}`: a method whose parameter is such a `t` can beat a
+// `Type{Union{}}` method as a strict subtype, and the typemap's `Union{}` pruning relies on
+// the winner of those calls also beating every method it skips. Subtyping proves this for an
+// alias of `TypeofBottom` (see above), a typevar through its upper bound, and a union through
+// each of its components; the latter two are not aliases (`S <: TypeofBottom` may also be
+// `Union{}`, so `Vector{S}` is not `Vector{TypeofBottom}`). The typemap files all of these
+// either in the `Type{Union{}}` buckets or as kinds under the `AnyType` name, outside the
+// `Type{...}` buckets that pruning skips.
+static int is_typeofbottom_param(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (t == NULL)
+        return 0;
+    while (1) {
+        if (jl_is_typevar(t)) {
+            t = ((jl_tvar_t*)t)->ub;
+        }
+        else if (jl_is_uniontype(t)) {
+            if (!is_typeofbottom_param(((jl_uniontype_t*)t)->a))
+                return 0;
+            t = ((jl_uniontype_t*)t)->b;
+        }
+        else {
+            return is_typeofbottom_typealias(t);
+        }
+    }
+}
+
 static int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
 {
     size_t i, la = jl_nparams(a), lb = jl_nparams(b);
@@ -7102,8 +7154,8 @@ static int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
         jl_value_t *pa = i < la ? jl_tparam(a, i) : NULL;
         jl_value_t *pb = i < lb ? jl_tparam(b, i) : NULL;
         assert(jl_typeofbottom_type); // for clang-sa
-        int xa = is_typeofbottom_typealias(pa);
-        int xb = is_typeofbottom_typealias(pb);
+        int xa = is_typeofbottom_param(pa);
+        int xb = is_typeofbottom_param(pb);
         if (xa != xb)
             return xa - xb;
     }

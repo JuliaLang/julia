@@ -691,6 +691,33 @@ end
     @test which(BottomFixedArity.k, (Type{<:BottomFixedArity.X}, Int, Int)) in [m.method for m in ms]
 end
 
+# A method that admits only `Union{}` but is not spelled `Type{Union{}}` still wins the
+# `Union{}` calls, so lookups that prune on a `Type{Union{}}` method agree with dispatch:
+# `M` and `U` beat the slurp method as strict subtypes and must also beat the pruned `P`s, and
+# a covering method found in `targ` must not hide the more specific `N` keyed in `tname`.
+module BottomSpellings
+    f(::AbstractVector, ::Type{Union{}}, slurp...) = :S
+    f(::AbstractVector, ::T) where {T<:Core.TypeofBottom} = :M
+    f(::AbstractVector{Int}, ::Type{<:AbstractString}) = :P
+    f(::AbstractVector, ::Type{T}, ::Vector{T}) where {T<:Union{}} = :N
+    f(::AbstractVector{Int}, ::Type{<:AbstractString}, ::Vector{Union{}}) = :P
+    f(::AbstractVector, ::Union{Core.TypeofBottom, Type{T}}, ::Vector{T}, ::Int) where {T<:Union{}} = :U
+    f(::AbstractVector{Int}, ::Type{<:AbstractString}, ::Vector{Union{}}, ::Int) = :P
+    for i in 1:5
+        @eval f(::AbstractVector{Val{$i}}, ::Type{<:AbstractString}) = $i
+    end
+end
+@testset "Union{} pruning agrees with dispatch for other spellings of Union{}" begin
+    f = BottomSpellings.f
+    for (args, winner) in (((Int[], Union{}), :M), ((Int[], Union{}, Union{}[]), :N),
+                           ((Int[], Union{}, Union{}[], 1), :U))
+        @test f(args...) === winner
+        tt = Tuple{Vector{Int}, Type{Union{}}, map(typeof, args[3:end])...}
+        @test invoke(f, tt, args...) === winner
+        @test which(f, tt) === which(f, Tuple{Vector{Int}, Core.TypeofBottom, tt.parameters[3:end]...})
+    end
+end
+
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
     @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})
