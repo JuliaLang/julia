@@ -273,9 +273,9 @@ function retry_ebusy(f)
             return code
         end
         # Longer each time, with jitter.
-        jitter_delay = delay + (Libc.rand() % delay)
+        jitter_delay = min(delay + (Libc.rand() % delay), FS_RETRY_MAX_DELAY_MS)
         sleep(jitter_delay * 1000)
-        delay = min(2delay, FS_RETRY_MAX_DELAY_MS)
+        delay *= 2
     end
 end
 
