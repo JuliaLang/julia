@@ -18,6 +18,9 @@ JL_DLLEXPORT void jl_gc_multi_wb_cold(const struct _jl_value_t *parent, void *de
 
 STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT
 {
+#ifdef WITH_GC_REGIONS
+    jl_gc_region_wb_check(parent, ptr);
+#endif
     // parent isa jl_value_t* and ptr isa jl_value_t* or NULL
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */)) // parent is old and not in remset
         jl_gc_wb_cold(parent, slot, ptr);
@@ -37,16 +40,47 @@ STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue JL_UNUSED) JL_NOT
 
 // These "special case" stores require no barrier under the stock GC, since the stock GC
 // has a purely generational barrier.
+#ifdef WITH_GC_REGIONS
+// With the regions the barrier is not purely generational: the region check runs at each of
+// them, because none of the three properties says anything about the region of `ptr`.
+#endif
 
 // parent is newly allocated since last safepoint
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{
+#ifdef WITH_GC_REGIONS
+    jl_gc_region_wb_check(parent, ptr);
+#endif
+}
 // parent is `jl_current_task`
-STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{
+#ifdef WITH_GC_REGIONS
+    jl_gc_region_wb_check(parent, ptr);
+#endif
+}
 // ptr is a known old object
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{
+#ifdef WITH_GC_REGIONS
+    jl_gc_region_wb_check(parent, ptr);
+#endif
+}
+#ifdef WITH_GC_REGIONS
+STATIC_INLINE void jl_gc_multi_wb_fresh(const void *parent, const void *data, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    jl_gc_region_wb_inline_check(parent, data, dt);
+}
+#endif
 
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
+#ifdef WITH_GC_REGIONS
+    // The pointer fields of `ptr` are what the copy puts into `parent`: the pair check, then
+    // the fields when the pair fails (jl_gc_region_wb_copy_inline_check in gc-interface.h).
+    jl_gc_region_wb_copy_inline_check(parent, (const void*)ptr, (const char*)ptr, 1, 0,
+                                      (jl_datatype_t*)jl_typeof(ptr));
+#endif
     // ptr is an immutable object
     if (__likely(jl_astaggedvalue(parent)->bits.gc != 3 /* GC_OLD_MARKED */))
         return; // parent is young or in remset
@@ -65,6 +99,9 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest, const jl_value
 
 STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT
 {
+#ifdef WITH_GC_REGIONS
+    jl_gc_region_wb_check(mod, from);
+#endif
     if (__unlikely(jl_astaggedvalue(mod)->bits.gc == 3 /* GC_OLD_MARKED */)) {
         if (jl_astaggedvalue(mod)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */ ||
             !(jl_astaggedvalue(from)->bits.gc & 1 /* GC_MARKED */))
@@ -79,6 +116,9 @@ STATIC_INLINE void jl_gc_genericmemory_copy_boxed(const jl_value_t *dest_owner, 
                                                   jl_genericmemory_t *src JL_UNUSED, _Atomic(void*) *src_p,
                                                   size_t n) JL_NOTSAFEPOINT
 {
+#ifdef WITH_GC_REGIONS
+    jl_gc_region_wb_copy_boxed_check(dest_owner, src, src_p, n);
+#endif
     memmove_refs(dest_p, src_p, n);
     if (n == 0 || __likely(jl_astaggedvalue(dest_owner)->bits.gc != 3 /* GC_OLD_MARKED */))
         return; // destination is young or remembered, or the copy is empty
@@ -107,6 +147,9 @@ STATIC_INLINE void jl_gc_genericmemory_copy_ptr(const jl_value_t *owner, char *d
     const jl_datatype_layout_t *ly = dt->layout;
     size_t stride = ly->size / sizeof(void*);
     _Atomic(void*) *dest_p = (_Atomic(void*)*)destdata;
+#ifdef WITH_GC_REGIONS
+    jl_gc_region_wb_copy_inline_check(owner, src, srcdata, n, ly->size, (jl_datatype_t*)jl_tparam1(dt));
+#endif
     memmove_refs(dest_p, (_Atomic(void*)*)srcdata, n * stride);
     if (n == 0 || __likely(jl_astaggedvalue(owner)->bits.gc != 3 /* GC_OLD_MARKED */))
         return; // destination is young or remembered, or the copy is empty

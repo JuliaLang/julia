@@ -317,6 +317,49 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 // Write barrier slow-path. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
+#ifdef WITH_GC_REGIONS
+#ifdef WITH_GC_REGION_BARRIER
+// The escape barrier of the GC regions (gc-regions.h): armed at the first
+// window, a comparison of the page tags of parent and child; disarmed, one
+// load and one branch per store. `ptr` may be NULL.
+extern JL_DLLIMPORT _Atomic(uint8_t) jl_gc_region_barrier_on;
+JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_gc_region_would_escape(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_region_wb_boxed(const void *parent, _Atomic(void*) *src, size_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_region_wb_inline(const void *parent, const char *src, size_t n,
+                                         size_t elsz, struct _jl_datatype_t *et) JL_NOTSAFEPOINT;
+#define jl_gc_region_wb_check(parent, ptr) do {                         \
+        if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on))) \
+            jl_gc_region_wb((parent), (ptr));                           \
+    } while (0)
+// A bulk copy costs one check of the pair (parent, source): when it passes,
+// every element is legal, because the elements of a legal source are legal;
+// when it fails, the elements are checked one by one (gc-regions.c).
+#define jl_gc_region_wb_copy_boxed_check(parent, src, src_p, n) do {     \
+        if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on)) && \
+            __unlikely(jl_gc_region_would_escape((parent), (src))))     \
+            jl_gc_region_wb_boxed((parent), (src_p), (n));              \
+    } while (0)
+#define jl_gc_region_wb_copy_inline_check(parent, src, src_p, n, elsz, et) do { \
+        if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on)) && \
+            __unlikely(jl_gc_region_would_escape((parent), (src))))     \
+            jl_gc_region_wb_inline((parent), (src_p), (n), (elsz), (et)); \
+    } while (0)
+// The pointer fields of one inline value whose bytes are not a heap object
+// (a field, an element, a stack buffer): no pair check stands in for them.
+#define jl_gc_region_wb_inline_check(parent, src_p, et) do {             \
+        if (__unlikely(jl_atomic_load_relaxed(&jl_gc_region_barrier_on))) \
+            jl_gc_region_wb_inline((parent), (const char*)(src_p), 1, 0, (et)); \
+    } while (0)
+#else
+// The regions without their barrier (WITH_GC_REGION_BARRIER=0): no store is checked.
+#define jl_gc_region_wb_check(parent, ptr) do { } while (0)
+#define jl_gc_region_wb_copy_boxed_check(parent, src, src_p, n) do { } while (0)
+#define jl_gc_region_wb_copy_inline_check(parent, src, src_p, n, elsz, et) do { } while (0)
+#define jl_gc_region_wb_inline_check(parent, src_p, et) do { } while (0)
+#endif
+#endif
+
 // Write barrier function that must be used immediately before writing any number of
 // the pointer fields of a heap-allocated object, when the fields or the values written
 // are not known individually (e.g. a bulk copy into the object). This is a less-precise
@@ -339,6 +382,16 @@ STATIC_INLINE void jl_gc_wb_fresh(const void *parent, void *slot, const void *pt
 STATIC_INLINE void jl_gc_wb_current_task(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
 // Annotates that a write barrier can (possibly) be elided: `ptr` is known to be an old object
 STATIC_INLINE void jl_gc_wb_knownold(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
+#ifdef WITH_GC_REGIONS
+// Region annotation of a copy of the bytes of an inline value of type `dt` (a field, an
+// element, a stack buffer) into the freshly allocated object `parent`, used after the copy:
+// `data` is the copied bytes in `parent`. The generational barrier has nothing to do for a
+// fresh parent; the region barrier checks every pointer field of `dt` (gc-regions.h).
+STATIC_INLINE void jl_gc_multi_wb_fresh(const void *parent, const void *data,
+                                        struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
+#else
+#define jl_gc_multi_wb_fresh(parent, data, dt) ((void)0)
+#endif
 
 
 // Write-barrier function that must be used before copying the payload of the boxed

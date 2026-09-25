@@ -65,6 +65,10 @@ typedef struct _jl_gc_region_state_t {
 // current, or a refusal code.
 JL_DLLEXPORT int jl_gc_region_set(int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_gc_region_current(void) JL_NOTSAFEPOINT;
+#ifdef WITH_GC_REGION_BARRIER
+// The escape barrier, called by the write barrier while a region is in use.
+JL_DLLEXPORT void jl_gc_region_wb(const void *parent, const void *child) JL_NOTSAFEPOINT;
+#endif
 
 // --- the hooks the rest of the runtime calls --------------------------------
 // The census filter: the region of the census that runs now, 0 otherwise.

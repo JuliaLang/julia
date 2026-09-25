@@ -275,10 +275,24 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
         memcpy(new_mem->ptr, (char*)mem->ptr + (size_t)data * elsz, len * elsz);
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
+#ifdef WITH_GC_REGIONS
+    // The elements of a boxed memory are the references, and its layout
+    // lists no pointer field: the region check of the copy, as a bulk copy.
+    else if (layout->flags.arrayelem_isboxed) {
+        if (data != NULL) {
+            jl_gc_region_wb_copy_boxed_check(new_mem, mem, (_Atomic(void*)*)data, len);
+            memcpy(new_mem->ptr, data, len * elsz);
+        }
+    }
+#endif
     else if (layout->first_ptr != -1) {
         if (data == NULL) {
             assert(len * elsz / sizeof(void*) == 0); // make static analyzer happy
         }
+#ifdef WITH_GC_REGIONS
+        jl_gc_region_wb_copy_inline_check(new_mem, mem, (const char*)data, len, elsz,
+                                          (jl_datatype_t*)jl_tparam1(mtype));
+#endif
         memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * elsz / sizeof(void*));
     }
     else if (data != NULL) {
