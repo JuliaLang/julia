@@ -92,7 +92,6 @@ static int _uv_err_to_errno(int uverr)
         return 0;
 
 #if !defined(_OS_WINDOWS_)
-    // On Unix libuv error codes are the negated errno.
     return -uverr;
 #else
     switch (uverr) {

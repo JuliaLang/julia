@@ -259,7 +259,7 @@ end
 delayed_delete_ref() = joinpath(tempdir(), "julia_delayed_deletes_ref")
 
 # libuv removed its own retry policy in libuv#2098.
-# defering to the applications if needed.
+# deferring to the applications if needed.
 const FS_RETRY_MAX_ATTEMPTS = 8
 const FS_RETRY_INITIAL_DELAY_MS = 10
 const FS_RETRY_MAX_DELAY_MS = 320
