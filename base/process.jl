@@ -765,6 +765,25 @@ kill(ps::Vector{Process}, signum::Integer=SIGTERM) = for p in ps; kill(p, signum
 kill(ps::ProcessChain, signum::Integer=SIGTERM) = kill(ps.processes, signum)
 
 """
+    kill(pid::Integer, signum=Base.SIGTERM)
+
+Send a signal to the process with ID `pid`, which need not have been started by Julia.
+Throws an error if that fails, for example because no such process exists or because of
+insufficient permissions.
+
+On Windows, `SIGINT`, `SIGQUIT`, `SIGTERM` and `SIGKILL` all end the process, and `0` only
+checks that it exists. Other signals throw an error.
+
+!!! compat "Julia 1.14"
+    This method requires at least Julia 1.14.
+"""
+function kill(pid::Integer, signum::Integer=SIGTERM)
+    err = ccall(:uv_kill, Cint, (Cint, Cint), pid, signum)
+    err == 0 || throw(_UVError("kill", err))
+    nothing
+end
+
+"""
     getpid(process)::Int32
 
 Get the child process ID, if it still exists.
