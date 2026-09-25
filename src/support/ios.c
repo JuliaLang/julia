@@ -84,6 +84,7 @@ static int _enonfatal(int err)
 }
 
 
+#if defined(_OS_WINDOWS_)
 // Translate a libuv error from uv_fs_open() into an errno value.
 // inverse of uv_translate_sys_error() which libuv does not provide.
 static int _uv_err_to_errno(int uverr)
@@ -91,9 +92,6 @@ static int _uv_err_to_errno(int uverr)
     if (uverr >= 0)
         return 0;
 
-#if !defined(_OS_WINDOWS_)
-    return -uverr;
-#else
     switch (uverr) {
     case UV_EACCES:       return EACCES;        // denied, or sharing violation
     case UV_EBUSY:        return EBUSY;         // lock violation
@@ -116,8 +114,8 @@ static int _uv_err_to_errno(int uverr)
     // UV_ECHARSET (invalid path encoding) has no errno equivalent.
     default:              return EINVAL;
     }
-#endif
 }
+#endif
 
 #define SLEEP_TIME 5//ms
 
