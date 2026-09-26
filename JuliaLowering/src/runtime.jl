@@ -160,7 +160,9 @@ end
 #--------------------------------------------------
 # Functions which create modules or mutate their bindings
 
+# For partial compatibility with older julia (JETLS)
 const _Base_has_eval_import = isdefined(Base, :_eval_import)
+const _has_jl_module_public = VERSION >= v"1.14.0-DEV.1556"
 
 function eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
     if _Base_has_eval_import
@@ -182,9 +184,15 @@ function eval_using(to::Module, path::Expr)
     end
 end
 
-function eval_public(mod::Module, is_exported::Bool, identifiers)
-    # symbol jl_module_public is no longer exported as of #57765
-    Core.eval(mod, Expr((is_exported ? :export : :public), map(Symbol, identifiers)...))
+function eval_public(mod::Module, is_exported::Bool, identifiers::Vector{String})
+    if _has_jl_module_public
+        syms = Symbol[Symbol(x) for x in identifiers]
+        ccall(:jl_module_public, Cvoid, (Any, Ptr{Any}, Csize_t, Cint),
+              mod, syms, length(syms), is_exported)
+    else
+        Core.eval(mod, Expr((is_exported ? :export : :public),
+                            map(Symbol, identifiers)...))
+    end
 end
 
 #--------------------------------------------------
