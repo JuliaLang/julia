@@ -2215,6 +2215,36 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
     @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
 end
 
+# A call site where inference learned nothing records no edge, but the code inferred for
+# its callee must still be kept in the image, without making the caller depend on it.
+precompile_test_harness("uninformative call site image coverage") do load_path
+    write(joinpath(load_path, "UninfCoverageDep.jl"),
+        """
+        module UninfCoverageDep
+        @noinline f(x) = Base.inferencebarrier(identity)(x)
+        end
+        """)
+    write(joinpath(load_path, "UninfCoverage.jl"),
+        """
+        module UninfCoverage
+        using UninfCoverageDep
+        g(v::Vector{Any}) = UninfCoverageDep.f(v[1])
+        g(Any[1])
+        end
+        """)
+    Base.compilecache(Base.PkgId("UninfCoverageDep"))
+    Base.compilecache(Base.PkgId("UninfCoverage"))
+    @eval using UninfCoverage
+    Dep = Base.root_module(Base.PkgId("UninfCoverageDep"))
+    Mod = Base.root_module(Base.PkgId("UninfCoverage"))
+    fmi = Base.method_instance(Dep.f, (Any,))
+    @test isdefined(fmi, :cache)
+    gci = Base.method_instance(Mod.g, (Vector{Any},)).cache
+    @test gci.max_world == typemax(UInt)
+    @eval Dep f(::Val{:uninf_coverage}) = 2
+    @test gci.max_world == typemax(UInt)
+end
+
 precompile_test_harness("Issue #48391") do load_path
     write(joinpath(load_path, "I48391.jl"),
         """

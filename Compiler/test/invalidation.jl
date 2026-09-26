@@ -205,11 +205,11 @@ begin
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
         @test ci.owner === nothing
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
     end
 
     @test isnothing(pr48932_caller(42))
@@ -304,11 +304,11 @@ begin take!(GLOBAL_BUFFER)
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
         @test ci.owner === nothing
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
     end
     @test isnothing(pr48932_caller_unuse(42))
     @test "foo" == String(take!(GLOBAL_BUFFER))
@@ -510,4 +510,103 @@ let RU = Compiler.ReinferUtils
     b = convert(Core.Binding, GlobalRef(Base, :sin))
     @test b.partitions.min_world <= Base.get_require_world()
     @test !RU.binding_changed_since_require_world(b, Base.get_world_counter())
+end
+
+# A call site where inference learned nothing records no edges of its own, but the
+# optimizer may still commit to the matched method, by emitting an `:invoke` for it or by
+# inlining its body. Such a site must record its dispatch dependency, so that a method
+# added later invalidates the caller.
+module UninformativeCommit
+    global CALLEE = identity
+    @noinline uninf_invoke(@nospecialize x) = CALLEE(x)
+    @inline uninf_inline(x) = CALLEE(x)
+    invoke_caller(v::Vector{Any}) = uninf_invoke(v[1])
+    inline_caller(v::Vector{Any}) = uninf_inline(v[1])
+end
+let tester_ci(f) = let ci = Base.method_instance(f, (Vector{Any},)).cache
+        @test ci.owner === InvalidationTesterToken()
+        ci
+    end
+    @test only(Base.return_types(UninformativeCommit.invoke_caller, (Vector{Any},);
+        interp=InvalidationTester())) === Any
+    @test only(Base.return_types(UninformativeCommit.inline_caller, (Vector{Any},);
+        interp=InvalidationTester())) === Any
+    @test tester_ci(UninformativeCommit.invoke_caller).max_world == typemax(UInt)
+    @test tester_ci(UninformativeCommit.inline_caller).max_world == typemax(UInt)
+
+    @eval UninformativeCommit uninf_invoke(x::Int) = "specific"
+    @eval UninformativeCommit uninf_inline(x::Int) = "specific"
+    @test tester_ci(UninformativeCommit.invoke_caller).max_world != typemax(UInt)
+    @test tester_ci(UninformativeCommit.inline_caller).max_world != typemax(UInt)
+end
+
+# A call site that inference found uninformative defers its edges to the optimizer, so
+# other conclusions drawn from the call must still record them. Here the callee is
+# effect-free and terminating though not consistent, which lets its caller catch its
+# exceptions and be deleted as dead code; a new method must invalidate that.
+module UninformativeEffects
+    flag::Bool = true
+    @noinline callee(x) = flag ? x : throw(x)
+    function caller(v::Vector{Any})
+        try
+            callee(v[1])
+        catch
+        end
+        nothing
+    end
+end
+let M = UninformativeEffects, interp = InvalidationTester()
+    Base.return_types(M.caller, (Vector{Any},); interp)
+    ci = Base.method_instance(M.caller, (Vector{Any},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x::Int) = x
+    @test ci.max_world != typemax(UInt)
+end
+
+# The `Nothing` branch of this uninformative union split is evaluated concretely and folded
+# into the caller, which commits to the matched method; a more specific method for that
+# branch must invalidate the caller.
+module UninformativeFold
+    Base.@assume_effects :foldable @noinline callee(x) = Base.inferencebarrier(identity)(1)
+    @noinline callee(x::Integer) = Base.inferencebarrier(identity)(x)
+    caller(v::Vector{Union{Nothing,Integer}}) = callee(v[1])
+end
+let M = UninformativeFold, interp = InvalidationTester()
+    Base.return_types(M.caller, (Vector{Union{Nothing,Integer}},); interp)
+    ci = Base.method_instance(M.caller, (Vector{Union{Nothing,Integer}},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(::Nothing) = 2
+    @test ci.max_world != typemax(UInt)
+end
+
+# `return_type` observes the inferred result of an uninformative call as a value, so
+# redefining the callee must invalidate the caller.
+module UninformativeReturnType
+    @noinline callee(x) = Base.inferencebarrier(identity)(x)
+end
+@eval UninformativeReturnType caller() = $(Compiler.return_type)(callee, Tuple{Any})
+let M = UninformativeReturnType, interp = InvalidationTester()
+    Base.return_types(M.caller, (); interp)
+    ci = Base.method_instance(M.caller, ()).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x) = 1
+    @test ci.max_world != typemax(UInt)
+end
+
+# The same holds when the uninformative call is nested inside the queried call.
+module UninformativeReturnTypeApply
+    @noinline callee(x) = Base.inferencebarrier(identity)(x)
+end
+@eval UninformativeReturnTypeApply caller() =
+    $(Compiler.return_type)(Core._apply_iterate, Tuple{typeof(iterate), typeof(callee), Tuple{Any}})
+let M = UninformativeReturnTypeApply, interp = InvalidationTester()
+    Base.return_types(M.caller, (); interp)
+    ci = Base.method_instance(M.caller, ()).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x) = 1
+    @test ci.max_world != typemax(UInt)
 end
