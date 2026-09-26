@@ -1980,6 +1980,16 @@ precompile_test_harness("Recursive types") do load_path
     end
 end
 
+@testset "a compile hint with a `where`" begin
+    # `precompile` takes any type. A `UnionAll` keeps its parameters under the
+    # `where`, and the normalization of the egality slots must leave it alone
+    # rather than read it as a tuple type.
+    minus(a::T, b::T) where {T<:Integer} = a - b
+    @test precompile(Tuple{typeof(minus), T, T} where T<:Union{Int64, UInt64}) isa Bool
+    @test precompile(Tuple{typeof(minus), T, T} where T) isa Bool
+    @test precompile(Tuple{typeof(minus), Int64, Int64})
+end
+
 @testset "issue 46778" begin
     f46778(::Any, ::Type{Int}) = 1
     f46778(::Any, ::DataType) = 2
