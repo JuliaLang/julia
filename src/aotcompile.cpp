@@ -1194,8 +1194,8 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
     assert(gvars_gv);
     assert(fvars_idxs);
     assert(gvars_idxs);
-    auto fvars_init = cast<ConstantArray>(fvars_gv->getInitializer());
-    auto gvars_init = cast<ConstantArray>(gvars_gv->getInitializer());
+    auto fvars_init = fvars_gv->getInitializer();
+    auto gvars_init = gvars_gv->getInitializer();
     for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
         auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
         assert(gv && gv->hasName() && "fvar must be a named global");
@@ -1635,6 +1635,32 @@ struct AOTOutputs {
 };
 }  // anonymous namespace
 
+static void emit_bitcode(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf)
+{
+    raw_svector_ostream OS(buf);
+    PassBuilder PB;
+    AnalysisManagers AM{TM, PB, OptimizationLevel::O0};
+    ModulePassManager MPM;
+    MPM.addPass(BitcodeWriterPass(OS));
+    MPM.run(M, AM.MAM);
+}
+
+static void emit_native(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf, bool asm_)
+{
+    raw_svector_ostream OS(buf);
+    legacy::PassManager emitter;
+    addTargetPasses(&emitter, TM.getTargetTriple(), TM.getTargetIRAnalysis());
+#if JL_LLVM_VERSION >= 180000
+    auto type = asm_ ? CodeGenFileType::AssemblyFile : CodeGenFileType::ObjectFile;
+#else
+    auto type = asm_ ? CGFT_AssemblyFile : CGFT_ObjectFile;
+#endif
+    if (TM.addPassesToEmitFile(emitter, OS, nullptr, type, false))
+        jl_safe_printf("ERROR: target does not support generation of %s files\n",
+                       asm_ ? "assembly" : "object");
+    emitter.run(M);
+}
+
 // Perform the actual optimization and emission of the output files
 static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,
         bool unopt, bool opt, bool obj, bool asm_) {
@@ -1656,12 +1682,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     fixupTM(*TM);
     if (unopt) {
         timers.unopt.startTimer();
-        raw_svector_ostream OS(out.unopt);
-        PassBuilder PB;
-        AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
-        ModulePassManager MPM;
-        MPM.addPass(BitcodeWriterPass(OS));
-        MPM.run(M, AM.MAM);
+        emit_bitcode(M, *TM, out.unopt);
         timers.unopt.stopTimer();
     }
     if (!opt && !obj && !asm_) {
@@ -1748,43 +1769,20 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
     if (opt) {
         timers.opt.startTimer();
-        raw_svector_ostream OS(out.opt);
-        PassBuilder PB;
-        AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
-        ModulePassManager MPM;
-        MPM.addPass(BitcodeWriterPass(OS));
-        MPM.run(M, AM.MAM);
+        emit_bitcode(M, *TM, out.opt);
         timers.opt.stopTimer();
     }
 
     if (obj) {
         timers.obj.startTimer();
         TimeTraceScope EmitScope("AOT Emit Object", M.getModuleIdentifier());
-        raw_svector_ostream OS(out.obj);
-        legacy::PassManager emitter;
-        addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-#if JL_LLVM_VERSION >= 180000
-        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CodeGenFileType::ObjectFile, false))
-#else
-        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_ObjectFile, false))
-#endif
-            jl_safe_printf("ERROR: target does not support generation of object files\n");
-        emitter.run(M);
+        emit_native(M, *TM, out.obj, false);
         timers.obj.stopTimer();
     }
 
     if (asm_) {
         timers.asm_.startTimer();
-        raw_svector_ostream OS(out.asm_);
-        legacy::PassManager emitter;
-        addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-#if JL_LLVM_VERSION >= 180000
-        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CodeGenFileType::AssemblyFile, false))
-#else
-        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_AssemblyFile, false))
-#endif
-            jl_safe_printf("ERROR: target does not support generation of assembly files\n");
-        emitter.run(M);
+        emit_native(M, *TM, out.asm_, true);
         timers.asm_.stopTimer();
     }
 
@@ -2015,7 +2013,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
         }
     }
-    // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
         {
@@ -2204,78 +2201,60 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
-static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active) {
+constexpr size_t jl_image_max_shard_weight = 250000;
+constexpr size_t jl_image_min_shard_weight = 10000;
+
+static unsigned get_env_threads(const char *name)
+{
+    const char *env = getenv(name);
+    if (!env)
+        return 0;
+    char *endptr;
+    unsigned long requested = strtoul(env, &endptr, 10);
+    if (*endptr || !requested) {
+        jl_safe_printf("WARNING: invalid value '%s' for %s\n", env, name);
+        return 0;
+    }
+    return requested;
+}
+
+static unsigned compute_image_thread_count() {
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
         return 1;
-    // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
-    // known easy behavior. Plus they really don't warrant multiple threads
-    if (info.weight < 1000) {
-        LLVM_DEBUG(dbgs() << "Small module, using a single thread\n");
-        return 1;
-    }
 
-    // With a jobserver coordinating across parallel workers, aim for all
-    // effective cores (the jobserver bounds the actual total); otherwise fall
-    // back to the conservative half-cores default to avoid oversubscription.
-    unsigned threads = jobserver_active
-        ? std::max(jl_effective_threads(), 1)
-        : std::max(jl_effective_threads() / 2, 1);
-    auto max_threads = info.globals / 100;
-    if (max_threads < threads) {
-        LLVM_DEBUG(dbgs() << "Low global count limiting threads to " << max_threads << " (" << info.globals << "globals)\n");
-        threads = max_threads;
-    }
+#ifdef _P32
+    // We need to be very careful about using too much memory on 32 bit.
+    return 1;
+#endif
 
     // environment variable override.
     // this controls how many threads we request from the jobserver (if it is enabled)
     // but the question of whether to enable it or not is decided upstream
-    const char *env_threads = getenv("JULIA_IMAGE_THREADS");
-    bool env_threads_set = false;
-    if (env_threads) {
-        char *endptr;
-        unsigned long requested = strtoul(env_threads, &endptr, 10);
-        if (*endptr || !requested) {
-            jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_THREADS\n", env_threads);
-        } else {
-            LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_IMAGE_THREADS\n");
-            threads = requested;
-            env_threads_set = true;
-        }
+    if (unsigned requested = get_env_threads("JULIA_IMAGE_THREADS")) {
+        LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_IMAGE_THREADS\n");
+        return requested;
     }
+
+    unsigned threads = jl_effective_threads();
 
     // more defaults
-    if (!env_threads_set && threads > 1) {
-        if (auto fallbackenv = getenv("JULIA_CPU_THREADS")) {
-            char *endptr;
-            unsigned long requested = strtoul(fallbackenv, &endptr, 10);
-            if (*endptr || !requested) {
-                jl_safe_printf("WARNING: invalid value '%s' for JULIA_CPU_THREADS\n", fallbackenv);
-            } else if (requested < threads) {
-                LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n");
-                threads = requested;
-            }
-        }
+    unsigned requested = get_env_threads("JULIA_CPU_THREADS");
+    if (requested && requested < threads) {
+        LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n");
+        threads = requested;
     }
-
-#ifdef _P32
-    // shards are compiled one at a time, so this bounds memory, not parallelism
-    if (!env_threads_set)
-        threads = std::max<size_t>(threads, std::min<size_t>(max_threads, 8));
-#endif
-
-    threads = std::max(threads, 1u);
 
     return threads;
 }
 
-// Number of shards compiled concurrently. Each worker holds one shard's IR and
-// object code, which is what keeps a 32-bit sysimage build within address space.
-static unsigned compute_image_worker_count(unsigned threads) {
-#ifdef _P32
-    return 1;
-#else
-    return threads;
-#endif
+static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned workers)
+{
+    size_t max_shards = std::max<size_t>(info.weight / jl_image_min_shard_weight, 1);
+    size_t shards = std::max<size_t>(divideCeil(info.weight, jl_image_max_shard_weight),
+                                     std::min<size_t>(workers, max_shards));
+    if (shards > workers)
+        shards = std::min<size_t>(alignTo(shards, workers), std::max(shards, max_shards));
+    return shards;
 }
 
 jl_emission_params_t default_emission_params = { 1 };
@@ -2337,8 +2316,8 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     std::string StackProtectorGuard = dataM.getStackProtectorGuard().str();
     unsigned OverrideStackAlignment = dataM.getOverrideStackAlignment();
 
-    auto compile = [&](Module &M, StringRef name, unsigned threads, unsigned workers, JobserverClient *jobserver, auto module_released) {
-        return add_output(M, *SourceTM, name, threads, workers, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
+    auto compile = [&](Module &M, StringRef name, unsigned shards, unsigned workers, JobserverClient *jobserver, auto module_released) {
+        return add_output(M, *SourceTM, name, shards, workers, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
     };
 
     SmallVector<AOTOutputs, 16> sysimg_outputs;
@@ -2403,7 +2382,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     }
 
     const bool imaging_mode = true;
-    unsigned threads = 1;
+    unsigned shards = 1;
     unsigned workers = 1;
     unsigned nfvars = 0;
     unsigned ngvars = 0;
@@ -2459,15 +2438,16 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                 << "    clones: " << module_info.clones << "\n"
                 << "    weight: " << module_info.weight << "\n"
             );
-            threads = compute_image_thread_count(module_info, jobserver.active());
-            workers = compute_image_worker_count(threads);
+            workers = compute_image_thread_count();
+            shards = compute_image_shard_count(module_info, workers);
+            workers = std::min(workers, shards);
             if (jobserver.active() && workers > 1) {
-                // `threads` is the partition count and `workers` the concurrency
+                // `shards` is the partition count and `workers` the concurrency
                 // ceiling; add_output rations the actual pool size from the
                 // shared token budget, growing it as sibling workers finish.
                 text_jobserver = &jobserver;
             }
-            LLVM_DEBUG(dbgs() << "Using " << threads << " shards and up to " << workers << " threads to emit aot image\n");
+            LLVM_DEBUG(dbgs() << "Using " << shards << " shards and up to " << workers << " threads to emit aot image\n");
             nfvars = data->jl_sysimg_fvars.size();
             ngvars = data->jl_sysimg_gvars.size();
             emit_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
@@ -2505,12 +2485,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     };
 
     {
-        // Don't use withModuleDo here since we delete the TSM midway through
-        // auto TSCtx = data->out->get_tsm().consumingModuleDo();
-        // auto lock = TSCtx.getLock();
-        // auto dataM = data->M.getModuleUnlocked();
-
-        data_outputs = compile(dataM, "text", threads, workers, text_jobserver, [data](Module &) {
+        data_outputs = compile(dataM, "text", shards, workers, text_jobserver, [data](Module &) {
             // Delete data when add_output thinks it's done with it
             // Saves memory for use when multithreading
             delete data;
@@ -2571,9 +2546,9 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
                                         value, "jl_dispatch_target_ids");
-            auto shards = emit_shard_table(metadataM, T_size, T_psize, threads);
+            auto shard_table = emit_shard_table(metadataM, T_size, T_psize, shards);
             auto ptls = emit_ptls_table(metadataM, T_size, T_ptr);
-            auto header = emit_image_header(metadataM, threads, nfvars, ngvars);
+            auto header = emit_image_header(metadataM, shards, nfvars, ngvars);
             auto AT = ArrayType::get(T_size, sizeof(jl_small_typeof) / sizeof(void*));
             auto jl_small_typeof_copy = new GlobalVariable(metadataM, AT, false,
                                                         GlobalVariable::ExternalLinkage,
@@ -2636,7 +2611,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                             GlobalVariable::ExternalLinkage,
                                             ConstantArray::get(AT, {
                                                     ConstantExpr::getBitCast(header, T_psize),
-                                                    ConstantExpr::getBitCast(shards, T_psize),
+                                                    ConstantExpr::getBitCast(shard_table, T_psize),
                                                     ConstantExpr::getBitCast(ptls, T_psize),
                                                     ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
                                                     ConstantExpr::getBitCast(target_ids, T_psize),
@@ -2665,7 +2640,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         SmallVector<NewArchiveMember, 0> archive; \
         SmallVector<std::string, 16> filenames; \
         SmallVector<StringRef, 16> buffers; \
-        for (size_t i = 0; i < threads; i++) { \
+        for (size_t i = 0; i < shards; i++) { \
             filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
             buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
         } \
@@ -2707,10 +2682,18 @@ jl_dump_native_impl(void *native_code, const char *bc_fname, const char *unopt_b
         params = &default_emission_params;
     }
 
-    data->TSM_ref->withModuleDo([&](Module &dataM) {
+    // We can destroy the LLVM context earlier if we own ThreadSafeModule and
+    // ThreadSafeContext.
+    if (data->TSM_ref == &data->TSM) {
         jl_dump_native_locked(data, bc_fname, unopt_bc_fname, obj_fname, asm_fname, z,
-                              checksum, unpack_func, params, dataM);
-    });
+                              checksum, unpack_func, params, *data->TSM.getModuleUnlocked());
+    }
+    else {
+        data->TSM_ref->withModuleDo([&](Module &dataM) {
+            jl_dump_native_locked(data, bc_fname, unopt_bc_fname, obj_fname, asm_fname, z,
+                                  checksum, unpack_func, params, dataM);
+        });
+    }
 }
 
 
