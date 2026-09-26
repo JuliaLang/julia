@@ -193,6 +193,18 @@ extern jl_mutex_t finalizers_lock;
 #define GC_FIN_CFUNC_TAG 1
 #define GC_FIN_COBJ_TAG  2
 #define GC_FIN_TAG_MASK  3
+
+#define JL_GC_ENCODE_PUSHFINLIST(n) ((((size_t)(n)) << 2) | JL_GCFRAME_FINLIST)
+
+// Outside finalizer lists, a value rooted in a GC frame with either of the two
+// low bits set is an immediate, not an object reference, and is not marked.
+// Reserving two bits only requires objects to be 4-byte aligned, so this works
+// on 32-bit platforms too; objects are in fact 16-byte aligned
+// (JL_HEAP_ALIGNMENT). Tagged object pointers are not supported.
+STATIC_INLINE int gc_is_tagged_immediate(const void *v) JL_NOTSAFEPOINT
+{
+    return ((uintptr_t)v & 0x3) != 0;
+}
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 
