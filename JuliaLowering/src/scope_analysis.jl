@@ -152,7 +152,7 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
         mod = ex.mod isa Module ?
             throw(LoweringError(ex, "cannot use GlobalRef as local identifier")) : nothing
     end
-    is_internal = (ex.context::SyntaxContext).internal ||
+    is_internal = ex.context.internal ||
         getmeta(ex, :is_internal, false)::Bool
     b = _new_binding(ctx.bindings, ex, nk.name, bk;
                      mod, is_internal, is_nospecialize, is_ambiguous_local)
@@ -230,7 +230,7 @@ function _typevar_refs!(out, ctx, ex)
 end
 
 function _record_layer!(ctx, ex)
-    ex.context isa SyntaxContext || return
+    ex.context.layer isa ScopeLayer || return
     sl = ex.context.layer
     get!(ctx.layer_ids, sl, length(ctx.layer_ids)+1)
 end
@@ -256,7 +256,7 @@ function _find_scope_decls!(ctx, scope, ex)
             ex[1].mod isa Module &&
                 explicit_declare_in_scope!(ctx, scope, ex[1], :global)
             get!(scope.assignments, NameKey(ex[1]), ex[1])
-            get!(ctx.layer_ids, (ex[1].context::SyntaxContext).layer,
+            get!(ctx.layer_ids, ex[1].context.layer,
                  length(ctx.layer_ids)+1)
         else
             @jl_assert false (ex, "unknown kind in assignment")
@@ -264,7 +264,7 @@ function _find_scope_decls!(ctx, scope, ex)
     elseif k in KSet"= constdecl assign_or_constdecl_if_global"
         k1 = kind(ex[1])
         _record_layer!(ctx, ex[1])
-        sc = ex[1].context::SyntaxContext
+        sc = ex[1].context
         if k1 === K"BindingId"
             b = get_binding(ctx, ex[1])
             get!(scope.binding_assignments, b.id, ex[1])
@@ -338,7 +338,7 @@ function enter_scope!(ctx, ex)
         local ex = node_id
         b = resolve_name(ctx, ex)
         if b === nothing
-            sc = ex.context::SyntaxContext
+            sc = ex.context
             # Top-level assignments are locals in hygienic expansions.  We may
             # need to adjust this, as flisp makes them name-mangled globals.
             hygienic_toplevel = !is_base_layer(sc) && sc.layer !== ctx.layer

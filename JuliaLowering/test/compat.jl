@@ -507,14 +507,14 @@ test_toplevel_programs = [
 
     # empty let block linenumbernode is accepted by lowering
     fl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1))) == 1
-    jl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1))) == 1
+    jl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1)); edition=JL_NEW_EDITION) == 1
 end
 
 @testset "non-ASCII operator handling" begin
     # regression test for invalid string index
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     @noinline (x = 0xF; x ⊻= 1; x)
-    """; expr_compat_mode=true) == 0xE
+    """; edition=JL_OLD_EDITION) == 0xE
 end
 
 @testset "Expr(:ssavalue) conversion" begin
@@ -541,61 +541,61 @@ end
 end
 
 @testset "expr compat: #self# becomes `thisfunction`" begin
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     (function var_self()
         var"#self#"
     end)()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     (let
         ()->(var"#self#")
     end)()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     var_self_short() = var"#self#"
     var_self_short()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro var_self_macro(); var"#self#"; end
     @var_self_macro
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     (function var_self_kw(; k=1)
         var"#self#"
     end)()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     (function var_self_quoted()
         :(var"#self#")
     end)()
-    """; expr_compat_mode=true) === Symbol("#self#")
+    """; edition=JL_OLD_EDITION) === Symbol("#self#")
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     @isdefined(var"#self#") ? var"#self#" : nothing
-    """; expr_compat_mode=true) == nothing
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_OLD_EDITION) == nothing
+    @test jl_eval(test_mod, raw"""
     (function var_self_isdefined()
         @isdefined(var"#self#") ? var"#self#" : nothing
     end)()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
     # we don't bother with generators
-    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    @test_broken jl_eval(test_mod, raw"""
     collect(var"#self#" for i in 1:1)[1]
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
     # we assume the user doesn't create vars with this name
-    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    @test_broken jl_eval(test_mod, raw"""
     (function var_self_assign()
         var"#self#" = 1
         var"#self#"
     end)()
-    """; expr_compat_mode=true) == 1
+    """; edition=JL_OLD_EDITION) == 1
 end
 
 @testset "scope-block" begin
@@ -604,7 +604,7 @@ end
                     Expr(:block,
                          Expr(:return, 1))))
     @test fl_eval(test_mod, lam) isa Core.CodeInfo
-    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam; edition=JL_NEW_EDITION) isa Core.CodeInfo
 end
 
 @testset "with-static-parameters" begin
@@ -612,7 +612,7 @@ end
                Expr(:lambda, [Symbol("#self#"), :x],
                     Expr(:block, Expr(:return, :T))), :T)
     @test fl_eval(test_mod, lam) isa Core.CodeInfo
-    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam; edition=JL_NEW_EDITION) isa Core.CodeInfo
 end
 
 # `x^n` is rewritten to `literal_pow(^, x, Val(n))` if n is an Int
@@ -659,14 +659,14 @@ end
     for (str, expected) in cases
         ex = parsestmt(SyntaxTree, str)
         fl = fl_eval(pow_mod, ex)
-        jl = jl_eval(pow_mod, ex; expr_compat_mode=true)
+        jl = jl_eval(pow_mod, ex; edition=JL_OLD_EDITION)
         @test (str, fl) == (str, expected) context=str
         @test (str, jl) == (str, fl) context=str
     end
 
     let ex = parsestmt(SyntaxTree, "let q = p; q ^= 2; q end")
         @test fl_eval(pow_mod, ex) == (:literal, 2)
-        @test_broken jl_eval(pow_mod, ex; expr_compat_mode=true) == (:literal, 2)
+        @test_broken jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == (:literal, 2)
     end
 end
 
@@ -692,15 +692,15 @@ end
 
 @testset "validation of macro-expansion-specific forms" begin
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(:escape))
+        test_mod, Expr(:escape); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape), @__MODULE__))
+        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape), @__MODULE__); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape, :x, :y), @__MODULE__))
+        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape, :x, :y), @__MODULE__); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope")))
+        test_mod, Expr(Symbol("hygienic-scope")); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope"), :x))
+        test_mod, Expr(Symbol("hygienic-scope"), :x); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope"), :x, :y, :z))
+        test_mod, Expr(Symbol("hygienic-scope"), :x, :y, :z); edition=JL_NEW_EDITION)
 end

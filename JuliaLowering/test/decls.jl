@@ -133,7 +133,7 @@ end
 end
 
 # lowering is strict about the nesting order where parsing is not
-@test_throws LoweringError jl_eval(test_mod, Expr(:global, Expr(:const, Expr(:(=), :a, 1))))
+@test_throws LoweringError jl_eval(test_mod, Expr(:global, Expr(:const, Expr(:(=), :a, 1))); edition=JL_NEW_EDITION)
 @test_throws ErrorException fl_eval(test_mod, Expr(:global, Expr(:const, Expr(:(=), :a, 1))))
 
 # Possibly worth testing excessive global/const keywords or invalid combinations
@@ -259,7 +259,7 @@ end
                                 Expr(:tuple,
                                      Expr(:call, func, 1),
                                      Expr(:call, func2, 1))))
-        @test jl_eval(test_mod, ex) == (1, 2)
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (1, 2)
         @test !isdefined(test_mod, func)
         @test !isdefined(test_mod, func2)
     end
@@ -267,7 +267,7 @@ end
     # const
     @gensym func func2
     @testset let ex = Expr(:const, Expr(:(=), Expr(:call, func, :x), :x))
-        @test jl_eval(test_mod, ex) isa Function
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Function
         Core.@latestworld
         @test getproperty(test_mod, func)(1) == 1
     end
@@ -277,7 +277,7 @@ end
     @testset let ex = Expr(:global,
                            Expr(:(=), Expr(:call, func, :x), :x),
                            Expr(:(=), Expr(:call, func2, :y), :(y+1)))
-        @test jl_eval(test_mod, ex) isa Function
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Function
         Core.@latestworld
         @test getproperty(test_mod, func)(1) == 1
         @test getproperty(test_mod, func2)(1) == 2
@@ -288,7 +288,7 @@ end
     @testset let ex = Expr(:const,
                            Expr(:global,
                                 Expr(:(=), Expr(:call, func, :x), :x)))
-        @test jl_eval(test_mod, ex) isa Function
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Function
         Core.@latestworld
         @test getproperty(test_mod, func)(1) == 1
     end
@@ -299,7 +299,7 @@ end
                            Expr(:global,
                                 Expr(:(=), Expr(:call, func, :x), :x),
                                 Expr(:(=), Expr(:call, func2, :y), :(y+1))))
-        @test_broken jl_eval(test_mod, ex) isa Function
+        @test_broken jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Function
         Core.@latestworld
         @test_broken getproperty(test_mod, func)(1) == 1
         # also broken in flisp (func2 doesn't get defined)
@@ -312,7 +312,7 @@ end
                            Expr(:global,
                                 Expr(:(=), Expr(:call, func, :x), :x),
                                 Expr(:(=), Expr(:call, func2, :y), :(y+1))))
-        @test jl_eval(test_mod, ex) isa Function
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Function
         Core.@latestworld
         @test getproperty(test_mod, func)(1) == 1
         @test getproperty(test_mod, func2)(1) == 2
@@ -323,7 +323,7 @@ end
                            Expr(:const,
                                 Expr(:global,
                                      Expr(:(=), Expr(:call, func, :x), :x))))
-        @test jl_eval(test_mod, ex) isa Function
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Function
         Core.@latestworld
         @test getproperty(test_mod, func)(1) == 1
     end
@@ -334,7 +334,7 @@ end
                                 Expr(:global,
                                      Expr(:(=), Expr(:call, func, :x), :x),
                                      Expr(:(=), Expr(:call, func2, :y), :(y+1)))))
-        @test_broken jl_eval(test_mod, ex) isa Function
+        @test_broken jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Function
         Core.@latestworld
         @test_broken getproperty(test_mod, func)(1) == 1
         # also broken in flisp (func2 doesn't get defined)
@@ -350,7 +350,7 @@ end
              Expr(:block,
                   Expr(declkind, Expr(:(=), sym, 1)),
                   Expr(:tuple, sym)))
-        @test jl_eval(test_mod, ex) == (1,)
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (1,)
         Core.@latestworld
         if declkind === :global
             @test getproperty(test_mod, sym) == 1
@@ -368,7 +368,7 @@ end
                   Expr(:(=), sym, :(with_mutable_a(1))),
                   Expr(declkind, Expr(:(=), Expr(:., sym, QuoteNode(:a)), 2)),
                   sym))
-        @test jl_eval(test_mod, ex).a == 2
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION).a == 2
         Core.@latestworld
         @test !isdefined(test_mod, sym)
     end
@@ -379,7 +379,7 @@ end
         Expr(:let, Expr(:block),
              Expr(:block,
                   Expr(declkind, Expr(:(=), Expr(:ref, sym), 0))))
-        @test_throws UndefVarError jl_eval(test_mod, ex)
+        @test_throws UndefVarError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         Core.@latestworld
         @test !isdefined(test_mod, sym)
     end
@@ -389,7 +389,7 @@ end
                   Expr(:(=), sym, [1,2,3]),
                   Expr(declkind, Expr(:(=), Expr(:ref, sym, 2), 0)),
                   Expr(:tuple, sym)))
-        @test jl_eval(test_mod, ex) == ([1,0,3],)
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == ([1,0,3],)
         Core.@latestworld
         @test !isdefined(test_mod, sym)
     end
@@ -404,7 +404,7 @@ end
                             Expr(:(=), sym2,
                                  Expr(:(=), sym3, :(gensym()))))),
                   Expr(:tuple, sym1, sym2, sym3)))
-        res = jl_eval(test_mod, ex)
+        res = jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         Core.@latestworld
         @test res isa Tuple
         @test res[1] == res[2] == res[3]
@@ -425,7 +425,7 @@ end
                   Expr(declkind, Expr(:(=), sym, 1)),
                   Expr(declkind, Expr(:(+=), sym, 2)),
                   Expr(:tuple, sym)))
-        @test jl_eval(test_mod, ex) == (3,)
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (3,)
         Core.@latestworld
         if declkind === :global
             @test getproperty(test_mod, sym) == 3
@@ -442,7 +442,7 @@ end
                   Expr(declkind, Expr(:(=), sym, [1,2,3])),
                   Expr(declkind, Expr(:(.=), sym, 0)),
                   Expr(:tuple, sym)))
-        @test jl_eval(test_mod, ex) == ([0,0,0],)
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == ([0,0,0],)
         Core.@latestworld
         if declkind === :global
             @test getproperty(test_mod, sym) == [0,0,0]
@@ -459,7 +459,7 @@ end
                   Expr(declkind, Expr(:(=), sym, [1,2,3])),
                   Expr(declkind, Expr(:(.+=), sym, [4,5,6])),
                   Expr(:tuple, sym)))
-        @test jl_eval(test_mod, ex) == ([5,7,9],)
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == ([5,7,9],)
         Core.@latestworld
         if declkind === :global
             @test getproperty(test_mod, sym) == [5,7,9]
@@ -472,18 +472,18 @@ end
 @testset "all non-call non-globalref assignment forms within `const`" begin
     # prohibited by parsing as of writing this, so hard to make into an IR test
     ex = Expr(:const, Expr(:(.=), :x, 1))
-    @test_throws LoweringError jl_lower(test_mod, ex)
+    @test_throws LoweringError jl_lower(test_mod, ex; edition=JL_NEW_EDITION)
     ex = Expr(:const, Expr(:(+=), :x, 1))
-    @test_throws LoweringError jl_lower(test_mod, ex)
+    @test_throws LoweringError jl_lower(test_mod, ex; edition=JL_NEW_EDITION)
     ex = Expr(:const, Expr(:(.+=), :x, 1))
-    @test_throws LoweringError jl_lower(test_mod, ex)
+    @test_throws LoweringError jl_lower(test_mod, ex; edition=JL_NEW_EDITION)
 
     # placeholder
-    @test jl_eval(test_mod, :(const _ = 1)) === 1
-    @test jl_eval(test_mod, :(const _ = _ = __ = ___ = 1)) === 1
-    @test jl_eval(test_mod, :(const _::Int = 1.0)) === 1.0
-    @test jl_eval(test_mod, :(const _{x} = Vector{x})) == Vector
-    @test jl_eval(test_mod, :(const (_, _::Int, _{x}) = 1, 2, Vector)) == (1, 2, Vector)
+    @test jl_eval(test_mod, :(const _ = 1); edition=JL_NEW_EDITION) === 1
+    @test jl_eval(test_mod, :(const _ = _ = __ = ___ = 1); edition=JL_NEW_EDITION) === 1
+    @test jl_eval(test_mod, :(const _::Int = 1.0); edition=JL_NEW_EDITION) === 1.0
+    @test jl_eval(test_mod, :(const _{x} = Vector{x}); edition=JL_NEW_EDITION) == Vector
+    @test jl_eval(test_mod, :(const (_, _::Int, _{x}) = 1, 2, Vector); edition=JL_NEW_EDITION) == (1, 2, Vector)
     Core.@latestworld
     @test !Base.isdefinedglobal(Main, :_)
     @test !Base.isdefinedglobal(Main, :__)
@@ -492,7 +492,7 @@ end
     # pre-desugared const
     @gensym sym
     ex = Expr(:const, sym, 1)
-    @test jl_eval(test_mod, ex) == 1
+    @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == 1
     @test Base.binding_kind(test_mod, sym) == Base.PARTITION_KIND_CONST
 
     # chained, const first
@@ -501,7 +501,7 @@ end
                            Expr(:(=), sym1,
                                 Expr(:(=), sym2,
                                      Expr(:(=), sym3, :(gensym())))))
-        @test jl_eval(test_mod, ex) isa Symbol
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Symbol
         Core.@latestworld
 
         @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
@@ -518,7 +518,7 @@ end
                            Expr(:(=), Expr(:(::), sym1, :Symbol),
                                 Expr(:(=), Expr(:(::), sym2, :Symbol),
                                      Expr(:(=), Expr(:(::), sym3, :Symbol), :(gensym())))))
-        @test_broken jl_eval(test_mod, ex) isa Symbol
+        @test_broken jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Symbol
         Core.@latestworld
 
         @test_broken Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
@@ -541,7 +541,7 @@ end
                                      Expr(:(=), sym2,
                                           Expr(:const,
                                                Expr(:(=), sym3, :(gensym())))))))
-        @test jl_eval(test_mod, ex) isa Symbol
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Symbol
         Core.@latestworld
 
         @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
@@ -555,7 +555,7 @@ end
     # destructured
     @gensym sym1 sym2 sym3
     @testset let ex = :(const ($sym1, ($sym2, $sym3)) = (1, (2, 3)))
-        @test jl_eval(test_mod, ex) == (1, (2, 3))
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (1, (2, 3))
         Core.@latestworld
 
         @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
@@ -569,7 +569,7 @@ end
     # destructured, with types
     @gensym sym1 sym2 sym3
     @testset let ex = :(const ($sym1::Int, ($sym2::Int, $sym3::Int)) = (1, (2, 3)))
-        @test jl_eval(test_mod, ex) == (1, (2, 3))
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (1, (2, 3))
         Core.@latestworld
 
         @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
@@ -588,7 +588,7 @@ end
     # destructured, nested NamedTuple
     @gensym sym1 sym2 sym3
     @testset let ex = :(const ($sym1, (;$sym2, $sym3)) = (1, (;$sym2=2, $sym3=3)))
-        @test jl_eval(test_mod, ex) == (1, (;sym2=>2, sym3=>3))
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (1, (;sym2=>2, sym3=>3))
         Core.@latestworld
 
         @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
@@ -602,7 +602,7 @@ end
     # destructured, slurp
     @gensym sym1 sym2 sym3
     @testset let ex = :(const ($sym1, $sym2..., $sym3) = (1, 2, 22, 222, 3))
-        @test jl_eval(test_mod, ex) == (1, 2, 22, 222, 3)
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (1, 2, 22, 222, 3)
         Core.@latestworld
 
         @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
@@ -618,7 +618,7 @@ end
     @testset let ex = Expr(:const,
                            Expr(:(=), Expr(:curly, sym1, sym2),
                                 Expr(:curly, Vector, sym2)))
-        @test jl_eval(test_mod, ex) == Vector
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == Vector
         Core.@latestworld
 
         @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
@@ -632,26 +632,26 @@ gr_mod = Module()
 @testset "GlobalRef as an identifier" begin
     # gr = 1
     @gensym sym
-    @test 1 == jl_eval(test_mod, Expr(:(=), GlobalRef(gr_mod, sym), 1))
+    @test 1 == jl_eval(test_mod, Expr(:(=), GlobalRef(gr_mod, sym), 1); edition=JL_NEW_EDITION)
     @test Base.isdefinedglobal(gr_mod, sym)
     @test getproperty(gr_mod, sym) == 1
     @test !Base.isdefinedglobal(test_mod, sym)
     # test gr as a value
-    @test 1 == jl_eval(test_mod, Expr(:block, GlobalRef(gr_mod, sym)))
+    @test 1 == jl_eval(test_mod, Expr(:block, GlobalRef(gr_mod, sym)); edition=JL_NEW_EDITION)
 
     # gr resolves when a similar local is in scope
     @gensym sym
     Base.eval(gr_mod, Expr(:(=), sym, "gr"))
     @test ("let-local", "gr") == jl_eval(
         test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
-                       Expr(:tuple, sym, GlobalRef(gr_mod, sym))))
+                       Expr(:tuple, sym, GlobalRef(gr_mod, sym))); edition=JL_NEW_EDITION)
     @test !Base.isdefinedglobal(test_mod, sym)
 
     @test ("let-local", "gr reassigned") == jl_eval(
         test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
                        Expr(:block,
                             Expr(:(=), GlobalRef(gr_mod, sym), "gr reassigned"),
-                            Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))
+                            Expr(:tuple, sym, GlobalRef(gr_mod, sym)))); edition=JL_NEW_EDITION)
     @test !Base.isdefinedglobal(test_mod, sym)
     @test getproperty(gr_mod, sym) == "gr reassigned"
 
@@ -659,7 +659,7 @@ gr_mod = Module()
         test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
                        Expr(:block,
                             Expr(:(*=), GlobalRef(gr_mod, sym), " twice"),
-                            Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))
+                            Expr(:tuple, sym, GlobalRef(gr_mod, sym)))); edition=JL_NEW_EDITION)
     @test !Base.isdefinedglobal(test_mod, sym)
     @test getproperty(gr_mod, sym) == "gr reassigned twice"
 
@@ -667,7 +667,7 @@ gr_mod = Module()
         test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
                        Expr(:call,
                             Expr(:->, Expr(:tuple, Expr(:kw, sym, "lambda-local")),
-                                 Expr(:block, Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))))
+                                 Expr(:block, Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))); edition=JL_NEW_EDITION)
     @test !Base.isdefinedglobal(test_mod, sym)
 
     # gr1 = gr2 = gr3 = gr4 = 1
@@ -677,7 +677,7 @@ gr_mod = Module()
         Expr(:(=), GlobalRef(gr_mod, sym1),
              Expr(:(=), GlobalRef(gr_mod, sym2),
                   Expr(:(=), GlobalRef(gr_mod, sym3),
-                       Expr(:(=), GlobalRef(gr_mod, sym4), 1)))))
+                       Expr(:(=), GlobalRef(gr_mod, sym4), 1)))); edition=JL_NEW_EDITION)
     @test Base.isdefinedglobal(gr_mod, sym1)
     @test Base.isdefinedglobal(gr_mod, sym2)
     @test Base.isdefinedglobal(gr_mod, sym3)
@@ -693,9 +693,9 @@ gr_mod = Module()
 
     # gr += 5
     @gensym sym
-    jl_eval(test_mod, Expr(:(=), GlobalRef(gr_mod, sym), 10))
+    jl_eval(test_mod, Expr(:(=), GlobalRef(gr_mod, sym), 10); edition=JL_NEW_EDITION)
     @test 15 == jl_eval(
-        test_mod, Expr(:(+=), GlobalRef(gr_mod, sym), 5))
+        test_mod, Expr(:(+=), GlobalRef(gr_mod, sym), 5); edition=JL_NEW_EDITION)
     @test getproperty(gr_mod, sym) == 15
 
     # (gr1, gr2) = (1, 2)
@@ -703,7 +703,7 @@ gr_mod = Module()
     @test (1, 2) == jl_eval(
         test_mod, Expr(:(=),
                        Expr(:tuple, GlobalRef(gr_mod, sym1), GlobalRef(gr_mod, sym2)),
-                       Expr(:call, :tuple, 1, 2)))
+                       Expr(:call, :tuple, 1, 2)); edition=JL_NEW_EDITION)
     @test getproperty(gr_mod, sym1) == 1
     @test getproperty(gr_mod, sym2) == 2
     @test !Base.isdefinedglobal(test_mod, sym1)
@@ -714,7 +714,7 @@ gr_mod = Module()
         test_mod, Expr(:global,
                        Expr(:(=),
                             Expr(:(::), GlobalRef(gr_mod, sym), Int),
-                            1)))
+                            1)); edition=JL_NEW_EDITION)
     @test Base.isdefinedglobal(gr_mod, sym)
     @test Core.get_binding_type(gr_mod, sym) == Int
     @test getproperty(gr_mod, sym) == 1
@@ -723,13 +723,13 @@ gr_mod = Module()
     # global gr::Int
     @gensym sym
     @test nothing == jl_eval(
-        test_mod, Expr(:global, Expr(:(::), GlobalRef(gr_mod, sym), Int)))
+        test_mod, Expr(:global, Expr(:(::), GlobalRef(gr_mod, sym), Int)); edition=JL_NEW_EDITION)
     @test Core.get_binding_type(gr_mod, sym) == Int
 
     # const gr = 1
     @gensym sym
     @test 1 == jl_eval(
-        test_mod, Expr(:const, Expr(:(=), GlobalRef(gr_mod, sym), 1)))
+        test_mod, Expr(:const, Expr(:(=), GlobalRef(gr_mod, sym), 1)); edition=JL_NEW_EDITION)
     @test Base.isdefinedglobal(gr_mod, sym)
     @test getproperty(gr_mod, sym) == 1
     @test Base.binding_kind(gr_mod, sym) == Base.PARTITION_KIND_CONST
@@ -741,7 +741,7 @@ gr_mod = Module()
         test_mod, Expr(:const,
                        Expr(:(=),
                             Expr(:(::), GlobalRef(gr_mod, sym), Int),
-                            42)))
+                            42)); edition=JL_NEW_EDITION)
     @test Base.isdefinedglobal(gr_mod, sym)
     @test getproperty(gr_mod, sym) == 42
     @test Base.binding_kind(gr_mod, sym) == Base.PARTITION_KIND_CONST
@@ -750,14 +750,14 @@ gr_mod = Module()
     # local gr (error)
     @gensym sym
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(:local, GlobalRef(gr_mod, sym)))
+        test_mod, Expr(:local, GlobalRef(gr_mod, sym)); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(:let, Expr(:block, Expr(:(=), GlobalRef(gr_mod, sym), 1))))
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), GlobalRef(gr_mod, sym), 1))); edition=JL_NEW_EDITION)
     @test !Base.isdefinedglobal(test_mod, sym)
 
     # function gr end
     @gensym sym
-    @test jl_eval(test_mod, Expr(:function, GlobalRef(gr_mod, sym))) isa Function
+    @test jl_eval(test_mod, Expr(:function, GlobalRef(gr_mod, sym)); edition=JL_NEW_EDITION) isa Function
     @test Base.isdefinedglobal(gr_mod, sym)
     @test getproperty(gr_mod, sym) isa Function
     @test !Base.isdefinedglobal(test_mod, sym)
@@ -766,7 +766,7 @@ gr_mod = Module()
     @gensym sym
     @test jl_eval(test_mod, Expr(:function,
                                  Expr(:call, GlobalRef(gr_mod, sym), :x),
-                                 Expr(:block, :x))) isa Function
+                                 Expr(:block, :x)); edition=JL_NEW_EDITION) isa Function
     @test Base.isdefinedglobal(gr_mod, sym)
     @test getproperty(gr_mod, sym)(1) == 1
     @test !Base.isdefinedglobal(test_mod, sym)
@@ -779,7 +779,7 @@ gr_mod = Module()
                                       Expr(:parameters, :kw1, Expr(:kw, :kw2, 2)),
                                       :x),
                                  Expr(:block,
-                                      Expr(:tuple, :x, :kw1, :kw2)))) isa Function
+                                      Expr(:tuple, :x, :kw1, :kw2))); edition=JL_NEW_EDITION) isa Function
     @test Base.isdefinedglobal(gr_mod, sym)
     @test getproperty(gr_mod, sym)(0;kw1=1) == (0,1,2)
     @test getproperty(gr_mod, sym)(0;kw1=1,kw2=20) == (0,1,20)
@@ -793,7 +793,7 @@ gr_mod = Module()
              Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, 2)),
              Expr(:block,
                   Expr(:function, Expr(:call, GlobalRef(gr_mod, sym), :c),
-                       Expr(:block, Expr(:tuple, :a, :b, :c)))))) isa Function
+                       Expr(:block, Expr(:tuple, :a, :b, :c))))); edition=JL_NEW_EDITION) isa Function
     @test Base.isdefinedglobal(gr_mod, sym)
     @test !Base.isdefinedglobal(test_mod, sym)
     @test getproperty(gr_mod, sym)(3) == (1,2,3)
@@ -805,12 +805,12 @@ gr_mod = Module()
         Expr(:function, Expr(:call, outer_f),
              Expr(:block,
                   Expr(:function, Expr(:call, GlobalRef(gr_mod, sym)),
-                       Expr(:block)))))
+                       Expr(:block)))); edition=JL_NEW_EDITION)
 
     # macro gr end
     @gensym sym
     mac_sym = Symbol("@"*string(sym))
-    @test jl_eval(test_mod, Expr(:macro, GlobalRef(gr_mod, sym))) isa Function
+    @test jl_eval(test_mod, Expr(:macro, GlobalRef(gr_mod, sym)); edition=JL_NEW_EDITION) isa Function
     @test Base.isdefinedglobal(gr_mod, mac_sym)
     @test !Base.isdefinedglobal(test_mod, mac_sym)
 
@@ -823,24 +823,24 @@ gr_mod = Module()
     @test jl_eval(test_mod, Expr(:macro, Expr(:call, GlobalRef(gr_mod, sym), :x),
                                  Expr(:block,
                                       Expr(:tuple, :x, :(@__MODULE__()))));
-                  expr_compat_mode=true) isa Function
+                  edition=JL_OLD_EDITION) isa Function
     @test Base.isdefinedglobal(gr_mod, mac_sym)
     @test !Base.isdefinedglobal(test_mod, mac_sym)
-    @test jl_eval(gr_mod, :(@($mac_sym)(1))) == (1, test_mod)
+    @test jl_eval(gr_mod, :(@($mac_sym)(1)); edition=JL_NEW_EDITION) == (1, test_mod)
     @testset "globalref as macrocall name" begin
         @test (1, test_mod) == jl_eval(
             test_mod,
-            Expr(:macrocall, GlobalRef(gr_mod, mac_sym), LineNumberNode(1, :none), 1))
+            Expr(:macrocall, GlobalRef(gr_mod, mac_sym), LineNumberNode(1, :none), 1); edition=JL_NEW_EDITION)
         @test (1, test_mod) == jl_eval(
             gr_mod,
-            Expr(:macrocall, GlobalRef(gr_mod, mac_sym), LineNumberNode(1, :none), 1))
+            Expr(:macrocall, GlobalRef(gr_mod, mac_sym), LineNumberNode(1, :none), 1); edition=JL_NEW_EDITION)
         # globalref(test_mod, mac_sym) should fail
         @test_throws MacroExpansionError jl_eval(
             test_mod,
-            Expr(:macrocall, GlobalRef(test_mod, mac_sym), LineNumberNode(1, :none), 1))
+            Expr(:macrocall, GlobalRef(test_mod, mac_sym), LineNumberNode(1, :none), 1); edition=JL_NEW_EDITION)
         @test_throws MacroExpansionError jl_eval(
             gr_mod,
-            Expr(:macrocall, GlobalRef(test_mod, mac_sym), LineNumberNode(1, :none), 1))
+            Expr(:macrocall, GlobalRef(test_mod, mac_sym), LineNumberNode(1, :none), 1); edition=JL_NEW_EDITION)
     end
 
     # error: begin; local gr = 1; end
@@ -848,7 +848,7 @@ gr_mod = Module()
     @gensym sym
     @test_throws "cannot use GlobalRef as local identifier" jl_eval(
         test_mod, Expr(:block,
-                       Expr(:local, Expr(:(=), GlobalRef(gr_mod, sym), 1))))
+                       Expr(:local, Expr(:(=), GlobalRef(gr_mod, sym), 1))); edition=JL_NEW_EDITION)
     @test !Base.isdefinedglobal(test_mod, sym)
     @test !Base.isdefinedglobal(gr_mod, sym)
 
@@ -858,7 +858,7 @@ gr_mod = Module()
     @test_throws "cannot use GlobalRef as local identifier" jl_eval(
         test_mod, Expr(:let,
                        Expr(:block, Expr(:(=), GlobalRef(gr_mod, sym), 1)),
-                       Expr(:block)))
+                       Expr(:block)); edition=JL_NEW_EDITION)
 
     # error: for gr = 1:3
     # (note: flisp allows this)
@@ -867,14 +867,14 @@ gr_mod = Module()
         test_mod, Expr(:for,
                        Expr(:(=), GlobalRef(gr_mod, sym),
                             Expr(:call, :(:), 1, 3)),
-                       Expr(:block)))
+                       Expr(:block)); edition=JL_NEW_EDITION)
 
     # error: function f(gr); end
     @gensym sym
     @test_throws "cannot use GlobalRef as local identifier" jl_eval(
         test_mod, Expr(:function,
                        Expr(:call, :fname, GlobalRef(gr_mod, sym)),
-                       Expr(:block)))
+                       Expr(:block)); edition=JL_NEW_EDITION)
 
 
     # error: try/catch with GlobalRef catch var

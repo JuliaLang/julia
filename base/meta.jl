@@ -307,10 +307,8 @@ ParseError(msg::AbstractString) = ParseError(msg, nothing)
 function parser_for_module(mod::Union{Module, Nothing})
     if mod isa Module && invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
         invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
-    elseif isdefined(Base, :VersionedParse)
-        Base.VersionedParse(VERSION)
     else
-        Base.fl_parse_bootstrap
+        Base.VersionedParse(Base.VERSION_EDITION)
     end
 end
 
