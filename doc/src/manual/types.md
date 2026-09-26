@@ -305,6 +305,22 @@ byte-rounded storage, so `sizeof(T)` rounds their storage size up to a whole num
 when their logical width is not a multiple of 8 bits. Use `Core.bitsizeof(T)` to query the declared
 logical width.
 
+A primitive type may take type parameters, and its bit width may be given by one of them:
+
+```jldoctest
+julia> primitive type BitInt{N} <: Signed N end
+
+julia> Core.bitsizeof(BitInt{21})
+21
+
+julia> sizeof(BitInt{21})
+3
+```
+
+Each instantiation then has its own layout, so `BitInt{21}` and `BitInt{64}` are distinct concrete
+types of different size, while `BitInt` itself has no layout. The width parameter must be a positive
+`Int`, and must be written as a bare parameter name -- an expression such as `8N` is not accepted.
+
 Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
 expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays still
 use byte-rounded element storage rather than packed bit layouts. Therefore, boolean values, although
