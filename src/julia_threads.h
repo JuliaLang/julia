@@ -387,8 +387,10 @@ struct _jl_cancel_source_t {
     // installed lazily by the first walker.
     _Atomic(jl_value_t*) walk_lock;
     // 0x00 = uncancelled; otherwise the (nonzero) severity at which the
-    // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL).
-    // Monotonic (CAS-max).
+    // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL)
+    // in the low bits, with the 0x20 bit set when the cancellation is a
+    // process-termination request (see jl_request_process_termination).
+    // Monotonic (CAS to the lattice join, see jl_cancel_state_join).
     _Atomic(uint8_t) state;
     // Number of parent links following the fixed fields. Const.
     uint16_t nparents;
@@ -404,6 +406,23 @@ struct _jl_cancel_source_t {
     _Atomic(uint32_t) reg_count;
     // jl_cancel_parent_link_t links[nparents];  (see jl_cancel_source_links)
 };
+
+// The source state byte: the low bits hold the severity, the 0x20 bit flags
+// a process-termination request. The two halves form a lattice ordered
+// pointwise (severities escalate, the terminate flag is sticky); state
+// advances are CAS loops to the join. Mirrors `Base.SEVERITY_MASK` /
+// `Base.TERMINATE_BIT` / `Base._join_states`. (The 0x40 bit is used in
+// cancellation-point *status* bytes for a pending cooperative yield and
+// never appears in a source's state.)
+#define JL_CANCEL_SEVERITY_MASK 0x1f
+#define JL_CANCEL_TERMINATE_BIT 0x20
+
+static inline uint8_t jl_cancel_state_join(uint8_t a, uint8_t b) JL_NOTSAFEPOINT
+{
+    uint8_t sa = a & JL_CANCEL_SEVERITY_MASK;
+    uint8_t sb = b & JL_CANCEL_SEVERITY_MASK;
+    return (sa > sb ? sa : sb) | ((a | b) & JL_CANCEL_TERMINATE_BIT);
+}
 
 // The fixed-field layout above must be kept in sync with the registration
 // in jltypes.c; the trailing links are invisible to the field system.
