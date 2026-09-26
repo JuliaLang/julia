@@ -63,6 +63,7 @@ if Sys.isunix()
 
 const PROT_READ     = Cint(1)
 const PROT_WRITE    = Cint(2)
+const PROT_EXEC     = Cint(4)
 const MAP_SHARED    = Cint(1)
 const MAP_PRIVATE   = Cint(2)
 const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
@@ -163,16 +164,18 @@ end
 Base.filesize(io::SharedMemory) = io.handle == INVALID_OS_HANDLE ? io.size : stat(io.handle).size
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::RawFD, shared::Bool)
+function settings(s::RawFD, shared::Bool, exec::Bool=false)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
     if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
         prot = PROT_READ | PROT_WRITE
+        exec && (prot |= PROT_EXEC)
     else
         mode = ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
         systemerror("fcntl F_GETFL", mode == -1)
         mode = mode & 3
         prot = (mode == 0) ? PROT_READ : ((mode == 1) ? PROT_WRITE : (PROT_READ | PROT_WRITE))
+        exec && (prot |= PROT_EXEC)
         if prot & PROT_READ == 0
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
@@ -358,7 +361,7 @@ end
 # core implementation of mmap
 
 """
-    mmap(io::Union{IOStream,AbstractString,Mmap.SharedMemory}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+    mmap(io::Union{IOStream,AbstractString,Mmap.SharedMemory}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true, exec::Bool=false)
     mmap(type::Type{Array{T,N}}, dims)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
@@ -387,6 +390,8 @@ privileges are required to grow the file.
 
 The `shared` keyword argument specifies whether the resulting `Array` and changes made to it
 will be visible to other processes mapping the same file.
+
+The `exec` keyword argument specifies whether the underlying mmap data will be executale.
 
 For example, the following code
 
@@ -419,7 +424,8 @@ like HDF5 (which can be used with memory-mapping).
 function mmap(io::IO,
               ::Type{Array{T,N}}=Vector{UInt8},
               dims::NTuple{N,Integer}=(div(filesize(io)-position(io),Base.aligned_sizeof(T)),),
-              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
+              exec::Bool=false) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
@@ -446,7 +452,7 @@ function mmap(io::IO,
     handle = INVALID_OS_HANDLE
     try
         @static if Sys.isunix()
-            prot, flags, readonly = settings(file_desc, shared)
+            prot, flags, readonly = settings(file_desc, shared, exec)
             check_can_grow(io, szfile, readonly, grow) && grow!(io, offset, len)
             ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, OS_HANDLE, Int64),
                 C_NULL, mmaplen, prot, flags, file_desc, offset_page)
@@ -476,6 +482,8 @@ function mmap(io::IO,
                 split_high_bits(offset_page), split_low_bits(offset_page), # High-order and low-order bits of offset
                 mmaplen                                                    # Number of bytes to map
             )
+        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
+                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
             Base.windowserror(:MapViewOfFile, ptr == C_NULL)
         end # os-test
 
@@ -547,11 +555,11 @@ julia> rm("mmap.bin")
 This creates a 25-by-30000 `BitArray`, linked to the file associated with stream `io`.
 """
 function mmap(io::IO, ::Type{<:BitArray}, dims::NTuple{N,Integer},
-              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where N
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true, exec::Bool=false) where N
     dims = map(Int, dims)
     n = Core.checked_dims(dims...)
     nc = Base.num_bit_chunks(n)
-    chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
+    chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared, exec=exec)
     if !isreadonly(io)
         chunks[end] &= Base._msk_end(n)
     else
