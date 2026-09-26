@@ -62,6 +62,7 @@ already work:
 - emacsclient
 - vim
 - nvim
+- nvr (neovim-remote)
 - nano
 - micro
 - kak
@@ -133,6 +134,17 @@ function define_default_editors()
                 column == 0 ? `$cmd +$line $path` :
                 `$cmd "+normal $(line)G$(column)|" $path`
         end
+    end
+    # nvr (neovim-remote)
+    define_editor("nvr"; wait=true) do cmd, path, line, column
+        # This will not block (even with wait=true) if there is a running
+        # server process since then nvr just fires the command and exits.
+        # wait=true is still needed in the case where nvr will start the neovim
+        # process.
+        cmd = `$cmd --remote-silent`
+        cmd = line == 0 ? `$cmd $path` :
+            column == 0 ? `$cmd +$line $path` :
+            `$cmd "+normal $(line)G$(column)|" $path`
     end
     define_editor("nano"; wait=true) do cmd, path, line, column
         cmd = `$cmd +$line,$column $path`
