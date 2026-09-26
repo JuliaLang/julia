@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra
+using Test, LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -2545,6 +2545,40 @@ end
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
+
+# Prefer aliases with fewer parameters, preserving ambiguity on ties (issue #41034).
+module M41034
+export Dog, Cat, Giraffe, Pair, CatPair, Kitten, Kitty, FloatPair, IntPair
+struct A{T} end
+const Dog = A{String}
+const Cat = A{Int}
+const Giraffe = A{<:Number}
+struct B{T,S,U} end
+const Pair{T,S} = B{T,S,Nothing}
+const CatPair{S} = B{Int,S,Nothing}
+struct C{T} end
+const Kitten = C{Int}
+const Kitty = C{Int}
+struct D{T,S} end
+const FloatPair{S} = D{Float64,S}
+const IntPair{T} = D{T,Int}
+end
+
+@testset "Overlapping type aliases" begin
+    prefix = "$(curmod_prefix)M41034."
+    @test string(M41034.Cat) == "$(prefix)Cat"
+    @test replstr(M41034.Cat) == "Cat (alias for $(prefix)A{$Int})"
+    @test string(M41034.Dog) == "$(prefix)Dog"
+    @test string(M41034.Giraffe) == "$(prefix)Giraffe"
+    @test string(M41034.Giraffe{Float64}) == "$(prefix)Giraffe{Float64}"
+    @test string(M41034.CatPair) == "$(prefix)CatPair"
+    @test string(M41034.CatPair{String}) == "$(prefix)CatPair{String}"
+    @test string(M41034.Pair{Float64,String}) == "$(prefix)Pair{Float64, String}"
+    @test Base.make_typealias(M41034.Kitten) === nothing
+    @test string(M41034.Kitten) == "$(prefix)C{$Int}"
+    @test Base.make_typealias(M41034.D{Float64,Int}) === nothing
+    @test string(M41034.D{Float64,Int}) == "$(prefix)D{Float64, $Int}"
+end
 
 # Alias printing should recover the source binder for bounded alias parameters.
 module MBoundedAlias
