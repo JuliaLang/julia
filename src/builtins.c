@@ -138,6 +138,19 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(ft)) {
+                if (jl_field_istagged(dt, f)) {
+                    uintptr_t wa = *(uintptr_t*)ao;
+                    uintptr_t wb = *(uintptr_t*)bo;
+                    if (wa == wb)
+                        continue; // equal immediates, identical reference, or both #undef
+                    // immediates are canonical, so distinct words are egal only
+                    // when both reference objects with egal contents
+                    if (!jl_tagged_word_isptr(wa) || !jl_tagged_word_isptr(wb))
+                        return 0;
+                    if (!jl_egal((jl_value_t*)wa, (jl_value_t*)wb))
+                        return 0;
+                    continue;
+                }
                 size_t idx = jl_field_size(dt, f) - 1;
                 uint8_t asel = ((uint8_t*)ao)[idx];
                 uint8_t bsel = ((uint8_t*)bo)[idx];
@@ -519,6 +532,17 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(fieldtype)) {
+                if (jl_field_istagged(dt, f)) {
+                    uintptr_t w = *(uintptr_t*)vo;
+                    if (jl_tagged_word_isptr(w))
+                        u = jl_object_id((jl_value_t*)w);
+                    else if (w == 0)
+                        u = 0; // #undef
+                    else
+                        u = bits_hash(&w, sizeof(w)); // immediates are canonical
+                    h = bitmix(h, u);
+                    continue;
+                }
                 uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
             }
@@ -628,6 +652,8 @@ JL_CALLABLE(jl_f_sizeof)
         int isinline = jl_uniontype_size(x, &elsize);
         if (isinline)
             return jl_box_long(elsize);
+        if (jl_uniontype_istagged(x, NULL, NULL))
+            return jl_box_long(sizeof(void*)); // one tagged union word
         if (!jl_is_datatype(x))
             jl_error("Argument is an abstract type and does not have a definite size.");
     }
