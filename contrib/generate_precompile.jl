@@ -58,6 +58,9 @@ precompile(Tuple{typeof(Base.getindex), Type{Pair{Base.PkgId, UInt128}}, Pair{Ba
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}, Core.SimpleVector})
 precompile(Base.include_package_for_output, (Base.PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), Nothing))
 precompile(Base.include_package_for_output, (Base.PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), String))
+# `@time_imports` reporting, so that the report itself does not add recompilation to what it measures
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:bold, :italic, :underline, :blink, :reverse, :hidden, :color), Tuple{Bool, Bool, Bool, Bool, Bool, Bool, Symbol}}, typeof(Base.printstyled), Base.TTY, String})
+precompile(Tuple{typeof(Base.Filesystem.joinpath), NTuple{7, String}})
 precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, String, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, IO, IO))
 precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, Nothing, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, IO, IO))
 
@@ -236,6 +239,10 @@ for x in (Float16(1.0), 1.0f0, 1.0)
     show(buf, x)
     show(IOContext(buf, :compact => true), x)
 end
+# `@time_imports` report lines, including the invalidation count and tip
+Base.print_time_imports_report(Base, UInt64(1), UInt64(1), UInt64(1), 1)
+Base.print_time_imports_report_init(Base)
+Base.print_time_imports_invalidations_tip()
 throw(InterruptException())
 """
 

@@ -12,6 +12,8 @@ const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
 const _jl_debug_method_invalidation = RefValue{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
     _jl_debug_method_invalidation[] = onoff ? Any[] : nothing
+# number of cached code instances that failed edge verification so far, for `@time_imports`
+const n_invalidated_code_instances = RefValue{Int}(0)
 
 # Immutable structs for different categories of state data
 struct VerifyMethodInitialState
@@ -361,9 +363,12 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                     end
                     @assert workspace.visiting[child] == length(workspace.stack) + 1 "internal error maintaining workspace"
                     delete!(workspace.visiting, child)
-                    invalidations = _jl_debug_method_invalidation[]
-                    if invalidations !== nothing && result.result_maxworld < validation_world
-                        push!(invalidations, child, "verify_methods", work.cause)
+                    if result.result_maxworld < validation_world
+                        n_invalidated_code_instances[] += 1
+                        invalidations = _jl_debug_method_invalidation[]
+                        if invalidations !== nothing
+                            push!(invalidations, child, "verify_methods", work.cause)
+                        end
                     end
                 end
 

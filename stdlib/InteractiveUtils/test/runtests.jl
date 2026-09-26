@@ -872,7 +872,7 @@ file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
     m = @which versioninfo()
     s = sprint(showerror, e)
     m = match(Regex("@ .+ (.*?):$(m.line)"), s)
-    @test isfile(expanduser(m.captures[1]))
+    @test isfile(replace(expanduser(m.captures[1]), "@stdlib" => Sys.STDLIB))
 
     g() = x
     e, bt = try code_llvm(g, Tuple{Int})
@@ -882,7 +882,7 @@ file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
     @test e isa Exception
     s = sprint(showerror, e, bt)
     m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
-    @test isfile(expanduser(m.captures[1]))
+    @test isfile(replace(expanduser(m.captures[1]), "@stdlib" => Sys.STDLIB))
 end
 
 @testset "Issue #34434" begin
@@ -969,6 +969,150 @@ end
             finally
                 filter!((≠)(dir), LOAD_PATH)
             end
+        end
+    end
+end
+
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
+import .FakePTYs: open_fake_pty
+
+@testset "@time_imports invalidations" begin
+    mktempdir() do dir
+        try
+            pushfirst!(LOAD_PATH, dir)
+            # the extension packages define methods that supersede InvBase3242.f/g(::AbstractThing)
+            # for the calls compiled into InvBase3242's cache, so loading them invalidates `callf`/`callg`
+            write(joinpath(dir, "InvBase3242.jl"),
+                """
+                module InvBase3242
+                abstract type AbstractThing end
+                f(::AbstractThing) = 1
+                g(::AbstractThing) = 1
+                callf(xs::Vector{AbstractThing}) = f(xs[1])
+                callg(xs::Vector{AbstractThing}) = g(xs[1])
+                precompile(callf, (Vector{AbstractThing},))
+                precompile(callg, (Vector{AbstractThing},))
+                end
+                """)
+            write(joinpath(dir, "InvExtF3242.jl"),
+                """
+                module InvExtF3242
+                using InvBase3242
+                struct Thing <: InvBase3242.AbstractThing end
+                InvBase3242.f(::Thing) = 2
+                end
+                """)
+            write(joinpath(dir, "InvExtG3242.jl"),
+                """
+                module InvExtG3242
+                using InvBase3242
+                struct Thing <: InvBase3242.AbstractThing end
+                InvBase3242.g(::Thing) = 2
+                end
+                """)
+            # loads InvExtG3242 from its `__init__`, i.e. nested inside its own load
+            write(joinpath(dir, "InvExtH3242.jl"),
+                """
+                module InvExtH3242
+                __init__() = Base.require(@__MODULE__, :InvExtG3242)
+                end
+                """)
+            Base.compilecache(Base.PkgId("InvBase3242"))
+            Base.compilecache(Base.PkgId("InvExtF3242"))
+            Base.compilecache(Base.PkgId("InvExtG3242"))
+            Base.compilecache(Base.PkgId("InvExtH3242"))
+
+            function capture_stdout(f)
+                fname = tempname()
+                open(fname, "w") do io
+                    redirect_stdout(f, io)
+                end
+                out = read(fname, String)
+                rm(fname)
+                return out
+            end
+
+            out = capture_stdout() do
+                @eval @time_imports using InvExtF3242
+            end
+            @test occursin("ms  InvBase3242\n", out)
+            @test occursin("ms  InvExtF3242 1 invalidation\n", out)
+            @test occursin("Tip: `@time_imports invalidations=true` lists what triggered the invalidations", out)
+
+            # with the logs already enabled by something else (as SnoopCompile does), they are
+            # left enabled and intact, and the nested load's entries are still reported only once
+            logedges = Base.ReinferUtils.debug_method_invalidation(true)
+            logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+            out = capture_stdout() do
+                @eval @time_imports invalidations=true using InvExtH3242
+            end
+            @test count("invalidation from", out) == 1
+            @test occursin("1 invalidation from 1 trigger:", out)
+            @test occursin(r"1  g\(::InvExtG3242\.Thing\) @ InvExtG3242 .*superseding g\(::InvBase3242\.AbstractThing\) @ InvBase3242", out)
+            @test occursin(r"\n *[\d.]+ ms  InvExtG3242\n", out)
+            @test occursin(r"InvExtH3242.__init__\(\).*\n *[\d.]+ ms  InvExtH3242\b[^\n]*\n", out)
+            @test !occursin(r"InvExtH3242\b[^\n]*invalidation", out)
+            @test !occursin("Tip:", out)
+            @test ccall(:jl_debug_method_invalidation, Any, (Cint,), 2) === logmeths
+            @test Base.ReinferUtils._jl_debug_method_invalidation[] === logedges
+            @test any(x -> x isa Method && x.name === :g, logmeths)
+            Base.ReinferUtils.debug_method_invalidation(false)
+            ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+
+            # scopes on different tasks may finish in any order; the logs are switched off
+            # once the last one is done
+            e1, e2 = Base.Event(), Base.Event()
+            t1 = @async @time_imports invalidations=true wait(e1)
+            t2 = @async @time_imports invalidations=true wait(e2)
+            while !(istaskstarted(t1) && istaskstarted(t2))
+                yield()
+            end
+            @test ccall(:jl_debug_method_invalidation, Any, (Cint,), 2) !== nothing
+            notify(e1); wait(t1)
+            @test ccall(:jl_debug_method_invalidation, Any, (Cint,), 2) !== nothing
+            notify(e2); wait(t2)
+            @test ccall(:jl_debug_method_invalidation, Any, (Cint,), 2) === nothing
+            @test Base.ReinferUtils._jl_debug_method_invalidation[] === nothing
+            @test Base.TIMING_IMPORTS_INVALIDATIONS[] === nothing
+
+            @test_throws ArgumentError @eval @time_imports invalidations=:none using InvExtG3242
+            @test_throws LoadError @eval @time_imports foo=true using InvExtG3242
+
+            # the report itself must not compile anything, or it would add recompilation to
+            # what it measures; checked in a pty-attached process, as in a terminal session
+            if !Sys.iswindows()
+                script = """
+                    pushfirst!(LOAD_PATH, $(repr(dir)))
+                    using InteractiveUtils
+                    @time_imports using InvExtF3242
+                    """
+                cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --color=yes -e $script`, Dict("TERM" => ""))
+                # compile the fixture packages for the child's flags first, outside the traced run
+                run(pipeline(cmd; stdout=devnull, stderr=devnull))
+                tracefile, _ = mktemp()
+                pts, ptm = open_fake_pty()
+                outbuf = IOBuffer()
+                drain = @async try
+                    while !eof(ptm)
+                        write(outbuf, readavailable(ptm))
+                    end
+                catch # ignore EIO when the child exits
+                end
+                p = run(`$cmd --trace-compile=$tracefile`, pts, pts, pts; wait=false)
+                Base.close_stdio(pts)
+                wait(p)
+                wait(drain)
+                close(ptm)
+                out = replace(String(take!(outbuf)), r"\e\[[0-9;]*m" => "")  # strip colors
+                @test occursin("InvExtF3242 1 invalidation", out)
+                @test occursin("Tip:", out)
+                trace = read(tracefile, String)
+                report_compiles = filter(l -> occursin(r"time_imports|printstyled|with_output_color|invalidation", l),
+                                         split(trace, '\n'))
+                @test isempty(report_compiles)
+            end
+        finally
+            filter!((≠)(dir), LOAD_PATH)
         end
     end
 end
