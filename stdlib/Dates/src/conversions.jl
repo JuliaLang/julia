@@ -29,7 +29,7 @@ Time(dt::AbstractDateTime) = convert(Time, dt)
     Timestamp{P}(dt::TimeType)
 
 Convert a `Date`, `DateTime`, or `Timestamp` to `Timestamp{P}`. Throws an error if
-the value is out of range or is not a whole number of `P`.
+the value is out of range or has more precision than `P`.
 
 !!! compat "Julia 1.14"
     `Timestamp` requires Julia 1.14 or later.
@@ -60,7 +60,7 @@ Base.convert(::Type{Millisecond},dt::DateTime) = Millisecond(value(dt))        #
 Base.convert(::Type{Date},x::Day)  = Date(Dates.UTInstant(x))  # Converts Rata Die days to a Date
 Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date to Rata Die days
 Base.convert(::Type{Timestamp},x::Nanosecond)  = Timestamp(UTInstant(x))       # Converts Unix nanoseconds to a Timestamp
-# Convert between a Timestamp and its count since the Unix epoch, in any of its units
+# Convert between a Timestamp and a period counted from the Unix epoch
 Base.convert(::Type{P}, dt::Timestamp{Q}) where {P<:TimePeriod,Q} =
     P(timestamp_ticks(P, Int128(value(dt)) * timestamp_scale(Q)))
 Base.convert(::Type{Timestamp{P}}, x::Q) where {P,Q<:TimePeriod} =
@@ -101,9 +101,9 @@ datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH) / 1000.0
     unix2timestamp(Timestamp{P}, x::Real)::Timestamp{P}
 
 Take the number of seconds since the Unix epoch `1970-01-01T00:00:00` (UTC) and
-convert it to a `Timestamp`, truncated toward zero to a whole number of `P`.
-A [`Float64`](@ref) count of seconds near the present has only about microsecond
-precision. For exact nanoseconds, use `convert(Timestamp, Nanosecond(ns))`.
+convert it to a `Timestamp`, rounding toward zero to resolution `P`. A [`Float64`](@ref)
+count of seconds near the present has only about microsecond precision. For exact
+nanoseconds, use `convert(Timestamp, Nanosecond(ns))`.
 
 !!! compat "Julia 1.14"
     This function requires Julia 1.14 or later.

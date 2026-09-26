@@ -93,8 +93,8 @@ end
 # Timestamp rounding computes the floor and the ceiling of `dt` in exact nanoseconds since
 # the Unix epoch (Int128, or a Rational below a nanosecond), so a bound past the range
 # does not wrap. The chosen bound must fit in Timestamp{P}, or an InexactError is thrown.
-# `upper = false` skips the ceiling. The grids match Date and DateTime: months count from
-# 0000-01, weeks from Monday 0000-01-03, and other periods from 0000-01-01.
+# `upper = false` skips the ceiling. As for Date and DateTime, months count from 0000-01,
+# weeks from Monday 0000-01-03, and other periods from 0000-01-01.
 function timestamp_rounding_value(dt::Timestamp{P}, ns, op::Symbol) where {P}
     ticks, remainder = divrem(ns, timestamp_scale(P))
     iszero(remainder) && value(typemin(P)) <= ticks <= value(typemax(P)) ||

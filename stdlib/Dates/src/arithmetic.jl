@@ -84,7 +84,7 @@ end
 (-)(x::DateTime, y::Period) = return DateTime(UTM(value(x) - toms(y)))
 (+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
-# `y` as a count of P. Throws an InexactError if `y` is not a whole number of P.
+# The period `y` as a count of P. Throws an InexactError if `y` has more precision than P.
 function timestamp_period_ticks(::Type{P}, y::Union{FixedPeriod,TimePeriod}) where {P}
     unit, scale = tons(oneunit(y)), timestamp_scale(P)
     unit >= scale && return value(y) * (unit ÷ scale)
@@ -92,9 +92,9 @@ function timestamp_period_ticks(::Type{P}, y::Union{FixedPeriod,TimePeriod}) whe
     iszero(remainder) || throw(InexactError(:convert, P, y))
     return ticks
 end
-# Timestamp arithmetic keeps the resolution P and, like DateTime arithmetic, wraps at
-# the ends of the range. Calendar periods change the date like Date arithmetic and
-# keep the time of day.
+# Arithmetic keeps the resolution P and wraps at the ends of the range, like DateTime
+# arithmetic. Calendar periods change the date like Date arithmetic and keep the time
+# of day.
 for op in (:+, :-)
     @eval begin
         function ($op)(x::Timestamp{P}, y::Union{Year,Quarter,Month}) where {P}

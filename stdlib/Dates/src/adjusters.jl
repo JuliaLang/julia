@@ -321,12 +321,10 @@ end
     Timestamp(f::Function, y, m, d, h, mi, s, ms; step=Microsecond(1), limit=10000)::Timestamp
     Timestamp(f::Function, y, m, d, h, mi, s, ms, us; step=Nanosecond(1), limit=10000)::Timestamp
 
-Create a `Timestamp` through the adjuster API. The starting point will be constructed from
-the provided `y, m, d...` arguments, and will be adjusted until `f::Function` returns
-`true`. The step size in adjusting can be provided manually through the `step` keyword.
-`limit` provides a limit to the max number of iterations the adjustment API will
-pursue before throwing an error (in the case that `f::Function` is never satisfied).
-`Timestamp{P}(f, ...)` works the same way, with a default `step` of at least `P(1)`.
+Create a `Timestamp` through the adjuster API. It starts at the time given by
+`y, m, d...` and adds `step` until `f` returns `true`, and throws an error if `f` is
+still `false` after `limit` steps. `Timestamp{P}(f, ...)` works the same way, with a
+default `step` of at least `P(1)`.
 
 !!! compat "Julia 1.14"
     `Timestamp` requires Julia 1.14 or later.
