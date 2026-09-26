@@ -466,6 +466,19 @@ function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
     return apply_type(tc, params...)
 end
 
+struct UUID
+    value::UInt128
+    UUID(value::UInt128) = new(value)
+end
+
+abstract type AbstractLibrary end
+
+struct LibraryID
+    pkg::UUID
+    name::String
+    LibraryID(pkg::UUID, name::String) = new(pkg, name)
+end
+
 abstract type Exception end
 struct ErrorException <: Exception
     msg::AbstractString
