@@ -484,6 +484,46 @@ function compute_inlining_cost(interp::AbstractInterpreter, result::InferenceRes
     return inline_cost_model(interp, result, optresult.inline_flag, optresult.ir)
 end
 
+function is_inlineable_forwarder(ir::IRCode, caller_isva::Bool, caller_sig::DataType)
+    # Bound the parameter scans to fit the argument mask.
+    Mask = UInt16
+    max_forwarding_params = 8 * sizeof(Mask)
+    caller_params = caller_sig.parameters
+    # Vararg slots do not map directly to signature parameters.
+    length(caller_params) <= max_forwarding_params && !caller_isva || return false
+    length(ir.stmts) == 2 || return false
+    call = ir.stmts[1][:stmt]
+    isexpr(call, :invoke) || return false
+    callee = call.args[1]
+    ret = ir.stmts[2][:stmt]
+    isa(ret, ReturnNode) && isa(callee, CodeInstance) || return false
+    callee_sig = get_ci_abi(callee)
+    isdispatchtuple(callee_sig) || return false
+    callee_params = callee_sig.parameters
+    length(callee_params) <= max_forwarding_params &&
+        length(call.args) - 1 == length(callee_params) || return false
+    callee_nargs = 0
+    seen_args = Mask(0)
+    for index in 1:length(callee_params)
+        type = callee_params[index]
+        issingletontype(type) && continue
+        arg = call.args[index + 1]
+        # Avoid new argument setup or boxing at the call site.
+        isa(arg, Argument) && caller_params[arg.n] === type || return false
+        # Duplicated inputs can increase outgoing argument setup.
+        arg_bit = Mask(1) << (arg.n - 1)
+        iszero(seen_args & arg_bit) || return false
+        seen_args |= arg_bit
+        callee_nargs += 1
+    end
+    caller_nargs = 0
+    for type in caller_params
+        caller_nargs += !issingletontype(type)
+    end
+    # Equal counts rule out dropped non-singleton inputs.
+    return callee_nargs == caller_nargs
+end
+
 function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
         inline_flag::UInt8, ir::IRCode)
 
@@ -505,8 +545,10 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
     if !(isa(sig, DataType) && sig.name === Tuple.name)
         return MAX_INLINE_COST
     end
+    # Reject automatic inlining of nonreturning methods except argument forwarders
+    # such as `|>` that introduce no boxing or argument expansion.
     if !declared_inline && rt === Bottom
-        return MAX_INLINE_COST
+        return is_inlineable_forwarder(ir, def.isva, sig) ? MIN_INLINE_COST : MAX_INLINE_COST
     end
 
     if declared_inline && isdispatchtuple(specTypes)
