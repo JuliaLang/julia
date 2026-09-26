@@ -2907,6 +2907,8 @@ JL_DLLEXPORT void jl_set_precompile_field_replace(jl_value_t *val, jl_value_t *f
 
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
+    if (jl_object_in_image(val))
+        return 1;
     if (jl_is_datatype(val)) {
         jl_datatype_t *dt = (jl_datatype_t*)val;
         if (jl_unwrap_unionall(dt->name->wrapper) == val)
@@ -3191,9 +3193,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
                                                     jl_symbol("BITS_PER_LIMB"))) / 8;
     }
-    jl_genericmemory_t *global_roots_list = NULL;
-    jl_genericmemory_t *global_roots_keyset = NULL;
-
     { // step 1: record values (recursively) that need to go in the image
         size_t i;
         if (worklist == NULL) {
@@ -3238,23 +3237,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, s.method_roots_list);
             jl_serialize_reachable(&s);
         }
-        // step 1.4: prune (garbage collect) special weak references from the jl_global_roots_list
-        if (worklist == NULL) {
-            global_roots_list = jl_alloc_memory_any(0);
-            global_roots_keyset = jl_alloc_memory_any(0);
-            for (size_t i = 0; i < jl_global_roots_list->length; i++) {
-                jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
-                if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
-                    ssize_t idx;
-                    global_roots_list = jl_idset_put_key(global_roots_list, val, &idx);
-                    global_roots_keyset = jl_idset_put_idx(global_roots_list, global_roots_keyset, idx);
-                }
-            }
-            jl_queue_for_serialization(&s, global_roots_list);
-            jl_queue_for_serialization(&s, global_roots_keyset);
-            jl_serialize_reachable(&s);
-        }
-        // step 1.5: prune (garbage collect) some special weak references known caches
+        // step 1.4: prune (garbage collect) some special weak references known caches
         for (i = 0; i < serialization_queue.len; i++) {
             jl_value_t *v = (jl_value_t*)serialization_queue.items[i];
             if (jl_is_method(v)) {
@@ -3365,8 +3348,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 #define XX(name, type) jl_write_value(&s, (jl_value_t*)jl_##name);
             JL_CONST_GLOBAL_VARS(XX)
 #undef XX
-            jl_write_value(&s, global_roots_list);
-            jl_write_value(&s, global_roots_keyset);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             size_t world = jl_atomic_load_acquire(&jl_world_counter);
@@ -4111,8 +4092,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 #undef XX
         export_jl_small_typeof();
         export_jl_sysimg_globals();
-        jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
-        jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
         jl_gc_write(s.ptls->root_task, s.ptls->root_task->tls, jl_value_t, jl_read_value(&s));
 
         uint32_t gs_ctr = read_uint32(f);
@@ -4492,6 +4471,32 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
 
+    // Register the image before rooting native globals, so jl_object_in_image
+    // recognizes their targets as already globally rooted.
+    image_metadata_t *meta = (image_metadata_t*)malloc_s(sizeof(image_metadata_t));
+    meta->base = (uintptr_t)image_base;
+    meta->relocs_base = (void*)relocs_base;
+    meta->idx = n_linkage_blobs();
+    // adopt the image's coverage counters
+    meta->coverage_compatible = jl_register_image_coverage(image->coverage, !s.incremental);
+    if (restored == NULL) {
+        meta->top_mod = jl_top_module;
+    } else {
+        size_t len = jl_array_nrows(*restored);
+        assert(len > 0);
+        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
+        // Ordinarily set during deserialization, but our compiler stub image,
+        // just returns a reference to the sysimage version, so we set it here.
+        topmod->build_id.hi = checksum;
+        assert(jl_is_module(topmod));
+        meta->top_mod = topmod;
+    }
+    eyt_tree_add_range(&image_tree,
+        (uintptr_t)image_base,
+        (uintptr_t)image_base + sizeof_sysimg,
+        (void*)meta);
+    jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
+
     if (s.incremental)
         jl_root_new_gvars(&s, image, external_fns_begin);
     ios_close(&relocs);
@@ -4539,32 +4544,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     if (!s.incremental)
         jl_gc_reset_alloc_count();
     arraylist_free(&deser_sym);
-
-    // Prepare for later external linkage against the sysimg
-    // Also sets up images for protection against garbage collection
-    image_metadata_t *meta = (image_metadata_t*)malloc_s(sizeof(image_metadata_t));
-    meta->base = (uintptr_t)image_base;
-    meta->relocs_base = (void*)relocs_base;
-    meta->idx = n_linkage_blobs();
-    // adopt the image's coverage counters
-    meta->coverage_compatible = jl_register_image_coverage(image->coverage, !s.incremental);
-    if (restored == NULL) {
-        meta->top_mod = jl_top_module;
-    } else {
-        size_t len = jl_array_nrows(*restored);
-        assert(len > 0);
-        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
-        // Ordinarily set during deserialization, but our compiler stub image,
-        // just returns a reference to the sysimage version, so we set it here.
-        topmod->build_id.hi = checksum;
-        assert(jl_is_module(topmod));
-        meta->top_mod = topmod;
-    }
-    eyt_tree_add_range(&image_tree,
-        (uintptr_t)image_base,
-        (uintptr_t)image_base + sizeof_sysimg,
-        (void*)meta);
-    jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", image_tree.nranges);
     jl_gc_enable(en);
