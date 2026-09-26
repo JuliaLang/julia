@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra
+using Test, LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -2545,6 +2545,78 @@ end
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
+
+# Discard strictly broader aliases, preserving other ambiguities (issue #41034).
+module M41034
+export Dog, Cat, Giraffe, Pair, CatPair, Kitten, Kitty, FloatPair, IntPair
+export IntegerAnimal, NothingPair, TuplePair, Cats, One, Ints
+struct A{T} end
+const Dog = A{String}
+const Cat = A{Int}
+const Giraffe = A{<:Number}
+const IntegerAnimal = A{<:Integer}
+struct B{T,S,U} end
+const Pair{T,S} = B{T,S,Nothing}
+const CatPair{S} = B{Int,S,Nothing}
+const NothingPair{T} = B{T,Nothing,Nothing}
+const TuplePair{T,S} = B{Tuple{T,S},Nothing,Nothing}
+struct C{T} end
+const Kitten = C{Int}
+const Kitty = C{Int}
+const Cats = C{<:Number}
+struct D{T,S} end
+const FloatPair{S} = D{Float64,S}
+const IntPair{T} = D{T,Int}
+struct Indexed{T,N} end
+const One{T} = Indexed{T,1}
+const Ints{N} = Indexed{Int,N}
+end
+
+@testset "Overlapping type aliases" begin
+    prefix = "$(curmod_prefix)M41034."
+    @test string(M41034.Cat) == "$(prefix)Cat"
+    @test replstr(M41034.Cat) == "Cat (alias for $(prefix)A{$Int})"
+    @test string(M41034.Dog) == "$(prefix)Dog"
+    @test string(M41034.Giraffe) == "$(prefix)Giraffe"
+    @test string(M41034.Giraffe{Float64}) == "$(prefix)Giraffe{Float64}"
+    @test string(M41034.A{Int8}) == "$(prefix)IntegerAnimal{Int8}"
+    @test string(M41034.CatPair) == "$(prefix)CatPair"
+    @test string(M41034.CatPair{String}) == "$(prefix)CatPair{String}"
+    @test string(M41034.Pair{Float64,String}) == "$(prefix)Pair{Float64, String}"
+    @test string(M41034.NothingPair{String}) == "$(prefix)NothingPair{String}"
+    @test string(M41034.NothingPair{Tuple{Int,Float64}}) == "$(prefix)TuplePair{$Int, Float64}"
+    @test Base.make_typealias(M41034.B{Int,Nothing,Nothing}) === nothing
+    @test Base.make_typealias(M41034.Kitten) === nothing
+    @test string(M41034.Kitten) == "$(prefix)C{$Int}"
+    @test Base.make_typealias(M41034.D{Float64,Int}) === nothing
+    @test string(M41034.D{Float64,Int}) == "$(prefix)D{Float64, $Int}"
+    @test Base.make_typealias(M41034.Indexed{Int,1}) === nothing
+    @test string(M41034.Indexed{Int,1}) == "$(prefix)Indexed{$Int, 1}"
+end
+
+# JuMP-style aliases fix backend and hook types before fixing the numeric type.
+module M41034JuMP
+export Model, GenericModel, VariableRef, GenericVariableRef
+abstract type AbstractBackend end
+struct Backend <: AbstractBackend end
+struct ConcreteModel{T<:Real,B<:AbstractBackend,H} end
+const GenericModel{T<:Real} = ConcreteModel{T,AbstractBackend,Any}
+const Model = GenericModel{Float64}
+struct VariableRefImpl{T,M<:ConcreteModel{T}} end
+const GenericVariableRef{T<:Real} = VariableRefImpl{T,GenericModel{T}}
+const VariableRef = GenericVariableRef{Float64}
+end
+
+@testset "Nested model and variable aliases" begin
+    prefix = "$(curmod_prefix)M41034JuMP."
+    @test string(M41034JuMP.Model) == "$(prefix)Model"
+    @test string(M41034JuMP.GenericModel) == "$(prefix)GenericModel"
+    @test string(M41034JuMP.GenericModel{BigFloat}) == "$(prefix)GenericModel{BigFloat}"
+    @test string(M41034JuMP.VariableRef) == "$(prefix)VariableRef"
+    @test string(M41034JuMP.GenericVariableRef) == "$(prefix)GenericVariableRef"
+    @test string(M41034JuMP.GenericVariableRef{BigFloat}) == "$(prefix)GenericVariableRef{BigFloat}"
+    @test Base.make_typealias(M41034JuMP.ConcreteModel{Float64,M41034JuMP.Backend,Nothing}) === nothing
+end
 
 # Alias printing should recover the source binder for bounded alias parameters.
 module MBoundedAlias
