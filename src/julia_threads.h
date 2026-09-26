@@ -354,7 +354,7 @@ typedef struct _jl_handler_t jl_handler_t;
 // dance between attaching (publish link, then read the parent's state) and
 // cancelling (write the state, then walk the links) is what makes
 // attachment level-triggered; see jl_new_cancel_source and `cancel!`.
-typedef struct _jl_cancel_source_t jl_cancel_source_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_cancel_source_t jl_cancel_source_t;
 
 typedef struct {
     // Strong, const after construction.
@@ -367,7 +367,7 @@ typedef struct {
     _Atomic(jl_value_t*) *pprev;
 } jl_cancel_parent_link_t;
 
-struct _jl_cancel_source_t {
+struct JL_GC_TRACKED_TYPE _jl_cancel_source_t {
     JL_DATA_TYPE
     // Weak (spliced by the GC): most recently attached live child;
     // `jl_nothing`-terminated. Union{Nothing, CancellationTokenSource}.
@@ -443,7 +443,7 @@ typedef struct {
 // wake claim is validated by the task's `waiting_on` CAS, never by the
 // `task` read alone). `next` and `aux` stay plain under their owner's
 // discipline.
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     _Atomic(jl_value_t*) task;   // Union{Nothing, Task}; nothing marks a retired entry
     uint32_t nslots;    // const
