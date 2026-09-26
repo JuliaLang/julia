@@ -623,6 +623,12 @@ end
         n_initialized_merged = min(n_initialized(typea), n_initialized(typeb))
         anyrefine = n_initialized_merged > fldmin
         for i = 1:nflds
+            if i == nflds && isvatuple(aty)
+                # the trailing `Vararg` element carries no information beyond `aty` itself,
+                # so keep it as is
+                fields[i] = (unwrap_unionall(aty)::DataType).parameters[end]
+                continue # `undefs[i]` stays `nothing`
+            end
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
             ft = fieldtype(aty, i)
