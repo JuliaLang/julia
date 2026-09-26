@@ -1,7 +1,6 @@
 # SIMD Support
 
-Type `VecElement{T}` is intended for building libraries of SIMD operations. Practical use of it
-requires using `llvmcall`. The type is defined as:
+Type `VecElement{T}` is intended for building libraries of SIMD operations. The type is defined as:
 
 ```julia
 struct VecElement{T}
@@ -31,5 +30,16 @@ triple(c::m128) = add(add(c,c),c)
 code_native(triple,(m128,))
 ```
 
-However, since the automatic vectorization cannot be relied upon, future use will mostly be via
-libraries that use `llvmcall`.
+However, since the automatic vectorization cannot be relied upon, libraries should instead
+use the elementwise intrinsics in `Core.Intrinsics` (such as `add_int`, `mul_float`, `slt_int`,
+`sext_int` or `bitcast`), which accept such vectors and compile to LLVM vector instructions:
+
+```julia
+add(a::m128, b::m128) = Core.Intrinsics.add_float(a, b)
+```
+
+These intrinsics act lane-wise, so all vector arguments must have the same number of lanes.
+Comparisons return a vector of `Bool` (an `NTuple{N,VecElement{Bool}}`), conversions such as
+`sext_int` take a vector target type with the same number of lanes, and `bitcast` requires only
+that the total size in bits matches. The checked arithmetic intrinsics do not support vectors.
+Operations not covered by the intrinsics (for example, shuffles) still require `llvmcall`.

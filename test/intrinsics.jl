@@ -896,3 +896,202 @@ tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
 # https://github.com/JuliaLang/julia/issues/61436
 primitive type UIntN256 <: Unsigned 256 end
 @test tofloat(reinterpret(UIntN256, (zeros(UInt8, 32)...,))) == 0.0
+
+@testset "SIMD vector intrinsics" begin
+    I = Core.Intrinsics
+    VE{N,T} = NTuple{N,VecElement{T}}
+    mkvec(::Type{T}, N, vals, off=0) where {T} = ntuple(i -> VecElement(convert_lane(T, vals[mod1(i + off, length(vals))])), N)
+    convert_lane(::Type{T}, x) where {T<:Integer} = x % T
+    convert_lane(::Type{T}, x) where {T} = T(x)
+    lane(v, i) = v[i].value
+    # lane-wise reference result computed with the scalar runtime intrinsic
+    reference(op, args...) = ntuple(i -> VecElement(op(map(a -> a isa Tuple ? lane(a, i) : a, args)...)), length(args[end]))
+    reference_cvt(op, ::Type{VE{N,T}}, x) where {N,T} = ntuple(i -> VecElement(op(T, lane(x, i))), N)
+    vec_isequal(a, b) = typeof(a) === typeof(b) && all(i -> isequal(lane(a, i), lane(b, i)), 1:length(a))
+
+    function folds_to(h, expected)
+        ci = only(code_typed(h, ()))[1]
+        length(ci.code) == 1 || return false
+        ret = ci.code[1]
+        ret isa Core.ReturnNode || return false
+        v = ret.val isa QuoteNode ? ret.val.value : ret.val
+        return vec_isequal(v, expected)
+    end
+
+    # check `op(ty..., args...)` against `expected` compiled, through the runtime, and constant-folded;
+    # `ty` (the target type of a conversion) is always a compile-time constant
+    function check_vec(op, args, expected; ty=(), cmp=vec_isequal)
+        # the runtime fallback of most `_fast` intrinsics is that of the non-fast variant
+        names = unique([string(nameof(op)), replace(string(nameof(op)), r"_fast$" => "")])
+        syms = [Symbol(:a, i) for i in 1:length(args)]
+        g = @eval ($(syms...),) -> $op($(ty...), $(syms...))
+        @test cmp(Base.invokelatest(g, args...), expected)
+        ir = sprint(io -> code_llvm(io, g, map(typeof, args); debuginfo=:none))
+        @test !any(name -> occursin("@jl_$name(", ir), names)
+        @test cmp(Base.invokelatest(op, ty..., args...), expected)
+        h = @eval () -> $op($(ty...), $(args...))
+        cmp === vec_isequal && @test folds_to(h, expected)
+        @test cmp(Base.invokelatest(h), expected)
+    end
+    vec_isapprox(a, b) = typeof(a) === typeof(b) && all(i -> isapprox(lane(a, i), lane(b, i); rtol=1e-2), 1:length(a))
+    check_lanewise(op, args...; kws...) = check_vec(op, args, reference(op, args...); kws...)
+
+    int_types = (Int8, UInt16, Int32, UInt64, Int64)
+    float_types = (Float16, Float32, Float64)
+    Ns = (1, 3, 4, 8)
+    ivals(T) = (0, 1, -1, typemin(T), typemax(T), 5, 3, -7, 42, 0x55)
+    divisors = (1, 2, 3, 7, -3, 5)
+    fvals = (1.5, -2.25, 0.0, -0.0, 3.0, Inf, -Inf, NaN, 0.5, 100.0)
+    fastvals = (1.5, -2.25, 3.0, 0.5, 4.0, -8.0)
+
+    @testset "integer $T x $N" for T in int_types, N in Ns
+        x = mkvec(T, N, ivals(T))
+        y = mkvec(T, N, ivals(T), 3)
+        for op in (I.add_int, I.sub_int, I.mul_int, I.and_int, I.or_int, I.xor_int, I.flipsign_int,
+                   I.eq_int, I.ne_int, I.slt_int, I.ult_int, I.sle_int, I.ule_int)
+            check_lanewise(op, x, y)
+        end
+        d = mkvec(T, N, divisors)
+        for op in (I.sdiv_int, I.udiv_int, I.srem_int, I.urem_int)
+            check_lanewise(op, x, d)
+        end
+        for op in (I.neg_int, I.not_int, I.ctpop_int, I.ctlz_int, I.cttz_int)
+            check_lanewise(op, x)
+        end
+        T !== Int8 && check_lanewise(I.bswap_int, x)
+        nb = 8 * sizeof(T)
+        for S in (UInt8, T)
+            s = mkvec(S, N, (0, 1, nb - 1, nb, nb + 3, 2))
+            for op in (I.shl_int, I.lshr_int, I.ashr_int)
+                check_lanewise(op, x, s)
+            end
+        end
+    end
+
+    @testset "float $T x $N" for T in float_types, N in Ns
+        x = mkvec(T, N, fvals)
+        y = mkvec(T, N, fvals, 4)
+        z = mkvec(T, N, fvals, 7)
+        for op in (I.add_float, I.sub_float, I.mul_float, I.div_float, I.min_float, I.max_float,
+                   I.copysign_float, I.eq_float, I.ne_float, I.lt_float, I.le_float, I.fpiseq)
+            check_lanewise(op, x, y)
+        end
+        for op in (I.neg_float, I.abs_float, I.ceil_llvm, I.floor_llvm, I.trunc_llvm, I.rint_llvm)
+            check_lanewise(op, x)
+        end
+        check_lanewise(I.sqrt_llvm, mkvec(T, N, (0.0, 2.0, 4.0, 0.25, Inf, 7.0)))
+        check_lanewise(I.fma_float, x, y, z)
+        # values for which fused and unfused results agree
+        fx = mkvec(T, N, fastvals)
+        fy = mkvec(T, N, fastvals, 2)
+        fz = mkvec(T, N, fastvals, 5)
+        check_lanewise(I.muladd_float, fx, fy, fz)
+        for op in (I.add_float_fast, I.sub_float_fast, I.mul_float_fast, I.min_float_fast,
+                   I.max_float_fast, I.eq_float_fast, I.ne_float_fast, I.lt_float_fast, I.le_float_fast)
+            check_lanewise(op, fx, fy)
+        end
+        check_lanewise(I.neg_float_fast, fx)
+        # these may use reciprocal estimates
+        check_lanewise(I.div_float_fast, fx, mkvec(T, N, (2.0, -4.0, 0.5, 1.0)); cmp=vec_isapprox)
+        check_lanewise(I.sqrt_llvm_fast, mkvec(T, N, (1.0, 4.0, 0.25, 9.0)); cmp=vec_isapprox)
+    end
+
+    @testset "Bool masks x $N" for N in Ns
+        a = mkvec(Bool, N, (true, false, false, true, true))
+        b = mkvec(Bool, N, (true, true, false, false))
+        for op in (I.and_int, I.or_int, I.xor_int, I.eq_int, I.ne_int)
+            check_lanewise(op, a, b)
+        end
+        check_lanewise(I.not_int, a)
+        # results must be valid Bools (0x00 or 0x01), not bitwise complements of the byte
+        @test all(i -> reinterpret(UInt8, lane(I.not_int(a), i)) <= 0x01, 1:N)
+        g = @eval x -> $(I.not_int)(x)
+        @test all(i -> reinterpret(UInt8, lane(Base.invokelatest(g, a), i)) <= 0x01, 1:N)
+        # comparisons produce masks which can be used as Bool vectors
+        x = mkvec(Int32, N, (1, 5, -3, 7))
+        y = mkvec(Int32, N, (2, 5, -4, 0))
+        m = I.slt_int(x, y)
+        @test m isa VE{N,Bool}
+        @test vec_isequal(I.not_int(m), I.sle_int(y, x))
+    end
+
+    @testset "conversions x $N" for N in Ns
+        i32 = mkvec(Int32, N, (0, 1, -1, typemin(Int32), typemax(Int32), 77))
+        u16 = mkvec(UInt16, N, (0, 1, 0xffff, 0x8000, 1234))
+        u64 = mkvec(UInt64, N, (0, 1, typemax(UInt64), 1 << 53 + 1, 99))
+        f64 = mkvec(Float64, N, (0.0, -0.0, 1.5, -2.75, 1e9, -1e-3))
+        f32 = mkvec(Float32, N, (0.0, 1.5, 3.25, 250.0, 65000.0))
+        for (op, VT, x) in ((I.sext_int, VE{N,Int64}, i32), (I.zext_int, VE{N,UInt64}, u16),
+                            (I.trunc_int, VE{N,Int8}, i32), (I.trunc_int, VE{N,UInt8}, u16),
+                            (I.sitofp, VE{N,Float64}, i32), (I.uitofp, VE{N,Float32}, u64),
+                            (I.fptosi, VE{N,Int32}, f64), (I.fptoui, VE{N,UInt16}, f32),
+                            (I.fpext, VE{N,Float64}, f32), (I.fptrunc, VE{N,Float16}, f64),
+                            (I.fptrunc, VE{N,Float32}, f64), (I.fpext, VE{N,Float32}, mkvec(Float16, N, (1.5, -0.0, 3.0))))
+            check_vec(op, (x,), reference_cvt(op, VT, x); ty=(VT,))
+        end
+    end
+
+    @testset "bitcast" begin
+        x = mkvec(UInt64, 4, (0x0123456789abcdef, 0xfedcba9876543210, 1, typemax(UInt64)))
+        as32 = I.bitcast(VE{8,UInt32}, x)
+        @test collect(map(e -> e.value, as32)) == reinterpret(UInt32, collect(map(e -> e.value, x)))
+        check_vec(I.bitcast, (x,), as32; ty=(VE{8,UInt32},))
+        check_vec(I.bitcast, (as32,), x; ty=(VE{4,UInt64},))
+        check_vec(I.bitcast, (x,), map(e -> VecElement(reinterpret(Float64, e.value)), x); ty=(VE{4,Float64},))
+        # vector <-> primitive
+        u128 = 0x0123456789abcdef_fedcba9876543210
+        check_vec(I.bitcast, (u128,), (VecElement(0xfedcba9876543210), VecElement(0x0123456789abcdef)); ty=(VE{2,UInt64},))
+        g = @eval x -> $(I.bitcast)(UInt128, x)
+        @test Base.invokelatest(g, (VecElement(0xfedcba9876543210), VecElement(0x0123456789abcdef))) === u128
+        @test I.bitcast(UInt128, (VecElement(0xfedcba9876543210), VecElement(0x0123456789abcdef))) === u128
+        @test I.bitcast(Float64, (VecElement(1.0f0), VecElement(2.0f0))) === reinterpret(Float64, [1.0f0, 2.0f0])[1]
+    end
+
+    @testset "LLVM vector IR" begin
+        function llvm(op, types; ty=())
+            syms = [Symbol(:a, i) for i in 1:length(types)]
+            g = @eval ($(syms...),) -> $op($(ty...), $(syms...))
+            return sprint(io -> code_llvm(io, g, types; debuginfo=:none))
+        end
+        V4I64 = VE{4,Int64}
+        V4F64 = VE{4,Float64}
+        V4I32 = VE{4,Int32}
+        @test occursin("add <4 x i64>", llvm(I.add_int, (V4I64, V4I64)))
+        @test occursin("fmul <4 x double>", llvm(I.mul_float, (V4F64, V4F64)))
+        @test occursin("fcmp olt <4 x double>", llvm(I.lt_float, (V4F64, V4F64)))
+        @test occursin("icmp slt <4 x i32>", llvm(I.slt_int, (V4I32, V4I32)))
+        @test occursin("sext <4 x i32>", llvm(I.sext_int, (V4I32,); ty=(V4I64,)))
+        @test occursin("sitofp <4 x i32>", llvm(I.sitofp, (V4I32,); ty=(V4F64,)))
+        @test occursin("@llvm.fma.v4f64", llvm(I.fma_float, (V4F64, V4F64, V4F64)))
+        @test occursin("@llvm.ctpop.v4i64", llvm(I.ctpop_int, (V4I64,)))
+        @test !occursin("extractelement", llvm(I.add_int, (V4I64, V4I64)))
+    end
+
+    @testset "comparisons of inexactly inferred values" begin
+        # inference must allow for the result of a comparison to be a vector of Bool
+        g = @eval r -> $(I.slt_int)(r[], r[]) isa Bool
+        @test !Base.invokelatest(g, Ref{Any}(mkvec(Int64, 4, (1, 2, 3, 4))))
+        @test Base.invokelatest(g, Ref{Any}(1))
+    end
+
+    @testset "errors" begin
+        v4 = mkvec(Int64, 4, (1, 2, 3, 4))
+        v8 = mkvec(Int64, 8, (1, 2, 3, 4))
+        v4i32 = mkvec(Int32, 4, (1, 2, 3, 4))
+        v4f = mkvec(Float64, 4, (1, 2, 3, 4))
+        v4u8 = mkvec(UInt8, 4, (1, 2, 3, 4))
+        for (op, args) in ((I.add_int, (v4, v8)), (I.add_int, (v4, v4i32)), (I.add_int, (v4, 1)),
+                           (I.add_int, (1, v4)), (I.add_int, ((1, 2), (1, 2))),
+                           (I.shl_int, (v4, 0x01)), (I.shl_int, (v4, v8)), (I.shl_int, (1, v4u8)),
+                           (I.add_float, (v4, v4)), (I.neg_float, (v4,)), (I.checked_sadd_int, (v4, v4)),
+                           (I.slt_int, (v4, v8)), (I.fma_float, (v4f, v4f, mkvec(Float64, 8, (1.0,)))),
+                           (I.sext_int, (VE{8,Int64}, v4i32)), (I.sext_int, (Int64, v4i32)),
+                           (I.sext_int, (VE{4,Int64}, Int32(1))), (I.fpext, (VE{4,Float64}, v4)),
+                           (I.bitcast, (VE{4,Int32}, v4)), (I.bitcast, (Int64, v4)),
+                           (I.add_int, (ntuple(_ -> VecElement(Int24(1)), 4), ntuple(_ -> VecElement(Int24(1)), 4))))
+            @test_throws ErrorException Base.invokelatest(op, args...)
+            g = @eval (args...) -> $op(args...)
+            @test_throws ErrorException Base.invokelatest(g, args...)
+        end
+    end
+end
