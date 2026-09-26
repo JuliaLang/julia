@@ -158,22 +158,32 @@ for (tok, fn) in zip("uUeE", Any[monthabbr_to_value, monthname_to_value, dayabbr
     end
 end
 
-# 3-digit (base 10) number following a decimal point. For InexactError below.
-struct Decimal3 end
-
-@inline function tryparsenext(d::DatePart{'s'}, str, i, len)
-    val = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
-    val === nothing && return nothing
-    ms0, ii = val
-    len = ii - i
-    if len > 3
-        ms, r = divrem(ms0, Int64(10) ^ (len - 3))
-        r == 0 || return nothing
-    else
-        ms = ms0 * Int64(10) ^ (3 - len)
+# Parse the digits of a fractional second as a count of 10^-precision seconds: with
+# precision 9, "5" is 500000000 and "123456789" is 123456789. Digits past `precision`
+# must be zero.
+@inline function tryparsenext_fraction(d::DatePart, str, i, len, precision)
+    ndigits = 0
+    frac = Int64(0)
+    max_digits = max_width(d)
+    @inbounds while i <= len && (max_digits == 0 || ndigits < max_digits)
+        c, ii = iterate(str, i)::Tuple{Char, Int}
+        '0' <= c <= '9' || break
+        digit = Int64(c - '0')
+        ndigits += 1
+        if ndigits <= precision
+            frac = 10frac + digit
+        elseif digit != 0
+            return nothing
+        end
+        i = ii
     end
-    return ms, ii
+    ndigits >= min_width(d) || return nothing
+    ndigits < precision && (frac *= Int64(10) ^ (precision - ndigits))
+    return frac, i
 end
+
+@inline tryparsenext(d::DatePart{'s'}, str, i, len) = tryparsenext_fraction(d, str, i, len, 3)
+@inline tryparsenext(d::DatePart{'n'}, str, i, len) = tryparsenext_fraction(d, str, i, len, 9)
 
 ### Format tokens
 
@@ -218,18 +228,26 @@ end
     end
 end
 
-function format(io, d::DatePart{'s'}, dt)
-    ms = millisecond(dt)
-    if ms % 100 == 0
-        str = string(div(ms, 100))
-    elseif ms % 10 == 0
-        str = string(div(ms, 10), pad = 2)
-    else
-        str = string(ms, pad = 3)
+# Write a fraction of a second, given in units of 10^-precision seconds. Drop trailing
+# zeros, then pad with zeros to the width of the code: 500 milliseconds is "5" under `n`
+# and "500000000" under `nnnnnnnnn`. A fixed-width field keeps only its leading digits.
+function format_fraction(io, d::DatePart, frac, precision)
+    str = rstrip(string(frac, pad = precision), '0')
+    if d.fixed && length(str) > d.width
+        str = SubString(str, 1, d.width)
     end
-
     print(io, rpad(str, d.width, '0'))
 end
+
+format(io, d::DatePart{'s'}, dt) = format_fraction(io, d, millisecond(dt), 3)
+format(io, d::DatePart{'n'}, dt) = format_fraction(io, d, subsecond_nanoseconds(dt), 9)
+
+# Whole nanoseconds since the start of the second. Digits finer than a nanosecond are
+# rounded down, because the `n` code stops at nanoseconds.
+subsecond_nanoseconds(dt::DateTime) = 1000000 * millisecond(dt)
+subsecond_nanoseconds(t::Time) = mod(value(t), 1000000000)
+subsecond_nanoseconds(dt::Timestamp{P}) where {P} =
+    floor(Int64, mod(value(dt), 1000000000 ÷ timestamp_scale(P)) * timestamp_scale(P))
 
 ### Delimiters
 
@@ -322,6 +340,7 @@ const CONVERSION_SPECIFIERS = Dict{Char, Type}(
     'M' => Minute,
     'S' => Second,
     's' => Millisecond,
+    'n' => Nanosecond,
     'p' => AMPM,
 )
 
@@ -348,6 +367,7 @@ const CONVERSION_TRANSLATIONS = IdDict{Type, Any}(
     Date => (Year, Month, Day),
     DateTime => (Year, Month, Day, Hour, Minute, Second, Millisecond, AMPM),
     Time => (Hour, Minute, Second, Millisecond, Microsecond, Nanosecond, AMPM),
+    Timestamp => (Year, Month, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond, AMPM),
 )
 
 # The `DateFormat(format, locale)` method just below consumes the following Regex.
@@ -386,16 +406,24 @@ string:
 | `I`        | 00        | For outputting hours with 12-hour clock                       |
 | `M`        | 00        | Matches minutes                                               |
 | `S`        | 00        | Matches seconds                                               |
-| `s`        | .500      | Matches milliseconds                                          |
+| `s`        | .5, .500  | Matches fractional seconds to millisecond precision           |
+| `n`        | .5, .123456789 | Matches fractional seconds to nanosecond precision       |
 | `e`        | Mon, Tues | Matches abbreviated days of the week                          |
 | `E`        | Monday    | Matches full name days of the week                            |
 | `p`        | AM        | Matches AM/PM (case-insensitive)                              |
 | `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                      |
 
+!!! compat "Julia 1.14"
+    The `n` code requires Julia 1.14 or later.
+
+When parsing a `DateTime`, an `n` field must be a whole number of milliseconds.
+
 Characters not listed above are normally treated as delimiters between date and time slots.
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
 "y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using
-backslash. The date "1995y01m" would have the format "y\\ym\\m".
+backslash. The date "1995y01m" would have the format "y\\ym\\m". It is safest to escape
+every letter that is meant literally, because new codes can be added (Julia 1.14 added
+`n`) and packages can define their own (TimeZones.jl adds `z` and `Z`).
 
 Note that 12:00AM corresponds to 00:00 (midnight), and 12:00PM corresponds to 12:00 (noon).
 When parsing a time with a `p` specifier, any hour (either `H` or `I`) is interpreted as a 12-hour clock, so the `I` code is mainly useful for output.
@@ -499,6 +527,27 @@ const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
 default_format(::Type{DateTime}) = ISODateTimeFormat
 
 """
+    Dates.ISOTimestampFormat
+
+Describes the ISO8601 formatting for a date and time with up to nanosecond precision.
+This is the default value for `Dates.format` of a `Timestamp`.
+
+# Examples
+```jldoctest
+julia> Dates.format(Timestamp(2018, 8, 8, 12, 0, 43, 1), ISOTimestampFormat)
+"2018-08-08T12:00:43.001"
+
+julia> Dates.format(Timestamp(2018, 8, 8, 12, 0, 43, 0, 0, 1), ISOTimestampFormat)
+"2018-08-08T12:00:43.000000001"
+```
+
+!!! compat "Julia 1.14"
+    `ISOTimestampFormat` requires Julia 1.14 or later.
+"""
+const ISOTimestampFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.n")
+default_format(::Type{<:Timestamp}) = ISOTimestampFormat
+
+"""
     Dates.ISODateFormat
 
 Describes the ISO8601 formatting for a date. This is the default value for `Dates.format` of a `Date`.
@@ -522,8 +571,11 @@ Describes the ISO8601 formatting for a time. This is the default value for `Date
 julia> Dates.format(Time(12, 0, 43, 1), ISOTimeFormat)
 "12:00:43.001"
 ```
+
+!!! compat "Julia 1.14"
+    Before Julia 1.14, `ISOTimeFormat` was `HH:MM:SS.s`, with millisecond precision.
 """
-const ISOTimeFormat = DateFormat("HH:MM:SS.s")
+const ISOTimeFormat = DateFormat("HH:MM:SS.n")
 default_format(::Type{Time}) = ISOTimeFormat
 
 """
@@ -664,6 +716,46 @@ repeatedly parsing similarly formatted time strings with a pre-created
 """
 Time(t::AbstractString, df::DateFormat=ISOTimeFormat) = parse(Time, t, df)
 
+"""
+    Timestamp(dt::AbstractString, format::AbstractString; locale="english")::Timestamp
+
+Construct a `Timestamp` by parsing the `dt` date time string following the
+pattern given in the `format` string (see [`DateFormat`](@ref) for syntax).
+Use the `n` code to match fractional seconds with up to nanosecond precision.
+
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+!!! compat "Julia 1.14"
+    `Timestamp` requires Julia 1.14 or later.
+
+# Examples
+```jldoctest
+julia> Timestamp("2020-01-01 00:00:00.001002003", "yyyy-mm-dd HH:MM:SS.n")
+2020-01-01T00:00:00.001002003
+```
+"""
+function Timestamp{P}(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH) where {P}
+    return parse(Timestamp{P}, dt, DateFormat(format, locale))
+end
+
+"""
+    Timestamp(dt::AbstractString, df::DateFormat=ISOTimestampFormat)::Timestamp
+
+Construct a `Timestamp` by parsing the `dt` date time string following the
+pattern given in the [`DateFormat`](@ref) object, or $ISOTimestampFormat if omitted.
+
+Similar to `Timestamp(::AbstractString, ::AbstractString)` but more efficient when
+repeatedly parsing similarly formatted date time strings with a pre-created
+`DateFormat` object.
+
+!!! compat "Julia 1.14"
+    `Timestamp` requires Julia 1.14 or later.
+"""
+Timestamp{P}(dt::AbstractString, df::DateFormat=ISOTimestampFormat) where {P} = parse(Timestamp{P}, dt, df)
+
 @generated function format(io::IO, dt::TimeType, fmt::DateFormat{<:Any,T}) where T
     N = fieldcount(T)
     quote
@@ -698,9 +790,13 @@ following character codes can be used to construct the `format` string:
 | `H`        | 0, 23     | Hour (24-hour clock) with a minimum width                    |
 | `M`        | 0, 59     | Minute with a minimum width                                  |
 | `S`        | 0, 59     | Second with a minimum width                                  |
-| `s`        | 000, 500  | Millisecond with a minimum width of 3                        |
+| `s`        | 5, 500    | Fractional second to millisecond precision                   |
+| `n`        | 5, 123456789 | Fractional second to nanosecond precision                 |
 | `e`        | Mon, Tue  | Abbreviated days of the week                                 |
 | `E`        | Monday    | Full day of week name                                        |
+
+!!! compat "Julia 1.14"
+    The `n` code requires Julia 1.14 or later.
 
 The number of sequential code characters indicate the width of the code. A format of
 `yyyy-mm` specifies that the code `y` should have a width of four while `m` a width of two.
@@ -728,6 +824,15 @@ function Base.print(io::IO, dt::DateTime)
     print(io, str)
 end
 
+function Base.print(io::IO, dt::Timestamp)
+    str = if subsecond_nanoseconds(dt) == 0
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 19)
+    else
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.n", 29)
+    end
+    print(io, str)
+end
+
 function Base.print(io::IO, dt::Date)
     # don't use format - bypassing IOBuffer creation
     # saves a bit of time here.
@@ -738,14 +843,17 @@ function Base.print(io::IO, dt::Date)
     print(io, "$yy-$mm-$dd")
 end
 
-for date_type in (:Date, :DateTime)
+for date_type in (:Date, :DateTime, :Timestamp)
     # Human readable output (i.e. "2012-01-01")
     @eval Base.show(io::IO, ::MIME"text/plain", dt::$date_type) = print(io, dt)
     # Parsable output (i.e. Date("2012-01-01"))
     @eval Base.show(io::IO, dt::$date_type) = print(io, typeof(dt), "(\"", dt, "\")")
-    # Parsable output will have type info displayed, thus it is implied
-    @eval Base.typeinfo_implicit(::Type{$date_type}) = true
 end
+
+# Parsable output includes the concrete type.
+Base.typeinfo_implicit(::Type{Date}) = true
+Base.typeinfo_implicit(::Type{DateTime}) = true
+Base.typeinfo_implicit(::Type{<:Timestamp}) = true
 
 # minimal Base.TOML support
 Base.TOML.Printer.printvalue(f::Function, io::IO, value::Date, sorted::Bool) =
