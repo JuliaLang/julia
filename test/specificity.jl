@@ -324,6 +324,30 @@ end
 @test !args_morespecific(Tuple{DataType}, Tuple{Type{T}} where T<:Integer)
 @test  args_morespecific(Tuple{Type{T}} where T<:Integer, Tuple{DataType})
 @test  args_morespecific(Tuple{Type{Int}}, Tuple{DataType})
+# `Type{X}` is more specific than any kind, including the wrapper kinds of `Type{Int}`
+@test  args_morespecific(Tuple{Type{Type{Int}}}, Tuple{Core.TypeEq})
+@test !args_morespecific(Tuple{Core.TypeEq}, Tuple{Type{Type{Int}}})
+@test  args_morespecific(Tuple{Type{Core.TypeEgal{Int}}}, Tuple{Core.TypeEgal})
+@test !args_morespecific(Tuple{Core.TypeEgal}, Tuple{Type{Core.TypeEgal{Int}}})
+module WrapperKindSpecificity
+    f(::Type{Type{Int}}) = 1
+    f(::Core.TypeEq) = 2
+end
+@test WrapperKindSpecificity.f(Type{Int}) == 1
+@test WrapperKindSpecificity.f(Type{Float64}) == 2
+
+# a parameter that admits only `Union{}` ranks first however it is spelled, including a
+# typevar bounded by `Union{}` or `TypeofBottom` that is also used elsewhere
+for bottom in (Tuple{Type{T}, Integer, Vector{T}} where T<:Union{},
+               Tuple{Type{T}, Integer, Vector{S}} where {S<:Union{}, T<:S},
+               Tuple{S, Integer, Vector{S}} where S<:Core.TypeofBottom,
+               Tuple{S, Integer} where S<:Type{Union{}},
+               Tuple{Union{Core.TypeofBottom, Type{T}}, Integer, Vector{T}} where T<:Union{},
+               Tuple{S, Integer, Vector{S}, Vector{T}} where {T<:Union{}, S<:Union{Core.TypeofBottom, Type{T}}})
+    other = Tuple{Type{<:AbstractString}, Int, Vararg{Vector{Union{}}}}
+    @test  args_morespecific(bottom, other)
+    @test !args_morespecific(other, bottom)
+end
 
 # requires assertions enabled
 let root = NTuple
