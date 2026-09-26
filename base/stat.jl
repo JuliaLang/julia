@@ -21,6 +21,7 @@ export
     issticky,
     lstat,
     mtime,
+    atime,
     operm,
     stat,
     uperm
@@ -53,6 +54,7 @@ The following fields of this struct are considered public API:
 | blocks  | `Int64`                         | The number of 512-byte blocks allocated                            |
 | mtime   | `Float64`                       | Unix timestamp of when the file was last modified                  |
 | ctime   | `Float64`                       | Unix timestamp of when the file's metadata was changed             |
+| atime   | `Float64`                       | Unix timestamp of when the file was last accessed                  |
 
 See also [`stat`](@ref).
 """
@@ -70,6 +72,7 @@ struct StatStruct
     blocks  :: Int64
     mtime   :: Float64
     ctime   :: Float64
+    atime   :: Float64
     ioerrno :: Int32
 end
 
@@ -88,7 +91,7 @@ end
     end)
 end
 
-StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Base.UV_ENOENT)
+StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Base.UV_ENOENT)
 StatStruct(buf::Union{Memory{UInt8},Vector{UInt8},Ptr{UInt8}}, ioerrno::Int32) = StatStruct("", buf, ioerrno)
 StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Memory{UInt8},Vector{UInt8},Ptr{UInt8}}, ioerrno::Int32) = StatStruct(
     desc isa OS_HANDLE ? desc : String(desc),
@@ -104,6 +107,7 @@ StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Memory{UInt8},Vect
     ioerrno != 0 ? zero(UInt64) : ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
     ioerrno != 0 ? zero(Float64) : ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
     ioerrno != 0 ? zero(Float64) : ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(Float64) : ccall(:jl_stat_atime,   Float64, (Ptr{UInt8},), buf),
     ioerrno
 )
 
@@ -359,6 +363,24 @@ Equivalent to `stat(path).ctime` or `stat_struct.ctime`.
 """
 ctime(st::StatStruct) = st.ctime
 
+"""
+    atime(path)
+    atime(path_elements...)
+    atime(stat_struct)
+
+Return the unix timestamp of when the file at `path` was last accessed,
+or the last accessed timestamp indicated by the file descriptor `stat_struct`.
+
+Equivalent to `stat(path).atime` or `stat_struct.atime`.
+
+!!! note
+    Access time behavior varies by filesystem and mount options. Some filesystems
+    disable access time updates for performance (e.g., `noatime` mount option) or
+    only update periodically (e.g., `relatime`). On such systems, access times may
+    not reflect recent file access.
+"""
+atime(st::StatStruct) = st.atime
+
 # mode type predicates
 
 """
@@ -583,6 +605,7 @@ for f in Symbol[
     :filesize,
     :mtime,
     :ctime,
+    :atime,
 ]
     @eval ($f)(path...)  = ($f)(stat(path...))
 end
