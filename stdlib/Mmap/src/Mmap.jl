@@ -164,7 +164,7 @@ end
 Base.filesize(io::SharedMemory) = io.handle == INVALID_OS_HANDLE ? io.size : stat(io.handle).size
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::RawFD, shared::Bool, exec::Bool)
+function settings(s::RawFD, shared::Bool, exec::Bool=false=false)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
     if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
@@ -399,7 +399,7 @@ will be visible to other processes mapping the same file.
 The `exec` keyword argument specifies whether the underlying mmap data will be executable.
 
 !!! note
-    On MacOS `exec=true` implies `shared=false`, because each thread has its own access permissions to `mmap` regions.
+    On MacOS `exec=true` implies `shared=false`.
 
 
 For example, the following code
