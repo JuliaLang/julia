@@ -3523,6 +3523,7 @@ end
 
 # Test that warn_loaded names loaded packages and counts affected dependents
 @testset "warn_loaded names packages and counts dependents" begin
+    Sys.iswindows() || isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
     mkdepottempdir() do depot; mktempdir() do dir
         # Create LoadedDep old source — loaded at the start of the script
         loaded_dep_old_path = joinpath(dir, "dev", "LoadedDepOld")
@@ -3642,6 +3643,115 @@ end
         output = fetch(log)
         @test occursin("currently loaded", output)
         @test occursin("LoadedDep", output)
+
+        # Run `script` in a child that loads packages as in the REPL: `-i` so the loading-time
+        # precompile output is not suppressed; the script ends with `exit()` so the fallback
+        # REPL never starts on the non-tty stdin afterwards (EPIPE on CI).
+        function loading_output(script; flags=``, project=old_project_path)
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no -i $flags --project=$project -e $script`,
+                         "JULIA_DEPOT_PATH" => depot)
+            out = Base.PipeEndpoint()
+            log = @async read(out, String)
+            try
+                proc = run(pipeline(cmd, stdin=devnull, stdout=out, stderr=out))
+                @test success(proc)
+            catch
+                @show fetch(log)
+                rethrow()
+            end
+            return fetch(log)
+        end
+        conflict_script(disable_parallel) = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.disable_parallel_precompile = $disable_parallel
+            using DepUser
+            exit()
+            """
+        flags_message = "The existing caches were built with different compilation options"
+        check_bounds = Base.JLOptions().check_bounds == 1 ? "no" : "yes"
+
+        # Loading DepUser with the old LoadedDep still loaded recompiles it for the loaded
+        # version; the cause is explained under the header (no tty here, so no `c` to cancel
+        # offered) and not repeated in the summary.
+        output = loading_output(conflict_script(false))
+        @test occursin("LoadedDep is loaded at a different version than in the manifest, so its dependents are being precompiled.", output)
+        @test occursin("Mixing versions may violate compat requirements and cause unexpected errors.", output)
+        @test occursin("To use the manifest version and its existing caches instead, restart julia with `--project` set.", output)
+        @test !occursin("were precompiled", output)
+        @test !occursin("currently loaded", output)
+        @test !occursin(flags_message, output)
+
+        # With other compilation options every cache is rejected for its flags, which is explained.
+        using_depuser = "using DepUser\nexit()"
+        output = loading_output(using_depuser; flags=`--check-bounds=$check_bounds`, project=new_project_path)
+        @test occursin(flags_message, output)
+        @test !occursin("is loaded at a different version", output)
+
+        # Once the source changes, the cache left with the other options is still rejected for
+        # its flags, but that is not why DepUser is precompiling.
+        depuser_src = joinpath(depuser_path, "src", "DepUser.jl")
+        edit_depuser(line) = write(depuser_src, replace(read(depuser_src, String), "module DepUser\n" => "module DepUser\n$line\n"))
+        edit_depuser("const EDITED = true")
+        output = loading_output(using_depuser; project=new_project_path)
+        @test occursin("DepUser", output)
+        @test !occursin(flags_message, output)
+
+        # Without a parallel session, loading compiles serially and must still say so.
+        # Flip `--check-bounds` and edit DepUser again so none of the caches above can be reused.
+        edit_depuser("const EDITED_AGAIN = true")
+        output = loading_output(conflict_script(true); flags=`--check-bounds=$check_bounds`)
+        @test occursin("Info: Precompiling DepUser", output)
+
+        # On a tty the explanation offers `c`; canceling must stop the load, not load DepUser
+        # from source without a cache. DepUser's precompile sleeps so there is time to cancel.
+        if !Sys.iswindows()
+            edit_depuser("get(ENV, \"DEPUSER_SLOW\", \"\") == \"1\" && sleep(60)")
+            script = """
+                using LoadedDep
+                Base.set_active_project($(repr(new_project_path)))
+                Base.disable_parallel_precompile = false
+                try
+                    @eval using DepUser
+                catch err
+                    println("load failed: ", sprint(showerror, err))
+                end
+                println("DepUser defined: ", isdefined(Main, :DepUser))
+                exit()
+                """
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no -i --project=$(old_project_path) -e $script`,
+                         "JULIA_DEPOT_PATH" => depot, "DEPUSER_SLOW" => "1", "TERM" => "dumb")
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, pts, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            output = readuntil(ptm, "press `c` to cancel", keep=true)
+            write(ptm, "c")
+            sleep(0.5)
+            write(ptm, "\r")
+            buf = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(buf, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            output *= String(take!(buf))
+            @test success(p)
+            @test occursin("LoadedDep is loaded at a different version", output)
+            @test occursin("load failed: Precompilation was canceled", output)
+            @test occursin("DepUser defined: false", output)
+        end
+
+        # many conflicting packages are listed five at a time
+        @test Base.Precompilation.format_names_list(["A"]) == "A"
+        @test Base.Precompilation.format_names_list(["A", "B"]) == "A and B"
+        @test Base.Precompilation.format_names_list(["A", "B", "C", "D", "E", "F", "G"]) == "A, B, C, D, E, and 2 more"
+        @test Base.Precompilation.loaded_conflicts_message(["A", "B"], false; ongoing=false, cancelable=true) ==
+            "  A and B are loaded at different versions than in the manifest, so their dependents were precompiled.\n" *
+            "  Mixing versions may violate compat requirements and cause unexpected errors.\n" *
+            "  To use the manifest versions and their existing caches instead, restart julia with `--project` set."
     end end
 end
 

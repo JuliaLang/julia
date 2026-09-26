@@ -1477,6 +1477,7 @@ end
                     nENV["JULIA_LOAD_PATH"] = join([proj, "@stdlib"], sep) # the REPL must be loadable
                     nENV["JULIA_DEPOT_PATH"] = depot * sep # trailing separator appends the default depots
                     nENV["TERM"] = "dumb"
+                    nENV["CI"] = "true" # plain precompile progress: one line per package, no redraws
                     Main.FakePTYs.with_fake_pty() do pts, ptm
                         # `--compiled-modules=yes` so an inherited `=no` cannot skip the look-ahead
                         p = run(detach(setenv(`$(Base.julia_cmd()) --startup-file=no --color=no --compiled-modules=yes -q`, nENV)), pts, pts, pts, wait=false)
@@ -1510,19 +1511,12 @@ end
                 check_exts,
             ))
             @test occursin("lookahead ok", output)
-            precompiling = filter(l -> occursin("Info: Precompiling", l), split(output, '\n'))
-            # once for `using ExtDep2`, once for everything `using HasExtensions, ExtDep` loads,
-            # each a single parallel session
-            @test length(precompiling) == 2
+            # one session for `using ExtDep2`, one for everything `using HasExtensions, ExtDep`
+            # loads, extensions included (serially compiled extensions would show no session)
             @test count("successfully precompiled", output) == 2
-            if length(precompiling) == 2
-                # names are unique in this environment, so no uuids are shown
-                @test endswith(strip(precompiling[1]), "Precompiling ExtDep2")
-                @test !occursin("]", precompiling[2])
-                for name in ("HasExtensions", "ExtDep", "HasExtensions → Extension",
-                             "HasExtensions → ExtensionDep", "HasExtensions → ExtensionFolder")
-                    @test occursin(name, precompiling[2])
-                end
+            for name in ("✓ ExtDep2", "✓ HasExtensions", "✓ ExtDep", "✓ HasExtensions → Extension",
+                         "✓ HasExtensions → ExtensionDep", "✓ HasExtensions → ExtensionFolder")
+                @test occursin(name, output)
             end
 
             # the parent is already loaded: its extensions are batched with the triggers being loaded
@@ -1534,15 +1528,10 @@ end
                 check_exts,
             ))
             @test occursin("lookahead ok", output)
-            precompiling = filter(l -> occursin("Info: Precompiling", l), split(output, '\n'))
-            @test length(precompiling) == 2
             @test count("successfully precompiled", output) == 2
-            if length(precompiling) == 2
-                @test occursin("Precompiling HasExtensions", precompiling[1])
-                @test !occursin("]", precompiling[2])
-                for name in ("ExtDep", "ExtDep2", "HasExtensions → Extension", "HasExtensions → ExtensionFolder")
-                    @test occursin(name, precompiling[2])
-                end
+            for name in ("✓ HasExtensions", "✓ ExtDep", "✓ ExtDep2", "✓ HasExtensions → Extension",
+                         "✓ HasExtensions → ExtensionFolder")
+                @test occursin(name, output)
             end
         end
 
