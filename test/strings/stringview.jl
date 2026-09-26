@@ -1,3 +1,15 @@
+# A dense byte vector whose memory is not addressable from the CPU, like a GPU array:
+# its `pointer` returns something other than a `Ptr`, so no fast path may rely on it.
+struct NonCPUPtr end
+struct NonCPUByteVector <: DenseVector{UInt8}
+    data::Vector{UInt8}
+end
+Base.size(v::NonCPUByteVector) = size(v.data)
+Base.IndexStyle(::Type{NonCPUByteVector}) = IndexLinear()
+Base.getindex(v::NonCPUByteVector, i::Int) = v.data[i]
+Base.pointer(::NonCPUByteVector) = NonCPUPtr()
+Base.pointer(::NonCPUByteVector, ::Integer) = NonCPUPtr()
+
 @testset "StringViews" begin
 
     @testset "Construction" begin
@@ -124,6 +136,42 @@
         # Non-dense arrays don't have pointer method
         abc = StringView(0x61:0x63)
         @test_throws MethodError pointer(abc)
+    end
+
+    @testset "Pointer fast paths are limited to CPU memory" begin
+        b = Vector{UInt8}("foobar")
+        for v in Any[b, Memory{UInt8}(b), codeunits("foobar"), b"foobar",
+                     view(b, 2:4), view(codeunits("foobar"), 2:4)]
+            @test StringView(v) isa Base.DenseStringView
+        end
+        @test !(StringView(NonCPUByteVector(b)) isa Base.DenseStringView)
+    end
+
+    @testset "Dense arrays without a CPU pointer (#63361)" begin
+        str = "fooβ 3.5 bar"
+        s = StringView(NonCPUByteVector(collect(codeunits(str))))
+        ss = SubString(s, 1, 4) # "fooβ"
+        @test pointer(codeunits(s)) isa NonCPUPtr
+
+        @test String(s) === str
+        @test convert(String, s) === str
+        @test String(ss) === "fooβ"
+        @test Symbol(s) === Symbol(str)
+        @test Symbol(ss) === :fooβ
+        @test hash(s) == hash(str)
+        @test hash(ss) == hash("fooβ")
+
+        @test s == str
+        @test cmp(s, "foo") > 0
+        @test startswith(s, "fooβ") && startswith(ss, "foo")
+        @test endswith(s, " bar") && endswith(ss, "β")
+        @test occursin(r"\d\.\d", s)
+        # `match` requires CPU memory and says so, rather than handing PCRE a device pointer
+        @test_throws ArgumentError match(r"β (\S+)", s)
+        @test match(r"β (\S+)", String(s)).captures[1] == "3.5"
+        @test tryparse(Float64, SubString(s, 7, 9)) == 3.5
+        @test parse(Int, StringView(NonCPUByteVector(collect(codeunits("42"))))) == 42
+        @test reverse(ss) == "βoof"
     end
 
     @testset "Comparison and equality" begin
