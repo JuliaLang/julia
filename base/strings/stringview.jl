@@ -1,5 +1,11 @@
-const DenseStringView = StringView{<:Union{DenseVector{UInt8}, <:FastContiguousSubArray{UInt8, 1, <:DenseVector{UInt8}}}}
 const StringAndSub = Union{String, SubString{String}}
+
+# Byte vectors whose `pointer` is known to be a CPU `Ptr{UInt8}`. Being a `DenseVector` is
+# not enough: arrays in other memory spaces (e.g. GPU arrays) are dense too, but their
+# `pointer` returns a device pointer that cannot be read from the CPU. Only these types get
+# the pointer-based fast paths; other `StringView`s use the generic `AbstractVector` methods.
+const CPUByteVector = Union{Vector{UInt8}, Memory{UInt8}, CodeUnits{UInt8, <:StringAndSub}}
+const DenseStringView = StringView{<:Union{CPUByteVector, <:FastContiguousSubArray{UInt8, 1, <:CPUByteVector}}}
 const StringViewAndSub = Union{StringView, SubString{<:StringView}}
 const DenseStringViewAndSub = Union{DenseStringView, SubString{<:DenseStringView}}
 const DenseUTF8String = Union{DenseStringViewAndSub, StringAndSub}
