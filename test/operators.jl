@@ -201,6 +201,37 @@ end
 
 end
 
+@testset "ComposedFunction hash eq" begin
+    @test sin∘cos == sin∘cos
+    @test isequal(sin∘cos, sin∘cos)
+    @test !isequal(sin∘cos, sin∘asin)
+    @test ==(sin∘cos, sin∘cos)
+    @test !==(sin∘cos, sin∘asin)
+    @test hash(sin∘cos) == hash(sin∘cos)
+    @test hash(sin∘cos) != hash(sin∘tan)
+
+    Base.@kwdef mutable struct F
+        isequal::Bool = false
+        eq::Bool = false
+    end
+    function Base.isequal(f1::F, f2::F)
+        f1.isequal
+    end
+    function Base.:(==)(f1::F, f2::F)
+        f1.eq
+    end
+    f2 = F() ∘ F()
+    @test  isequal(F(isequal=true) ∘ F(isequal=true) , f2)
+    @test !isequal(F(isequal=true) ∘ F(isequal=false) , f2)
+    @test !isequal(F(isequal=false) ∘ F(isequal=true) , f2)
+    @test !isequal(F(isequal=false) ∘ F(isequal=false) , f2)
+
+    @test  ==(F(eq=true) ∘ F(eq=true) , f2)
+    @test !==(F(eq=true) ∘ F(eq=false) , f2)
+    @test !==(F(eq=false) ∘ F(eq=true) , f2)
+    @test !==(F(eq=false) ∘ F(eq=false) , f2)
+end
+
 @testset "Nested ComposedFunction's stability" begin
     f(x) = (1, 1, x...)
     g = (f ∘ (f ∘ f)) ∘ (f ∘ f ∘ f)
