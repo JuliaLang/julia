@@ -16,7 +16,7 @@ end
 
 # Emit LLVM IR to dir
 counter = 0
-function emit(f, tt...)
+function emit(f, tt...; debuginfo=:none)
     global counter
     name = nameof(f)
     open(joinpath(dir, @sprintf("%05d-%s.ll", counter, name)), "w") do io
@@ -25,7 +25,7 @@ function emit(f, tt...)
             debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=true,
             gcstack_arg=true, unique_names=true,
         )
-        code_llvm(io, f, tt, raw=true, optimize=optimize, dump_module=true, debuginfo=:none, params=params)
+        code_llvm(io, f, tt, raw=true, optimize=optimize, dump_module=true, debuginfo=debuginfo, params=params)
     end
     counter+=1
 end
