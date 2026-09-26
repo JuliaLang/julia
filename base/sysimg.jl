@@ -84,8 +84,8 @@ let
         stdlibs = [
             # No dependencies
             :FileWatching, # used by loading.jl -- implicit assumption that init runs
-            :Libdl, # Transitive through LinAlg
-            :Artifacts, # Transitive through LinAlg
+            :Libdl,
+            :Artifacts,
             :SHA, # transitive through Random
             :Sockets, # used by stream.jl
 
@@ -94,7 +94,7 @@ let
             # libblastrampoline_jll
 
             # 1-depth packages
-            :LinearAlgebra, # Commits type-piracy and GEMM
+            # :LinearAlgebra, # Commits type-piracy and GEMM
             :Random, # Can't be removed due to rand being exported by Base
         ]
     end
