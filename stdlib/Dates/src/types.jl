@@ -253,8 +253,8 @@ A package can add a resolution with its own `TimePeriod` type, such as a 128-bit
 of picoseconds. The type needs methods for `Dates.value`, `typemin`, `typemax`, and
 `Dates.tons`, which gives the length in nanoseconds (a `Rational` for a unit shorter
 than a nanosecond). For years whose day number does not fit in an `Int64`, also add a
-method for `Dates.timestamp_totaldays(P, y, m, d)`. The `n` format code has nanosecond
-precision.
+method for `Dates.timestamp_totaldays(P, y, m, d)`. Printing and the `n` format code
+round digits finer than a nanosecond down.
 """
 struct Timestamp{P<:TimePeriod} <: AbstractDateTime
     instant::UTInstant{P}

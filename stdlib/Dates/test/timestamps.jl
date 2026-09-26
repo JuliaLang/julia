@@ -633,6 +633,12 @@ Dates.tons(p::TestPicosecond) = Dates.value(p) // big(1000)
     @test Date(before) == Date(1969, 12, 31)
     @test Dates.nanosecond(before) == 999
     @test floor(before, Nanosecond) == convert(T, Nanosecond(-1))
+    # formatting rounds digits finer than a nanosecond down
+    @test string(origin + Nanosecond(1)) == "2026-09-24T00:00:00.000000001"
+    @test string(origin + TestPicosecond(1999)) == "2026-09-24T00:00:00.000000001"
+    @test string(origin + TestPicosecond(999)) == "2026-09-24T00:00:00"
+    @test string(before) == "1969-12-31T23:59:59.999999999"
+    @test Dates.format(x, "HH:MM:SS.nnnnnnnnn") == "00:00:00.000000000"
     @test year(T(Int64(10)^18)) == Int64(10)^18
     @test_throws InexactError Date(T(Int64(10)^18))
     @test_throws ArgumentError T(Year(2026), TestPicosecond(1))

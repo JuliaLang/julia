@@ -243,11 +243,12 @@ end
 format(io, d::DatePart{'s'}, dt) = format_fraction(io, d, millisecond(dt), 3)
 format(io, d::DatePart{'n'}, dt) = format_fraction(io, d, subsecond_nanoseconds(dt), 9)
 
-# Nanoseconds since the start of the second
+# Whole nanoseconds since the start of the second. Digits finer than a nanosecond are
+# rounded down, because the `n` code stops at nanoseconds.
 subsecond_nanoseconds(dt::DateTime) = 1000000 * millisecond(dt)
 subsecond_nanoseconds(t::Time) = mod(value(t), 1000000000)
 subsecond_nanoseconds(dt::Timestamp{P}) where {P} =
-    mod(value(dt), 1000000000 ÷ timestamp_scale(P)) * timestamp_scale(P)
+    floor(Int64, mod(value(dt), 1000000000 ÷ timestamp_scale(P)) * timestamp_scale(P))
 
 ### Delimiters
 
