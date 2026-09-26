@@ -45,25 +45,6 @@ Distributed.worker_output_hook[] = (ident, line) -> begin
     return Base.annotatedstring(prefix, line)
 end
 
-# Run `f()` with its stdout/stderr captured and re-emitted to `io` with `prefix` on every
-# line. Node-1 tests run in this process, so their output does not pass through
-# Distributed's redirection and `worker_output_hook`.
-function with_output_prefix(f, prefix::AbstractString, io::IO, lock::ReentrantLock)
-    pipe = Pipe()
-    Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
-    reader = @async while !eof(pipe)
-        line = readline(pipe)
-        @lock lock println(io, prefix, line)
-    end
-    try
-        redirect_stdio(f; stdout=pipe, stderr=pipe)
-    finally
-        close(pipe.in)
-        wait(reader)
-        close(pipe)
-    end
-end
-
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
@@ -207,8 +188,6 @@ cd(@__DIR__) do
     printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
     printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
     results = []
-    # Node-1 tests run with `stdout` redirected, so the table is printed to the real stdout
-    # to keep it out of that capture (see `with_output_prefix`).
     master_stdout = stdout
     print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
     if stderr isa Base.LibuvStream
@@ -516,10 +495,8 @@ cd(@__DIR__) do
             running_on[t] = 1
             before = time()
             resp, duration = try
-                    with_output_prefix(output_prefix(t, 1), master_stdout, print_lock) do
-                        r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
-                        r, time() - before
-                    end
+                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                    r, time() - before
                 catch e
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
