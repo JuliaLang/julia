@@ -385,10 +385,10 @@ Float16(6.55e4)
 ```
 
 !!! note
-    Rounding to specified digits in bases other than 2 can be inexact when
-    operating on binary floating point numbers. For example, the [`Float64`](@ref)
-    value represented by `1.15` is actually *less* than 1.15, yet will be
-    rounded to 1.2. For example:
+    Rounding to specified digits in bases other than 2 acts on the exact value of the
+    binary floating point number, which may differ from the decimal literal used to
+    write it. For example, the [`Float64`](@ref) value represented by `1.15` is actually
+    *less* than 1.15, and so is rounded to 1.1:
 
     ```jldoctest
     julia> x = 1.15
@@ -401,8 +401,12 @@ Float16(6.55e4)
     true
 
     julia> round(x, digits=1)
-    1.2
+    1.1
     ```
+
+    When `base^digits` is representable, the result is the floating point number
+    closest to the exactly rounded value, which in bases other than 2 is itself
+    generally not representable.
 
 # Extensions
 
