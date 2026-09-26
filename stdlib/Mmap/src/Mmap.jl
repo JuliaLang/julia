@@ -421,6 +421,21 @@ information in the header. In practice, consider encoding binary data using stan
 like HDF5 (which can be used with memory-mapping).
 """
 function mmap(io::IO,
+              type::Type{Array{T,N}}=Vector{UInt8},
+              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
+    _mmap(io, type, dims, offset; grow, shared)
+end
+function mmap(io::Anonymous,
+              type::Type{Array{T,N}}=Vector{UInt8},
+              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
+              exec::Bool=true) where {T,N}
+    _mmap(io, type, dims, offset; grow, shared, exec)
+end
+
+
+function _mmap(io::IO,
               ::Type{Array{T,N}}=Vector{UInt8},
               dims::NTuple{N,Integer}=(div(filesize(io)-position(io),Base.aligned_sizeof(T)),),
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
@@ -428,6 +443,9 @@ function mmap(io::IO,
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
+    if exec && !(io isa Anonymous)
+        throw(ArgumentError("unable to mmap a file with exec=true"))
+    end
 
     len = checked_bytesize(dims, Base.aligned_sizeof(T))
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
@@ -559,7 +577,7 @@ function mmap(io::IO, ::Type{<:BitArray}, dims::NTuple{N,Integer},
     dims = map(Int, dims)
     n = Core.checked_dims(dims...)
     nc = Base.num_bit_chunks(n)
-    chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared, exec=exec)
+    chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
     if !isreadonly(io)
         chunks[end] &= Base._msk_end(n)
     else
