@@ -1284,24 +1284,27 @@ end
 end
 
 @testset "code blocks are faced as code #61456" begin
+    using JuliaSyntaxHighlighting
+    # Julia code blocks are padded to the full width so the background tint
+    # spans the block, hence the `rstrip`.
     function codefaces(md)
         buf = Base.AnnotatedIOBuffer()
         show(buf, MIME("text/plain"), md)
         str = read(seekstart(buf), Base.AnnotatedString)
-        [(String(str[a.region]), a.value) for a in Base.annotations(str) if a.label === :face]
+        [(rstrip(String(str[a.region])), a.value) for a in Base.annotations(str) if a.label === :face]
     end
     # Syntax highlighting is conservative, so a lone identifier picks up no
     # highlighting of its own; it must still be faced as code.
     for lang in ("", "julia", "julia-repl", "jldoctest", "text")
         @test codefaces(Markdown.MD(Markdown.Code(lang, "VERSION"))) ==
-            [("VERSION", :markdown_code)]
+            [("VERSION", face"Markdown.code")]
     end
     # Highlighting is layered over the code face rather than replacing it.
     let faces = codefaces(Markdown.MD(Markdown.Code("julia", "f() = 1 # c")))
-        @test ("f() = 1 # c", :markdown_code) ∈ faces
-        @test ("# c", :julia_comment) ∈ faces
+        @test ("f() = 1 # c", face"Markdown.code") ∈ faces
+        @test ("# c", face"JuliaSyntaxHighlighting.comment") ∈ faces
     end
-    @test ("julia>", :markdown_julia_prompt) ∈
+    @test ("julia>", face"Markdown.julia_prompt") ∈
         codefaces(Markdown.MD(Markdown.Code("julia-repl", "julia> x")))
 end
 

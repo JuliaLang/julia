@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const AnnotIO = Union{AnnotatedIOBuffer, IOContext{AnnotatedIOBuffer}}
+const AnnotIO = Union{AnnotatedIOBuffer{V}, IOContext{AnnotatedIOBuffer{V}}} where V
 
 function annotprint(f::Function, args...)
-    buf = AnnotatedIOBuffer()
+    buf = AnnotatedIOBuffer{Union{Face, String}}()
     f(buf, args...)
     read(seekstart(buf), AnnotatedString)
 end

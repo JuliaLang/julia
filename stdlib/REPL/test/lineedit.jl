@@ -1318,6 +1318,7 @@ end
 # tests on the same worker would otherwise see, so restore it afterwards.
 osc_saved_colors = copy(REPL.StyledStrings.FACES.basecolors)
 osc_saved_faces = copy(REPL.StyledStrings.FACES.current[])
+osc_saved_theme = REPL.StyledStrings.FACES.current_theme[]
 @testset "OSC colour responses" begin
     RGB(r, g, b) = (; r=UInt8(r), g=UInt8(g), b=UInt8(b))
     # `awaiting` mirrors a pending `query_colors`, so the sentinel applies the palette.
@@ -1391,3 +1392,4 @@ osc_saved_faces = copy(REPL.StyledStrings.FACES.current[])
 end
 merge!(empty!(REPL.StyledStrings.FACES.basecolors), osc_saved_colors)
 merge!(empty!(REPL.StyledStrings.FACES.current[]), osc_saved_faces)
+REPL.StyledStrings.FACES.current_theme[] = osc_saved_theme
