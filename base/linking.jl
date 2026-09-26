@@ -11,16 +11,14 @@ const dsymutil_exe = Sys.iswindows() ? "dsymutil.exe" : "dsymutil"
 if Sys.iswindows()
     const LIBPATH_env = "PATH"
     const LIBPATH_default = ""
-    const pathsep = ';'
 elseif Sys.isapple()
     const LIBPATH_env = "DYLD_FALLBACK_LIBRARY_PATH"
     const LIBPATH_default = "~/lib:/usr/local/lib:/lib:/usr/lib"
-    const pathsep = ':'
 else
     const LIBPATH_env = "LD_LIBRARY_PATH"
     const LIBPATH_default = ""
-    const pathsep = ':'
 end
+const pathsep = Base.Filesystem.path_list_separator
 
 function adjust_ENV!(env::Dict, PATH::String, LIBPATH::String, adjust_PATH::Bool, adjust_LIBPATH::Bool)
     if adjust_LIBPATH
