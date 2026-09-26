@@ -880,3 +880,11 @@ end
     @test !Base.array_subpadding(T_5, S_1_3)
     @test !Base.array_subpadding(S_1_3, T_5)
 end
+
+@testset "issue #63305" begin
+    a = ones(UInt64, 2)
+    b = reinterpret(UInt8, reinterpret(reshape, UInt16, a))
+    c = collect(b)
+    @test c[5] == b[5] == 0x00
+    @test vec(c) == reinterpret(UInt8, a)
+end
