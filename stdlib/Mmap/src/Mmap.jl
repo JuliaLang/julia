@@ -456,11 +456,12 @@ function _mmap(io::IO,
     if exec && !iswritable(io)
         throw(ArgumentError("$io must be writeable to mmap with exec = true"))
     end
-   @static if Sys.isapple()
-      # on MacOS each thread has its own access permissions, so we can't share when exec=true
-      # https://developer.apple.com/documentation/apple-silicon/porting-just-in-time-compilers-to-apple-silicon#Disable-Write-Protections-Before-You-Generate-Instructions
-      exec && (shared = false)
-   end
+    @static if Sys.isapple()
+       # on MacOS exec=true requires the MAP_JIT flag to bypass W^X protections
+       # but combining MAP_JIT with MAP_SHARED is disallowed on MacOS, although its undocumented
+       # https://github.com/apple-oss-distributions/xnu/blob/1031c584a5e37aff177559b9f69dbd3c8c3fd30a/bsd/kern/kern_mman.c#L328-L337
+       exec && (shared = false)
+    end
 
     len = checked_bytesize(dims, Base.aligned_sizeof(T))
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
