@@ -104,6 +104,11 @@ without any intermediate rounding.
   ``[0, |y|)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundFromZero`](@ref).
 
+For integer arguments, `RoundUp` and the nearest rounding modes return the same type as
+`mod(x, -signed(y))`; `RoundFromZero` does so when it rounds upward. If the exact
+remainder is not representable in that type, an `InexactError` is thrown instead of
+returning a modularly equivalent value.
+
 !!! compat "Julia 1.9"
     `RoundFromZero` requires at least Julia 1.9.
 
@@ -123,10 +128,38 @@ true
 """
 rem(x, y, r::RoundingMode)
 
+@inline _rounded_rem_type(x, y) = typeof(mod(oneunit(x), -oneunit(signed(y))))
+@inline _mod_result_type(x, y) = typeof(mod(oneunit(x), oneunit(y)))
+@inline _signed_widen(x::Bool) = Int(x)
+@inline _signed_widen(x::Integer) = signed(widen(x))
+
+@inline function _widened_add(x::Integer, y::Integer)
+    x, y = promote(_signed_widen(x), _signed_widen(y))
+    x + y
+end
+@inline function _widened_sub(x::Integer, y::Integer)
+    x, y = promote(_signed_widen(x), _signed_widen(y))
+    x - y
+end
+
 # TODO: Make these primitive and have the two-argument version call these
 rem(x, y, ::RoundingMode{:ToZero}) = rem(x, y)
 rem(x, y, ::RoundingMode{:Down}) = mod(x, y)
 rem(x, y, ::RoundingMode{:Up}) = mod(x, -y)
+function rem(x, y::Unsigned, ::RoundingMode{:Up})
+    R = _rounded_rem_type(x, y)
+    convert(R, mod(x, -signed(widen(y))))
+end
+function rem(x::Integer, y::Unsigned, ::RoundingMode{:Up})
+    R = _rounded_rem_type(x, y)
+    x, y = promote(_signed_widen(x), _signed_widen(y))
+    convert(R, mod(x, -y))
+end
+function rem(x, y::T, ::RoundingMode{:Up}) where {T<:BitSigned}
+    y == typemin(T) || return mod(x, -y)
+    R = _rounded_rem_type(x, y)
+    convert(R, mod(x, -widen(y)))
+end
 rem(x, y, r::RoundingMode{:Nearest}) = x - y * div(x, y, r)
 rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
 function rem(x::Integer, y::Integer, rnd::Union{typeof(RoundNearestTiesAway),
@@ -284,25 +317,31 @@ function divrem(a, b, r::RoundingMode)
         (div(a, b, r), rem(a, b, r))
     end
 end
-# avoids calling rem for Integers-Integers (all modes),
-# a - d * b not precise for Floats - AbstractFloat, AbstractIrrational.
-# Rationals are still slower
-function divrem(a::Integer, b::Integer, r::Union{typeof(RoundUp),
-                                                typeof(RoundDown),
-                                                typeof(RoundToZero)})
-    if r === RoundToZero
-        # For compat. Remove in 2.0.
-        d = div(a, b)
-        (d, a - d * b)
-    elseif r === RoundDown
-        # For compat. Remove in 2.0.
-        d = fld(a, b)
-        (d, a - d * b)
-    elseif r === RoundUp
-        # For compat. Remove in 2.0.
-        d = div(a, b, r)
-        (d, a - d * b)
-    end
+# Avoids calling rem for Integers-Integers. Rationals are still slower, and
+# a - d * b is not precise for AbstractFloats and AbstractIrrationals.
+function divrem(a::Integer, b::Integer, ::typeof(RoundToZero))
+    # For compat. Remove in 2.0.
+    d = div(a, b)
+    (d, a - d * b)
+end
+
+@inline _divrem_keep(::Type{R}, q, r) where {R} = (q, convert(R, r))
+@inline _divrem_inc(::Type{R}, q, r, y) where {R} =
+    (q + true, convert(R, _widened_sub(r, y)))
+@inline _divrem_dec(::Type{R}, q, r, y) where {R} =
+    (q - true, convert(R, _widened_add(r, y)))
+
+function divrem(a::Integer, b::Integer, ::typeof(RoundDown))
+    q, r = divrem(a, b)
+    R = _mod_result_type(a, b)
+    signbit(a) != signbit(b) && !iszero(r) ? _divrem_dec(R, q, r, b) :
+                                             _divrem_keep(R, q, r)
+end
+function divrem(a::Integer, b::Integer, ::typeof(RoundUp))
+    q, r = divrem(a, b)
+    R = _rounded_rem_type(a, b)
+    signbit(a) == signbit(b) && !iszero(r) ? _divrem_inc(R, q, r, b) :
+                                             _divrem_keep(R, q, r)
 end
 # For fixed-width integers the floored/ceiled quotient times `b` lies in
 # `(a - b, a + b]` and so wraps on valid inputs (e.g. `fld(typemin(Int), 3)*3`);
@@ -325,49 +364,58 @@ function divrem(a::T, b::T, r::Union{typeof(RoundUp),
 end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
     (q, r) = divrem(x, y)
+    R = _rounded_rem_type(x, y)
     if x >= 0
         if y >= 0
-            r >=        (y÷2) + (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
+            r >= (y÷2) + (isodd(y) | iseven(q)) ?
+                _divrem_inc(R, q, r, y) : _divrem_keep(R, q, r)
         else
-            r >=       -(y÷2) + (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
+            r >= -(y÷2) + (isodd(y) | iseven(q)) ?
+                _divrem_dec(R, q, r, y) : _divrem_keep(R, q, r)
         end
     else
         if y >= 0
-            r <= -signed(y÷2) - (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
+            r <= -signed(y÷2) - (isodd(y) | iseven(q)) ?
+                _divrem_dec(R, q, r, y) : _divrem_keep(R, q, r)
         else
-            r <=        (y÷2) - (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
+            r <= (y÷2) - (isodd(y) | iseven(q)) ?
+                _divrem_inc(R, q, r, y) : _divrem_keep(R, q, r)
         end
     end
 end
 function divrem(x::Integer, y::Integer, rnd:: typeof(RoundNearestTiesAway))
     (q, r) = divrem(x, y)
+    R = _rounded_rem_type(x, y)
     if x >= 0
         if y >= 0
-            r >=        (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
+            r >= (y÷2) + isodd(y) ? _divrem_inc(R, q, r, y) : _divrem_keep(R, q, r)
         else
-            r >=       -(y÷2) + isodd(y) ? (q-true, r+y) : (q, r)
+            r >= -(y÷2) + isodd(y) ? _divrem_dec(R, q, r, y) : _divrem_keep(R, q, r)
         end
     else
         if y >= 0
-            r <= -signed(y÷2) - isodd(y) ? (q-true, r+y) : (q, r)
+            r <= -signed(y÷2) - isodd(y) ?
+                _divrem_dec(R, q, r, y) : _divrem_keep(R, q, r)
         else
-            r <=        (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
+            r <= (y÷2) - isodd(y) ? _divrem_inc(R, q, r, y) : _divrem_keep(R, q, r)
         end
     end
 end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearestTiesUp))
     (q, r) = divrem(x, y)
+    R = _rounded_rem_type(x, y)
     if x >= 0
         if y >= 0
-            r >=        (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
+            r >= (y÷2) + isodd(y) ? _divrem_inc(R, q, r, y) : _divrem_keep(R, q, r)
         else
-            r >=       -(y÷2) + true     ? (q-true, r+y) : (q, r)
+            r >= -(y÷2) + true ? _divrem_dec(R, q, r, y) : _divrem_keep(R, q, r)
         end
     else
         if y >= 0
-            r <= -signed(y÷2) - true     ? (q-true, r+y) : (q, r)
+            r <= -signed(y÷2) - true ?
+                _divrem_dec(R, q, r, y) : _divrem_keep(R, q, r)
         else
-            r <=        (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
+            r <= (y÷2) - isodd(y) ? _divrem_inc(R, q, r, y) : _divrem_keep(R, q, r)
         end
     end
 end
