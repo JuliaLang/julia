@@ -261,7 +261,8 @@ function _find_scope_decls!(ctx, scope, ex)
         else
             @jl_assert false (ex, "unknown kind in assignment")
         end
-    elseif k in KSet"= constdecl assign_or_constdecl_if_global"
+    elseif k in KSet"= constdecl assign_or_constdecl_if_global" ||
+           (k === K"decl" && numchildren(ex) == 3) # `x::T = v`
         k1 = kind(ex[1])
         _record_layer!(ctx, ex[1])
         sc = ex[1].context::SyntaxContext
@@ -276,8 +277,8 @@ function _find_scope_decls!(ctx, scope, ex)
         else
             @jl_assert false (ex, "unknown kind in assignment")
         end
-        if !(k == K"constdecl" && numchildren(ex) == 1)
-            _find_scope_decls!(ctx, scope, ex[2])
+        for i in 2:numchildren(ex)
+            _find_scope_decls!(ctx, scope, ex[i])
         end
     elseif needs_resolution(ex) && !(k in KSet"scope_block lambda method_defs")
         for e in children(ex)
@@ -816,7 +817,7 @@ function analyze_variables!(ctx, ex)
     elseif k == K"local" || k == K"global"
         # Presence of BindingId within local/global is ignored.
         return
-    elseif k == K"="
+    elseif k == K"=" || (k == K"decl" && numchildren(ex) == 3) # `x::T = v`
         lhs = ex[1]
         if kind(lhs) != K"Placeholder"
             b = get_binding(ctx, lhs)
@@ -829,7 +830,7 @@ function analyze_variables!(ctx, ex)
                 analyze_variables!(ctx, binding_type_ex(ctx, b))
             end
         end
-        analyze_variables!(ctx, ex[2])
+        analyze_variables!(ctx, ex[end])
     elseif k == K"function_decl"
         name = ex[1]
         b = get_binding(ctx, name)
