@@ -4,8 +4,10 @@
 DocTestSetup = :(using Dates)
 ```
 
-The `Dates` module provides two types for working with dates: [`Date`](@ref) and [`DateTime`](@ref),
-representing day and millisecond precision, respectively; both are subtypes of the abstract [`TimeType`](@ref).
+The `Dates` module provides three types for representing dates and times:
+[`Date`](@ref), [`DateTime`](@ref), and [`Time`](@ref) measured with
+day, millisecond and nanosecond precision, respectively;
+all are subtypes of the abstract [`TimeType`](@ref).
 The motivation for distinct types is simple: some operations are much simpler, both in terms of
 code and mental reasoning, when the complexities of greater precision don't have to be dealt with.
 For example, since the [`Date`](@ref) type only resolves to the precision of a single date (i.e.
@@ -14,7 +16,7 @@ time, and leap seconds are unnecessary and avoided.
 
 Both [`Date`](@ref) and [`DateTime`](@ref) are basically immutable [`Int64`](@ref) wrappers.
 The single `instant` field of either type is actually a `UTInstant{P}` type, which
-represents a continuously increasing machine timeline based on the UT second [^1]. The
+represents a monotonically increasing machine timeline based on the UT second [^1]. The
 [`DateTime`](@ref) type is not aware of time zones (*naive*, in Python parlance),
 analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
@@ -25,6 +27,12 @@ day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year
 The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is the day before
 `0001-01-01`, and year `-0001` (yes, negative one for the year) is 2 BC/BCE, year `-0002` is 3
 BC/BCE, etc.
+
+The [`Time`](@ref) is also an immutable [`Int64`](@ref) wrapper, also based on the UT second [^1],
+and represents the time of day according to the conventional 24-hour clock, starting at midnight,
+and ending the instant one nanosecond prior to midnight. Time is periodic, and wraps around at
+midnight (see [TimeType-Period arithmetic](#TimeType-Period-Arithmetic)).
+
 
 [^1]:
     The notion of the UT second is actually quite fundamental. There are basically two different notions
@@ -39,7 +47,7 @@ BC/BCE, etc.
 
 ## Constructors
 
-[`Date`](@ref) and [`DateTime`](@ref) types can be constructed by integer or [`Period`](@ref)
+[`Date`](@ref), [`DateTime`](@ref) and [`Time`](@ref) types can be constructed by integer or [`Period`](@ref)
 types, by parsing, or through adjusters (more on those later):
 
 ```jldoctest
@@ -78,6 +86,16 @@ julia> Date(Dates.Year(2013),Dates.Month(7),Dates.Day(1))
 
 julia> Date(Dates.Month(7),Dates.Year(2013))
 2013-07-01
+
+julia> Time(12)
+12:00:00
+
+julia> Time(12, 30, 59, 1, 0, 2)
+12:30:59.001000002
+
+julia> Time(Hour(12), Minute(30), Second(59), Millisecond(1), Nanosecond(2))
+12:30:59.001000002
+
 ```
 
 [`Date`](@ref) or [`DateTime`](@ref) parsing is accomplished by the use of format strings. Format
@@ -459,6 +477,25 @@ julia> collect(dr)
  2014-07-29
 ```
 
+Time is periodic, and wraps around at midnight:
+
+```jldoctest
+julia> Time(23) + Hour(1)
+00:00:00
+
+julia> r = range(Time(0), step = Hour(9), length = 5)
+Time(0):Hour(9):Time(12)
+
+julia> collect(r)
+5-element Vector{Time}:
+ 00:00:00
+ 09:00:00
+ 18:00:00
+ 03:00:00
+ 12:00:00
+
+```
+
 ## Adjuster Functions
 
 As convenient as date-period arithmetic is, often the kinds of calculations needed on dates
@@ -707,7 +744,7 @@ Dates.UTC
 Dates.DateTime(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
 Dates.DateTime(::Dates.Period)
 Dates.DateTime(::Function, ::Any...)
-Dates.DateTime(::Dates.TimeType)
+Dates.DateTime(::Dates.Date)
 Dates.DateTime(::AbstractString, ::AbstractString)
 Dates.format(::Dates.TimeType, ::AbstractString)
 Dates.DateFormat
@@ -716,7 +753,7 @@ Dates.DateTime(::AbstractString, ::Dates.DateFormat)
 Dates.Date(::Int64, ::Int64, ::Int64)
 Dates.Date(::Dates.Period)
 Dates.Date(::Function, ::Any, ::Any, ::Any)
-Dates.Date(::Dates.TimeType)
+Dates.Date(::Dates.DateTime)
 Dates.Date(::AbstractString, ::AbstractString)
 Dates.Date(::AbstractString, ::Dates.DateFormat)
 Dates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
