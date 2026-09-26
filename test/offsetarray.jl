@@ -2,11 +2,22 @@
 
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
-import .Main.OffsetArrays: IdOffsetRange
+import .Main.OffsetArrays: IdOffsetRange, no_offset_view
 using Random
 using LinearAlgebra
 using Base: IdentityUnitRange
 using Test
+
+no_offset_axes(x, d) = no_offset_view(axes(x, d))
+no_offset_axes(x) = map(no_offset_view, axes(x))
+
+function same_value(r1, r2)
+    length(r1) == length(r2) || return false
+    for (v1, v2) in zip(r1, r2)
+        v1 == v2 || return false
+    end
+    return true
+end
 
 if !isdefined(@__MODULE__, :T24Linear)
     include("testhelpers/arrayindexingtypes.jl")
@@ -848,6 +859,175 @@ end
     a = OffsetArray(4:5, 5:6)
     @test reshape(a, :) === a
     @test reshape(a, (:,)) === a
+
+    A0 = [1 3; 2 4]
+    A = OffsetArray(A0, (-1,2))
+
+    B = reshape(A0, -10:-9, 9:10)
+    @test isa(B, OffsetArray{Int,2})
+    @test parent(B) == A0
+    @test axes(B) == IdentityUnitRange.((-10:-9, 9:10))
+    B = reshape(A, -10:-9, 9:10)
+    @test isa(B, OffsetArray{Int,2})
+    @test axes(B) == IdentityUnitRange.((-10:-9, 9:10))
+    b = reshape(A, -7:-4)
+    @test axes(b) == (IdentityUnitRange(-7:-4),)
+    @test isa(parent(b), Vector{Int})
+    @test parent(b) == A0[:]
+    a = OffsetArray(rand(3,3,3), -1:1, 0:2, 3:5)
+    # Offset axes are required for reshape(::OffsetArray, ::Val) support
+    b = reshape(a, Val(2))
+    @test isa(b, OffsetArray{Float64,2})
+    @test axes(b) == IdentityUnitRange.((-1:1, 1:9))
+    b = reshape(a, Val(4))
+    @test isa(b, OffsetArray{Float64,4})
+    @test axes(b) == (axes(a)..., IdentityUnitRange(1:1))
+
+    @test reshape(OffsetArray(-1:0, -1:0), :, 1) == reshape(-1:0, 2, 1)
+    @test reshape(OffsetArray(-1:2, -1:2), -2:-1, :) == reshape(-1:2, -2:-1, 2)
+
+    @test reshape(OffsetArray(-1:0, -1:0), :) == OffsetArray(-1:0, -1:0)
+    @test reshape(A, :) == reshape(A0, :)
+
+    # reshape with one Colon for AbstractArrays
+    B = reshape(A0, -10:-9, :)
+    @test B isa OffsetArray{Int,2}
+    @test parent(B) == A0
+    @test no_offset_axes(B, 1) == -10:-9
+    @test axes(B, 2) == axes(A0, 2)
+
+    B = reshape(A0, -10:-9, 3:3, :)
+    @test B isa OffsetArray{Int,3}
+    @test same_value(A0, B)
+    @test no_offset_axes(B, 1) == -10:-9
+    @test no_offset_axes(B, 2) == 3:3
+    @test axes(B, 3) == 1:2
+
+    B = reshape(A0, -10:-9, 3:4, :)
+    @test B isa OffsetArray{Int,3}
+    @test same_value(A0, B)
+    @test no_offset_axes(B, 1) == -10:-9
+    @test no_offset_axes(B, 2) == 3:4
+    @test axes(B, 3) == 1:1
+
+    # pop the parent
+    B = reshape(A, size(A))
+    @test B == A0
+    B = reshape(A, (Base.OneTo(2), 2))
+    @test B == A0
+    B = reshape(A, (2,:))
+    @test B == A0
+
+    # julialang/julia #33614
+    A = OffsetArray(-1:0, (-2,))
+    @test reshape(A, :) == A
+    Arsc = reshape(A, :, 1)
+    Arss = reshape(A, 2, 1)
+    @test Arsc[1,1] == Arss[1,1] == -1
+    @test Arsc[2,1] == Arss[2,1] == 0
+    @test_throws BoundsError Arsc[0,1]
+    @test_throws BoundsError Arss[0,1]
+    A = OffsetArray([-1,0], (-2,))
+    Arsc = reshape(A, :, 1)
+    Arsc[1,1] = 5
+    @test first(A) == 5
+
+    Vec64  = zeros(6)
+    ind_a_64 = 3
+    ind_a_32 =Int32.(ind_a_64)
+    @test reshape(Vec64, ind_a_32, :) == reshape(Vec64, ind_a_64, :)
+
+    R = reshape(zeros(6), 2, :)
+    @test R isa Matrix
+    @test axes(R) == (1:2, 1:3)
+    R = reshape(zeros(6,1), 2, :)
+    @test R isa Matrix
+    @test axes(R) == (1:2, 1:3)
+    R = reshape(zeros(6), 2:3, :)
+    @test axes(R) == (2:3, 1:3)
+    R = reshape(zeros(6,1), 2:3, :)
+    @test axes(R) == (2:3, 1:3)
+
+    R = reshape(zeros(6), 1:2, :)
+    @test axes(R) == (1:2, 1:3)
+    R = reshape(zeros(6,1), 1:2, :)
+    @test axes(R) == (1:2, 1:3)
+
+    # reshape works even if the parent doesn't have 1-based indices
+    # this works even if the parent doesn't support the reshape
+    r = OffsetArray(IdentityUnitRange(0:1), -1)
+    @test reshape(r, 2) == 0:1
+    @test reshape(r, (2,)) == 0:1
+    @test reshape(r, :) == OffsetArray(0:1, -1:0)
+    @test reshape(r, (:,)) == OffsetArray(0:1, -1:0)
+
+    @test reshape(ones(2:3, 4:5), (2, :)) == ones(2,2)
+
+    # more than one colon is not allowed
+    @test_throws Exception reshape(ones(3:4, 4:5, 1:2), :, :, 2)
+    @test_throws Exception reshape(ones(3:4, 4:5, 1:2), :, 2, :)
+
+    A = OffsetArray(rand(4, 4), -1, -1);
+    B = reshape(A, (2, :))
+    @test axes(B, 1) == 1:2
+    @test axes(B, 2) == 1:8
+
+    # reshape with one single colon becomes a `vec`
+    A = OffsetArray(rand(4, 4), -1, -1)
+    @test reshape(A, (:, )) == vec(A)
+    @test reshape(A, :) == vec(A)
+
+    A0 = [1 3; 2 4]
+    A = reshape(A0, 2:3, 4:5)
+    @test axes(A) == Base.IdentityUnitRange.((2:3, 4:5))
+    @test reshape(A, axes(parent(A))..., :) == reshape(A0, axes(A0)..., :)
+
+    B = reshape(A0, -10:-9, 9:10)
+    @test isa(B, OffsetArray{Int,2})
+    @test parent(B) == A0
+    @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
+
+    @testset "BigInt reshape" begin
+        struct MyBigFill{T,N} <: AbstractArray{T,N}
+            val :: T
+            axes :: NTuple{N,Base.OneTo{BigInt}}
+        end
+        MyBigFill(val, sz::Tuple{}) = MyBigFill{typeof(val),0}(val, sz)
+        MyBigFill(val, sz::Tuple{Vararg{Integer}}) = MyBigFill(val, map(Base.OneTo{BigInt}, sz))
+        Base.size(M::MyBigFill) = map(length, M.axes)
+        Base.axes(M::MyBigFill) = M.axes
+        function Base.getindex(M::MyBigFill{<:Any,N}, ind::Vararg{Integer,N}) where {N}
+            checkbounds(M, ind...)
+            M.val
+        end
+        function Base.isassigned(M::MyBigFill{<:Any,N}, ind::Vararg{BigInt,N}) where {N}
+            checkbounds(M, ind...)
+            true
+        end
+        function Base.reshape(M::MyBigFill, ind::NTuple{N,BigInt}) where {N}
+            length(M) == prod(ind) || throw(ArgumentError("length mismatch in reshape"))
+            MyBigFill(M.val, ind)
+        end
+        Base.reshape(M::MyBigFill, ind::Tuple{}) = MyBigFill(M.val, ind)
+
+        M = MyBigFill(4, (2, 3))
+        O = OffsetArray(M)
+        @test vec(O) isa MyBigFill
+        @test vec(O) == vec(M)
+        @test reshape(O, :, big(2)) == reshape(M, :, big(2))
+        @test reshape(O, :, big(2)) isa MyBigFill
+        @test reshape(O, axes(M)) isa MyBigFill
+        @test reshape(O, axes(M)) == reshape(M, axes(M))
+        @test reshape(O, axes(M,1), :) isa MyBigFill
+        @test reshape(O, axes(M,1), :) == reshape(M, axes(M,1), :)
+        @test reshape(O, axes(M,1), big(1), :) isa MyBigFill
+        @test reshape(O, axes(M,1), big(1), :) == reshape(M, axes(M,1), big(1), :)
+
+        M = MyBigFill(4, (1,1))
+        O = OffsetArray(M)
+        @test reshape(O) isa MyBigFill
+        @test reshape(O) == reshape(M)
+    end
 end
 
 @testset "stack" begin
