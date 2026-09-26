@@ -850,6 +850,7 @@ export
 # help and reflection
     code_typed,
     code_lowered,
+    constructors,
     fullname,
     functionloc,
     isconst,
