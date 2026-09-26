@@ -347,6 +347,19 @@ See also [`LazyLibrary`](@ref), [`LazyLibraryPath`](@ref).
 """
 BundledLazyLibraryPath(subpath) = LazyLibraryPath(PrivateShlibdirGetter(), subpath)
 
+function Base.show(io::IO, llp::LazyLibraryPath)
+    pieces = llp.pieces
+    # `PrivateShlibdirGetter()` dlopens. Avoid doing so in `show`.
+    # Like `Library`, avoids printing the full path when bundled.
+    if length(pieces) == 2 && pieces[1] isa PrivateShlibdirGetter
+        show(io, pieces[2])
+    else
+        print(io, "LazyLibraryPath(")
+        join(io, (sprint(show, p) for p in pieces), ", ")
+        print(io, ")")
+    end
+end
+
 # Small helper struct to initialize a LazyLibrary with its initial set of dependencies
 struct InitialDependencies{T}
     dependencies::Vector{T}
@@ -431,6 +444,13 @@ mutable struct LazyLibrary
             C_NULL,
         )
     end
+end
+
+# Only print the path and avoid printing all the dependencies
+function Base.show(io::IO, ll::LazyLibrary)
+    print(io, "LazyLibrary(")
+    show(io, ll.path)
+    print(io, ")")
 end
 
 # We support adding dependencies only because of very special situations
