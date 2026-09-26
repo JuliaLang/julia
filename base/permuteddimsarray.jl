@@ -66,6 +66,15 @@ function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     ntuple(d->s[perm[d]], Val(N))
 end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
+Base.isunsafeloadable(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.isunsafeloadable(P)::Bool
+Base.isunsafestorable(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.isunsafestorable(P)::Bool
+Base.isstrided(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.isstrided(P)::Bool
+function Base.isdense(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
+    Base.isdense(P) && ntuple(identity, Val(N)) === perm
+end
+function Base.islinearstrided(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
+    Base._islinearstrided_or_trivial(P) && ntuple(identity, Val(N)) === perm
+end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)

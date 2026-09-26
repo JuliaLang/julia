@@ -397,25 +397,56 @@ perhaps range-types `Ind` of your own design. For more information, see
 
 ## [Strided Arrays](@id man-interface-strided-arrays)
 
+A strided array is a subtype of `AbstractArray` whose entries are stored with fixed strides.
+The strided array interface has two parts: a description of where the elements are located in
+the array's storage, and optionally, access to that storage through a pointer.
+
 | Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
-| `strides(A)`                                    |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
-| `Base.unsafe_convert(::Type{Ptr{T}}, Base.cconvert(Ptr{T}, A))` |                        | Return the native address of an array. |
+| `Base.isstrided(::Type{<:A})`                   |                                        | Return `true` to declare that the array type follows this interface.                                 |
+| `strides(A)`                                    |                                        | Return the distance in storage (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
 | `Base.elsize(::Type{<:A})`                      |                                        | Return the stride (in number of bytes) between consecutive elements in the array.                    |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                                |
-| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.      |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in storage (in number of elements) between adjacent elements in dimension i.      |
+| `Base.islinearstrided(::Type{<:A})`             |     `Base.isdense(A)`                  | Return `true` to declare that the array additionally has evenly spaced elements in column-major order. Implies `Base.isstrided`. |
+| `Base.isdense(::Type{<:A})`                     |     `A <: DenseArray`                  | Return `true` to declare that the array additionally has the same layout as an `Array`. Implies `Base.islinearstrided` and provides default `strides` and `Base.elsize` definitions. |
+
+These methods only describe where each element is located relative to the others: the element
+at indices `I` is stored at a byte offset of
+`Base.elsize(typeof(A)) * sum((I[d] - first(axes(A, d))) * stride(A, d) for d in 1:ndims(A))`
+from the element at the first index of every dimension. They do not require the storage
+to be accessible through a `Ptr`; for example, the storage could be GPU memory. Array wrappers
+such as [`view`](@ref), [`reshape`](@ref), [`reinterpret`](@ref), and [`PermutedDimsArray`](@ref)
+compute their layout from the layout of their parent, independent of what kind of storage the
+parent uses.
+
+To also allow the elements of an array with an `isbits` element type to be accessed through a
+pointer, declare one or both of the following traits:
+
+| Methods to implement                            |                                        | Brief description                                                                     |
+|:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
+| `Base.isunsafeloadable(::Type{<:A})`            |     `false`                            | Return `true` to declare that `unsafe_load` of a pointer to an `isbits` element is equivalent to `getindex`. |
+| `Base.isunsafestorable(::Type{<:A})`            |     `false`                            | Return `true` to declare that `unsafe_store!` to a pointer to an `isbits` element is equivalent to `setindex!`. |
+
+If `Base.isstrided(A)` and either of these traits is `true` for an array `A` with an `isbits`
+element type `T`, the following methods must also be implemented:
+
+| Methods to implement                            |                                        | Brief description                                                                     |
+|:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
+| `Base.unsafe_convert(::Type{Ptr{T}}, Base.cconvert(Ptr{T}, A))` |                        | Return the native address of the element at the first index of every dimension. This must not throw, even if `A` is empty. |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                                |
 | `Base.cconvert(::Type{Ptr{T}}, A)`              |     `A`                                | Return an object that can be converted to the native address of the array with [`Base.unsafe_convert`](@ref) |
 
-A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
-Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
-for more efficient linear algebra routines. A typical example of a user-defined strided array is one
-that wraps a standard `Array` with additional structure.
+Provided the element type of the array is compatible with BLAS, a strided array whose elements
+are accessible through a pointer can utilize BLAS and LAPACK routines for more efficient linear
+algebra routines. A typical example of a user-defined strided array is one that wraps a standard
+`Array` with additional structure.
 
 Warning: do not implement these methods if the underlying storage is not actually strided, as it
 may lead to incorrect results or segmentation faults.
 
 The following function demonstrates how an element at indices `I` in a strided array `A` can be accessed.
-This function assumes the element type `isbitstype` and the indices are inbounds.
+This function assumes the element type `isbitstype`, `Base.isunsafeloadable(A)` is `true`, and the indices are inbounds.
 
 ```jldoctest
 julia> function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}

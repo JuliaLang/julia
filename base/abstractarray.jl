@@ -559,12 +559,158 @@ function last(v::AbstractVector, n::Integer)
     v[range(stop=lastindex(v), length=min(n, checked_length(v)))]
 end
 
+## strided array traits
+
+"""
+    Base.isunsafeloadable(type)::Bool
+
+Return `true` if reading an element of an array of this type through a pointer is
+equivalent to reading it with [`getindex`](@ref). Otherwise return `false`.
+
+Precisely, for an array `A` of this type with an `isbits` element type `T`, if `p::Ptr{T}`
+points to the memory of the element `A[i]`, then `unsafe_load(p)`
+returns a value identical (`===`) to `A[i]`.
+
+This trait does not imply that the array is strided. If the array type is also
+[`isstrided`](@ref Base.isstrided), arrays of this type with an `isbits` element type
+must provide a pointer to their elements through `Base.cconvert` and `Base.unsafe_convert`,
+as described in the [strided array interface](@ref man-interface-strided-arrays).
+
+Defaults to `false`.
+
+See also [`Base.isunsafestorable`](@ref), [`unsafe_load`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+isunsafeloadable(::Type{<:AbstractArray}) = false
+isunsafeloadable(::Type{<:Array}) = true
+isunsafeloadable(::Type{<:Memory}) = true
+isunsafeloadable(::Type{Union{}}) = false
+isunsafeloadable(A::AbstractArray) = isunsafeloadable(typeof(A))
+
+"""
+    Base.isunsafestorable(type)::Bool
+
+Return `true` if writing an element of an array of this type through a pointer is
+equivalent to writing it with [`setindex!`](@ref). Otherwise return `false`.
+
+Precisely, for an array `A` of this type with an `isbits` element type `T`, if `p::Ptr{T}`
+points to the memory of the element `A[i]`, then `unsafe_store!(p, x)`
+has the same effect as `A[i] = x` for any `x::T`.
+
+This trait does not imply that the array is strided. If the array type is also
+[`isstrided`](@ref Base.isstrided), arrays of this type with an `isbits` element type
+must provide a pointer to their elements through `Base.cconvert` and `Base.unsafe_convert`,
+as described in the [strided array interface](@ref man-interface-strided-arrays).
+
+Defaults to `false`.
+
+See also [`Base.isunsafeloadable`](@ref), [`unsafe_store!`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+isunsafestorable(::Type{<:AbstractArray}) = false
+isunsafestorable(::Type{<:Array}) = true
+isunsafestorable(::Type{<:Memory}) = true
+isunsafestorable(::Type{Union{}}) = false
+isunsafestorable(A::AbstractArray) = isunsafestorable(typeof(A))
+
+"""
+    Base.isdense(type)::Bool
+
+Return `true` if arrays of this array type are [`isstrided`](@ref Base.isstrided)
+and additionally store isbits elements in the same layout as an [`Array`](@ref) of the same element
+type and size: contiguously, in column-major order, with an element spacing of
+`Base.elsize(Array{T})` bytes.
+
+Like the other layout traits, this only describes where elements are stored, not how that
+storage can be accessed. It does not imply that the elements can be accessed through a
+pointer, see [`Base.isunsafeloadable`](@ref) and [`Base.isunsafestorable`](@ref).
+
+Array types with this trait get default [`strides`](@ref) and [`Base.elsize`](@ref)
+definitions, and are [`islinearstrided`](@ref Base.islinearstrided) and
+[`isstrided`](@ref Base.isstrided) by default.
+
+Defaults to `true` for subtypes of [`DenseArray`](@ref), and `false` otherwise.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+isdense(::Type{<:AbstractArray}) = false
+isdense(::Type{<:DenseArray}) = true
+# Atomic memory may require extra padding
+isdense(::Type{<:GenericMemory}) = false
+isdense(::Type{<:Memory}) = true
+isdense(::Type{Union{}}) = false
+isdense(A::AbstractArray) = isdense(typeof(A))
+
+"""
+    Base.islinearstrided(type)::Bool
+
+Return `true` if arrays of this array type are [`isstrided`](@ref Base.isstrided)
+and additionally isbits elements are evenly spaced in column-major order.
+
+Array types with this trait are [`isstrided`](@ref Base.isstrided) by default.
+
+Defaults to [`Base.isdense`](@ref) of the type.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+islinearstrided(::Type{A}) where {A<:AbstractArray} = isdense(A)::Bool
+islinearstrided(::Type{Union{}}) = false
+islinearstrided(A::AbstractArray) = islinearstrided(typeof(A))
+
+"""
+    Base.isstrided(type)::Bool
+
+Return `true` if arrays of this array type follow the
+[strided array interface](@ref man-interface-strided-arrays): the location of each
+element in the array's storage is described by [`strides`](@ref) and [`Base.elsize`](@ref).
+Otherwise return `false`.
+
+The storage does not need to be accessible through a `Ptr`; for example, it could be
+GPU memory. Pointer access is declared separately with [`Base.isunsafeloadable`](@ref)
+and [`Base.isunsafestorable`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+isstrided(::Type{A}) where {A<:AbstractArray} = islinearstrided(A)::Bool
+isstrided(::Type{Union{}}) = false
+isstrided(A::AbstractArray) = isstrided(typeof(A))
+
+"""
+    Base._islinearstrided_or_trivial(type)::Bool
+
+Check the [`Base.islinearstrided`](@ref) trait. Also return `true` for strided zero- and one-dimensional arrays,
+which are trivially linear strided.
+"""
+_islinearstrided_or_trivial(::Type{A}) where {T,A<:AbstractArray{T,0}} = isstrided(A)::Bool
+_islinearstrided_or_trivial(::Type{A}) where {T,A<:AbstractArray{T,1}} = isstrided(A)::Bool
+_islinearstrided_or_trivial(::Type{A}) where {A<:AbstractArray} = islinearstrided(A)::Bool
+_islinearstrided_or_trivial(::Type{Union{}}) = false
+
+function elsize(::Type{A}) where {T,A<:AbstractArray{T}}
+    if isdense(A)
+        elsize(Array{T})
+    else
+        throw(MethodError(elsize, (A,)))
+    end
+end
+
+@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * Int(d), sz...)...)
+size_to_strides(s, d) = (s,)
+size_to_strides(s) = ()
+
 """
     strides(A)
 
 Return a tuple of the memory strides in each dimension.
 
-See also [`stride`](@ref).
+See also [`stride`](@ref) and [`Base.isstrided`](@ref).
 
 # Examples
 ```jldoctest
@@ -574,7 +720,13 @@ julia> strides(A)
 (1, 3, 12)
 ```
 """
-function strides end
+function strides(x::A) where {A<:AbstractArray}
+    if isdense(A)
+        size_to_strides(1, size(x)...)
+    else
+        throw(MethodError(strides, (x,)))
+    end
+end
 
 """
     stride(A, k::Integer)
@@ -595,6 +747,9 @@ julia> stride(A,3)
 ```
 """
 function stride(A::AbstractArray, k::Integer)
+    if isdense(A) && k > ndims(A)
+        return length(A)
+    end
     st = strides(A)
     k ≤ ndims(A) && return st[k]
     ndims(A) == 0 && return 1
@@ -605,10 +760,6 @@ function stride(A::AbstractArray, k::Integer)
     end
     return s
 end
-
-@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
-size_to_strides(s, d) = (s,)
-size_to_strides(s) = ()
 
 function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     @boundscheck checkbounds(A, I...)

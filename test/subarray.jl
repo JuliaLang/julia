@@ -118,6 +118,7 @@ function test_cartesian(@nospecialize(A), @nospecialize(B))
             @test v1 == v2 == B[IB]
         end
     end
+    check_strided_traits(A)
 end
 
 function test_linear(@nospecialize(A), @nospecialize(B))

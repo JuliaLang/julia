@@ -456,6 +456,8 @@ compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(LazyString("invalid strided index type ", typeof(I[1]))))
 
 elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
+isunsafeloadable(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = isunsafeloadable(P)
+isunsafestorable(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = isunsafestorable(P)
 
 iscontiguous(A::SubArray) = iscontiguous(typeof(A))
 iscontiguous(::Type{<:SubArray}) = false

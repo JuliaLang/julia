@@ -285,9 +285,9 @@ end
         if mod(step(viewax1), 2) == 0
             check_strided_get(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+            check_strides_throws("Parent's strides", reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         end
-        @test_throws "Parent must" strides(reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
+        check_strides_throws("Parent must", reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
     end
 end
 
@@ -389,8 +389,10 @@ test_many_wrappers((A1, A2), (identity, wrapper)) do (A1_, A2_)
     A1, A2 = deepcopy(A1_), deepcopy(A2_)
     @test reinterpret(S1, A2)[1] == S1(0, 0)
     @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S1(1, 2))
+    @test !Base.isunsafestorable(reinterpret(S1, A2))
     check_strided_get(reinterpret(S1, A2))
     @test_throws Base.PaddingError reinterpret(S2, A1)[1]
+    @test !Base.isunsafeloadable(reinterpret(S2, A1))
     check_strided_set(
         reinterpret(S2, deepcopy(A1_)),
         reinterpret(S2, deepcopy(A1_)),
@@ -790,16 +792,28 @@ end
     a = reinterpret(RInt24, collect(UInt8, 1:12))
     @test length(a) == 3
     z = reinterpret(RInt24, zeros(UInt8, 12))
+    check_strided_traits(a)
+    @test Base.isstrided(a)
+    @test !Base.isunsafestorable(a)
     check_strided_get(a)
     b = collect(a)
     @test b == a
+    check_strided_traits(b)
+    @test Base.isunsafeloadable(b)
+    @test Base.isunsafestorable(b)
+    @test Base.isstrided(b)
     check_strided_get(b)
     c = reinterpret(RAlsoInt24, b)
+    check_strided_traits(c)
+    @test Base.isstrided(c)
     check_strided_get(c)
     for N in 1:4
         local d = reinterpret(NTuple{N,UInt8}, b)
         # b has padding that should not be exposed
+        @test !Base.isunsafeloadable(d)
         @test_throws Base.PaddingError d[1]
+        check_strided_traits(d)
+        @test Base.isstrided(d)
         check_strided_set(
             deepcopy(d),
             deepcopy(d),

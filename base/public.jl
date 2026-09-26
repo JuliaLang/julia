@@ -35,6 +35,11 @@ public
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,
+    isstrided,
+    islinearstrided,
+    isdense,
+    isunsafeloadable,
+    isunsafestorable,
     unsetindex!,
     unsetindex_atomic!,
 
