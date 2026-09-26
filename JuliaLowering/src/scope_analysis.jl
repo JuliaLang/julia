@@ -19,8 +19,7 @@ struct ScopeInfo
     assignments::Dict{NameKey, SyntaxTree}
     # Map from variable names to binding IDs for resolution.  Includes all
     # locals, args, sparams, and explicit globals belonging to this scope.
-    # Variables captured from an outer scope are not included.  The top-level
-    # scope also contains all globals for resolution to fall back to.
+    # Variables captured from an outer scope are not included.
     vars::Dict{NameKey,IdTag}
     # See `LambdaBindings`. Nothing if not a lambda scope.  This is the final
     # collecting place for locals going in to closure conversion.
@@ -68,6 +67,10 @@ mutable struct ScopeResolutionContext <: AbstractLoweringContext
     # be assigned to without the `global` keyword in soft scopes due to being
     # assigned to at top level, or passing the defined-and-owned-global check.
     const soft_assignable_globals::Set{NameKey}
+    # We want any one (module, name) pair to use one binding, even across
+    # hygiene layers or with GlobalRefs (which don't enter scope.vars and don't
+    # affect name resolution), so store them here.
+    const globals::Dict{Tuple{Module, String}, IdTag}
     # Every static parameter corresponds to some typevar (top-level local)
     # required to create this method
     const sp_typevars::Dict{IdTag, IdTag}
@@ -100,9 +103,9 @@ _var_str(v) = v === :local ? "local variable" :
     v === :static_parameter ? "static parameter" : "unknown"
 
 # Declare `ex` in `scope`, unless a binding already exists with the same name in
-# scope, or anywhere.  Throw an error if a name conflict occurs.  The rules
-# for conflict: declaring a local (or global) twice with the same name is a
-# no-op, but doing so with an argument or static parameter is an error.  A
+# scope, or `ex` is pre-resolved.  Throw an error if a name conflict occurs.
+# The rules for conflict: declaring a local (or global) twice with the same name
+# is a no-op, but doing so with an argument or static parameter is an error.  A
 # variable usually can't be two things in one scope, but flisp has quirks.
 function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if kind(ex) === K"BindingId"
@@ -113,6 +116,10 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
         add_lambda_local!(ctx, scope, b)
         return bid
     elseif kind(ex) === K"Placeholder"
+        return nothing
+    elseif ex.mod isa Module
+        new_k === :global || throw(LoweringError(
+            ex, "cannot use GlobalRef as local identifier"))
         return nothing
     end
     bid = get(scope.vars, NameKey(ex), nothing)
@@ -138,28 +145,27 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     end
 end
 
-# globals are added to both `scope` and the top scope (mainly so we can get the
-# same binding for many unrelated global references).
 function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
                            is_nospecialize::Bool=false,
                            is_ambiguous_local::Bool=false)
     nk = NameKey(ex)
-    if bk === :global
-        mod = syntax_module(ex)
-        declaration_scope = top_scope(ctx)
-    else
-        declaration_scope = scope
-        mod = ex.mod isa Module ?
-            throw(LoweringError(ex, "cannot use GlobalRef as local identifier")) : nothing
-    end
     is_internal = (ex.context::SyntaxContext).internal ||
         getmeta(ex, :is_internal, false)::Bool
-    b = _new_binding(ctx.bindings, ex, nk.name, bk;
-                     mod, is_internal, is_nospecialize, is_ambiguous_local)
-    declaration_scope.vars[nk] = b.id
-    scope.vars[nk] = b.id
-    add_lambda_local!(ctx, scope, b)
-    return b.id
+    if bk === :global
+        mod = syntax_module(ex)
+        bid = get!(ctx.globals, (mod, nk.name)) do
+            _new_binding(ctx.bindings, ex, nk.name, bk; mod, is_internal).id
+        end
+    else
+        @jl_assert ex.mod === nothing ex
+        bid = _new_binding(ctx.bindings, ex, nk.name, bk;
+                         is_internal, is_nospecialize, is_ambiguous_local).id
+    end
+    if !(ex.mod isa Module)
+        scope.vars[nk] = bid
+    end
+    add_lambda_local!(ctx, scope, get_binding(ctx, bid))
+    return bid
 end
 
 function add_lambda_local!(ctx, scope::ScopeInfo, b)
@@ -198,10 +204,11 @@ function needs_resolution(ex)
         !is_leaf(ex) && !is_quoted(ex) && !(kind(ex) in KSet"toplevel module")
 end
 
+# Resolve a (sym, layer) in the current scope.  GlobalRefs may skip this step.
 function resolve_name(ctx, ex; exclude_toplevel_globals=false)
     # TODO: probably want to cache these lookups
     nk = NameKey(ex)
-    for sid in Iterators.reverse(ctx.scope_stack)
+    ex.mod isa Module || for sid in Iterators.reverse(ctx.scope_stack)
         bid = get(ctx.scopes[sid].vars, nk, nothing)
         isnothing(bid) && continue
         b = get_binding(ctx, bid)
@@ -253,8 +260,7 @@ function _find_scope_decls!(ctx, scope, ex)
                 ex, "allow local BindingId as function name?")
             get!(scope.binding_assignments, b.id, ex[1])
         elseif k1 === K"Identifier"
-            ex[1].mod isa Module &&
-                explicit_declare_in_scope!(ctx, scope, ex[1], :global)
+            ex[1].mod isa Module && return
             get!(scope.assignments, NameKey(ex[1]), ex[1])
             get!(ctx.layer_ids, (ex[1].context::SyntaxContext).layer,
                  length(ctx.layer_ids)+1)
@@ -333,9 +339,9 @@ function enter_scope!(ctx, ex)
         b = get_binding(ctx, bid)
         b.lambda_id != 0 || add_lambda_local!(ctx, scope, b)
     end
-    for (vk, node_id) in sort!(collect(scope.assignments);
-                               by=x->let nk=x[1]; (nk.name, ctx.layer_ids[nk.layer]); end)
-        local ex = node_id
+    for (vk, ex) in sort!(collect(scope.assignments);
+                          by=x->let nk=x[1]; (nk.name, ctx.layer_ids[nk.layer]); end)
+        @jl_assert ex.mod === nothing ex
         b = resolve_name(ctx, ex)
         if b === nothing
             sc = ex.context::SyntaxContext
@@ -369,7 +375,8 @@ function enter_scope!(ctx, ex)
                 # assign-existing-global if this is an explicit global that
                 # isn't at top level, or if the soft scope exception applies
             else
-                declare_in_scope!(ctx, scope, ex, :local; is_ambiguous_local = scope.is_permeable)
+                declare_in_scope!(ctx, scope, ex, :local;
+                                  is_ambiguous_local=scope.is_permeable)
             end
         elseif b.kind === :static_parameter
             throw(LoweringError(ex, "cannot overwrite a static parameter"))
@@ -398,9 +405,6 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
     @jl_assert scope isa ScopeInfo || k === K"lambda" ||
         k === K"toplevel_lambda" || k === K"generated_lambda" ex
     if k == K"Identifier"
-        if (mod = ex.mod; !isnothing(mod))
-            return new_global_binding(ctx, ex, syntax_name(ex), mod)
-        end
         b = resolve_name(ctx, ex)
         # Unresolved names are assumed global
         if isnothing(b)
@@ -938,7 +942,7 @@ enclosing lambda form and information about variables captured by closures.
     ctx2 = ScopeResolutionContext(ctx.layer, ctx.bindings,
                                   Dict{ScopeLayer, Int}(),
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
-                                  Set{NameKey}(), Dict{IdTag, IdTag}(),
+                                  Set{NameKey}(), Dict(), Dict{IdTag, IdTag}(),
                                   Dict{IdTag, Vector{IdTag}}(),
                                   enable_soft_scopes,
                                   world)
