@@ -2466,11 +2466,9 @@
              (cons (length a) (get-dims anext is-row-first (1- d)))))))
   (define (is-balanced s)
     ; determine whether there are exactly the same number of elements along each axis
-    (= 0 (sum (map (lambda (x y)
-                     (sum (map (lambda (z)
-                                 (- z y))
-                               x)))
-                   (cdr s) (map car (cdr s))))))
+    (every (lambda (x)
+             (every (lambda (z) (= z (car x))) x))
+           (cdr s)))
   (define (hasrows-flatten a)
     ; (car <result>) stores if a row was observed
     (foldl (lambda (x y)
