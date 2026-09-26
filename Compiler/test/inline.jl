@@ -2517,4 +2517,16 @@ let m = Module()
     @test store_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal_partition)]
     @test assign_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal!)]
 end
+
+# A static parameter that is undefined for every call does not prevent a direct invoke (#27813)
+@test_warn r"declares type variable S but does not use it" @eval begin
+    @noinline undef_sparam_invoke27813(x::T) where {T,S} = x
+end
+@noinline cond_sparam_invoke27813(x::T, ::Union{Nothing,Ref{S}}) where {T,S} = x
+let code = get_code((Int,)) do x
+        undef_sparam_invoke27813(x) + cond_sparam_invoke27813(x, nothing)
+    end
+    @test count(isinvoke(:undef_sparam_invoke27813), code) == 1
+    @test count(isinvoke(:cond_sparam_invoke27813), code) == 1
+end
 end # module inline_tests

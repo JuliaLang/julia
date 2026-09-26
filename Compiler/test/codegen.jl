@@ -1035,6 +1035,20 @@ end
 g56739(x) = @noinline f56739(x)
 @test g56739(1) == 1
 
+# A static parameter that is undefined for every call is resolved at compile time,
+# without passing static parameters at run time (#27813)
+@test_warn r"declares type variable S but does not use it" @eval begin
+    undef_sparam27813(x::T) where {T,S} = S
+    isdefined_sparam27813(x::T) where {T,S} = @isdefined(S)
+end
+isdefined_cond_sparam27813(::Union{Nothing,Ref{S}}) where {S} = @isdefined(S)
+@test_throws UndefVarError(:S, :static_parameter) undef_sparam27813(1)
+@test isdefined_sparam27813(1) === false
+@test isdefined_cond_sparam27813(nothing) === false
+@test isdefined_cond_sparam27813(Ref(1)) === true
+@test !occursin("japi3_", get_llvm(isdefined_sparam27813, Tuple{Int}))
+@test !occursin("japi3_", get_llvm(isdefined_cond_sparam27813, Tuple{Nothing}))
+
 struct Vec56937 x::NTuple{8, VecElement{Int}} end
 
 x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
