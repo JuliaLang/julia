@@ -250,6 +250,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     such as `Int128`, [`BigInt`](@ref) or a floating point type like `Float64`.
   * The imaginary unit `sqrt(-1)` is represented in Julia as `im`, not `j` as in Python.
   * In Julia, the exponentiation operator is `^`, not `**` as in Python.
+  * Julia's `clamp(x, lo, hi)` propagates `NaN` from any argument, whereas Python's `numpy.clip` does not propagate `NaN` from the bounds arguments.
   * Julia uses `nothing` of type `Nothing` to represent a null value, whereas Python uses `None` of type `NoneType`.
   * In Julia, the standard operators over a matrix type are matrix operations, whereas, in Python, the standard operators are element-wise operations. When both `A` and `B` are matrices, `A * B` in Julia performs matrix multiplication, not element-wise multiplication as in Python. `A * B` in Julia is equivalent with `A @ B` in Python, whereas `A * B` in Python is equivalent with `A .* B` in Julia.
   * In Julia, when you want to apply a scalar-valued function elementwise to an array, use broadcasting
@@ -345,6 +346,8 @@ For users coming to Julia from R, these are some noteworthy differences:
     of the form `if cond; statement; end`, `cond && statement` and `!cond || statement`. Assignment
     statements in the latter two syntaxes must be explicitly wrapped in parentheses, e.g. `cond && (x = value)`,
     because of the operator precedence.
+  * Julia's `clamp(x, lo, hi)` propagates `NaN` from any argument. In C++, `std::clamp` does not
+    specify behavior when `lo`, `hi`, or `x` is `NaN`.
   * Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
     expression, it is considered done; otherwise the input continues. One way to force an expression
     to continue is to wrap it in parentheses.
