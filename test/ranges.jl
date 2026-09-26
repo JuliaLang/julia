@@ -1815,6 +1815,21 @@ end
     end
 end
 
+@testset "Issue #37276" begin
+    # `lerpi` interpolates in the element type, so an element type wider than `Float64`
+    # keeps its own precision rather than being capped at `Float64`.
+    @test real(Base.lerpi(1, 10, Complex{BigFloat}(0), Complex{BigFloat}(1))) ==
+          Base.lerpi(1, 10, BigFloat(0), BigFloat(1))
+    @test real(LinRange(Complex{BigFloat}(0), Complex{BigFloat}(1), 11)[2]) ==
+          LinRange(BigFloat(0), BigFloat(1), 11)[2]
+    # A narrower element type interpolates in itself rather than widening to `Float64`.
+    for (j, d) in ((1, 3), (2, 3), (17, 97))
+        t = Float32(j)/d
+        @test Base.lerpi(j, d, 1f0, 2f0) === (1-t)*1f0 + t*2f0
+    end
+    @test Base.lerpi(1, 3, 1.0, 2.0) === (1-1/3)*1.0 + (1/3)*2.0
+end
+
 @testset "Issue #26532" begin
     x = range(3, stop=3, length=5)
     @test step(x) == 0.0
