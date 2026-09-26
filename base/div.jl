@@ -127,6 +127,13 @@ rem(x, y, r::RoundingMode)
 rem(x, y, ::RoundingMode{:ToZero}) = rem(x, y)
 rem(x, y, ::RoundingMode{:Down}) = mod(x, y)
 rem(x, y, ::RoundingMode{:Up}) = mod(x, -y)
+# For integers, the `-y` above overflows when `y == typemin(typeof(y))` (and
+# wraps for all unsigned `y`), so `mod` is passed a divisor of the wrong sign;
+# this made `rem` disagree with `divrem`, return values outside the documented
+# interval, and violate `x == div(x, y, r)*y + rem(x, y, r)` — even though the
+# exact remainder is always representable.  Go through `divrem`, which computes
+# the remainder without negating the divisor.
+rem(x::Integer, y::Integer, r::RoundingMode{:Up}) = divrem(x, y, r)[2]
 rem(x, y, r::RoundingMode{:Nearest}) = x - y * div(x, y, r)
 rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
 function rem(x::Integer, y::Integer, rnd::Union{typeof(RoundNearestTiesAway),
