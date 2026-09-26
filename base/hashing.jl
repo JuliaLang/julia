@@ -197,51 +197,65 @@ function hash(x::Float16, h::UInt)
 end
 
 ## generic hashing for rational values ##
-_hash_shl!(x, n) = (x << n)
 function hash(x::Real, h::UInt)
     # decompose x as num*2^pow/den
-    num, pow, den = decompose(x)
+    _num, _pow, _den = decompose(x)
+    # promote Bool to Int8 for trailing_zeros and widen
+    num = _num isa Bool ? Int8(_num) : _num
+    den = _den isa Bool ? Int8(_den) : _den
 
     # handle special values
     num == 0 && den == 0 && return hash(NaN, h)
     num == 0 && return hash(ifelse(den > 0, 0.0, -0.0), h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
 
-    # normalize decomposition
-    if den < 0
-        num = -num
-        den = -den
-    end
-    num_z = trailing_zeros(num)
-
-    num >>= num_z
-    den_z = trailing_zeros(den)
+    # normalize decomposition: num*2^pow/den with den odd, and num odd once shifted by num_z.
+    # num is shifted lazily, so that the generic path below can fold the shift into one operation.
+    num_z::Int = trailing_zeros(num)
+    den_z::Int = trailing_zeros(den)
+    # effective pow for hashing purposes is defined as pow%Int64
+    pow::Int64 = _pow%Int64 + num_z - den_z
     den >>= den_z
-    pow += num_z - den_z
+    num_signbit = signbit(num)
+    den_signbit = signbit(den)
+    x_signbit = num_signbit ⊻ den_signbit
+    # The sign is not normalized: num may be unsigned, and negating a BigInt allocates.
+    # hash_integer folds the sign in as `seed ⊻= (x < 0)`, so do the same for the sign of den below.
     # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be non-negative.
-    if den == 1
-        # left = ceil(log2(num*2^pow))
-        left = top_set_bit(abs(num)) + pow
+    if den == 1 || den == -1
+        num_sig_dig = exponent(num) + 1 - num_z
         # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
             if 0 <= pow # if pow is non-negative, it is an integer
-                left <= 63 && return hash(Int64(num) << Int(pow), h)
-                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
+                # Int64 and UInt64 hash by their 64-bit pattern, so compute the pattern of
+                # num*2^pow modulo 2^64. It is exact when the value fits in Int64 or UInt64.
+                if pow <= 64 - x_signbit - num_sig_dig
+                    unum = (num >> num_z) % UInt64
+                    return hash(ifelse(den_signbit, -unum, unum) << Int(pow), h)
+                end
             end # typemin(Int64) handled by Float64 case
             # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
             # Float64s have 53 mantissa bits (including implicit bit)
-            left <= 1024 && left - pow <= 53 && return hash(ldexp(Float64(num), pow), h)
+            if pow <= 1024 - num_sig_dig && num_sig_dig <= 53
+                fnum = Float64((num >> num_z) % Int64) # exact: abs(num >> num_z) has at most 53 bits here
+                return hash(ldexp(ifelse(den_signbit, -fnum, fnum), Int(pow)), h)
+            end
         end
     else
-        h = hash_integer(den, h)
+        h = hash_integer(den, h ⊻ den_signbit)
     end
     # handle generic rational values
-    h = hash_integer(pow, h)
+    h = hash_integer(pow, h) ⊻ den_signbit
 
     # trimming only whole bytes of trailing zeros simplifies greatly
     # some specializations for memory-backed bitintegers
-    h = hash_integer((pow > 0) ? _hash_shl!(num, pow % 8) : num, h)
+    net_shift = num_z - ((pow > 0) ? pow % 8 : 0)
+    h = if net_shift < 0
+        hash_integer(widen(num) << (-net_shift), h)
+    else
+        hash_integer(num >> net_shift, h)
+    end
     return h
 end
 
