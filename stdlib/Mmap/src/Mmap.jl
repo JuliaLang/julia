@@ -169,18 +169,17 @@ function settings(s::RawFD, shared::Bool, exec::Bool=false)
     if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
         prot = PROT_READ | PROT_WRITE
-        exec && (prot |= PROT_EXEC)
     else
         mode = ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
         systemerror("fcntl F_GETFL", mode == -1)
         mode = mode & 3
         prot = (mode == 0) ? PROT_READ : ((mode == 1) ? PROT_WRITE : (PROT_READ | PROT_WRITE))
-        exec && (prot |= PROT_EXEC)
         if prot & PROT_READ == 0
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
     end
-    return prot, flags, (prot & PROT_WRITE) == 0
+    exec && (prot |= PROT_EXEC)
+    return prot, flags, (prot & PROT_WRITE) > 0
 end
 
 # Before mapping, grow the file to sufficient size
@@ -462,7 +461,7 @@ function mmap(io::IO,
             check_can_grow(io, szfile, readonly, grow) # Cannot grow on Windows, error if requested size is larger than file size
 
             if !(io isa SharedMemory)
-                page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
+                page_prot = exec ? (readonly ? PAGE_EXECUTE_READ : PAGE_EXECUTE_READWRITE) : (readonly ? PAGE_READONLY : PAGE_READWRITE)
                 handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                     file_desc,                                       # File to map
                     C_NULL,                                          # Cannot be inherited
@@ -476,6 +475,7 @@ function mmap(io::IO,
             end
 
             map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
+            exec && (map_access |= FILE_MAP_EXECUTE)
             ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (OS_HANDLE, DWORD, DWORD, DWORD, Csize_t),
                 handle,                                                    # Handle to mapping object
                 map_access,                                                # Requested access mode
