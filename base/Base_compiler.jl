@@ -344,6 +344,7 @@ using .Checked
 
 # array structures
 include("indices.jl")
+include("gcregions.jl")
 include("genericmemory.jl")
 include("array.jl")
 include("abstractset.jl")

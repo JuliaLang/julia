@@ -7,6 +7,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "gc-regions.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,7 +18,11 @@ extern "C" {
 // that link it ahead of another partition overwrite this.
 static jl_binding_partition_t *new_binding_partition(jl_binding_t *b) JL_CANSAFEPOINT
 {
+    // A partition is stored into its binding, a region-0 object: it is made
+    // in region 0 whatever GC region window the caller holds (gc-regions.h).
+    int lent = jl_gc_region_borrow(0);
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_gc_alloc(jl_current_task->ptls, sizeof(jl_binding_partition_t), jl_binding_partition_type);
+    jl_gc_region_unborrow(lent);
     bpart->restriction = NULL;
     bpart->kind = (size_t)PARTITION_KIND_GUARD;
     jl_atomic_store_relaxed(&bpart->min_world, 0);
@@ -1771,6 +1776,9 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
             JL_LOCK(&m->lock);
         }
         else {
+            // The binding and the tables that hold it are region-0 objects:
+            // made in region 0 whatever window the caller holds (gc-regions.h).
+            int lent = jl_gc_region_borrow(0);
             size_t i, cl = jl_svec_len(bindings);
             for (i = cl; i > 0; i--) {
                 jl_value_t *b = jl_svecref(bindings, i - 1);
@@ -1791,6 +1799,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
             assert(jl_svecref(bindings, i) == jl_nothing);
             jl_svecset(bindings, i, b); // relaxed
             jl_smallintset_insert(&m->bindingkeyset, (jl_value_t*)m, bindingkey_hash, i, (jl_value_t*)bindings); // release
+            jl_gc_region_unborrow(lent);
             JL_UNLOCK(&m->lock);
             return b;
         }

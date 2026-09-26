@@ -197,6 +197,16 @@ end
     run_pg_size_test()
 end
 
+@testset "jl_gc_heap_reserve" begin
+    # The reserve maps whole page blocks, populated, into the clean page pool: it returns
+    # at least what was asked, a second call is not an error, and allocation goes on.
+    reserve(bytes) = ccall(:jl_gc_heap_reserve, UInt64, (UInt64,), bytes)
+    @test reserve(4 << 20) >= 4 << 20
+    @test reserve(4 << 20) >= 4 << 20
+    v = [Ref(i) for i in 1:10_000]
+    @test v[end][] == 10_000
+end
+
 @testset "issue-54275" begin
     issue_54275_test()
 end
@@ -216,6 +226,26 @@ end
         @test reasons[:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL] >= 10;"
     cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no --gc-sweep-always-full -e $prog`
     @test success(cmd)
+end
+
+# The GC regions (src/gc-regions.h), built with WITH_GC_REGIONS=1. Each
+# script exits 1 at its first failed check, so `success` is the assertion.
+if Base.GC_REGIONS
+    Base.GC_REGION_BARRIER || @info "GC regions: built without the escape barrier (WITH_GC_REGION_BARRIER=0), the escape cases are skipped"
+    @testset "regions" begin
+        run_gctest("gc/regions_window.jl")
+        run_gctest("gc/regions_escape.jl")
+        run_gctest("gc/regions_lifetime.jl")
+        run_gctest("gc/regions_census.jl")
+        run_gctest("gc/regions_tree.jl")
+        run_gctest("gc/regions_stores.jl")
+        run_gctest("gc/regions_safety.jl")
+        run_gctest("gc/regions_containers.jl")
+        run_gctest("gc/regions_heaps.jl")
+        run_gctest("gc/regions_many.jl")
+    end
+else
+    @info "GC regions: not built (WITH_GC_REGIONS=0), the regions tests are skipped"
 end
 end
 

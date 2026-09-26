@@ -145,19 +145,20 @@ end
     h.idxfloor = 1
     if h.count == 0
         # TODO: tryresize
-        h.slots = Memory{UInt8}(undef, newsz)
+        # The tables replace the tables of the Dict: allocated where the Dict lives (gcregions.jl)
+        h.slots = memory_for(h, Memory{UInt8}, newsz)
         fill!(h.slots, 0x0)
-        h.keys = Memory{K}(undef, newsz)
-        h.vals = Memory{V}(undef, newsz)
+        h.keys = memory_for(h, Memory{K}, newsz)
+        h.vals = memory_for(h, Memory{V}, newsz)
         h.ndel = 0
         h.maxprobe = 0
         return h
     end
 
-    slots = Memory{UInt8}(undef, newsz)
+    slots = memory_for(h, Memory{UInt8}, newsz)
     fill!(slots, 0x0)
-    keys = Memory{K}(undef, newsz)
-    vals = Memory{V}(undef, newsz)
+    keys = memory_for(h, Memory{K}, newsz)
+    vals = memory_for(h, Memory{V}, newsz)
     age0 = h.age
     count = 0
     maxprobe = 0

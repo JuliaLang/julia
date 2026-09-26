@@ -1283,6 +1283,30 @@ static const auto jl_cancellation_point_func = new JuliaFunction<>{
             {}); }
 };
 
+#ifdef WITH_GC_REGION_BARRIER
+// The escape barrier of the GC regions alone (gc-regions.h), for the stores
+// into a fresh object: the parent, then the children, like julia.write_barrier.
+// The parent is `nocapture`, or alloc-opt could not elide the object.
+static const auto jl_region_write_barrier_func = new JuliaFunction<>{
+    "julia.region_write_barrier",
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {JuliaType::get_prjlvalue_ty(C)}, true); },
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        AttrBuilder ParamAttrs(C);
+        ParamAttrs.addAttribute(Attribute::ReadOnly);
+        addNoCaptureAttr(ParamAttrs);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet(),
+            {AttributeSet::get(C, ParamAttrs)});
+    },
+};
+#endif
+
 static const auto jlisa_func = new JuliaFunction<>{
     XSTR(jl_isa),
     [](LLVMContext &C) {
@@ -11301,6 +11325,9 @@ static void init_jit_functions(void)
     add_named_global(jl_typeof_func, (void*)NULL);
     add_named_global(jl_field_write_barrier_p11_func, (void*)NULL);
     add_named_global(jl_field_write_barrier_p13_func, (void*)NULL);
+#ifdef WITH_GC_REGION_BARRIER
+    add_named_global(jl_region_write_barrier_func, (void*)NULL);
+#endif
     add_named_global(jldlsym_func, &jl_load_and_lookup);
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);

@@ -640,7 +640,10 @@ close(proc.in)
     script = "profile_spawnmany_exec.jl"
     cmd_base = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
     @testset for n in [20000, 200000, 2000000]
-        cmd = ignorestatus(setenv(cmd_base, "NTASKS" => n; dir = @__DIR__))
+        # addenv, not setenv: the child keeps the depot and load path of the
+        # test run; with its environment replaced it looked in the home of a
+        # sandboxed CI agent, which it may not read.
+        cmd = ignorestatus(Cmd(addenv(cmd_base, "NTASKS" => string(n)); dir = @__DIR__))
         cmd = pipeline(cmd; stdout = stderr, stderr)
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
