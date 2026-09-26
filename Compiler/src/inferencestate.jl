@@ -680,6 +680,7 @@ _should_instrument(loc::MethodInstance) = _should_instrument(loc.def)
 _should_instrument(::Module) = false
 _should_instrument(::Nothing) = false
 function _should_instrument(info::DebugInfo)
+    ccall(:jl_di_materialize_all, Cvoid, (Any,), info) # decode image fields before the raw reads below
     linetable = info.linetable
     # a byte-precise linetable is a compressed `String` that carries no file
     # information of its own; only recurse into nested `DebugInfo`

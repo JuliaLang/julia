@@ -1754,6 +1754,26 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
     return wrap_tvar_env(*new_tvar, constrained);
 }
 
+// An "atom" is a type whose only subtypes are itself and Union{}. So if an atom is not a
+// subtype of a method's slot type, the two are disjoint.
+// Kinds are not atoms, because Type{X} <: DataType. A Tuple is an atom only if its
+// parameters are, because Tuple{DataType} has the subtype Tuple{Type{Int}}.
+JL_DLLEXPORT int jl_is_atom_type(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(a))
+        return 0;
+    jl_datatype_t *d = (jl_datatype_t*)a;
+    if (!d->isconcretetype || jl_is_kind(a))
+        return 0;
+    if (d->name == jl_tuple_typename) {
+        for (size_t i = 0; i < jl_nparams(d); i++) {
+            if (!jl_is_atom_type(jl_tparam(d, i)))
+                return 0;
+        }
+    }
+    return 1;
+}
+
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     u = unalias_unionall(u, e);

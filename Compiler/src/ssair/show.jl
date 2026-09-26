@@ -12,7 +12,7 @@ using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, BasicBlock, CFG, CachedMethodTable,
     DebugInfoStream, EMPTY_SPTYPES, Effects, IRCode, IncrementalCompact, InferenceResult,
     InferenceState, InvalidIRError, LimitedAccuracy, NativeInterpreter, StmtRange,
     Timings, VarState, argextype, block_for_inst, compute_basic_blocks, edge_debuginfo,
-    get_ci_abi, get_ci_mi, has_prev_debuginfo, prev_debuginfo, scan_ssa_use!,
+    ci_debuginfo, get_ci_abi, get_ci_mi, has_prev_debuginfo, prev_debuginfo, scan_ssa_use!,
     singleton_type, source_location, sptypes_from_meth_instance, widenconst
 
 @nospecialize
@@ -1212,7 +1212,7 @@ function Base.show(io::IO, mi_info::Timings.InferenceFrameInfo)
             show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
-        di = mi.cache.debuginfo
+        di = ci_debuginfo(mi.cache)
         file, line = debuginfo_firstline(di)
         file = string(file)
         line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"

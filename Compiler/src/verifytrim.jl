@@ -11,7 +11,7 @@ using ..Compiler:
      NamedTuple, Pair, PhiCNode, PhiNode, PiNode, QuoteNode, SSAValue, SimpleVector, String,
      Tuple, VarState, Vector,
      # functions
-     argextype, argextype_widened, empty!, error, get, get_ci_mi, get_world_counter, getglobal, getindex, getproperty,
+     argextype, argextype_widened, ci_debuginfo, empty!, error, get, get_ci_mi, get_world_counter, getglobal, getindex, getproperty,
      hasintersect, haskey, in, isdefinedglobal, isdispatchelem, isempty, isexpr, iterate, length, map!, max,
      pop!, popfirst!, push!, pushfirst!, reinterpret, reverse!, reverse, setindex!,
      setproperty!, similar, singleton_type, sptypes_from_meth_instance, sp_type_rewrap,
@@ -243,7 +243,7 @@ function verify_create_stackframes(codeinst::CodeInstance, stmtidx::Int, parents
     visited = IdSet{Tuple{CodeInstance,Int}}()
     while parent !== nothing
         codeinst, stmtidx = parent
-        di = codeinst.debuginfo
+        di = ci_debuginfo(codeinst)
         append_scopes!(scopes, stmtidx, di, :var"unknown scope")
         for i in reverse(1:length(scopes))
             lno = scopes[i]
@@ -304,7 +304,7 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 haskey(parents, edge) || (parents[edge] = (codeinst, i))
                 edge in inspected && continue
                 edge_mi = get_ci_mi(edge)
-                if edge_mi === edge.def
+                if edge_mi === ci_def(edge)
                     ci = get(caches, edge_mi, nothing)
                     ci isa CodeInstance && continue # assume that only this_world matters for trim
                 end

@@ -240,6 +240,50 @@ static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
     return meta ? meta->idx : (size_t)-1;
 }
 
+size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return external_blob_index(v);
+}
+
+// Record which images form the dependency closure of the image being loaded:
+// the sysimage, each dependency, and the image itself. Certificate replay checks use it.
+static size_t *loading_closure_bits_owned = NULL;
+JL_DLLEXPORT void jl_set_loading_closure_from_depmods(jl_array_t *depmods, jl_array_t *anchors)
+{
+    size_t nblobs = n_linkage_blobs();
+    size_t nwords = (nblobs + 8 * sizeof(size_t) - 1) / (8 * sizeof(size_t));
+    size_t *bits = (size_t*)calloc_s(nwords ? nwords * sizeof(size_t) : sizeof(size_t));
+    bits[0] |= 1;
+    if (depmods) {
+        for (size_t i = 0, ld = jl_array_nrows(depmods); i < ld; i++) {
+            size_t idx = external_blob_index(jl_array_ptr_ref(depmods, i));
+            if (idx < nblobs)
+                bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
+        }
+    }
+    if (anchors) {
+        for (size_t i = 0, la = jl_array_nrows(anchors); i < la; i++) {
+            jl_value_t *a = jl_array_ptr_ref(anchors, i);
+            if (a && jl_object_in_image(a)) {
+                size_t idx = external_blob_index(a);
+                if (idx < nblobs)
+                    bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
+                break;
+            }
+        }
+    }
+    assert(loading_closure_bits_owned == NULL);
+    loading_closure_bits_owned = bits;
+    jl_set_loading_closure_blobs(bits, nblobs);
+}
+
+JL_DLLEXPORT void jl_clear_loading_closure(void)
+{
+    jl_set_loading_closure_blobs(NULL, 0);
+    free(loading_closure_bits_owned);
+    loading_closure_bits_owned = NULL;
+}
+
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
 {
     if (obj == NULL)
@@ -487,6 +531,255 @@ static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAF
         ptrhash_put(&field_replace, (void*)addr, newval);
 }
 
+// Interned edge lists: one word per edge, with no relocation.
+// A reference word is (image key << 40) | (offset in 8-byte units).
+// Image key 0 is this image; key k > 0 is the dependency with index k-1.
+// A word with the high bit set is instead a zigzag-encoded Int literal.
+// References into this image are patched after layout.
+// The tag bits need room above the 40-bit field, so this is 64-bit only.
+#define ICI_WORD_BITS   (sizeof(uintptr_t) * 8)
+#define ICI_TAG_LITERAL (((uintptr_t)1) << (ICI_WORD_BITS - 1))
+#define ICI_TAG_REF     (((uintptr_t)1) << (ICI_WORD_BITS - 2))
+#define ICI_TAG_CONST   (((uintptr_t)1) << (ICI_WORD_BITS - 3)) // ref into the const-data stream (self image only)
+static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_CANSAFEPOINT JL_GC_DISABLED;
+static jl_value_t *svec_dedup_canonical(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED;
+
+static uintptr_t ici_field_gate(const char *envname, uintptr_t dflt) JL_NOTSAFEPOINT
+{
+    char *e = getenv(envname);
+    return e ? strtoull(e, NULL, 16) : dflt;
+}
+typedef struct { jl_value_t *target; jl_value_t *invokesig; uint32_t cls; uint32_t orig; } belog_trip_t;
+static int belog_trip_cmp(const void *a_, const void *b_) JL_NOTSAFEPOINT
+{
+    const belog_trip_t *a = (const belog_trip_t*)a_, *b = (const belog_trip_t*)b_;
+    if (a->cls != b->cls)
+        return a->cls < b->cls ? -1 : 1;
+    if (a->target != b->target)
+        return (uintptr_t)a->target < (uintptr_t)b->target ? -1 : 1;
+    if (a->invokesig != b->invokesig)
+        return (uintptr_t)a->invokesig < (uintptr_t)b->invokesig ? -1 : 1;
+    return a->orig < b->orig ? -1 : a->orig > b->orig ? 1 : 0;
+}
+
+// Symbols already in a dependency image are written as (dependency, index)
+// instead of by name. Values are (depsidx+1) << 40 | index.
+static htable_t depsym_map;
+#define DEPSYM_IDX_SHIFT ((sizeof(uintptr_t) >= 8) ? 40 : 0) // 64-bit only
+static int depsym_map_init = 0;
+static void depsym_map_build(jl_serializer_state *s) JL_GC_DISABLED;
+
+// Call and method signatures whose typename decompositions are saved,
+// so the loader does not have to recompute them.
+static htable_t edge_sig_set;
+static int edge_sig_set_init = 0;
+
+static int save_sig_tns_enabled(void) JL_NOTSAFEPOINT
+{
+    static int on = -1;
+    if (on == -1) {
+        char *e = getenv("JULIA_SIG_TNS");
+        on = e != NULL && strcmp(e, "1") == 0 && sizeof(void*) == 8; // explicitness bits are packed into a 64-bit Int
+    }
+    return on;
+}
+
+static void edge_sig_note(jl_value_t *sig) JL_GC_DISABLED
+{
+    if (sig == NULL || !jl_is_type(sig) || !save_sig_tns_enabled())
+        return;
+    if (!edge_sig_set_init) {
+        htable_new(&edge_sig_set, 1 << 12);
+        edge_sig_set_init = 1;
+    }
+    void **bp = ptrhash_bp(&edge_sig_set, (void*)sig);
+    if (*bp == HT_NOTFOUND)
+        *bp = (void*)sig;
+}
+
+// Must walk edge groups the same way the load-time edge verifier does.
+static void collect_edge_group_sigs(jl_svec_t *edges) JL_GC_DISABLED
+{
+    size_t n = jl_svec_len(edges);
+    for (size_t j = 0; j < n; j++) {
+        jl_value_t *item = jl_svecref(edges, j);
+        if (item == NULL)
+            continue;
+        if (jl_is_long(item)) { // (n, sig, targets...) match group
+            ssize_t nt = jl_unbox_long(item);
+            if (nt < 0)
+                nt = -nt;
+            if (j + 1 < n)
+                edge_sig_note(jl_svecref(edges, j + 1));
+            j += 1 + (size_t)nt;
+        }
+        else if (jl_is_code_instance(item)) {
+            edge_sig_note(jl_get_ci_mi((jl_code_instance_t*)item)->specTypes);
+        }
+        else if (jl_is_method_instance(item)) {
+            edge_sig_note(((jl_method_instance_t*)item)->specTypes);
+        }
+        else if (jl_is_binding(item) || jl_is_method(item)) {
+        }
+        else { // (invokesig, target) pair
+            jl_value_t *target = j + 1 < n ? jl_svecref(edges, j + 1) : NULL;
+            if (target != NULL && !jl_is_mtable(target))
+                edge_sig_note(item);
+            j += 1;
+        }
+    }
+}
+
+static jl_typename_t *method_first_tn(jl_method_t *m) JL_NOTSAFEPOINT
+{
+    jl_value_t *sig = jl_unwrap_unionall(m->sig);
+    if (!jl_is_datatype(sig) || jl_nparams(sig) == 0)
+        return NULL;
+    jl_value_t *t = jl_tparam0(sig);
+    while (jl_is_unionall(t))
+        t = ((jl_unionall_t*)t)->body;
+    if (!jl_is_datatype(t))
+        return NULL;
+    return ((jl_datatype_t*)t)->name;
+}
+
+static int extext_method_cmp(const void *a_, const void *b_) JL_NOTSAFEPOINT
+{
+    // elements are (method, certificate) pairs; key on the method
+    jl_value_t *a = ((jl_value_t**)a_)[0], *b = ((jl_value_t**)b_)[0];
+    jl_typename_t *ta = jl_is_method(a) ? method_first_tn((jl_method_t*)a) : NULL;
+    jl_typename_t *tb = jl_is_method(b) ? method_first_tn((jl_method_t*)b) : NULL;
+    if (ta != tb)
+        return (uintptr_t)ta < (uintptr_t)tb ? -1 : 1;
+    return a < b ? -1 : a > b ? 1 : 0;
+}
+
+struct _sig_tn_collect {
+    jl_value_t *tns[62];
+    uint64_t explbits;
+    int n;
+    int overflow;
+};
+
+static void _sig_tn_collect_cb(jl_typename_t *tn, int explct, void *env0) JL_NOTSAFEPOINT
+{
+    struct _sig_tn_collect *env = (struct _sig_tn_collect*)env0;
+    if (env->n >= 62) {
+        env->overflow = 1;
+        return;
+    }
+    if (explct)
+        env->explbits |= (uint64_t)1 << env->n;
+    env->tns[env->n++] = (jl_value_t*)tn;
+}
+
+static arraylist_t ici_fixups; // (ici, wordidx, target) triples
+static int ici_fixups_init = 0;
+
+static uintptr_t *ici_words(jl_interned_code_instance_t *ici) JL_NOTSAFEPOINT
+{
+    return (uintptr_t*)(ici + 1);
+}
+#define ICI_DEFWORD_IDX ((size_t)-1) // fixup-record sentinel for the defword slot
+
+// classify a field value for interning: 0 = keep the pointer field
+// (NULL, symbol, unmapped image, needs uniquing); 1 = immediate word in *w;
+// 2 = serialized with this image, patch after layout
+static int ici_classify_value(jl_serializer_state *s, jl_value_t *e, uintptr_t *w) JL_GC_DISABLED
+{
+    if (e == NULL || jl_is_symbol(e))
+        return 0;
+    if (jl_object_in_image(e)) {
+        uint32_t *blob_to_depsidx = jl_array_data(s->buildid_depmods_idxs, uint32_t);
+        size_t nblobmap = jl_array_len(s->buildid_depmods_idxs);
+        size_t blob = external_blob_index(e);
+        if (blob >= nblobmap || blob_to_depsidx[blob] == (uint32_t)-1)
+            return 0;
+        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[blob].data;
+        uintptr_t off = ((uintptr_t)e - (uintptr_t)meta->base) / SYS_EXTERNAL_LINK_UNIT;
+        assert(off < ((uintptr_t)1 << DEPS_IDX_OFFSET));
+        *w = ICI_TAG_REF | (((uintptr_t)blob_to_depsidx[blob] + 1) << DEPS_IDX_OFFSET) | off;
+        return 1;
+    }
+    if (!jl_needs_serialization(s, e))
+        return 0; // special relocation representation (boxed-int caches, root task, ...)
+    if (needs_uniquing(e, s->query_cache))
+        return 0;
+    return 2;
+}
+
+static jl_value_t *ici_try_build(jl_serializer_state *s, jl_svec_t *edges, size_t nfieldwords) JL_CANSAFEPOINT JL_GC_DISABLED
+{
+#ifndef _P64
+    return NULL;
+#endif
+    if (!s->incremental || s->buildid_depmods_idxs == NULL)
+        return NULL;
+    size_t n = jl_svec_len(edges);
+    if (n == 0 && nfieldwords == 0)
+        return NULL;
+    // at save time this maps linkage-blob index to dependency index
+    uint32_t *blob_to_depsidx = jl_array_data(s->buildid_depmods_idxs, uint32_t);
+    size_t nblobmap = jl_array_len(s->buildid_depmods_idxs);
+    // validate every edge is encodable before allocating
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *e = jl_svecref(edges, i);
+        if (e == NULL)
+            return NULL; // unset entry: keep the svec form
+        if (jl_is_long(e))
+            continue; // literal
+        if (jl_object_in_image(e)) {
+            size_t blob = external_blob_index(e);
+            if (blob >= nblobmap || blob_to_depsidx[blob] == (uint32_t)-1)
+                return NULL; // not among our recorded dependencies
+        }
+    }
+    jl_task_t *ct = jl_current_task;
+    jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)jl_gc_alloc(
+        ct->ptls, sizeof(jl_interned_code_instance_t) + (n + nfieldwords) * sizeof(uintptr_t),
+        jl_interned_code_instance_type);
+    ici->nedges = n;
+    ici->defword = 0;
+    ici->fieldmask = 0;
+    uintptr_t *words = ici_words(ici);
+    memset(words + n, 0, nfieldwords * sizeof(uintptr_t));
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *e = jl_svecref(edges, i);
+        if (jl_is_long(e)) {
+            intptr_t v = jl_unbox_long(e);
+            words[i] = ICI_TAG_LITERAL | ((((uintptr_t)v << 1) ^ (uintptr_t)(v >> (ICI_WORD_BITS - 1))) & ~ICI_TAG_LITERAL);
+        }
+        else if (jl_object_in_image(e)) {
+            size_t blob = external_blob_index(e);
+            image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[blob].data;
+            uintptr_t off = ((uintptr_t)e - (uintptr_t)meta->base) / SYS_EXTERNAL_LINK_UNIT;
+            assert(off < ((uintptr_t)1 << DEPS_IDX_OFFSET));
+            words[i] = ICI_TAG_REF | (((uintptr_t)blob_to_depsidx[blob] + 1) << DEPS_IDX_OFFSET) | off;
+        }
+        else {
+            jl_queue_for_serialization_(s, e, 1, 0);
+            if (needs_uniquing(e, s->query_cache)) {
+                // The image copy is a stub that uniquing replaces at load.
+                // Store the raw pointer so it is written as a normal relocated slot.
+                // The writer spots it because heap pointers never set the top two bits.
+                words[i] = (uintptr_t)e;
+            }
+            else {
+                // serialized with this image: patch after layout
+                words[i] = 0;
+                if (!ici_fixups_init) {
+                    arraylist_new(&ici_fixups, 0);
+                    ici_fixups_init = 1;
+                }
+                arraylist_push(&ici_fixups, (void*)ici);
+                arraylist_push(&ici_fixups, (void*)i);
+                arraylist_push(&ici_fixups, (void*)e);
+            }
+        }
+    }
+    return (jl_value_t*)ici;
+}
+
 static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_value_t *fld = (jl_value_t*)ptrhash_get(&field_replace, addr);
@@ -642,6 +935,7 @@ static int codeinst_may_be_runnable(jl_code_instance_t *ci, int incremental) {
 // you want to handle uniquing of `Dict{String,Float64}` before you tackle `Vector{Dict{String,Float64}}`.
 // Uniquing is done in `serialization_order`, so the very first mention of such an object must
 // be the "source" rather than merely a cross-reference.
+
 static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
@@ -805,6 +1099,70 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
+    if (s->incremental && jl_is_method(v))
+        edge_sig_note(((jl_method_t*)v)->sig);
+    if (jl_typetagis(v, jl_debuginfo_type)) {
+        // field order must match the DebugInfo field ranks in julia_internal.h
+        jl_debuginfo_t *di = (jl_debuginfo_t*)v;
+        jl_svec_t *diedges = (jl_svec_t*)get_replaceable_field((jl_value_t**)&di->edges, 1);
+        if (diedges != NULL && jl_is_svec(diedges) &&
+            ptrhash_get(&field_replace, (void*)&di->edges) == HT_NOTFOUND) {
+            jl_value_t **faddrs[3] = {
+                (jl_value_t**)&di->def,
+                (jl_value_t**)&di->linetable,
+                (jl_value_t**)&di->codelocs,
+            };
+            jl_value_t *fv[3];
+            uintptr_t fw[3];
+            int fc[3];
+            size_t nfw = 0;
+            uintptr_t gate = ici_field_gate("JULIA_ICI_DIMASK", ~(uintptr_t)0);
+            // DebugInfos whose def is not a MethodInstance can be read raw
+            // through the Method, which never converts them. Keep them plain.
+            jl_value_t *didef = get_replaceable_field(&di->def, 1);
+            if (didef == NULL || !jl_is_method_instance(didef))
+                gate = 0;
+            // Intern fields only when the edge list needs a container anyway.
+            // Adding containers just for fields costs more than it saves.
+            if (jl_svec_len(diedges) == 0)
+                gate = 0;
+            for (int r = 0; r < 3; r++) {
+                fv[r] = get_replaceable_field(faddrs[r], 1);
+                fw[r] = 0;
+                fc[r] = (fv[r] == NULL || !(gate & ((uintptr_t)1 << r))) ? 0 : ici_classify_value(s, fv[r], &fw[r]);
+                if (fc[r])
+                    nfw++;
+            }
+            jl_value_t *ici = ici_try_build(s, diedges, nfw);
+            if (ici != NULL) {
+                jl_interned_code_instance_t *icid = (jl_interned_code_instance_t*)ici;
+                record_field_change((jl_value_t**)&di->edges, ici);
+                uintptr_t *words = ici_words(icid);
+                size_t wi = icid->nedges;
+                for (int r = 0; r < 3; r++) {
+                    if (!fc[r])
+                        continue;
+                    icid->fieldmask |= ((uintptr_t)1 << r);
+                    if (fc[r] == 1) {
+                        words[wi] = fw[r];
+                    }
+                    else {
+                        jl_queue_for_serialization_(s, fv[r], 1, 0);
+                        words[wi] = 0;
+                        if (!ici_fixups_init) {
+                            arraylist_new(&ici_fixups, 0);
+                            ici_fixups_init = 1;
+                        }
+                        arraylist_push(&ici_fixups, (void*)icid);
+                        arraylist_push(&ici_fixups, (void*)wi);
+                        arraylist_push(&ici_fixups, (void*)fv[r]);
+                    }
+                    record_field_change(faddrs[r], NULL);
+                    wi++;
+                }
+            }
+        }
+    }
     if (jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
@@ -899,6 +1257,89 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                             }
                         }
                     }
+                }
+            }
+        }
+        // This must run after the field changes above,
+        // so it sees the values that will actually be serialized.
+        jl_svec_t *ciedges = (jl_svec_t*)get_replaceable_field((jl_value_t**)&ci->edges, 1);
+        if (s->incremental && ciedges != NULL && (jl_value_t*)ciedges != jl_nothing && jl_is_svec(ciedges))
+            collect_edge_group_sigs(ciedges);
+        if (ciedges != NULL && (jl_value_t*)ciedges != jl_nothing && jl_is_svec(ciedges) &&
+            ptrhash_get(&field_replace, (void*)&ci->edges) == HT_NOTFOUND) {
+            // field order must match the CodeInstance field ranks in julia_internal.h
+            jl_value_t **faddrs[8] = {
+                (jl_value_t**)&ci->owner,
+                (jl_value_t**)&ci->next,
+                (jl_value_t**)&ci->rettype,
+                (jl_value_t**)&ci->exctype,
+                (jl_value_t**)&ci->rettype_const,
+                (jl_value_t**)&ci->inferred,
+                (jl_value_t**)&ci->debuginfo,
+                (jl_value_t**)&ci->analysis_results,
+            };
+            jl_value_t *fv[8];
+            uintptr_t fw[8];
+            int fc[8];
+            size_t nfw = 0;
+            uintptr_t gate = ici_field_gate("JULIA_ICI_CIMASK", ~(uintptr_t)0);
+            for (int r = 0; r < 8; r++) {
+                fv[r] = get_replaceable_field(faddrs[r], 1);
+                fw[r] = 0;
+                // Never intern `next`. Cache insertion writes it at runtime and
+                // NULL means end of chain, so a lazy write-back could corrupt or
+                // even cycle a live cache chain.
+                fc[r] = (r == JL_ICI_CI_NEXT || fv[r] == NULL || !(gate & ((uintptr_t)1 << r))) ? 0 : ici_classify_value(s, fv[r], &fw[r]);
+                if (fc[r])
+                    nfw++;
+            }
+            jl_value_t *ici = ici_try_build(s, ciedges, nfw);
+            if (ici != NULL) {
+                jl_interned_code_instance_t *icid = (jl_interned_code_instance_t*)ici;
+                record_field_change((jl_value_t**)&ci->edges, ici);
+                // def has its own slot, restored on first access
+                jl_value_t *def = (gate & ((uintptr_t)1 << 8)) ? ci->def : NULL;
+                if (def != NULL) {
+                    uintptr_t dw = 0;
+                    int dc = ici_classify_value(s, def, &dw);
+                    if (dc == 1) {
+                        icid->defword = dw;
+                        record_field_change((jl_value_t**)&ci->def, NULL);
+                    }
+                    else if (dc == 2) {
+                        jl_queue_for_serialization_(s, def, 1, 0);
+                        if (!ici_fixups_init) {
+                            arraylist_new(&ici_fixups, 0);
+                            ici_fixups_init = 1;
+                        }
+                        arraylist_push(&ici_fixups, (void*)icid);
+                        arraylist_push(&ici_fixups, (void*)ICI_DEFWORD_IDX);
+                        arraylist_push(&ici_fixups, (void*)def);
+                        record_field_change((jl_value_t**)&ci->def, NULL);
+                    }
+                }
+                uintptr_t *words = ici_words(icid);
+                size_t wi = icid->nedges;
+                for (int r = 0; r < 8; r++) {
+                    if (!fc[r])
+                        continue;
+                    icid->fieldmask |= ((uintptr_t)1 << r);
+                    if (fc[r] == 1) {
+                        words[wi] = fw[r];
+                    }
+                    else {
+                        jl_queue_for_serialization_(s, fv[r], 1, 0); // field no longer references it
+                        words[wi] = 0;
+                        if (!ici_fixups_init) {
+                            arraylist_new(&ici_fixups, 0);
+                            ici_fixups_init = 1;
+                        }
+                        arraylist_push(&ici_fixups, (void*)icid);
+                        arraylist_push(&ici_fixups, (void*)wi);
+                        arraylist_push(&ici_fixups, (void*)fv[r]);
+                    }
+                    record_field_change(faddrs[r], NULL);
+                    wi++;
                 }
             }
         }
@@ -1051,6 +1492,10 @@ done_fields: ;
 
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
 {
+    if (v == NULL)
+        return;
+    if (jl_is_svec(v))
+        v = svec_dedup_canonical(s, v);
     if (!jl_needs_serialization(s, v))
         return;
 
@@ -1079,8 +1524,9 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
 
     void **bp = ptrhash_bp(&serialization_order, v);
     assert(!immediate || *bp != (void*)(uintptr_t)-2);
-    if (*bp == HT_NOTFOUND)
+    if (*bp == HT_NOTFOUND) {
         *bp = (void*)(uintptr_t)-1; // now enqueued
+    }
     else if (!s->incremental || !immediate || !recursive || *bp != (void*)(uintptr_t)-1)
         return;
 
@@ -1193,13 +1639,25 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_GC_DISABLED JL_CANSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
+    if (jl_is_svec(v))
+        v = svec_dedup_canonical(s, v); // all references resolve to the interned representative
     if (jl_is_symbol(v)) {
         void **pidx = ptrhash_bp(&symbol_table, v);
         void *idx = *pidx;
         if (idx == HT_NOTFOUND) {
-            size_t l = strlen(jl_symbol_name((jl_sym_t*)v));
-            write_uint32(s->symbols, l);
-            ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), l + 1);
+            if (!depsym_map_init)
+                depsym_map_build(s);
+            void *shared = ptrhash_get(&depsym_map, v);
+            if (shared != HT_NOTFOUND) {
+                // in a dependency image: write (dep, index), flagged by the high bit of the length
+                write_uint32(s->symbols, 0x80000000u | (uint32_t)(((uintptr_t)shared >> DEPSYM_IDX_SHIFT) - 1));
+                write_uint32(s->symbols, (uint32_t)(uintptr_t)shared);
+            }
+            else {
+                size_t l = strlen(jl_symbol_name((jl_sym_t*)v));
+                write_uint32(s->symbols, l);
+                ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), l + 1);
+            }
             size_t offset = ++nsym_tag;
             assert(offset < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many symbols");
             idx = to_seroder_entry(offset - 1);
@@ -1257,13 +1715,60 @@ static void record_uniquing(jl_serializer_state *s, jl_value_t *fld, uintptr_t o
     }
 }
 
+// Egal SimpleVectors are serialized once and shared.
+// This is safe because svecs are immutable and compared with egal, not identity.
+// Lists with different typevars never merge, since typevars are egal by identity.
+static htable_t svec_dedup_memo;   // svec -> canonical svec (identity-keyed)
+static htable_t svec_dedup_byhash; // content hash -> first svec with it
+static int svec_dedup_init = 0;
+static htable_t svec_dedup_skip;   // svecs changed after queueing: never deduplicated
+static int svec_dedup_skip_init = 0;
+
+static jl_value_t *svec_dedup_canonical(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
+{
+    if (!s->incremental || !jl_is_svec(v))
+        return v;
+    size_t l = jl_svec_len(v);
+    if (l == 0)
+        return v;
+    if (svec_dedup_skip_init && ptrhash_has(&svec_dedup_skip, v))
+        return v;
+    if (!svec_dedup_init) {
+        htable_new(&svec_dedup_memo, 1 << 16);
+        htable_new(&svec_dedup_byhash, 1 << 16);
+        svec_dedup_init = 1;
+    }
+    void *memo = ptrhash_get(&svec_dedup_memo, v);
+    if (memo != HT_NOTFOUND)
+        return (jl_value_t*)memo;
+    jl_value_t *canon = v;
+    for (size_t i = 0; i < l; i++) {
+        if (jl_svecref(v, i) == NULL) { // unset slot: leave alone
+            ptrhash_put(&svec_dedup_memo, v, v);
+            return v;
+        }
+    }
+    uintptr_t hash = jl_object_id(v);
+    void **bp = ptrhash_bp(&svec_dedup_byhash, (void*)(hash | 1)); // |1 keeps the key nonzero
+    if (*bp == HT_NOTFOUND)
+        *bp = v;
+    else if (jl_egal((jl_value_t*)*bp, v))
+        canon = (jl_value_t*)*bp;
+    // a hash collision without egality only misses a dedup
+    ptrhash_put(&svec_dedup_memo, v, canon);
+    return canon;
+}
+
 // Save blank space in stream `s` for a pointer `fld`, storing both location and target
 // in `relocs_list`.
 static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_CANSAFEPOINT JL_GC_DISABLED
 {
+    if (fld != NULL && jl_is_svec(fld))
+        fld = svec_dedup_canonical(s, fld);
     if (fld != NULL) {
+        uintptr_t id = backref_id(s, fld, s->link_ids_relocs);
         arraylist_push(&s->relocs_list, (void*)(uintptr_t)ios_pos(s->s));
-        arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs));
+        arraylist_push(&s->relocs_list, (void*)id);
         record_uniquing(s, fld, ios_pos(s->s));
     }
     write_pointer(s->s);
@@ -1274,8 +1779,9 @@ static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_CANSA
 static void write_gctaggedfield(jl_serializer_state *s, jl_datatype_t *ref) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     // jl_printf(JL_STDOUT, "gctaggedfield: position %p, value 0x%lx\n", (void*)(uintptr_t)ios_pos(s->s), ref);
+    uintptr_t id = backref_id(s, ref, s->link_ids_gctags);
     arraylist_push(&s->gctags_list, (void*)(uintptr_t)ios_pos(s->s));
-    arraylist_push(&s->gctags_list, (void*)backref_id(s, ref, s->link_ids_gctags));
+    arraylist_push(&s->gctags_list, (void*)id);
     write_pointer(s->s);
 }
 
@@ -1481,6 +1987,11 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(f)|1));
         if (f == s->const_data)
             write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED | GC_IN_IMAGE);
+        else if (t->smalltag) {
+            // small-tagged types are never uniqued, so the header needs no relocation
+            assert(!(s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t, s->query_cache)));
+            write_uint(f, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED | GC_IN_IMAGE);
+        }
         else
             write_gctaggedfield(s, t);
         size_t reloc_offset = ios_pos(f);
@@ -1535,7 +2046,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             newa->ref.mem = NULL; // relocation offset
             arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_array_t, ref.mem))); // relocation location
             jl_value_t *mem = get_replaceable_field((jl_value_t**)&ar->ref.mem, 1);
-            arraylist_push(&s->relocs_list, (void*)backref_id(s, mem, s->link_ids_relocs)); // relocation target
+            uintptr_t memid = backref_id(s, mem, s->link_ids_relocs);
+            arraylist_push(&s->relocs_list, (void*)memid); // relocation target
             record_memoryref(s, reloc_offset + offsetof(jl_array_t, ref), ar->ref);
         }
         else if (jl_is_genericmemory(v)) {
@@ -1634,7 +2146,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                                 size_t fld_pos = reloc_offset + headersize + offset;
                                 if (fld != NULL) {
                                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)fld_pos); // relocation location
-                                    arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
+                                    uintptr_t fldid = backref_id(s, fld, s->link_ids_relocs);
+                                    arraylist_push(&s->relocs_list, (void*)fldid); // relocation target
                                     record_uniquing(s, fld, fld_pos);
                                 }
                                 memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
@@ -1780,8 +2293,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset], mutabl);
                 size_t fld_pos = offset + reloc_offset;
                 if (fld != NULL) {
+                    uintptr_t fld_id = backref_id(s, fld, s->link_ids_relocs);
                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)(fld_pos)); // relocation location
-                    arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
+                    arraylist_push(&s->relocs_list, (void*)fld_id); // relocation target
                     record_uniquing(s, fld, fld_pos);
                 }
                 memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
@@ -1825,12 +2339,31 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     jl_atomic_store_relaxed(&newbpart->max_world, 0);
                 }
             }
+            else if (t == jl_interned_code_instance_type) {
+                assert(f == s->s);
+                jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)v;
+                // Words are final, except raw pointers to uniqued objects, which are
+                // written as relocated slots, and zeros, which are patched after layout.
+                uintptr_t *words = ici_words(ici);
+                size_t nwords = ici->nedges + __builtin_popcountll(ici->fieldmask);
+                for (size_t i = 0; i < nwords; i++) {
+                    uintptr_t w = words[i];
+                    if (w != 0 && (w >> (ICI_WORD_BITS - 2)) == 0)
+                        write_pointerfield(s, (jl_value_t*)w);
+                    else
+                        write_uint(f, w);
+                }
+            }
             else if (jl_is_method(v)) {
                 assert(f == s->s);
                 write_padding(f, sizeof(jl_method_t) - tot); // hidden fields
                 jl_method_t *m = (jl_method_t*)v;
                 jl_method_t *newm = (jl_method_t*)&f->buf[reloc_offset];
                 if (s->incremental) {
+                    // The per-module scanned-method lists are not saved, so clear this
+                    // bit too. Otherwise the load never re-adds the method to its list.
+                    jl_atomic_store_relaxed(&newm->did_scan_source,
+                        jl_atomic_load_relaxed(&newm->did_scan_source) & ~(uint8_t)0x2);
                     if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
                         jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
                         int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
@@ -1875,8 +2408,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 }
                 jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
-                // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID bits
-                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID);
+                // preserve only the native-cache-valid and backedges-logged bits
+                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) &
+                                        (JL_CI_FLAGS_NATIVE_CACHE_VALID | JL_CI_FLAGS_BACKEDGES_LOGGED));
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
                 uintptr_t fptr_type = JL_INVOKE_SPECSIG;
                 int8_t builtin_id = 0;
@@ -2013,6 +2547,104 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
     assert(s->uniquing_super.len == 0);
 }
 
+// --- lazy decoding of interned edge-list words ---
+typedef struct {
+    uintptr_t data_base;
+    size_t data_size;
+    uintptr_t const_base;
+    uint32_t *depsmap; // depsidx -> image_tree range index
+    uintptr_t *depbase; // depsidx -> mapped base (copied because the image range table can be reallocated)
+    uint32_t ndeps;
+    // identity used by compressed IR to reference this image directly
+    uint64_t key;      // worklist key of the image
+    _Atomic(uint8_t) has_key; // set with release after `key` is written
+    uint8_t is_sysimg;
+    // symbol table, so dependent images can reference its symbols
+    jl_sym_t **syms;
+    uint32_t nsyms;
+} ici_image_info_t;
+// Registry of loaded images. Only the loader appends, under the loading lock.
+// Other threads read it without a lock, so entries live in chunks that never
+// move, and the count is published with release ordering.
+#define ICI_IMAGES_CHUNK 1024
+#define ICI_IMAGES_MAXCHUNKS 256
+static _Atomic(ici_image_info_t**) ici_image_chunks[ICI_IMAGES_MAXCHUNKS];
+static _Atomic(size_t) ici_images_len;
+static size_t ici_images_count(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_acquire(&ici_images_len);
+}
+static ici_image_info_t *ici_image_at(size_t k) JL_NOTSAFEPOINT
+{
+    ici_image_info_t **chunk = jl_atomic_load_relaxed(&ici_image_chunks[k / ICI_IMAGES_CHUNK]);
+    return chunk[k % ICI_IMAGES_CHUNK];
+}
+
+static void ici_register_image(uintptr_t base, size_t size, uintptr_t const_base, jl_array_t *depmods_idxs, int is_sysimg)
+{
+    ici_image_info_t *info = (ici_image_info_t*)malloc_s(sizeof(ici_image_info_t));
+    info->data_base = base;
+    info->data_size = size;
+    info->const_base = const_base;
+    info->key = 0;
+    jl_atomic_store_relaxed(&info->has_key, 0);
+    info->is_sysimg = (uint8_t)is_sysimg;
+    info->syms = NULL;
+    info->nsyms = 0;
+    info->ndeps = depmods_idxs ? jl_array_len(depmods_idxs) : 0;
+    info->depsmap = info->ndeps ? (uint32_t*)malloc_s(info->ndeps * sizeof(uint32_t)) : NULL;
+    info->depbase = info->ndeps ? (uintptr_t*)malloc_s(info->ndeps * sizeof(uintptr_t)) : NULL;
+    if (info->ndeps) {
+        uint32_t *idxs = jl_array_data(depmods_idxs, uint32_t);
+        for (uint32_t k = 0; k < info->ndeps; k++) {
+            // dependencies are registered before the images that use them
+            size_t ri = idxs[k];
+            assert(ri < image_tree.nranges);
+            info->depsmap[k] = (uint32_t)ri;
+            info->depbase[k] = (uintptr_t)((image_metadata_t*)image_tree.ranges[ri].data)->base;
+        }
+    }
+    size_t n = jl_atomic_load_relaxed(&ici_images_len);
+    if (n / ICI_IMAGES_CHUNK >= ICI_IMAGES_MAXCHUNKS)
+        jl_error("too many loaded images");
+    ici_image_info_t **chunk = jl_atomic_load_relaxed(&ici_image_chunks[n / ICI_IMAGES_CHUNK]);
+    if (chunk == NULL) {
+        chunk = (ici_image_info_t**)calloc_s(ICI_IMAGES_CHUNK * sizeof(ici_image_info_t*));
+        jl_atomic_store_release(&ici_image_chunks[n / ICI_IMAGES_CHUNK], chunk);
+    }
+    chunk[n % ICI_IMAGES_CHUNK] = info;
+    jl_atomic_store_release(&ici_images_len, n + 1);
+}
+
+static ici_image_info_t *ici_find_image(uintptr_t a) JL_NOTSAFEPOINT
+{
+    static _Atomic(ici_image_info_t*) last;
+    ici_image_info_t *hit = jl_atomic_load_acquire(&last);
+    if (hit && a - hit->data_base < hit->data_size)
+        return hit;
+    for (size_t k = 0, n = ici_images_count(); k < n; k++) {
+        hit = ici_image_at(k);
+        if (a - hit->data_base < hit->data_size) {
+            jl_atomic_store_release(&last, hit);
+            return hit;
+        }
+    }
+    return NULL;
+}
+
+// --- direct references from compressed IR into images ---
+
+// lets compressed IR reference this image's objects by (key, offset)
+static void ici_set_image_key(uintptr_t base, uint64_t key) JL_NOTSAFEPOINT
+{
+    ici_image_info_t *info = ici_find_image(base);
+    if (info != NULL && !info->is_sysimg) {
+        info->key = key;
+        jl_atomic_store_release(&info->has_key, 1);
+    }
+}
+
+
 // In deserialization, create Symbols and set up the
 // index for backreferencing
 static void jl_read_symbols(jl_serializer_state *s)
@@ -2020,14 +2652,57 @@ static void jl_read_symbols(jl_serializer_state *s)
     assert(deser_sym.len == 0);
     uintptr_t base = (uintptr_t)&s->symbols->buf[0];
     uintptr_t end = base + s->symbols->size;
+    // per-dependency symbol tables, looked up on first use
+    size_t ndeps_tab = s->buildid_depmods_idxs ? jl_array_len(s->buildid_depmods_idxs) : 0;
+    jl_sym_t ***dep_syms = (jl_sym_t***)alloca((ndeps_tab ? ndeps_tab : 1) * sizeof(void*));
+    memset(dep_syms, 0, (ndeps_tab ? ndeps_tab : 1) * sizeof(void*));
     while (base < end) {
         uint32_t len = jl_load_unaligned_i32((void*)base);
         base += 4;
+        if (len & 0x80000000u) {
+            // (dependency, index) into a dependency's symbol table
+            uint32_t depsidx = len & 0x7fffffffu;
+            uint32_t symidx = jl_load_unaligned_i32((void*)base);
+            base += 4;
+            assert(depsidx < ndeps_tab);
+            jl_sym_t **tab = dep_syms[depsidx];
+            if (tab == NULL) {
+                ici_image_info_t *info = NULL;
+                if (depsidx == 0) {
+                    // dependency index 0 is the sysimage
+                    for (size_t k = 0, n = ici_images_count(); k < n; k++) {
+                        ici_image_info_t *e = ici_image_at(k);
+                        if (e->is_sysimg) {
+                            info = e;
+                            break;
+                        }
+                    }
+                }
+                else {
+                    size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
+                    assert(i < image_tree.nranges);
+                    image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
+                    info = ici_find_image(meta->base);
+                }
+                assert(info && info->syms && "dependency symbol table missing");
+                tab = dep_syms[depsidx] = info->syms;
+            }
+            arraylist_push(&deser_sym, (void*)tab[symidx]);
+            continue;
+        }
         const char *str = (const char*)base;
         base += len + 1;
         //printf("symbol %3d: %s\n", len, str);
         jl_sym_t *sym = _jl_symbol(str, len);
         arraylist_push(&deser_sym, (void*)sym);
+    }
+    // Keep the table for images that depend on this one. The data section is
+    // not set up yet, so find the image by the symbols section, which is in the same span.
+    ici_image_info_t *self = ici_find_image((uintptr_t)s->symbols->buf);
+    if (self != NULL && self->syms == NULL && deser_sym.len > 0) {
+        self->syms = (jl_sym_t**)malloc_s(deser_sym.len * sizeof(jl_sym_t*));
+        memcpy(self->syms, deser_sym.items, deser_sym.len * sizeof(jl_sym_t*));
+        self->nsyms = (uint32_t)deser_sym.len;
     }
 }
 
@@ -2175,6 +2850,305 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 }
 
 
+static void depsym_map_build(jl_serializer_state *s) JL_GC_DISABLED
+{
+    assert(!depsym_map_init);
+    htable_new(&depsym_map, 1 << 17);
+    depsym_map_init = 1;
+    if (sizeof(uintptr_t) < 8)
+        return; // the map values need 64 bits
+    if (!s->incremental || s->buildid_depmods_idxs == NULL || ici_images_count() == 0)
+        return;
+    uint32_t *blob_to_depsidx = jl_array_data(s->buildid_depmods_idxs, uint32_t);
+    size_t nblobmap = jl_array_len(s->buildid_depmods_idxs);
+    for (size_t k = 0, n = ici_images_count(); k < n; k++) {
+        ici_image_info_t *info = ici_image_at(k);
+        if (info->syms == NULL) {
+            continue;
+        }
+        uintptr_t depsidx;
+        if (info->is_sysimg) {
+            depsidx = 0; // by convention, dependency index 0 is the sysimage
+        }
+        else {
+            size_t blob = external_blob_index((jl_value_t*)info->data_base);
+            if (blob >= nblobmap || blob_to_depsidx[blob] == (uint32_t)-1) {
+                continue; // not a declared dependency of this output
+            }
+            depsidx = blob_to_depsidx[blob];
+        }
+        for (uint32_t i = 0; i < info->nsyms; i++) {
+            void **bp = ptrhash_bp(&depsym_map, (void*)info->syms[i]);
+            if (*bp == HT_NOTFOUND)
+                *bp = (void*)(((depsidx + 1) << DEPSYM_IDX_SHIFT) | i);
+        }
+    }
+}
+
+// Can `v` be referenced as (image key, offset)? Returns 0 = no, 1 = package image
+// (*key set), 2 = sysimage. *offset is the byte offset from the image base.
+JL_DLLEXPORT int jl_image_ref_of(jl_value_t *v, uint64_t *key, uint64_t *offset) JL_NOTSAFEPOINT
+{
+    ici_image_info_t *info = ici_find_image((uintptr_t)v);
+    if (info == NULL)
+        return 0;
+    if (info->is_sysimg) {
+        *key = 0;
+        *offset = (uintptr_t)v - info->data_base;
+        return 2;
+    }
+    if (!jl_atomic_load_acquire(&info->has_key))
+        return 0;
+    *key = info->key;
+    *offset = (uintptr_t)v - info->data_base;
+    return 1;
+}
+
+// returns NULL if the image is not loaded, which cannot happen for a valid cache
+JL_DLLEXPORT jl_value_t *jl_image_ref_resolve(int is_sysimg, uint64_t key, uint64_t offset) JL_NOTSAFEPOINT
+{
+    static _Atomic(ici_image_info_t*) last;
+    ici_image_info_t *hit = jl_atomic_load_acquire(&last);
+    if (hit == NULL || (is_sysimg ? !hit->is_sysimg : (!jl_atomic_load_acquire(&hit->has_key) || hit->key != key))) {
+        hit = NULL;
+        for (size_t k = 0, n = ici_images_count(); k < n; k++) {
+            ici_image_info_t *e = ici_image_at(k);
+            if (is_sysimg ? e->is_sysimg : (jl_atomic_load_acquire(&e->has_key) && e->key == key)) {
+                hit = e;
+                break;
+            }
+        }
+        if (hit == NULL)
+            return NULL;
+        jl_atomic_store_release(&last, hit);
+    }
+    assert(offset < hit->data_size);
+    return (jl_value_t*)(hit->data_base + (uintptr_t)offset);
+}
+
+static jl_value_t *ici_decode_ref(jl_interned_code_instance_t *ici, uintptr_t w) JL_NOTSAFEPOINT
+{
+    size_t key = (w & ~(ICI_TAG_REF | ICI_TAG_CONST)) >> DEPS_IDX_OFFSET;
+    uintptr_t off = (w & (((uintptr_t)1 << DEPS_IDX_OFFSET) - 1)) * SYS_EXTERNAL_LINK_UNIT;
+    ici_image_info_t *info = ici_find_image((uintptr_t)ici);
+    assert(info && "InternedCodeInstance outside any registered image");
+    if (w & ICI_TAG_CONST) {
+        assert(key == 0 && "const refs are self-image only");
+        return (jl_value_t*)(info->const_base + off);
+    }
+    if (key == 0)
+        return (jl_value_t*)(info->data_base + off);
+    assert(key - 1 < info->ndeps);
+    return (jl_value_t*)(info->depbase[key - 1] + off);
+}
+
+// returns NULL if the field was not interned
+JL_DLLEXPORT jl_value_t *jl_ici_fieldref(jl_value_t *edges, int rank) JL_NOTSAFEPOINT
+{
+    if (edges == NULL || !jl_typetagis(edges, jl_interned_code_instance_type))
+        return NULL;
+    jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)edges;
+    uintptr_t bit = (uintptr_t)1 << rank;
+    if (!(ici->fieldmask & bit))
+        return NULL;
+    size_t idx = ici->nedges + __builtin_popcountll(ici->fieldmask & (bit - 1));
+    jl_value_t *v = ici_decode_ref(ici, ici_words(ici)[idx]);
+    return v;
+}
+
+JL_DLLEXPORT jl_value_t *jl_ici_ref(jl_interned_code_instance_t *ici, size_t i) JL_CANSAFEPOINT
+{
+    assert(i < ici->nedges);
+    uintptr_t w = ici_words(ici)[i];
+    if (w & ICI_TAG_LITERAL) {
+        uintptr_t z = w & ~ICI_TAG_LITERAL;
+        return jl_box_long((intptr_t)((z >> 1) ^ (0 - (z & 1))));
+    }
+    if (w & ICI_TAG_REF)
+        return ici_decode_ref(ici, w);
+    return (jl_value_t*)w; // relocated (and possibly uniqued) pointer
+}
+
+// returns NULL for literal words instead of boxing them
+JL_DLLEXPORT jl_value_t *jl_ici_ref_nobox(jl_interned_code_instance_t *ici, size_t i) JL_NOTSAFEPOINT
+{
+    assert(i < ici->nedges);
+    uintptr_t w = ici_words(ici)[i];
+    if (w & ICI_TAG_LITERAL)
+        return NULL;
+    if (w & ICI_TAG_REF)
+        return ici_decode_ref(ici, w);
+    return (jl_value_t*)w;
+}
+
+JL_DLLEXPORT int jl_ici_literal(jl_interned_code_instance_t *ici, size_t i, intptr_t *out) JL_NOTSAFEPOINT
+{
+    assert(i < ici->nedges);
+    uintptr_t w = ici_words(ici)[i];
+    if (!(w & ICI_TAG_LITERAL))
+        return 0;
+    uintptr_t z = w & ~ICI_TAG_LITERAL;
+    *out = (intptr_t)((z >> 1) ^ (0 - (z & 1)));
+    return 1;
+}
+
+JL_DLLEXPORT void jl_ci_materialize_all(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+
+// Write the decoded def back so later reads are plain field reads.
+// Decode the other interned fields too, as defense in depth.
+JL_DLLEXPORT jl_value_t *jl_ici_materialize_def(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    jl_value_t *edges = (jl_value_t*)jl_atomic_load_relaxed(&ci->edges);
+    assert(edges != NULL && jl_typetagis(edges, jl_interned_code_instance_type) &&
+           "NULL ci->def without an interned container");
+    jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)edges;
+    assert(ici->defword != 0);
+    jl_value_t *def = ici_decode_ref(ici, ici->defword);
+    jl_value_t *expected = NULL;
+    jl_gc_wb(ci, (void*)&ci->def, def);
+    jl_atomic_cmpswap((_Atomic(jl_value_t*)*)&ci->def, &expected, def);
+    jl_ci_materialize_all(ci);
+    return def;
+}
+
+// Decoding every field on first access also makes later raw field reads safe.
+JL_DLLEXPORT void jl_ci_materialize_all(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    jl_value_t *edges = (jl_value_t*)jl_atomic_load_relaxed(&ci->edges);
+    if (edges == NULL || !jl_typetagis(edges, jl_interned_code_instance_type))
+        return;
+    jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)edges;
+    if (ici->defword != 0 && (jl_value_t*)jl_load_set_once(&ci->def) == NULL)
+        jl_ici_materialize_def(ci);
+    uintptr_t mask = ici->fieldmask;
+    if (mask == 0)
+        return;
+    // Threads may race here. Each field is set once, from NULL, so all racers
+    // store the same object and a concurrent runtime store is never overwritten.
+    // Runtime code never stores NULL here, so NULL always means not yet decoded.
+    jl_value_t *v;
+#define ICI_MAT(rank, fieldp) \
+    if (mask & ((uintptr_t)1 << (rank))) { \
+        _Atomic(jl_value_t*) *fp_ = (_Atomic(jl_value_t*)*)(fieldp); \
+        if (jl_atomic_load_relaxed(fp_) == NULL) { \
+            v = jl_ici_fieldref(edges, rank); \
+            jl_value_t *expected_ = NULL; \
+            if (v != NULL) { \
+                jl_gc_wb(ci, (void*)fp_, v); \
+                jl_atomic_cmpswap(fp_, &expected_, v); \
+            } \
+        } \
+    }
+    ICI_MAT(JL_ICI_CI_OWNER, &ci->owner)
+    // `next` is never interned: it is runtime state and NULL is a valid value
+    ICI_MAT(JL_ICI_CI_RETTYPE, &ci->rettype)
+    ICI_MAT(JL_ICI_CI_EXCTYPE, &ci->exctype)
+    ICI_MAT(JL_ICI_CI_RETTYPE_CONST, &ci->rettype_const)
+    ICI_MAT(JL_ICI_CI_INFERRED, &ci->inferred)
+    ICI_MAT(JL_ICI_CI_DEBUGINFO, &ci->debuginfo)
+    ICI_MAT(JL_ICI_CI_ANALYSIS, &ci->analysis_results)
+#undef ICI_MAT
+}
+
+// Julia code must use this: an interned def reads as undefined, and
+// isdefined on a CodeInstance field is constant-folded.
+JL_DLLEXPORT jl_value_t *jl_ci_def(jl_code_instance_t *ci)
+{
+    jl_value_t *def = ci->def;
+    if (def == NULL)
+        def = jl_ici_materialize_def(ci);
+    return def;
+}
+
+// does not write to the heap, for signal handlers and dumps
+JL_DLLEXPORT jl_value_t *jl_ci_def_ro(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    jl_value_t *def = (jl_value_t*)jl_load_set_once(&ci->def);
+    if (def != NULL)
+        return def;
+    jl_value_t *edges = (jl_value_t*)jl_atomic_load_relaxed(&ci->edges);
+    if (edges == NULL || !jl_typetagis(edges, jl_interned_code_instance_type))
+        return NULL;
+    jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)edges;
+    if (ici->defword == 0)
+        return NULL;
+    return ici_decode_ref(ici, ici->defword);
+}
+
+// Convert an interned DebugInfo tree back to its plain form.
+// Compiled code reads DebugInfo fields directly and cannot see interned ones.
+// So every path that hands a DebugInfo tree to Julia code must convert it first.
+// An interned `edges` value marks a node that is not yet converted.
+JL_DLLEXPORT void jl_di_materialize_all(jl_debuginfo_t *di) JL_CANSAFEPOINT
+{
+    jl_value_t *edges = (jl_value_t*)jl_load_set_once_acquire(&di->edges);
+    if (edges == NULL || !jl_typetagis(edges, jl_interned_code_instance_type))
+        return; // already plain
+    jl_interned_code_instance_t *ici = (jl_interned_code_instance_t*)edges;
+    uintptr_t mask = ici->fieldmask;
+    jl_value_t *v;
+    // as for CodeInstances: each field is set once, from NULL
+#define ICI_MATD(rank, fieldp) \
+    if (mask & ((uintptr_t)1 << (rank))) { \
+        _Atomic(jl_value_t*) *fp_ = (_Atomic(jl_value_t*)*)(fieldp); \
+        if (jl_atomic_load_relaxed(fp_) == NULL) { \
+            v = jl_ici_fieldref(edges, rank); \
+            jl_value_t *expected_ = NULL; \
+            if (v != NULL) { \
+                jl_gc_wb(di, (void*)fp_, v); \
+                jl_atomic_cmpswap(fp_, &expected_, v); \
+            } \
+        } \
+    }
+    ICI_MATD(JL_ICI_DI_DEF, &di->def)
+    ICI_MATD(JL_ICI_DI_LINETABLE, &di->linetable)
+    ICI_MATD(JL_ICI_DI_CODELOCS, &di->codelocs)
+#undef ICI_MATD
+    jl_value_t *lt = (jl_value_t*)jl_load_set_once(&di->linetable);
+    if (lt != NULL && jl_is_debuginfo(lt))
+        jl_di_materialize_all((jl_debuginfo_t*)lt);
+    jl_svec_t *sv = jl_ici_to_svec(ici);
+    JL_GC_PUSH1(&sv);
+    for (size_t i = 0, n = jl_svec_len(sv); i < n; i++) {
+        jl_value_t *el = jl_svecref(sv, i);
+        if (el != NULL && jl_is_debuginfo(el))
+            jl_di_materialize_all((jl_debuginfo_t*)el);
+    }
+    // Publish last, since `edges` is the not-converted marker. If another thread
+    // converts concurrently, only one copy wins, so readers see one SimpleVector.
+    jl_value_t *expected = edges;
+    jl_gc_wb(di, (void*)&di->edges, sv);
+    jl_atomic_cmpswap((_Atomic(jl_value_t*)*)&di->edges, &expected, (jl_value_t*)sv);
+    JL_GC_POP();
+}
+
+// Edge lists are a SimpleVector, or the interned word form for image objects.
+JL_DLLEXPORT size_t jl_edgelist_len(jl_value_t *edges) JL_NOTSAFEPOINT
+{
+    if (jl_typetagis(edges, jl_interned_code_instance_type))
+        return ((jl_interned_code_instance_t*)edges)->nedges;
+    return jl_svec_len(edges);
+}
+
+JL_DLLEXPORT jl_value_t *jl_edgelist_ref(jl_value_t *edges, size_t i) JL_CANSAFEPOINT
+{
+    if (jl_typetagis(edges, jl_interned_code_instance_type))
+        return jl_ici_ref((jl_interned_code_instance_t*)edges, i);
+    return jl_svecref(edges, i);
+}
+
+// for callers that pass the edge list on to other code
+JL_DLLEXPORT jl_svec_t *jl_ici_to_svec(jl_interned_code_instance_t *ici) JL_CANSAFEPOINT
+{
+    size_t n = ici->nedges;
+    jl_svec_t *out = jl_alloc_svec(n);
+    JL_GC_PUSH1(&out);
+    for (size_t i = 0; i < n; i++)
+        jl_svecset(out, i, jl_ici_ref(ici, i));
+    JL_GC_POP();
+    return out;
+}
+
 static void jl_finish_relocs(char *base, size_t size, arraylist_t *list)
 {
     for (size_t i = 0; i < list->len; i += 2) {
@@ -2222,6 +3196,7 @@ static void jl_write_arraylist(ios_t *s, arraylist_t *list)
 
 static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint8_t bits) JL_CANSAFEPOINT
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Relocs);
     uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
     uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
@@ -2435,6 +3410,7 @@ static uint32_t write_gvars(jl_serializer_state *s, arraylist_t *globals, arrayl
 // Pointer relocation for native-code referenced global variables
 static void jl_update_all_gvars(jl_serializer_state *s, jl_image_t *image, uint32_t external_fns_begin) JL_CANSAFEPOINT
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Gvars);
     if (image->gvars_base == NULL)
         return;
     uintptr_t base = (uintptr_t)s->s->buf;
@@ -3142,6 +4118,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     ios_mem(&gvar_record, 0);
     ios_mem(&fptr_record, 0);
     jl_serializer_state s = {0};
+    jl_value_t *sig_tn_root = NULL;
     s.query_cache = query_cache;
     s.incremental = !(worklist == NULL);
     s.s = &sysimg;
@@ -3217,19 +4194,212 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, module_init_order);
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
+        arraylist_t cert_lists; // (cert, slot, list) triples
+        arraylist_new(&cert_lists, 0);
         if (extext_methods) {
+            // Sort (method, certificate) pairs by first-argument typename, so
+            // that consecutive insertions at load touch the same typemap paths.
+            size_t nex = jl_array_nrows(extext_methods);
+            if (nex > 3)
+                qsort(jl_array_ptr_data(extext_methods), nex / 2, 2 * sizeof(void*), extext_method_cmp);
+            // Detach each certificate's invalidation lists before queueing.
+            // Slot 2 holds replaced-dispatch MethodInstances with a flag;
+            // slot 4 holds invalidated callers. Rooting them here would save
+            // dead objects into the image. They are pruned and requeued below.
+            for (size_t i = 1; i < nex; i += 2) {
+                jl_value_t *cert = jl_array_ptr_ref(extext_methods, i);
+                if (cert == jl_nothing)
+                    continue;
+                // a detached certificate may briefly equal another one, so never dedup it
+                if (!svec_dedup_skip_init) {
+                    htable_new(&svec_dedup_skip, 256);
+                    svec_dedup_skip_init = 1;
+                }
+                ptrhash_put(&svec_dedup_skip, (void*)cert, (void*)cert);
+                for (int slot = 2; slot <= 4; slot += 2) {
+                    jl_value_t *lst = jl_svecref(cert, slot);
+                    if (lst == jl_nothing)
+                        continue;
+                    arraylist_push(&cert_lists, cert);
+                    arraylist_push(&cert_lists, (void*)(uintptr_t)slot);
+                    arraylist_push(&cert_lists, lst);
+                    jl_svecset(cert, slot, jl_nothing);
+                }
+            }
             // Queue method extensions
             jl_queue_for_serialization(&s, extext_methods);
             // Queue the new specializations
             jl_queue_for_serialization(&s, new_ext);
         }
         jl_serialize_reachable(&s);
+        if (worklist && edge_sig_set_init && edge_sig_set.count > 0) {
+            // Save each signature's typename decomposition so the loader need not
+            // compute it. Plain pointer arrays let uniquing fix up the typenames.
+            jl_array_t *sigtab = jl_alloc_vec_any(0);
+            jl_svec_t *tnsv = NULL;
+            JL_GC_PUSH2(&sigtab, &tnsv);
+            void **tab = edge_sig_set.table;
+            for (size_t i = 0; i < edge_sig_set.size; i += 2) {
+                if (tab[i + 1] == HT_NOTFOUND)
+                    continue;
+                jl_value_t *sig = (jl_value_t*)tab[i];
+                struct _sig_tn_collect env = { {NULL}, 0, 0, 0 };
+                if (!jl_foreach_top_typename_for(_sig_tn_collect_cb, sig, 1, &env))
+                    continue; // the loader computes it instead
+                if (env.overflow)
+                    continue;
+                tnsv = jl_alloc_svec(1 + env.n);
+                jl_svecset(tnsv, 0, jl_box_long((int64_t)env.explbits));
+                for (int k = 0; k < env.n; k++)
+                    jl_svecset(tnsv, 1 + k, env.tns[k]);
+                jl_array_ptr_1d_push(sigtab, sig);
+                jl_array_ptr_1d_push(sigtab, (jl_value_t*)tnsv);
+            }
+            JL_GC_POP();
+            sig_tn_root = (jl_value_t*)sigtab;
+            jl_queue_for_serialization(&s, sig_tn_root);
+            jl_serialize_reachable(&s);
+        }
+        else if (worklist) {
+            jl_queue_for_serialization(&s, jl_nothing);
+        }
         // step 1.2: ensure all gvars are part of the sysimage too
         record_gvars(&s, &gvars);
         record_external_fns(&s, &external_fns);
         if (jl_options.trim)
             record_gvars(&s, &MIs);
         jl_serialize_reachable(&s);
+        // Prune only now, after every other root is queued (including those
+        // from generated code), so no reachable object loses its record.
+        if (cert_lists.len > 0) {
+            // Keep an object only if it will exist at load: it is in a dependency
+            // image, or it is saved in this image anyway. Dropping the rest is
+            // sound, because replay scans live counterparts made outside the closure.
+            for (size_t i = 0; i < cert_lists.len; i += 3) {
+                jl_svec_t *cert = (jl_svec_t*)cert_lists.items[i];
+                int slot = (int)(uintptr_t)cert_lists.items[i + 1];
+                jl_array_t *lst = (jl_array_t*)cert_lists.items[i + 2];
+                size_t stride = slot == 2 ? 2 : 1; // slot 2 holds (mi, flag) pairs
+                size_t n = jl_array_nrows(lst), ins = 0;
+                jl_value_t **d = jl_array_ptr_data(lst);
+                for (size_t k = 0; k + stride <= n; k += stride) {
+                    if (!jl_object_in_image(d[k]) && ptrhash_get(&serialization_order, d[k]) == HT_NOTFOUND)
+                        continue;
+                    for (size_t j = 0; j < stride; j++)
+                        d[ins + j] = d[k + j];
+                    ins += stride;
+                }
+                if (ins < n)
+                    jl_array_del_end(lst, n - ins);
+                if (ins == 0)
+                    continue; // the slot stays `nothing`
+                jl_svecset(cert, slot, (jl_value_t*)lst);
+                jl_queue_for_serialization(&s, (jl_value_t*)lst);
+            }
+            jl_serialize_reachable(&s);
+        }
+        arraylist_free(&cert_lists);
+        if (worklist && jl_backedge_log) {
+            // Keep only callers that are saved anyway, so the log does not
+            // pull dead CodeInstances into the image.
+            jl_array_t *belog = jl_backedge_log;
+            size_t bn = jl_array_nrows(belog), ins = 0;
+            jl_value_t **bd = jl_array_ptr_data(belog);
+            for (size_t i = 0; i + 2 < bn; i += 3) {
+                jl_code_instance_t *caller = (jl_code_instance_t*)bd[i + 2];
+                if (jl_atomic_load_relaxed(&caller->max_world) != ~(size_t)0)
+                    continue;
+                if (ptrhash_get(&serialization_order, caller) == HT_NOTFOUND)
+                    continue;
+                // flagged callers get their backedges from this log, not the usual scan
+                jl_atomic_fetch_or_relaxed(&caller->flags, JL_CI_FLAGS_BACKEDGES_LOGGED);
+                bd[ins] = bd[i];
+                bd[ins + 1] = bd[i + 1];
+                bd[ins + 2] = bd[i + 2];
+                ins += 3;
+            }
+            if (ins < bn)
+                jl_array_del_end(belog, bn - ins);
+            // Store each object once and the triples as varint indices.
+            // Three pointers per entry would add many relocations.
+            {
+                htable_t uniq;
+                htable_new(&uniq, 1024);
+                jl_array_t *uobjs = jl_alloc_vec_any(0);
+                jl_array_t *idxbytes = NULL;
+                JL_GC_PUSH2(&uobjs, &idxbytes);
+                idxbytes = jl_alloc_array_1d(jl_array_uint8_type, 0);
+                size_t nlog = jl_array_nrows(belog);
+                size_t ntrip = nlog / 3;
+                // Group by target, so the loader locks each callee once.
+                // Registration order does not matter. Per group the stream is
+                // target, count, then count pairs of (invokesig, caller).
+                belog_trip_t *trips = (belog_trip_t*)malloc_s((ntrip ? ntrip : 1) * sizeof(belog_trip_t));
+                for (size_t i = 0; i < ntrip; i++) {
+                    jl_value_t *t = jl_array_ptr_ref(belog, 3 * i);
+                    trips[i].target = t;
+                    trips[i].invokesig = jl_array_ptr_ref(belog, 3 * i + 1);
+                    trips[i].cls = t == jl_nothing ? 1 : jl_is_method_instance(t) ? 0 : 2;
+                    trips[i].orig = (uint32_t)i;
+                }
+                qsort(trips, ntrip, sizeof(belog_trip_t), belog_trip_cmp);
+#define BELOG_UNIQ(o, out) do { \
+                    void **ubp_ = ptrhash_bp(&uniq, (void*)(o)); \
+                    if (*ubp_ == HT_NOTFOUND) { \
+                        (out) = jl_array_nrows(uobjs); \
+                        *ubp_ = (void*)((out) + 1); \
+                        jl_array_ptr_1d_push(uobjs, (o)); \
+                    } \
+                    else { \
+                        (out) = (size_t)(uintptr_t)*ubp_ - 1; \
+                    } \
+                } while (0)
+#define BELOG_EMIT(v) do { \
+                    size_t v_ = (v); \
+                    uint8_t vbuf_[10]; \
+                    int nb_ = 0; \
+                    do { \
+                        vbuf_[nb_] = v_ & 0x7f; \
+                        v_ >>= 7; \
+                        if (v_) \
+                            vbuf_[nb_] |= 0x80; \
+                        nb_++; \
+                    } while (v_); \
+                    size_t pos_ = jl_array_nrows(idxbytes); \
+                    jl_array_grow_end(idxbytes, nb_); \
+                    memcpy(jl_array_data(idxbytes, uint8_t) + pos_, vbuf_, nb_); \
+                } while (0)
+                for (size_t g = 0; g < ntrip; ) {
+                    size_t e = g + 1;
+                    while (e < ntrip && trips[e].target == trips[g].target)
+                        e++;
+                    size_t idx;
+                    BELOG_UNIQ(trips[g].target, idx);
+                    BELOG_EMIT(idx);
+                    BELOG_EMIT(e - g);
+                    for (size_t i = g; i < e; i++) {
+                        BELOG_UNIQ(trips[i].invokesig, idx);
+                        BELOG_EMIT(idx);
+                        jl_value_t *caller = jl_array_ptr_ref(belog, 3 * (size_t)trips[i].orig + 2);
+                        BELOG_UNIQ(caller, idx);
+                        BELOG_EMIT(idx);
+                    }
+                    g = e;
+                }
+#undef BELOG_EMIT
+#undef BELOG_UNIQ
+                free(trips);
+                htable_free(&uniq);
+                jl_array_t *compact = jl_alloc_vec_any(2);
+                jl_array_ptr_set(compact, 0, (jl_value_t*)uobjs);
+                jl_array_ptr_set(compact, 1, (jl_value_t*)idxbytes);
+                jl_backedge_log = compact; // keeps it rooted
+                belog = compact;
+                JL_GC_POP();
+            }
+            jl_queue_for_serialization(&s, (jl_value_t*)belog);
+            jl_serialize_reachable(&s);
+        }
         // Beyond this point, all content should already have been visited, so now we can prune
         // the rest and add some internal root arrays.
         // step 1.3: include some other special roots
@@ -3293,6 +4463,60 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     { // step 2: build all the sysimg sections
         write_padding(&sysimg, sizeof(uintptr_t));
         jl_write_values(&s);
+        if (ici_fixups_init) {
+            // now that the layout is final, patch references into this image
+            for (size_t i = 0; i < ici_fixups.len; i += 3) {
+                jl_value_t *ici = (jl_value_t*)ici_fixups.items[i];
+                size_t wordidx = (size_t)ici_fixups.items[i + 1];
+                jl_value_t *target = (jl_value_t*)ici_fixups.items[i + 2];
+                uintptr_t ici_reloc = get_reloc_for_item(backref_id(&s, ici, NULL), 0);
+                uintptr_t tgt_reloc = get_reloc_for_item(backref_id(&s, target, NULL), 0);
+                if ((ici_reloc >> RELOC_TAG_OFFSET) != DataRef) {
+                    assert(0 && "interned container outside the data section");
+                    abort();
+                }
+                uintptr_t mask = (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1);
+                uintptr_t word;
+                if ((tgt_reloc >> RELOC_TAG_OFFSET) == DataRef) {
+                    word = ICI_TAG_REF | ((tgt_reloc & mask) / SYS_EXTERNAL_LINK_UNIT); // image key 0 is this image
+                }
+                else if ((tgt_reloc >> RELOC_TAG_OFFSET) == ConstDataRef) {
+                    word = ICI_TAG_REF | ICI_TAG_CONST | (tgt_reloc & mask); // already in pointer units
+                }
+                else {
+                    assert(0 && "interned reference to an object outside the image");
+                    abort();
+                }
+                size_t wordpos = (ici_reloc & mask) +
+                    (wordidx == ICI_DEFWORD_IDX ? offsetof(jl_interned_code_instance_t, defword)
+                                                : sizeof(jl_interned_code_instance_t) + sizeof(uintptr_t) * wordidx);
+                if (wordpos + sizeof(word) > (size_t)s.s->size) {
+                    assert(0 && "interned word outside the image");
+                    abort();
+                }
+                memcpy(&s.s->buf[wordpos], &word, sizeof(word));
+            }
+            arraylist_free(&ici_fixups);
+            ici_fixups_init = 0;
+        }
+        if (svec_dedup_init) {
+            // free only after the fixups, which look up svecs in these tables again
+            htable_free(&svec_dedup_memo);
+            htable_free(&svec_dedup_byhash);
+            svec_dedup_init = 0;
+        }
+        if (svec_dedup_skip_init) {
+            htable_free(&svec_dedup_skip);
+            svec_dedup_skip_init = 0;
+        }
+        if (depsym_map_init) {
+            htable_free(&depsym_map);
+            depsym_map_init = 0;
+        }
+        if (edge_sig_set_init) {
+            htable_free(&edge_sig_set);
+            edge_sig_set_init = 0;
+        }
         external_fns_begin = write_gvars(&s, &gvars, &external_fns);
     }
 
@@ -3385,7 +4609,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, module_init_order);
             jl_write_value(&s, extext_methods);
             jl_write_value(&s, new_ext);
+            jl_write_value(&s, jl_backedge_log ? (jl_value_t*)jl_backedge_log : jl_nothing);
             jl_write_value(&s, s.method_roots_list);
+            jl_write_value(&s, sig_tn_root ? sig_tn_root : jl_nothing);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
         ios_write(f, (char*)jl_array_data(s.link_ids_gctags, uint32_t), jl_array_len(s.link_ids_gctags) * sizeof(uint32_t));
@@ -4013,12 +5239,13 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
 }
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
-                                                 jl_array_t *depmods, uint32_t checksum,
+                                                 jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **init_order JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
+                                                 jl_array_t **backedge_log JL_REQUIRE_ROOTED_SLOT,
                                                  pkgcachesizes *cachesizes) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
@@ -4042,6 +5269,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     htable_t new_dt_objs;
     htable_new(&new_dt_objs, 0);
     arraylist_new(&deser_sym, 0);
+    jl_value_t *sig_tns_root = NULL;
 
     if (jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
         memset(&image->fptrs, 0, sizeof(image->fptrs));
@@ -4049,6 +5277,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
+#ifdef ENABLE_TIMINGS
+    // ended explicitly below, not at scope exit
+    static jl_timing_event_t *meta_timing_event = NULL;
+    if (!meta_timing_event)
+        meta_timing_event = jl_timing_event_create("LOAD_IMAGE", "LOAD_ImageMeta", __func__, __FILE__, __LINE__, 0);
+    jl_timing_block_t meta_timing_block = { 0 };
+    meta_timing_block.event = meta_timing_event;
+    jl_timing_block_start(&meta_timing_block);
+#endif
     // step 1: read section map
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
     size_t sizeof_sysdata = read_uint(f);
@@ -4090,7 +5327,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
-    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_backedge_log = 0, offset_method_roots_list = 0, offset_sig_tns = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -4126,9 +5363,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         offset_init_order = jl_read_offset(&s);
         offset_extext_methods = jl_read_offset(&s);
         offset_new_ext = jl_read_offset(&s);
+        offset_backedge_log = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
+        offset_sig_tns = jl_read_offset(&s);
     }
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
+    ici_register_image((uintptr_t)s.s->buf, (size_t)s.s->size, (uintptr_t)s.const_data->buf,
+                       s.incremental ? s.buildid_depmods_idxs : NULL, !s.incremental);
     size_t nlinks_gctags = read_uint32(f);
     if (nlinks_gctags > 0) {
         s.link_ids_gctags = jl_alloc_array_1d(jl_array_int32_type, nlinks_gctags);
@@ -4156,14 +5397,24 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         *init_order = (jl_array_t*)jl_delayed_reloc(&s, offset_init_order);
         *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
         (void)(jl_array_t*)jl_delayed_reloc(&s, offset_new_ext);
+        jl_value_t *belog = jl_delayed_reloc(&s, offset_backedge_log);
+        if (backedge_log)
+            *backedge_log = belog == jl_nothing ? NULL : (jl_array_t*)belog;
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
+        sig_tns_root = jl_delayed_reloc(&s, offset_sig_tns);
         *internal_methods = jl_alloc_vec_any(0);
     }
     s.s = NULL;
 
+#ifdef ENABLE_TIMINGS
+    jl_timing_block_end(&meta_timing_block);
+#endif
     // step 3: apply relocations
     assert(!ios_eof(f));
-    jl_read_symbols(&s);
+    {
+        JL_TIMING(LOAD_IMAGE, LOAD_Symbols);
+        jl_read_symbols(&s);
+    }
     ios_close(&symbols);
 
     char *image_base = (char*)&sysimg.buf[0];
@@ -4204,6 +5455,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     arraylist_new(&cleanup_list, 0);
     arraylist_t delay_list;
     arraylist_new(&delay_list, 0);
+#ifdef ENABLE_TIMINGS
+    // ended explicitly below, not at scope exit
+    static jl_timing_event_t *uniquing_timing_event = NULL;
+    if (!uniquing_timing_event)
+        uniquing_timing_event = jl_timing_event_create("LOAD_IMAGE", "LOAD_Uniquing", __func__, __FILE__, __LINE__, 0);
+    jl_timing_block_t uniquing_timing_block = { 0 };
+    uniquing_timing_block.event = uniquing_timing_event;
+    jl_timing_block_start(&uniquing_timing_block);
+#endif
     JL_LOCK(&typecache_lock); // Might GC--prevent other threads from changing any type caches while we inspect them all
     for (size_t i = 0; i < s.uniquing_types.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_types.items[i];
@@ -4416,6 +5676,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
+#ifdef ENABLE_TIMINGS
+    jl_timing_block_end(&uniquing_timing_block);
+    static jl_timing_event_t *fixup_timing_event = NULL;
+    if (!fixup_timing_event)
+        fixup_timing_event = jl_timing_event_create("LOAD_IMAGE", "LOAD_Fixup", __func__, __FILE__, __LINE__, 0);
+    jl_timing_block_t fixup_timing_block = { 0 };
+    fixup_timing_block.event = fixup_timing_event;
+    jl_timing_block_start(&fixup_timing_block);
+#endif
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -4491,6 +5760,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
+#ifdef ENABLE_TIMINGS
+    jl_timing_block_end(&fixup_timing_block);
+#endif
 
     if (s.incremental)
         jl_root_new_gvars(&s, image, external_fns_begin);
@@ -4530,12 +5802,17 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
 
     s.s = &sysimg;
-    jl_update_all_fptrs(&s, image); // fptr relocs and registration
+    {
+        JL_TIMING(LOAD_IMAGE, LOAD_Fptrs);
+        jl_update_all_fptrs(&s, image);
+    }
     s.s = NULL;
 
     ios_close(&fptr_record);
     ios_close(&sysimg);
 
+    if (s.incremental && sig_tns_root != NULL && sig_tns_root != jl_nothing)
+        jl_register_sig_tns((jl_array_t*)sig_tns_root); // after uniquing, so the typenames are canonical
     if (!s.incremental)
         jl_gc_reset_alloc_count();
     arraylist_free(&deser_sym);
@@ -4645,9 +5922,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
 
     jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *method_roots_list = NULL;
+    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *method_roots_list = NULL, *backedge_log = NULL;
     jl_svec_t *cachesizes_sv = NULL;
-    JL_GC_PUSH6(&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes_sv);
+    JL_GC_PUSH7(&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes_sv, &backedge_log);
 
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
@@ -4656,13 +5933,16 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         char *sysimg;
         int success = !needs_permalloc;
         ios_seek(f, datastartpos);
-        if (needs_permalloc) {
-            sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
-            jl_gc_notify_image_alloc(sysimg, len);
-        } else
-            sysimg = &f->buf[f->bpos];
-        if (needs_permalloc)
-            success = ios_readall(f, sysimg, len) == len;
+        {
+            JL_TIMING(LOAD_IMAGE, LOAD_ImageCopy);
+            if (needs_permalloc) {
+                sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
+                jl_gc_notify_image_alloc(sysimg, len);
+            } else
+                sysimg = &f->buf[f->bpos];
+            if (needs_permalloc)
+                success = ios_readall(f, sysimg, len) == len;
+        }
         if (!success) {
             restored = jl_get_exceptionf(jl_errorexception_type, "Error reading package image file.");
             JL_SIGATOMIC_END();
@@ -4672,11 +5952,16 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 ios_close(f);
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes);
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &backedge_log, &cachesizes);
             JL_SIGATOMIC_END();
 
+            ici_set_image_key((uintptr_t)sysimg, jl_worklist_key((jl_array_t*)restored));
             // Add roots to methods
-            int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            int failed;
+            {
+                JL_TIMING(LOAD_IMAGE, LOAD_CopyRoots);
+                failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            }
             if (failed != 0) {
                 jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
                 abort();
@@ -4698,7 +5983,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             size_t world = jl_atomic_load_relaxed(&jl_world_counter);
             if (new_methods)
                 world += 1;
-            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            jl_activate_methods(extext_methods, internal_methods, world, pkgname, depmods);
             // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
             // allow users to start running in this updated world
             if (new_methods)
@@ -4720,10 +6005,10 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 // `extext_methods` contains all worklist methods; `internal_methods`
                 // only partially overlaps it and exists only for per-object world-stamp
                 // updates during the fixup walk.
-                restored = (jl_value_t*)jl_svec(6, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv);
+                restored = (jl_value_t*)jl_svec(7, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv, backedge_log ? (jl_value_t*)backedge_log : jl_nothing);
             }
             else {
-                restored = (jl_value_t*)jl_svec(3, restored, init_order, internal_methods);
+                restored = (jl_value_t*)jl_svec(4, restored, init_order, internal_methods, backedge_log ? (jl_value_t*)backedge_log : jl_nothing);
             }
         }
     }
@@ -4744,8 +6029,8 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
         jl_throw(exc);
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
-    jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL);
+    jl_restore_system_image_from_stream_(&f_payload, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32),
+                                         NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT
