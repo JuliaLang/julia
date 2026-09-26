@@ -488,10 +488,24 @@ function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int
     flatcand = replace(highlightcand(cand), r"\r?\n\s*" => NEWLINE_MARKER)
     candstr = focus_matches(search, flatcand, width - decorationlen)
     if hover
-        face!(candstr, :region)
-        face!(agedec, :region)
+        candstr = region_highlight(candstr)
+        agedec = region_highlight(agedec)
     end
     println(io, candstr, modehint, agedec, ' ')
+end
+
+function region_highlight(content::AnnotatedString)
+    region = getface(:region)
+    if !isnothing(region.background)
+        rgb = rgbcolor(region.background)
+        linear(c) = (c /= 255; c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055)^2.4)
+        luminance = 0.2126 * linear(rgb.r) + 0.7152 * linear(rgb.g) + 0.0722 * linear(rgb.b)
+        fallback = Face(foreground = luminance > 0.179 ? 0x000000 : 0xffffff)
+        # Syntax faces and an explicit region foreground take precedence over the fallback.
+        content = S"{$fallback:$content}"
+    end
+    face!(content, :region)
+    content
 end
 
 """
@@ -699,7 +713,9 @@ function redisplay_preview(io::IO, oldstate::SelectorState, oldrows::Int, newsta
         for idx in getselidxs(newstate)
             entry = getcand(newstate, idx)
             content = highlightcand(entry)
-            ishover(newstate, idx) && face!(content, :region)
+            if ishover(newstate, idx)
+                content = region_highlight(content)
+            end
             push!(seltexts, content)
         end
         linecount = sum(t -> 1 + count('\n', String(t)), seltexts, init=0)
