@@ -22,8 +22,27 @@ public
     ImmutableDict,
     OneTo,
     Pairs,
+    SignalCondition,
     LogRange,
     UUID,
+
+# signals
+    SIGHUP,
+    SIGINT,
+    SIGQUIT,
+    SIGKILL,
+    SIGUSR1,
+    SIGUSR2,
+    SIGPIPE,
+    SIGALRM,
+    SIGTERM,
+    SIGCHLD,
+    SIGCONT,
+    SIGWINCH,
+    SIGINFO,
+    sigrtmin,
+    sigrtmax,
+    signal_name,
 
 # Semaphores
     Semaphore,

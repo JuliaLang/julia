@@ -44,8 +44,9 @@ end
 Create an async condition that calls the given `callback` function. The `callback` is passed one argument,
 the async condition object itself.
 """
-function AsyncCondition(cb::Function)
-    async = AsyncCondition()
+AsyncCondition(cb::Function) = run_callback_task(cb, AsyncCondition())
+
+function run_callback_task(cb::Function, async)
     # Shielded like the `Timer` callback task below: this task owns the
     # handle's lifetime and must survive a cancelled constructing scope.
     t = ScopedValues.with(CANCEL_TOKEN => nothing) do
@@ -67,6 +68,132 @@ function AsyncCondition(cb::Function)
         end
     end
     return async
+end
+
+## signal notifications
+
+"""
+    SignalCondition(signum::Integer)
+
+Create a condition that wakes up tasks waiting for it (by calling [`wait`](@ref) on the
+object) when the process receives the signal `signum`, for example `Base.SIGTERM` or
+`Base.SIGHUP`. Several deliveries that arrive before a waiting task runs are reported once.
+
+While any `SignalCondition` for `signum` is open, the signal no longer has its usual
+effect: receiving `SIGTERM`, for instance, no longer exits Julia. Closing the last one with
+[`close`](@ref) restores it. A handler therefore usually ends by calling [`exit`](@ref)
+itself once it has shut down cleanly. Some effects happen regardless: a stopped process
+still resumes on `SIGCONT`.
+
+The signals that have a named constant in `Base` can be watched as follows:
+
+| Signal          | Linux      | macOS, BSD | Windows | Usual effect                          |
+|:--------------- |:---------- |:---------- |:------- |:------------------------------------- |
+| `Base.SIGHUP`   | yes        | yes        | yes     | exit                                  |
+| `Base.SIGINT`   | yes        | yes        | yes     | interrupt running code (see below)    |
+| `Base.SIGQUIT`  | yes        | yes        | no      | print backtraces and exit             |
+| `Base.SIGUSR1`  | yes        | yes        | no      | profile peek on Linux, exit on macOS  |
+| `Base.SIGUSR2`  | no         | macOS only | no      | exit                                  |
+| `Base.SIGALRM`  | yes        | yes        | no      | exit                                  |
+| `Base.SIGTERM`  | yes        | yes        | no      | exit                                  |
+| `Base.SIGCHLD`  | yes        | yes        | no      | none                                  |
+| `Base.SIGCONT`  | yes        | yes        | no      | resume if stopped (always happens)    |
+| `Base.SIGWINCH` | yes        | yes        | yes     | none                                  |
+| `Base.SIGINFO`  | no         | yes        | no      | profile peek                          |
+
+Without a `SignalCondition`, Ctrl-C (`SIGINT`) interrupts running code through task
+cancellation (see [`CancellationToken`](@ref)), or exits a script. Watching `SIGINT` replaces
+both: Ctrl-C then only notifies the condition, which is a safer place to stop work. If the
+condition's task cannot run, for example because other code never yields, then on Unix
+Ctrl-\\ (`SIGQUIT`) still stops Julia, unless `SIGQUIT` is also being watched.
+
+The signals Julia itself relies on, such as `SIGSEGV`, `SIGPIPE` and `SIGUSR2` outside
+macOS, cannot be watched, nor can the signals that cannot be caught (`SIGKILL`, `SIGSTOP`).
+Watching one throws an `ArgumentError`.
+
+On Windows, libuv reports console events as signals: Ctrl+C as `SIGINT`, Ctrl+Break as
+`SIGBREAK` (21), closing the console as `SIGHUP`, and resizing it as `SIGWINCH`. No other
+signals are available there. While `SIGHUP` is watched, closing the console no longer exits
+Julia by itself, so the handler should call [`exit`](@ref); Windows ends the process a few
+seconds after the console closes in any case.
+
+Other signals can be watched by number. For real-time signals use
+`Base.sigrtmin() + n`, like `SIGRTMIN+n` in C (see [`Base.sigrtmin`](@ref)). The numbers of
+the rest, such as `SIGPROF`, differ between platforms; see `signal.h` or `man 7 signal`.
+Watching `SIGTSTP` stops Ctrl-Z from suspending Julia.
+
+Handling a signal needs the event loop to run, so a task busy in a loop that never yields
+delays it until it does.
+
+# Examples
+```julia
+term = Base.SignalCondition(Base.SIGTERM)
+Threads.@spawn begin
+    wait(term)
+    save_checkpoint()
+    exit(0)
+end
+```
+
+!!! compat "Julia 1.14"
+    `SignalCondition` requires at least Julia 1.14.
+"""
+mutable struct SignalCondition
+    @atomic handle::Ptr{Cvoid}
+    cond::ThreadSynchronizer
+    @atomic isopen::Bool
+    @atomic set::Bool
+    signum::Cint
+
+    function SignalCondition(signum::Integer)
+        if !(typemin(Cint) <= signum <= typemax(Cint)) ||
+                ccall(:jl_signal_is_reserved, Cint, (Cint,), signum) != 0
+            throw(ArgumentError("signal $signum cannot be watched"))
+        end
+        this = new(Libc.malloc(_sizeof_uv_signal), ThreadSynchronizer(), true, false, signum)
+        iolock_begin()
+        associate_julia_struct(this.handle, this)
+        err = ccall(:uv_signal_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), this)
+        if err != 0
+            Libc.free(this.handle)
+            this.handle = C_NULL
+            iolock_end()
+            throw(_UVError("uv_signal_init", err))
+        end
+        finalizer(uvfinalize, this)
+        err = ccall(:jl_start_signal_watcher, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cint),
+            this, @cfunction(uv_signalcb, Cvoid, (Ptr{Cvoid}, Cint)), signum)
+        iolock_end()
+        if err != 0
+            close(this)
+            throw(_UVError("uv_signal_start", err))
+        end
+        return this
+    end
+end
+
+"""
+    SignalCondition(callback::Function, signum::Integer)
+
+Create a [`SignalCondition`](@ref) that calls `callback` when the process receives the
+signal `signum`. Several deliveries that arrive before the callback runs are reported once,
+so the number of calls is not a count of signals. The `callback` is passed one argument, the
+condition object itself.
+
+# Examples
+```julia
+Base.SignalCondition(Base.SIGHUP) do _
+    reload_config()
+end
+```
+"""
+SignalCondition(cb::Function, signum::Integer) = run_callback_task(cb, SignalCondition(signum))
+
+function show(io::IO, s::SignalCondition)
+    state = isopen(s) ? "open" : "closed"
+    name = signal_name(s.signum)
+    signal = name === nothing ? string(s.signum) : "$name ($(s.signum))"
+    print(io, "SignalCondition($signal, $state)")
 end
 
 ## timer-based notifications
@@ -168,13 +295,14 @@ end
 
 unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
+unsafe_convert(::Type{Ptr{Cvoid}}, s::SignalCondition) = s.handle
 
 # if this returns true, the object has been signaled
 # if this returns false, the object is closed
 # a cancellation of the governing token is thrown as a CancellationRequest
-_trywait(t::Union{Timer, AsyncCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+_trywait(t::Union{Timer, AsyncCondition, SignalCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
     _trywait(t, resolve_cancel_token(cancel))
-function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
+function _trywait(t::Union{Timer, AsyncCondition, SignalCondition}, tok::MaybeToken)
     set = t.set
     if set
         # full barrier now for AsyncCondition
@@ -230,11 +358,11 @@ function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
     return set
 end
 
-waitqueue(t::Union{Timer, AsyncCondition}) = waitqueue(t.cond)
+waitqueue(t::Union{Timer, AsyncCondition, SignalCondition}) = waitqueue(t.cond)
 
-wait(t::Union{Timer, AsyncCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+wait(t::Union{Timer, AsyncCondition, SignalCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
     wait(t, check_cancel_arg(cancel))
-function wait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
+function wait(t::Union{Timer, AsyncCondition, SignalCondition}, tok::MaybeToken)
     ok = _trywait(t, tok)
     @cancel_check(tok)
     ok || throw(EOFError())
@@ -242,17 +370,17 @@ function wait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = @atomic :acquire t.isopen
+isopen(t::Union{Timer, AsyncCondition, SignalCondition}) = @atomic :acquire t.isopen
 
 """
-    close(t::Union{Timer, AsyncCondition})
+    close(t::Union{Timer, AsyncCondition, SignalCondition})
 
 Close an object `t` and thus mark it as inactive. Once a timer or condition is inactive, it will not produce
 a new event.
 
 See also [`isopen`](@ref).
 """
-function close(t::Union{Timer, AsyncCondition})
+function close(t::Union{Timer, AsyncCondition, SignalCondition})
     t.handle == C_NULL && !t.isopen && return # short-circuit path, :monotonic
     iolock_begin()
     if t.handle != C_NULL
@@ -289,7 +417,7 @@ function close(t::Union{Timer, AsyncCondition})
     nothing
 end
 
-function uvfinalize(t::Union{Timer, AsyncCondition})
+function uvfinalize(t::Union{Timer, AsyncCondition, SignalCondition})
     iolock_begin()
     lock(t.cond)
     try
@@ -309,7 +437,7 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
     nothing
 end
 
-function _uv_hook_close(t::Union{Timer, AsyncCondition})
+function _uv_hook_close(t::Union{Timer, AsyncCondition, SignalCondition})
     lock(t.cond)
     try
         handle = t.handle
@@ -331,6 +459,18 @@ function uv_asynccb(handle::Ptr{Cvoid})
         notify(async.cond, true)
     finally
         unlock(async.cond)
+    end
+    nothing
+end
+
+function uv_signalcb(handle::Ptr{Cvoid}, ::Cint)
+    s = @handle_as handle SignalCondition
+    lock(s.cond)
+    try
+        @atomic :release s.set = true
+        notify(s.cond, true)
+    finally
+        unlock(s.cond)
     end
     nothing
 end

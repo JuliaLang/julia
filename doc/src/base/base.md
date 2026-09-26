@@ -355,6 +355,23 @@ Base.success
 Base.process_running
 Base.process_exited
 Base.kill(::Base.Process, ::Integer)
+Base.kill(::Integer, ::Integer)
+Base.SIGHUP
+Base.SIGINT
+Base.SIGQUIT
+Base.SIGKILL
+Base.SIGUSR1
+Base.SIGUSR2
+Base.SIGPIPE
+Base.SIGALRM
+Base.SIGTERM
+Base.SIGCHLD
+Base.SIGCONT
+Base.SIGWINCH
+Base.SIGINFO
+Base.sigrtmin
+Base.sigrtmax
+Base.signal_name
 Base.Sys.set_process_title
 Base.Sys.get_process_title
 Base.ignorestatus
@@ -473,6 +490,8 @@ Base.Timer(::Function, ::Real)
 Base.Timer
 Base.AsyncCondition
 Base.AsyncCondition(::Function)
+Base.SignalCondition
+Base.SignalCondition(::Function, ::Integer)
 ```
 
 ## Reflection

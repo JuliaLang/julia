@@ -140,6 +140,7 @@ function uv_shutdowncb_task end
 function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
+function uv_signalcb end
 
 reinit_stdio() = _reinit_stdio()
 # we need this so it can be called by codegen to print errors, even after

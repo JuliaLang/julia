@@ -912,6 +912,34 @@ let p = run(`$sleepcmd 100`, wait=false)
     kill(p)
 end
 
+@testset "signal numbers and names" begin
+    if !Sys.iswindows()
+        for name in (:SIGHUP, :SIGINT, :SIGQUIT, :SIGKILL, :SIGUSR1, :SIGUSR2, :SIGPIPE, :SIGALRM,
+                     :SIGTERM, :SIGCHLD, :SIGCONT, :SIGWINCH, :SIGINFO)
+            name === :SIGINFO && !Sys.isbsd() && continue
+            @test Base.signal_name(getglobal(Base, name)) == String(name)
+        end
+    end
+    @test Base.signal_name(0) === nothing
+    @test Base.signal_name(typemax(Int)) === nothing
+    if Sys.islinux()
+        @test 32 < Base.sigrtmin() < Base.sigrtmax()
+        @test Base.signal_name(Base.sigrtmin() + 2) == "SIGRTMIN+2"
+    elseif Sys.isapple() || Sys.iswindows()
+        @test_throws ErrorException Base.sigrtmin()
+    end
+end
+
+# `kill` by process ID
+let p = run(`$sleepcmd 100`, wait=false)
+    kill(getpid(p), 0) # only checks that the process exists
+    @test_throws Base.IOError kill(getpid(p), typemax(Cint))
+    kill(getpid(p))
+    wait(p)
+    @test !success(p)
+    @test_throws Base.IOError kill(getpid(p))
+end
+
 # Second return of shell_parse
 let s = "   \$abc   "
     @test Base.shell_parse(s)[2] === findfirst('a', s)
