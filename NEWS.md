@@ -222,6 +222,10 @@ Standard library changes
 * The `Precompiling` messages printed while loading name packages without their uuid when the
   name is unambiguous in the environment, name extensions by their parent package, and say which
   dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
+* Precompile cache file names now also include the `environment_id` that Pkg records in the manifest
+  (the project uuid, or a generated one), so containers sharing a depot with different projects mounted
+  at the same path keep their caches from overwriting each other. Loading is unaffected, as it checks
+  file contents rather than names ([#63268]).
 
 #### JuliaSyntaxHighlighting
 

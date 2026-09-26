@@ -3639,12 +3639,23 @@ function track_nested_precomp(pkgs::Vector{PkgId})
     end
 end
 
+# The `environment_id` Pkg records in the manifest of `project_file`: the project uuid,
+# or a generated one. Empty when there is no manifest or it predates the entry.
+function project_environment_id(project_file::String)::String
+    isempty(project_file) && return ""
+    manifest_file = project_file_manifest_path(project_file)
+    manifest_file === nothing && return ""
+    id = get(parsed_toml(manifest_file), "environment_id", nothing)
+    return id isa String ? id : ""
+end
+
 function compilecache_dir(pkg::PkgId)
     entrypath, entryfile = cache_file_entry(pkg)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""))::String
+function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""),
+                           environment_id::String=project_environment_id(project))::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
@@ -3652,6 +3663,9 @@ function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=Cac
         abspath(cachepath, entryfile) * ".ji"
     else
         crc = _crc32c(project)
+        # environments sharing a depot can sit at the same project path (containers mounting
+        # different projects at /work), so the manifest's environment id also keys the name (#63268)
+        isempty(environment_id) || (crc = _crc32c(environment_id, crc))
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(_cacheflag_to_uint8(flags), crc)
@@ -4421,7 +4435,7 @@ global parse_pidfile_hook::Any
 # The preferences blob is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
-compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, ""; project="", flags) * ".pidfile"
+compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, ""; project="", environment_id="", flags) * ".pidfile"
 
 const compilecache_pidlock_stale_age = 10
 
