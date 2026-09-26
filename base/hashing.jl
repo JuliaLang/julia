@@ -213,7 +213,7 @@ function hash(x::Real, h::UInt)
     num_z::Int = trailing_zeros(num)
     den_z::Int = trailing_zeros(den)
     # effective pow for hashing purposes is defined as pow%Int64
-    pow::Int64 = _pow%Int64 + num_z - den_z
+    pow::Int64 = _pow%Int64 +% num_z%Int64 -% den_z%Int64
     den >>= den_z
     num_signbit = signbit(num)
     den_signbit = signbit(den)
@@ -249,7 +249,7 @@ function hash(x::Real, h::UInt)
 
     # trimming only whole bytes of trailing zeros simplifies greatly
     # some specializations for memory-backed bitintegers
-    net_shift = num_z - ((pow > 0) ? pow % 8 : 0)
+    net_shift = num_z - ((pow > 0) ? Int(pow % 8) : 0)
     h = if net_shift < 0
         hash_integer(widen(num) << (-net_shift), h)
     else
