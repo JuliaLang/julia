@@ -195,10 +195,10 @@ end
     Timestamp{P}
 
 `Timestamp{P}` represents a point in time according to the proleptic Gregorian
-calendar. It stores a count of `P` since the Unix epoch, `1970-01-01T00:00:00`. The
-built-in resolutions `Second`, `Millisecond`, `Microsecond`, and `Nanosecond` each use
-an `Int64` count. `Timestamp(...)` without a type parameter creates a
-`Timestamp{Nanosecond}`, except that `Timestamp(ts)` returns a timestamp `ts` unchanged.
+calendar. It stores the number of `P` units since the Unix epoch, `1970-01-01T00:00:00`.
+The built-in resolutions `Second`, `Millisecond`, `Microsecond`, and `Nanosecond` store
+an `Int64`. `Timestamp(...)` without a type parameter creates a `Timestamp{Nanosecond}`,
+except that `Timestamp(ts::Timestamp)` returns `ts`.
 
 The resolution sets the range. `Timestamp{Nanosecond}` covers
 `1677-09-21T00:12:43.145224192` through `2262-04-11T23:47:16.854775807`.
@@ -214,7 +214,7 @@ first. Like `DateTime`, period arithmetic wraps at the ends of the range:
 
 Comparisons between timestamps of any resolution, `Date`, and `DateTime` values
 are exact and never throw. Other operations that mix resolutions, such as
-subtraction, convert both values to the finer resolution; `DateTime` counts as
+subtraction, convert both values to the finer resolution. A `DateTime` counts as
 `Millisecond`:
 
 ```jldoctest
@@ -244,15 +244,15 @@ With a built-in resolution, `Timestamp{P}` has the same bits as an Apache Arrow
 directly. NumPy uses `typemin(Int64)` for `NaT` (not a time).
 
 `Dates.value(ts)` returns the count since the Unix epoch, and `convert(P, ts)`
-returns the same count as a `P`. In contrast, a built-in period type returns a calendar
+returns the same count as a `P`. In contrast, calling a period type returns a calendar
 field: for example, `Second(ts)` is the second of the minute, from 0 through 59.
 `DateTime` counts from a different epoch, so `Dates.value(ts)` and `Dates.value(dt)`
 differ even when `ts == dt`.
 
 A package can add a resolution with its own `TimePeriod` type, such as a 128-bit count
 of picoseconds. The type needs methods for `Dates.value`, `typemin`, `typemax`, and
-`Dates.tons`, which gives the length in nanoseconds (a `Rational` for a unit shorter
-than a nanosecond). For years whose day number does not fit in an `Int64`, also add a
+`Dates.tons`, which returns the length of a period in nanoseconds (a `Rational` for a
+unit shorter than a nanosecond). For years whose day count overflows `Int64`, also add a
 method for `Dates.timestamp_totaldays(P, y, m, d)`. Printing and the `n` format code
 round digits finer than a nanosecond down.
 """
@@ -267,7 +267,7 @@ Timestamp(ts::Timestamp) = ts
 
 # Integer type of a count of P
 timestamp_count_type(::Type{P}) where {P} = typeof(value(zero(P)))
-# Rata Die day number; a package period with a very wide range can compute it in a wider type
+# Rata Die day number of a date. A package period with a huge range can use a wider type.
 timestamp_totaldays(::Type{P}, y, m, d) where {P} = totaldays(y, m, d)
 # Nanoseconds per unit of P (a Rational below a nanosecond), and units of P per day
 timestamp_scale(::Type{P}) where {P<:Period} = tons(oneunit(P))
@@ -277,7 +277,7 @@ timestamp_ticks_per_day(::Type{P}) where {P} = NS_PER_DAY ÷ timestamp_scale(P)
 timestamp_finer(::Type{P}, ::Type{Q}) where {P,Q} =
     timestamp_scale(P) <= timestamp_scale(Q) ? P : Q
 
-# `ns` nanoseconds as a count of P. Throws an InexactError if it is not a whole number.
+# `ns` nanoseconds as a count of P. Throws an InexactError if `ns` has more precision than P.
 function timestamp_ticks(::Type{P}, ns::Real) where {P}
     ticks, remainder = divrem(ns, timestamp_scale(P))
     iszero(remainder) || throw(InexactError(:convert, Timestamp{P}, ns))
@@ -285,7 +285,7 @@ function timestamp_ticks(::Type{P}, ns::Real) where {P}
 end
 
 # The Timestamp{P} at `ns` nanoseconds after the start of Rata Die day `rata`. Throws an
-# InexactError if the result is out of range or is not a whole number of P.
+# InexactError if the result is out of range or has more precision than P.
 function timestamp_from_day(::Type{Timestamp{P}}, rata, ns) where {P}
     ns = (Int128(rata) - UNIXEPOCHDAYS) * NS_PER_DAY + ns
     return Timestamp{P}(UTInstant(P(timestamp_ticks(P, ns))))
@@ -395,8 +395,8 @@ Date(dt::Base.Libc.TmStruct) = Date(1900 + dt.year, 1 + dt.month, dt.mday)
     Time(h, [mi, s, ms, us, ns])::Time
 
 Construct a `Time` type by parts. Arguments must be convertible to [`Int64`](@ref).
-`ns` may hold a whole fractional second, from `0` through `999999999`, if `ms`,
-`us`, and `ns` together are less than one second.
+`ns` can be from `0` through `999999999`, so it can hold a full fraction of a second.
+Together, `ms`, `us`, and `ns` must be less than one second.
 
 !!! compat "Julia 1.14"
     Before Julia 1.14, `ns` must be less than `1000`.
@@ -418,7 +418,7 @@ function validargs(::Type{Time}, h::Int64, mi::Int64, s::Int64, ms::Int64, us::I
     -1 < s < 60 || return ArgumentError("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return ArgumentError("Millisecond: $ms out of range (0:999)")
     -1 < us < 1000 || return ArgumentError("Microsecond: $us out of range (0:999)")
-    # `ns` may hold a whole fractional second, as parsed by the `n` format code
+    # `ns` can hold a full fraction of a second, as parsed by the `n` format code
     -1 < ns < 1000000000 || return ArgumentError("Nanosecond: $ns out of range (0:999999999)")
     1000000ms + 1000us + ns < 1000000000 ||
         return ArgumentError("Sub-second parts must together be less than one second")
@@ -432,9 +432,8 @@ Time(dt::Base.Libc.TmStruct) = Time(dt.hour, dt.min, dt.sec)
     Timestamp(y, [m, d, h, mi, s, ms, us, ns])::Timestamp{Nanosecond}
 
 Construct a `Timestamp` type by parts. Arguments must be convertible to
-[`Int64`](@ref). As for [`Time`](@ref), `ns` may hold a whole fractional second.
-Throws an `ArgumentError` if the result is outside the range of `Timestamp{P}`
-or is not a whole number of `P`.
+[`Int64`](@ref). As for [`Time`](@ref), `ns` can hold a full fraction of a second.
+Throws an `ArgumentError` if the result is out of range or has more precision than `P`.
 
 !!! compat "Julia 1.14"
     `Timestamp` requires Julia 1.14 or later.
@@ -472,7 +471,7 @@ function validargs(::Type{Timestamp{P}}, y::Int64, m::Int64, d::Int64, h::Int64,
     nsofday = ns + 1000us + 1000000ms + 1000000000 * (s + 60mi + 3600 * adjusthour(h, ampm))
     ticks, remainder = divrem(nsofday, timestamp_scale(P))
     iszero(remainder) || return ArgumentError("Fractional second is not exactly representable as Timestamp{$P}")
-    # Compare (day, tick of day) pairs with the range limits so the check cannot overflow
+    # Compare (day, time of day) pairs with the range limits, so the check cannot overflow
     fldmod(value(typemin(P)), timestamp_ticks_per_day(P)) <= (epochdays, ticks) <=
         fldmod(value(typemax(P)), timestamp_ticks_per_day(P)) ||
         return ArgumentError("Timestamp: $y-$m-$d out of range ($(typemin(Timestamp{P})) to $(typemax(Timestamp{P})))")
@@ -626,8 +625,8 @@ end
     Timestamp(d::Date, [t::Time])::Timestamp{Nanosecond}
 
 Construct a `Timestamp` from a `Date` and an optional `Time` of day. Throws an
-`ArgumentError` if the result is out of range, or an `InexactError` if `t` is not
-a whole number of `P`.
+`ArgumentError` if the result is out of range, or an `InexactError` if `t` has more
+precision than `P`.
 
 !!! compat "Julia 1.14"
     `Timestamp` requires Julia 1.14 or later.

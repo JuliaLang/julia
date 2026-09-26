@@ -180,7 +180,7 @@ end
     @test_throws ArgumentError Dates.Time(0, 0, 0, 0, -1)
     @test_throws ArgumentError Dates.Time(0, 0, 0, 0, 1000)
     @test_throws ArgumentError Dates.Time(0, 0, 0, 0, 0, -1)
-    # `ns` may hold a whole fractional second if the sub-second parts sum to less than 1s
+    # `ns` can hold a full fraction of a second if the sub-second parts sum to less than 1s
     @test Dates.Time(0, 0, 0, 0, 0, 1000) == Dates.Time(0, 0, 0, 0, 1)
     @test Dates.Time(0, 0, 0, 0, 0, 999999999) == Dates.Time(0, 0, 0, 999, 999, 999)
     @test_throws ArgumentError Dates.Time(0, 0, 0, 0, 0, 1000000000)

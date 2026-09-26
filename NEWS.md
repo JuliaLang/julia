@@ -249,7 +249,7 @@ Standard library changes
 * New `n` format code for fractional seconds with up to nanosecond precision. A format that used `n`
   as a literal character must now escape it with a backslash. The default `Time` format,
   `ISOTimeFormat`, now uses `n`, so `Time` values with sub-millisecond parts round-trip through
-  `string`. The `ns` argument of `Time` now accepts a whole fractional second, `0` through
+  `string`. The `ns` argument of `Time` now accepts a full fraction of a second, `0` through
   `999999999` ([#62994]).
 
 #### InteractiveUtils

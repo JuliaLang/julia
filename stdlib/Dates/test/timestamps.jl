@@ -39,7 +39,7 @@ using Dates
     @test_throws ArgumentError Timestamp(2026, 1, 1, 0, 0, 0, 1000)
     @test_throws ArgumentError Timestamp(2026, 1, 1, 0, 0, 0, 0, 1000)
     @test_throws ArgumentError Timestamp(2026, 1, 1, 0, 0, 0, 0, 0, 1000000000)
-    # ns may carry a full fractional second as long as the total stays below 1s
+    # ns can hold a full fraction of a second if the total stays below 1s
     @test Timestamp(2026, 1, 1, 0, 0, 0, 0, 0, 999999999) ==
         Timestamp(2026, 1, 1, 0, 0, 0, 999, 999, 999)
     @test_throws ArgumentError Timestamp(2026, 1, 1, 0, 0, 0, 1, 0, 999999999)

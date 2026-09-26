@@ -228,10 +228,9 @@ end
     end
 end
 
-# Write a fractional second, given as a count of 10^-precision seconds, without
-# trailing zeros and then padded with zeros to the width of the code: 500 milliseconds
-# is "5" under `n` and "500000000" under `nnnnnnnnn`. A fixed-width field keeps only
-# its leading digits.
+# Write a fraction of a second, given in units of 10^-precision seconds. Drop trailing
+# zeros, then pad with zeros to the width of the code: 500 milliseconds is "5" under `n`
+# and "500000000" under `nnnnnnnnn`. A fixed-width field keeps only its leading digits.
 function format_fraction(io, d::DatePart, frac, precision)
     str = rstrip(string(frac, pad = precision), '0')
     if d.fixed && length(str) > d.width
@@ -417,8 +416,7 @@ string:
 !!! compat "Julia 1.14"
     The `n` code requires Julia 1.14 or later.
 
-When parsing a `DateTime`, an `n` field must be exactly representable in
-milliseconds.
+When parsing a `DateTime`, an `n` field must be a whole number of milliseconds.
 
 Characters not listed above are normally treated as delimiters between date and time slots.
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
