@@ -782,7 +782,7 @@ for the complete implementation.
 The `@assert` macro makes great use of splicing into quoted expressions to simplify the manipulation
 of expressions inside the macro body.
 
-### Hygiene
+### [Hygiene](@id man-hygiene)
 
 An issue that arises in more complex macros is that of [hygiene](https://en.wikipedia.org/wiki/Hygienic_macro).
 In short, macros must ensure that the variables they introduce in their returned expressions do
@@ -900,6 +900,72 @@ end
 However, we don't do this for a good reason: wrapping the `expr` in a new scope block (the anonymous function)
 also slightly changes the meaning of the expression (the scope of any variables in it),
 while we want `@time` to be usable with minimum impact on the wrapped code.
+
+#### How `esc` works — a before/after example
+
+[`esc`](@ref) wraps its argument in `Expr(:escape, ...)`. The macro expander treats any
+`:escape` node as belonging to the *call site*, so its symbols are not renamed. To see why
+this matters, consider a macro that assigns to a caller-visible variable:
+
+**Without `esc`** — the assignment targets a hygienic (gensym'd) variable, so the caller's
+`x` is never modified:
+
+```jldoctest esc_example; filter = r"#\d+#"
+julia> macro set_x_bad(val)
+           :(x = $val)
+       end;
+
+julia> macroexpand(@__MODULE__, :(@set_x_bad 42))
+:(var"x" = 42)
+```
+
+The local variable `var"#7#x"` is invisible to the caller; the intended assignment to `x`
+silently does nothing.
+
+**With `esc`** — escaping the entire returned expression (or selectively escaping the
+variable `x`) ensures the name resolves at the call site:
+
+```jldoctest esc_example
+julia> macro set_x_good(val)
+           :(x = $(esc(val)))
+       end;
+
+julia> macroexpand(@__MODULE__, :(@set_x_good 42))
+:(x = 42)
+```
+
+Now `x` refers to whatever `x` exists in the caller's scope, and the assignment works as
+intended.
+
+!!! note "esc is just data outside of macros"
+    `esc(expr)` always succeeds — it simply returns `Expr(:escape, expr)`. The resulting
+    expression only acquires meaning when it is part of a tree returned from a macro and
+    processed by the macro expander. If you try to `eval` an escaped expression directly,
+    Julia raises a syntax error because `:escape` is not valid surface syntax:
+    ```julia
+    julia> eval(esc(:(x, )))
+    ERROR: syntax: invalid syntax (escape ...)
+    ```
+
+#### Common pitfalls
+
+Two mistakes come up frequently when using [`esc`](@ref):
+
+1. **Forgetting to escape user-supplied expressions** (under-escaping).
+   When a macro receives an expression from the caller and interpolates it back into
+   generated code, the hygiene pass will rename variables inside it to gensyms. The caller's
+   code then silently refers to the wrong bindings. Always wrap user-supplied expressions
+   with `esc` when splicing them into the returned quote.
+
+2. **Escaping too much** (over-escaping).
+   Wrapping the *entire* macro return value in `esc` disables hygiene for every symbol in
+   the expansion, including the macro's own internal temporaries. This leaks implementation
+   details into the caller's scope, can shadow the caller's variables, and makes the macro
+   fragile. Prefer escaping only the specific subexpressions that need call-site resolution.
+
+See also [`macroexpand`](@ref) for inspecting the fully expanded form of a macro call,
+and [`@__MODULE__`](@ref) for obtaining the module in which the macro is being expanded.
+
 
 ### Macros and dispatch
 
