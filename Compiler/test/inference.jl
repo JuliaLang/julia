@@ -8296,6 +8296,13 @@ invoke_covered(x::Int) = invoke(invoke_narrower_target, Tuple{Integer}, x)
     @test fully_eliminated(invoke_covered, (Int,); retval=1)
 end
 
+# JuliaLang/julia#63351: merging vararg-tuple `PartialStruct`s must keep the trailing `Vararg`
+issue63351(c, xs) = c ? (1, :a, xs...) : (2, :a, xs...)
+@testset "tmerge of vararg-tuple `PartialStruct`s" begin
+    @test Base.infer_return_type(issue63351, (Bool, Vector{Any})) == Tuple{Int, Symbol, Vararg{Any}}
+    @test issue63351(true, Any[3]) === (1, :a, 3)
+end
+
 # irinterp must visit every reachable block even when block numbers are not in
 # topological order: once constant folding kills the fall-through path into a join
 # block, that block may be reachable only through a jump from a higher-numbered block (#63136)
