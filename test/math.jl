@@ -28,6 +28,40 @@ has_fma = Dict(
     BigFloat => true,
 )
 
+# Ordered error-free transforms retain exact residuals for either operand sign.
+@testset "fast two sum and difference" begin
+    setprecision(BigFloat, exponent(floatmax(Float64)) - 2 - exponent(nextfloat(zero(Float64))) + 1) do
+        for float_type in (Float16, Float32, Float64)
+            magnitudes = (zero(float_type), nextfloat(zero(float_type)),
+                          nextfloat(zero(float_type), 2), prevfloat(floatmin(float_type)),
+                          floatmin(float_type), nextfloat(floatmin(float_type)),
+                          eps(float_type)/2, float_type(0.1), float_type(0.5),
+                          prevfloat(one(float_type)), one(float_type),
+                          nextfloat(one(float_type)), floatmax(float_type)/4)
+            for big_magnitude in magnitudes, little_magnitude in magnitudes,
+                big_sign in (-one(float_type), one(float_type)),
+                little_sign in (-one(float_type), one(float_type))
+
+                little_magnitude <= big_magnitude || continue
+                big_operand = copysign(big_magnitude, big_sign)
+                little_operand = copysign(little_magnitude, little_sign)
+
+                for (transform, operation, first_operand, second_operand) in
+                    ((Base.fast_two_sum, +, big_operand, little_operand),
+                     (Base.fast_two_diff, -, big_operand, little_operand),
+                     (Base.fast_two_diff_rev, -, little_operand, big_operand))
+
+                    hi, lo = @inferred transform(first_operand, second_operand)
+                    @test hi isa float_type && lo isa float_type
+                    @test isequal(hi, operation(first_operand, second_operand))
+                    @test BigFloat(hi) + BigFloat(lo) ==
+                          operation(BigFloat(first_operand), BigFloat(second_operand))
+                end
+            end
+        end
+    end
+end
+
 @testset "meta test: ULPError" begin
     examples_f64 = (-3e0, -2e0, -1e0, -1e-1, -1e-10, -0e0, 0e0, 1e-10, 1e-1, 1e0, 2e0, 3e0)::Tuple{Vararg{Float64}}
     examples_f16 = Float16.(examples_f64)
@@ -676,7 +710,8 @@ end
         @testset "f: $f" for f in (
             # all strictly increasing
             identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
-            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, n1), Base.Fix2(atand, n1),
+            sin, sind, sinpi, tan, tand, tanpi, asin, asind, asinpi, atan, atand, atanpi,
+            Base.Fix2(atan, n1), Base.Fix2(atand, n1), Base.Fix2(atanpi, n1),
             Base.Fix1(round, typ), Base.Fix1(trunc, typ), +, ∘(-, -), ∘(-, cosc),
             rounders_typ...,
             Base.Fix1(*, n1), Base.Fix2(*, n1), Base.Fix2(/, n1),
@@ -950,7 +985,7 @@ end
 
 @testset "vectorization of 2-arg functions" begin
     binary_math_functions = [
-        copysign, flipsign, log, atan, hypot, max, min,
+        copysign, flipsign, log, atan, atanpi, hypot, max, min,
     ]
     @testset "$f" for f in binary_math_functions
         x = y = 2
@@ -1167,26 +1202,22 @@ end
         @test atan(T(Inf), -absr) === T(pi)/2
         @test atan(-T(Inf), -absr) === -T(pi)/2
         # |y/x| above high threshold
-        atanpi = T(1.5707963267948966)
-        @test atan(T(2.0^61), T(1.0)) === atanpi # m==0
-        @test atan(-T(2.0^61), T(1.0)) === -atanpi # m==1
-        @test atan(T(2.0^61), -T(1.0)) === atanpi # m==2
-        @test atan(-T(2.0^61), -T(1.0)) === -atanpi # m==3
+        @test atan(T(2.0^61), T(1.0)) === T(pi)/2 # m==0
+        @test atan(-T(2.0^61), T(1.0)) === -T(pi)/2 # m==1
+        @test atan(T(2.0^61), -T(1.0)) === T(pi)/2 # m==2
+        @test atan(-T(2.0^61), -T(1.0)) === -T(pi)/2 # m==3
         @test atan(-T(Inf), -absr) === -T(pi)/2
         # |y|/x between 0 and low threshold
         @test atan(T(2.0^-61), -T(1.0)) === T(pi) # m==2
         @test atan(-T(2.0^-61), -T(1.0)) === -T(pi) # m==3
-        # y/x is "safe" ("arbitrary values", just need to hit the branch)
-        _ATAN_PI_LO(::Type{Float32}) = -8.7422776573f-08
-        _ATAN_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
-        @test atan(T(5.0), T(2.5)) === atan(abs(T(5.0)/T(2.5)))
-        @test atan(-T(5.0), T(2.5)) === -atan(abs(-T(5.0)/T(2.5)))
-        @test atan(T(5.0), -T(2.5)) === T(pi)-(atan(abs(T(5.0)/-T(2.5)))-_ATAN_PI_LO(T))
-        @test atan(-T(5.0), -T(2.5)) === -(T(pi)-atan(abs(-T(5.0)/-T(2.5)))-_ATAN_PI_LO(T))
-        @test atan(T(1235.2341234), T(2.5)) === atan(abs(T(1235.2341234)/T(2.5)))
-        @test atan(-T(1235.2341234), T(2.5)) === -atan(abs(-T(1235.2341234)/T(2.5)))
-        @test atan(T(1235.2341234), -T(2.5)) === T(pi)-(atan(abs(T(1235.2341234)/-T(2.5)))-_ATAN_PI_LO(T))
-        @test atan(-T(1235.2341234), -T(2.5)) === -(T(pi)-(atan(abs(-T(1235.2341234)/T(2.5)))-_ATAN_PI_LO(T)))
+        # Finite arguments in all quadrants.
+        setprecision(BigFloat, 320) do
+            for y in (T(5.0), T(1235.2341234)), signy in (-1, 1), signx in (-1, 1)
+                signed_y, signed_x = signy*y, signx*T(2.5)
+                reference = atan(BigFloat(signed_y), BigFloat(signed_x))
+                @test ulp_error(reference, atan(signed_y, signed_x)) < 1.5 context = (signed_y, signed_x)
+            end
+        end
     end
 end
 
@@ -1225,6 +1256,299 @@ end
         @test atand(-absr, +absr) === -T(45.0)
         @test atand(+absr, -absr) === T(135.0)
         @test atand(-absr, -absr) === -T(135.0)
+    end
+end
+
+@testset "asinpi, acospi and atanpi" begin
+    @testset "exactly representable results, $T" for T in (Float16, Float32, Float64)
+        # asinpi and atanpi are odd
+        for (f, x, y) in ((asinpi, T(0), T(0)), (asinpi, T(1), T(0.5)),
+                          (atanpi, T(0), T(0)), (atanpi, T(1), T(0.25)),
+                          (atanpi, T(Inf), T(0.5)))
+            @test f(x) === y context = (f, x)
+            @test f(-x) === -y context = (f, x)
+        end
+        # acospi reflects about the quarter turn instead
+        for (x, y) in ((T(0), T(0.5)), (T(1), T(0)))
+            @test acospi(x) === y context = x
+            @test acospi(-x) === one(T) - y context = x
+        end
+
+        for f in (asinpi, acospi, atanpi)
+            @test isnan_type(T, f(T(NaN))) context = f
+        end
+        for f in (asinpi, acospi)
+            @test_throws DomainError f(nextfloat(T(1)))
+            @test_throws DomainError f(prevfloat(-T(1)))
+        end
+    end
+
+    @testset "accuracy, $T" for T in (Float32, Float64)
+        for (f, xs) in ((asinpi, range(-one(T), one(T), length = 5000)),
+                        (acospi, range(-one(T), one(T), length = 5000)),
+                        (atanpi, range(-T(4), T(4), length = 5000)),
+                        (atanpi, T(2) .^ range(-T(30), T(30), length = 5000)))
+            @test ulp_error_maximum(f, xs) < 1 context = f
+        end
+        # both sides of every seam of the argument reduction
+        for b in (T(7/16), T(11/16), T(19/16), T(39/16))
+            @test ulp_error_maximum(atanpi, nextfloat.(b, -3:3)) < 1 context = b
+        end
+        for f in (asinpi, acospi), b in (T(0.5), one(T))
+            @test ulp_error_maximum(f, nextfloat.(b, -3:0)) < 1 context = (f, b)
+        end
+    end
+
+    @testset "atanpi(y, x), $T" for T in (Float32, Float64)
+        r = T(2.5)
+        # Negating `y` reflects the result and negating `x` reflects it about the
+        # quarter turn, and in half-turns both stay exact.
+        for (y, x, v) in ((T(0), r, T(0)),             # `y` zero
+                          (r, T(0), T(0.5)),           # `x` zero
+                          (r, r, T(0.25)),             # equal magnitudes
+                          (T(Inf), T(Inf), T(0.25)),
+                          (r, T(Inf), T(0)),           # `x` infinite, `y` finite
+                          (T(Inf), r, T(0.5)),         # `y` infinite, `x` finite
+                          (T(2.0^61), T(1), T(0.5)))   # |y/x| above the threshold
+            @test atanpi(y, x) === v context = (y, x)
+            @test atanpi(-y, x) === -v context = (y, x)
+            @test atanpi(y, -x) === one(T) - v context = (y, x)
+            @test atanpi(-y, -x) === v - one(T) context = (y, x)
+        end
+        # |y/x| below the threshold, where the quotient is not formed at all
+        @test atanpi(T(2.0^-61), -T(1.0)) === T(1)
+        @test atanpi(-T(2.0^-61), -T(1.0)) === -T(1)
+
+        @test isnan_type(T, atanpi(T(NaN), r))
+        @test isnan_type(T, atanpi(r, T(NaN)))
+    end
+    @test atanpi(Float16(1), -Float16(1)) === Float16(0.75)
+
+    @testset "BigFloat" begin
+        @test asinpi(big(1.0)) == 1//2
+        @test asinpi(big(-1.0)) == -1//2
+        @test acospi(big(1.0)) == 0
+        @test acospi(big(-1.0)) == 1
+        @test atanpi(big(1.0)) == 1//4
+        @test atanpi(BigFloat(Inf)) == 1//2
+        @test atanpi(big(-1.0), big(-1.0)) == -3//4
+        for f in (asinpi, acospi, atanpi)
+            @test isnan(f(big(NaN))) context = f
+        end
+        for f in (asinpi, acospi)
+            @test_throws DomainError f(big(1.5))
+        end
+    end
+
+    @testset "promotion and non-float arguments" begin
+        @test asinpi(1//2) === asinpi(0.5)
+        @test acospi(0) === 0.5
+        @test atanpi(1) === 0.25
+        @test atanpi(1, -1) === 0.75
+        @test atanpi(1.0f0, -1.0) === 0.75
+        for f in (asinpi, acospi, atanpi)
+            @test f(missing) === missing context = f
+        end
+        @test atanpi(missing, 1) === missing
+        @test atanpi(1, missing) === missing
+        @test @inferred(asinpi(Float16(0.5))) isa Float16
+        @test @inferred(acospi(0.5f0)) isa Float32
+        @test @inferred(atanpi(0.5)) isa Float64
+        @test @inferred(atanpi(0.5f0, 1.0f0)) isa Float32
+    end
+end
+
+@testset "$inverse(x) reduction boundaries" for inverse in (atan, asinpi, acospi, atanpi)
+    # Cover polynomial evaluation, reduction boundaries, endpoints, and tiny arguments.
+    setprecision(BigFloat, 2*precision(Float64)) do
+        values = inverse === atan ? collect(range(-1.0, 1.0; length=2001)) : [-1.0, 1.0]
+        append!(values, (0.0, -0.0, NaN, nextfloat(0.0), -nextfloat(0.0), floatmin(Float64), -floatmin(Float64)))
+        boundaries = inverse in (atan, atanpi) ? (7/16, 11/16, 19/16, 39/16, 0x1p-27, 0x1p66) : (0.5, 0x1p-26)
+        for boundary in boundaries, step in -3:3, sign in (-1, 1)
+            push!(values, sign*nextfloat(boundary, step))
+        end
+        if inverse in (atan, atanpi)
+            append!(values, (Inf, -Inf, floatmax(Float64), -floatmax(Float64)))
+        else
+            for value in (nextfloat(1.0), -nextfloat(1.0), Inf, -Inf)
+                @test_throws DomainError inverse(value)
+            end
+        end
+        for value in values
+            reference = inverse(BigFloat(value))
+            result = inverse(value)
+            if isnan(value) || iszero(value) || isinf(value) || abs(value) == 1.0
+                @test isequal(result, Float64(reference)) context = value
+            else
+                @test ulp_error(reference, result) < 1.5 context = value
+            end
+        end
+    end
+end
+
+@testset "inverse trigonometric pi scaling near underflow" begin
+    # Check tiny pi-scaled values whose split-product intermediates can underflow.
+    setprecision(BigFloat, 2*precision(Float64)) do
+        numerator, denominator = 3.666376960471129e-244, 4.36195554095601e63
+        values = [ldexp(1.5, exponent) for exponent in -1074:-960]
+        append!(values, nextfloat.(0x1p-968, -1:1))
+        push!(values, numerator/denominator)
+        for value in values, sign in (-1, 1), correction in (0.0, -0.05, 0.05)
+            signed_value = sign*value
+            reference = (BigFloat(signed_value) + BigFloat(signed_value)*BigFloat(correction)) / big(pi)
+            result = Base.Math.scale_divpi(signed_value, correction)
+            @test abs(BigFloat(result) - reference) < 1.5*BigFloat(eps(Float64(reference))) context = (signed_value, correction)
+            if iszero(correction)
+                @test isequal(result, Base.Math.divpi(signed_value)) context = signed_value
+            end
+        end
+        for sign in (-1, 1)
+            y, x = sign*numerator, denominator
+            reference = atan(BigFloat(y), BigFloat(x)) / big(pi)
+            @test abs(BigFloat(atanpi(y, x)) - reference) < BigFloat(eps(Float64(reference))) context = (y, x)
+        end
+    end
+end
+
+@testset "atan quotient correction derivative approximation" begin
+    # Check the minimax correction across its interval, extrema, and operand scales.
+    setprecision(BigFloat, 3*precision(Float64)) do
+        ratios = collect(range(1/1024, prevfloat(7/16); length=33))
+        append!(ratios, (7/32, sqrt(3)*7/32))
+        for target_ratio in ratios,
+            large in (nextfloat(1.0), 1.5, prevfloat(2.0), ldexp(1.5, -900), ldexp(1.5, 900))
+            small = target_ratio*large
+            reciprocal = 1.0/large
+            ratio = small*reciprocal
+            correction = Base.Math.atan2_quotient_correction(ratio, reciprocal, small, large)
+            reference = atan(BigFloat(small)/BigFloat(large)) - atan(BigFloat(ratio))
+            @test abs(BigFloat(correction) - reference) <=
+                0.000168*abs(reference) context = (small, large)
+        end
+    end
+end
+
+@testset "$inverse(y, x) octant reduction" for inverse in (atan, atanpi)
+    # Check quadrant reconstruction and reduction boundaries across the exponent range.
+    setprecision(BigFloat, 2*precision(Float64)) do
+        for (y, x) in ((9.603656030032316e-79, 2.0875688600105563e-78),
+                       (1.369254359368033e-198, 3.0934105980779002e-198),
+                       (0.03255512957176587, 0.12963417862161836),
+                       (1235.2341234, 2.5),
+                       (2.17044372414797e-310, 1.5427969775932214e-266),
+                       (0.2546844306967133, 1.0172162230673232),
+                       (0.04324485747200532, 1.8871985396666688),
+                       (0.5644170657620842, 1.3997554720596739),
+                       (0.5000000000000001, 1.9999999999999998),
+                       (1.4740538354366347e-308, 6.1534809921142496e-192),
+                       (2.1083433236826544e-308, 2.812416776643377e-269))
+            for (small, large) in ((y, x), (x, y)), signy in (-1, 1), signx in (-1, 1)
+                signed_y, signed_x = signy*small, signx*large
+                reference = inverse(BigFloat(signed_y), BigFloat(signed_x))
+                @test ulp_error(reference, inverse(signed_y, signed_x)) < 1 context = (signed_y, signed_x)
+            end
+        end
+        for exponent in (-1074, -1070, -1022, -1020, -1000, 0, 1000, 1022, 1023)
+            for boundary in (7/16, 1.0, 16/7), step in -1:1
+                y = ldexp(nextfloat(boundary, step), exponent)
+                x = ldexp(1.0, exponent)
+                for signy in (-1, 1), signx in (-1, 1)
+                    signed_y, signed_x = signy*y, signx*x
+                    reference = inverse(BigFloat(signed_y), BigFloat(signed_x))
+                    @test ulp_error(reference, inverse(signed_y, signed_x)) < 1.5 context = (signed_y, signed_x)
+                end
+            end
+        end
+        # Check exponent-gap exits with normal and subnormal operands in every quadrant.
+        for large_exponent in (-1022, -970, 0, 1023),
+            gap in (60, 61), fraction in (1.0, 1.5, prevfloat(2.0)), step in -1:1
+            large = ldexp(fraction, large_exponent)
+            small = nextfloat(ldexp(large, -gap), step)
+            small > 0 || continue
+            for (y, x) in ((small, large), (large, small)), signy in (-1, 1), signx in (-1, 1)
+                signed_y, signed_x = signy*y, signx*x
+                reference = inverse(BigFloat(signed_y), BigFloat(signed_x))
+                @test ulp_error(reference, inverse(signed_y, signed_x)) < 1 context = (signed_y, signed_x)
+            end
+        end
+        extremes = (0.0, Inf, NaN, nextfloat(0.0),
+                    prevfloat(floatmin(Float64)), floatmin(Float64),
+                    floatmax(Float64), 1.0)
+        for y in extremes, x in extremes, signy in (-1, 1), signx in (-1, 1)
+            signed_y, signed_x = signy*y, signx*x
+            reference = inverse(BigFloat(signed_y), BigFloat(signed_x))
+            result = inverse(signed_y, signed_x)
+            if !isfinite(signed_y) || !isfinite(signed_x) || iszero(signed_y) || iszero(signed_x)
+                @test isequal(result, Float64(reference)) context = (signed_y, signed_x)
+            else
+                @test ulp_error(reference, result) < 1.5 context = (signed_y, signed_x)
+            end
+        end
+        for small in (nextfloat(0.0), nextfloat(0.0, 4), nextfloat(0.0, 8), prevfloat(floatmin(Float64)),
+                      nextfloat(floatmin(Float64)), prevfloat(0x1p-1020)),
+            boundary in (0x1p-1020, 0x1p968, 0x1p1022, 0x1p1023), step in -1:1
+            large = nextfloat(boundary, step)
+            for (y, x) in ((small, large), (large, small)), signy in (-1, 1), signx in (-1, 1)
+                signed_y, signed_x = signy*y, signx*x
+                reference = inverse(BigFloat(signed_y), BigFloat(signed_x))
+                @test ulp_error(reference, inverse(signed_y, signed_x)) < 1.5 context = (signed_y, signed_x)
+            end
+        end
+        # Check tiny quotients, inverse-pi product residuals, and the normalization threshold.
+        for (small, large) in ((8.525208016341445, 7.207081646097689e307),
+                               (8.726676225112434e-309, 0.0720639933818978),
+                               (1.1044805720867e-310, 7.116622316914403e12)),
+            small_step in -1:1, large_step in -1:1
+            perturbed_small = nextfloat(small, small_step)
+            perturbed_large = nextfloat(large, large_step)
+            for (y, x) in ((perturbed_small, perturbed_large), (perturbed_large, perturbed_small)),
+                signy in (-1, 1), signx in (-1, 1)
+                signed_y, signed_x = signy*y, signx*x
+                reference = inverse(BigFloat(signed_y), BigFloat(signed_x))
+                @test ulp_error(reference, inverse(signed_y, signed_x)) < 1.5 context = (signed_y, signed_x)
+            end
+        end
+        for exponent in (-100, 0, 968, 1022, 1023), step in -1:1
+            large = ldexp(1.0, exponent)
+            small = nextfloat(ldexp(large, -968), step)
+            for (y, x) in ((small, large), (large, small)), signy in (-1, 1), signx in (-1, 1)
+                signed_y, signed_x = signy*y, signx*x
+                reference = inverse(BigFloat(signed_y), BigFloat(signed_x))
+                @test ulp_error(reference, inverse(signed_y, signed_x)) < 1.5 context = (signed_y, signed_x)
+            end
+        end
+        if inverse === atanpi
+            for (y, x) in ((8.525208016341445, 7.207081646097689e307),
+                           (8.726676225112434e-309, 0.0720639933818978))
+                @test inverse(y, x) === Float64(inverse(BigFloat(y), BigFloat(x)))
+            end
+        else
+            for (y, x) in ((nextfloat(0.0), 8.369915275569256e-17),
+                           (nextfloat(0.0, 2), 1.9152680152139577e-16)),
+                step in -1:1, signy in (-1, 1)
+                signed_y, perturbed_x = signy*y, nextfloat(x, step)
+                reference = inverse(BigFloat(signed_y), BigFloat(perturbed_x))
+                @test ulp_error(reference, inverse(signed_y, perturbed_x)) < 1 context = (signed_y, perturbed_x)
+            end
+        end
+        rng = Xoshiro(63031)
+        for _ in 1:1000
+            y, x = reinterpret(Float64, rand(rng, UInt64)), reinterpret(Float64, rand(rng, UInt64))
+            reference = inverse(BigFloat(y), BigFloat(x))
+            @test ulp_error(reference, inverse(y, x)) < 1.5 context = (y, x)
+        end
+    end
+end
+
+@testset "tiny arguments of the inverse trigonometric functions, $T" for T in (Float32, Float64)
+    # asin, acos and acospi carry no fast path for tiny |x|, so the general
+    # expressions have to reach the limit on their own
+    for x in (T(2)^-60, floatmin(T), nextfloat(zero(T)))
+        @test asin(x) === x context = x
+        @test asin(-x) === -x context = x
+        @test acos(x) === T(pi)/2 context = x
+        @test acospi(x) === T(0.5) context = x
+        @test acospi(-x) === T(0.5) context = x
     end
 end
 
@@ -1838,10 +2162,19 @@ end
     for T = Any[Float16, Float32, Float64]
         @testset let T = T
             for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
-                        asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
+                        asin, atan, acos, asinpi, atanpi, acospi, sinh, cosh, tanh, asinh, acosh, atanh,
+                        exp, exp2, exp10, expm1]
                 @testset let f = f,
                              rt = Base.infer_return_type(f, (T,)),
                              effects = Base.infer_effects(f, (T,))
+                    @test rt != Union{}
+                    @test Core.Compiler.is_foldable(effects)
+                end
+            end
+            for f = Any[atan, atanpi]
+                @testset let f = f,
+                             rt = Base.infer_return_type(f, (T,T)),
+                             effects = Base.infer_effects(f, (T,T))
                     @test rt != Union{}
                     @test Core.Compiler.is_foldable(effects)
                 end

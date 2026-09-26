@@ -180,6 +180,10 @@ New library functions
 * `Base.raw_substring` is an unexported, public constructor to build a `SubString` without checking for
   valid string indices.
 * `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string of the input string.
+* `asinpi(x)`, `acospi(x)`, `atanpi(y)` and `atanpi(y, x)` compute the inverse trigonometric functions
+  in half-turns with improved accuracy compared to dividing the corresponding radian results by `pi`.
+  They complete the `sinpi`/`cospi`/`tanpi` family and correspond to the C23 and
+  IEEE 754-2019 operations of the same names ([#63031]).
 * `Base.include_mapexprs(mod)` is an unexported, public function returning the non-identity
   `mapexpr` functions used by `include(mapexpr, …)` calls while loading the package rooted at
   `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
@@ -189,6 +193,8 @@ New library functions
 New library features
 --------------------
 
+* `Float64` implementations of `asin`, `acos`, and two-argument `atan` have improved accuracy.
+  Changes to `atan` performance depend on the input distribution ([#63031]).
 * `IOContext` supports a new boolean `hexunsigned` option that allows for printing unsigned integers in
   decimal instead of hexadecimal ([#60267]).
 * `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags to the
