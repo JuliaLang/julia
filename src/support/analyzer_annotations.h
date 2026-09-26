@@ -126,7 +126,8 @@
 //                     rooting, exactly as it tracks a jl_value_t*. Types are
 //                     recognised by this annotation alone, so code outside
 //                     Julia can mark its own object types too. For a struct or
-//                     class, annotate its declaration to cover all aliases:
+//                     class, annotate each of its declarations; this covers
+//                     all aliases:
 //                         struct JL_GC_TRACKED_TYPE MyObject;
 //                         typedef struct MyObject *MyValue;
 //                     For memory without such a type, annotate an opaque

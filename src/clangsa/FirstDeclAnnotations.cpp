@@ -83,10 +83,13 @@
 // case apply -- a method the analyzer already treats as a non-safepoint without
 // an annotation is not flagged.
 //
-// The first-declaration rule also covers JL_GC_TRACKED_TYPE on a struct,
-// class or typedef: the analyzer consults only the declarations visible in the
-// file it analyzes, so an annotation added by a later declaration, e.g. in a
-// .c file, would be missed wherever that declaration is not visible.
+// A related rule covers JL_GC_TRACKED_TYPE: every declaration of a tracked
+// struct, class or typedef up to its definition must carry it. The analyzer
+// consults only the declarations visible in the file it analyzes, so with the
+// annotation on some declarations only, whether a type is tracked would depend
+// on what a file includes; on every declaration, each also shows the reader
+// that the type is tracked. A declaration after the definition is exempt, as
+// clang drops the annotation there.
 //
 // Usage (see src/Makefile): clang-tidy foo.c --quiet \ -load
 // libFirstDeclAnnotationsPlugin.so \
@@ -165,7 +168,7 @@ public:
                      Result.Nodes.getNodeAs<CXXMethodDecl>("override"))
             checkOverride(MD);
         else if (const auto *TD = Result.Nodes.getNodeAs<TypeDecl>("type"))
-            checkTypeFirstDecl(TD, Result);
+            checkTypeDecl(TD, Result);
     }
 
     void checkFirstDecl(const FunctionDecl *FD,
@@ -251,47 +254,63 @@ public:
         }
     }
 
-    // A JL_GC_TRACKED_TYPE annotation on a later declaration of a struct,
-    // class or typedef belongs on its first declaration. The fix inserts it
-    // after the `struct`/`class` keyword, or after a typedef's name.
-    void checkTypeFirstDecl(const TypeDecl *D,
-                            const MatchFinder::MatchResult &Result) {
-        if (D->isImplicit())
+    // Report a declaration of a GC-tracked type that lacks JL_GC_TRACKED_TYPE
+    // (see the file comment). The fix inserts the annotation after the
+    // `struct`/`class` keyword, or after a typedef's name.
+    void checkTypeDecl(const TypeDecl *D,
+                       const MatchFinder::MatchResult &Result) {
+        if (D->isImplicit() || trackedAnnotation(D))
             return;
         if (const auto *RD = dyn_cast<CXXRecordDecl>(D))
             if (RD->getTemplateSpecializationKind() ==
                 TSK_ImplicitInstantiation)
                 return;
-        const auto *First = cast<TypeDecl>(D->getCanonicalDecl());
-        if (First == D)
+        const Decl *Annotated = nullptr;
+        for (const Decl *R : D->redecls()) {
+            if (trackedAnnotation(R)) {
+                Annotated = R;
+                break;
+            }
+        }
+        if (!Annotated)
             return;
         SourceManager &SM = Result.Context->getSourceManager();
-        if (SM.isInSystemHeader(First->getLocation()) ||
-            jl_clangsa::isInLLVMHeaderFile(First->getLocation(), SM))
+        if (SM.isInSystemHeader(D->getLocation()) ||
+            jl_clangsa::isInLLVMHeaderFile(D->getLocation(), SM))
             return;
+        if (const auto *TD = dyn_cast<TagDecl>(D)) {
+            const TagDecl *Def = TD->getDefinition();
+            if (Def && Def != TD &&
+                SM.isBeforeInTranslationUnit(Def->getLocation(),
+                                             TD->getLocation()))
+                return;
+        }
 
         const LangOptions &LO = getLangOpts();
         SourceLocation InsertLoc =
-            isa<TagDecl>(First)
-                ? endOfToken(cast<TagDecl>(First)->getInnerLocStart(), SM, LO)
-                : endOfToken(First->getLocation(), SM, LO);
-        for (const auto *A : D->attrs()) {
-            if (A->isInherited())
-                continue;
-            std::string Key = attrKey(A);
-            if (Key != "annotate:julia_gc_tracked" || hasAttrLike(First, Key))
-                continue;
-            auto Diag = diag(A->getLocation().isValid() ? A->getLocation()
-                                                        : D->getLocation(),
-                 "Julia annotation \"%0\" is on this declaration of %1 but "
-                 "missing from its first declaration; move it to the first "
-                 "declaration so every file using the type sees it");
-            Diag << attrName(A) << D;
-            for (const FixItHint &F : moveFixes(A, InsertLoc, SM, LO))
-                Diag << F;
-            diag(First->getLocation(), "first declaration is here",
-                 DiagnosticIDs::Note);
-        }
+            isa<TagDecl>(D)
+                ? endOfToken(cast<TagDecl>(D)->getInnerLocStart(), SM, LO)
+                : endOfToken(D->getLocation(), SM, LO);
+        const Attr *A = trackedAnnotation(Annotated);
+        auto Diag = diag(D->getLocation(),
+             "Julia annotation \"%0\" is missing from this declaration of "
+             "%1, but another declaration carries it; annotate every "
+             "declaration of the type so that each shows it is tracked");
+        Diag << attrName(A) << D;
+        for (const FixItHint &F :
+             moveFixes(A, InsertLoc, SM, LO, /*Copy=*/true))
+            Diag << F;
+        diag(Annotated->getLocation(), "annotated declaration is here",
+             DiagnosticIDs::Note);
+    }
+
+    // The JL_GC_TRACKED_TYPE annotation written on `D` itself, not inherited
+    // from an earlier declaration.
+    static const Attr *trackedAnnotation(const Decl *D) {
+        for (const auto *A : D->attrs())
+            if (!A->isInherited() && attrKey(A) == "annotate:julia_gc_tracked")
+                return A;
+        return nullptr;
     }
 
 private:
@@ -729,7 +748,8 @@ private:
 
     // A fix that moves attribute `A` to `InsertLoc` on the first
     // declaration: copy the exact macro spelling (e.g. "JL_ROOTED_BY_ARG(1)",
-    // "JL_DLLEXPORT") there and delete it where it is misplaced.
+    // "JL_DLLEXPORT") there and, unless `Copy` is set, delete it where it is
+    // misplaced.
     //
     // Only do this when the attribute was written through a macro: its
     // expansion range is then the single, self-contained macro
@@ -744,7 +764,7 @@ private:
     // the fix when both edits can be expressed against real file locations.
     static llvm::SmallVector<FixItHint, 2>
     moveFixes(const Attr *A, SourceLocation InsertLoc, SourceManager &SM,
-              const LangOptions &LO) {
+              const LangOptions &LO, bool Copy = false) {
         llvm::SmallVector<FixItHint, 2> Fixes;
         bool FromMacro = A->getRange().getBegin().isMacroID();
         CharSourceRange Spelling = SM.getExpansionRange(A->getRange());
@@ -755,6 +775,8 @@ private:
         if (FromMacro && InsertLoc.isValid() && !Text.empty()) {
             Fixes.push_back(
                 FixItHint::CreateInsertion(InsertLoc, (" " + Text).str()));
+            if (Copy)
+                return Fixes;
             // Also drop one preceding space along with the misplaced
             // annotation so the source does not keep a double space.
             CharSourceRange Removal = Spelling;

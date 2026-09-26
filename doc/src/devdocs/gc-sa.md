@@ -323,8 +323,10 @@ few stack structures that are treated as roots. A type is recognised by the
 annotation alone, so code embedding Julia can mark its own object types the same
 way.
 
-For a `struct` or C++ `class`, put the annotation on its declaration. This also
-covers pointers to the type, including those declared through typedef aliases:
+For a `struct` or C++ `class`, put the annotation on every declaration of it,
+forward declarations included, so that a file sees it whichever declarations it
+includes. This also covers pointers to the type, including those declared
+through typedef aliases:
 
 ```c
 struct JL_GC_TRACKED_TYPE MyObject;
@@ -354,8 +356,8 @@ An annotation on a typedef that is not a pointer type also works, e.g.
 
 Misplaced annotations are reported: by the analyzer where the annotation would
 have no effect, such as on a pointer typedef like `MyValue` above, and by the
-`julia-first-decl-annotations` clang-tidy check where it is missing from the
-type's first declaration.
+`julia-first-decl-annotations` clang-tidy check where a declaration of the type
+lacks it.
 
 ## Completeness of analysis
 

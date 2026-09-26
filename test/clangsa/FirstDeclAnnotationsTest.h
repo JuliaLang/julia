@@ -38,3 +38,4 @@ struct JL_GC_TRACKED_TYPE fda_tracked_ok;
 struct fda_tracked_late;
 typedef struct fda_tracked_elab fda_tracked_elab_t;
 typedef void fda_tracked_buf_t;
+struct JL_GC_TRACKED_TYPE fda_tracked_defmissing;

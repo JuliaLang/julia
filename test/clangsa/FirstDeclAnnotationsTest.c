@@ -111,21 +111,26 @@ struct fda_cb_holder { fda_cb_t cb; };
 // CHECK: warning: 'fda_cb_bad' is annotated "julia_can_safepoint" but is converted to a function pointer of type 'fda_cb_t'{{.*}}that is not
 struct fda_cb_holder fda_cb_inst = { fda_cb_bad };
 
-// A type's annotation belongs on its first declaration too, so that every
-// file using the type sees it.
+// Every declaration of a GC-tracked type up to its definition carries the
+// annotation, so that each shows the type is tracked and a file sees it
+// whichever declarations it includes. The unannotated declarations of the
+// next three types are in the header; their warnings are checked at the end.
 struct JL_GC_TRACKED_TYPE fda_tracked_ok { int x; };
-// CHECK: warning: Julia annotation "julia_gc_tracked" is on this declaration of 'fda_tracked_late' but missing from its first declaration
-// CHECK-FIXES: {{^}}struct fda_tracked_late { int x; };{{$}}
+// CHECK-FIXES: {{^}}struct JL_GC_TRACKED_TYPE fda_tracked_late { int x; };{{$}}
 // CHECK-FIXES-H: {{^}}struct JL_GC_TRACKED_TYPE fda_tracked_late;{{$}}
 struct JL_GC_TRACKED_TYPE fda_tracked_late { int x; };
-// CHECK: warning: Julia annotation "julia_gc_tracked" is on this declaration of 'fda_tracked_elab' but missing from its first declaration
-// CHECK-FIXES: {{^}}struct fda_tracked_elab { int x; };{{$}}
+// CHECK-FIXES: {{^}}struct JL_GC_TRACKED_TYPE fda_tracked_elab { int x; };{{$}}
 // CHECK-FIXES-H: {{^}}typedef struct JL_GC_TRACKED_TYPE fda_tracked_elab fda_tracked_elab_t;{{$}}
 struct JL_GC_TRACKED_TYPE fda_tracked_elab { int x; };
-// CHECK: warning: Julia annotation "julia_gc_tracked" is on this declaration of 'fda_tracked_buf_t' but missing from its first declaration
-// CHECK-FIXES: {{^}}typedef void fda_tracked_buf_t;{{$}}
+// CHECK-FIXES: {{^}}typedef void fda_tracked_buf_t JL_GC_TRACKED_TYPE;{{$}}
 // CHECK-FIXES-H: {{^}}typedef void fda_tracked_buf_t JL_GC_TRACKED_TYPE;{{$}}
 typedef void fda_tracked_buf_t JL_GC_TRACKED_TYPE;
+// CHECK: warning: Julia annotation "julia_gc_tracked" is missing from this declaration of 'fda_tracked_defmissing'
+// CHECK-FIXES: {{^}}struct JL_GC_TRACKED_TYPE fda_tracked_defmissing { int x; };{{$}}
+struct fda_tracked_defmissing { int x; };
+// A declaration after the definition cannot carry the annotation: clang drops
+// it there.
+struct fda_tracked_ok;
 
 #ifdef __cplusplus
 // CHECK-CXX: warning: Julia annotation "julia_can_safepoint" is on this declaration of 'm' but missing from its first declaration
@@ -155,3 +160,8 @@ struct fda_Derived : fda_Base {
 void fda_sysproto(void);
 # 1 "FirstDeclAnnotationsTest.c" 2
 void fda_sysproto(void) JL_CANSAFEPOINT {}
+
+// Warnings on the header's declarations, reported after those in this file.
+// CHECK: FirstDeclAnnotationsTest.h:{{[0-9]+}}:{{[0-9]+}}: warning: Julia annotation "julia_gc_tracked" is missing from this declaration of 'fda_tracked_late'
+// CHECK: FirstDeclAnnotationsTest.h:{{[0-9]+}}:{{[0-9]+}}: warning: Julia annotation "julia_gc_tracked" is missing from this declaration of 'fda_tracked_elab'
+// CHECK: FirstDeclAnnotationsTest.h:{{[0-9]+}}:{{[0-9]+}}: warning: Julia annotation "julia_gc_tracked" is missing from this declaration of 'fda_tracked_buf_t'
