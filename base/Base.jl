@@ -620,7 +620,7 @@ function __init__()
         # Base after-the-fact via an incremental sysimage build.
         JuliaLowering.activate!()
     end
-
+    Base.Experimental.make_io_thread()
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
