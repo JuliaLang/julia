@@ -24,7 +24,7 @@ const TESTNAMES = [
         "some", "meta", "stacktraces", "docs", "gc",
         "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
-        "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",
+        "checked", "bitset", "floatfuncs", "precompile", "relocatedepot", "buildpathmap",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "cancellation", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
