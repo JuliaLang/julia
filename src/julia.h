@@ -210,7 +210,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_sym_t {
 
 // A numbered SSA value, for optimized code analysis and generation
 // the `id` is a unique, small number
-typedef struct _jl_ssavalue_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_ssavalue_t {
     JL_DATA_TYPE
     ssize_t id;
 } jl_ssavalue_t;
@@ -662,13 +662,13 @@ typedef struct JL_GC_TRACKED_TYPE {
 // denotes `a ∩ b`. It is created transiently inside the subtyping algorithm to
 // represent a greatest-lower-bound that cannot be expressed precisely as a
 // single existing type, and never escapes into user-visible types.
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_value_t *JL_NONNULL a;
     jl_value_t *JL_NONNULL b;
 } jl_intersecttype_t;
 
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_value_t *JL_NONNULL T;
 } jl_typeeq_t;
@@ -760,7 +760,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_vararg_t {
     jl_value_t *N;
 } jl_vararg_t;
 
-typedef struct _jl_weakref_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_weakref_t {
     JL_DATA_TYPE
     jl_value_t *value;
 } jl_weakref_t;
