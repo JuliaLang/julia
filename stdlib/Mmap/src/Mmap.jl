@@ -164,7 +164,7 @@ end
 Base.filesize(io::SharedMemory) = io.handle == INVALID_OS_HANDLE ? io.size : stat(io.handle).size
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::RawFD, shared::Bool, exec::Bool=false=false)
+function settings(s::RawFD, shared::Bool, exec::Bool=false)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
     if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
@@ -433,21 +433,6 @@ information in the header. In practice, consider encoding binary data using stan
 like HDF5 (which can be used with memory-mapping).
 """
 function mmap(io::IO,
-              type::Type{Array{T,N}}=Vector{UInt8},
-              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
-              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
-    _mmap(io, type, dims, offset; grow, shared)
-end
-function mmap(io::Anonymous,
-              type::Type{Array{T,N}}=Vector{UInt8},
-              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
-              offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
-              exec::Bool=false) where {T,N}
-    _mmap(io, type, dims, offset; grow, shared, exec)
-end
-
-
-function _mmap(io::IO,
               ::Type{Array{T,N}}=Vector{UInt8},
               dims::NTuple{N,Integer}=(div(filesize(io)-position(io),Base.aligned_sizeof(T)),),
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
