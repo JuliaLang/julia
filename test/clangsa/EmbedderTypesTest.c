@@ -73,4 +73,3 @@ typedef AnnotatedPointer AnnotatedPointerArray[2] JL_GC_TRACKED_TYPE; // expecte
                                                                       // expected-note@-1{{JL_GC_TRACKED_TYPE has no effect on a typedef of a pointer, reference or array type}}
 int tracked_int JL_GC_TRACKED_TYPE; // expected-warning{{JL_GC_TRACKED_TYPE has no effect here}}
                                     // expected-note@-1{{JL_GC_TRACKED_TYPE has no effect here}}
-

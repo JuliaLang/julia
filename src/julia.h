@@ -257,9 +257,9 @@ JL_EXTENSION typedef struct JL_GC_TRACKED_TYPE {
 
 typedef struct _jl_datatype_t jl_tupletype_t;
 struct JL_GC_TRACKED_TYPE _jl_code_instance_t;
-typedef struct _jl_method_instance_t jl_method_instance_t;
-typedef struct _jl_globalref_t jl_globalref_t;
-typedef struct _jl_typemap_entry_t jl_typemap_entry_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_method_instance_t jl_method_instance_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_globalref_t jl_globalref_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t jl_typemap_entry_t;
 
 
 // TypeMap is an implicitly defined type
@@ -413,7 +413,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_code_info_t {
 typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
     JL_DATA_TYPE
     jl_sym_t *name;  // for error reporting
-    struct _jl_module_t *module;
+    struct JL_GC_TRACKED_TYPE _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
     _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
@@ -488,7 +488,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
 //   cache_with_orig
 // No lock is required to read these fields, set once on construction:
 //   def, specTypes, sparam_vals
-struct JL_GC_TRACKED_TYPE _jl_method_instance_t {
+struct _jl_method_instance_t {
     JL_DATA_TYPE
     union {
         jl_value_t *value; // generic accessor
@@ -951,7 +951,7 @@ typedef struct {
 // No lock is required to read these fields, set once on construction:
 //   name, parent, file, line, build_id, uuid, nospecialize, optlevel, compile,
 //   infer, iistopmod, max_methods
-typedef struct JL_GC_TRACKED_TYPE _jl_module_t {
+typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
@@ -990,7 +990,7 @@ struct _jl_module_using {
 // Flags for _jl_module_using.flags
 static const uint8_t JL_MODULE_USING_REEXPORT = 0x1;
 
-struct JL_GC_TRACKED_TYPE _jl_globalref_t {
+struct _jl_globalref_t {
     JL_DATA_TYPE
     jl_module_t *mod;
     jl_sym_t *name;
@@ -998,7 +998,7 @@ struct JL_GC_TRACKED_TYPE _jl_globalref_t {
 };
 
 // one Type-to-Value entry
-struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
+struct _jl_typemap_entry_t {
     JL_DATA_TYPE
     _Atomic(struct _jl_typemap_entry_t*) next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
