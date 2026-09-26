@@ -740,9 +740,16 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
         end
     end
     if length(aliases) > 1
-        # Prefer fewer parameters, but leave equally good aliases ambiguous.
-        shortest = minimum(a -> length(a[2]), aliases)
-        filter!(a -> length(a[2]) == shortest, aliases)
+        # Compare the original aliases, before applying their parameters.
+        # Equivalent or incomparable aliases remain ambiguous.
+        candidates = aliases
+        aliases = filter(candidates) do (name, _)
+            alias = getglobal(name.mod, name.name)
+            !any(candidates) do (other_name, _)
+                other = getglobal(other_name.mod, other_name.name)
+                other <: alias && !(alias <: other)
+            end
+        end
     end
     if length(aliases) == 1
         return aliases[1]
