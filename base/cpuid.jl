@@ -146,8 +146,19 @@ function _make_isa_list(arch::String, entries::Vector{Pair{String,String}})
     return result
 end
 
-# ISA definitions per architecture family.
-# CPU names are LLVM names in the cpufeatures database.
+"""
+    ISAs_by_family
+
+ISA definitions per architecture family. Each label maps to an LLVM CPU name in
+the cpufeatures database whose feature mask represents the label's intent: the
+strict architectural-mandatory feature set at that ISA level, plus any optional
+extensions named in the label suffix (e.g. `armv8.2-a+crypto`). Where multiple
+LLVM CPUs sit at the same ISA level, prefer the one with the minimum feature
+set that still covers the label, so CPUs with richer feature sets match via the
+standard superset rule rather than being baked into the baseline. CPU-named
+labels (`a64fx`, `apple_m1`, `apple_m4`) are intentional exceptions for hardware
+whose feature mix doesn't fit a clean ISA label.
+"""
 # Keep in sync with `arch_march_isa_mapping` in binaryplatforms.jl.
 const ISAs_by_family = Dict(
     "i686" => _make_isa_list("x86_64", [
@@ -165,10 +176,14 @@ const ISAs_by_family = Dict(
     ]),
     "aarch64" => _make_isa_list("aarch64", [
         "armv8.0-a" => "",
-        "armv8.1-a" => "cortex-a76",
+        "armv8.1-a" => "cortex-a76",     # closest LLVM CPU; a76 is v8.2-class but carries the v8.1 mandatory features
         "armv8.2-a+crypto" => "cortex-a78",
+        "armv8.4-a" => "neoverse-v1",    # Graviton3; V1 has some v8.6 extras (SVE, BF16) but is the lowest v8.4-class LLVM CPU
+        "armv9.0-a" => "neoverse-n2",    # Cobalt 100, Yitian 710; V2 (Graviton4, Axion, Grace) matches via subset
+        "armv9.2-a" => "neoverse-v3",    # Graviton5, Cobalt 200, Jetson Thor; V3 over N3 since N3 has the same cpufeatures mask as N2
         "a64fx" => "a64fx",
-        "apple_m1" => "apple-a14",
+        "apple_m1" => "apple-a14",       # M1 reuses A14's CPU cores
+        "apple_m4" => "apple-m4",        # also covers M5
     ]),
     "riscv64" => _make_isa_list("riscv64", [
         "riscv64" => "",
