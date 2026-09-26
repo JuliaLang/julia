@@ -2527,9 +2527,25 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             AI->eraseFromParent();
             AI = NULL;
         };
-        for (auto AI : S.ArrayAllocas) {
-            replace_alloca(AI.first);
-            AllocaSlot += AI.second;
+        // walk the function for these: iterating S.ArrayAllocas would follow
+        // the DenseMap hash of their addresses, which differs between builds
+        SmallVector<std::pair<AllocaInst *, unsigned>, 0> OrderedAllocas;
+        OrderedAllocas.reserve(S.ArrayAllocas.size());
+        for (BasicBlock &BB : *F) {
+            for (Instruction &I : BB) {
+                AllocaInst *AI = dyn_cast<AllocaInst>(&I);
+                if (!AI)
+                    continue;
+                auto it = S.ArrayAllocas.find(AI);
+                if (it != S.ArrayAllocas.end())
+                    OrderedAllocas.push_back(std::make_pair(AI, it->second));
+            }
+        }
+        assert(OrderedAllocas.size() == S.ArrayAllocas.size());
+        for (auto &Entry : OrderedAllocas) {
+            AllocaInst *AI = Entry.first;
+            replace_alloca(AI);
+            AllocaSlot += Entry.second;
         }
         for (auto Store : S.TrackedStores) {
             auto SI = Store.first;
