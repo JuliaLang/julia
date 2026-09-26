@@ -2,7 +2,7 @@
 
 julia_version = "1.14.0-DEV"
 manifest_format = "2.1"
-project_hash = "10c2816629fed766649b89eb6670e7001df6ea18"
+project_hash = "d456eaa69e6fe2f6948e3def3d2e33c75cd7da74"
 
 [[deps.Compiler]]
 path = "../.."
