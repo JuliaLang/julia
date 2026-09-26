@@ -83,6 +83,40 @@ static int _enonfatal(int err)
     return (err == EAGAIN ||/* err == EINPROGRESS ||*/ err == EINTR /*|| err == EWOULDBLOCK*/); //jwn
 }
 
+
+#if defined(_OS_WINDOWS_)
+// Translate a libuv error from uv_fs_open() into an errno value.
+// inverse of uv_translate_sys_error() which libuv does not provide.
+static int _uv_err_to_errno(int uverr)
+{
+    if (uverr >= 0)
+        return 0;
+
+    switch (uverr) {
+    case UV_EACCES:       return EACCES;        // denied, or sharing violation
+    case UV_EBUSY:        return EBUSY;         // lock violation
+    case UV_EEXIST:       return EEXIST;        // O_CREAT|O_EXCL
+    case UV_EINVAL:       return EINVAL;        // bad flag combination
+    case UV_EIO:          return EIO;
+    case UV_EISDIR:       return EISDIR;
+    case UV_ELOOP:        return ELOOP;         // reparse point cycle
+    case UV_EMFILE:       return EMFILE;        // CRT descriptor table full
+    case UV_ENAMETOOLONG: return ENAMETOOLONG;
+    case UV_ENFILE:       return ENFILE;
+    case UV_ENOENT:       return ENOENT;        // file or path not found
+    case UV_ENOMEM:       return ENOMEM;
+    case UV_ENOSPC:       return ENOSPC;
+    case UV_ENOTDIR:      return ENOTDIR;
+    case UV_EPERM:        return EPERM;
+    case UV_EROFS:        return EROFS;         // write-protected
+    case UV_ETXTBSY:      return ETXTBSY;       // image in use
+
+    // UV_ECHARSET (invalid path encoding) has no errno equivalent.
+    default:              return EINVAL;
+    }
+}
+#endif
+
 #define SLEEP_TIME 5//ms
 
 #if defined(__APPLE__)
@@ -970,6 +1004,10 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
 {
     int flags;
     int fd;
+    // The mode of the created file is (mode & ~umask), which resolves with
+    // default umask to u=rw,g=r,o=r
+    int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+
     if (!(rd || wr)) {
         // must specify read and/or write
         errno = EINVAL;
@@ -978,28 +1016,31 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
+
+    do {
 #if defined(_OS_WINDOWS_)
-    {
-        ssize_t wlen = uv_wtf8_length_as_utf16(fname);
-        if (wlen < 0) {
+
+        uv_fs_t req;
+
+        set_io_wait_begin(1);
+        // O_NOINHERIT should be covered by libuv passing NULL to the
+        // security attributes of CreateFileW
+        fd = uv_fs_open(NULL, &req, fname, flags, mode, NULL);
+        set_io_wait_begin(0);
+        uv_fs_req_cleanup(&req);
+
+        if (fd < 0) {
+            errno = _uv_err_to_errno(fd);
             fd = -1;
         }
-        else {
-            wchar_t *fname_w = (wchar_t*)alloca(wlen * sizeof(wchar_t));
-            uv_wtf8_to_utf16(fname, (uint16_t*)fname_w, wlen);
-            set_io_wait_begin(1);
-            fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
-            set_io_wait_begin(0);
-        }
-    }
+
+        // The retry for windows should never trigger since CreateFileW doesn't generate those
+        // errors.
 #else
-    // The mode of the created file is (mode & ~umask), which resolves with
-    // default umask to u=rw,g=r,o=r
-    do
-        fd = open_cloexec(fname, flags,
-                          S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-    while (-1 == fd && _enonfatal(errno));
+        fd = open_cloexec(fname, flags, mode);
 #endif
+    } while (-1 == fd && _enonfatal(errno));
+
     if (fd == -1)
         goto open_file_err;
 
