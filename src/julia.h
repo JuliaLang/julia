@@ -256,7 +256,8 @@ JL_EXTENSION typedef struct JL_GC_TRACKED_TYPE {
 
 
 typedef struct _jl_datatype_t jl_tupletype_t;
-struct JL_GC_TRACKED_TYPE _jl_code_instance_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_code_instance_t jl_code_instance_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_module_t jl_module_t;
 typedef struct JL_GC_TRACKED_TYPE _jl_method_instance_t jl_method_instance_t;
 typedef struct JL_GC_TRACKED_TYPE _jl_globalref_t jl_globalref_t;
 typedef struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t jl_typemap_entry_t;
@@ -413,7 +414,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_code_info_t {
 typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
     JL_DATA_TYPE
     jl_sym_t *name;  // for error reporting
-    struct JL_GC_TRACKED_TYPE _jl_module_t *module;
+    jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
     _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
@@ -492,7 +493,7 @@ struct _jl_method_instance_t {
     JL_DATA_TYPE
     union {
         jl_value_t *value; // generic accessor
-        struct _jl_module_t *module; // this is a toplevel thunk
+        jl_module_t *module; // this is a toplevel thunk
         jl_method_t *method; // method this is specialized from
     } def; // pointer back to the context for this code
     jl_value_t *specTypes;  // argument types this was specialized for
@@ -537,7 +538,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_opaque_closure_t {
 #define JL_CI_FLAGS_FROM_IMAGE               0b0100
 #define JL_CI_FLAGS_NATIVE_CACHE_VALID       0b1000
 
-typedef struct JL_GC_TRACKED_TYPE _jl_code_instance_t {
+struct _jl_code_instance_t {
     JL_DATA_TYPE
     jl_value_t *def; // MethodInstance or ABIOverride
     jl_value_t *owner; // Compiler token this belongs to, `jl_nothing` is reserved for native
@@ -595,7 +596,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_code_instance_t {
         _Atomic(jl_fptr_sparam_t) fptr3;
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
-} jl_code_instance_t;
+};
 
 // May be used as the ->def field of a CodeInstance to override the ABI
 typedef struct JL_GC_TRACKED_TYPE _jl_abi_override_t {
@@ -625,7 +626,7 @@ typedef struct JL_GC_TRACKED_TYPE {
 typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_sym_t *name;
-    struct _jl_module_t *module;
+    jl_module_t *module;
     jl_sym_t *singletonname; // sometimes used for debug printing
     jl_svec_t *names;  // field names
     const uint32_t *atomicfields; // if any fields are atomic, we record them here
@@ -951,7 +952,7 @@ typedef struct {
 // No lock is required to read these fields, set once on construction:
 //   name, parent, file, line, build_id, uuid, nospecialize, optlevel, compile,
 //   infer, iistopmod, max_methods
-typedef struct _jl_module_t {
+struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
@@ -978,7 +979,7 @@ typedef struct _jl_module_t {
     _Atomic(int8_t) has_reexports;
     jl_mutex_t lock;
     intptr_t hash;
-} jl_module_t;
+};
 
 struct _jl_module_using {
     jl_module_t *mod;
