@@ -30,6 +30,7 @@ const libzstd = LazyLibrary(
     else
         error("Zstd_jll: Library 'libzstd' is not available for $(Sys.KERNEL)")
     end;
+    id = LibraryID(Base.UUID("3161d3a3-bdf6-5164-811a-617609db77b4"), "libzstd"),
     dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
         LazyLibrary[libgcc_s]
     else

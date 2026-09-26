@@ -73,6 +73,55 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src) JL_
     }
 }
 
+// Expand a foreign symbol 2-tuple `(fname, lib)` to a 3-tuple `(fname, lib, lib_id)` where
+// `lib_id` is computed by evaluating `dlid(lib_ref)` during method definition side effects.
+static void expand_library_id(jl_expr_t *e, jl_module_t *module,
+                              jl_svec_t *sparam_vals,
+                              const char *kind) JL_CANSAFEPOINT
+{
+    jl_value_t *fptr = jl_exprarg(e, 0);
+    if (!(jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == jl_tuple_sym))
+        return;
+    jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
+    size_t nargs_tuple = jl_expr_nargs(tuple_expr);
+    if (nargs_tuple != 2 || jl_libdl_dlid_func == NULL)
+        return;
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *lib_arg = jl_exprarg(tuple_expr, 1);
+    jl_value_t *lib_val = NULL;
+    jl_value_t *lib_id = NULL;
+    JL_GC_PUSH2(&lib_val, &lib_id);
+    if (jl_is_globalref(lib_arg)) {
+        JL_TRY {
+            lib_val = jl_interpret_toplevel_expr_in(module, lib_arg, NULL, sparam_vals);
+        }
+        JL_CATCH {
+            lib_val = NULL;
+        }
+    }
+    if (lib_val != NULL && jl_isa(lib_val, (jl_value_t*)jl_abstractlibrary_type)) {
+        JL_TRY {
+            lib_id = jl_apply_generic(jl_libdl_dlid_func, &lib_val, 1);
+        }
+        JL_CATCH {
+            if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                jl_errorf("could not evaluate dlid() for %s library", kind);
+            else
+                jl_rethrow();
+        }
+        if (lib_id != NULL && lib_id != jl_nothing) {
+            if (!jl_typeis(lib_id, (jl_value_t*)jl_libraryid_type))
+                jl_errorf("dlid() for %s library must return a LibraryID or nothing", kind);
+            jl_expr_t *new_tuple = jl_exprn(jl_tuple_sym, 3);
+            jl_exprargset(new_tuple, 0, jl_exprarg(tuple_expr, 0));
+            jl_exprargset(new_tuple, 1, lib_arg);
+            jl_exprargset(new_tuple, 2, lib_id);
+            jl_exprargset(e, 0, (jl_value_t*)new_tuple);
+        }
+    }
+    JL_GC_POP();
+}
+
 static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
@@ -242,6 +291,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         JL_NARGSV(ccall method definition, 5); // (target, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
         normalize_foreignsymbol(e, module, "ccall");
+        expand_library_id(e, module, sparam_vals, "ccall");
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
         if (!jl_is_type(rt)) {
@@ -287,6 +337,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     if (e->head == jl_foreignglobal_sym) {
         JL_NARGS(cglobal method definition, 1, 1); // (target)
         normalize_foreignsymbol(e, module, "cglobal");
+        expand_library_id(e, module, sparam_vals, "cglobal");
     }
     if (e->head == jl_call_sym && nargs > 0 &&
             jl_is_globalref(jl_exprarg(e, 0))) {
