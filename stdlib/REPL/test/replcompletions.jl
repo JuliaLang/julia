@@ -260,6 +260,24 @@ let s = "Main.CompletionFoo."
     @test s[r] == ""
 end
 
+let s = "Main.CompletionFoo.()"
+    paren = findfirst('(', s)
+    s_with_cursor = s[1:prevind(s, paren)] * "|" * s[paren:end]
+    c, r = test_complete_pos(s_with_cursor)
+    @test any(x -> x == "bar", c)
+    @test !any(x -> x == "Main", c)
+    @test r === paren:prevind(s, paren)
+end
+
+let s = "CompletionFoo.()"
+    paren = findfirst('(', s)
+    s_with_cursor = s[1:prevind(s, paren)] * "|" * s[paren:end]
+    c, r = test_complete_pos(s_with_cursor)
+    @test any(x -> x == "bar", c)
+    @test !any(x -> x == "Main", c)
+    @test r === paren:prevind(s, paren)
+end
+
 let s = "Main.CompletionFoo.f"
     c, r = test_complete(s)
     @test "foo" in c
