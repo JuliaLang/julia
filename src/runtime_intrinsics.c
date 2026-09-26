@@ -1785,6 +1785,12 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
         return jl_false;
 }
 
+JL_DLLEXPORT jl_value_t *jl_cpu_supports(jl_value_t *feat)
+{
+    JL_TYPECHK(cpu_supports, symbol, feat);
+    return jl_cpu_has_features(jl_symbol_name((jl_sym_t*)feat)) ? jl_true : jl_false;
+}
+
 JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)
 {
     JL_TYPECHK(add_ptr, pointer, ptr);

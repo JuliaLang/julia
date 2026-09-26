@@ -896,3 +896,34 @@ tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
 # https://github.com/JuliaLang/julia/issues/61436
 primitive type UIntN256 <: Unsigned 256 end
 @test tofloat(reinterpret(UIntN256, (zeros(UInt8, 32)...,))) == 0.0
+
+@testset "cpu_supports runtime fallback agrees with constant folding" begin
+    CPUID = Base.BinaryPlatforms.CPUID
+    @noinline runtime_cpu_supports(s::Symbol) = Core.Intrinsics.cpu_supports(s)
+    function check(query::Symbol)
+        folded = @eval () -> Core.Intrinsics.cpu_supports($(QuoteNode(query)))
+        @test Base.invokelatest(folded) === runtime_cpu_supports(query)
+    end
+    for name in CPUID._codegen_feature_names()
+        check(name)
+    end
+    # Feature lists, as the macro emits for CPU models; names of other architectures are skipped
+    for cpu in ("generic", "x86-64-v3", "haswell", "sapphirerapids", "cortex-a78", "neoverse-v2")
+        features = CPUID._cpu_model_features(cpu)
+        features === nothing && continue
+        query = Symbol(join(features, ','))
+        check(query)
+        @test runtime_cpu_supports(query) === all(runtime_cpu_supports, features)
+    end
+    # Features Julia deliberately keeps out of codegen always test false
+    @static if Sys.ARCH === :x86_64
+        for name in (:rdrnd, :rdseed, :xsaveopt, :avx512bf16, :avxneconvert)
+            @test name in CPUID._codegen_feature_names()
+            folded = @eval () -> Core.Intrinsics.cpu_supports($(QuoteNode(name)))
+            @test !Base.invokelatest(folded)
+            @test !runtime_cpu_supports(name)
+        end
+    end
+    @test !runtime_cpu_supports(Symbol(""))
+    @test !runtime_cpu_supports(Symbol("sse2,not_a_real_feature"))
+end

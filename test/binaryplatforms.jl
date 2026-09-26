@@ -92,6 +92,49 @@ using Test, Base.BinaryPlatforms, Base.BinaryPlatforms.CPUID
     @test "sve" in values(mapping_aarch64)
 end
 
+@testset "@cpu_supports" begin
+    expand(ex) = macroexpand(@__MODULE__, ex)
+    is_single_query(ex) = Meta.isexpr(ex, :call, 2) && ex.args[2] isa QuoteNode &&
+        Core.eval(@__MODULE__, ex.args[1]) === Core.Intrinsics.cpu_supports
+
+    foreign = Sys.ARCH === :x86_64 ? :aarch64 : :x86_64
+    @test expand(:(Base.@cpu_supports $foreign not_validated)) === false
+    @test_throws "usage is" expand(:(Base.@cpu_supports))
+    @test_throws "usage is" expand(:(Base.@cpu_supports sse2))
+    @test_throws "first argument must be one of" expand(:(Base.@cpu_supports xtensa sse2))
+    @test_throws "expected a literal name" expand(:(Base.@cpu_supports x86_64 1))
+
+    if Sys.ARCH in CPUID._CPU_SUPPORTS_ARCHES
+        @test_throws "neither a hardware feature nor a CPU model" expand(:(Base.@cpu_supports $(Sys.ARCH) not_a_real_feature))
+        # Names of other architectures are skipped
+        for cpu in ("sapphirerapids", "znver4", "haswell", "neoverse-v2", "cortex-a78")
+            features = CPUID._cpu_model_features(cpu)
+            features === nothing && continue
+            # The expansion is what a clone for `cpu` is compiled with
+            @test all(in(CPUID._codegen_feature_names()), features)
+            @test !any(in((:avx512bf16, :avxneconvert)), features)
+            @test is_single_query(expand(:(Base.@cpu_supports $(Sys.ARCH) $cpu)))
+            # A helper guarded by a CPU model stays cheap enough to inline
+            f = @eval () -> Base.@cpu_supports $(Sys.ARCH) $cpu
+            g = @eval () -> $f()
+            @test !any(s -> Meta.isexpr(s, :invoke), first(only(code_typed(g, ()))).code)
+        end
+    end
+    if Sys.ARCH === :x86_64
+        # Tuning hints and privileged instructions are not queryable
+        for name in ("fast-gather", "prefer-256-bit", "invpcid", "xsaves")
+            @test_throws "neither a hardware feature nor a CPU model" expand(:(Base.@cpu_supports x86_64 $name))
+        end
+    elseif Sys.ARCH === :aarch64
+        # CPU names that LLVM also uses for tuning features resolve as CPU models
+        for cpu in ("apple-a14", "cortex-x1", "a64fx")
+            @test !(Symbol(cpu) in CPUID._codegen_feature_names())
+            query = expand(:(Base.@cpu_supports aarch64 $cpu)).args[2].value
+            @test occursin(',', String(query))
+        end
+    end
+end
+
 # Helper constructor to create a Platform with `validate_strict` set to `true`.
 P(args...; kwargs...) = Platform(args...; validate_strict=true, kwargs...)
 
