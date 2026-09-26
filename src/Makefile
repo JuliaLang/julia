@@ -450,6 +450,7 @@ $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT): $(SRCDIR)/ccalllazyfoo.c
 		$(CC) $(LDFLAGS) -shared $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazyfoo.$(SHLIB_EXT)), \
 		$@.tmp.o))
 	@rm -f $@.tmp.o
+	$(INSTALL_NAME_CMD)libccalllazyfoo.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
 	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -c -o $@.tmp.o)
@@ -459,6 +460,7 @@ $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build
 		$(CC) $(LDFLAGS) -shared $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)), \
 		$@.tmp.o -lccalllazyfoo))
 	@rm -f $@.tmp.o
+	$(INSTALL_NAME_CMD)libccalllazybar.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) $(JCXXFLAGS) $(LLVM_CXXFLAGS) $(FLAGS_COMMON) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -c -o $@.tmp.o)
