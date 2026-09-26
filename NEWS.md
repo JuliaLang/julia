@@ -87,6 +87,11 @@ Compiler/Runtime improvements
   code loading machinery, which are collapsed to the single frame that entered loading.
   Frames for user code that runs during loading are unaffected. Set the
   `JULIA_STACKTRACE_FULL_LOADING` environment variable to `true` to show them ([#52988]).
+* A stack trace shown at the REPL prompt now hides the frames of Julia's own code — Base,
+  the stdlibs and installed packages — collapsing each run of them to a line naming the
+  modules they came from. The frames a user wrote are kept, as is the frame each run of
+  them called into. `show(err)` still gives the complete trace, and the
+  `JULIA_STACKTRACE_ABBREVIATED` environment variable decides for every trace when set.
 * Parallel package precompilation now coordinates CPU usage across both the precompile worker processes and
   the LLVM threads each spawns to compile its native image, sharing a single thread budget so idle cores are
   filled during the long tail without oversubscribing the machine when many packages compile at once. The total

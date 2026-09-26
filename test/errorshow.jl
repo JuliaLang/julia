@@ -1843,3 +1843,108 @@ end
     @test_throws ErrorException("too many parameters for type `Array`: expected 2, got 4") Array{1,2,3,4}
     @test_throws ErrorException("too many parameters for type `BitArray`: expected 1, got 2") BitArray{1,2}
 end
+
+module AbbreviatedTraces
+    outer(x) = inner(x)
+    inner(x) = sum([1, 2, 3]; dims = x)
+end
+
+@testset "abbreviated stacktraces" begin
+    trace = try
+        AbbreviatedTraces.outer("not a dimension")
+    catch
+        Base.process_backtrace(stacktrace(catch_backtrace()))
+    end
+
+    function render(io::IO, shown = trace)
+        Base.show_backtrace(io, shown)
+        return String(take!(io.io))
+    end
+    hidden = Ref(false)
+    abbreviated = render(IOContext(IOBuffer(), :stacktrace_frames_hidden => hidden))
+    full = render(IOContext(IOBuffer()))
+
+    @test hidden[]
+    @test occursin("⋮ internal", abbreviated)
+    @test occursin("Base", abbreviated)
+    @test !occursin("⋮", full)
+
+    # the frames the user wrote stay, and keep the numbers they have in the full trace
+    for frame in ("inner(x::String)", "outer(x::String)")
+        @test occursin(frame, abbreviated)
+        @test match(Regex("\\[(\\d+)\\] \\Q$frame\\E"), abbreviated)[1] ==
+              match(Regex("\\[(\\d+)\\] \\Q$frame\\E"), full)[1]
+    end
+
+    # the frame a run of user code called into names what rejected the call
+    @test occursin("sum(a::Vector{Int64}", abbreviated)
+    # while the frames below it, which are Base's own business, are gone
+    @test !occursin("reduced_indices", abbreviated)
+    @test count("\n", abbreviated) < count("\n", full)
+
+    # a trace with nothing of the user's in it is shown whole
+    internal = Any[entry for entry in trace if Base._is_julia_source(string(entry[1].file))]
+    all_internal = Ref(false)
+    whole = render(IOContext(IOBuffer(), :stacktrace_frames_hidden => all_internal), internal)
+    @test !all_internal[]
+    @test !occursin("⋮", whole)
+
+    # asking for abbreviation outright needs no flag to carry the request
+    withenv("JULIA_STACKTRACE_ABBREVIATED" => "true") do
+        @test occursin("⋮ internal", render(IOContext(IOBuffer())))
+    end
+end
+
+@testset "frames of Julia's own code are told apart from a user's" begin
+    @test Base._is_julia_source("array.jl")
+    @test Base._is_julia_source(joinpath(Sys.STDLIB, "Random", "src", "misc.jl"))
+    # the REPL's pseudo-files and code passed to `-e` carry no extension
+    @test !Base._is_julia_source("REPL[1]")
+    @test !Base._is_julia_source("none")
+    @test !Base._is_julia_source(@__FILE__)
+    for depot in DEPOT_PATH
+        @test Base._is_julia_source(joinpath(depot, "packages", "Pkg", "src", "Pkg.jl"))
+        # a package checked out for development is the user's own code
+        @test !Base._is_julia_source(joinpath(depot, "dev", "Example", "src", "Example.jl"))
+    end
+end
+
+module RecursiveTraces
+    descend(depth) = depth == 0 ? error("bottom") : only(map(descend, [depth - 1]))
+end
+
+@testset "abbreviated stacktraces inside a repeated cycle" begin
+    trace = try
+        RecursiveTraces.descend(30)
+    catch
+        Base.process_backtrace(stacktrace(catch_backtrace()))
+    end
+    render(io::IO) = (Base.show_backtrace(io, trace); String(take!(io.io)))
+    full = render(IOContext(IOBuffer()))
+    abbreviated = render(IOContext(IOBuffer(), :stacktrace_frames_hidden => Ref(false)))
+
+    # the recursion is still bracketed once, and Base's frames inside it are hidden
+    @test count("┌", abbreviated) == count("╰", abbreviated) == 1
+    @test occursin("repeated 30 times", abbreviated)
+    @test occursin(r"│ +⋮ internal @ Base", abbreviated)
+    @test count("\n", abbreviated) < count("\n", full)
+    numbers(text) = [m[1] for m in eachmatch(r"\[(\d+)\] descend", text)]
+    @test !isempty(numbers(abbreviated)) && numbers(abbreviated) ⊆ numbers(full)
+
+    # a run of hidden frames that a cycle opens or closes on carries the bracket itself
+    entry(name, file) = (Base.StackFrame(name, Symbol(file), 1), 1)
+    synthetic = Any[entry(:u1, "/user/a.jl"), entry(:b2, "b.jl"), entry(:b3, "b.jl"),
+                    entry(:u4, "/user/a.jl"), entry(:b5, "b.jl")]
+    function shown(cycles, kept)
+        io = IOBuffer()
+        Base.show_processed_backtrace(io, synthetic, 20, copy(cycles), 1; print_linebreaks = false, kept)
+        return String(take!(io))
+    end
+    kept = [true, false, false, true, false]
+    opening = shown([(2, 3, 5)], kept)
+    @test occursin(r"┌ +⋮ internal", opening)
+    @test occursin("[4] u4", opening) && occursin("[4] u4", shown([(2, 3, 5)], nothing))
+    closing = shown([(1, 2, 5)], kept)
+    @test occursin(r"│ +⋮ internal\n ╰", closing)
+    @test occursin("[12] u4", closing) && occursin("[12] u4", shown([(1, 2, 5)], nothing))
+end
