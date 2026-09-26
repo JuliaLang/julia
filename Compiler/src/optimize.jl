@@ -987,7 +987,7 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
     sv.all_retpaths_consistent || return
     scan!(ScanStmt(sv), scanner, false)
     sv.all_retpaths_consistent || return
-    complete!(tpdum); push!(scanner.bb_ip, 1)
+    complete!(tpdum); restart!(scanner)
     populate_def_use_map!(tpdum, scanner)
 
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))

@@ -8296,4 +8296,26 @@ invoke_covered(x::Int) = invoke(invoke_narrower_target, Tuple{Integer}, x)
     @test fully_eliminated(invoke_covered, (Int,); retval=1)
 end
 
+# irinterp must visit every reachable block even when block numbers are not in
+# topological order: once constant folding kills the fall-through path into a join
+# block, that block may be reachable only through a jump from a higher-numbered block (#63136)
+struct IRInterpScanDual{V}
+    value::V
+    partial::V
+end
+Base.one(x::IRInterpScanDual{V}) where {V} = IRInterpScanDual(one(V), zero(V))
+Base.:*(x::IRInterpScanDual, y::IRInterpScanDual) = IRInterpScanDual(x.value*y.value, x.partial*y.value + y.partial*x.value)
+Base.:*(x::IRInterpScanDual, y::Int) = IRInterpScanDual(x.value*y, x.partial*y)
+@inline function Base.:^(x::IRInterpScanDual, y::Int)
+    v = x.value
+    p = (y == 0 || x.partial == 0) ? x.partial * 0 : x.partial * y * v^(y-1)
+    return IRInterpScanDual(v^y, p)
+end
+@inline irinterp_scan_derivative(f, x) = f(IRInterpScanDual(x, one(x))).partial
+irinterp_scan_square(t) = t^2
+irinterp_scan_d1(t) = irinterp_scan_derivative(irinterp_scan_square, t)
+irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
+@test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
+@test irinterp_scan_d2(2) == 2
+
 end # module inference
