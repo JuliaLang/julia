@@ -214,6 +214,24 @@ end
         @test addr(boxboolunion(t)) === addr(true) && addr(boxboolunion(f)) === addr(false)
     end
 
+    # Runtime intrinsics leave the bits above a primitive's width zero, and ignore
+    # them in operands read from memory, which may hold anything there.
+    # `@nospecialize` inspects a box as is.
+    rawbytes(@nospecialize x) = GC.@preserve x [unsafe_load(Ptr{UInt8}(addr(x)), i) for i in 1:sizeof(x)]
+    highbits(@nospecialize x) = [b & ~(0xff >> (8 - clamp(Core.bitsizeof(typeof(x)) - 8(i - 1), 0, 8)))
+                                 for (i, b) in enumerate(rawbytes(x))]
+    dirty(T, bytes...) = (m = UInt8[bytes...];
+                          GC.@preserve m Base.invokelatest(Core.Intrinsics.pointerref, Ptr{T}(pointer(m)), 1, 1))
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.sext_int, TestInt17, Int8(-1))))
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.sext_int, TestInt63, Int8(-1))))
+    # out of range, so only the bits above the width are defined
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.fptoui, TestUInt17, 0x1p20)))
+    let x = Base.invokelatest(Core.Intrinsics.flipsign_int, dirty(TestInt17, 0xfd, 0xff, 0xff, 0xff),
+                              Core.Intrinsics.trunc_int(TestInt17, Int32(1)))
+        @test x === Core.Intrinsics.trunc_int(TestInt17, Int32(-3))
+        @test all(iszero, highbits(x))
+    end
+
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
 
