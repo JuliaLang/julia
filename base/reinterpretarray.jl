@@ -337,28 +337,22 @@ function _setindex!(::IndexSCartesian2, A::AbstractArray, v, I::Vararg{Int, N}) 
 end
 # fallbacks for array types that use "pass-through" indexing (e.g., `IndexStyle(A) = IndexStyle(parent(A))`)
 # but which don't handle SCartesianIndex2
-function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianIndex2) where {T,N}
+function _getindex(style::IndexSCartesian2, A::AbstractArray, ind::SCartesianIndex2)
     @_propagate_inbounds_meta
-    J = _ind2sub(tail(axes(A)), ind.j)
-    getindex(A, ind.i, J...)
+    getindex(A, first(axes(A, 1)) + ind.i - 1, _scartesian2_trailing(style, A, ind)...)
 end
 
-function _getindex(::IndexSCartesian2{2}, A::AbstractArray{T,2}, ind::SCartesianIndex2) where {T}
+function _setindex!(style::IndexSCartesian2, A::AbstractArray, v, ind::SCartesianIndex2)
     @_propagate_inbounds_meta
-    J = first(axes(A, 2)) + ind.j - 1
-    getindex(A, ind.i, J)
+    setindex!(A, v, first(axes(A, 1)) + ind.i - 1, _scartesian2_trailing(style, A, ind)...)
 end
 
-function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
-    @_propagate_inbounds_meta
-    J = _ind2sub(tail(axes(A)), ind.j)
-    setindex!(A, v, ind.i, J...)
-end
-
-function _setindex!(::IndexSCartesian2{2}, A::AbstractArray{T,2}, v, ind::SCartesianIndex2) where {T}
-    @_propagate_inbounds_meta
-    J = first(axes(A, 2)) + ind.j - 1
-    setindex!(A, v, ind.i, J)
+# `ind.j` is a linear index of the innermost reinterpreted parent, which may not start at 1.
+# Convert it to the matching indices in the trailing axes of `A`.
+@propagate_inbounds function _scartesian2_trailing(style::IndexSCartesian2, A::AbstractArray, ind::SCartesianIndex2)
+    k = ind.j - first(eachindex(style, A).indices2)
+    ax = tail(axes(A))
+    return length(ax) == 1 ? (first(ax[1]) + k,) : Tuple(CartesianIndices(ax)[k + 1])
 end
 
 eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A))
