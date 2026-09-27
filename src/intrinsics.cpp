@@ -551,7 +551,7 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
 
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
         assert(x.V);
-        Value *unboxed = zext_struct(ctx, x.V);
+        Value *unboxed = zext_struct_helper(ctx, x.V, julia_memory_access_type(x.V->getType(), x.typ));
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, align_dst);
         store->setVolatile(isVolatile);
         dest_ai.decorateInst(store);

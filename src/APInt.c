@@ -734,7 +734,9 @@ static int FPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty,
         negate_words(result, result, nw);
     mask_top(result, nw, onumbits);
 
-    memcpy(pr, result, onumbytes);
+    unsigned onumbytes_value = APINT_NBYTES(onumbits);
+    memcpy(pr, result, onumbytes_value);
+    memset((char *)pr + onumbytes_value, 0, onumbytes - onumbytes_value);
 
     double limit = ldexp(1.0, isSigned ? onumbits - 1 : onumbits);
     return (trunc(Val) == Val) && (absVal < limit);

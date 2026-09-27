@@ -89,6 +89,7 @@ end
     primitive type TestUInt63 63 end
     primitive type TestInt17 <: Signed 17 end
     primitive type TestInt63 <: Signed 63 end
+    primitive type TestUInt129 129 end
 
     @test Core.bitsizeof(TestUInt24) == 24
     @test Core.bitsizeof(TestUInt40) == 40
@@ -119,6 +120,8 @@ end
     load_boxed17(x::Any) = Core.Intrinsics.zext_int(UInt32, x::TestUInt17)
     bitcast17(x::Any) = Core.Intrinsics.bitcast(TestInt17, x::TestUInt17)
     load_tuple17(x::Any) = x::Tuple{TestUInt17,TestUInt17}
+    box17(x::TestUInt17) = Ref{Any}(x)[]
+    objectid17(x::TestUInt17) = objectid(x) # spills x to a stack slot
     # Under Revise these `code_llvm` queries can fail in InteractiveUtils'
     # reflective inference path before reaching the odd-bit lowering.
     if !isdefined(Main, :Revise)
@@ -134,6 +137,12 @@ end
             Tuple{Ptr{TestUInt17}, TestUInt17}; debuginfo=:none, optimize=false))
         @test occursin(r"\bzext i17\b.*\bto i32\b", store_ir)
         @test occursin(r"\bstore i32\b", store_ir)
+        box_ir = sprint(io -> code_llvm(io, box17, Tuple{TestUInt17};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", box_ir)
+        objectid_ir = sprint(io -> code_llvm(io, objectid17, Tuple{TestUInt17};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", objectid_ir)
         bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
             debuginfo=:none, optimize=false))
         @test occursin(r"\bload i24\b", bitcast_ir)
@@ -286,6 +295,21 @@ end
         @test Base.invokelatest(replacefield!, s, :x, Core.Intrinsics.trunc_int(TestUInt5, 0x1f),
                                 Core.Intrinsics.trunc_int(TestUInt5, 0x00),
                                 :sequentially_consistent, :sequentially_consistent).success
+    end
+
+    # The padding that rounding `sizeof` up to the alignment adds is zero in the
+    # results of runtime intrinsics.
+    let a = Core.Intrinsics.trunc_int(TestUInt24, 0x00123456),
+        b = Core.Intrinsics.trunc_int(TestUInt24, 0x00000789)
+        # fill recycled GC cells with all-ones, so an unwritten byte shows
+        Base.donotdelete([Ref(typemax(UInt64)) for _ in 1:100_000])
+        GC.gc(false)
+        # byte 4 is the padding of the tuple's first field
+        @test all(1:100) do _
+            r = Base.invokelatest(Core.Intrinsics.checked_sadd_int, a, b)
+            GC.@preserve r unsafe_load(Ptr{UInt8}(addr(r)), 4) == 0
+        end
+        @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.fptoui, TestUInt129, 3.0)))
     end
 
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))

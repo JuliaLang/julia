@@ -994,7 +994,9 @@ static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsig
 {
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
     intrinsic_1_t op = select_intrinsic_1(osize, runtime_nbits, (const intrinsic_1_t*)voidlist);
+    // APInt writes only the value bytes; zero the rest so padding is defined
     void *pr = alloca(osize);
+    memset(pr, 0, osize);
     op(runtime_nbits, pa, pr);
     return jl_new_bits(ty, pr);
 }
@@ -1191,6 +1193,7 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
 static inline jl_value_t *jl_intrinsiclambda_2(jl_value_t *ty, void *pa, void *pb, unsigned sz, const void *voidlist) JL_CANSAFEPOINT
 {
     void *pr = alloca(sz);
+    memset(pr, 0, sz);
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
     intrinsic_2_t op = select_intrinsic_2(sz, runtime_nbits, (const intrinsic_2_t*)voidlist);
     op(runtime_nbits, pa, pb, pr);
@@ -1253,6 +1256,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
     jl_task_t *ct = jl_current_task;
     jl_value_t *newv = jl_gc_alloc(ct->ptls, jl_datatype_size(tuptyp), tuptyp);
+    memset(jl_data_ptr(newv), 0, jl_datatype_size(tuptyp));
 
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
     intrinsic_checked_t op = select_intrinsic_checked(sz, runtime_nbits, (const intrinsic_checked_t*)voidlist);
@@ -1265,6 +1269,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
 static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa, void *pb, unsigned sz, const void *voidlist) JL_CANSAFEPOINT
 {
     void *pr = alloca(sz);
+    memset(pr, 0, sz);
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
     intrinsic_checked_t op = select_intrinsic_checked(sz, runtime_nbits, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(runtime_nbits, pa, pb, pr);
