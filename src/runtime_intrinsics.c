@@ -1220,7 +1220,6 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
     unsigned sz = jl_datatype_size(ty);
     unsigned sz2 = next_power_of_two(sz);
-    unsigned szb = cvtb ? jl_datatype_size(tyb) : sz;
     if (sz2 > sz) {
         /* round type up to the appropriate c-type and set/clear the unused bits */
         void *pa2 = alloca(sz2);
@@ -1228,13 +1227,23 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
         memset((char*)pa2 + sz, getsign(pa, sz, runtime_nbits), sz2 - sz);
         pa = pa2;
     }
-    if (sz2 > szb) {
-        /* round type up to the appropriate c-type and set/clear/truncate the unused bits
-         * (zero-extend if cvtb is set, since in that case b is unsigned while the sign of a comes from the op)
-         */
+    if (cvtb) {
+        /* b is an unsigned amount of its own type: take its value bits alone,
+         * zero-extended or truncated to the c-type of a */
+        unsigned nbitsb = jl_datatype_nbits((jl_datatype_t*)tyb);
+        unsigned nbytesb = (nbitsb + 7) / 8;
         void *pb2 = alloca(sz2);
-        memcpy(pb2, pb, szb);
-        memset((char*)pb2 + szb, cvtb ? 0 : getsign(pb, szb, runtime_nbits), sz2 - szb);
+        memset(pb2, 0, sz2);
+        memcpy(pb2, pb, nbytesb < sz2 ? nbytesb : sz2);
+        if (nbitsb % 8 && nbytesb <= sz2)
+            ((uint8_t*)pb2)[nbytesb - 1] &= (1 << (nbitsb % 8)) - 1;
+        pb = pb2;
+    }
+    else if (sz2 > sz) {
+        /* b has the type of a; round it up the same way */
+        void *pb2 = alloca(sz2);
+        memcpy(pb2, pb, sz);
+        memset((char*)pb2 + sz, getsign(pb, sz, runtime_nbits), sz2 - sz);
         pb = pb2;
     }
     jl_value_t *newv = lambda2(ty, pa, pb, sz, sz2, list);

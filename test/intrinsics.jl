@@ -231,6 +231,11 @@ end
         @test x === Core.Intrinsics.trunc_int(TestInt17, Int32(-3))
         @test all(iszero, highbits(x))
     end
+    let one17 = dirty(TestUInt17, 0x01, 0x00, 0xfe, 0x00), one24 = dirty(TestUInt24, 0x01, 0x00, 0x00, 0xff)
+        @test Base.invokelatest(Core.Intrinsics.shl_int, UInt64(1), one17) === UInt64(2)
+        @test Base.invokelatest(Core.Intrinsics.shl_int, UInt64(1), one24) === UInt64(2)
+        @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt64(4), one24) === UInt64(2)
+    end
 
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
