@@ -260,6 +260,11 @@ julia> signed(unsigned(-2))
 unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
+# The difference `hi - lo` of two integers with `hi >= lo`. Fixed-width types can wrap to a
+# negative value when the operands span more than half the type, but it still fits as unsigned.
+maybe_unsigned(x::BitSigned) = unsigned(x)
+maybe_unsigned(x::Integer) = signbit(x) ? unsigned(x) : x
+
 """
     signed(x)
 
