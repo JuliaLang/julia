@@ -547,6 +547,10 @@ let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", 
     @test Base.shell_escape_posixly(`$cmd`) ==
         """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' '' z"""
 end
+let cmd = ["~", "~/x", "~root", "a~", "~'q"]
+    @test string(`$cmd`) == """`'~' '~/x' '~root' a~ "~'q"`"""
+    @test eval(Meta.parse(string(`$cmd`))) == `$cmd`
+end
 let cmd = ["foo=bar", "baz"]
     @test string(`$cmd`) == "`foo=bar baz`"
     @test Base.shell_escape(`$cmd`) == "foo=bar baz"
