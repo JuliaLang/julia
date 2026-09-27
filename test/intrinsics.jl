@@ -237,6 +237,9 @@ end
         @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt64(4), one24) === UInt64(2)
     end
 
+    # the top bit of a 17-bit value is bit 16
+    @test_throws InexactError Core.check_top_bit(TestUInt17, Core.Intrinsics.trunc_int(TestUInt17, 0x00010000))
+
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
 
