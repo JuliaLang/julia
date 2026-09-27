@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.13.1-DEV"
+julia_version = "1.13.2-DEV"
 manifest_format = "2.1"
-project_hash = "e004ccb9c815ef8d9aea64f24612ad5f67933e21"
+project_hash = "1cdaf841ee394d5a246a319054512fbeb972d4ff"
 
 [[deps.AbstractTrees]]
 deps = ["Markdown"]
@@ -91,7 +91,7 @@ version = "1.11.0"
 [[deps.LibGit2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "PCRE2_jll", "Zlib_jll"]
 uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.9.1+0"
+version = "1.9.7+0"
 
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "OpenSSL_jll", "Zlib_jll"]
