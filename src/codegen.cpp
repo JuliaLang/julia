@@ -8641,6 +8641,10 @@ static Function *gen_cfun_wrapper(
     // Create the call
     jl_cgval_t retval = emit_abi_call(ctx, declrt, sigt, inputargs, nargs + 1);
     bool jlfunc_sret = retval.V && isa<AllocaInst>(retval.V) && !retval.TIndex && retval.inline_roots.empty();
+    // The Julia callee writes all of `sizeof`, but a C caller sizes the buffer
+    // by the C ABI, which can leave out the padding of a primitive.
+    bool fuse_sret = sig.sret && jlfunc_sret &&
+        !(jl_is_primitivetype(declrt) && ((jl_datatype_t*)declrt)->layout->flags.haspadding);
 
     // Prepare the return value
     Value *r;
@@ -8649,7 +8653,7 @@ static Function *gen_cfun_wrapper(
         // return a jl_value_t*
         r = boxed(ctx, retval);
     }
-    else if (sig.sret && jlfunc_sret) {
+    else if (fuse_sret) {
         // fuse the two sret together
         assert(retval.ispointer());
         AllocaInst *result = cast<AllocaInst>(retval.V);

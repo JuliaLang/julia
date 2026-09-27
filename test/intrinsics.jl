@@ -123,10 +123,12 @@ end
     load_tuple17(x::Any) = x::Tuple{TestUInt17,TestUInt17}
     box17(x::TestUInt17) = Ref{Any}(x)[]
     objectid17(x::TestUInt17) = objectid(x) # spills x to a stack slot
-    ret129(x::UInt128) = Core.Intrinsics.zext_int(TestUInt129, x) # returns through sret
+    # global, for `@cfunction`; returns through sret
+    @eval ret129(x::UInt128) = Core.Intrinsics.zext_int($TestUInt129, x)
     ccall129(p::Ptr{Cvoid}, x::UInt128) = ccall(p, TestUInt129, (UInt128,), x)
     # codegen does not know `T`, so it boxes the result with the runtime type
     ccallp24(@nospecialize(x::Vector{T}), p::Ptr{Cvoid}) where {T} = ccall(p, TestP24{T}, ())
+    @eval cfunction129() = @cfunction(ret129, $TestUInt129, (UInt128,))
     # Under Revise these `code_llvm` queries can fail in InteractiveUtils'
     # reflective inference path before reaching the odd-bit lowering.
     if !isdefined(Main, :Revise)
@@ -158,6 +160,15 @@ end
         ccallp24_ir = sprint(io -> code_llvm(io, ccallp24, Tuple{Vector, Ptr{Cvoid}};
             debuginfo=:none, optimize=false))
         @test occursin(r"\bstore i32\b", ccallp24_ir)
+        # A C caller sizes an sret buffer by the C ABI, which may be less than
+        # `sizeof`, so the wrapper writes only the value bytes. 32-byte results
+        # return through sret on these architectures.
+        if Sys.ARCH in (:x86_64, :aarch64)
+            cfunction_ir = sprint(io -> code_llvm(io, cfunction129, Tuple{};
+                debuginfo=:none, dump_module=true, optimize=false))
+            wrapper = match(r"^define [^\n]*@jlcapi_ret129_.*?^}"ms, cfunction_ir).match
+            @test occursin(r"\bstore i136\b", wrapper)
+        end
         bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
             debuginfo=:none, optimize=false))
         @test occursin(r"\bload i24\b", bitcast_ir)
