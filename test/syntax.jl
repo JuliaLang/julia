@@ -1680,6 +1680,11 @@ function f32620(x::T) where T
 end
 @test f32620(0) === (Int, 2)
 
+# Static parameter reads must be separate statements in lowered IR.
+f_sparam_assign(::Val{S}) where {S} = (println(devnull, repr(begin value = S end)); S)
+@test f_sparam_assign(Val(1)) === 1
+@test isempty(Base.Compiler.validate_code(only(code_lowered(f_sparam_assign, (Val{1},)))))
+
 # issue #28044
 code28044(x) = 10x
 begin
