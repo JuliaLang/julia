@@ -91,6 +91,7 @@ end
     primitive type TestInt63 <: Signed 63 end
     primitive type TestUInt129 129 end
     primitive type TestP24{T} 24 end
+    primitive type TestUInt28 28 end
 
     @test Core.bitsizeof(TestUInt24) == 24
     @test Core.bitsizeof(TestUInt40) == 40
@@ -129,6 +130,8 @@ end
     # codegen does not know `T`, so it boxes the result with the runtime type
     ccallp24(@nospecialize(x::Vector{T}), p::Ptr{Cvoid}) where {T} = ccall(p, TestP24{T}, ())
     @eval cfunction129() = @cfunction(ret129, $TestUInt129, (UInt128,))
+    ccall_narrow(p::Ptr{Cvoid}, x::TestInt17, y::TestUInt24, z::TestUInt28) =
+        ccall(p, Cvoid, (TestInt17, TestUInt24, TestUInt28), x, y, z)
     # Under Revise these `code_llvm` queries can fail in InteractiveUtils'
     # reflective inference path before reaching the odd-bit lowering.
     if !isdefined(Main, :Revise)
@@ -169,6 +172,14 @@ end
             wrapper = match(r"^define [^\n]*@jlcapi_ret129_.*?^}"ms, cfunction_ir).match
             @test occursin(r"\bstore i136\b", wrapper)
         end
+        # Arguments narrower than 32 bits are extended by signedness, as for
+        # `_BitInt(N)` in C, although `sizeof` rounds them up to 4. RISC-V
+        # sign-extends everything stored in 4 bytes.
+        narrow_ir = sprint(io -> code_llvm(io, ccall_narrow,
+            Tuple{Ptr{Cvoid}, TestInt17, TestUInt24, TestUInt28}; debuginfo=:none, optimize=false))
+        narrow_call = only(filter(contains("call void %\"p::Ptr\""), split(narrow_ir, '\n')))
+        @test count("signext", narrow_call) == (Sys.ARCH === :riscv64 ? 3 : 1)
+        @test count("zeroext", narrow_call) == (Sys.ARCH === :riscv64 ? 0 : 2)
         bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
             debuginfo=:none, optimize=false))
         @test occursin(r"\bload i24\b", bitcast_ir)

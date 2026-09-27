@@ -1325,18 +1325,19 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
             }
             if (jl_is_primitivetype(tti) && t->isIntegerTy()) {
                 // see pull req #978. need to annotate signext/zeroext for
-                // small integer arguments.
+                // small integer arguments. Small means narrower than 32 bits,
+                // as for `_BitInt(N)` in C, although `sizeof` rounds up to 4.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                size_t sz = jl_datatype_size(bt);
-                if (sz < 4) {
+                if (jl_datatype_size(bt) == 4 && ctx->TargetTriple.isRISCV64()) {
+                    // RISC-V sign-extends all 32-bit arguments to XLEN, and clang
+                    // counts any type stored in 4 bytes as 32-bit here.
+                    ab.addAttribute(Attribute::SExt);
+                }
+                else if (jl_datatype_nbits(bt) < 32) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
                         ab.addAttribute(Attribute::ZExt);
-                }
-                else if (sz == 4 && ctx->TargetTriple.isRISCV64()) {
-                    // RISC-V sign-extends all 32-bit arguments to XLEN.
-                    ab.addAttribute(Attribute::SExt);
                 }
             }
         }
