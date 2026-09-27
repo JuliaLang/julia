@@ -37,6 +37,9 @@ $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
+$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+	echo 1 > $@
+
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
 # Disable....almost everything
 CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON)				\
@@ -49,20 +52,24 @@ CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON)				\
         --without-brotli
 # A few things we actually enable
 CURL_CONFIGURE_FLAGS +=											\
-        --with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}	\
+        --with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-zstd=${build_prefix} --with-nghttp2=${build_prefix}	\
         --enable-versioned-symbols
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
+#   On macOS, we use OpenSSL and validate using SecTrust by default
 #   On other platforms, we use OpenSSL
 ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
+else ifeq ($(OS), Darwin)
+CURL_TLS_CONFIGURE_FLAGS := --with-openssl
+CURL_TLS_CONFIGURE_FLAGS += --with-apple-sectrust
 else
 CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CURL_CONFIGURE_FLAGS) \
