@@ -709,26 +709,26 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     lc = length(Bc)
     last_chunk_len = _mod64(length(B)-1)+1
 
+    lx = length(X)
+    c = 0
     Xi = first(eachindex(X))
-    lastXi = last(eachindex(X))
     for i = 1:lc
         @inbounds Imsk = Ic[i]
         @inbounds C = Bc[i]
         u = UInt64(1)
         for _ = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
-                Xi > lastXi && throw_setindex_mismatch(X, count(I))
+                c == lx && throw_setindex_mismatch(X, count(I))
                 @inbounds x = convert(Bool, X[Xi])
                 C = ifelse(x, C | u, C & ~u)
                 Xi = nextind(X, Xi)
+                c += 1
             end
             u <<= 1
         end
         @inbounds Bc[i] = C
     end
-    if Xi != nextind(X, lastXi)
-        throw_setindex_mismatch(X, count(I))
-    end
+    c == lx || throw_setindex_mismatch(X, count(I))
     return B
 end
 
