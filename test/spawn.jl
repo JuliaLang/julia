@@ -626,6 +626,16 @@ mktempdir() do dir
     run(`$echocmd interp > $outfile`)
     @test read(outfile, String) == "interp\n"
 
+    buf = IOBuffer()
+    run(`$echocmd tobuf > $buf`)
+    @test String(take!(buf)) == "tobuf\n"
+    @test read(`$catcmd < $(IOBuffer("frombuf"))`, String) == "frombuf"
+    open(outfile, "w") do io
+        run(`$echocmd tofile > $io`)
+    end
+    @test read(outfile, String) == "tofile\n"
+    @test (`$echocmd hi > $devnull`).handle === devnull
+
     # Interpolated arg in pipe
     word = "interp_arg"
     @test read(`$echocmd $word | $catcmd`, String) == "interp_arg\n"

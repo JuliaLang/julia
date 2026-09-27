@@ -578,6 +578,9 @@ cmd_interpolate(xs...) = cstr(string(map(cmd_interpolate1, xs)...))
 cmd_interpolate1(x) = x
 cmd_interpolate1(::Nothing) = throw(ArgumentError("`nothing` can not be interpolated into commands (`Cmd`)"))
 
+cmd_redirect_target(x::Redirectable) = x
+cmd_redirect_target(x) = cmd_interpolate(x)
+
 arg_gen() = String[]
 arg_gen(x::AbstractString) = String[cstr(x)]
 function arg_gen(cmd::Cmd)

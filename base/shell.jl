@@ -106,6 +106,8 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
     function redirect_word_expr(word)
         if length(word) == 1 && isa(word[1], AbstractString)
             return String(word[1])
+        elseif length(word) == 1
+            return Expr(:call, GlobalRef(Base, :cmd_redirect_target), word[1])
         else
             return Expr(:call, GlobalRef(Base, :cmd_interpolate), word...)
         end
