@@ -2809,7 +2809,7 @@ int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
           dta->name->mutabl == dtb->name->mutabl &&
           dta->name->n_uninitialized == dtb->name->n_uninitialized &&
           dta->isprimitivetype == dtb->isprimitivetype &&
-          (!dta->isprimitivetype || dta->layout->size == dtb->layout->size) &&
+          (!dta->isprimitivetype || jl_datatype_nbits(dta) == jl_datatype_nbits(dtb)) &&
           (dta->name->atomicfields == NULL
            ? dtb->name->atomicfields == NULL
            : (dtb->name->atomicfields != NULL &&

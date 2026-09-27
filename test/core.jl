@@ -8235,6 +8235,8 @@ primitive type P36104 8 end
 const orig_P36104 = P36104
 primitive type P36104 16 end
 @test P36104 !== orig_P36104
+primitive type P36104 12 end # same size as 16 bits
+@test Core.bitsizeof(P36104) == 12
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
