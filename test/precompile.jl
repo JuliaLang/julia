@@ -25,7 +25,7 @@ end
 
 # method root provenance
 
-rootid(m::Module) = Base.module_build_id(Base.parentmodule(m)) % UInt64
+rootid(m::Module) = Base.module_build_id(Base.parentmodule(m))
 rootid(m::Method) = rootid(m.module)
 
 function root_provenance(m::Method, i::Int)
@@ -459,7 +459,7 @@ precompile_test_harness(false) do dir
 
         modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> mod_fl_mt.filename
-        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
+        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) ]
         @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", foo_file), joinpath("@depot", bar_file) ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
@@ -666,13 +666,13 @@ precompile_test_harness(false) do dir
     cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), "")
     @test isfile(joinpath(cachedir, "FooBar.ji"))
-    Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
+    Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt64} : Tuple{<:Vector, Nothing, UInt64}
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String, UInt128} : Bool) # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String, UInt64} : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
     @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
 

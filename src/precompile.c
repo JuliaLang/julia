@@ -137,7 +137,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     ios_t *s = NULL;
     int64_t srctextpos = 0 ;
-    uint32_t checksum =
+    uint64_t checksum =
         jl_create_system_image(emit_native ? &native_code : NULL,
                                jl_options.incremental ? worklist : NULL, emit_split, comp,
                                &s, &udeps, &srctextpos, jl_module_init_order);

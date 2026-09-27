@@ -89,6 +89,9 @@ typedef struct JL_GC_TRACKED_TYPE {
     jl_svec_t *edges;
     jl_ptls_t ptls;
     uint8_t relocatability;
+    // when decoding, the build id of the image that holds the code, which keys the method
+    // roots that image added (encoded as `JL_BUILD_ID_PENDING`, see `jl_add_method_root`)
+    uint64_t build_id;
 } jl_ircode_state;
 
 // type => tag hash for a few core types (e.g., Expr, PhiNode, etc)
@@ -789,6 +792,8 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s)
     case TAG_RELOC_METHODROOT:
     {
         key = read_uint64(s->s);
+        if (key == JL_BUILD_ID_PENDING)
+            key = s->build_id;
         tag = read_uint8(s->s);
         assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
         int index = -1;
@@ -1027,7 +1032,8 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         m,
         (!isdef && jl_is_svec(edges)) ? (jl_svec_t*)edges : jl_emptysvec,
         jl_current_task->ptls,
-        1
+        1,
+        0
     };
 
     uint8_t nargsmatchesmethod = code->nargs == m->nargs;
@@ -1114,13 +1120,17 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     ios_mem(&src, 0);
     ios_setbuf(&src, (char*)jl_string_data(data), jl_string_len(data), 0);
     src.size = jl_string_len(data);
+    // code that is not in an image yet (it is being precompiled) references the roots of its
+    // image by the pending key still
+    jl_value_t *top = jl_object_top_module((jl_value_t*)data);
     jl_ircode_state s = {
         &src,
         0,
         m,
         metadata == NULL ? NULL : jl_atomic_load_relaxed(&metadata->edges),
         jl_current_task->ptls,
-        1
+        1,
+        jl_is_module(top) ? ((jl_module_t*)top)->build_id : JL_BUILD_ID_PENDING
     };
     jl_code_info_t *code = jl_new_code_info_uninit();
     jl_value_t *slotnames = NULL;

@@ -2261,7 +2261,7 @@ jl_emission_params_t default_emission_params = { 1 };
 
 static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                            const char *unopt_bc_fname, const char *obj_fname,
-                           const char *asm_fname, ios_t *z, uint32_t checksum,
+                           const char *asm_fname, ios_t *z, uint64_t checksum,
                            const char *unpack_func, jl_emission_params_t *params,
                            Module &dataM)
 {
@@ -2362,7 +2362,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             free(z);
         }
 
-        Constant *checksum_val = ConstantInt::get(Type::getInt32Ty(Context), checksum);
+        Constant *checksum_val = ConstantInt::get(Type::getInt64Ty(Context), checksum);
         addComdat(new GlobalVariable(sysimgM, checksum_val->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      checksum_val, "jl_system_image_checksum"), TheTriple);
@@ -2667,7 +2667,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
 extern "C" JL_DLLEXPORT_CODEGEN void
 jl_dump_native_impl(void *native_code, const char *bc_fname, const char *unopt_bc_fname,
                     const char *obj_fname, const char *asm_fname, ios_t *z,
-                    uint32_t checksum, const char *unpack_func,
+                    uint64_t checksum, const char *unpack_func,
                     jl_emission_params_t *params)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);

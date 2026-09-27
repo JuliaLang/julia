@@ -929,6 +929,15 @@ int clear_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
 void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_code_instance_t *caller) JL_CANSAFEPOINT;
 void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t old_flags);
 
+// The build id of an image is a hash of its content, truncated to `JL_BUILD_ID_HASH_MASK` (see
+// `jl_image_build_id`); the top 6 bits are markers, of which bits 58-61 are unused so far. A
+// module created at runtime gets a random id with `JL_BUILD_ID_RUNTIME` set, so it never matches
+// an image. The blocks of method roots that an image adds are keyed by
+// its build id; while the image is being written, that is not known yet, so the blocks it adds are
+// keyed by `JL_BUILD_ID_PENDING`, which the loader replaces with the build id of the image.
+#define JL_BUILD_ID_HASH_MASK (((uint64_t)1 << 58) - 1)
+#define JL_BUILD_ID_RUNTIME ((uint64_t)1 << 62)
+#define JL_BUILD_ID_PENDING ((uint64_t)1 << 63)
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root) JL_CANSAFEPOINT;
 void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots) JL_CANSAFEPOINT;
 int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i) JL_NOTSAFEPOINT;
@@ -2300,7 +2309,7 @@ JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim
 JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) JL_CANSAFEPOINT;
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        ios_t *z, uint32_t checksum, const char *unpack_func, jl_emission_params_t *params);
+        ios_t *z, uint64_t checksum, const char *unpack_func, jl_emission_params_t *params);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs);
 JL_DLLIMPORT void jl_get_llvm_gv_inits(void *native_code, size_t *num_els, void **inits);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,

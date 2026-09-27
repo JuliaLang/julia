@@ -598,11 +598,8 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent) JL_CANS
     m->uuid = uuid_zero;
     static _Atomic(unsigned int) mcounter; // simple counter backup, in case hrtime is not incrementing
     unsigned int count = jl_atomic_fetch_add_relaxed(&mcounter, 1);
-    // TODO: this is used for ir decompression and is liable to hash collisions so use more of the bits
-    m->build_id.lo = bitmix(jl_hrtime() + count, jl_rand());
-    if (!m->build_id.lo)
-        m->build_id.lo++; // build id 0 is invalid
-    m->build_id.hi = ~(uint64_t)0;
+    // random, and distinct from the build id of every image
+    m->build_id = (bitmix(jl_hrtime() + count, jl_rand()) & JL_BUILD_ID_HASH_MASK) | JL_BUILD_ID_RUNTIME;
     jl_atomic_store_relaxed(&m->counter, 1);
     m->usings_backedges = jl_nothing;
     m->scanned_methods = jl_nothing;
@@ -2431,7 +2428,7 @@ JL_DLLEXPORT jl_sym_t *jl_module_getloc(jl_module_t *m, int32_t *line)
     return m->file;
 }
 
-JL_DLLEXPORT jl_uuid_t jl_module_build_id(jl_module_t *m) { return m->build_id; }
+JL_DLLEXPORT uint64_t jl_module_build_id(jl_module_t *m) { return m->build_id; }
 JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
 
 // TODO: make this part of the module constructor and read-only?
