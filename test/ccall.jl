@@ -2136,6 +2136,43 @@ end
 ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid},), C_NULL)
 @test_throws UndefVarError(:xx_nOt_DeFiNeD_xx, @__MODULE__) ccall_with_undefined_lib()
 
+# An undefined module in the library name throws when called, not when defined
+module CCallUndefinedLibModule
+module Inner end
+f() = ccall((:foo, NotDefined.lib), Cvoid, ())
+g() = @ccall NotDefined.lib.foo()::Cvoid
+h() = ccall((:foo, NotDefined.Inner.lib), Cvoid, ())
+k() = ccall((:foo, Inner.NotDefined.lib), Cvoid, ())
+c() = cglobal((:foo, NotDefined.lib), Cint)
+d(x) = ccall((:foo, NotDefined.lib), Cint, (Cint,), x) + 1
+n() = ccall((NotDefined.foo, "libfoo"), Cvoid, ())
+end
+@testset "undefined module in ccall library name" begin
+    M = CCallUndefinedLibModule
+    @test_throws UndefVarError(:NotDefined, M) M.f()
+    @test_throws UndefVarError(:NotDefined, M) M.g()
+    @test_throws UndefVarError(:NotDefined, M) M.h()
+    @test_throws UndefVarError(:NotDefined, M.Inner) M.k()
+    @test_throws UndefVarError(:NotDefined, M) M.c()
+    @test_throws UndefVarError(:NotDefined, M) M.d(1)
+    @test_throws UndefVarError(:NotDefined, M) M.n()
+    @test only(Base.return_types(M.d, (Int,))) === Union{}
+    @test_throws UndefVarError(:unrelated) eval(:(module CCallGetpropertyLib
+        struct Provider end
+        const provider = Provider()
+        Base.getproperty(::Provider, ::Symbol) = throw(UndefVarError(:unrelated))
+        f() = ccall((:foo, provider.Inner.lib), Cvoid, ())
+    end))
+    @test_throws TypeError eval(:(module CCallNotAModuleLib
+        x = 1
+        f() = ccall((:foo, x.lib), Cvoid, ())
+    end))
+    @test_throws TypeError eval(:(module CCallNotAModuleCGlobal
+        x = 1
+        f() = cglobal((:foo, x.lib))
+    end))
+end
+
 @testset "transcode for UInt8 and UInt16" begin
     a   = [UInt8(1), UInt8(2), UInt8(3)]
     a16 = transcode(UInt16, a)
