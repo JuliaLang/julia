@@ -1358,7 +1358,7 @@ end
 end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
-last(f::Flatten) = last(last(f.it))
+last(f::Flatten) = first(reverse(f))
 
 """
     Iterators.flatmap(f, iterators...)
