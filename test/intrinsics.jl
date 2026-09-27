@@ -237,8 +237,11 @@ end
         @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt64(4), one24) === UInt64(2)
     end
 
-    # the top bit of a 17-bit value is bit 16
+    # the top bit of a 17-bit value is bit 16, and of a 5-bit value bit 4
     @test_throws InexactError Core.check_top_bit(TestUInt17, Core.Intrinsics.trunc_int(TestUInt17, 0x00010000))
+    @test_throws InexactError Core.check_top_bit(TestUInt5, Core.Intrinsics.trunc_int(TestUInt5, 0x10))
+    @test Core.check_top_bit(TestUInt5, Core.Intrinsics.trunc_int(TestUInt5, 0x0f)) ===
+          Core.Intrinsics.trunc_int(TestUInt5, 0x0f)
 
     # a runtime replace compares values, not the bits above their width
     mutable struct AtomicTestUInt5
