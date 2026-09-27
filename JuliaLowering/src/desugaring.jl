@@ -321,17 +321,23 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
     iterstate = n_lhs > 0 ? new_local_binding(ctx, rhs, "iterstate") : nothing
 
     end_stmts = SyntaxList()
+    end_targets = SyntaxList()
     wrap(asgn) = is_const ? (@ast ctx assignment_srcref [K"const" asgn]) : asgn
+    # A variable used in an earlier target, like `i` in `x[i], i = rhs`, is assigned after
+    # that target, in order
+    assign_now(lh) = is_identifier_like(lh) && !is_const &&
+        !any(t -> contains_identifier(t, lh), end_targets)
 
     i = 0
     for lh in children(lhs)
         i += 1
         if kind(lh) == K"..."
-            lh1 = if is_identifier_like(lh[1]) && !is_const
+            lh1 = if assign_now(lh[1])
                 lh[1]
             else
                 lhs_tmp = ssavar(ctx, lh[1], "lhs_tmp")
                 push!(end_stmts, expand_forms_2(ctx, wrap(@ast ctx lh[1] [K"=" lh[1] lhs_tmp])))
+                push!(end_targets, lh[1])
                 lhs_tmp
             end
             if i == n_lhs
@@ -381,12 +387,13 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
         else
             # Normal case, eg, for `y` in
             #   (x, y, z) = rhs
-            lh1 = if is_identifier_like(lh) && !is_const
+            lh1 = if assign_now(lh)
                 lh
             # elseif is_eventually_call(lh) (TODO??)
             else
                 lhs_tmp = ssavar(ctx, lh, "lhs_tmp")
                 push!(end_stmts, expand_forms_2(ctx, wrap(@ast ctx lh [K"=" lh lhs_tmp])))
+                push!(end_targets, lh)
                 lhs_tmp
             end
             push!(stmts,
