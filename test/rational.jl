@@ -551,6 +551,13 @@ end
 end
 # issue 3412
 @test convert(Rational{Int32},0.5) === Int32(1)//Int32(2)
+# a float just past the integer range must not round-trip through `typemax`
+@test_throws InexactError Rational(2.0^63)
+@test_throws InexactError Rational(-2.0^63)
+@test_throws InexactError Rational{Int32}(2f0^31)
+# inside the range, the result only has to round back to the float
+@test Rational{Int32}(0.1) === Int32(1)//Int32(10)
+@test Float64(Rational(1.5e-19)) == 1.5e-19
 
 @testset "issue 6712" begin
     @test convert(Rational{BigInt},Float64(pi)) == Float64(pi)

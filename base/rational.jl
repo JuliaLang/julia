@@ -208,7 +208,9 @@ Float32(x::Rational{<:Union{Int128,UInt128}}) =
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
-    x == convert(typeof(x), r) || throw(InexactError(:Rational, Rational{T}, x))
+    # Outside the range of `T`, a saturated result can round back to `x`.
+    x == r || (x == convert(typeof(x), r) && abs(x) <= typemax(T)) ||
+        throw(InexactError(:Rational, Rational{T}, x))
     r
 end
 Rational(x::Float64) = Rational{Int64}(x)
