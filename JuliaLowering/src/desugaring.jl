@@ -501,7 +501,7 @@ is_dotted(x) = kind(x) === K"." && numchildren(x) == 1
 # a .< b .< c < d < e   ==>  (a .< b) .& (b .< c) .& (c < d && d < e)
 function expand_compare_chain(ctx, ex)
     @jl_assert kind(ex) == K"comparison" ex
-    terms = children(ex)
+    terms = copy(children(ex))
     @jl_assert numchildren(ex) >= 3 ex
     @jl_assert isodd(numchildren(ex)) ex
 
@@ -514,11 +514,11 @@ function expand_compare_chain(ctx, ex)
             op = terms[i+1]
             rhs = terms[i+2]
 
-            rhs = if kind(rhs) != K"BindingId"
+            rhs = if i + 2 < length(terms) && kind(rhs) != K"BindingId"
                 rhs_ident = ssavar(ctx, rhs, "rhs_ident")
                 terms[i+2] = rhs_ident
                 @ast ctx rhs [K"block"
-                    @ast ctx rhs [K"=" rhs_ident rhs]
+                    [K"=" rhs_ident rhs]
                     rhs_ident
                 ]
             else
@@ -585,7 +585,7 @@ function expand_scalar_compare_chain(ctx, srcref, terms, i)
 
         is_dotted(op) && break
 
-        rhs = if kind(rhs) != K"BindingId"
+        rhs = if i + 2 < length(terms) && kind(rhs) != K"BindingId"
             rhs_ident = ssavar(ctx, rhs, "rhs_ident")
             terms[i+2] = rhs_ident
             @ast ctx rhs [K"block"
