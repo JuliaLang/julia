@@ -70,6 +70,9 @@ Language changes
   (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
+* `reinterpret` on arrays now uses the size of an element including alignment padding, instead of
+  `sizeof`. For example, if `T` is a 24-bit primitive type, `reinterpret(T, zeros(UInt8, 12))` now
+  has length 3 instead of 4 ([#62771]).
 
 Compiler/Runtime improvements
 -----------------------------
