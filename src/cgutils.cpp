@@ -3849,8 +3849,12 @@ static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant
     if (ConstantInt *cint = dyn_cast<ConstantInt>(constant)) {
         if (jst == jl_bool_type)
             return cint->isZero() ? jl_false : jl_true;
-        return jl_new_bits(jt,
-            const_cast<uint64_t *>(cint->getValue().getRawData()));
+        // `jl_new_bits` reads all of `sizeof`, which can exceed the words of the APInt
+        const APInt &val = cint->getValue();
+        size_t nb = jl_datatype_size(jst);
+        SmallVector<uint64_t, 4> data(alignTo(nb, sizeof(uint64_t)) / sizeof(uint64_t), 0);
+        memcpy(data.data(), val.getRawData(), std::min<size_t>(nb, val.getNumWords() * sizeof(uint64_t)));
+        return jl_new_bits(jt, data.data());
     }
 
     if (ConstantFP *cfp = dyn_cast<ConstantFP>(constant)) {

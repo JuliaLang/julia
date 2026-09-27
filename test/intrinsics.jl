@@ -325,6 +325,10 @@ end
         end
         @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.fptoui, TestUInt129, 3.0)))
     end
+    # `compilerbarrier` hides the constant from inference, so codegen boxes the
+    # folded LLVM constant
+    const129() = Ref{Any}(Core.Intrinsics.zext_int(TestUInt129, Base.compilerbarrier(:const, 0x01)))[]
+    @test rawbytes(const129()) == [0x01; zeros(UInt8, sizeof(TestUInt129) - 1)]
 
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
