@@ -1752,6 +1752,21 @@ end
     close(p)
 end
 
+@testset "eachline resolves the default token per line" begin
+    src = CancellationTokenSource()
+    cancel!(src)
+    ctok = CancellationToken(src)
+    # made inside a cancelled scope, read outside it
+    itr = with(() -> eachline(IOBuffer("ab\n")), CANCEL_TOKEN => ctok)
+    @test with(() -> iterate(itr), CANCEL_TOKEN => nothing) == ("ab", nothing)
+    # made outside a cancelled scope, read inside it
+    itr = with(() -> eachline(IOBuffer("ab\n")), CANCEL_TOKEN => nothing)
+    @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => ctok)
+    # an explicit token stays with the iterator
+    itr = eachline(IOBuffer("ab\n"); cancel=ctok)
+    @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => nothing)
+end
+
 @testset "explicit tokens and shields thread through call chains" begin
     deadsrc = CancellationTokenSource()
     cancel!(deadsrc)
