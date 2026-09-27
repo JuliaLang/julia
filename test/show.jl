@@ -2571,6 +2571,13 @@ let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
         "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
 end
 
+for T in (Union{Int, Vector{Vector{C}} where C}, Union{Int, Vector{Vector{C}} where C<:Real},
+          Union{Nothing, Matrix{Int}, Vector{Vector{C}} where C},
+          Union{Nothing, Vector{Vector{C}} where C<:D} where D)
+    @test eval(Meta.parse(repr(T))) == T
+end
+@test string(Union{Int64, Vector{Vector{C}} where C}) == "Union{Int64, Vector{Vector{C}} where C}"
+
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
 
