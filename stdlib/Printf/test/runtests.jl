@@ -2,6 +2,8 @@
 
 using Test, Printf
 
+@test isempty(Test.detect_closure_boxes(Printf))
+
 @testset "Printf" begin
 
 @testset "%p" begin
@@ -1143,6 +1145,18 @@ end
     @test (Printf.@sprintf("%10s%n", "😉", x); Printf.@sprintf("%*s%n", 10, "😉", y); x[] == y[])
     @test (Printf.@sprintf("%10s%n", "1234", x); Printf.@sprintf("%*s%n", 10, "1234", y); x[] == y[])
 
+end
+
+# Format buffer estimates must not wrap before direct writers fill the buffer.
+@testset "format length overflow" begin
+    for conversion in ('e', 'f', 'g')
+        fmt = Printf.Format("%1.$(typemax(Int))$conversion")
+        @test_throws OverflowError Printf.format(fmt, 0.0)
+    end
+    @test_throws OverflowError Printf.format(Printf.Format("%.$(typemax(Int))d"), 1)
+    @test_throws OverflowError Printf.format(Printf.Format("%$(typemax(Int))s"), "α")
+    @test_throws OverflowError Printf.format(
+        Printf.Format("%$(typemax(Int))s%1s"), "", "")
 end
 
 @testset "length modifiers" begin

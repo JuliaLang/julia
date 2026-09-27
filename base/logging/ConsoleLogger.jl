@@ -57,6 +57,7 @@ min_enabled_level(logger::ConsoleLogger) = logger.min_level
 showvalue(io, msg) = show(io, "text/plain", msg)
 function showvalue(io, e::Tuple{Exception,Any})
     ex,bt = e
+    bt = Base.scrub_repl_backtrace(bt)
     showerror(io, ex, bt; backtrace = bt!==nothing)
 end
 showvalue(io, ex::Exception) = showerror(io, ex)
@@ -124,8 +125,8 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # split into lines.  This is specialised to improve type inference,
     # and reduce the risk of resulting method invalidations.
     message = string(message)
-    msglines = if Base._isannotated(message) && !isempty(Base.annotations(message))
-        message = Base.AnnotatedString(String(message), Base.annotations(message))
+    msglines = if Base._isannotated(message) && !isempty(Base.annotations(message)::Vector{Base.RegionAnnotation})
+        message = Base.AnnotatedString(String(message)::String, Base.annotations(message)::Vector{Base.RegionAnnotation})
         @NamedTuple{indent::Int, msg::Union{SubString{Base.AnnotatedString{String}}, SubString{String}}}[
             (indent=0, msg=l) for l in split(chomp(message), '\n')]
     else
@@ -142,11 +143,13 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
         valbuf = IOBuffer()
         rows_per_value = max(1, dsize[1] ÷ (nkwargs + 1 - hasmaxlog))
         valio = IOContext(IOContext(valbuf, stream),
-                          :displaysize => (rows_per_value, dsize[2] - 5),
                           :limit => logger.show_limited)
         for (key, val) in kwargs
             key === :maxlog && continue
-            showvalue(valio, val)
+            keyio = IOContext(valio,
+                              :displaysize => (rows_per_value,
+                                               dsize[2] - 7 - textwidth(string(key))))
+            showvalue(keyio, val)
             vallines = split(takestring!(valbuf), '\n')
             if length(vallines) == 1
                 push!(msglines, (indent=2, msg=SubString("$key = $(vallines[1])")))

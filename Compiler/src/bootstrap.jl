@@ -7,6 +7,8 @@
 
 function activate_codegen!()
     ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+    # Register the new unified compile and emit function
+    ccall(:jl_set_compile_and_emit_func, Cvoid, (Any,), compile_and_emit_native)
     Core.eval(Compiler, quote
         let typeinf_world_age = Base.tls_world_age()
             @eval Core.OptimizedGenerics.CompilerPlugins.typeinf(::Nothing, mi::MethodInstance, source_mode::UInt8) =
@@ -24,8 +26,10 @@ function bootstrap!()
         ssa_inlining_pass!_tt = Tuple{typeof(ssa_inlining_pass!), IRCode, InliningState{NativeInterpreter}, Bool}
         optimize_tt = Tuple{typeof(optimize), NativeInterpreter, OptimizationState{NativeInterpreter}, InferenceResult}
         typeinf_ext_tt = Tuple{typeof(typeinf_ext), NativeInterpreter, MethodInstance, UInt8}
-        typeinf_tt = Tuple{typeof(typeinf), NativeInterpreter, InferenceState}
-        typeinf_edge_tt = Tuple{typeof(typeinf_edge), NativeInterpreter, Method, Any, SimpleVector, InferenceState, Bool, Bool}
+        typeinf_tt = Tuple{typeof(typeinf), NativeInterpreter, InferenceState{NativeInterpreter}}
+        typeinf_edge_tt = Tuple{
+            typeof(typeinf_edge), NativeInterpreter, Method, Any, SimpleVector,
+            InferenceState{NativeInterpreter}, Bool, Bool, Bool}
         fs = Any[
             # we first create caches for the optimizer, because they contain many loop constructions
             # and they're better to not run in interpreter even during bootstrapping
@@ -46,7 +50,6 @@ function bootstrap!()
             end
         end
         starttime = time()
-        methods = Any[]
         world = get_world_counter()
         for f in fs
             if isa(f, DataType) && f.name === typename(Tuple)

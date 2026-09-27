@@ -16,6 +16,13 @@ using Base.TOML: TOML
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
        select_downloadable_artifacts, find_artifacts_toml, @artifact_str
 
+const _artifacts_world_age = Ref{UInt}(typemax(UInt))
+
+function __init__()
+    _artifacts_world_age[] = Base.get_world_counter()
+    nothing
+end
+
 """
     parse_toml(path::String)
 
@@ -36,7 +43,7 @@ const ARTIFACTS_DIR_OVERRIDE = Ref{Union{String,Nothing}}(nothing)
 Helper function to allow temporarily changing the artifact installation and search
 directory.  When this is set, no other directory will be searched for artifacts, and new
 artifacts will be installed within this directory.  Similarly, removing an artifact will
-only effect the given artifact directory.  To layer artifact installation locations, use
+only affect the given artifact directory.  To layer artifact installation locations, use
 the typical Julia depot path mechanism.
 """
 function with_artifacts_directory(f::Function, artifacts_dir::String)
@@ -53,7 +60,7 @@ end
 
 Return a list of paths joined into all possible artifacts directories, as dictated by the
 current set of depot paths and the current artifact directory override via the method
-`with_artifacts_dir()`.
+`with_artifacts_directory()`.
 """
 function artifacts_dirs(args...)
     if ARTIFACTS_DIR_OVERRIDE[] === nothing
@@ -403,7 +410,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
         dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
-            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+            dl_dict[unpack_platform(x, name, artifacts_toml)::Platform] = x
         end
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain
@@ -543,7 +550,7 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
-    world = Base._require_world_age[]
+    world = _artifacts_world_age[]
     if world == typemax(UInt)
         world = Base.get_world_counter()
     end
@@ -636,7 +643,7 @@ function split_artifact_slash(name::String)
 end
 
 """
-    artifact_slash_lookup(name::String, atifact_dict::Dict,
+    artifact_slash_lookup(name::String, artifact_dict::Dict,
                           artifacts_toml::String, platform::Platform)
 
 Return `artifact_name`, `artifact_path_tail`, and `hash` by looking the results up in
@@ -671,7 +678,7 @@ If `name` contains a forward or backward slash, all elements after the first sla
 be taken to be path names indexing into the artifact, allowing for an easy one-liner to
 access a single file/directory within an artifact.  Example:
 
-    ffmpeg_path = @artifact"FFMPEG/bin/ffmpeg"
+    ffmpeg_path = artifact"FFMPEG/bin/ffmpeg"
 
 !!! compat "Julia 1.3"
     This macro requires at least Julia 1.3.
@@ -682,7 +689,8 @@ access a single file/directory within an artifact.  Example:
 macro artifact_str(name, platform=nothing)
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
-    if ((isinteractive() && startswith(srcfile, "REPL[")) || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
+    is_repl_or_ijulia = isinteractive() && (startswith(srcfile, "REPL[") || startswith(srcfile, "In["))
+    if (is_repl_or_ijulia || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
         srcfile = pwd()
     end
     local artifacts_toml = find_artifacts_toml(srcfile)

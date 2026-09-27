@@ -7,7 +7,7 @@ This document will explain how functions, method definitions, and method tables 
 
 Every function in Julia is a generic function. A generic function is conceptually a single function,
 but consists of many definitions, or methods. The methods of a generic function are stored in a
-method table. There is one global method table (type `MethodTable`) named `Core.GlobalMethods`. Any
+method table. There is one global method table (type `MethodTable`) named `Core.methodtable`. Any
 default operation on methods (such as calls) uses that table.
 
 ## [Function calls](@id Function-calls)
@@ -214,7 +214,7 @@ majority of dynamically-dispatched calls involve one or two arguments. In turn, 
 can be resolved by considering only the first argument. (Aside: proponents of single dispatch would
 not be surprised by this at all. However, this argument means "multiple dispatch is easy to optimize
 in practice", and that we should therefore use it, *not* "we should use single dispatch"!). So the
-method table and cache splits up on the structure based on a left-to-right decision tree so allow
+method table and cache splits up on the structure based on a left-to-right decision tree to allow
 efficient nearest-neighbor searches.
 
 The front end generates type declarations for all closures. Initially, this was implemented by

@@ -24,6 +24,7 @@ struct JLOptions
     startupfile::Int8
     compile_enabled::Int8
     code_coverage::Int8
+    code_coverage_mode::Int8
     malloc_log::Int8
     tracked_path::Ptr{UInt8}
     opt_level::Int8
@@ -64,18 +65,30 @@ struct JLOptions
     heap_target_increment::UInt64
     trace_compile_timing::Int8
     trim::Int8
+    trace_eval::Int8
     task_metrics::Int8
     timeout_for_safepoint_straggler_s::Int16
     gc_sweep_always_full::Int8
+    compress_sysimage::Int8
+    alert_on_critical_error::Int8
+    target_sanitize_memory::Int8
+    target_sanitize_thread::Int8
+    target_sanitize_address::Int8
 end
 
-# This runs early in the sysimage != is not defined yet
+# This runs early in the sysimage when `!=` is not defined yet
 if sizeof(JLOptions) === ccall(:jl_sizeof_jl_options, Int, ())
 else
     ccall(:jl_throw, Cvoid, (Any,), "Option structure mismatch")
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
+
+# NOTE: Keep in sync with the JL_OPTIONS_COMPILE_* defines in src/julia.h
+const JL_OPTIONS_COMPILE_OFF = 0
+const JL_OPTIONS_COMPILE_ON  = 1
+const JL_OPTIONS_COMPILE_ALL = 2
+const JL_OPTIONS_COMPILE_MIN = 3
 
 function colored_text(opts::JLOptions)
     return if opts.color != 0

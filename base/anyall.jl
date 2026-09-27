@@ -13,7 +13,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
+See also [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -51,7 +51,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
+See also [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest
@@ -147,7 +147,7 @@ function _any(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
 end
 
 # Specialized versions of any(f, ::Tuple)
-# We fall back to the for loop implementation all elements have the same type or
+# We fall back to the for loop implementation if all elements have the same type or
 # if the tuple is too large.
 function any(f, itr::Tuple)
     if itr isa NTuple || length(itr) > 32
@@ -156,7 +156,7 @@ function any(f, itr::Tuple)
     _any_tuple(f, false, itr...)
 end
 
-@inline function _any_tuple(f, anymissing, x, rest...)
+@inline function _any_tuple(f, anymissing::Bool, x, rest...)
     v = f(x)
     if ismissing(v)
         anymissing = true
@@ -165,7 +165,7 @@ end
     end
     return _any_tuple(f, anymissing, rest...)
 end
-@inline _any_tuple(f, anymissing) = anymissing ? missing : false
+@inline _any_tuple(_, anymissing::Bool) = anymissing ? missing : false
 
 """
     all(p, itr)::Bool
@@ -242,7 +242,7 @@ function all(f, itr::Tuple)
     _all_tuple(f, false, itr...)
 end
 
-@inline function _all_tuple(f, anymissing, x, rest...)
+@inline function _all_tuple(f, anymissing::Bool, x, rest...)
     v = f(x)
     if ismissing(v)
         anymissing = true
@@ -254,4 +254,4 @@ end
     end
     return _all_tuple(f, anymissing, rest...)
 end
-@inline _all_tuple(f, anymissing) = anymissing ? missing : true
+@inline _all_tuple(_, anymissing::Bool) = anymissing ? missing : true

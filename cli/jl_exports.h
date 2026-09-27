@@ -7,8 +7,9 @@
 #include "../src/jl_exported_funcs.inc"
 
 // Define pointer data as `const void * $(name);`
-#define XX(name)    JL_DLLEXPORT const void * name;
+#define XX(name, type)    JL_DLLEXPORT const void * jl_##name;
 JL_EXPORTED_DATA_POINTERS(XX)
+JL_CONST_GLOBAL_VARS(XX)
 #undef XX
 
 // Define symbol data as `$(type) $(name);`
@@ -30,7 +31,7 @@ JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
 JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX
 
-// Define holder locations for function addresses as `const void * $(name)_addr = NULL;
+// Define holder locations for function addresses as `JL_HIDDEN anonfunc * $(name)_addr = NULL;`
 #define XX(name)    JL_HIDDEN anonfunc * name##_addr = NULL;
 JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_

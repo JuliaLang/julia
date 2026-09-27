@@ -6,7 +6,7 @@
 
 The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR).
 
-Issues and pull requests should have self explanatory titles such that they can be understood from the list of PRs and Issues.
+Issues and pull requests should have self-explanatory titles such that they can be understood from the list of PRs and Issues.
 i.e. `Add {feature}` and `Fix {bug}` are good, `Fix #12345. Corrects the bug.` is bad.
 
 You can make pull requests for incomplete features to get code review. The convention is to open these as draft PRs and prefix

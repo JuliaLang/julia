@@ -21,7 +21,7 @@ char *shlib_ext = ".so";
 
 /* This simple hand-crafted tolower exists to avoid locale-dependent effects in
  * behaviors (and utf8proc_tolower wasn't linking properly on all platforms) */
-static char ascii_tolower(char c)
+static char ascii_tolower(char c) JL_NOTSAFEPOINT
 {
     if ('A' <= c && c <= 'Z')
         return c - 'A' + 'a';
@@ -86,7 +86,7 @@ uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int
 
 static int jl_options_initialized = 0;
 
-JL_DLLEXPORT void jl_init_options(void)
+JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT
 {
     if (jl_options_initialized)
         return;
@@ -113,6 +113,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0,    // startup file
                         JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
                         0,    // code_coverage
+                        JL_COVERAGE_MODE_HIT, // code_coverage_mode
                         0,    // malloc_log
                         NULL, // tracked_path
                         2,    // opt_level
@@ -157,9 +158,15 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // heap-target-increment
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
+                        0, // trace-eval
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
                         0, // gc_sweep_always_full
+                        0, // compress_sysimage
+                        0, // alert_on_critical_error
+                        0, // target_sanitize_memory
+                        0, // target_sanitize_thread
+                        0, // target_sanitize_address
     };
     jl_options_initialized = 1;
 }
@@ -175,7 +182,7 @@ static const char opts[]  =
     " --help-hidden                                 Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@temp|@.|@script[<rel>]}]   Set <dir> as the active project/environment.\n"
+    " -P, --project[={<dir>|@temp|@.|@script[<rel>]}]  Set <dir> as the active project/environment.\n"
     "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
@@ -219,10 +226,17 @@ static const char opts[]  =
     "                                               interface if supported (Linux and Windows) or to the\n"
     "                                               number of CPU threads if not supported (MacOS) or if\n"
     "                                               process affinity is not configured, and sets M to 1.\n"
+#if defined(WITH_THIRD_PARTY_HEAP) && WITH_THIRD_PARTY_HEAP == 1 // MMTk
+    " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M\n"
+    "                                               (0 <= M <= N) threads for concurrent GC work.\n"
+    "                                               N is set to the number of compute threads and\n"
+    "                                               M is set to 0 if unspecified.\n"
+#else
     " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M (0 or 1)\n"
     "                                               threads for the concurrent sweeping phase of GC.\n"
     "                                               N is set to the number of compute threads and\n"
     "                                               M is set to 0 if unspecified.\n"
+#endif
     " -p, --procs {N|auto}                          Integer value N launches N additional local worker\n"
     "                                               processes `auto` launches as many workers as the\n"
     "                                               number of local CPU threads (logical cores).\n"
@@ -268,15 +282,18 @@ static const char opts[]  =
 #endif
 
     // instrumentation options
-    " --code-coverage[={none*|user|all}]            Count executions of source lines (omitting setting is\n"
+    " --code-coverage[={none*|user|all}]            Record coverage for source lines (omitting setting is\n"
     "                                               equivalent to `user`)\n"
-    " --code-coverage=@<path>                       Count executions but only in files that fall under\n"
-    "                                               the given file path/directory. The `@` prefix is\n"
+    " --code-coverage=@<path>                       Record coverage only for files that fall under the\n"
+    "                                               given file path/directory. The `@` prefix is\n"
     "                                               required to select this option. A `@` with no path\n"
     "                                               will track the current directory.\n"
 
     " --code-coverage=tracefile.info                Append coverage information to the LCOV tracefile\n"
     "                                               (filename supports format tokens)\n"
+    " --code-coverage-mode={hit*|count}             Record whether each line ran (`hit`, the default)\n"
+    "                                               or collect execution counts (`count`, which may be\n"
+    "                                               approximate when code runs on multiple threads)\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation[={none*|user|all}]         Count bytes allocated by each source line (omitting\n"
     "                                               setting is equivalent to `user`)\n"
@@ -287,7 +304,7 @@ static const char opts[]  =
     " --bug-report=KIND                             Launch a bug report session. It can be used to start\n"
     "                                               a REPL, run a script, or evaluate expressions. It\n"
     "                                               first tries to use BugReporting.jl installed in\n"
-    "                                               current environment and fallbacks to the latest\n"
+    "                                               current environment and falls back to the latest\n"
     "                                               compatible BugReporting.jl if not. For more\n"
     "                                               information, see --bug-report=help.\n\n"
     " --heap-size-hint=<size>[<unit>]               Forces garbage collection if memory usage is higher\n"
@@ -297,7 +314,7 @@ static const char opts[]  =
     "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
 ;
 
-static const char opts_hidden[]  =
+static const char opts_hidden[] =
     "Switches (a '*' marks the default value, if applicable):\n\n"
     " Option                                        Description\n"
     " ---------------------------------------------------------------------------------------------------\n"
@@ -311,7 +328,10 @@ static const char opts_hidden[]  =
     " --strip-metadata                              Remove docstrings and source location info from\n"
     "                                               system image\n"
     " --strip-ir                                    Remove IR (intermediate representation) of compiled\n"
-    "                                               functions\n\n"
+    "                                               functions\n"
+    " --compress-sysimage={yes|no*}                 Compress the sys/pkgimage heap at the expense of\n"
+    "                                               slightly increased load time.\n"
+    "\n"
 
     // compiler debugging and experimental (see the devdocs for tips on using these options)
     " --experimental                                Enable the use of experimental (alpha) features\n"
@@ -340,6 +360,7 @@ static const char opts_hidden[]  =
     "                                               With unsafe-warn warnings will be printed for\n"
     "                                               dynamic call sites that might lead to such errors.\n"
     "                                               In safe mode compile-time errors are given instead.\n"
+    " --trace-eval={loc|full|no*}                   Show the expression being evaluated before eval.\n"
     " --hard-heap-limit=<size>[<unit>]              Set a hard limit on the heap size: if we ever\n"
     "                                               go above this limit, we will abort. The value\n"
     "                                               may be specified as a number of bytes,\n"
@@ -352,16 +373,29 @@ static const char opts_hidden[]  =
     "                                               B, K (kibibytes), M (mebibytes), G (gibibytes)\n"
     "                                               or T (tebibytes).\n"
     " --gc-sweep-always-full                        Makes the GC always do a full sweep of the heap\n"
+    " --target-sanitize=memory                      Instrument generated code for MemorySanitizer.\n"
+    " --target-sanitize=thread                      Instrument generated code for ThreadSanitizer.\n"
+    " --target-sanitize=address                     Instrument generated code for AddressSanitizer.\n"
+    "                                               The above options control the instrumentation of\n"
+    "                                               code generated by --output-* only. JITed code is\n"
+    "                                               instrumented if Julia itself is built with\n"
+    "                                               sanitizers.\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
 {
+    // ensure the defaults are in place before parsing over them; a no-op when
+    // the loader (or a previous call) already initialized the options, but a
+    // static build may parse options (e.g. from a constructor) before any
+    // other runtime entry point has run
+    jl_init_options();
     enum { opt_machinefile = 300,
            opt_color,
            opt_history_file,
            opt_startup_file,
            opt_compile,
            opt_code_coverage,
+           opt_code_coverage_mode,
            opt_track_allocation,
            opt_check_bounds,
            opt_output_unopt_bc,
@@ -393,7 +427,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compiled_modules,
            opt_pkgimages,
            opt_machine_file,
-           opt_project,
            opt_bug_report,
            opt_image_codegen,
            opt_rr_detach,
@@ -406,9 +439,12 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
+           opt_trace_eval,
            opt_experimental_features,
+           opt_compress_sysimage,
+           opt_target_sanitize,
     };
-    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
+    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:P:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -434,12 +470,13 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "threads",         required_argument, 0, 't' },
         { "gcthreads",       required_argument, 0, opt_gc_threads },
         { "machine-file",    required_argument, 0, opt_machine_file },
-        { "project",         optional_argument, 0, opt_project },
+        { "project",         optional_argument, 0, 'P' },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
         { "compile",         required_argument, 0, opt_compile },
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
+        { "code-coverage-mode", required_argument, 0, opt_code_coverage_mode },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
@@ -478,6 +515,9 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
         { "gc-sweep-always-full", no_argument, 0, opt_gc_sweep_always_full },
         { "trim",  optional_argument, 0, opt_trim },
+        { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
+        { "trace-eval",       optional_argument, 0, opt_trace_eval },
+        { "target-sanitize", required_argument, 0, opt_target_sanitize },
         { 0, 0, 0, 0 }
     };
 
@@ -536,13 +576,17 @@ restart_switch:
             }
             break;
         case 'v': // version
-            jl_printf(JL_STDOUT, "julia version %s\n", JULIA_VERSION_STRING);
+            jl_safe_fprintf(ios_stdout, "julia version %s\n", JULIA_VERSION_STRING);
             exit(0);
         case 'h': // help
-            jl_printf(JL_STDOUT, "%s%s", usage, opts);
+            ios_puts(usage, ios_stdout);
+            ios_puts(opts, ios_stdout);
+            ios_flush(ios_stdout);
             exit(0);
         case opt_help_hidden:
-            jl_printf(JL_STDOUT, "%s%s", usage, opts_hidden);
+            ios_puts(usage, ios_stdout);
+            ios_puts(opts_hidden, ios_stdout);
+            ios_flush(ios_stdout);
             exit(0);
         case 'g': // debug info
             if (optarg != NULL) {
@@ -623,7 +667,7 @@ restart_switch:
                 if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
                     jl_errorf("julia: --sysimage-native-code=no is deprecated");
                 else if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ON)
-                    jl_printf(JL_STDERR, "WARNING: --sysimage-native-code=no is deprecated\n");
+                    jl_safe_printf("WARNING: --sysimage-native-code=no is deprecated\n");
             }
             else {
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
@@ -649,7 +693,7 @@ restart_switch:
             else if (!strcmp(optarg,"existing"))
                 jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_EXISTING;
             else
-                jl_errorf("julia: invalid argument to --pkgimages={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --pkgimages={yes|no|existing} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
@@ -657,6 +701,7 @@ restart_switch:
                 jl_error("julia: failed to allocate memory");
             break;
         case 't': // threads
+        {
             errno = 0;
             jl_options.nthreadpools = 2;
             // By default:
@@ -701,11 +746,14 @@ restart_switch:
                 }
                 jl_options.nthreads = nthreads + nthreadsi;
             }
+            assert(jl_options.nthreadpools == 1 || jl_options.nthreadpools == 2);
             int16_t *ntpp = (int16_t *)malloc_s(jl_options.nthreadpools * sizeof(int16_t));
             ntpp[0] = (int16_t)nthreads;
-            ntpp[1] = (int16_t)nthreadsi;
+            if (jl_options.nthreadpools == 2)
+                ntpp[1] = (int16_t)nthreadsi;
             jl_options.nthreads_per_pool = ntpp;
             break;
+        }
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
@@ -723,7 +771,7 @@ restart_switch:
             if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
             break;
-        case opt_project:
+        case 'P':
             jl_options.project = optarg ? strdup(optarg) : "@.";
             break;
         case opt_color:
@@ -789,6 +837,14 @@ restart_switch:
             else {
                 codecov = JL_LOG_USER;
             }
+            break;
+        case opt_code_coverage_mode:
+            if (!strcmp(optarg, "hit"))
+                jl_options.code_coverage_mode = JL_COVERAGE_MODE_HIT;
+            else if (!strcmp(optarg, "count"))
+                jl_options.code_coverage_mode = JL_COVERAGE_MODE_COUNT;
+            else
+                jl_errorf("julia: invalid argument to --code-coverage-mode (%s)", optarg);
             break;
         case opt_track_allocation:
             if (optarg != NULL) {
@@ -1007,6 +1063,7 @@ restart_switch:
                 jl_errorf("julia: invalid memory size specified in --heap-target-increment=<size>[<unit>]");
             break;
         case opt_gc_threads:
+        {
             errno = 0;
             long nmarkthreads = strtol(optarg, &endptr, 10);
             if (errno != 0 || optarg == endptr || nmarkthreads < 1 || nmarkthreads >= INT16_MAX) {
@@ -1017,10 +1074,19 @@ restart_switch:
                 errno = 0;
                 char *endptri;
                 long nsweepthreads = strtol(&endptr[1], &endptri, 10);
+#if defined(WITH_THIRD_PARTY_HEAP) && WITH_THIRD_PARTY_HEAP == 1 // MMTk
+                // MMTk uses `m` as the number of concurrent GC threads, which may be any
+                // count up to the number of mark (GC) threads.
+                if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 ||
+                    nsweepthreads > nmarkthreads || nsweepthreads > INT8_MAX)
+                    jl_errorf("julia: --gcthreads=<n>,<m>; m must be an integer with 0 <= m <= n");
+#else
                 if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
                     jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
+#endif
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
+        }
             break;
         case opt_permalloc_pkgimg:
             if (!strcmp(optarg,"yes"))
@@ -1031,12 +1097,14 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
             break;
         case opt_timeout_for_safepoint_straggler:
+        {
             errno = 0;
             long timeout = strtol(optarg, &endptr, 10);
             if (errno != 0 || optarg == endptr || timeout < 1 || timeout > INT16_MAX)
                 jl_errorf("julia: --timeout-for-safepoint-straggler=<seconds>; seconds must be an integer between 1 and %d", INT16_MAX);
             jl_options.timeout_for_safepoint_straggler_s = (int16_t)timeout;
             break;
+        }
         case opt_gc_sweep_always_full:
             jl_options.gc_sweep_always_full = 1;
             break;
@@ -1052,6 +1120,16 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
             break;
+        case opt_trace_eval:
+            if (optarg == NULL || !strcmp(optarg,"loc"))
+                jl_options.trace_eval = 1;
+            else if (!strcmp(optarg,"full"))
+                jl_options.trace_eval = 2;
+            else if (!strcmp(optarg,"no"))
+                jl_options.trace_eval = 0;
+            else
+                jl_errorf("julia: invalid argument to --trace-eval={yes|no} (%s)", optarg);
+            break;
         case opt_task_metrics:
             if (!strcmp(optarg, "no"))
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_OFF;
@@ -1059,6 +1137,22 @@ restart_switch:
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
             else
                 jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
+            break;
+        case opt_compress_sysimage:
+            if (!strcmp(optarg,"yes"))
+                jl_options.compress_sysimage = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.compress_sysimage = 0;
+            break;
+        case opt_target_sanitize:
+            if (!strcmp(optarg, "memory"))
+                jl_options.target_sanitize_memory = 1;
+            else if (!strcmp(optarg, "thread"))
+                jl_options.target_sanitize_thread = 1;
+            else if (!strcmp(optarg, "address"))
+                jl_options.target_sanitize_address = 1;
+            else
+                jl_errorf("julia: invalid argument to --target-sanitize={memory|thread|address} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
@@ -1073,6 +1167,13 @@ restart_switch:
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
+    bool_t emit_native = jl_options.outputo || jl_options.outputbc ||
+                         jl_options.outputunoptbc || jl_options.outputasm;
+    if (jl_options.compress_sysimage && !emit_native && jl_options.outputji) {
+        jl_safe_printf(
+            "WARNING: --compress-sysimage=yes is unsupported when emitting non-split .ji; disabling.\n");
+        jl_options.compress_sysimage = 0;
+    }
     int proc_args = *argcp < optind ? *argcp : optind;
     *argvp += proc_args;
     *argcp -= proc_args;

@@ -14,7 +14,7 @@ spdxData= JSON.parsefile(spdxDocument; dicttype=OrderedDict{String, Any})
 
 # At the moment we can only update a few items automatically with each release.
 # These are the crucial elements to make a new version of the SPDX file.
-# Any other changes (ex. Adding or removing of external dependencies, updating copyright text, etc.) must be performed manually
+# Any other changes (ex. adding or removing of external dependencies, updating copyright text, etc.) must be performed manually
 spdxData["documentNamespace"]= "https://julialang.org/spdxdocs/julia-spdx-" * string(uuid4())
 spdxData["creationInfo"]["created"]=  Dates.format(now(tz"UTC"), "yyyy-mm-ddTHH:MM:SS") * "Z"
 

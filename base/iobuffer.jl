@@ -59,7 +59,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # When the buffer is resized, or a new buffer allocated, this is the maximum size of the buffer.
     # A new GenericIOBuffer may be constructed with an existing data larger than `maxsize`.
-    # When that happensm we must make sure to not have more than `maxsize` bytes in the buffer,
+    # When that happens, we must make sure to not have more than `maxsize` bytes in the buffer,
     # else reallocating will lose data. So, never write to indices > `maxsize + get_offset(io)`
     # This value is always in 0:typemax(Int).
     maxsize::Int
@@ -191,6 +191,7 @@ When `data` is not given, the buffer will be both readable and writable by defau
     offset leaving behind arbitrary values at other offsets. If `maxsize > length(data)`,
     the IOBuffer might re-allocate the data entirely, which
     may or may not be visible in any outstanding bindings to `array`.
+
 # Examples
 ```jldoctest
 julia> io = IOBuffer();
@@ -515,7 +516,7 @@ function seek(io::GenericIOBuffer, n::Int)
     end
 
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
-    #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
+    #       of a GenericIOBuffer), so that would need to be fixed in order to throw an error here
     max_ptr = io.size + 1
     min_ptr = get_offset(io) + 1
     io.ptr = clamp(translate_seek_position(io, n), min_ptr, max_ptr)
@@ -604,7 +605,8 @@ end
     end
     # The fast path here usually checks there is already room, then does nothing.
     # When append is true, new data is added after io.size, not io.ptr
-    existing_space = min(lastindex(io.data), io.maxsize + get_offset(io)) - (io.append ? io.size : io.ptr - 1)
+    start_offset = io.append ? io.size : io.ptr - 1
+    existing_space = min(lastindex(io.data) - start_offset, io.maxsize - (start_offset - get_offset(io)))
     if existing_space < nshort % Int
         # Outline this function to make it more likely that ensureroom inlines itself
         return ensureroom_slowpath(io, nshort, existing_space)
@@ -641,7 +643,7 @@ end
         # If we can't fit all the requested data in the new buffer, we need to
         # fit as much as possible, so we must compact
         if !iszero(reclaimable_bytes)
-            desired_size -= compact!(io)
+            compact!(io)
         end
         # Max out the buffer size if we want more than the buffer size
         if length(io.data) < io.maxsize
@@ -729,7 +731,7 @@ julia> String(take!(io))
 function take!(io::GenericIOBuffer)
     io.mark = -1
     if io.seekable
-        # If the buffer is seekable, then the previously consumed bytes from ptr+1:size
+        # If the buffer is seekable, then the previously consumed bytes from 1:ptr-1
         # must still be output, as they are not truly gone.
         # Hence, we output all bytes from 1:io.size
         offset = get_offset(io)
@@ -783,11 +785,13 @@ function take!(io::IOBuffer)
     return data
 end
 
-"Internal method. This method can be faster than takestring!, because it does not
+"""
+Internal method. This method can be faster than takestring!, because it does not
 reset the buffer to a usable state, and it does not check for io.reinit.
 Using the buffer after calling unsafe_takestring! may cause undefined behaviour.
 This function is meant to be used when the buffer is only used as a temporary
-string builder, which is discarded after the string is built."
+string builder, which is discarded after the string is built.
+"""
 function unsafe_takestring!(io::IOBuffer)
     used_span = get_used_span(io)
     nbytes = length(used_span)
@@ -805,7 +809,7 @@ function unsafe_takestring!(io::IOBuffer)
 end
 
 """
-    takestring!(io::IOBuffer) -> String
+    takestring!(io::IOBuffer)::String
 
 Return the content of `io` as a `String`, resetting the buffer to its initial
 state.
@@ -892,18 +896,23 @@ function write(to::IO, from::GenericIOBuffer)
     return written
 end
 
-function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
+# writing to an in-memory buffer never blocks; accept (and entry-gate)
+# `cancel` so that explicit-token writes forwarded here (e.g.
+# `write(io, ::String; cancel=...)`) keep working
+function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    precheck_cancel_arg(cancel)
     ensureroom(to, nb)
     size = to.size
     append = to.append
     ptr = append ? size+1 : to.ptr
     data = to.data
-    to_write = min(nb, (min(Int(length(data))::Int, to.maxsize + get_offset(to)) - ptr + 1) % UInt) % Int
+    start_offset = ptr - 1
+    to_write = max(0, min(nb, (min(Int(length(data))::Int - start_offset, to.maxsize - (start_offset - get_offset(to)))) % UInt) % Int)
     # Dispatch based on the type of data, to possibly allow using memcpy
     _unsafe_write(data, p, ptr, to_write % UInt)
     # Update to.size only if the ptr has advanced to higher than
     # the previous size. Otherwise, we just overwrote existing data
-    to.size = max(size, ptr + to_write - 1)
+    to.size = max(size, start_offset + to_write)
     # If to.append, we only update size, not ptr.
     if !append
         to.ptr = ptr + to_write
@@ -941,7 +950,7 @@ end
     ptr = (to.append ? to.size+1 : to.ptr)
     # We have just ensured there is room for 1 byte, EXCEPT if we were to exceed
     # maxsize. So, we just need to check that here.
-    if ptr > to.maxsize + get_offset(to)
+    if ptr - get_offset(to) > to.maxsize
         return 0
     else
         to.data[ptr] = a
@@ -953,7 +962,7 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb)::Int)
 
 function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
     io.readable || _throw_not_readable()
@@ -976,7 +985,12 @@ function occursin(delim::UInt8, buf::GenericIOBuffer)
     return in(delim, view(buf.data, buf.ptr:buf.size))
 end
 
-function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
+# Reading from an in-memory buffer never blocks, but the write to `out`
+# may: an explicit token (or `nothing` shield) is forwarded to it, so
+# shielded chains (e.g. `readline(stream; cancel=nothing)`, which lands
+# here through the stream's copyuntil) compose; the sentinel keeps the
+# plain call, which any IO's write supports.
+function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -984,12 +998,20 @@ function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     if !keep && nout > 0 && data[nout] == delim
         nout -= 1
     end
-    write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    if cancel === DEFAULT_CANCEL
+        write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    else
+        write(out, view(io.data, io.ptr:io.ptr+nout-1); cancel)
+    end
     io.ptr += nread
     return out
 end
 
-function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
+function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(cancel)
+    @cancel_check tok
+    # the resolved token (or explicit shield) governs the inner copyuntil,
+    # which does the actual blocking reads
     # If the data is copied into the middle of the buffer of `out` instead of appended to the end,
     # and !keep, and the line copied ends with \r\n, then the copyuntil (even if keep=false)
     # will overwrite one too many bytes with the new \r byte.
@@ -997,7 +1019,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
     # Could perhaps be done better
     if !out.append && out.ptr < out.size + 1
         newbuf = IOBuffer()
-        copyuntil(newbuf, s, 0x0a, keep=true)
+        copyuntil(newbuf, s, 0x0a; keep=true, cancel=tok)
         v = take!(newbuf)
         # Remove \r\n or \n if present
         if !keep
@@ -1008,12 +1030,14 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
                 pop!(v)
             end
         end
-        write(out, v)
+        # `tok` is resolved above: the write to `out` runs under it (or its
+        # explicit shield), not the ambient scope
+        write(out, v; cancel=tok)
         return out
     else
         # Else, we can just copy the data directly into the buffer, and then
         # subtract the last one or two bytes depending on `keep`.
-        copyuntil(out, s, 0x0a, keep=true)
+        copyuntil(out, s, 0x0a; keep=true, cancel=tok)
         line = out.data
         i = out.size
         if keep || i == out.offset_or_compacted || line[i] != 0x0a
@@ -1031,7 +1055,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
     end
 end
 
-function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
+function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -1041,13 +1065,20 @@ function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
         nout -= 1
         nout > 0 && data[nout] == 0x0d && (nout -= 1)
     end
-    write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    if cancel === DEFAULT_CANCEL
+        write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    else
+        write(out, view(io.data, io.ptr:io.ptr+nout-1); cancel)
+    end
     io.ptr += nread
     return out
 end
 
-copyline(out::IO, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
-copyline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
+# reading from an in-memory buffer never blocks, but the write to `out`
+# may; an explicit token (or shield) is forwarded to it (see copyuntil
+# above)
+copyline(out::IO, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) = _copyline(out, io; keep, cancel)
+copyline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) = _copyline(out, io; keep, cancel)
 
 
 # copy-free crc32c of IOBuffer:

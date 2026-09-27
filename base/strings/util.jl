@@ -66,8 +66,7 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-function startswith(a::Union{String, SubString{String}},
-                    b::Union{String, SubString{String}})
+function startswith(a::DenseUTF8String, b::DenseUTF8String)
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
@@ -78,28 +77,34 @@ function startswith(a::Union{String, SubString{String}},
     end
 end
 
+# nothrow+foldable: `String`/`SubString{String}` buffers are immutable, the
+# byte-wise `_memcmp` is bounded by `sizeof(b) ≤ ncodeunits(a)`, and
+# `nextind(a, cub)` operates on a valid index (`0 ≤ cub ≤ ncodeunits(a)`).
+@assume_effects :nothrow :foldable function startswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke startswith(a::DenseUTF8String, b::DenseUTF8String)
+end
+
 """
     startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
 
 Check if an `IO` object starts with a prefix, which can be either a string, a
 character, or a tuple/vector/set of characters.  See also [`peek`](@ref).
 """
-function Base.startswith(io::IO, prefix::Base.Chars)
+function startswith(io::IO, prefix::Base.Chars)
     mark(io)
     c = read(io, Char)
     reset(io)
     return c in prefix
 end
-function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
+function startswith(io::IO, prefix::UTF8String)
     mark(io)
     s = read(io, ncodeunits(prefix))
     reset(io)
     return s == codeunits(prefix)
 end
-Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
+startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
 
-function endswith(a::Union{String, SubString{String}},
-                  b::Union{String, SubString{String}})
+function endswith(a::DenseUTF8String, b::DenseUTF8String)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
@@ -108,6 +113,12 @@ function endswith(a::Union{String, SubString{String}},
     else
         false
     end
+end
+
+# nothrow+foldable: see `startswith` above; `pointer(a, astart)` is in bounds
+# (`1 ≤ astart ≤ ncodeunits(a)+1`), and `thisind(a, astart)` accepts the same range.
+@assume_effects :nothrow :foldable function endswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke endswith(a::DenseUTF8String, b::DenseUTF8String)
 end
 
 """
@@ -232,7 +243,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex})::SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -240,6 +251,9 @@ See also [`chopsuffix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` prefix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -272,8 +286,16 @@ function chopprefix(s::Union{String, SubString{String}},
     end
 end
 
+function chopprefix(s::AbstractString, prefix::AbstractChar)
+    if !isempty(s) && first(s) == prefix
+        return SubString(s, nextind(s, firstindex(s)))
+    else
+        return SubString(s)
+    end
+end
+
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex})::SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -281,6 +303,9 @@ See also [`chopprefix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` suffix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -315,6 +340,13 @@ function chopsuffix(s::Union{String, SubString{String}},
     end
 end
 
+function chopsuffix(s::AbstractString, suffix::AbstractChar)
+    if !isempty(s) && last(s) == suffix
+        return SubString(s, firstindex(s), prevind(s, lastindex(s)))
+    else
+        return SubString(s)
+    end
+end
 
 """
     chomp(s::AbstractString)::SubString
@@ -354,9 +386,7 @@ end
         has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
         ncu - (has_lf + has_cr)
     end
-    off = s isa String ? 0 : s.offset
-    par = s isa String ? s : s.string
-    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+    @inbounds raw_substring(s, 1, len)
 end
 """
     lstrip([pred=isspace,] str::AbstractString)::SubString
@@ -371,7 +401,7 @@ The default behaviour is to remove leading whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
-See also [`strip`](@ref) and [`rstrip`](@ref).
+See also [`strip`](@ref), [`rstrip`](@ref).
 
 # Examples
 ```jldoctest
@@ -406,7 +436,7 @@ The default behaviour is to remove trailing whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
-See also [`strip`](@ref) and [`lstrip`](@ref).
+See also [`strip`](@ref), [`lstrip`](@ref).
 
 # Examples
 ```jldoctest
@@ -441,10 +471,10 @@ The default behaviour is to remove leading and trailing whitespace and delimiter
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, vector or set of characters.
 
-See also [`lstrip`](@ref) and [`rstrip`](@ref).
-
 !!! compat "Julia 1.2"
     The method which accepts a predicate function requires Julia 1.2 or later.
+
+See also [`lstrip`](@ref), [`rstrip`](@ref).
 
 # Examples
 ```jldoctest
@@ -466,15 +496,31 @@ Stringify `s` and pad the resulting string on the left with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
 string is returned. Pad with spaces by default.
 
+!!! compat "Julia 1.7"
+    In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
+
+See also [`rpad`](@ref).
+
 # Examples
 ```jldoctest
 julia> lpad("March", 10)
 "     March"
 ```
-!!! compat "Julia 1.7"
-    In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
 """
 lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s)::AbstractString, n, string(p))
+
+# Pad for the last `0 < r < textwidth(p)` columns: the shortest prefix of a string pad
+# covering `r` columns, or the whole char for a char pad. When `r` falls inside a wide
+# character, the pad overshoots the requested width.
+function _pad_remainder(p::AbstractString, r::Int)
+    width = 0
+    for (i, c) in pairs(p)
+        width += Int(textwidth(c))::Int
+        width >= r && return @view p[begin:i]
+    end
+    return SubString(p) # unreachable: caller guarantees r < textwidth(p)
+end
+_pad_remainder(p::AbstractChar, r::Int) = p
 
 function lpad(
     s::Union{AbstractChar,AbstractString},
@@ -493,7 +539,7 @@ function lpad(
             (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
     end
     q, r = divrem(m, l)
-    r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
+    r == 0 ? stringfn(p^q, s) : stringfn(p^q, _pad_remainder(p, r), s)
 end
 
 """
@@ -503,13 +549,16 @@ Stringify `s` and pad the resulting string on the right with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
 string is returned. Pad with spaces by default.
 
+!!! compat "Julia 1.7"
+    In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
+
+See also [`lpad`](@ref).
+
 # Examples
 ```jldoctest
 julia> rpad("March", 20)
 "March               "
 ```
-!!! compat "Julia 1.7"
-    In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
 """
 rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = rpad(string(s)::AbstractString, n, string(p))
 
@@ -530,7 +579,7 @@ function rpad(
             (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
     end
     q, r = divrem(m, l)
-    r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
+    r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, _pad_remainder(p, r))
 end
 
 """
@@ -538,6 +587,11 @@ end
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
 with `replacement` if necessary. The default replacement string is "…".
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref), [`ctruncate`](@ref).
 
 # Examples
 ```jldoctest
@@ -550,11 +604,6 @@ julia> textwidth(s)
 julia> rtruncate("foo", 3)
 "foo"
 ```
-
-!!! compat "Julia 1.12"
-    This function was added in Julia 1.12.
-
-See also [`ltruncate`](@ref) and [`ctruncate`](@ref).
 """
 function rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:right))
@@ -572,6 +621,11 @@ end
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
 with `replacement` if necessary. The default replacement string is "…".
 
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`rtruncate`](@ref), [`ctruncate`](@ref).
+
 # Examples
 ```jldoctest
 julia> s = ltruncate("🍕🍕 I love 🍕", 10)
@@ -583,11 +637,6 @@ julia> textwidth(s)
 julia> ltruncate("foo", 3)
 "foo"
 ```
-
-!!! compat "Julia 1.12"
-    This function was added in Julia 1.12.
-
-See also [`rtruncate`](@ref) and [`ctruncate`](@ref).
 """
 function ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:left))
@@ -606,6 +655,11 @@ Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref
 with `replacement` if necessary. The default replacement string is "…". By default, the truncation
 prefers keeping chars on the left, but this can be changed by setting `prefer_left` to `false`.
 
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref), [`rtruncate`](@ref).
+
 # Examples
 ```jldoctest
 julia> s = ctruncate("🍕🍕 I love 🍕", 10)
@@ -617,11 +671,6 @@ julia> textwidth(s)
 julia> ctruncate("foo", 3)
 "foo"
 ```
-
-!!! compat "Julia 1.12"
-    This function was added in Julia 1.12.
-
-See also [`ltruncate`](@ref) and [`rtruncate`](@ref).
 """
 function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:center), prefer_left)
@@ -700,10 +749,10 @@ The optional keyword arguments are:
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
    a `dlm` argument, `true` with a `dlm` argument.
 
-See also [`split`](@ref).
-
 !!! compat "Julia 1.8"
     The `eachsplit` function requires at least Julia 1.8.
+
+See also [`split`](@ref).
 
 # Examples
 ```jldoctest
@@ -801,10 +850,10 @@ The optional keyword arguments are:
 Note that unlike [`split`](@ref), [`rsplit`](@ref) and [`eachsplit`](@ref), this
 function iterates the substrings right to left as they occur in the input.
 
-See also [`eachsplit`](@ref), [`rsplit`](@ref).
-
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
+
+See also [`eachsplit`](@ref), [`rsplit`](@ref).
 
 # Examples
 ```jldoctest
@@ -954,11 +1003,22 @@ rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
     rsplit(str, isspace; limit, keepempty)
 
-_replace(io, repl, str, r, pattern) = print(io, repl)
+_replace(io, repl::Union{<:AbstractString, <:AbstractChar}, str, r, pattern) =
+    write(io, repl)
+function _replace(io, repl, str, r, pattern)
+    if applicable(position, io)
+        p1 = position(io)
+        print(io, repl)
+        p2 = position(io)
+        p2 - p1
+    else
+        write(io, repr(repl))
+    end
+end
 _replace(io, repl::Function, str, r, pattern) =
-    print(io, repl(SubString(str, first(r), last(r))))
+    _replace(io, repl(SubString(str, first(r), last(r))), str, r, pattern)
 _replace(io, repl::Function, str, r, pattern::Function) =
-    print(io, repl(str[first(r)]))
+    _replace(io, repl(str[first(r)]), str, r, pattern)
 
 _pat_replacer(x) = x
 _free_pat_replacer(x) = nothing
@@ -988,43 +1048,54 @@ end
 function _replace_finish(io::IO, str, count::Int,
                          e1::Int, patterns::Tuple, replaces::Tuple, rs::Tuple)
     n = 1
-    i = a = firstindex(str)
-    while true
-        p = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
-        r = rs[p]
-        j, k = first(r), last(r)
-        j > e1 && break
-        if i == a || i <= k
-            # copy out preserved portion
-            GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
-            # copy out replacement string
-            _replace(io, replaces[p], str, r, patterns[p])
-        end
-        if k < j
-            i = j
-            j == e1 && break
-            k = nextind(str, j)
-        else
-            i = k = nextind(str, k)
-        end
-        n == count && break
-        let k = k
-            rs = map(patterns, rs) do p, r
-                if first(r) < k
-                    r = findnext(p, str, k)
-                    if r === nothing || first(r) == 0
-                        return e1+1:0
-                    end
-                    r isa Int && (r = r:r) # findnext / performance fix
-                end
-                return r
-            end
-        end
+    i = start = firstindex(str)
+    while n <= count
+        rs, _, r, _, i = @inline _replace_once(
+            io, str, start, e1, patterns, replaces, rs, count, n, i)
+        first(r) >= e1 && break
         n += 1
     end
     foreach(_free_pat_replacer, patterns)
     write(io, SubString(str, i))
     return io
+end
+
+function _replace_once(io::IO, str, start::Int, e1::Int,
+                       patterns::Tuple, replaces::Tuple, rs::Tuple,
+                       count::Int, n::Int, i::Int)
+    x = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
+    r = rs[x]
+    j, k = first(r), last(r)
+    j > e1 && return rs, x, r, 0, i
+    nb = if i == start || i <= k
+        # copy out preserved portion
+        GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
+        # copy out replacement string
+        _replace(io, replaces[x], str, r, patterns[x])
+    else
+        0
+    end
+    if k < j
+        i = j
+        j == e1 && return rs, x, r, nb, i
+        k = nextind(str, j)
+    else
+        i = k = nextind(str, k)
+    end
+    n == count && return rs, x, r, nb, i
+    let k = k
+        rs = map(patterns, rs) do p, r
+            if first(r) < k
+                r = findnext(p, str, k)
+                if r === nothing || first(r) == 0
+                    return e1+1:0
+                end
+                r isa Int && (r = r:r) # findnext / performance fix
+            end
+            return r
+        end
+    end
+    return rs, x, r, nb, i
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
@@ -1178,6 +1249,8 @@ to `dest`. The length of `dest` must be half the length of `itr`.
     Calling hex2bytes! with iterators producing UInt8 requires
     version 1.7. In earlier versions, you can collect the iterable
     before calling instead.
+
+See also [`hex2bytes`](@ref), [`bytes2hex`](@ref).
 """
 function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     isodd(length(itr)) && throw(ArgumentError("length of iterable must be even"))
@@ -1195,7 +1268,7 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     return dest
 end
 
-@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c))
+@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c)::Char)
 @inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
 @inline function number_from_hex(c::UInt8)
     UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
@@ -1217,6 +1290,8 @@ via `bytes2hex(io, itr)`.  The hexadecimal characters are all lowercase.
     Julia 1.7 or later. In earlier versions, you can `collect` the iterator
     before calling `bytes2hex`.
 
+See also [`hex2bytes`](@ref), [`hex2bytes!`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = string(12345, base = 16)
@@ -1235,12 +1310,15 @@ function bytes2hex end
 
 function bytes2hex(itr)
     eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
-    b = Base.StringMemory(2*length(itr))
-    @inbounds for (i, x) in enumerate(itr)
-        b[2i - 1] = hex_chars[1 + x >> 4]
-        b[2i    ] = hex_chars[1 + x & 0xf]
+    str = Base._string_n(2*length(itr))
+    GC.@preserve str begin
+        p = pointer(str)
+        for (i, x) in enumerate(itr)
+            unsafe_store!(p, @inbounds(hex_chars[1 + x >> 4]), 2i - 1)
+            unsafe_store!(p, @inbounds(hex_chars[1 + x & 0xf]), 2i)
+        end
     end
-    return unsafe_takestring(b)
+    return str
 end
 
 function bytes2hex(io::IO, itr)
@@ -1265,7 +1343,7 @@ end
 Convert a string to `String` type and check that it contains only ASCII data, otherwise
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 
-See also the [`isascii`](@ref) predicate to filter or replace non-ASCII characters.
+See also [`isascii`](@ref).
 
 # Examples
 ```jldoctest
@@ -1278,7 +1356,7 @@ julia> ascii("abcdefgh")
 "abcdefgh"
 ```
 """
-ascii(x::AbstractString) = ascii(String(x))
+ascii(x::AbstractString) = ascii(String(x)::String)
 
 Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
 function Base.rest(s::AbstractString, st...)

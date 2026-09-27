@@ -3,6 +3,9 @@
 include("testhelpers/EvenIntegers.jl")
 using .EvenIntegers
 
+include("testhelpers/ULPError.jl")
+using .ULPError
+
 using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
@@ -24,6 +27,55 @@ has_fma = Dict(
     Float64 => has_fma_Float64(),
     BigFloat => true,
 )
+
+@testset "meta test: ULPError" begin
+    examples_f64 = (-3e0, -2e0, -1e0, -1e-1, -1e-10, -0e0, 0e0, 1e-10, 1e-1, 1e0, 2e0, 3e0)::Tuple{Vararg{Float64}}
+    examples_f16 = Float16.(examples_f64)
+    examples_f32 = Float32.(examples_f64)
+    examples = (examples_f16..., examples_f32..., examples_f64...)
+    @testset "edge cases" begin
+        @testset "zero error - two equivalent values" begin
+            @test 0 == @inferred ulp_error(NaN, NaN)
+            @test 0 == @inferred ulp_error(-NaN, -NaN)
+            @test 0 == @inferred ulp_error(-NaN, NaN)
+            @test 0 == @inferred ulp_error(NaN, -NaN)
+            @test 0 == @inferred ulp_error(Inf, Inf)
+            @test 0 == @inferred ulp_error(-Inf, -Inf)
+            @test 0 == @inferred ulp_error(0.0, 0.0)
+            @test 0 == @inferred ulp_error(-0.0, -0.0)
+            @test 0 == @inferred ulp_error(-0.0, 0.0)
+            @test 0 == @inferred ulp_error(0.0, -0.0)
+            @test 0 == @inferred ulp_error(3.0, 3.0)
+            @test 0 == @inferred ulp_error(-3.0, -3.0)
+        end
+        @testset "infinite error" begin
+            @test Inf == @inferred ulp_error(NaN, 0.0)
+            @test Inf == @inferred ulp_error(0.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, 3.0)
+            @test Inf == @inferred ulp_error(3.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, Inf)
+            @test Inf == @inferred ulp_error(Inf, NaN)
+            @test Inf == @inferred ulp_error(Inf, -Inf)
+            @test Inf == @inferred ulp_error(-Inf, Inf)
+            @test Inf == @inferred ulp_error(0.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 0.0)
+            @test Inf == @inferred ulp_error(3.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 3.0)
+        end
+    end
+    @testset "faithful" begin
+        for x in examples
+            @test 1 == @inferred ulp_error(x, nextfloat(x, 1))
+            @test 1 == @inferred ulp_error(x, nextfloat(x, -1))
+        end
+    end
+    @testset "midpoint" begin
+        for x in examples
+            a = abs(x)
+            @test 1 == 2 * @inferred ulp_error(copysign((widen(a) + nextfloat(a, 1))/2, x), x)
+        end
+    end
+end
 
 @testset "clamp" begin
     let
@@ -390,6 +442,15 @@ end
     @test isnan(exp(reinterpret(Float64, 0x7ffbb14880000000)))
 end
 
+@testset "issue #57463" begin
+    for T in (Int16, Int32, Int64, Int128)
+        @test iszero(1.1^typemin(T))
+        @test iszero(0.9^typemax(T))
+        @test isinf(1.1^typemax(T))
+        @test isinf(0.9^typemin(T))
+    end
+end
+
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA')/2.
@@ -560,7 +621,7 @@ end
                 end
             end
         end
-        @testset begin
+        @testset "trig d/pi functions exactness" begin
             # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
             if has_fma[T]
@@ -583,6 +644,15 @@ end
                 T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
                 T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
             end
+        end
+
+        @testset "tanpi for Complex argument" begin
+            x = Complex{T}(12/11, 2/7)
+            @test tanpi(x) ≈ sinpi(x) / cospi(x)
+            # issue #57450
+            y = Complex{T}(0.5, 1000)
+            @test isfinite(tanpi(y))
+            @test tanpi(y) ≈ im
         end
     end
     scdm = sincosd(missing)
@@ -635,6 +705,8 @@ end
     @test tanpi(-1) === 0.0
     @test tanpi(2) === 0.0
     @test tanpi(-2) === -0.0
+    @test_throws DomainError tanpi(Inf)
+    @test_throws DomainError tanpi(-Inf32)
     @test sinc(1) == 0
     @test sinc(complex(1,0)) == 0
     @test sinc(0) == 1
@@ -684,6 +756,20 @@ end
     setprecision(256) do
         @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
         @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
+    end
+
+    @testset "accuracy of `cosc` around the origin" begin
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(cosc, range(start = t(-1), stop = t(1), length = 5000)) < 4
+        end
+    end
+end
+
+@testset "accuracy of `sinpi`, `cospi` around the origin" begin
+    for f in (sinpi, cospi)
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(f, range(start = t(-0.25), stop = t(0.25), length = 5000)) < (has_fma[t] ? 1.0 : 1.5)
+        end
     end
 end
 
@@ -900,6 +986,8 @@ end
     f19872b(x) = x ^ (-1024)
     @test 0 < f19872b(2.0) < 1e-300
     @test issubnormal(2.0 ^ (-1024))
+    @test !issubnormal(big(2.0 ^ (-1024)))
+    @test !issubnormal(nextfloat(BigFloat(0)))
     @test issubnormal(f19872b(2.0))
     @test !issubnormal(f19872b(0.0))
     @test f19872a(2.0) === 32.0
@@ -1470,7 +1558,7 @@ end
             @test func(-zero(T), zero(T), -zero(T)) === -zero(T)
             for _ in 1:2^18
                 a, b, c = reinterpret.(T, rand(Base.uinttype(T), 3))
-                @test isequal(func(a, b, c), fma(a, b, c)) || (a,b,c)
+                @test isequal(func(a, b, c), fma(a, b, c)) context=(a,b,c)
             end
         end
         @test func(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
@@ -1492,9 +1580,9 @@ end
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
                 got, expected = T(x)^T(y), T(big(x)^T(y))
                 if isnan(expected)
-                    @test isnan_type(T, got) || T.((x,y))
+                    @test isnan_type(T, got) context=T.((x,y))
                 else
-                    @test got == expected || T.((x,y))
+                    @test got == expected context=T.((x,y))
                 end
             end
         end
@@ -1504,13 +1592,13 @@ end
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) context=(x,y)
                 elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) context=(x,y)
                 elseif issubnormal(got)
-                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) context=(x,y)
                 else
-                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) context=(x,y)
                 end
             end
         end
@@ -1519,7 +1607,7 @@ end
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) context=(x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)
@@ -1552,6 +1640,31 @@ end
     n = Int64(1024 / log2(E))
     @test E^n == Inf
     @test E^float(n) == Inf
+
+    # integer power of a negative Float16/Float32 base must keep its sign when the
+    # exponent bypasses `pow_by_squaring` (|n| outside -2^12:3*2^13); the sign `s`
+    # used to be computed and then dropped.
+    @testset "sign of $T integer powers" for T in (Float16, Float32)
+        x = -nextfloat(one(T))
+        for n in (24577, 32769, -24577, -32769)   # odd, outside pow_by_squaring range
+            @test signbit(x^n)
+        end
+        for n in (24578, 32768, -24578)            # even, outside pow_by_squaring range
+            @test !signbit(x^n)
+        end
+    end
+    @testset "sign across clamped $T integer exponents" for (T, I) in
+            ((Float16, Int32), (Float32, Int32), (Float64, Int64))
+        W = widen(I)
+        nmax = W(typemax(I))
+        nmin = W(typemin(I))
+        @test !signbit((-T(2))^(nmax + 1))
+        @test signbit((-T(2))^(nmax + 2))
+        @test signbit((-T(2))^(nmin - 1))
+        @test !signbit((-T(2))^(nmin - 2))
+        @test signbit((-zero(T))^24577)
+        @test signbit((-zero(T))^-24577)
+    end
 
     # issue #55831
     @testset "literal pow zero sign" begin

@@ -57,14 +57,15 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
             @test_throws OverflowError gcd(typemin(T), T(0))
             @test_throws OverflowError gcd(T(0), typemin(T))
         elseif T != BigInt
+            negtmax = one(T)
             # For Unsigned Integer types, -typemax(T) == 1.
-            @test gcd(-typemax(T), T(1)) === T(1)
-            @test gcd(T(1), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), T(0)) === T(1)
-            @test gcd(T(0), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), typemax(T)) === T(1)
-            @test gcd(typemax(T), -typemax(T)) === T(1)
+            @test gcd(negtmax, T(1)) === T(1)
+            @test gcd(T(1), negtmax) === T(1)
+            @test gcd(negtmax, T(0)) === T(1)
+            @test gcd(T(0), negtmax) === T(1)
+            @test gcd(negtmax, negtmax) === T(1)
+            @test gcd(negtmax, typemax(T)) === T(1)
+            @test gcd(typemax(T), negtmax) === T(1)
 
             # For Unsigned Integer types, typemin(T) == 0.
             @test gcd(typemin(T), T(1)) === T(1)
@@ -131,14 +132,15 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
                 @test_throws OverflowError lcm(typemin(T), typemin(T)+T(1)) # lcm(n, n+1) = n*(n+1).
                 @test_throws OverflowError lcm(typemin(T), typemin(T))
             else
+                negtmax = one(T)
                 # For Unsigned Integer types, -typemax(T) == 1.
-                @test lcm(-typemax(T), T(1)) === T(1)
-                @test lcm(T(1), -typemax(T)) === T(1)
-                @test lcm(-typemax(T), T(0)) === T(0)
-                @test lcm(T(0), -typemax(T)) === T(0)
-                @test lcm(-typemax(T), -typemax(T)) === T(1)
-                @test lcm(-typemax(T), typemax(T)) === typemax(T)
-                @test lcm(typemax(T), -typemax(T)) === typemax(T)
+                @test lcm(negtmax, T(1)) === T(1)
+                @test lcm(T(1), negtmax) === T(1)
+                @test lcm(negtmax, T(0)) === T(0)
+                @test lcm(T(0), negtmax) === T(0)
+                @test lcm(negtmax, negtmax) === T(1)
+                @test lcm(negtmax, typemax(T)) === typemax(T)
+                @test lcm(typemax(T), negtmax) === typemax(T)
 
                 # For Unsigned Integer types, typemin(T) == 0.
                 @test lcm(typemin(T), T(1)) === lcm(T(0), T(1)) === T(0)
@@ -216,6 +218,48 @@ end
     x, y = Int8(-12), UInt(100)
     d, u, v = gcdx(x, y)
     @test x*u + y*v == d
+
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        @test_throws DomainError gcdx(typemin(T), typemin(T))
+        @test_throws DomainError gcdx(typemin(T), T(0))
+        @test_throws DomainError gcdx(T(0), typemin(T))
+        d, u, v = gcdx(typemin(T), T(-1))
+        @test d == T(1)
+        @test typemin(T) * u + T(-1) * v == T(1)
+        @test gcdx(T(-1), typemin(T)) == (d, v, u)
+        d, u, v = gcdx(typemin(T), T(1))
+        @test d == T(1)
+        @test typemin(T) * u + T(1) * v == T(1)
+        @test gcdx(T(1), typemin(T)) == (d, v, u)
+    end
+end
+
+# issue #58025
+@testset "Mixed signed/unsigned types" begin
+    cases = [ # adapted from https://github.com/JuliaLang/julia/pull/59487#issuecomment-3258209203
+        (UInt16(100), Int8(-101)),
+        (Int8(-50), UInt16(75)),
+        (UInt32(12), Int16(-18)),
+        (Int64(-24), UInt8(36)),
+        (UInt8(15), Int16(-25)),
+        (Int32(-42), UInt64(56)),
+        (UInt128(1000), Int32(-1500)),
+        (UInt64(0), Int32(-5)),
+        (Int16(-7), UInt8(0)),
+        (Int8(-14), UInt8(13)),
+    ]
+    for (a, b) in cases
+        g1 = gcd(a, b)
+        g2, s, t = gcdx(a, b)
+        @test g1 === g2
+        @test s*a + t*b == g2
+        @test g2 >= 0
+        @test lcm(a, b) === convert(typeof(g1), lcm(widen(a), widen(b)))
+    end
+
+    @test gcdx(Int16(-32768), Int8(-128)) === (Int16(128), Int16(0), Int16(-1))
+    @test gcdx(Int8(-128), UInt16(256)) === (0x0080, 0xffff, 0x0000)
+    @test gcd(Int8(-128), UInt16(256)) === 0x0080
 end
 
 @testset "gcd/lcm/gcdx for custom types" begin
@@ -265,10 +309,20 @@ end
     # Verify issue described in PR 58010 is fixed
     @test invmod(UInt8(3), UInt16(50000)) === 0x411b
 
+    @test invmod(0x00000001, Int8(-128)) === Int32(-127)
+    @test invmod(0xffffffff, Int8(-38)) === Int32(-15)
+    @test invmod(Int8(-1), 0xffffffff) === 0xfffffffe
+    @test invmod(Int32(-1), typemin(Int64)) === Int64(-1)
+    @test invmod(0x3e81, Int16(-5716)) === Int16(-2407)
+
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
             for m in typemin(T):typemax(T)
-                if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
+                if !(
+                    iszero(m) ||
+                    iszero(mod(x, m)) && !isone(abs(m)) ||
+                    !isone(gcd(x, m))
+                )
                     y = invmod(x, m)
                     @test mod(widemul(y, x), m) == mod(1, m)
                     @test div(y, m) == 0
@@ -330,6 +384,13 @@ end
     @test powermod(2, big(3), -5) == -2
     @inferred  powermod(2, -2, -5)
     @inferred  powermod(big(2), -2, UInt(5))
+
+    @test powermod(-3, 0x80, 7) === 2
+    @test powermod(0x03, 0x80, 0x07) === 0x02
+
+    @test powermod(511, 1, 0x00000021) === 0x00000010
+    @test powermod(Int8(-1), 0xff, Int8(33)) === Int8(32)
+    @test powermod(0, 10, -5) === 0
 end
 
 @testset "nextpow/prevpow" begin
@@ -455,6 +516,47 @@ primitive type BitString128 128 end
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
     @test bitstring(reinterpret(BitString128, Int128(3))) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+    primitive type BitString6 <: Unsigned 6 end
+    bit6(x::UInt64) = Core.Intrinsics.trunc_int(BitString6, x)
+    @test bitstring(bit6(UInt64(0x11))) == "010001"
+    primitive type BitString63 <: Unsigned 63 end
+    bit63(x::UInt64) = Core.Intrinsics.trunc_int(BitString63, x)
+    @test bitstring(bit63(0x7fff_ffff_ffff_ffff)) == repeat("1", 63)
+    @test bitstring(bit63(0x4000_0000_0000_0001)) == "1" * repeat("0", 61) * "1"
+end
+
+# A primitive type whose logical width is not a multiple of 8 occupies more
+# bytes than it uses, so the digit counts must come from the width, not from
+# `sizeof`. These types carry just the methods `bin`, `oct` and `hex` call.
+for nbits in (4, 6, 12, 21, 24, 63)
+    T = Symbol(:OddUInt, nbits)
+    # `% UInt8` widens the types narrower than a byte and truncates the rest
+    to_u8 = nbits < 8 ? :(Core.Intrinsics.zext_int(UInt8, x)) :
+                        :(Core.Intrinsics.trunc_int(UInt8, x))
+    @eval begin
+        primitive type $T <: Unsigned $nbits end
+        $T(x::UInt64) = Core.Intrinsics.trunc_int($T, x)
+        Base.UInt64(x::$T) = Core.Intrinsics.zext_int(UInt64, x)
+        Base.rem(x::$T, ::Type{UInt8}) = $to_u8
+        Base.leading_zeros(x::$T) =
+            Int(Core.Intrinsics.zext_int(UInt64, Core.Intrinsics.ctlz_int(x)))
+        Base.top_set_bit(x::$T) = $nbits - leading_zeros(x)
+        Base.:(>>)(x::$T, k::UInt) = Core.Intrinsics.lshr_int(x, k)
+    end
+end
+
+@testset "bin/oct/hex for primitive types of $nbits bits" for nbits in (4, 6, 12, 21, 24, 63)
+    T = getfield(@__MODULE__, Symbol(:OddUInt, nbits))
+    for v in UInt64[0, 1, 7, 8, 1000, 0x1234, UInt64(1) << (nbits - 1), (UInt64(1) << nbits) - 1]
+        v < UInt64(1) << nbits || continue
+        x = T(v)
+        @test UInt64(x) === v
+        # the same value in a wider type prints the same, without padding
+        for base in (2, 8, 16)
+            @test string(x, base = base) == string(v, base = base)
+            @test string(x, base = base, pad = 20) == string(v, base = base, pad = 20)
+        end
+    end
 end
 
 @testset "digits/base" begin
@@ -534,7 +636,7 @@ end
         x::Int
     end
     MyInt(x::MyInt) = x
-    Base.:+(a::MyInt, b::MyInt) = a.x + b.x
+    Base.uabs(x::MyInt) = Base.uabs(x.x)
 
     for n in 0:100
         x = ceil(Int, log2(n + 1))
@@ -550,9 +652,6 @@ end
         @test 32  == Base.top_set_bit(Int32(n)) == Base.top_set_bit(unsigned(Int32(n)))
         @test 8   == Base.top_set_bit(Int8(n)) == Base.top_set_bit(unsigned(Int8(n)))
         @test_throws DomainError Base.top_set_bit(big(n))
-        # This error message should never be exposed to the end user anyway.
-        err = n == -1 ? InexactError : DomainError
-        @test_throws err Base.top_set_bit(MyInt(n))
     end
 
     @test count_zeros(Int64(1)) == 63
@@ -570,6 +669,85 @@ end
     @test isqrt(5) == 2
     @test isqrt(Int8(4)) === Int8(2)
     @test isqrt(Int8(5)) === Int8(2)
+end
+
+@testset "exponent and top_set_bit consistency" begin
+    for _T in (Int8, Int16, Int32, Int64, Int128)
+        for issigned in (false, true)
+            T = issigned ? _T : unsigned(_T)
+            nbits = 8sizeof(T)
+            @test_throws DomainError exponent(T(0))
+            @test Base.top_set_bit(T(0)) == 0
+            @test Base.top_set_bit(T(0)) == invoke(Base.top_set_bit, Tuple{Integer}, T(0))
+
+            for i in 0:(nbits - (issigned ? 2 : 1))
+                p2 = T(1) << i
+                @test exponent(p2) == i
+                @test exponent(p2) == invoke(exponent, Tuple{Integer}, p2)
+                @test Base.top_set_bit(p2) == i + 1
+                @test Base.top_set_bit(p2) == invoke(Base.top_set_bit, Tuple{Integer}, p2)
+
+                p2m1 = p2 - T(1)
+                if p2m1 != 0
+                    @test exponent(p2m1) == i - 1
+                    @test exponent(p2m1) == invoke(exponent, Tuple{Integer}, p2m1)
+                    @test Base.top_set_bit(p2m1) == i
+                    @test Base.top_set_bit(p2m1) == invoke(Base.top_set_bit, Tuple{Integer}, p2m1)
+                end
+
+                p2p1 = p2 + T(1)
+                if p2p1 != 0
+                    @test exponent(p2p1) == max(i, 1)
+                    @test exponent(p2p1) == invoke(exponent, Tuple{Integer}, p2p1)
+                    @test Base.top_set_bit(p2p1) == max(i, 1) + 1
+                    @test Base.top_set_bit(p2p1) == invoke(Base.top_set_bit, Tuple{Integer}, p2p1)
+                end
+            end
+
+            @test exponent(typemax(T)) == nbits - (issigned ? 2 : 1)
+            @test exponent(typemax(T)) == invoke(exponent, Tuple{Integer}, typemax(T))
+            expected_max = !issigned ? nbits : nbits - 1
+            @test Base.top_set_bit(typemax(T)) == expected_max
+            @test Base.top_set_bit(typemax(T)) == invoke(Base.top_set_bit, Tuple{Integer}, typemax(T))
+
+            if issigned
+                for val in [T(-1), T(-2), T(-17), typemin(T)]
+                    expected = exponent(abs(BigInt(val)))
+                    @test exponent(val) == expected
+                    @test exponent(val) == invoke(exponent, Tuple{Integer}, val)
+                    @test Base.top_set_bit(val) == nbits
+                    @test invoke(Base.top_set_bit, Tuple{Integer}, val) == expected + 1
+                end
+            end
+        end
+
+        @test exponent(big(2)^100) == 100
+        @test exponent(big(2)^100 - 1) == 99
+        @test exponent(big(2)^100 + 1) == 100
+        @test exponent(big(-1)) == 0
+        @test_throws DomainError exponent(big(0))
+        # multi-limb values on and around limb boundaries, with both signs
+        for k in (1, 63, 64, 65, 127, 128, 200), d in (0, 1)
+            x = big(2)^k + d * (big(2)^k - 1)
+            @test exponent(x) == k
+            @test exponent(-x) == k
+        end
+        # `exponent(::BigInt)` must dispatch to the GMP method, which does not allocate
+        let x = big(2)^100 + 1, y = -x
+            exponent(x); exponent(y) # compile
+            @test @allocated(exponent(x)) == 0
+            @test @allocated(exponent(y)) == 0
+        end
+
+        @test Base.top_set_bit(big(0)) == 0
+        @test Base.top_set_bit(big(2)^100) == 101
+        @test Base.top_set_bit(big(2)^100 - 1) == 100
+        @test Base.top_set_bit(big(2)^100 + 1) == 101
+        @test_throws DomainError Base.top_set_bit(big(-1))
+    end
+
+    @test @inferred(exponent(true)) === 0
+    @test_throws DomainError exponent(false)
 end
 
 @testset "issue #4884" begin

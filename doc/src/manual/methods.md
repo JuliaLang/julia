@@ -582,7 +582,7 @@ However, future calls to `tryeval` will continue to see the definition of `newfu
 
 You may want to try this for yourself to see how it works.
 
-The implementation of this behavior is a "world age counter", which is further described in the [Worldage](@ref man-worldage)
+The implementation of this behavior is a "world age counter", which is further described in the [World Age](@ref World-age-in-general)
 manual chapter.
 
 ## Design Patterns with Parametric Methods
@@ -708,7 +708,7 @@ This dispatching branching can be observed, for example, in the logic to sum two
 ### Trait-based dispatch
 
 A natural extension to the iterated dispatch above is to add a layer to
-method selection that allows to dispatch on sets of types which are
+method selection that allows dispatching on sets of types which are
 independent from the sets defined by the type hierarchy.
 We could construct such a set by writing out a `Union` of the types in question,
 but then this set would not be extensible as `Union`-types cannot be
@@ -912,10 +912,51 @@ Keyword arguments behave quite differently from ordinary positional arguments. I
 they do not participate in method dispatch. Methods are dispatched based only on positional arguments,
 with keyword arguments processed after the matching method is identified.
 
+!!! warning "Known bug: the presence of keyword arguments affects dispatch"
+    Due to a long-standing bug ([#9498](https://github.com/JuliaLang/julia/issues/9498)),
+    a call that supplies keyword arguments only considers methods that accept keyword
+    arguments. This can select a less specific method over a more specific one that
+    accepts no keywords:
+
+    ```julia
+    julia> f(x; y=10) = "generic";
+
+    julia> f(x::Int) = "int-specific";
+
+    julia> f(1)
+    "int-specific"
+
+    julia> f(1; y=2)  # bug: bypasses the more specific method
+    "generic"
+    ```
+
+    Relatedly, redefining a method without keyword arguments does not replace the keyword
+    handling of an earlier definition with the same positional signature, even though only
+    one method is displayed:
+
+    ```julia
+    julia> g(x; y=1) = "with keywords";
+
+    julia> g(x) = "without keywords";
+
+    julia> g
+    g (generic function with 1 method)
+
+    julia> g(1)
+    "without keywords"
+
+    julia> g(1; y=2)  # bug: calls the overwritten definition
+    "with keywords"
+    ```
+
+    This warning is descriptive, not prescriptive, and code should not rely on this behavior. To keep a specialized
+    method applicable to calls with keyword arguments, give it its own keyword interface,
+    either by repeating the keyword arguments or by collecting any keyword with `kwargs...`.
+
 ## Function-like objects
 
 Methods are associated with types, so it is possible to make any arbitrary Julia object "callable"
-by adding methods to its type. (Such "callable" objects are sometimes called "functors.")
+by adding methods to its type.
 
 For example, you can define a type that stores the coefficients of a polynomial, but behaves like
 a function evaluating the polynomial:
@@ -1005,7 +1046,7 @@ f(x::NTuple{N,Float64}) where {N} = 2
 
 are ambiguous because of the possibility that `N == 0`: there are no
 elements to determine whether the `Int` or `Float64` variant should be
-called. To resolve the ambiguity, one approach is define a method for
+called. To resolve the ambiguity, one approach is to define a method for
 the empty tuple:
 
 ```julia

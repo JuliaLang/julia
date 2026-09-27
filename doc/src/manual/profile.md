@@ -463,6 +463,7 @@ Notice how many of the samples contain `sum_of_sqrt`, which is the expensive com
 In the current implementation, the wall-time profiler attempts to sample from tasks that have been alive since the last garbage collection, along with those created afterward. However, if most tasks are extremely short-lived, you may end up sampling tasks that have already completed, resulting in missed backtrace captures.
 
 If you encounter samples containing `failed_to_sample_task_fun` or `failed_to_stop_thread_fun`, this likely indicates a high volume of short-lived tasks, which prevented their backtraces from being collected.
+Samples containing `failed_to_unwind_fun`, which can also appear in CPU profiles, are ones where the profiler stopped a thread but could not walk its stack; this happens occasionally on some platforms.
 
 Let's consider this simple example:
 

@@ -6,13 +6,17 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
+blackbox(x) = compilerbarrier(:blackbox, x)
+
 # Define minimal array interface here to help code used in macros:
-length(a::Array{T, 0}) where {T} = 1
-length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]
-length(a::Array{T, 2}) where {T} = (sz = getfield(a, :size); sz[1] * sz[2])
-# other sizes are handled by generic prod definition for AbstractArray
-length(a::GenericMemory) = getfield(a, :length)
+size(a::Array) = getfield(a, :size)
+length(t::AbstractArray) = (@inline; prod(size(t)))
+size(a::GenericMemory) = (getfield(a, :length),)
+throw_boundserror(A) = (@noinline; throw(BoundsError(A, ())))
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
+throw_boundserror(A, i1, i2, I...) = (@noinline; throw(BoundsError(A, (i1, i2, I...))))
+_throw_boundserror_indices(A) = (@noinline; throw(BoundsError(A, ())))
+_throw_boundserror_indices(A, i1, I...) = (@noinline; throw(BoundsError(A, (i1, I...))))
 
 # multidimensional getindex will be defined later on
 
@@ -126,7 +130,7 @@ macro nospecialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :nospecialize, vars...)
+    return Expr(:escape, Expr(:meta, :nospecialize, vars...))
 end
 
 """
@@ -143,7 +147,7 @@ macro specialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :specialize, vars...)
+    return Expr(:escape, Expr(:meta, :specialize, vars...))
 end
 
 """
@@ -377,20 +381,21 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-# These special checkbounds methods are defined early for bootstrapping
+# These checkbounds methods are defined early for bootstrapping
 function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
     @inline
     ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
 end
-function checkbounds(A::Union{Array, GenericMemory}, i::Int)
+function checkbounds(A::AbstractArray, I...)
     @inline
-    checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    checkbounds(Bool, A, I...) || _throw_boundserror_indices(A, I...)
+    nothing
 end
 
-default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
-default_access_order(a::GenericMemory{:atomic}) = :monotonic
-default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
-default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
+default_access_order(::GenericMemory{:not_atomic}) = :not_atomic
+default_access_order(::GenericMemory{:atomic}) = :monotonic
+default_access_order(::GenericMemoryRef{:not_atomic}) = :not_atomic
+default_access_order(::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
@@ -461,12 +466,12 @@ julia> y === x
 true
 ```
 
-See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
+See also [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
 """
 function convert end
 
 # ensure this is never ambiguous, and therefore fast for lookup
-convert(T::Type{Union{}}, x...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
+convert(::Type{Union{}}, _...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
 
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -510,19 +515,19 @@ pairs(::Type{NamedTuple}) = Pairs{Symbol, V, Nothing, NT} where {V, NT <: NamedT
 """
     Base.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
-Transforms an indexable container into a Dictionary-view of the same data.
+Transform an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
 """
 Pairs
 
-argtail(x, rest...) = rest
+argtail(_, rest...) = rest
 
 """
     tail(x::Tuple)::Tuple
 
 Return a `Tuple` consisting of all but the first component of `x`.
 
-See also: [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
+See also [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
 
 # Examples
 ```jldoctest
@@ -578,7 +583,7 @@ end
 
 # remove concrete constraint on diagonal TypeVar if it comes from troot
 function widen_diagonal(@nospecialize(t), troot::UnionAll)
-    body = ccall(:jl_widen_diagonal, Any, (Any, Any), t, troot)
+    return ccall(:jl_widen_diagonal, Any, (Any, Any), t, troot)
 end
 
 function isvarargtype(@nospecialize(t))
@@ -618,7 +623,7 @@ function datatype_min_ninitialized(@nospecialize t0)
         if names isa Tuple
             return length(names)
         end
-        t = argument_datatype(types)
+        t = unwrap_unionall(types)
         t isa DataType || return 0
         t.name === Tuple.name || return 0
     end
@@ -740,6 +745,11 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
+# We don't add any _reinterpret methods until we include reinterpretarray.jl,
+# but defining the function up front avoids a whole lot of invalidations when we
+# do.
+function _reinterpret end
+
 """
     reinterpret(::Type{Out}, x::In)
 
@@ -828,6 +838,32 @@ Stacktrace:
 ```
 """
 sizeof(x) = Core.sizeof(x)
+
+"""
+    Core.bitsizeof(T::DataType)
+    Core.bitsizeof(obj)
+
+Logical size, in bits, of the canonical binary representation of the given `DataType` `T`, if any.
+Or the logical size, in bits, of object `obj` if it is not a `DataType`.
+
+For primitive types, this may differ from `8*sizeof(T)` when the type uses byte-rounded storage
+with unused bits in the last byte.
+
+# Examples
+```jldoctest
+julia> Core.bitsizeof(Float32)
+32
+
+julia> Core.bitsizeof(1.0)
+64
+
+julia> primitive type MyUInt63 <: Unsigned 63 end
+
+julia> Core.bitsizeof(MyUInt63)
+63
+```
+"""
+Core.bitsizeof
 
 """
     ifelse(condition::Bool, x, y)
@@ -943,9 +979,70 @@ end
 
 Labels a statement with the symbolic label `name`. The label marks the end-point
 of an unconditional jump with [`@goto name`](@ref).
+
+    @label expr
+    @label name expr
+
+Creates a labeled block that can be exited early with `break` / `break _ value` or
+`break name value`. The block evaluates to `value` if a `break` statement is executed,
+otherwise it evaluates to the result of `expr`.
+
+`@label expr` creates an anonymous block that participates in the default break scope:
+a plain `break` (or `break _`) inside it will exit the block, just as `break` exits a loop.
+
+`@label name expr` creates a named block that can be exited with `break name` or
+`break name value`.
+
+Using `_` as an explicit label name is not allowed — use `@label expr` instead.
+
+# Examples
+```jldoctest
+julia> @label begin
+           println("before")
+           break
+           println("after")
+       end
+before
+
+julia> result = @label myblock begin
+           for i in 1:10
+               if i > 5
+                   break myblock i * 2  # exits the @label block with value 12
+               end
+           end
+           0  # default value if no break
+       end
+12
+```
 """
 macro label(name::Symbol)
+    name === :_ && error("use `@label expr` for anonymous blocks; `@label _` is not allowed")
     return esc(Expr(:symboliclabel, name))
+end
+
+macro label(name::Symbol, body)
+    name === :_ && error("use `@label expr` for anonymous blocks; `@label _ expr` is not allowed")
+    # If body is a syntactic loop, wrap its body in a continue block
+    # This allows `continue name` to work by breaking to `name#cont`
+    if body isa Expr && (body.head === :for || body.head === :while)
+        cont_name = Symbol(string(name, "#cont"))
+        if body.head === :for
+            loop_body = body.args[2]
+            wrapped_body = Expr(:symbolicblock, cont_name, loop_body)
+            body = Expr(:for, body.args[1], wrapped_body)
+        else  # while
+            loop_body = body.args[2]
+            wrapped_body = Expr(:symbolicblock, cont_name, loop_body)
+            body = Expr(:while, body.args[1], wrapped_body)
+        end
+    end
+    return esc(Expr(:symbolicblock, name, body))
+end
+
+macro label(body)
+    # 1-arg form: create anonymous block that participates in the default break scope.
+    # Uses `loop-exit` as the internal label so that `break` and `break _` both target it.
+    return esc(Expr(:symbolicblock, Symbol("loop-exit"), body))
 end
 
 """
@@ -973,7 +1070,12 @@ function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(A, i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
+function setindex!(A::Memory{Any}, @nospecialize(x), i::Int)
+    @_noub_if_noinbounds_meta
+    (@_boundscheck) && checkbounds(A, i)
+    memoryrefset!(memoryrefnew(A, i, false), x, :not_atomic, false)
+    return A
+end
 setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
@@ -981,13 +1083,9 @@ setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomi
 
 getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref(v, i))
 function length(v::SimpleVector)
-    @_total_meta
-    t = @_gc_preserve_begin v
-    len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
-    @_gc_preserve_end t
-    return len
+    Core._svec_len(v)
 end
-firstindex(v::SimpleVector) = 1
+firstindex(::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
 iterate(v::SimpleVector, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
 eltype(::Type{SimpleVector}) = Any
@@ -1057,9 +1155,14 @@ The singleton instance of `Colon` is also a function used to construct ranges;
 see [`:`](@ref).
 """
 struct Colon <: Function
+    Colon() = new()
 end
 const (:) = Colon()
 
+function show(io::IO, ::Colon)
+    show_type_name(io, Colon.name)
+    print(io, "()")
+end
 
 """
     Val(c)
@@ -1082,6 +1185,7 @@ julia> f(Val(true))
 ```
 """
 struct Val{x}
+    Val{x}() where {x} = new()
 end
 
 Val(x) = Val{x}()
@@ -1146,13 +1250,264 @@ julia> values([2])
 """
 values(itr) = itr
 
+# Bootstrap operator definitions needed before _defaultctors
+import Core: !==
+(+)(x::Int, y::Int) = add_int(x, y)
+(-)(x::Int, y::Int) = sub_int(x, y)
+
+"""
+    !(x)
+
+Boolean not. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if `x` is `missing`.
+
+See also [`~`](@ref) for bitwise not.
+
+# Examples
+```jldoctest
+julia> !true
+false
+
+julia> !false
+true
+
+julia> !missing
+missing
+
+julia> .![true false true]
+1×3 BitMatrix:
+ 0  1  0
+```
+"""
+!(x::Bool) = not_int(x)
+
+length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
+const C_NULL = bitcast(Ptr{Cvoid}, 0)
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
+
+# Check whether all type parameters are constrained by fields or other constrained tvars.
+# `tvars` must be ordered from outermost to innermost `UnionAll`.
+function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVector)
+    nparams = length(tvars)
+    n = length(fts)
+    i = nparams
+    while i !== 0
+        @inbounds tv = tvars[i]::TypeVar
+        constrained = false
+        j = 1
+        while j !== n + 1
+            ft = fts[j]
+            if has_typevar(ft, tv)
+                constrained = true
+                break
+            end
+            j += 1
+        end
+        if !constrained
+            j = i + 1
+            remaining = nparams - i
+            while remaining !== 0
+                @inbounds tv2 = tvars[j]::TypeVar
+                if has_typevar(tv2.ub, tv)
+                    constrained = true
+                    break
+                end
+                if tv2 === tv
+                    constrained = false
+                    break
+                end
+                j += 1
+                remaining = remaining - 1
+            end
+        end
+        constrained || return false
+        i -= 1
+    end
+    return true
+end
+
+# Return the DataType, outer-to-inner type variables, and field types for `ty`.
+function _defaultctor_typeinfo(@nospecialize(ty::Type))
+    nparams = 0
+    ua = ty
+    while isa(ua, UnionAll)
+        nparams = nparams + 1
+        ua = ua.body
+    end
+    dt = ua::DataType
+    tvars = Array{Any,1}(Core.undef, nparams)
+    ua = ty
+    i = 1
+    while i !== nparams + 1
+        @inbounds tvars[i] = (ua::UnionAll).var
+        ua = (ua::UnionAll).body
+        i = i + 1
+    end
+    fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
+    return dt, tvars, fts
+end
+
+# Default constructor generation for structs without explicit inner constructors.
+# Called by lowered code from struct definitions (both flisp and JuliaLowering).
+# Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
+function _defaultctors(@nospecialize(ty), functionloc)
+    typeinfo = _defaultctor_typeinfo(ty)
+    dt = getfield(typeinfo, 1)
+    tvars = getfield(typeinfo, 2)
+    fts = getfield(typeinfo, 3)
+    nparams = length(tvars)
+
+    mod = dt.name.module
+    n = length(fts)
+    names = dt.name.names::Core.SimpleVector
+    src_file = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), functionloc.file)
+    src_line = UInt(functionloc.line)
+
+    is_parametric = nparams !== 0
+
+    # Build argument names using actual field names for slot names (better debugging).
+    # The body references arguments via Core.Argument(N) to avoid issues with
+    # all-underscore field names being write-only in lowering.
+    self = Symbol("#ctor-self#")
+    argnames = Array{Any,1}(Core.undef, n + 1)
+    @inbounds argnames[1] = self
+    i = 1
+    nany = 0
+    while i !== n + 1
+        @inbounds argnames[i + 1] = names[i]::Symbol
+        if fts[i] === Any
+            nany = nany + 1
+        end
+        i = i + 1
+    end
+
+    if _fieldtypes_constrain_typevars(tvars, fts)
+        # Outer constructor: T(x::FT1, y::FT2, ...) = new{A,B,...}(x, y, ...)
+        # Build lambda body with direct `new`, no convert calls
+        if is_parametric
+            # new(apply_type(ty, static_parameter(1), ...), args...)
+            curly_args = Array{Any,1}(Core.undef, nparams + 1)
+            @inbounds curly_args[1] = ty
+            i = 1
+            while i !== nparams + 1
+                @inbounds curly_args[i + 1] = Expr(:static_parameter, i)
+                i = i + 1
+            end
+            new_target = Expr(:curly, curly_args...)
+        else
+            new_target = Core.Argument(1)
+        end
+        new_args = Array{Any,1}(Core.undef, n + 1)
+        @inbounds new_args[1] = new_target
+        i = 1
+        while i !== n + 1
+            @inbounds new_args[i + 1] = Core.Argument(i + 1)
+            i = i + 1
+        end
+        new_expr = Expr(:new, new_args...)
+        lambda = Expr(:lambda, argnames,
+            Expr(:block, functionloc, Expr(:return, new_expr)))
+        ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
+                   lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+
+        # Build argdata: svec(svec(Type{ty}, ft1, ft2, ...), svec(tvars...), functionloc)
+        atypes_arr = Array{Any,1}(Core.undef, n + 1)
+        @inbounds atypes_arr[1] = Core.apply_type(Type, ty)
+        i = 1
+        while i !== n + 1
+            @inbounds atypes_arr[i + 1] = fts[i]
+            i = i + 1
+        end
+        outer_atypes = Core.svec(atypes_arr...)
+        outer_tvars = Core.svec(tvars...)
+        argdata = Core.svec(outer_atypes, outer_tvars, functionloc)
+        ccall(:jl_method_def, Any, (Any, Ptr{Nothing}, Any, Any),
+              argdata, C_NULL, ci, mod)
+
+        # For non-parametric types where all fields are Any, outer constructor suffices
+        if nparams === 0
+            all_any = true
+            i = 1
+            while i !== n + 1
+                if fts[i] !== Any
+                    all_any = false
+                    break
+                end
+                i = i + 1
+            end
+            if all_any
+                return
+            end
+        end
+    end
+
+    # Inner constructor: (::Type{T{A,B,...}})(x, y, ...) with convert calls
+    # Build lambda body using Core.Argument references
+    nstmts = ((n - nany) + (n - nany)) + 1
+    body_args = Array{Any,1}(Core.undef, nstmts)
+    new_args = Array{Any,1}(Core.undef, n)
+    i = 1
+    bidx = 1
+    while i !== n + 1
+        ft = fts[i]
+        if ft === Any
+            @inbounds new_args[i] = Core.Argument(i + 1)
+        else
+            # Use an isa check to avoid depending on convert inlining.
+            # This matches the old convert-for-type-decl pattern:
+            #   isa(arg, fieldtype(self, i)) ? arg : convert(fieldtype(self, i), arg)
+            # The isa check is important because user code may define ambiguous
+            # convert methods (e.g. convert(::Any, v::T) = v) that prevent the
+            # optimizer from inlining convert(fieldtype(self, i), arg) when the
+            # field type is Any after specialization.
+            ft_expr = Expr(:call, GlobalRef(Core, :fieldtype), Core.Argument(1), i)
+            ft_ssa = Expr(:ssavalue, bidx)
+            cnvt_ssa = Expr(:ssavalue, bidx + 1)
+            isa_check = Expr(:call, GlobalRef(Core, :isa), Core.Argument(i + 1), ft_ssa)
+            convert_expr = Expr(:call, GlobalRef(Base, :convert), ft_ssa, Core.Argument(i + 1))
+            @inbounds body_args[bidx] = Expr(:(=), ft_ssa, ft_expr)
+            @inbounds body_args[bidx + 1] = Expr(:(=), cnvt_ssa, Expr(:if, isa_check,
+                                               Core.Argument(i + 1), convert_expr))
+            @inbounds new_args[i] = cnvt_ssa
+            bidx = bidx + 2
+        end
+        i = i + 1
+    end
+    body_args[nstmts] = Expr(:return, Expr(:new, Core.Argument(1), new_args...))
+    lambda = Expr(:lambda, argnames,
+        Expr(:block, functionloc, body_args...))
+    ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
+               lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+
+    # Build argdata: svec(svec(UnionAll...Type{dt}..., Any, Any, ...), svec(), functionloc)
+    inner_atypes_arr = Array{Any,1}(Core.undef, n + 1)
+    typedt = Core.apply_type(Type, dt)
+    i = nparams
+    while i !== 0
+        @inbounds typedt = UnionAll(tvars[i], typedt)
+        i = i - 1
+    end
+    @inbounds inner_atypes_arr[1] = typedt
+    i = 1
+    while i !== n + 1
+        @inbounds inner_atypes_arr[i + 1] = Any
+        i = i + 1
+    end
+    inner_atypes = Core.svec(inner_atypes_arr...)
+    inner_tvars = Core.svec()
+    argdata = Core.svec(inner_atypes, inner_tvars, functionloc)
+    ccall(:jl_method_def, Any, (Any, Ptr{Nothing}, Any, Any),
+          argdata, C_NULL, ci, mod)
+    return
+end
+
 """
     Missing
 
 A type with no fields whose singleton instance [`missing`](@ref) is used
 to represent missing values.
 
-See also: [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
+See also [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
 """
 struct Missing end
 
@@ -1161,7 +1516,7 @@ struct Missing end
 
 The singleton instance of type [`Missing`](@ref) representing a missing value.
 
-See also: [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
+See also [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
 """
 const missing = Missing()
 
@@ -1170,7 +1525,7 @@ const missing = Missing()
 
 Indicate whether `x` is [`missing`](@ref).
 
-See also: [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
+See also [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
 """
 ismissing(x) = x === missing
 
@@ -1231,7 +1586,7 @@ to obtain a definitive answer.
 
 See also [`iterate`](@ref), [`isempty`](@ref)
 """
-isdone(itr, state...) = missing
+isdone(_, _...) = missing
 
 """
     iterate(iter [, state])::Union{Nothing, Tuple{Any, Any}}
@@ -1266,7 +1621,10 @@ is newer than the world currently running.
 The `@world` macro is primarily used in the printing of bindings that are no longer
 available in the current world.
 
-## Example
+!!! compat "Julia 1.12"
+    This functionality requires at least Julia 1.12.
+
+# Examples
 ```julia-repl
 julia> struct Foo; a::Int; end
 Foo
@@ -1282,9 +1640,6 @@ Foo
 julia> fold
 @world(Foo, 26866)(1)
 ```
-
-!!! compat "Julia 1.12"
-    This functionality requires at least Julia 1.12.
 """
 macro world(sym, world)
     if world == :∞
@@ -1305,7 +1660,7 @@ end
 _resolve_in_world(world::Integer, gr::GlobalRef) =
     invoke_in_world(UInt(world), Core.getglobal, gr.mod, gr.name)
 
-# Special constprop heuristics for various binary opes
+# Special constprop heuristics for various binary ops
 typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC

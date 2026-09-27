@@ -10,6 +10,7 @@
 #include <stdio.h> // for printf
 
 #include "dtypes.h"
+#include "uv.h"
 
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
@@ -235,11 +236,9 @@ static size_t _write_grow(ios_t *s, const char *data, size_t n)
         if (s->bpos + n > s->maxsize) {
             /* TODO: here you might want to add a mechanism for limiting
                the growth of the stream. */
-            newsize = (size_t)(s->maxsize ? s->maxsize * 2 : 8);
-            while (s->bpos + n > newsize)
-                newsize *= 2;
-            if (_buf_realloc(s, newsize) == NULL) {
-                /* no more space; write as much as we can */
+            if ((uint64_t)s->bpos + (uint64_t)n > (uint64_t)SIZE_MAX) {
+                /* no buffer can hold what this write needs, because the size
+                   it needs is not representable; write as much as we can */
                 amt = (size_t)(s->maxsize - s->bpos);
                 if (amt > 0) {
                     memcpy(&s->buf[s->bpos], data, amt);
@@ -247,6 +246,28 @@ static size_t _write_grow(ios_t *s, const char *data, size_t n)
                 s->bpos += amt;
                 s->size = s->maxsize;
                 return amt;
+            }
+            size_t exact = (size_t)(s->bpos + n);
+            newsize = (size_t)(s->maxsize ? s->maxsize * 2 : 8);
+            while (exact > newsize && newsize != 0)
+                newsize *= 2;
+            if (newsize < exact)
+                newsize = exact; /* doubling wrapped; it would loop here forever */
+            /* Doubling buys headroom for later writes. Where it cannot be had,
+               back off halfway at a time rather than dropping to the exact size,
+               which would leave the next write to reallocate the whole buffer. */
+            while (_buf_realloc(s, newsize) == NULL) {
+                if (newsize == exact) {
+                    /* no more space; write as much as we can */
+                    amt = (size_t)(s->maxsize - s->bpos);
+                    if (amt > 0) {
+                        memcpy(&s->buf[s->bpos], data, amt);
+                    }
+                    s->bpos += amt;
+                    s->size = s->maxsize;
+                    return amt;
+                }
+                newsize = exact + (newsize - exact) / 2;
             }
         }
         s->size = s->bpos + n;
@@ -958,13 +979,19 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
 #if defined(_OS_WINDOWS_)
-    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
-    if (!wlen) goto open_file_err;
-    wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
-    if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen)) goto open_file_err;
-    set_io_wait_begin(1);
-    fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
-    set_io_wait_begin(0);
+    {
+        ssize_t wlen = uv_wtf8_length_as_utf16(fname);
+        if (wlen < 0) {
+            fd = -1;
+        }
+        else {
+            wchar_t *fname_w = (wchar_t*)alloca(wlen * sizeof(wchar_t));
+            uv_wtf8_to_utf16(fname, (uint16_t*)fname_w, wlen);
+            set_io_wait_begin(1);
+            fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
+            set_io_wait_begin(0);
+        }
+    }
 #else
     // The mode of the created file is (mode & ~umask), which resolves with
     // default umask to u=rw,g=r,o=r
@@ -988,34 +1015,14 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     return NULL;
 }
 
-// Portable ios analogue of mkstemp: modifies fname to replace
-// trailing XXXX's with unique ID and returns the file handle s
-// for writing and reading.
-ios_t *ios_mkstemp(ios_t *s, char *fname)
-{
-    int fd;
-    // would be better to use a libuv function once it exists (see libuv/libuv#322)
 #ifdef _OS_WINDOWS_
-    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
-    if (!wlen) goto open_file_err;
-    wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
-    if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen) ||
-        !_wmktemp(fname_w) ||
-        !WideCharToMultiByte(CP_UTF8, 0, fname_w, -1, fname, strlen(fname)+1,
-                             NULL, NULL))
-        goto open_file_err;
-    fd = _wopen(fname_w, O_CREAT|O_TRUNC|O_RDWR | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
-#else
-    fd = mkstemp(fname);
-#endif
-    ios_fd(s, fd, 1, 1);
-    if (fd == -1)
-        goto open_file_err;
-    return s;
-open_file_err:
-    s->fd = -1;
-    return NULL;
+const wchar_t *ios_utf8_to_wchar(const char *str) {
+    ssize_t wlen = uv_wtf8_length_as_utf16(str);
+    wchar_t *wstr = (wchar_t *)malloc_s(sizeof(wchar_t) * wlen);
+    uv_wtf8_to_utf16(str, wstr, wlen);
+    return wstr;
 }
+#endif // _OS_WINDOWS_
 
 ios_t *ios_mem(ios_t *s, size_t initsize)
 {
@@ -1061,9 +1068,20 @@ ios_t *ios_fd(ios_t *s, long fd, int isfile, int own)
 ios_t *ios_stdin = NULL;
 ios_t *ios_stdout = NULL;
 ios_t *ios_stderr = NULL;
+ios_t *ios_safe_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
+#ifdef _OS_WINDOWS_
+    // Set stdio writes to binary mode
+    fflush(stdin);
+    _setmode(STDIN_FILENO, _O_BINARY);
+    fflush(stdout);
+    _setmode(STDOUT_FILENO, _O_BINARY);
+    fflush(stderr);
+    _setmode(STDERR_FILENO, _O_BINARY);
+#endif
+
     ios_stdin = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 
@@ -1074,6 +1092,12 @@ void ios_init_stdstreams(void)
     ios_stderr = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
+
+    // this 'safe' variant must use `bm_none` to avoid memory allocation
+    // in an async-signal context
+    ios_safe_stderr = (ios_t*)malloc_s(sizeof(ios_t));
+    ios_fd(ios_safe_stderr, STDERR_FILENO, 0, 0);
+    ios_safe_stderr->bm = bm_none;
 }
 
 /* higher level interface */

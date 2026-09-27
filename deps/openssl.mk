@@ -89,13 +89,13 @@ $(eval $(call staged-install, \
 	OPENSSL_INSTALL,,,$(OPENSSL_POST_INSTALL)))
 
 clean-openssl:
-	-rm -f $(BUILDDIR)/-openssl-$(OPENSSL_VER)/build-configured $(BUILDDIR)/-openssl-$(OPENSSL_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/-openssl-$(OPENSSL_VER) clean
+	-rm -f $(BUILDDIR)/openssl-$(OPENSSL_VER)/build-configured $(BUILDDIR)/openssl-$(OPENSSL_VER)/build-compiled
+	-if [ -d $(BUILDDIR)/openssl-$(OPENSSL_VER) ]; then $(MAKE) -C $(BUILDDIR)/openssl-$(OPENSSL_VER) clean; fi
 
 distclean-openssl:
-	rm -rf $(SRCCACHE)/-openssl-$(OPENSSL_VER).tar.gz \
-		$(SRCCACHE)/-openssl-$(OPENSSL_VER) \
-		$(BUILDDIR)/-openssl-$(OPENSSL_VER)
+	rm -rf $(SRCCACHE)/openssl-$(OPENSSL_VER).tar.gz \
+		$(SRCCACHE)/openssl-$(OPENSSL_VER) \
+		$(BUILDDIR)/openssl-$(OPENSSL_VER)
 
 get-openssl: $(SRCCACHE)/openssl-$(OPENSSL_VER).tar.gz
 extract-openssl: $(SRCCACHE)/openssl-$(OPENSSL_VER)/source-extracted

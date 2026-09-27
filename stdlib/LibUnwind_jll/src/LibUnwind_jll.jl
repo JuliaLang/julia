@@ -21,11 +21,7 @@ artifact_dir::String = ""
 libunwind_path::String = ""
 const libunwind = LazyLibrary(
     BundledLazyLibraryPath("libunwind.so.8"),
-    dependencies = if Sys.isfreebsd()
-        LazyLibrary[libz]
-    else
-        LazyLibrary[libgcc_s, libz]
-    end
+    dependencies = LazyLibrary[libz]
 )
 
 function eager_mode()
@@ -36,6 +32,9 @@ function eager_mode()
     dlopen(libunwind)
 end
 is_available() = @static(Sys.islinux() || Sys.isfreebsd()) ? true : false
+
+# JLLWrappers path compatibility accessor
+get_libunwind_path() = libunwind_path
 
 function __init__()
     global libunwind_path = string(libunwind.path)

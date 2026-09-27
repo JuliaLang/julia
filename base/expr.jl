@@ -9,7 +9,11 @@ const is_expr = isexpr
 """
     gensym([tag])
 
-Generates a symbol which will not conflict with other variable names (in the same module).
+Generate a symbol unique among all calls to this function within the same process.
+If a string or symbol tag argument is specified, it is included in the generated name.
+
+Note that packages may be precompiled in separate processes, so names will not be unique
+between definition time and run time.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
@@ -19,10 +23,10 @@ gensym(ss::String...) = map(gensym, ss)
 gensym(s::Symbol) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, -1 % Csize_t)
 
 """
-    @gensym
+    @gensym var1 var2 ...
 
-Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into
-`x = gensym("x"); y = gensym("y")`.
+Generate symbols with [`gensym`](@ref) and assign them to the given variables.
+For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
 """
 macro gensym(names...)
     blk = Expr(:block)
@@ -174,11 +178,12 @@ function ==(x::DebugInfo, y::DebugInfo)
 end
 
 """
-    macroexpand(m::Module, x; recursive=true)
+    macroexpand(m::Module, x; recursive=true, legacyscope=true)
 
 Take the expression `x` and return an equivalent expression with all macros removed (expanded)
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
+The `legacyscope` keyword controls whether legacy macroscope expansion is performed.
 This is demonstrated in the example below:
 ```jldoctest; filter = r"#= .*:6 =#"
 julia> module M
@@ -197,13 +202,35 @@ julia> macroexpand(M, :(@m2()), recursive=true)
 julia> macroexpand(M, :(@m2()), recursive=false)
 :(#= REPL[1]:6 =# @m1)
 ```
+
+!!! compat "Julia 1.13"
+    The `legacyscope` keyword argument requires at least Julia 1.13.
 """
-function macroexpand(m::Module, @nospecialize(x); recursive=true)
-    if recursive
-        ccall(:jl_macroexpand, Any, (Any, Any), x, m)
-    else
-        ccall(:jl_macroexpand1, Any, (Any, Any), x, m)
-    end
+function macroexpand(m::Module, @nospecialize(x); recursive=true, legacyscope=true)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
+end
+
+"""
+    macroexpand!(m::Module, x; recursive=true, legacyscope=false)
+
+Take the expression `x` and return an equivalent expression with all macros removed (expanded)
+for executing in module `m`, modifying `x` in place without copying.
+The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
+The `legacyscope` keyword controls whether legacy macroscope expansion is performed.
+
+This function performs macro expansion without the initial copy step, making it more efficient
+when the original expression is no longer needed. By default, macroscope expansion is disabled
+for in-place expansion as it can be called separately if needed.
+
+!!! warning
+    This function modifies the input expression `x` in place. Use `macroexpand` if you need
+    to preserve the original expression.
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+"""
+function macroexpand!(m::Module, @nospecialize(x); recursive=true, legacyscope=false)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, true, legacyscope)
 end
 
 """
@@ -250,10 +277,10 @@ With `macroexpand` the expression expands in the module given as the first argum
     The two-argument form requires at least Julia 1.11.
 """
 macro macroexpand(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
+    return :(macroexpand($__module__, $(QuoteNode(code)); recursive=true, legacyscope=true))
 end
 macro macroexpand(mod, code)
-    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=true))
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)); recursive=true, legacyscope=true))
 end
 
 """
@@ -262,10 +289,10 @@ end
 Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+    return :(macroexpand($__module__, $(QuoteNode(code)); recursive=false, legacyscope=true))
 end
 macro macroexpand1(mod, code)
-    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=false))
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)); recursive=false, legacyscope=true))
 end
 
 ## misc syntax ##
@@ -352,7 +379,7 @@ Give a hint to the compiler that calls within `block` are worth inlining.
     ```
 
 !!! warning
-    Although a callsite annotation will try to force inlining in regardless of the cost model,
+    Although a callsite annotation will try to force inlining regardless of the cost model,
     there are still chances it can't succeed in it. Especially, recursive calls can not be
     inlined even if they are annotated as `@inline`d.
 
@@ -598,6 +625,7 @@ The following `setting`s are supported.
 - `:noub`
 - `:noub_if_noinbounds`
 - `:nortcall`
+- `:reset_safe`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -676,7 +704,7 @@ were not executed.
 ---
 ## `:nothrow`
 
-The `:nothrow` settings asserts that this method does not throw an exception
+The `:nothrow` setting asserts that this method does not throw an exception
 (i.e. will either always return a value or never return).
 
 !!! note
@@ -694,7 +722,7 @@ The `:nothrow` settings asserts that this method does not throw an exception
 ---
 ## `:terminates_globally`
 
-The `:terminates_globally` settings asserts that this method will eventually terminate
+The `:terminates_globally` setting asserts that this method will eventually terminate
 (either normally or abnormally), i.e. does not loop indefinitely.
 
 !!! note
@@ -840,6 +868,25 @@ the following other `setting`s:
     recommended over the use of `:total`.
 
 ---
+## `:reset_safe`
+
+The `:reset_safe` asserts that it is safe to abandon execution of the annotated
+function at any point. For functions so inferred, the compiler may extend the
+reset region of a cancellation point through the `:reset_safe` regions. It thus
+in particular implies `:effect_free`, but is a stronger assertion. For example,
+an `:effect_free` function could in principle take a read-only lock (under appropriate
+assumptions on how this is implemented and annotated), but a `:reset_safe` function
+may not, because it could be abandoned inside the critical section.
+
+The same also applies to many implicitly inserted intrinsics and thus codegen for
+a `:reset_safe` function requires cooperation by the code generator to uphold the
+invariant throughout the entire body of the generated code.
+
+As such, annotating a function as `:reset_safe` is currently ignored as an effect
+override and will only apply to [`@ccall`](@ref) sites. See the ccall documentation
+for further details on this interaction.
+
+---
 ## Negated effects
 
 Effect names may be prefixed by `!` to indicate that the effect should be removed
@@ -848,13 +895,31 @@ the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
     lastex = args[end]
-    override = compute_assumed_settings(args[begin:end-1])
+    settings = args[begin:end-1]
+    if isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
+        # `:reset_safe` is a foreigncall-only setting (it marks the call for
+        # the cancellation lowering, not the enclosing method): peel it off
+        # and carry it in a dedicated bit above the standard effects
+        # overrides in the `@ccall_effects` word.
+        reset_safe = false
+        rest = ()
+        for st in settings
+            if st === QuoteNode(:reset_safe)
+                reset_safe = true
+            else
+                rest = (rest..., st)
+            end
+        end
+        override = compute_assumed_settings(rest)
+        word = encode_effects_override(override)
+        reset_safe && (word |= CCALL_EFFECT_RESET_SAFE)
+        lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
+        insert!(lastex.args, 3, word)
+        return esc(lastex)
+    end
+    override = compute_assumed_settings(settings)
     if is_function_def(unwrap_macrocalls(lastex))
         return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
-    elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
-        lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(lastex.args, 3, encode_effects_override(override))
-        return esc(lastex)
     end
     override′ = compute_assumed_setting(override, lastex)
     if override′ !== nothing
@@ -923,6 +988,9 @@ function EffectsOverride(
 end
 
 const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
+
+# `:reset_safe` is ccall_only at the moment.
+const CCALL_EFFECT_RESET_SAFE = 0x0800
 
 function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)
@@ -1431,8 +1499,14 @@ function make_atomic(order, ex)
         if length(ex.args) == 2
             if ex.head === :(+=)
                 op = :+
+            elseif ex.head === Symbol("+%=")
+                op = Symbol("+%")
             elseif ex.head === :(-=)
                 op = :-
+            elseif ex.head === Symbol("-%=")
+                op = Symbol("-%")
+            elseif ex.head === Symbol("*%=")
+                op = Symbol("*%")
             elseif ex.head === :(|=)
                 op = :|
             elseif ex.head === :(&=)
@@ -1759,6 +1833,7 @@ function isa_ast_node(@nospecialize x)
            x isa Argument ||
            x isa QuoteNode ||
            x isa GlobalRef ||
+           x isa Core.BindingPartition ||
            x isa Symbol ||
            x isa PiNode ||
            x isa PhiNode ||
@@ -1780,9 +1855,9 @@ types of AST object inside, and even may sometimes evaluate and interpolate any
 quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
 
 # Implementation of generated functions
-function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
+function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::LineNumberNode)
     ci = ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
-               ex, defmod, "none", 0, typemax(Csize_t), 0)[1]
+               ex, defmod, loc.file, loc.line, typemax(Csize_t), 0)[1]
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
             msg = ci.args[1]
@@ -1811,15 +1886,18 @@ function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecial
     body = g.gen(args...)
     file = source.file
     file isa Symbol || (file = :none)
+    loc = LineNumberNode(Int(source.line), source.file)
     lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
                Expr(:var"scope-block",
                     Expr(:block,
-                         LineNumberNode(Int(source.line), source.file),
+                         loc,
                          Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, body),
+                         Expr(:return, Expr(:toplevel_pure, body)),
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
-    return generated_body_to_codeinfo(spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
+    return generated_body_to_codeinfo(
+        spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
         source.module,
-        source.isva)
+        source.isva,
+        loc)
 end

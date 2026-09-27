@@ -106,7 +106,7 @@ test_send(9)
 
 
 # Utility function for test_bidirectional() that simultaneously transmits and
-# receives 10^exp bits of data over s
+# receives 10^exp bytes of data over s
 @everywhere function xfer(s, exp)
     @assert exp > 4
     xfer_size = 10^exp

@@ -304,12 +304,23 @@ end
 
 ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
+function parser_for_module(mod::Union{Module, Nothing})
+    if mod isa Module && invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
+        invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
+    elseif isdefined(Base, :VersionedParse)
+        Base.VersionedParse(VERSION)
+    else
+        Base.fl_parse_bootstrap
+    end
+end
+
 function _parse_string(text::AbstractString, filename::AbstractString,
-                       lineno::Integer, index::Integer, options)
+                       lineno::Integer, index::Integer, options,
+                       _parse=parser_for_module(nothing))
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset::Int = Core._parse(text, filename, lineno, index-1, options)
+    ex, offset::Int = _parse(text, filename, lineno, index-1, options)
     ex, offset+1
 end
 
@@ -346,8 +357,8 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 ```
 """
 function parse(str::AbstractString, pos::Integer;
-               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true)
-    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom)
+               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom, _parse)
     if raise && isexpr(ex, :error)
         err = ex.args[1]
         if err isa String
@@ -386,8 +397,8 @@ julia> Meta.parse("x = ")
 ```
 """
 function parse(str::AbstractString;
-               filename="none", raise::Bool=true, depwarn::Bool=true)
-    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn)
+               filename="none", raise::Bool=true, depwarn::Bool=true, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn, _parse)
     if isexpr(ex, :error)
         return ex
     end
@@ -398,12 +409,16 @@ function parse(str::AbstractString;
     return ex
 end
 
-function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1)
-    return _parse_string(text, String(filename), lineno, pos, :atom)
+function parseatom(text::AbstractString, pos::Integer; filename="none",
+                   lineno=1, mod::Union{Nothing, Module}=nothing,
+                   _parse = parser_for_module(mod))
+    return _parse_string(text, String(filename), lineno, pos, :atom, _parse)
 end
 
-function parseall(text::AbstractString; filename="none", lineno=1)
-    ex,_ = _parse_string(text, String(filename), lineno, 1, :all)
+function parseall(text::AbstractString; filename="none", lineno=1,
+                  mod::Union{Nothing, Module}=nothing,
+                  _parse = parser_for_module(mod))
+    ex,_ = _parse_string(text, String(filename), lineno, 1, :all, _parse)
     return ex
 end
 
@@ -521,7 +536,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             end
             return x
         elseif head === :cfunction
-            @assert !isa(type_signature, UnionAll) || !isempty(spvals)
+            @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
             if !isa(x.args[2], QuoteNode) # very common no-op
                 x.args[2] = _partially_inline!(x.args[2], slot_replacements, type_signature,
                                                static_param_values, slot_offset,
@@ -539,7 +554,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 4
                     @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt16, Bool}})
+                    @assert isa((x.args[5]::QuoteNode).value,
+                                Union{Symbol, Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool},
+                                      Tuple{Symbol, UInt16, Bool, Bool, Bool}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,
@@ -636,8 +653,11 @@ This is the inverse operation of [`unescape`](@ref) - if the original expression
 was escaped, the unescaped expression is wrapped in `:escape` again.
 """
 function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
-    if isexpr(original_expr, :escape) || isexpr(original_expr, :var"hygienic-scope")
+    if isexpr(original_expr, :escape)
         return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+    elseif isexpr(original_expr, :var"hygienic-scope")
+        next, ctx... = original_expr.args
+        return reescape(Expr(:var"hygienic-scope", unescaped_expr, ctx...), next)
     else
         return unescaped_expr
     end

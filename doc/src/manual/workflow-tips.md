@@ -59,7 +59,7 @@ your development experience with
 It is common to configure Revise to start whenever julia is started,
 as per the instructions in the [Revise documentation](https://timholy.github.io/Revise.jl/stable/).
 Once configured, Revise will track changes to files in any loaded modules,
-and to any files loaded in to the REPL with `includet` (but not with plain `include`);
+and to any files loaded into the REPL with `includet` (but not with plain `include`);
 you can then edit the files and the changes take effect without restarting your julia session.
 A standard workflow is similar to the REPL-based workflow above, with
 the following modifications:

@@ -118,15 +118,15 @@ wc265_41332a = Task(tls_world_age)
     global wc265_41332d = Task(tls_world_age)
     nothing
 end)()
-@test wc265 + 12 == get_world_counter() == tls_world_age()
+@test wc265 + 11 == get_world_counter() == tls_world_age()
 schedule(wc265_41332a)
 schedule(wc265_41332b)
 schedule(wc265_41332c)
 schedule(wc265_41332d)
 @test wc265 + 1 == fetch(wc265_41332a)
-@test wc265 + 10 == fetch(wc265_41332b)
-@test wc265 + 12 == fetch(wc265_41332c)
-@test wc265 + 10 == fetch(wc265_41332d)
+@test wc265 + 9 == fetch(wc265_41332b)
+@test wc265 + 11 == fetch(wc265_41332c)
+@test wc265 + 9 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
@@ -229,12 +229,24 @@ f38435(::Int, ::Int) = 3.0
 function method_instance(f, types=Base.default_tt(f))
     m = which(f, types)
     inst = nothing
-    tt = Base.signature_type(f, types)
+    tt0 = Base.signature_type(f, types)
+    # runtime-dispatch specializations key type-valued slots by egality
+    # (see `jl_compilation_sig`); inference-only (`==`) ones keep `Type{X}`
+    u = Base.unwrap_unionall(tt0)::DataType
+    ps = Any[isa(p, Core.TypeEq) && !Base.has_free_typevars(Base.type_parameter(p)) ?
+             Core.TypeEgal{Base.type_parameter(p)} : p for p in u.parameters]
+    tt1 = Base.rewrap_unionall(Tuple{ps...}, tt0)
     for mi in Base.specializations(m)
-        if mi.specTypes <: tt && tt <: mi.specTypes
+        if (mi.specTypes <: tt1 && tt1 <: mi.specTypes) ||
+           (mi.specTypes <: tt0 && tt0 <: mi.specTypes)
             inst = mi
             break
         end
+    end
+    if inst === nothing
+        # create the (egality-keyed) dispatch specialization if nothing has needed it yet
+        match = Base._which(tt1; raise=false)
+        match === nothing || (inst = Base.specialize_method(match))
     end
     return inst
 end
@@ -527,6 +539,24 @@ Base.delete_method(fshadow_m2)
 
 @test_throws "Method of fshadow already disabled" Base.delete_method(fshadow_m2)
 
+# A caller compiled with an ambiguous callee instead compiles a `throw(::MethodError)`.
+# Deleting one of the ambiguous methods must invalidate the caller (#63224).
+module AmbiguousDeletion
+f(::Nothing, x) = :nothing_method
+f(x, ::Int) = :int_method
+g(a, b) = f(a, b)
+end
+@test_throws "is ambiguous" AmbiguousDeletion.g(nothing, 1)
+wc_ambiguous = get_world_counter()
+Base.delete_method(which(AmbiguousDeletion.f, (Any, Int)))
+@test AmbiguousDeletion.f(nothing, 1) === :nothing_method
+@test AmbiguousDeletion.g(nothing, 1) === :nothing_method
+@test Base.invokelatest(AmbiguousDeletion.g, nothing, 1) === :nothing_method
+# The deletion is not retroactive: earlier worlds retain the ambiguity.
+# `showerror` looks up candidates in the latest world, so test the exception rather than its message.
+@test_throws MethodError Base.invoke_in_world(wc_ambiguous, AmbiguousDeletion.f, nothing, 1)
+@test_throws MethodError Base.invoke_in_world(wc_ambiguous, AmbiguousDeletion.g, nothing, 1)
+
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure
 # that the specialization survives revalidation.
@@ -598,3 +628,73 @@ function f()
 end
 end
 @test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()
+
+# issue #59429 - world age semantics with toplevel in macros
+module M59429
+using Test
+macro new_enum(T::Symbol, args...)
+   esc(quote
+      @enum $T $(args...)
+      function Base.hash(x::$T, h::UInt)
+        rand(UInt)
+      end
+    end)
+end
+
+@new_enum Foo59429 bar59429 baz59429
+
+# Test that the hash function works without world age issues
+@test hash(bar59429, UInt(0)) isa UInt
+end
+
+# jl_eval_thunk should update the world after resolving definition effects but
+# before "actually running" the thunk as some such code - such as that
+# computing the return type of a ccall - may have arbitrary side effects. (Note
+# it's not clear there's any valid use for such side effects in clean code but
+# the runtime should still handle it gracefully.)
+rettype_with_side_effect() = eval(:(rettype_side_effect = "blah"; Cint))
+let
+    @test rettype_side_effect == "blah"
+    ccall(:strlen, rettype_with_side_effect(), (Cstring,), "xx")
+end
+
+# issue #62022 - missing invalidation with CI equivalence swaps during expansive recursion
+# When inference hits recursion limits and reuses cached CIs, the swapped CIs must have
+# proper edges/backedges so that subsequent method additions correctly invalidate them.
+struct W62022{T}; x::T; end
+@noinline leaf62022() = true
+# grow the type up to a fixed limit (inference's recursion limits will trigger first)
+@noinline foo62022(w::W62022)::Bool = foo62022(W62022(w))
+@noinline foo62022(::W62022{W62022{W62022{W62022{W62022{W62022{T}}}}}}) where {T} = leaf62022()
+@test foo62022(W62022(1)) === true # trigger compilation
+# add a new method that bottoms out the recursion earlier, but after the limit
+@noinline foo62022(::W62022{W62022{W62022{W62022{Int}}}}) = false
+@test foo62022(W62022(1)) === false # test for invalidation
+@test foo62022(W62022(W62022(W62022(1)))) === false
+
+# issue #61667 - rebinding a name in Main must not invalidate the show machinery, which
+# concrete-evals binding queries against Main (via `isvisible`)
+struct ShowInval61667; x::Int; end
+fshow61667(v) = string(v)
+@test fshow61667([ShowInval61667(1)]) isa String
+let ci = method_instance(fshow61667, (Vector{ShowInval61667},)).cache
+    @test ci.max_world == typemax(UInt)
+    Core.eval(Main, :(struct ShowInval61667 end))
+    @test ci.max_world == typemax(UInt)
+end
+
+# issue #61667 - new array types must not invalidate abstractly-typed array iteration
+struct IterInval61667{T} <: AbstractVector{T}
+    v::Vector{T}
+end
+Base.size(A::IterInval61667) = size(A.v)
+Base.getindex(A::IterInval61667, i::Int) = A.v[i]
+absvec61667() = Base.inferencebarrier(Module[])::AbstractVector{Module}
+iter61667() = invoke(iterate, Tuple{AbstractArray}, absvec61667())
+@test precompile(iter61667, ())
+let ci = method_instance(iter61667, ()).cache
+    @test ci.max_world == typemax(UInt)
+    Base.eachindex(::IndexLinear, A::IterInval61667) = eachindex(A.v)
+    Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
+    @test ci.max_world == typemax(UInt)
+end

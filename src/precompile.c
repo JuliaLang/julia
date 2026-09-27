@@ -21,7 +21,7 @@ JL_DLLEXPORT int jl_generating_output(void)
     return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji || jl_options.outputasm;
 }
 
-void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
+static void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) JL_CANSAFEPOINT {
     // Write the source-text for the dependent files
     if (udeps) {
         // Go back and update the source-text position to point to the current position
@@ -108,12 +108,12 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     jl_gc_enable_finalizers(ct, 0); // now disable finalizers, as they could schedule more work or make other unexpected changes to reachability
     jl_task_wait_empty(); // then make sure we are the only thread alive that could be running user code past here
 
-    if (!jl_module_init_order) {
+    jl_array_t *worklist = jl_module_init_order;
+    if (!worklist) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
         return;
     }
 
-    jl_array_t *worklist = jl_module_init_order;
     jl_array_t *udeps = NULL;
     JL_GC_PUSH2(&worklist, &udeps);
     jl_module_init_order = jl_alloc_vec_any(0);
@@ -123,19 +123,6 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
-            int setting = jl_get_module_compile((jl_module_t*)m);
-            if ((setting != JL_OPTIONS_COMPILE_OFF && (jl_options.trim ||
-                (setting != JL_OPTIONS_COMPILE_MIN)))) {
-                // TODO: this would be better handled if moved entirely to jl_precompile
-                // since it's a slightly duplication of effort
-                jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
-                JL_GC_PUSH1(&tt);
-                tt = jl_apply_tuple_type_v(&tt, 1);
-                jl_compile_hint((jl_tupletype_t*)tt);
-                if (jl_options.trim)
-                    jl_add_entrypoint((jl_tupletype_t*)tt);
-                JL_GC_POP();
-            }
         }
     }
 
@@ -146,40 +133,40 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     const char *outputji = jl_options.outputji;
 
     bool_t emit_split = outputji && emit_native;
+    int comp = jl_options.compress_sysimage;
 
     ios_t *s = NULL;
-    ios_t *z = NULL;
     int64_t srctextpos = 0 ;
-    jl_create_system_image(emit_native ? &native_code : NULL,
-                           jl_options.incremental ? worklist : NULL,
-                           emit_split, &s, &z, &udeps, &srctextpos);
-
-    if (!emit_split)
-        z = s;
+    uint32_t checksum =
+        jl_create_system_image(emit_native ? &native_code : NULL,
+                               jl_options.incremental ? worklist : NULL, emit_split, comp,
+                               &s, &udeps, &srctextpos, jl_module_init_order);
 
     ios_t f;
 
     if (outputji) {
         if (ios_file(&f, outputji, 1, 1, 1, 1) == NULL)
             jl_errorf("cannot open system image file \"%s\" for writing", outputji);
+        // It would be a waste to allocate a huge buffer only to write it all
+        // immediately to the file.
+        ios_bufmode(&f, bm_none);
         ios_write(&f, (const char *)s->buf, (size_t)s->size);
         ios_close(s);
         free(s);
+        ios_bufmode(&f, bm_block);
     }
 
-    // jl_dump_native writes the clone_targets into `s`
-    // We need to postpone the srctext writing after that.
     if (native_code) {
-        ios_t *targets = outputji ? &f : NULL;
-        // jl_dump_native will close and free z when appropriate
+        const char *unpack_func =
+            emit_split ? (comp ? "jl_image_unpack_split_zstd" : "jl_image_unpack_split") :
+                         (comp ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp");
+
+        // jl_dump_native will close and free s when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly
-        jl_dump_native(native_code,
-                        jl_options.outputbc,
-                        jl_options.outputunoptbc,
-                        jl_options.outputo,
-                        jl_options.outputasm,
-                        z, targets, NULL);
+        jl_dump_native(native_code, jl_options.outputbc, jl_options.outputunoptbc,
+                       jl_options.outputo, jl_options.outputasm, outputji ? NULL : s,
+                       checksum, unpack_func, NULL);
         jl_postoutput_hook();
     }
 

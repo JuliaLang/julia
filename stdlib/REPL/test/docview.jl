@@ -77,6 +77,21 @@ end
     @test exact_match_export ≈ 1.0
 end
 
+@testset "string distance skips a shared prefix" begin
+    distance(a, b) = REPL.string_distance(a, length(a), b, length(b))
+
+    @test distance("kitten", "sitting") == 3
+    @test distance("abc", "acb") == 1
+
+    # a prefix shared by both strings contributes nothing, so skipping it must not
+    # change the distance
+    for (a, b) in (("kitten", "sitting"), ("abc", "acb"), ("αkδψm", "αkδm"), ("", "abc")),
+        prefix in ("x", "prefix_", "αβ")
+
+        @test distance(prefix * a, prefix * b) == distance(a, b)
+    end
+end
+
 @testset "Unicode doc lookup (#41589)" begin
     @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
 end
@@ -109,6 +124,24 @@ end
 
     # Shouldn't error if the struct doesn't have any field documentations at all.
     @test endswith(get_help_standard("Int.not_a_field"), "`$Int` has no fields.\n")
+end
+
+@testset "Parametric struct field help (#59524)" begin
+    "NonParametricStruct docstring"
+    struct NonParametricStruct
+        "field_x docstring"
+        field_x::Float64
+    end
+
+    "ParametricStruct docstring"
+    struct ParametricStruct{T<:Real}
+        "field_y docstring"
+        field_y::T
+    end
+
+    @test occursin("field_x docstring", get_help_standard("NonParametricStruct.field_x"))
+    @test occursin("field_y docstring", get_help_standard("ParametricStruct.field_y"))
+    @test endswith(get_help_standard("ParametricStruct.not_a_field"), "ParametricStruct` has field `field_y`.\n")
 end
 
 module InternalWarningsTests
@@ -157,6 +190,75 @@ end
 
 # Issue #51344, don't print "internal binding" warning for non-existent bindings.
 @test string(eval(REPL.helpmode("Base.no_such_symbol"))) == "No documentation found.\n\nBinding `Base.no_such_symbol` does not exist.\n"
+
+module AliasUsingTests
+    using Base: sum as sun
+end
+@testset "alias in using" begin
+    docstr = string(eval(REPL.helpmode(IOBuffer(), "sun", AliasUsingTests)))
+    @test contains(docstr, "sum")
+    @test !contains(docstr, "No documentation found.")
+end
+
+# Regression: by-name re-exports without `as`-rename must keep normalising
+# the binding through the full import chain.
+module ChainedReexportInner
+    """
+        target
+
+    chained re-export docstring
+    """
+    const target = 42
+end
+module ChainedReexportMid
+    import ..ChainedReexportInner: target
+end
+module ChainedReexportOuter
+    import ..ChainedReexportMid: target
+end
+@testset "chained by-name re-export resolves docstring" begin
+    docstr = string(eval(REPL.helpmode(IOBuffer(), "target", ChainedReexportOuter)))
+    @test contains(docstr, "chained re-export docstring")
+    @test !contains(docstr, "No documentation found")
+    # All three modules in the chain must produce the same canonical Binding.
+    inner_b = Base.Docs.Binding(ChainedReexportInner, :target)
+    outer_b = Base.Docs.Binding(ChainedReexportOuter, :target)
+    @test inner_b.mod === outer_b.mod
+    @test inner_b.var === outer_b.var
+end
+
+# Regression: `as`-rename composed with a plain re-export, in either order.
+module RenameOrigin
+    """
+        renamed_origin
+
+    renamed_origin docstring
+    """
+    renamed_origin() = 1
+end
+module RenameThenReexportMid
+    using ..RenameOrigin: renamed_origin as renamed_alias
+end
+module RenameThenReexportOuter
+    using ..RenameThenReexportMid: renamed_alias
+end
+module ReexportThenRenameMid
+    using ..RenameOrigin: renamed_origin
+end
+module ReexportThenRenameOuter
+    using ..ReexportThenRenameMid: renamed_origin as renamed_alias
+end
+@testset "chained renamed re-exports resolve docstring" begin
+    origin_b = Base.Docs.Binding(RenameOrigin, :renamed_origin)
+    for outr in (RenameThenReexportOuter, ReexportThenRenameOuter)
+        b = Base.Docs.Binding(outr, :renamed_alias)
+        @test b.mod === origin_b.mod
+        @test b.var === origin_b.var
+        docstr = string(eval(REPL.helpmode(IOBuffer(), "renamed_alias", outr)))
+        @test contains(docstr, "renamed_origin docstring")
+        @test !contains(docstr, "No documentation found")
+    end
+end
 
 module TestSuggestPublic
     export dingo

@@ -7,6 +7,40 @@ todouble(sign, exp, mant) = Core.bitcast(Float64, (UInt64(sign) << 63) | (UInt64
 
 @testset "Ryu" begin
 
+# Ryu wrapper buffers must account for requested precision without size overflow.
+@testset "precision buffer sizing" begin
+    @test Ryu.writeshortest(1.0, false, false, true, 400) == "1." * repeat("0", 399)
+    @test Ryu.writeshortest(1.0, false, false, true, UInt(0)) ==
+        Ryu.writeshortest(1.0, false, false, true, 0)
+    @test Ryu.writefixed(1.25, UInt(2)) == "1.25"
+    @test Ryu.writeexp(1.25, big(2)) == "1.25e+00"
+
+    overflow_precision = typemax(Int)
+    @test_throws OverflowError Ryu.writeshortest(1.0, false, false, true, overflow_precision)
+    @test_throws OverflowError Ryu.writefixed(0.0, overflow_precision)
+    @test_throws OverflowError Ryu.writeexp(0.0, overflow_precision)
+
+    @test_throws ArgumentError Ryu.writeshortest(1.0, false, false, true, -2)
+    @test_throws ArgumentError Ryu.writefixed(floatmax(Float64), -1)
+    @test_throws ArgumentError Ryu.writeexp(floatmax(Float64), -1)
+
+    buf = fill(UInt8(0), Ryu.neededdigits(Float64))
+    @test_throws InexactError Ryu.writeshortest(buf, 1, 1.0, false, false, true, typemax(UInt))
+    @test_throws MethodError Ryu.writefixed(buf, 1, 1.0)
+    @test_throws MethodError Ryu.writeexp(buf, 1, 1.0)
+    @test_throws ArgumentError Ryu.writefixed(buf, 1, 1.0, -1)
+    @test_throws ArgumentError Ryu.writeexp(buf, 1, 1.0, -1)
+
+    for exactbuf in (zeros(UInt8, 4), Memory{UInt8}(undef, 4))
+        @test Ryu.writeshortest(exactbuf, 1, 1.25) == 5
+        @test String(Vector(exactbuf)) == "1.25"
+    end
+    canarybuf = fill(0xa5, 5)
+    canarybuf[5] = 0x5a
+    @test Ryu.writeshortest(canarybuf, 1, 1.25) == 5
+    @test canarybuf[5] == 0x5a
+end
+
 @testset "Float64" begin
 
 @testset "Basic" begin
@@ -80,7 +114,7 @@ end
     @test "2.305843009213694e40" == Ryu.writeshortest(Core.bitcast(Float64, 0x4850F0CF064DD592))
 end
 
-@testset "pow5 overflow (#47464)" begin
+@testset "pow5 overflow (#46764/#47511)" begin
     @test "4.6458339e+63" == Ryu.writeexp(4.645833859177319e63, 7)
     @test "4.190673780e+40" == Ryu.writeexp(4.190673779576499e40, 9)
 end
@@ -150,11 +184,13 @@ end
     # 64-bit opt-size=0:  52 <= dist <= 52
     # 64-bit opt-size=1:  52 <= dist <= 59
     @test "2.900835519859558e-216" == Ryu.writeshortest(todouble(false, 307, 0))
+    @test "-2.900835519859558e-216" == Ryu.writeshortest(todouble(true, 307, 0))
     # 32-bit opt-size=0:  51 <= dist <= 51
     # 32-bit opt-size=1:  51 <= dist <= 59
     # 64-bit opt-size=0:  52 <= dist <= 52
     # 64-bit opt-size=1:  52 <= dist <= 59
     @test "5.801671039719115e-216" == Ryu.writeshortest(todouble(false, 306, maxMantissa))
+    @test "-5.801671039719115e-216" == Ryu.writeshortest(todouble(true, 306, maxMantissa))
 
     # https:#github.com/ulfjack/ryu/commit/19e44d16d80236f5de25800f56d82606d1be00b9#commitcomment-30146483
     # 32-bit opt-size=0:  49 <= dist <= 49
@@ -162,6 +198,7 @@ end
     # 64-bit opt-size=0:  50 <= dist <= 50
     # 64-bit opt-size=1:  44 <= dist <= 50
     @test "3.196104012172126e-27" == Ryu.writeshortest(todouble(false, 934, 0x000FA7161A4D6E0C))
+    @test "-3.196104012172126e-27" == Ryu.writeshortest(todouble(true, 934, 0x000FA7161A4D6E0C))
 end
 
 @testset "SmallIntegers" begin
@@ -343,6 +380,7 @@ end
     @test "1.00014165e-36" == Ryu.writeshortest(1.00014165f-36)
     @test "200.0" == Ryu.writeshortest(200f0)
     @test "3.3554432e7" == Ryu.writeshortest(3.3554432f7)
+    @test "-1.00000075e-36" == Ryu.writeshortest(-1.00000075f-36) #longest Float32
 end
 
 @testset "LooksLikePow5" begin
@@ -418,6 +456,7 @@ end
 #     return fails / (fails + success)
 # end
 
+@test "-0.00010014" == Ryu.writeshortest(Float16(-0.00010014)) #longest Float16
 end # Float16
 
 @testset "writeshortest(::AbstractVector, pos, ...)" begin

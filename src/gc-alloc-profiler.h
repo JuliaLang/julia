@@ -15,7 +15,7 @@ extern "C" {
 // ---------------------------------------------------------------------
 
 // Forward-declaration to avoid dependency in header file.
-struct jl_raw_alloc_t;  // Defined in gc-alloc-profiler.cpp
+struct jl_raw_alloc_t;  // Defined in gc-alloc-profiler.c
 
 typedef struct {
     struct jl_raw_alloc_t *allocs;
@@ -25,7 +25,13 @@ typedef struct {
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate);
 JL_DLLEXPORT jl_profile_allocs_raw_results_t jl_fetch_alloc_profile(void);
 JL_DLLEXPORT void jl_stop_alloc_profile(void);
+JL_DLLEXPORT int jl_alloc_profile_is_running(void);
 JL_DLLEXPORT void jl_free_alloc_profile(void);
+
+// Report every recorded type pointer to `f`, for GC root marking, so that the
+// types referenced by recorded allocations stay valid until the profile is freed.
+typedef void (*jl_alloc_profile_root_cb_t)(jl_value_t*, void*) JL_NOTSAFEPOINT;
+void jl_gc_foreach_alloc_profile_root(jl_alloc_profile_root_cb_t f, void *env) JL_NOTSAFEPOINT;
 
 // ---------------------------------------------------------------------
 // Functions to call from GC when alloc profiling is enabled
@@ -33,13 +39,15 @@ JL_DLLEXPORT void jl_free_alloc_profile(void);
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *typ) JL_NOTSAFEPOINT;
 
-extern int g_alloc_profile_enabled;
+extern _Atomic(int) g_alloc_profile_enabled;
 
 // This should only be used from _deprecated_ code paths. We shouldn't see UNKNOWN anymore.
 #define jl_gc_unknown_type_tag ((jl_datatype_t*)0xdeadaa03)
 
 static inline void maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *typ) JL_NOTSAFEPOINT {
-    if (__unlikely(g_alloc_profile_enabled)) {
+    // relaxed: the slow path re-checks the flag with the ordering needed to
+    // synchronize with `jl_stop_alloc_profile`
+    if (__unlikely(jl_atomic_load_relaxed(&g_alloc_profile_enabled))) {
         _maybe_record_alloc_to_profile(val, size, typ);
     }
 }

@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using .Compiler: has_typevar
-using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
-            is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier,
-            is_unary_and_binary_operator
+using .Meta: _isoperator, is_id_start_char, is_unary_and_binary_operator,
+    is_valid_identifier
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
@@ -176,6 +174,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     isempty(t) && return
     print(io, ":")
     show_circular(io, t) && return
+    keywidth = 0
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -188,7 +187,6 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         hascolor = get(recur_io, :color, false)
         ks = Vector{String}(undef, min(rows, length(t)))
         vs = Vector{String}(undef, min(rows, length(t)))
-        keywidth = 0
         valwidth = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
@@ -295,6 +293,25 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     end
 end
 
+# Compact summary: the default field-recursive show would descend the
+# intrusive child list (unbounded, possibly very deep) via `child_head`.
+function show(io::IO, src::Core.CancellationTokenSource)
+    print(io, "CancellationTokenSource(")
+    sev = cancel_severity(src)
+    if sev === nothing
+        print(io, "active")
+    else
+        r = sev.request
+        print(io, r == 0x1 ? "cancelled" :
+                  r == 0x3 ? "cancelled, abandon external" :
+                  r == 0x4 ? "cancelled, abandon all" :
+                  "cancelled, severity $(repr(r))")
+    end
+    np = Int(src.nparents)
+    np > 0 && print(io, ", ", np, np == 1 ? " parent" : " parents")
+    print(io, ")")
+end
+
 
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 
@@ -385,6 +402,11 @@ The following properties are in common use:
  - `:color`: Boolean specifying whether ANSI color/escape codes are supported/expected.
    By default, this is determined by whether `io` is a compatible terminal and by any
    `--color` command-line flag when `julia` was launched.
+ - `:hexunsigned`: Boolean specifying whether to print unsigned integers in
+   hexadecimal. Defaults to `true`, otherwise they will be printed in decimal.
+
+!!! compat "Julia 1.14"
+    The `:hexunsigned` option requires Julia 1.14 or later.
 
 # Examples
 
@@ -521,10 +543,18 @@ function _show_default(io::IO, @nospecialize(x))
     else
         print(io, "0x")
         r = Ref{Any}(x)
+        nbits = Core.bitsizeof(t)
+        nbytes = cld(nbits, 8)
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
-            for i in (nb - 1):-1:0
-                print(io, string(unsafe_load(convert(Ptr{UInt8}, p + i)), base = 16, pad = 2))
+            for i in (nbytes - 1):-1:0
+                byte = unsafe_load(convert(Ptr{UInt8}, p + i))
+                if i == nbytes - 1 && nbits % 8 != 0
+                    byte &= (UInt8(1) << (nbits % 8)) - UInt8(1)
+                    print(io, string(byte, base = 16, pad = cld(nbits % 8, 4)))
+                else
+                    print(io, string(byte, base = 16, pad = 2))
+                end
             end
         end
     end
@@ -576,7 +606,6 @@ end
 
 print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 
-show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
@@ -595,10 +624,20 @@ end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
+function modulesof!(s::Set{Module}, x::TypeEq)
+    p = type_parameter(x)
+    # the parameter may be a non-type value, e.g. `Type{1}` (#62897)
+    p isa Union{Core.AnyType,TypeVar} ? modulesof!(s, p) : s
+end
+modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
+    elseif x isa TypeEq
+        modulesof!(s, x)
+    elseif x isa Core.TypeEgal
+        modulesof!(s, x)
     elseif x isa Union
         modulesof!(s, x.a)
         modulesof!(s, x.b)
@@ -606,11 +645,45 @@ function modulesof!(s::Set{Module}, x::Type)
     s
 end
 
-# given an IO context for printing a type, reconstruct the proper type that
-# we're attempting to represent.
-# Union{T} where T is a degenerate case and is equal to T.ub, but we don't want
-# to print them that way, so filter those out from our aliases completely.
-function makeproper(io::IO, @nospecialize(x::Type))
+function has_other_free_typevars(@nospecialize(x), free_before)
+    has_free_typevars(x) || return false
+    for v in find_free_typevars(x)
+        seen = false
+        for p in free_before
+            if p === v
+                seen = true
+                break
+            end
+        end
+        seen || return true
+    end
+    return false
+end
+
+# Return a copy of the type alias `alias` with every bounded binder replaced by
+# an unbounded one, so that `typeintersect_env` can match an open `x` (whose free
+# typevars are not yet known to satisfy the alias' bounds) against the alias.
+# The binders are rewritten from the innermost outward, so that a bound that
+# references an outer binder is rewritten consistently with that binder.
+function unbounded_typealias(@nospecialize(alias))
+    alias isa UnionAll || return alias
+    body = unbounded_typealias(alias.body)
+    var = alias.var
+    if var.lb === Union{} && var.ub === Any
+        body === alias.body && return alias
+        return UnionAll(var, body)
+    end
+    newvar = TypeVar(var.name)
+    return UnionAll(newvar, UnionAll(var, body){newvar})
+end
+
+# Reconstruct the closed type that the (possibly open) `x` is a piece of, by
+# re-wrapping it in the typevars bound by the surrounding printing context (the
+# `:unionall_env` entries of `io`). Subtype tests use this so that the
+# context-bound typevars are quantified rather than treated as rigid free
+# variables, while the rest of the alias machinery keeps operating on the open
+# `x` whose free typevars must be matched against the alias' parameters.
+function reapply_unionall_env(io::Union{IO,Nothing}, @nospecialize(x))
     if io isa IOContext
         for (key, val) in io.dict
             if key === :unionall_env && val isa TypeVar
@@ -618,30 +691,28 @@ function makeproper(io::IO, @nospecialize(x::Type))
             end
         end
     end
-    has_free_typevars(x) && return Any
     return x
 end
 
-function make_typealias(@nospecialize(x::Type))
+function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
+    properx = reapply_unionall_env(io, x)
     aliases = Tuple{GlobalRef,SimpleVector}[]
-    xenv = UnionAll[]
-    for p in uniontypes(unwrap_unionall(x))
-        p isa UnionAll && push!(xenv, p)
-    end
-    x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
             if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getglobal(mod, name)
-                if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
+                if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && properx <: alias
                     if alias isa UnionAll
-                        (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                        free_before = find_free_typevars(x)
+                        (_ti, env) = typeintersect_env(x, unbounded_typealias(alias))
                         # ti === Union{} && continue # impossible, since we already checked that x <: alias
                         env = env::SimpleVector
+                        # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
+                        env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
                         # TODO: In some cases (such as the following), the `env` is over-approximated.
                         #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
                         #       (or detect and reverse the computation of it here).
@@ -659,11 +730,9 @@ function make_typealias(@nospecialize(x::Type))
                                 ex isa TypeError || rethrow()
                                 continue
                             end
-                        for p in xenv
-                            applied = rewrap_unionall(applied, p)
-                        end
-                        has_free_typevars(applied) && continue
-                        applied === x || continue # it couldn't figure out the parameter matching
+                        applied = rewrap_free_typevars(applied, free_before)
+                        has_other_free_typevars(applied, free_before) && continue
+                        applied == x || continue # it couldn't figure out the parameter matching
                     elseif alias === x
                         env = Core.svec()
                     else
@@ -701,8 +770,8 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
         return o isa TypeVar &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o.ub) != 0 &&
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o.lb) != 0
     end
     for i = n:-1:1
         p = env[i]
@@ -742,7 +811,7 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     nothing
 end
 
-function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+function show_typealias_name(io::IO, name::GlobalRef)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
         # IOContext. If :module is not set, default to Main.
@@ -754,6 +823,11 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
         end
     end
     print(io, name.name)
+    return nothing
+end
+
+function show_typealias(io::IO, name::GlobalRef, env::SimpleVector, wheres::Vector)
+    show_typealias_name(io, name)
     isempty(env) && return
     io = IOContext(io)
     for p in wheres
@@ -814,11 +888,10 @@ function show_wheres(io::IO, wheres::Vector{TypeVar})
 end
 
 function show_typealias(io::IO, @nospecialize(x::Type))
-    properx = makeproper(io, x)
-    alias = make_typealias(properx)
+    alias = make_typealias(x, io)
     alias === nothing && return false
     wheres = make_wheres(io, alias[2], x)
-    show_typealias(io, alias[1], x, alias[2], wheres)
+    show_typealias(io, alias[1], alias[2], wheres)
     show_wheres(io, wheres)
     return true
 end
@@ -829,7 +902,7 @@ function make_typealiases(@nospecialize(x::Type))
     x <: Tuple && return aliases, Union{}
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
-    vars = Dict{Symbol,TypeVar}()
+    free_before = find_free_typevars(x)
     xenv = UnionAll[]
     each = Any[]
     for p in uniontypes(unwrap_unionall(x))
@@ -842,12 +915,14 @@ function make_typealiases(@nospecialize(x::Type))
             if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
-                    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                    (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
                     ti === Union{} && continue
                     # make sure this alias wasn't from an unrelated part of the Union
                     mod2 = modulesof!(Set{Module}(), alias)
                     mod in mod2 || (mod === Base && Core in mod2) || continue
                     env = env::SimpleVector
+                    # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
+                    env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
                     applied = alias
                     if !isempty(env)
                         applied = try
@@ -866,10 +941,12 @@ function make_typealiases(@nospecialize(x::Type))
                     for p in xenv
                         applied = rewrap_unionall(applied, p)
                     end
-                    has_free_typevars(applied) && continue
+                    applied = rewrap_free_typevars(applied, free_before)
+                    has_other_free_typevars(applied, free_before) && continue
                     applied <: x || continue # parameter matching didn't make a subtype
                     print_without_params(x) && (env = Core.svec())
                     for typ in each # check that the alias also fully subsumes at least component of the input
+                        typ isa TypeVar && continue
                         if typ <: applied
                             push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
                             break
@@ -905,8 +982,7 @@ function make_typealiases(@nospecialize(x::Type))
 end
 
 function show_unionaliases(io::IO, x::Union)
-    properx = makeproper(io, x)
-    aliases, applied = make_typealiases(properx)
+    aliases, applied = make_typealiases(x)
     isempty(aliases) && return false
     first = true
     tvar = false
@@ -914,7 +990,7 @@ function show_unionaliases(io::IO, x::Union)
         if isa(typ, TypeVar)
             tvar = true # sort bare TypeVars to the end
             continue
-        elseif rewrap_unionall(typ, properx) <: applied
+        elseif typ <: applied
             continue
         end
         print(io, first ? "Union{" : ", ")
@@ -925,7 +1001,7 @@ function show_unionaliases(io::IO, x::Union)
         alias = aliases[1]
         env = alias[2]::SimpleVector
         wheres = make_wheres(io, env, x)
-        show_typealias(io, alias[1], x, env, wheres)
+        show_typealias(io, alias[1], env, wheres)
         show_wheres(io, wheres)
     else
         for alias in aliases
@@ -933,7 +1009,7 @@ function show_unionaliases(io::IO, x::Union)
             first = false
             env = alias[2]::SimpleVector
             wheres = make_wheres(io, env, x)
-            show_typealias(io, alias[1], x, env, wheres)
+            show_typealias(io, alias[1], env, wheres)
             show_wheres(io, wheres)
         end
         if tvar
@@ -951,8 +1027,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     if !print_without_params(x)
-        properx = makeproper(io, x)
-        if make_typealias(properx) !== nothing || (unwrap_unionall(x) isa Union && x <: make_typealiases(properx)[2])
+        if make_typealias(x, io) !== nothing || (unwrap_unionall(x) isa Union && x <: make_typealiases(x)[2])
             show(IOContext(io, :compact => true), x)
             if !(get(io, :compact, false)::Bool)
                 printstyled(io, " (alias for "; color = :light_black)
@@ -975,12 +1050,42 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
+function show_typeegal(io::IO, @nospecialize(x::Core.TypeEgal))
+    print(io, "Core.TypeEgal{")
+    show(io, type_parameter(x))
+    print(io, "}")
+end
+function show(io::IO, @nospecialize(x::Core.AnyType))
+    if x isa Core.TypeofBottom
+        print(io, "Union{}")
+    elseif x isa Core.TypeEgal
+        show_typeegal(io, x)
+    elseif x isa TypeEq
+        show_typeeq(io, x)
+    else
+        _show_type(io, inferencebarrier(x))
+    end
+end
+# `Type{T}` is the familiar user-facing spelling and is used for all normal
+# (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
+# display) the canonical kind name `TypeEq{T}` is shown instead, so that a
+# concrete `Type{T}` renders as `Type{T} (alias for TypeEq{T})`.
+function show_typeeq(io::IO, @nospecialize(x::TypeEq))
+    print(io, get(io, :compact, true)::Bool ? "Type{" : "TypeEq{")
+    show(io, type_parameter(x))
+    print(io, "}")
+end
 function _show_type(io::IO, @nospecialize(x::Type))
-    if print_without_params(x)
+    if x isa Core.TypeEgal
+        show_typeegal(io, x)
+        return
+    elseif print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
+        return
+    elseif x isa TypeEq
+        show_typeeq(io, x)
         return
     elseif x isa DataType
         show_datatype(io, x)
@@ -991,6 +1096,9 @@ function _show_type(io::IO, @nospecialize(x::Type))
         end
         print(io, "Union")
         show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        return
+    elseif x === Union{}
+        print(io, "Union{}")
         return
     end
 
@@ -1028,7 +1136,9 @@ end
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
-function isvisible(sym::Symbol, parent::Module, from::Module)
+# `@constprop :none` so concrete-eval doesn't bake binding edges (often on `Main.sym`)
+# into the show machinery, where any rebinding of the name would invalidate it (#61667)
+@constprop :none function isvisible(sym::Symbol, parent::Module, from::Module)
     isdeprecated(parent, sym) && return false
     isdefinedglobal(from, sym) || return false
     isdefinedglobal(parent, sym) || return false
@@ -1073,8 +1183,10 @@ function check_world_bounded(tn::Core.TypeName)
                 return Int(partition.min_world):Int(max_world)
             end
         end
-        isdefined(partition, :next) || return nothing
-        partition = @atomic partition.next
+        next = @atomic partition.next
+        # The last partition's `next` is a backreference to the owning Binding.
+        next isa Core.BindingPartition || return nothing
+        partition = next
     end
 end
 
@@ -1210,7 +1322,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         return
     elseif isnamedtuple
         syms, types = parameters
-        if syms isa Tuple && types isa DataType
+        if syms isa Tuple && types isa DataType && length(types.parameters) == length(syms) && !isvatuple(types)
             print(io, "@NamedTuple{")
             show_at_namedtuple(io, syms, types)
             print(io, "}")
@@ -1260,7 +1372,7 @@ show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 Prints one or more expressions, and their results, to `stdout`, and returns the last result.
 
-See also: [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
+See also [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
 
 # Examples
 ```jldoctest
@@ -1293,7 +1405,17 @@ nonnothing_nonmissing_typeinfo(io::IO) = nonmissingtype(nonnothingtype(get(io, :
 show(io::IO, b::Bool) = print(io, nonnothing_nonmissing_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
-show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+function show(io::IO, n::Unsigned)
+    if get(io, :hexunsigned, true)::Bool
+        print(io, "0x", string(n, pad = cld(Core.bitsizeof(n), 4), base = 16))
+    else
+        if get(io, :typeinfo, Nothing)::Type == typeof(n)
+            print(io, n)
+        else
+            print(io, typeof(n), "($(n))")
+        end
+    end
+end
 print(io::IO, n::Unsigned) = print(io, string(n))
 
 has_tight_type(p::Pair) =
@@ -1384,6 +1506,9 @@ function show(io::IO, codeinst::Core.CodeInstance)
         print(io, " (ABI Overridden)")
     else
         show_mi(io, def::MethodInstance)
+    end
+    if codeinst.owner !== nothing
+        print(io, " (foreign)")
     end
 end
 
@@ -1482,7 +1607,7 @@ end
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 
-show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
+show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 
 ## Abstract Syntax Tree (AST) printing ##
 
@@ -1521,7 +1646,7 @@ const ExprNode = Union{Expr, QuoteNode, SlotNumber, LineNumberNode, SSAValue,
 # head is :$ and which is not inside a quote to fallback to the "unhandled" case:
 # this is behavior is triggered by IOContext(io, :unquote_fallback => true)
 print(        io::IO, ex::ExprNode)    = (show_unquoted(IOContext(io, :unquote_fallback => false), ex, 0, -1); nothing)
-show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(IOContext(io, :unquote_fallback => true), ex, 0, -1, 0)
+show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(IOContext(io, :unquote_fallback => true), ex, 0, -1)
 show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
 show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
 show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
@@ -1551,9 +1676,12 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 """
     operator_precedence(s::Symbol)
 
-Return an integer representing the precedence of operator `s`, relative to
+Return an integer representing the precedence of a binary operator `s`, relative to
 other operators. Higher-numbered operators take precedence over lower-numbered
-operators. Return `0` if `s` is not a valid operator.
+operators. Return `0` if `s` is not a valid binary operator.
+
+(The precedence of *unary* operators is handled differently, including cases like `+`
+where an operator can be either unary or binary.)
 
 # Examples
 ```jldoctest
@@ -1670,7 +1798,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
             show_unquoted(io, Expr(:(=), item.args[1], item.args[2]), indent, parens ? 0 : prec, quote_level)
         elseif kw && is_expr(item, :(=), 2)
             item = item::Expr
-            show_unquoted_expr_fallback(io, item, indent, quote_level)
+            show_unquoted_expr_fallback(io, item)
         else
             show_unquoted(io, item, indent, parens ? 0 : prec, quote_level)
         end
@@ -1693,7 +1821,8 @@ function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
             (isa(func, Symbol) && !is_valid_identifier(func)) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
-            isa(func, GlobalRef)
+            isa(func, GlobalRef) ||
+            isa(func, Core.BindingPartition)
         show_unquoted(io, func, indent, 0, quote_level)
     else
         print(io, '(')
@@ -1735,13 +1864,22 @@ function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
         # invalid SSAValue, print this in red for better recognition
         printstyled(io, "%", val.id; color=:red)
     else
-        print(io, "%", val.id)
+        cls = Base.Compiler.IRShow.ssa_warn_type_class(io, val.id)
+        if cls === Base.Compiler.IRShow.SSA_WARN_TYPE_STRONG
+            printstyled(io, "%", val.id; color=:light_red, bold=true)
+        elseif cls === Base.Compiler.IRShow.SSA_WARN_TYPE_MILD
+            printstyled(io, "%", val.id; color=warn_color(), bold=true)
+        else
+            print(io, "%", val.id)
+        end
     end
 end
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allow_macroname=false)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
+show_unquoted(io::IO, bpart::Core.BindingPartition, ::Int, ::Int) =
+    show_globalref(io, partition_owner(bpart).globalref)
 
 function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     print(io, ex.mod)
@@ -1765,9 +1903,9 @@ function show_unquoted(io::IO, ex::SlotNumber, ::Int, ::Int)
     end
 end
 
-function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
+function show_unquoted(io::IO, ex::QuoteNode, indent::Int, _prec::Int)
     if isa(ex.value, Symbol)
-        show_unquoted_quote_expr(io, ex.value, indent, prec, 0)
+        show_unquoted_quote_expr(io, ex.value, indent, 0)
     else
         print(io, "\$(QuoteNode(")
         # QuoteNode does not allows for interpolation, so if ex.value is an
@@ -1778,7 +1916,7 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
     end
 end
 
-function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
+function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, quote_level::Int)
     if isa(value, Symbol)
         sym = value::Symbol
         if value in quoted_syms
@@ -1884,7 +2022,7 @@ is_core_macro(@nospecialize(arg), macro_name::Symbol) = false
 # as an ordinary symbol, which is true in indexing expressions.
 const beginsym = gensym(:beginsym)
 
-function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level::Int)
+function show_unquoted_expr_fallback(io::IO, ex::Expr)
     print(io, "\$(Expr(")
     show(io, ex.head)
     for arg in ex.args
@@ -1932,6 +2070,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif (head in expr_infix_any && nargs==2)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
+        if head == :-> && is_expr(args[1], :...)
+            args = Any[Expr(:tuple, args[1]), args[2]]
+        end
         if func_prec <= prec
             show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, quote_level, true)
         else
@@ -2163,7 +2304,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, "end")
         end
 
+    elseif head === :module && nargs==4 && isa(args[1],VersionNumber) && isa(args[2],Bool)
+        # New 4-argument form: (version, baremodule_flag, name, body)
+        show_block(IOContext(io, beginsym=>false), args[2] ? :module : :baremodule, args[3], args[4], indent, quote_level)
+        print(io, "end")
     elseif head === :module && nargs==3 && isa(args[1],Bool)
+        # Old 3-argument form: (baremodule_flag, name, body)
         show_block(IOContext(io, beginsym=>false), args[1] ? :module : :baremodule, args[2], args[3], indent, quote_level)
         print(io, "end")
 
@@ -2327,7 +2473,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         end
 
     elseif head === :quote && nargs == 1 && isa(args[1], Symbol)
-        show_unquoted_quote_expr(IOContext(io, beginsym=>false), args[1]::Symbol, indent, 0, quote_level+1)
+        show_unquoted_quote_expr(IOContext(io, beginsym=>false), args[1]::Symbol, indent, quote_level+1)
     elseif head === :quote && !(get(io, :unquote_fallback, true)::Bool)
         if nargs == 1 && is_expr(args[1], :block)
             show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, (args[1]::Expr).args...), indent,
@@ -2433,12 +2579,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # Reset SOURCE_SLOTNAMES. Raw SlotNumbers are not valid in Expr(:toplevel), but
         # we want to show bad ASTs reasonably to make errors understandable.
         lambda_io = IOContext(io, :SOURCE_SLOTNAMES => false)
-        show_unquoted_expr_fallback(lambda_io, ex, indent, quote_level)
+        show_unquoted_expr_fallback(lambda_io, ex)
     else
         unhandled = true
     end
     if unhandled
-        show_unquoted_expr_fallback(io, ex, indent, quote_level)
+        show_unquoted_expr_fallback(io, ex)
     end
     nothing
 end
@@ -2464,7 +2610,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
-    elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
+    elseif isType(ft) && (f = type_parameter(ft); !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
@@ -2568,11 +2714,11 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     levelcount = Int[]                     # number of nodes at each level
     strwid = 0
     st_0, st_backslash, st_squote, st_dquote = 0,1,2,4
-    state::Int = st_0
-    stateis(s) = (state & s) != 0
+    state = Ref(st_0)
+    stateis(s) = (state[] & s) != 0
     quoted() = stateis(st_squote) || stateis(st_dquote)
-    enter(s) = (state |= s)
-    leave(s) = (state &= ~s)
+    enter(s) = (state[] |= s)
+    leave(s) = (state[] &= ~s)
     for (i, c) in ANSIIterator(str)
         if c isa ANSIDelimiter
             depths[i] = depth
@@ -2708,11 +2854,12 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, @nospecialize(b))
+    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar}
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
-        show(io, b)
+        b isa TypeVar ? show(io, b) : show(io, b::Core.AnyType)
         parens && print(io, ")")
+        nothing
     end
     lb, ub = tv.lb, tv.ub
     if !in_env && lb !== Bottom
@@ -3006,6 +3153,8 @@ end
 nocolor(io::IO) = IOContext(io, :color => false)
 alignment_from_show(io::IO, x::Any) =
     textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
+alignment_from_show(io::IO, x::AbstractString) =
+    textwidth(sprint(show, MIME"text/plain"(), x, context=nocolor(io), sizehint=0))
 
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are
@@ -3110,21 +3259,35 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
+## `summary` for GenericMemoryRef
+function summary(io::IO, mref::GenericMemoryRef)
+    offset = Core.memoryrefoffset(mref)
+    len_after_offset = length(mref.mem) - offset + 1
+    print(io, len_after_offset, "-element ")
+    showarg(io, mref, true)
+end
+
 ## `summary` for Function
 summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
 
 """
-    showarg(io::IO, x, toplevel)
+    Base.showarg(io::IO, x, toplevel)
 
-Show `x` as if it were an argument to a function. This function is
-used by [`summary`](@ref) to display type information in terms of sequences of
-function calls on objects. `toplevel` is `true` if this is
-the direct call from `summary` and `false` for nested (recursive) calls.
+Show the quasi-type of `x` where quasi-type is the type of `x` or an expression (possibly
+containing quasi-types) that would generate an object of the same type as `x`. The shorter
+of these two options is typically used.
 
-The fallback definition is to print `x` as "::\\\$(typeof(x))",
-representing argument `x` in terms of its type. (The double-colon is
-omitted if `toplevel=true`.) However, you can
-specialize this function for specific types to customize printing.
+This function is used by `summary` to display type information in terms of sequences of
+function calls on objects.
+
+Show a leading `::` if `toplevel` is `false` and showing a type. `toplevel` is `true` if
+this is the direct call from `summary` and `false` for nested (recursive) calls.
+
+The fallback definition is to print `x` as "::\\\$(typeof(x))" or "\\\$(typeof(x))",
+representing argument `x` in terms of its type. However, you can specialize
+this function for specific types to customize printing. This customization is useful for
+types that have simple, public constructors and verbose and/or internal types and type
+parameters such as `reinterpret`ed arrays or `SubArray`s.
 
 # Examples
 
@@ -3153,13 +3316,13 @@ type, indicating that any recursed calls are not at the top level.
 Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
 behavior, because no specialized method for `Array` has been defined.
 """
-function showarg(io::IO, T::Type, toplevel)
-    toplevel || print(io, "::")
-    print(io, "Type{", T, "}")
-end
 function showarg(io::IO, @nospecialize(x), toplevel)
     toplevel || print(io, "::")
     print(io, typeof(x))
+end
+function showarg(io::IO, T::Type, toplevel)
+    toplevel || print(io, "::")
+    print(io, "Type{", T, "}")
 end
 # This method resolves an ambiguity for packages that specialize on eltype
 function showarg(io::IO, a::Array{Union{}}, toplevel)
@@ -3283,32 +3446,22 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, max_world)
     end
     if (partition.kind & PARTITION_MASK_FLAG) != 0
-        first = false
-        print(io, " [")
-        if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
-            print(io, "exported")
-        end
-        if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
-            first ? (first = false) : print(io, ",")
-            print(io, "deprecated")
-        end
-        if (partition.kind & PARTITION_FLAG_DEPWARN) != 0
-            first ? (first = false) : print(io, ",")
-            print(io, "depwarn")
-        end
-        print(io, "]")
+        flags = String[]
+        (partition.kind & PARTITION_FLAG_EXPORTED)            != 0 && push!(flags, "exported")
+        (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0 && push!(flags, "re-exported")
+        (partition.kind & PARTITION_FLAG_DEPRECATED)          != 0 && push!(flags, "deprecated")
+        (partition.kind & PARTITION_FLAG_DEPWARN)             != 0 && push!(flags, "depwarn")
+        (partition.kind & PARTITION_FLAG_IMPLICITLY_DEPRECATED) != 0 && push!(flags, "implicitly-deprecated")
+        print(io, " [", join(flags, ","), "]")
     end
     print(io, " - ")
     kind = binding_kind(partition)
     if kind == PARTITION_KIND_BACKDATED_CONST
-        print(io, "backdated constant binding to ")
-        print(io, partition_restriction(partition))
+        print(io, "backdated constant binding")
     elseif kind == PARTITION_KIND_CONST
-        print(io, "constant binding to ")
-        print(io, partition_restriction(partition))
+        print(io, "constant binding")
     elseif kind == PARTITION_KIND_CONST_IMPORT
-        print(io, "constant binding (declared with `import`) to ")
-        print(io, partition_restriction(partition))
+        print(io, "constant binding (declared with `import`)")
     elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")
     elseif kind == PARTITION_KIND_GUARD
@@ -3321,8 +3474,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "implicit `using` resolved to global ")
         print(io, partition_restriction(partition).globalref)
     elseif kind == PARTITION_KIND_IMPLICIT_CONST
-        print(io, "implicit `using` resolved to constant ")
-        print(io, partition_restriction(partition))
+        print(io, "implicit `using` resolved to constant")
     elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
         print(io, partition_restriction(partition).globalref)
@@ -3330,14 +3482,21 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "explicit `import` from ")
         print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == PARTITION_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL "unexpected partition kind"
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end
 end
 
+function show(io::IO, partition::Core.BindingPartition)
+    print(io, "BindingPartition(for ", partition_owner(partition).globalref, ": ")
+    print_partition(io, partition)
+    print(io, ")")
+end
+
 function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
     print(io, "BindingPartition ")
+    print(io, "for ", partition_owner(partition).globalref, "\n   ")
     print_partition(io, partition)
 end
 
@@ -3352,8 +3511,10 @@ function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
             println(io)
             print(io, "   ")
             print_partition(io, partition)
-            isdefined(partition, :next) || break
-            partition = @atomic partition.next
+            next = @atomic partition.next
+            # The last partition's `next` is a backreference to the owning Binding.
+            next isa Core.BindingPartition || break
+            partition = next
         end
     end
 end

@@ -6,8 +6,8 @@ module Order
 import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 import .Base:
-    AbstractVector, @propagate_inbounds, isless, identity, getindex, reverse,
-    +, -, !, &, <, |
+    AbstractVector, @propagate_inbounds, isless, identity, reverse,
+    !, &, <, |
 
 ## notions of element ordering ##
 
@@ -50,7 +50,7 @@ ReverseOrdering() = ReverseOrdering(ForwardOrdering())
 """
     reverse(o::Base.Ordering)
 
-reverses ordering specified by `o`.
+Reverses ordering specified by `o`.
 
 """
 reverse(o::Ordering) = ReverseOrdering(o)

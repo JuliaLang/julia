@@ -1,0 +1,342 @@
+@testset "while loops" begin
+
+test_mod = Module()
+Base.set_syntax_version(test_mod, v"1.14")
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    i = 0
+    while i < 5
+        i = i + 1
+        push!(a, i)
+    end
+    a
+end
+""") == [1,2,3,4,5]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    i = 0
+    while i < 5
+        i = i + 1
+        if i == 3
+            break
+        end
+        push!(a, i)
+    end
+    a
+end
+""") == [1,2]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    i = 0
+    while i < 5
+        i = i + 1
+        if isodd(i)
+            continue
+        end
+        push!(a, i)
+    end
+    a
+end
+""") == [2,4]
+
+end
+
+@testset "for loops" begin
+
+test_mod = Module()
+Base.set_syntax_version(test_mod, v"1.14")
+
+# iteration
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:3
+        push!(a, i)
+    end
+    a
+end
+""") == [1,2,3]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:0
+        push!(a, i)
+    end
+    a
+end
+""") == []
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for _ = 1:3
+        push!(a, 1)
+    end
+    a
+end
+""") == [1, 1, 1]
+
+# break
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:6
+        if i == 3
+            break
+        end
+        push!(a, i)
+    end
+    a
+end
+""") == [1, 2]
+# Break from inner nested loop
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i in 1:2
+       for j in 3:4
+           push!(a, (i, j))
+           j == 6 && break
+       end
+    end
+    a
+end
+""") == [(1, 3), (1, 4), (2, 3), (2, 4)]
+
+# continue
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:6
+        if isodd(i)
+            continue
+        end
+        push!(a, i)
+    end
+    a
+end
+""") == [2, 4, 6]
+
+# Loop variable scope
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:3
+        push!(a, i)
+        i = 100
+    end
+    a
+end
+""") == [1,2,3]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    i = 100
+    for i = 1:3
+    end
+    i
+end
+""") == 100
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    i = 100
+    for outer i = 1:2
+        nothing
+    end
+    i
+end
+""") == 2
+
+# Fancy for loop left hand side - unpacking and scoping
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    i = 100
+    j = 200
+    for (i,j) in [('a', 'b'), (1,2)]
+        push!(a, (i,j))
+    end
+    (a, i, j)
+end
+""") == ([('a', 'b'), (1,2)], 100, 200)
+
+end
+
+
+@testset "multidimensional for loops" begin
+
+test_mod = Module()
+Base.set_syntax_version(test_mod, v"1.14")
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:2, j = 3:4
+        push!(a, (i,j))
+    end
+    a
+end
+""") == [(1,3), (1,4), (2,3), (2,4)]
+
+@testset "break/continue" begin
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:2, j = 3:4
+        push!(a, (i,j))
+        break
+    end
+    a
+end
+""") == [(1,3)]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:4, j = 3:4
+        if isodd(i)
+            continue
+        end
+        push!(a, (i,j))
+    end
+    a
+end
+""") == [(2,3), (2,4), (4,3), (4,4)]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:2, j = 1:4
+        if isodd(j)
+            continue
+        end
+        push!(a, (i,j))
+    end
+    a
+end
+""") == [(1,2), (1,4), (2,2), (2,4)]
+
+# Labeled continue skips to next iteration of the named outer loop
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    @label outer for i = 1:3
+        for j = 1:3
+            if j == 2
+                continue outer
+            end
+            push!(a, (i,j))
+        end
+    end
+    a
+end
+""") == [(1,1), (2,1), (3,1)]
+
+# An unlabeled break exits an anonymous `@label` block
+@test JuliaLowering.include_string(test_mod, """
+@label begin
+    break
+    error("unreached")
+end
+""") === nothing
+
+# ... but breaking through a named block is still an error
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
+@label named begin
+    break
+end
+""")
+
+# Values of labeled breaks are scope-resolved: variables (not just
+# literals) work as break values, including from inside nested scopes
+@test JuliaLowering.include_string(test_mod, """
+@label begin
+    let
+        local t = 1
+        break _ t
+    end
+    0
+end
+""") == 1
+
+@test JuliaLowering.include_string(test_mod, """
+@label myblock begin
+    let v = 21
+        break myblock 2v
+    end
+    0
+end
+""") == 42
+
+@test JuliaLowering.include_string(test_mod, """
+let a = []
+    @label outer for i = 1:10
+        x = i * 2
+        i == 3 && break outer x
+        push!(a, i)
+    end
+end
+""") == 6
+
+end
+
+
+@testset "Loop variable scope" begin
+
+# Test that `i` is copied in the inner loop
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    for i = 1:2, j = 3:4
+        push!(a, (i,j))
+        i = 100
+    end
+    a
+end
+""") == [(1,3), (1,4), (2,3), (2,4)]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    i = 100
+    j = 200
+    for i = 1:2, j = 3:4
+        nothing
+    end
+    (i,j)
+end
+""") == (100,200)
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    i = 100
+    j = 200
+    for outer i = 1:2, j = 3:4
+        nothing
+    end
+    (i,j)
+end
+""") == (2,200)
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    i = 100
+    j = 200
+    for i = 1:2, outer j = 3:4
+        nothing
+    end
+    (i,j)
+end
+""") == (100,4)
+
+end
+
+end

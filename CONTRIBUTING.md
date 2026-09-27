@@ -4,6 +4,9 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](https://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
 
+> [!IMPORTANT]
+> If your pull request contains substantive contributions from a generative AI tool, please disclose so with details, and review all changes before opening. This also applies to other content, such as issues, discussions, and comments.
+
 ## Learning Julia
 
 [The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.
@@ -40,6 +43,18 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ## Submitting contributions
 
+### Working on issues
+
+We rarely assign issues to contributors, especially not to new contributors. If you want to work on an issue, just go ahead and open a pull request. There's no need to ask for permission or comment that you're planning to work on it—just start working and submit your PR when ready.
+
+This policy exists to avoid ["cookie licking"](https://www.redhat.com/en/blog/dont-lick-cookie) (claiming an issue without following through), which can discourage others from contributing. If someone else is already working on the same issue, that's okay—multiple approaches can be valuable, and reviewers will help sort out which solution is best.
+
+### Reviewing pull requests
+
+Pull request reviews from all members of the community are welcomed and encouraged, even if you are not a committer or triager. Reading through someone else's PR can be a great way to learn the codebase, and thoughtful review with an explicit approval (or rejection) is a helpful signal to those with merge rights to accelerate a PR out of pending-review limbo.
+
+Similarly to other types of contribution, AI-assisted review is allowed so long as it is disclosed, but all humans remain responsible for the content they generate. Low-effort "LGTM" or unabridged walls of AI-generated text are not useful.
+
 ### Contributor Checklist
 
 * Create a [GitHub account](https://github.com/signup/free).
@@ -54,7 +69,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 * Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
-* If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening.
+* If your pull request contains substantive contributions from a generative AI tool, please disclose so with details, and review all changes before opening. Open the pull request yourself once you have reviewed it, rather than having a tool open it on your behalf.
 
 * Relax and have fun!
 

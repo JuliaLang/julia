@@ -2,7 +2,7 @@
 EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/InteractiveUtils/docs/src/index.md"
 ```
 
-# [Interactive Utilities](@id man-interactive-utils)
+# [InteractiveUtils](@id man-interactive-utils)
 
 The `InteractiveUtils` module provides utilities for interactive use of Julia,
 such as code introspection and clipboard access.
@@ -16,13 +16,14 @@ InteractiveUtils.methodswith
 InteractiveUtils.subtypes
 InteractiveUtils.supertypes
 InteractiveUtils.edit(::AbstractString, ::Integer)
-InteractiveUtils.edit(::Any)
+InteractiveUtils.edit
 InteractiveUtils.@edit
 InteractiveUtils.define_editor
 InteractiveUtils.less(::AbstractString)
-InteractiveUtils.less(::Any)
+InteractiveUtils.less
 InteractiveUtils.@less
 InteractiveUtils.@which
+InteractiveUtils.@methods
 InteractiveUtils.@functionloc
 InteractiveUtils.@code_lowered
 InteractiveUtils.@code_typed

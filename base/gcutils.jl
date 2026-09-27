@@ -157,7 +157,7 @@ enable_finalizers(on::Bool) = on ? enable_finalizers() : disable_finalizers()
 
 function enable_finalizers() @inline
     ccall(:jl_gc_enable_finalizers_internal, Cvoid, ())
-    if Core.Intrinsics.atomic_pointerref(cglobal(:jl_gc_have_pending_finalizers, Cint), :monotonic) != 0
+    if unsafe_load(cglobal(:jl_gc_have_pending_finalizers, Cint), :monotonic) != 0
         ccall(:jl_gc_run_pending_finalizers, Cvoid, (Ptr{Cvoid},), C_NULL)
     end
 end
@@ -169,7 +169,7 @@ end
 """
     GC.in_finalizer()::Bool
 
-Returns `true` if the current task is running a finalizer, returns `false`
+Return `true` if the current task is running a finalizer, return `false`
 otherwise. Will also return `false` within a finalizer which was inlined by the
 compiler's eager finalization optimization, or if `finalize` is called on the
 finalizer directly.

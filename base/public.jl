@@ -34,6 +34,9 @@ public
 # arrays
     has_offset_axes,
     require_one_based_indexing,
+    memoryindex,
+    unsetindex!,
+    unsetindex_atomic!,
 
 # collections
     IteratorEltype,
@@ -52,11 +55,13 @@ public
     DL_LOAD_PATH,
     load_path,
     active_project,
+    active_manifest,
 
 # Reflection and introspection
     get_extension,
     isambiguous,
     isexpr,
+    isfieldatomic,
     isidentifier,
     issingletontype,
     identify_package,
@@ -67,6 +72,7 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    generating_output,
 
 # AST handling
     IR,
@@ -79,6 +85,13 @@ public
     isbinaryoperator,
     isoperator,
     isunaryoperator,
+
+# Integer math
+    uabs,
+    mul_hi,
+
+# Numbers
+    decompose,
 
 # C interface
     cconvert,
@@ -93,6 +106,8 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+    @__doc__,
+    @nospecializeinfer,
 
 # External processes
     shell_escape,
@@ -104,6 +119,13 @@ public
 
 # Strings
     escape_raw_string,
+    raw_substring,
+    unannotate,
+
+# Chars
+    ismalformed,
+    isoverlong,
+    show_invalid,
 
 # IO
     # types
@@ -121,9 +143,13 @@ public
 # filesystem operations
     rename,
 
+# promotion
+    promote_typejoin,
+
 # misc
     notnothing,
     runtests,
     text_colors,
     depwarn,
+    blackbox,
     donotdelete

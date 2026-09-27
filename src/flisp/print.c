@@ -536,7 +536,7 @@ static numerictype_t sym_to_numtype(fl_context_t *fl_ctx, value_t type);
 #define DFINITE(d) (((*(int64_t*)&(d))&0x7ff0000000000000LL)!=0x7ff0000000000000LL)
 
 // 'weak' means we don't need to accurately reproduce the type, so
-// for example #int32(0) can be printed as just 0. this is used
+// for example #int32(0) can be printed as just 0. this is used when
 // printing in a context where a type is already implied, e.g. inside
 // an array.
 static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,

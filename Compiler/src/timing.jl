@@ -6,7 +6,14 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
         file = QuoteNode(file)
 
         # XXX: This buffer must be large enough to store any jl_timing_block_t (runtime-checked)
-        buffer = (0, 0, 0, 0, 0, 0, 0)
+        # Inlined Sys.isapple but bootstrapping
+        kernel = ccall(:jl_get_UNAME, Symbol, ())
+        buffer = if kernel === :Apple || kernel === :Darwin
+            # Oslog needs a little extra space to store any buffered data
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        else
+            (0, 0, 0, 0, 0, 0, 0)
+        end
         buffer_size = Core.sizeof(buffer)
         return quote
             if $event[] === C_NULL
@@ -32,7 +39,7 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
         return getzonedexpr(name, ex, :unknown_julia_function, __source__.file, __source__.line, 0)
     end
 else
-    macro zone(name, ex::Expr)
+    macro zone(_, ex::Expr)
         return esc(ex)
     end
 end

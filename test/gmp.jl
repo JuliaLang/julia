@@ -235,6 +235,11 @@ let a, b
     @test prod(b) == foldl(*, b)
     @test 1 == prod(BigInt[]) isa BigInt
     @test prod(BigInt[0, 0, 0]) == 0 # issue #46665
+    # Test prod with negative numbers
+    @test prod(BigInt[-2, 3, -4]) == 24
+    @test prod(BigInt[-1, -2, -3]) == -6
+    @test prod(BigInt[-5]) == -5
+    @test prod(BigInt[-2, -2, -2, -2]) == 16
 end
 
 @testset "Iterated arithmetic" begin
@@ -810,7 +815,7 @@ t = Rational{BigInt}(0, 1)
 end
 
 @testset "hashing" begin
-    for i in 1:10:100
+    for i in vcat(0, 1:10:100)
         for shift in vcat(0:8, 9:8:81)
             for sgn in (1, -1)
                 bint = sgn * (big(11)^i << shift)
@@ -820,6 +825,15 @@ end
                     @invoke(hash(bint::Real, Base.HASH_SEED))
                 @test Base.hash_integer(bint, Base.HASH_SEED) ==
                     @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+
+                brat = bint // 3
+                for T in Base.BitInteger_types
+                    typemin(T) <= bint <= typemax(T) || continue
+                    rat = Rational{T}(brat)
+                    for h in (zero(UInt), Base.HASH_SEED, typemax(UInt))
+                        @test hash(rat, h) == hash(brat, h)
+                    end
+                end
             end
         end
     end

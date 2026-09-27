@@ -345,7 +345,8 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 #  elif defined(_OS_LINUX_)
 static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
 {
-    if (hwcap & (1 << JL_AArch64_crc))
+    // HWCAP_CRC32 is bit 7 in the Linux AArch64 HWCAP
+    if (hwcap & (1 << 7))
         return crc32c_armv8;
     return jl_crc32c_sw;
 }

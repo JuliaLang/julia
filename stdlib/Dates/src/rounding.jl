@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# The epochs used for date rounding are based ISO 8601's "year zero" notation
+# The epochs used for date rounding are based on ISO 8601's "year zero" notation
 const DATEEPOCH = value(Date(0))
 const DATETIMEEPOCH = value(DateTime(0))
 
@@ -206,7 +206,7 @@ end
 """
     floorceil(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> (T, T)
 
-Simultaneously return the `floor` and `ceil` of `Period` at resolution `p`.  More efficient
+Simultaneously return the `floor` and `ceil` of a `Period` at resolution `precision`.  More efficient
 than calling both `floor` and `ceil` individually.
 """
 function floorceil(x::ConvertiblePeriod, precision::ConvertiblePeriod)

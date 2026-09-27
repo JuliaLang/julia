@@ -259,6 +259,8 @@ end
 
         f = findeach(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
         @test only(f) == 2
+
+        @test collect(findeach([true,false,true])) == [1,3]
     end
 end
 
@@ -360,7 +362,7 @@ end
 let itr
     itr = Iterators.Stateful(Iterators.map(identity, 1:5))
     @test collect(itr) == 1:5
-    @test collect(itr) == Int[] # Stateful do not preserve shape
+    @test collect(itr) == Int[] # Stateful does not preserve shape
     itr = (i+1 for i in Base.Stateful([1, 2, 3]))
     @test collect(itr) == [2, 3, 4]
     @test collect(itr) == Int[] # Stateful do not preserve shape
@@ -549,6 +551,11 @@ end
 @test collect(flatten(())) == Union{}[]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
+
+# Flattened iterator lengths must not wrap before comprehension allocation.
+overflow_length = Int(typemax(UInt) ÷ 3 + 1)
+overflow_flatten = flatten(Iterators.repeated((1, 2, 3), overflow_length))
+@test_throws OverflowError collect(identity(x) for x in overflow_flatten)
 
 @testset "IteratorSize trait for flatten" begin
     @test (@inferred Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1))) == Base.SizeUnknown()
@@ -1022,6 +1029,7 @@ end
     @test (@inferred Base.IteratorSize(zip(repeated(0), 1:5 ))) == Base.HasLength()     # for zip of ::IsInfinite and ::HasShape
     @test (@inferred Base.IteratorSize(zip((1,2,3), 1:5) )) == Base.HasLength()         # for zip of ::HasLength and ::HasShape
     @test (@inferred Base.IteratorSize(zip(1:5, (1,2,3)) )) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
+    @test (@inferred Base.IteratorSize(zip(1:4, [1 2; 3 4]))) == Base.HasLength()       # for zip of mismatched ::HasShape
 end
 
 @testset "foldability inference" begin

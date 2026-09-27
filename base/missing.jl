@@ -102,19 +102,14 @@ for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
           :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
 end
-for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
+for f in (:zero, :one, :oneunit)
+    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
     @eval ($f)(::Type{Missing}) = missing
-    @eval function $(f)(::Type{Union{T, Missing}}) where T
-        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-        $f(T)
-    end
+    @eval ($f)(::Type{T}) where {T>:Missing} = $f(nonmissingtype_checked(T))
 end
-for f in (:(Base.float), :(Base.complex))
-    @eval $f(::Type{Missing}) = Missing
-    @eval function $f(::Type{Union{T, Missing}}) where T
-        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-        Union{$f(T), Missing}
-    end
+for f in (:float, :real, :complex)
+    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+    @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype(T)), Missing}
 end
 
 # Binary operators/functions
@@ -131,12 +126,14 @@ div(::Missing, ::Missing, r::RoundingMode) = missing
 div(::Missing, ::Number, r::RoundingMode) = missing
 div(::Number, ::Missing, r::RoundingMode) = missing
 
-min(::Missing, ::Missing) = missing
-min(::Missing, ::Any)     = missing
-min(::Any,     ::Missing) = missing
-max(::Missing, ::Missing) = missing
-max(::Missing, ::Any)     = missing
-max(::Any,     ::Missing) = missing
+for (f, result) in ((:min, missing), (:max, missing), (:minmax, (missing, missing)))
+    @eval begin
+        $f(::Missing, ::Missing) = $result
+        $f(::Missing, ::Any)     = $result
+        $f(::Any,     ::Missing) = $result
+        $f(::Missing) = $result
+    end
+end
 clamp(::Missing, lo, hi) = missing
 
 missing_conversion_msg(@nospecialize T) =
@@ -296,17 +293,18 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     end
     ismissing(ai) && return mapreduce_first(f, op, a1)
     # We know A contains at least two non-missing entries: the result cannot be nothing
-    something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
+    something(_mapreduce_impl_skipmissing(f, op, itr, first(inds), last(inds)))
 end
 
 _mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
 
-mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+# Returns nothing when the input contains only missing values, and Some(x) otherwise.
+# Kept separate from `mapreduce_impl` so this return type doesn't leak into its inference.
+_mapreduce_impl_skipmissing(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
+    _mapreduce_impl_skipmissing(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
-# Returns nothing when the input contains only missing values, and Some(x) otherwise
-@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
+@noinline function _mapreduce_impl_skipmissing(f, op, itr::SkipMissing{<:AbstractArray},
+                                               ifirst::Integer, ilast::Integer, blksize::Int)
     A = itr.x
     if ifirst > ilast
         return nothing
@@ -349,8 +347,8 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
-        v1 = mapreduce_impl(f, op, itr, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, itr, imid+1, ilast, blksize)
+        v1 = _mapreduce_impl_skipmissing(f, op, itr, ifirst, imid, blksize)
+        v2 = _mapreduce_impl_skipmissing(f, op, itr, imid+1, ilast, blksize)
         if v1 === nothing && v2 === nothing
             return nothing
         elseif v1 === nothing

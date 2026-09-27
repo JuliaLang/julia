@@ -5,12 +5,10 @@ using Test, Random
 include("buildkitetestjson.jl")
 
 function runtests(name, path, isolate=true; seed=nothing)
-    old_print_setting = Test.TESTSET_PRINT_ENABLE[]
-    Test.TESTSET_PRINT_ENABLE[] = false
+    @Base.ScopedValues.with Test.TESTSET_PRINT_ENABLE=>false Test.TEST_RECORD_PASSES=>Base.get_bool_env("CI", false) begin
     # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
     # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
     empty!(Base.Experimental._hint_handlers)
-    withenv("JULIA_TEST_RECORD_PASSES" => Base.get_bool_env("CI", false)) do
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard
@@ -103,11 +101,10 @@ function runtests(name, path, isolate=true; seed=nothing)
                              rss)
         return res_and_time_data
     catch ex
-        Test.TESTSET_PRINT_ENABLE[] = old_print_setting
         ex isa TestSetException || rethrow()
         return Any[ex]
     end
-    end # withenv
+    end # TESTSET_PRINT_ENABLE
 end
 
 # looking in . messes things up badly
@@ -115,7 +112,14 @@ filter!(x->x!=".", LOAD_PATH)
 
 # Support for Revise
 function revise_trackall()
-    Revise.track(Core.Compiler)
+    try
+        Revise.track(Core.Compiler)
+    catch err
+        # Revise cannot currently reparse the `typegroup` blocks in the
+        # Compiler sources; track everything else so `revise-*` targets keep
+        # working for Base and stdlib changes
+        @warn "Revise could not track Core.Compiler" err
+    end
     Revise.track(Base)
     for (id, mod) in Base.loaded_modules
         if id.name in STDLIBS

@@ -181,6 +181,7 @@ upper = $(shell echo $1 | tr a-z A-Z)
 # so it's harder to get half-installed (or half-reinstalled) dependencies
 # # and enables sharing deps compiles, uninstall, and fast reinstall
 MAKE_INSTALL = MSYS2_ARG_CONV_EXCL="prefix=" $$(MAKE) -C $1 install $$(MAKE_COMMON) $3 DESTDIR="$2"
+CMAKE_INSTALL = DESTDIR="$2" $$(CMAKE) --install $1 $3
 
 define SHLIBFILE_INSTALL
 	mkdir -p $2/$$(build_shlibdir)
@@ -199,9 +200,10 @@ install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
 ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tar ] && echo exists ))
 # clean depends on uninstall only if the staged file exists
 distclean-$(strip $1) clean-$(strip $1): uninstall-$(strip $1)
-else
+else ifeq (exists, $$(shell [ -e $$(build_prefix)/manifest/$(strip $1) ] && echo exists ))
 # uninstall depends on staging only if the staged file doesn't exist
-# otherwise, uninstall doesn't actually want the file to be updated first
+# but the dep is installed; otherwise, uninstall doesn't actually want
+# the file to be updated first (or has nothing to uninstall)
 uninstall-$(strip $1): | $$(build_staging)/$2.tar
 endif
 
@@ -289,6 +291,26 @@ endif
 
 ## phony targets ##
 
-.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall version-check \
-	get-* extract-* configure-* compile-* fastcheck-* check-* install-* uninstall-* reinstall-* clean-* distclean-* \
-	update-llvm
+.PHONY: check
+.PHONY: check-*
+.PHONY: clean-*
+.PHONY: cleanall
+.PHONY: compile
+.PHONY: compile-*
+.PHONY: configure
+.PHONY: configure-*
+.PHONY: default
+.PHONY: distclean-*
+.PHONY: distcleanall
+.PHONY: extract
+.PHONY: extract-*
+.PHONY: fastcheck
+.PHONY: fastcheck-*
+.PHONY: get
+.PHONY: get-*
+.PHONY: install
+.PHONY: install-*
+.PHONY: reinstall
+.PHONY: reinstall-*
+.PHONY: uninstall
+.PHONY: uninstall-*

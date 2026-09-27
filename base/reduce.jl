@@ -198,9 +198,10 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 ## foldr & mapfoldr
 
 function mapfoldr_impl(f, op, nt, itr)
-    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return foldl_impl(op′, nt, _reverse_iter(itr′))
+    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, _reverse_iter(itr)))
+    return foldl_impl(op′, nt, itr′)
 end
+
 
 _reverse_iter(itr) = Iterators.reverse(itr)
 _reverse_iter(itr::Union{Tuple,NamedTuple}) = length(itr) <= 32 ? reverse(itr) : Iterators.reverse(itr) #33235
@@ -218,7 +219,7 @@ Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr
 provided, the keyword argument `init` will be used exactly once. In general, it will be
 necessary to provide `init` to work with empty collections.
 """
-mapfoldr(f, op, itr; init=_InitialValue()) = mapfoldr_impl(f, op, init, itr)
+mapfoldr(f::F, op::F2, itr; init=_InitialValue()) where {F,F2} = mapfoldr_impl(f, op, init, itr)
 
 
 """
@@ -237,7 +238,7 @@ julia> foldr(=>, 1:4; init=0)
 1 => (2 => (3 => (4 => 0)))
 ```
 """
-foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
+foldr(op::F, itr; kw...) where {F} = mapfoldr(identity, op, itr; kw...)
 
 ## reduce & mapreduce
 
@@ -379,6 +380,14 @@ mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F,F2} =
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
 @inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
+# a homogeneous tuple binds the element type as a static parameter, which stays
+# precise for abstract `Tuple{Vararg{T}}` queries where `eltype` of the
+# `@nospecialize`d tuple type does not (#61323). `T` is undefined only for the
+# empty tuple (vacuous `Vararg` match), whose eltype is `Union{}`; the
+# `@isdefined` guard keeps this method's intentional unbound sparam (see the
+# `detect_unbound_args` allow-list in test/ambiguous.jl), like `_eltype_ntuple`.
+@inline reduce_empty_iter(op, itr::Tuple{Vararg{T}}, ::HasEltype) where {T} =
+    reduce_empty(op, @isdefined(T) ? T : Union{})
 reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
     reducing over an empty collection of unknown element type is not allowed.
     You may be able to prevent this error by supplying an `init` value to the reducer."""))

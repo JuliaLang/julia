@@ -149,8 +149,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
 `--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
-`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
-command line arguments that are not at their default values.
+`--code-coverage`, `--code-coverage-mode`, `--track-allocation`, `--color`, `--startup-file`,
+and `--depwarn` command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
 
@@ -175,11 +175,11 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
-    let compile = if opts.compile_enabled == 0
+    let compile = if opts.compile_enabled == JL_OPTIONS_COMPILE_OFF
                       "no"
-                  elseif opts.compile_enabled == 2
+                  elseif opts.compile_enabled == JL_OPTIONS_COMPILE_ALL
                       "all"
-                  elseif opts.compile_enabled == 3
+                  elseif opts.compile_enabled == JL_OPTIONS_COMPILE_MIN
                       "min"
                   else
                       "" # default = "yes"
@@ -227,6 +227,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
     end
+    opts.code_coverage_mode == 1 && push!(addflags, "--code-coverage-mode=count")
     if opts.malloc_log == 1
         push!(addflags, "--track-allocation=user")
     elseif opts.malloc_log == 2
@@ -244,6 +245,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
+    end
+    if opts.compress_sysimage == 1
+        push!(addflags, "--compress-sysimage=yes")
     end
     return `$julia -C $cpu_target -J$image_file $addflags`
 end
@@ -593,7 +597,7 @@ macro kwdef(expr)
         if isnothing(defval)
             return fieldname
         else
-            return Expr(:kw, fieldname, esc(defval))
+            return Expr(:kw, fieldname, defval)
         end
     end
 
@@ -602,9 +606,9 @@ macro kwdef(expr)
     if !isempty(parameters)
         T_no_esc = Meta.unescape(T)
         if T_no_esc isa Symbol
-            sig = Expr(:call, esc(T), Expr(:parameters, parameters...))
-            body = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
-            kwdefs = Expr(:function, sig, body)
+            sig = Expr(:call, T, Expr(:parameters, parameters...))
+            body = Expr(:block, __source__, Expr(:call, T, fieldnames...))
+            kwdefs = esc(Expr(:function, sig, body))
         elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
@@ -613,13 +617,13 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
-            sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
+            body1 = Expr(:block, __source__, Expr(:call, S, fieldnames...))
+            sig1 = Expr(:call, S, Expr(:parameters, parameters...))
             def1 = Expr(:function, sig1, body1)
-            body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
-            sig2 = :($(Expr(:call, esc(SQ), Expr(:parameters, parameters...))) where {$(esc.(P)...)})
+            body2 = Expr(:block, __source__, Expr(:call, SQ, fieldnames...))
+            sig2 = :($(Expr(:call, SQ, Expr(:parameters, parameters...))) where {$(P...)})
             def2 = Expr(:function, sig2, body2)
-            kwdefs = Expr(:block, def1, def2)
+            kwdefs = esc(Expr(:block, def1, def2))
         else
             error("Invalid usage of @kwdef")
         end
@@ -677,7 +681,7 @@ end
 # testing
 
 """
-    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.EFFECTIVE_CPU_THREADS / 2),
                   exit_on_error=false, revise=false, propagate_project=true, [seed], [julia_args::Cmd])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
@@ -691,7 +695,7 @@ If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 The argument `julia_args` can be used to pass custom `julia` command line flags to the test process.
 """
-function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   propagate_project::Bool=false,
@@ -716,20 +720,15 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
-        buf = PipeBuffer()
-        let InteractiveUtils = Base.require_stdlib(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-            @invokelatest InteractiveUtils.versioninfo(buf)
+        # evaluate versioninfo in the test environment so the listed env vars are the same
+        vinfo = read(setenv(`$(julia_cmd()) -e 'let InteractiveUtils = Base.require_stdlib(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils")); @invokelatest(InteractiveUtils.versioninfo()); end'`, ENV2), String)
+        msg = "A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+              "including error messages above and the output of versioninfo():\n$(vinfo)"
+        if isinteractive()
+            error(msg)
+        else
+            print(stderr, "ERROR: ", msg)
+            exit(1)
         end
-        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
-              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
-end
-
-"""
-    isdebugbuild()
-
-Return `true` if julia is a debug version.
-"""
-function isdebugbuild()
-    return ccall(:jl_is_debugbuild, Cint, ()) != 0
 end

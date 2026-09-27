@@ -45,6 +45,7 @@ Base.reset(::Base.Threads.Event)
 
 Base.Semaphore
 Base.acquire
+Base.@acquire
 Base.release
 
 Base.AbstractLock
@@ -55,6 +56,28 @@ Base.islocked
 Base.ReentrantLock
 Base.@lock
 Base.Lockable
+```
+
+## Cancellation
+
+Cooperative cancellation of blocked waits (and, eventually, running
+computations) is organized around cancellation token sources and the
+tokens they hand out. Blocking operations across `Base`, `Sockets` and
+`FileWatching` accept a `cancel` keyword argument governing which token may
+interrupt them; the scoped default is [`Base.CANCEL_TOKEN`](@ref).
+
+```@docs
+Base.CancellationTokenSource
+Base.CancellationToken
+Base.CancellationRequest
+Base.cancel!
+Base.iscancelled
+Base.cancel_severity
+Base.CANCEL_TOKEN
+Base.@cancel_check
+Base.CANCEL_REQUEST_SAFE
+Base.CANCEL_REQUEST_ABANDON_EXTERNAL
+Base.CANCEL_REQUEST_ABANDON_ALL
 ```
 
 ## Channels
@@ -152,7 +175,7 @@ notifying...
 done
 ```
 
-`OneWayEvent` lets one task to `wait` for another task's `notify`. It is a limited
+`OneWayEvent` lets one task `wait` for another task's `notify`. It is a limited
 communication interface since `wait` can only be used once from a single task (note the
 non-atomic assignment of `ev.task`)
 

@@ -4,6 +4,7 @@ using Test
 
 
 include("testenv.jl")
+include("tempdepot.jl")
 
 
 function test_harness(@nospecialize(fn); empty_load_path=true, empty_depot_path=true)
@@ -32,7 +33,7 @@ if !test_relocated_depot
 
         # insert @depot only once for first match
         test_harness() do
-            mktempdir() do dir
+            mkdepottempdir() do dir
                 pushfirst!(DEPOT_PATH, dir)
                 if Sys.iswindows()
                     # dirs start with a drive letter instead of a path separator
@@ -46,7 +47,7 @@ if !test_relocated_depot
 
             # 55340
             empty!(DEPOT_PATH)
-            mktempdir() do dir
+            mkdepottempdir() do dir
                 jlrc = joinpath(dir, "julia-rc2")
                 jl   = joinpath(dir, "julia")
                 mkdir(jl)
@@ -61,7 +62,7 @@ if !test_relocated_depot
 
         # deal with and without trailing path separators
         test_harness() do
-            mktempdir() do dir
+            mkdepottempdir() do dir
                 pushfirst!(DEPOT_PATH, dir)
                 path = joinpath(dir, "foo")
                 if isdirpath(DEPOT_PATH[1])
@@ -170,13 +171,54 @@ if !test_relocated_depot
         end
     end
 
+    @testset "depot selection with overlapping incomplete depots" begin
+        # A depot missing some of a cache's source files must not win the depot
+        # resolution over a depot containing all of them, regardless of the order
+        # of the two depots in DEPOT_PATH and of the order in which the source
+        # files are scanned.
+        test_harness() do
+            mkdepottempdir() do depot_complete
+                mkdepottempdir() do depot_incomplete
+                    pkgname = "DepotResolution"
+                    for depot in (depot_complete, depot_incomplete)
+                        srcdir = joinpath(depot, pkgname, "src")
+                        mkpath(srcdir)
+                        write(joinpath(srcdir, "$pkgname.jl"), """
+                            module $pkgname
+                            include("extra.jl")
+                            end
+                            """)
+                    end
+                    write(joinpath(depot_complete, pkgname, "src", "extra.jl"), "f() = 1\n")
+                    write(joinpath(depot_complete, pkgname, "Project.toml"), """
+                        name = "$pkgname"
+                        uuid = "00000000-0000-0000-0000-000000000003"
+                        version = "1.0.0"
+                        """)
+                    pushfirst!(LOAD_PATH, depot_complete)
+                    push!(DEPOT_PATH, depot_complete)
+                    pkg = Base.identify_package(pkgname)
+                    Base.compilecache(pkg)
+                    cachefile = only(Base.find_all_in_cache_path(pkg))
+                    for depots in ([depot_complete, depot_incomplete],
+                                   [depot_incomplete, depot_complete])
+                        copy!(DEPOT_PATH, depots)
+                        _, (includes, _, _), _... = Base.parse_cache_header(cachefile)
+                        @test all(inc -> startswith(inc.filename, depot_complete), includes)
+                        @test Base.isprecompiled(pkg)
+                    end
+                end
+            end
+        end
+    end
+
     @testset "#52161" begin
         # Take the src files from two pkgs Example1 and Example2,
         # which are each located in depot1 and depot2, respectively, and
         # add them as include_dependency()s to a new pkg Foo, which will be precompiled into depot3.
         # After loading the include_dependency()s of Foo should refer to depot1 depot2 each.
         test_harness() do
-            mktempdir() do depot1
+            mkdepottempdir() do depot1
                 # precompile Example in depot1
                 example1_root = joinpath(depot1, "Example1")
                 mkpath(joinpath(example1_root, "src"))
@@ -196,7 +238,7 @@ if !test_relocated_depot
                 end
                 pushfirst!(LOAD_PATH, depot1); pushfirst!(DEPOT_PATH, depot1)
                 pkg = Base.identify_package("Example1"); Base.require(pkg)
-                mktempdir() do depot2
+                mkdepottempdir() do depot2
                     # precompile Example in depot2
                     example2_root = joinpath(depot2, "Example2")
                     mkpath(joinpath(example2_root, "src"))
@@ -216,7 +258,7 @@ if !test_relocated_depot
                     end
                     pushfirst!(LOAD_PATH, depot2); pushfirst!(DEPOT_PATH, depot2)
                     pkg = Base.identify_package("Example2"); Base.require(pkg)
-                    mktempdir() do depot3
+                    mkdepottempdir() do depot3
                         # precompile Foo in depot3
                         open(joinpath(depot3, "Module52161.jl"), write=true) do io
                             println(io, """

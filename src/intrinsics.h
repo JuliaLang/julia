@@ -95,7 +95,7 @@
     ADD_I(pointerref, 3) \
     ADD_I(pointerset, 4) \
     /*  pointer atomics */ \
-    ADD_I(atomic_fence, 1) \
+    ADD_I(atomic_fence, 2) \
     ADD_I(atomic_pointerref, 2) \
     ADD_I(atomic_pointerset, 3) \
     ADD_I(atomic_pointerswap, 3) \
