@@ -888,3 +888,11 @@ end
     @test c[5] == b[5] == 0x00
     @test vec(c) == reinterpret(UInt8, a)
 end
+
+@testset "BitArray from and into a reshaped reinterpret" begin
+    X = reinterpret(reshape, Bool, UInt16[0x0001, 0x0100, 0x0101])
+    @test BitArray(X) == Bool[1 0 1; 0 1 1]
+    @test copyto!(falses(2, 3), X) == Bool[1 0 1; 0 1 1]
+    @test all(nextind(X, a) == b for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
+    @test all(prevind(X, b) == a for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
+end
