@@ -565,6 +565,15 @@ end
 @test `foo~` == Cmd(["foo~"])        # ~ end-word: no expansion
 @test `'~'` == Cmd(["~"])            # ~ in single quotes: no expansion
 @test `"~"` == Cmd(["~"])            # ~ in double quotes: no expansion
+@test `~'root'` == Cmd(["~root"])    # quoted user name: no expansion
+@test `~"x"/a` == Cmd(["~x/a"])
+@test `~\x` == Cmd(["~x"])
+@test `~x'y'` == Cmd(["~xy"])
+@test samepath(only(`~/'a b'`.exec), joinpath(homedir(), "a b"))  # quote after the slash
+@test samepath(only(`~\
+    /a`.exec), joinpath(homedir(), "a"))
+@test `~\
+    x'y'` == Cmd(["~xy"])
 @test Base.shell_split("~/foo") == ["~/foo"]  # shell_split does not expand ~
 if !Sys.iswindows()
     me = Sys.username()
