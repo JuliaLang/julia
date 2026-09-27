@@ -220,8 +220,7 @@ end
         @test v::T === Core.Intrinsics.trunc_int(T, typemax(UInt64))
     end
 
-    # sizeof rounds the value bytes up to a multiple of the alignment, as C23 lays out
-    # `_BitInt(N)`.
+    # sizeof rounds the value bytes up to a multiple of the alignment
     for (nb, sz) in ((1, 1), (2, 1), (5, 1), (8, 1), (9, 2), (17, 4), (24, 4), (25, 4),
                      (33, 8), (40, 8), (48, 8), (63, 8), (64, 8), (65, 16), (128, 16))
         T = Core.eval(@__MODULE__, :(primitive type $(Symbol("TestSz", nb)) $nb end;
