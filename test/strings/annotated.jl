@@ -77,6 +77,7 @@
     @test (@inferred Base.annotatedstring("y", valued(1))) isa Base.AnnotatedString{String, Int}
     @test (@inferred String join(AbstractString["y", valued(1)])) isa Base.AnnotatedString{String, Any}
     @test (@inferred String join(Union{Missing, Base.AnnotatedString{String, Int}}[valued(1), valued(2)])) isa Base.AnnotatedString{String, Int}
+    @test join(split(Base.AnnotatedString("ab cd", [(1:2, :a, :x)]))) == Base.AnnotatedString("abcd", [(1:2, :a, :x)])
     # An empty iterator, whose eltype is `Union{}`, joins to a plain `String`
     @test join(()) === ""
     @test join(x for x in ()) === ""
@@ -87,6 +88,7 @@
         @test repeat(sub, 1) !== sub # A copy, as an annotated string is mutable
     end
     @test uppercase(Base.AnnotatedString(SubString("abcd", 1, 3), [(1:1, :n, 1)])) isa Base.AnnotatedString{String, Int}
+    @test (@inferred join(split(valued(1) * " " * valued(2)))) isa Base.AnnotatedString{String, Int}
     # A value outside the value type is refused with a clear error
     @test_throws ArgumentError Base.annotate!(valued(1), 1:1, :m, "s")
     @test_throws ArgumentError Base.annotate!(Base.AnnotatedIOBuffer{Int}(), 1:1, :m, "s")
