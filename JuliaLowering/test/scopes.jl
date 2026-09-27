@@ -460,6 +460,18 @@ end
     end
 end
 
+@testset "explicit-module names share the plain global's binding" begin
+    # A `GlobalRef` and a plain identifier for the same global resolve to one
+    # binding, in either order
+    mod = Module()
+    for ex in (Expr(:block, :y, GlobalRef(mod, :y)),
+               Expr(:block, GlobalRef(mod, :y), :y))
+        ys = filter(b -> b.name == "y" && b.kind === :global,
+                    resolve_and_get_bindings(mod, ex))
+        @test length(ys) == 1
+    end
+end
+
 @testset "is_ambiguous_local" begin
     # Assignment in for loop within begin block after toplevel assignment
     let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end))
