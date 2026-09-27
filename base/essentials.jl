@@ -798,7 +798,8 @@ end
     sizeof(obj)
 
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
-Or the size, in bytes, of object `obj` if it is not a `DataType`.
+Or the size, in bytes, of object `obj` if it is not a `DataType`. The size of a primitive type
+includes padding past its declared width, which [`Core.bitsizeof`](@ref) gives.
 
 See also [`Base.summarysize`](@ref).
 

@@ -74,7 +74,8 @@ Language changes
 * `Core.sizeof` of a `primitive type` now rounds its value bytes up to a multiple of its
   alignment rather than only up to a whole byte, so it always equals `Base.elsize(Array{T})`
   and, up to 64 bits, matches C23's `_BitInt(N)`. For example `primitive type Int24 24 end`
-  now has `sizeof` 4 rather than 3.
+  now has `sizeof` 4 rather than 3. Pointer loads and stores, `read` and `write`, and the layout
+  of structs follow the new size: `unsafe_store!` through a `Ptr{Int24}` now writes 4 bytes.
   Such types now report `Base.datatype_haspadding`; the trailing padding is not part of the
   value and does not affect `===` or `objectid` ([#61361]).
 
