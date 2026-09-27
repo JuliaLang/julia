@@ -1962,7 +1962,8 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                 # verify this statement won't throw, otherwise it can't be eliminated safely
                 setfield_ssa = SSAValue(didx)
                 if is_nothrow(ir, setfield_ssa)
-                    ir[setfield_ssa][:stmt] = nothing
+                    # `setfield!` returns the stored value, which may still be used
+                    ir[setfield_ssa][:stmt] = val_for_def_expr(ir, didx, fidx)
                 else
                     # We can't eliminate this statement, because it might still
                     # throw an error, but we can mark it as effect-free since we
