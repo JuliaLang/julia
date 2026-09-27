@@ -70,6 +70,8 @@ Language changes
   (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
+* `Base.cconvert(Ptr{T}, v)` for a strided `SubArray` `v` now returns an internal wrapper around
+  `cconvert(Ptr{T}, parent(v))` plus a byte offset, instead of returning `v` itself ([#60533]).
 
 Compiler/Runtime improvements
 -----------------------------
