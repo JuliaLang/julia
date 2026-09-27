@@ -73,9 +73,39 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src) JL_
     }
 }
 
-static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind) JL_CANSAFEPOINT
+// Look up a path like `A.B` through module bindings only, so that no user code runs.
+// Sets the flag if a binding on the path has no value. Returns NULL if that happens
+// or if a step of the path is not a module.
+static jl_value_t *lookup_module_path(jl_value_t *ex, int *missing) JL_CANSAFEPOINT
+{
+    jl_value_t *v;
+    if (jl_is_globalref(ex)) {
+        v = jl_get_binding_value(jl_get_module_binding(jl_globalref_mod(ex), jl_globalref_name(ex), 1));
+    }
+    else if (jl_is_expr(ex) && ((jl_expr_t*)ex)->head == jl_dot_sym && jl_expr_nargs(ex) == 2 &&
+             jl_is_quotenode(jl_exprarg(ex, 1)) && jl_is_symbol(jl_quotenode_value(jl_exprarg(ex, 1)))) {
+        jl_value_t *parent = lookup_module_path(jl_exprarg(ex, 0), missing);
+        if (parent == NULL || !jl_is_module(parent))
+            return NULL;
+        JL_GC_PUSH1(&parent);
+        jl_sym_t *s = (jl_sym_t*)jl_quotenode_value(jl_exprarg(ex, 1));
+        v = jl_get_binding_value(jl_get_module_binding((jl_module_t*)parent, s, 1));
+        JL_GC_POP();
+    }
+    else {
+        return NULL;
+    }
+    if (v == NULL)
+        *missing = 1;
+    return v;
+}
+
+// Return a missing-prefix error for the caller to defer until execution.
+static jl_value_t *normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
+    jl_value_t *undef_err = NULL;
+    JL_GC_PUSH1(&undef_err);
     jl_value_t *fptr = jl_exprarg(e, 0);
     if (jl_is_quotenode(fptr)) {
         if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
@@ -112,6 +142,7 @@ static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const cha
                 jl_value_t *sym_expr = jl_exprarg(dot_expr, 1);
                 if (!(jl_is_quotenode(sym_expr) && jl_is_symbol(jl_quotenode_value(sym_expr))))
                     jl_type_error("ccall/cglobal name dot expression", (jl_value_t*)jl_symbol_type, sym_expr);
+                int missing = 0;
                 JL_TRY {
                     jl_value_t *mod_val = jl_toplevel_eval(module, mod_expr);
                     JL_TYPECHK(ccall/cglobal name dot expression, module, mod_val);
@@ -123,8 +154,11 @@ static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const cha
                 JL_CATCH {
                     if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
                         jl_errorf("could not evaluate %s function/library name (it might depend on a local variable)", kind);
-                    else
+                    if (jl_typetagis(jl_current_exception(ct), jl_undefvarerror_type))
+                        lookup_module_path(mod_expr, &missing);
+                    if (!missing)
                         jl_rethrow();
+                    undef_err = jl_current_exception(ct);
                 }
             }
             else if (jl_is_quotenode(arg)) {
@@ -152,6 +186,19 @@ static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const cha
     else {
         // preserve argument (1-arg, pointer form)
     }
+    JL_GC_POP();
+    return undef_err;
+}
+
+static jl_value_t *throw_expr(jl_value_t *exc JL_MAYBE_UNROOTED) JL_CANSAFEPOINT
+{
+    jl_expr_t *ex = NULL;
+    JL_GC_PUSH2(&exc, &ex);
+    ex = jl_exprn(jl_call_sym, 2);
+    jl_exprargset(ex, 0, jl_module_globalref(jl_core_module, jl_symbol("throw")));
+    jl_exprargset(ex, 1, exc);
+    JL_GC_POP();
+    return (jl_value_t*)ex;
 }
 
 // Resolve references to non-locally-defined variables to become references to global
@@ -241,7 +288,8 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     if (e->head == jl_foreigncall_sym) {
         JL_NARGSV(ccall method definition, 5); // (target, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
-        normalize_foreignsymbol(e, module, "ccall");
+        jl_value_t *undef_err = normalize_foreignsymbol(e, module, "ccall");
+        JL_GC_PUSH1(&undef_err);
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
         if (!jl_is_type(rt)) {
@@ -283,10 +331,16 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
             for (size_t i = 2; i < (size_t)jl_nfields(cc); i++)
                 JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, i));
         }
+        if (undef_err)
+            expr = throw_expr(undef_err);
+        JL_GC_POP();
+        return expr;
     }
     if (e->head == jl_foreignglobal_sym) {
         JL_NARGS(cglobal method definition, 1, 1); // (target)
-        normalize_foreignsymbol(e, module, "cglobal");
+        jl_value_t *undef_err = normalize_foreignsymbol(e, module, "cglobal");
+        if (undef_err)
+            return throw_expr(undef_err);
     }
     if (e->head == jl_call_sym && nargs > 0 &&
             jl_is_globalref(jl_exprarg(e, 0))) {
