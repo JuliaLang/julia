@@ -514,7 +514,7 @@ function expand_compare_chain(ctx, ex)
             op = terms[i+1]
             rhs = terms[i+2]
 
-            rhs = if i + 2 < length(terms) && kind(rhs) != K"BindingId"
+            rhs = if i + 2 < length(terms) && !is_effect_free(rhs)
                 rhs_ident = ssavar(ctx, rhs, "rhs_ident")
                 terms[i+2] = rhs_ident
                 @ast ctx rhs [K"block"
@@ -539,7 +539,7 @@ function expand_compare_chain(ctx, ex)
             next_dotop = findnext(is_dotted, terms, i+3)
             if !isnothing(next_dotop)
                 dotop_lhs = terms[next_dotop-1]
-                if kind(dotop_lhs) != K"BindingId"
+                if !is_effect_free(dotop_lhs)
                     dotop_lhs_ident = ssavar(ctx, dotop_lhs, "dotop_lhs_ident")
                     terms[next_dotop-1] = dotop_lhs_ident
                     dotchain_head = @ast ctx dotop_lhs [K"=" dotop_lhs_ident dotop_lhs]
@@ -585,7 +585,7 @@ function expand_scalar_compare_chain(ctx, srcref, terms, i)
 
         is_dotted(op) && break
 
-        rhs = if i + 2 < length(terms) && kind(rhs) != K"BindingId"
+        rhs = if i + 2 < length(terms) && !is_effect_free(rhs)
             rhs_ident = ssavar(ctx, rhs, "rhs_ident")
             terms[i+2] = rhs_ident
             @ast ctx rhs [K"block"
