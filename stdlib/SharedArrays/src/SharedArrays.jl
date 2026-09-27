@@ -371,6 +371,7 @@ localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 cconvert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = cconvert(Ptr{T}, sdata(S))
 cconvert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = cconvert(Ptr{T}, sdata(S))
+Base.pointer(S::SharedArray) = pointer(sdata(S))
 
 function SharedArray(A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))

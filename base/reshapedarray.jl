@@ -349,6 +349,7 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 cconvert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = cconvert(Ptr{T}, parent(a))
 unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, a.parent)
+pointer(a::ReshapedArray) = pointer(parent(a))
 
 # Add a few handy specializations to further speed up views of reshaped ranges
 const ReshapedUnitRange{T,N,A<:AbstractUnitRange} = ReshapedArray{T,N,A,Tuple{}}
@@ -364,15 +365,23 @@ substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedRange{<:Integer}, Vararg{Any}}
 # step, and reshaped ranges with a constant step.
 const StridedSubArrayIndex = Union{Integer, AbstractRange{<:Integer}, ReshapedRange{<:Integer}}
 
-# This exists for backwards compatibility, normally the cconvert method below will be used
-function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}) where {S,T,N,P}
+# Byte offset of the first element of a strided `SubArray` from the start of its parent
+function _subarray_byte_offset(V::SubArray{<:Any,<:Any,<:Any,<:Tuple{Vararg{StridedSubArrayIndex}}})
     parent = V.parent
     Δmem = if _checkcontiguous(Bool, parent)
         (first_index(V) - firstindex(parent)) * elsize(parent)
     else
         _memory_offset(parent, map(first, V.indices)...)
     end
-    return Ptr{S}(unsafe_convert(Ptr{T}, parent) + Int(Δmem))
+    return Int(Δmem)
+end
+
+pointer(V::SubArray{<:Any,<:Any,<:Any,<:Tuple{Vararg{StridedSubArrayIndex}}}) =
+    pointer(V.parent) + _subarray_byte_offset(V)
+
+# This exists for backwards compatibility, normally the cconvert method below will be used
+function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}) where {S,T,N,P}
+    return Ptr{S}(unsafe_convert(Ptr{T}, V.parent) + _subarray_byte_offset(V))
 end
 
 struct OffsetCConvert{T, C}
@@ -400,17 +409,10 @@ function unsafe_convert(::Type{Ptr{S}}, c::OffsetCConvert{T}) where {S, T}
 end
 
 function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}) where {S,T,N,P}
-    parent = V.parent
-    p = cconvert(Ptr{T}, parent)
-    Δmem = if _checkcontiguous(Bool, parent)
-        (first_index(V) - firstindex(parent)) * elsize(parent)
-    else
-        _memory_offset(parent, map(first, V.indices)...)
-    end
     _offset_cconvert(
         Ptr{T},
-        Int(Δmem),
-        p,
+        _subarray_byte_offset(V),
+        cconvert(Ptr{T}, V.parent),
     )
 end
 

@@ -1273,10 +1273,8 @@ end
 
 ## unsafe/pointer conversions ##
 
-# note: the following type definitions don't mean any AbstractArray is convertible to
-# a data Ref. they just map the array element type to the pointer type for
-# convenience in cases that work.
-pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, cconvert(Ptr{T}, x))
+# note: there is no generic `pointer(x::AbstractArray)`; array types backed by memory
+# must define it. Given that, this computes the address of an element.
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @inline
     pointer(x) + Int(_memory_offset(x, i))::Int
