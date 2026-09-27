@@ -1467,6 +1467,9 @@ function get_max_methods_for_func(@nospecialize(f))
     return nothing
 end
 
+max_methods_callee(@nospecialize(f), argtypes::Vector{Any}) =
+    f === Core.kwcall && length(argtypes) >= 3 ? singleton_type(argtypes[3]) : f
+
 # Whether `f` is marked to only allow inference of call sites with fully concrete
 # argument types. `f === nothing` means the callee value is unknown.
 function is_concrete_only(@nospecialize(f))

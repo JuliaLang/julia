@@ -1999,8 +1999,7 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo,
-                        vtypes::Union{VarTable,Nothing}, sv::AbsIntState,
-                        max_methods::Int=get_max_methods(interp, sv))
+                        vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     itft = Core.Box(argtype_by_index(argtypes, 2))
     aft = argtype_by_index(argtypes, 3)
     (itft.contents === Bottom || aft === Bottom) && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
@@ -2127,7 +2126,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     break
                 end
             end
-            state.callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv, max_methods)::Future{CallMeta}
+            state.callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv)::Future{CallMeta}
             if !isready(state.callfuture)
                 state.nextstate = 0x3
                 return false
@@ -2965,7 +2964,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
         if f === _apply_iterate
-            return abstract_apply(interp, argtypes, si, vtypes, sv, max_methods)
+            return abstract_apply(interp, argtypes, si, vtypes, sv)
         elseif f === invoke
             return abstract_invoke(interp, arginfo, si, vtypes, sv)
         elseif f === modifyfield! || f === Core.modifyglobal! ||
@@ -3236,7 +3235,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
         max_methods = max_methods == typemin(Int) ? get_max_methods(interp, sv) : max_methods
         return abstract_call_unknown(interp, ft, arginfo, si, vtypes, sv, max_methods)
     end
-    max_methods = max_methods == typemin(Int) ? get_max_methods(interp, f, sv) : max_methods
+    max_methods = max_methods == typemin(Int) ? get_max_methods(interp, max_methods_callee(f, arginfo.argtypes), sv) : max_methods
     return abstract_call_known(interp, f, arginfo, si, vtypes, sv, max_methods)
 end
 
