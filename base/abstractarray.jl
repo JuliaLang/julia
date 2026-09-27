@@ -568,8 +568,9 @@ Return `true` if reading an element of an array of this type through a pointer i
 equivalent to reading it with [`getindex`](@ref). Otherwise return `false`.
 
 Precisely, for an array `A` of this type with an `isbits` element type `T`, if `p::Ptr{T}`
-points to the memory of the element `A[i]`, then `unsafe_load(p)`
-returns a value identical (`===`) to `A[i]`.
+points to the memory of the element `A[i]`, then `A[i]` and `unsafe_load(p)` are
+interchangeable: they return identical (`===`) values and have the same side effects,
+including any error thrown.
 
 This trait does not imply that the array is strided. If the array type is also
 [`isstrided`](@ref Base.isstrided), arrays of this type with an `isbits` element type
@@ -596,8 +597,9 @@ Return `true` if writing an element of an array of this type through a pointer i
 equivalent to writing it with [`setindex!`](@ref). Otherwise return `false`.
 
 Precisely, for an array `A` of this type with an `isbits` element type `T`, if `p::Ptr{T}`
-points to the memory of the element `A[i]`, then `unsafe_store!(p, x)`
-has the same effect as `A[i] = x` for any `x::T`.
+points to the memory of the element `A[i]`, then for any `x::T`, `A[i] = x` and
+`unsafe_store!(p, x)` are interchangeable: they have the same side effects,
+including any error thrown.
 
 This trait does not imply that the array is strided. If the array type is also
 [`isstrided`](@ref Base.isstrided), arrays of this type with an `isbits` element type
