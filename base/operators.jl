@@ -946,7 +946,7 @@ Legacy spelling of `cldmod1(x, y)` for integers.
 
 See also [`cldmod1`](@ref).
 """
-fldmod1(x, y) = cldmod1(x, y)
+fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
 """
     widen(x)
