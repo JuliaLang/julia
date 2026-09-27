@@ -1740,20 +1740,6 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
 }
 */
 
-static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
-{
-    jl_aliasinfo_t ai = ctx.alias().constant;
-    Value *Ptr = decay_derived(ctx, dt);
-    Value *Idx = ConstantInt::get(ctx.types().T_size, offsetof(jl_datatype_t, name));
-    Value *Nam = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getPointerTy(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getPointerTy(ctx.builder.getContext()), Ptr, Idx), Align(sizeof(int8_t*))));
-    Value *Idx2 = ConstantInt::get(ctx.types().T_size, offsetof(jl_typename_t, n_uninitialized) + sizeof(((jl_typename_t*)nullptr)->n_uninitialized));
-    Value *mutabl = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), Nam, Idx2), Align(1)));
-    mutabl = ctx.builder.CreateLShr(mutabl, 1);
-    return ctx.builder.CreateTrunc(mutabl, getInt1Ty(ctx.builder.getContext()));
-}
-
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *typ)
 {
     Value *isprimitive;
