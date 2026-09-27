@@ -1360,14 +1360,15 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->regs[30] = (*_ctx)[11]; // aka lr
     // Yes, they did skip 12 when writing the code originally; and, no, I do not know why.
     mc->sp = (*_ctx)[13];
-    mcfp->vregs[7] = (*_ctx)[14]; // aka d8
-    mcfp->vregs[8] = (*_ctx)[15]; // aka d9
-    mcfp->vregs[9] = (*_ctx)[16]; // aka d10
-    mcfp->vregs[10] = (*_ctx)[17]; // aka d11
-    mcfp->vregs[11] = (*_ctx)[18]; // aka d12
-    mcfp->vregs[12] = (*_ctx)[19]; // aka d13
-    mcfp->vregs[13] = (*_ctx)[20]; // aka d14
-    mcfp->vregs[14] = (*_ctx)[21]; // aka d15
+    // vregs is uint64_t[64] holding each 128-bit v_k as two halves, so d_k is vregs[2k].
+    mcfp->vregs[16] = (*_ctx)[14]; // aka d8
+    mcfp->vregs[18] = (*_ctx)[15]; // aka d9
+    mcfp->vregs[20] = (*_ctx)[16]; // aka d10
+    mcfp->vregs[22] = (*_ctx)[17]; // aka d11
+    mcfp->vregs[24] = (*_ctx)[18]; // aka d12
+    mcfp->vregs[26] = (*_ctx)[19]; // aka d13
+    mcfp->vregs[28] = (*_ctx)[20]; // aka d14
+    mcfp->vregs[30] = (*_ctx)[21]; // aka d15
     // ifdef PTR_DEMANGLE ?
     mc->sp = jl_ptr_demangle(mc->sp);
     mc->regs[30] = jl_ptr_demangle(mc->regs[30]);
@@ -1457,15 +1458,21 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->__x[11] = ((uint64_t*)mctx)[11];
     mc->__x[12] = ((uint64_t*)mctx)[12];
     // 13 is reserved/unused
-    double *mcfp = (double*)&mc[1];
-    mcfp[7] = ((uint64_t*)mctx)[14]; // aka d8
-    mcfp[8] = ((uint64_t*)mctx)[15]; // aka d9
-    mcfp[9] = ((uint64_t*)mctx)[16]; // aka d10
-    mcfp[10] = ((uint64_t*)mctx)[17]; // aka d11
-    mcfp[11] = ((uint64_t*)mctx)[18]; // aka d12
-    mcfp[12] = ((uint64_t*)mctx)[19]; // aka d13
-    mcfp[13] = ((uint64_t*)mctx)[20]; // aka d14
-    mcfp[14] = ((uint64_t*)mctx)[21]; // aka d15
+    // d8-d15 are the low halves of __v[8..15] in the NEON state, which directly
+    // follows the thread state in __darwin_mcontext64. (The Mach exception path
+    // only returns the thread state, so these writes only take effect for signals.)
+    _Static_assert(offsetof(struct __darwin_mcontext64, __ns) ==
+                   offsetof(struct __darwin_mcontext64, __ss) + sizeof(arm_thread_state64_t),
+                   "NEON state must directly follow the thread state");
+    arm_neon_state64_t *mcfp = (arm_neon_state64_t*)&mc[1];
+    mcfp->__v[8] = ((uint64_t*)mctx)[14]; // aka d8
+    mcfp->__v[9] = ((uint64_t*)mctx)[15]; // aka d9
+    mcfp->__v[10] = ((uint64_t*)mctx)[16]; // aka d10
+    mcfp->__v[11] = ((uint64_t*)mctx)[17]; // aka d11
+    mcfp->__v[12] = ((uint64_t*)mctx)[18]; // aka d12
+    mcfp->__v[13] = ((uint64_t*)mctx)[19]; // aka d13
+    mcfp->__v[14] = ((uint64_t*)mctx)[20]; // aka d14
+    mcfp->__v[15] = ((uint64_t*)mctx)[21]; // aka d15
     mc->__fp = _OS_PTR_UNMUNGE(mc->__x[10]);
     mc->__lr = _OS_PTR_UNMUNGE(mc->__x[11]);
     mc->__x[12] = _OS_PTR_UNMUNGE(mc->__x[12]);
@@ -1502,6 +1509,9 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // The jump buffer is a packed array of 8-byte words (the __int128_t element
     // type in <machine/setjmp.h> only forces alignment/size, it is not the stride):
     //   [0] magic, [1] sp, [2..13] x19..x30, [14..21] d8..d15
+    // _JB_MAGIC__SETJMP / _JB_MAGIC_SETJMP (only defined for assembly)
+    if ((((uint64_t*)mctx)[0] & ~(uint64_t)1) != 0xfb5d25837d7ff700ull)
+        return 0;
     mc->mc_gpregs.gp_sp = ((long*)mctx)[1];
     mc->mc_gpregs.gp_x[19] = ((long*)mctx)[2];
     mc->mc_gpregs.gp_x[20] = ((long*)mctx)[3];
@@ -1515,22 +1525,22 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->mc_gpregs.gp_x[28] = ((long*)mctx)[11];
     mc->mc_gpregs.gp_x[29] = ((long*)mctx)[12]; // aka fp
     mc->mc_gpregs.gp_lr = ((long*)mctx)[13]; // aka x30
-    // d8-d15 are the low halves of q8-q15. Zero-extending is fine here: AAPCS64
-    // only requires the bottom 64 bits of v8-v15 to be preserved across a call.
-    mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14]; // aka d8
-    mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15]; // aka d9
-    mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16]; // aka d10
-    mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17]; // aka d11
-    mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18]; // aka d12
-    mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19]; // aka d13
-    mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20]; // aka d14
-    mc->mc_fpregs.fp_q[15] = ((long*)mctx)[21]; // aka d15
+    // d8-d15 are the low halves of q8-q15; read as uint64_t so they zero-extend.
+    mc->mc_fpregs.fp_q[8] = ((uint64_t*)mctx)[14]; // aka d8
+    mc->mc_fpregs.fp_q[9] = ((uint64_t*)mctx)[15]; // aka d9
+    mc->mc_fpregs.fp_q[10] = ((uint64_t*)mctx)[16]; // aka d10
+    mc->mc_fpregs.fp_q[11] = ((uint64_t*)mctx)[17]; // aka d11
+    mc->mc_fpregs.fp_q[12] = ((uint64_t*)mctx)[18]; // aka d12
+    mc->mc_fpregs.fp_q[13] = ((uint64_t*)mctx)[19]; // aka d13
+    mc->mc_fpregs.fp_q[14] = ((uint64_t*)mctx)[20]; // aka d14
+    mc->mc_fpregs.fp_q[15] = ((uint64_t*)mctx)[21]; // aka d15
+    // set_fpcontext() ignores mc_fpregs without this flag
+    mc->mc_flags |= _MC_FP_VALID;
     // AArch64 resumes from a signal at ELR, not LR, so the restored return
     // address has to be installed as the pc as well.
     mc->mc_gpregs.gp_elr = mc->mc_gpregs.gp_lr;
     mc->mc_gpregs.gp_x[0] = val;
-    assert(mc->mc_gpregs.gp_sp % 16 == 0);
-    return 1;
+    return valid_longjmp_target(mc->mc_gpregs.gp_sp, mc->mc_gpregs.gp_elr);
     #else
     #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown freebsd")
     (void)mctx;

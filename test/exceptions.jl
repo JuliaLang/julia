@@ -402,3 +402,39 @@ end
 catch
     current_exceptions()
 end) == 2
+
+# #63007: doubles live across a `try` must survive a fault turned into an exception
+# (callee-saved FP registers, d8-d15 on aarch64, must be restored)
+@noinline function fp_clobber_then_fault(p::Ptr{Float64}, v::Vector{Float64})
+    # live across a call, so these occupy the callee-saved FP registers
+    y1 = -v[1]; y2 = -v[2]; y3 = -v[3]; y4 = -v[4]
+    y5 = -v[5]; y6 = -v[6]; y7 = -v[7]; y8 = -v[8]
+    Libc.getpid()
+    unsafe_store!(p, y1) # p is read-only: raises ReadOnlyMemoryError
+    return (y1, y2, y3, y4, y5, y6, y7, y8)
+end
+@noinline function fp_live_across_fault(p::Ptr{Float64}, v::Vector{Float64})
+    x1 = v[1]; x2 = v[2]; x3 = v[3]; x4 = v[4]
+    x5 = v[5]; x6 = v[6]; x7 = v[7]; x8 = v[8]
+    try
+        fp_clobber_then_fault(p, v)
+    catch e
+        e isa ReadOnlyMemoryError || rethrow()
+    end
+    return (x1, x2, x3, x4, x5, x6, x7, x8)
+end
+if Sys.isunix()
+    @testset "fp registers restored after a fault (#63007)" begin
+        PROT_READ = 0x1
+        MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
+        pagesize = 16 * 1024
+        p = Ptr{Float64}(ccall(:jl_mmap, Ptr{Cvoid},
+                               (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
+                               C_NULL, pagesize, PROT_READ, MAP_ANONYMOUS_PRIVATE, -1, 0))
+        @test p != Ptr{Float64}(-1)
+        v = [1.5, -2.25, 3.125, 4.0e10, -5.0e-10, 6.75, pi, -8.5]
+        # the Mach exception path on macOS does not restore FP registers
+        @test fp_live_across_fault(p, v) == Tuple(v) skip=(Sys.isapple() && Sys.ARCH === :aarch64)
+        ccall(:munmap, Cint, (Ptr{Cvoid}, Csize_t), p, pagesize)
+    end
+end
