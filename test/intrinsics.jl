@@ -240,6 +240,17 @@ end
     # the top bit of a 17-bit value is bit 16
     @test_throws InexactError Core.check_top_bit(TestUInt17, Core.Intrinsics.trunc_int(TestUInt17, 0x00010000))
 
+    # a runtime replace compares values, not the bits above their width
+    mutable struct AtomicTestUInt5
+        @atomic x::TestUInt5
+    end
+    let s = AtomicTestUInt5(Core.Intrinsics.trunc_int(TestUInt5, 0x1f))
+        Base.invokelatest(setfield!, s, :x, dirty(TestUInt5, 0xff), :sequentially_consistent)
+        @test Base.invokelatest(replacefield!, s, :x, Core.Intrinsics.trunc_int(TestUInt5, 0x1f),
+                                Core.Intrinsics.trunc_int(TestUInt5, 0x00),
+                                :sequentially_consistent, :sequentially_consistent).success
+    end
+
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
 
