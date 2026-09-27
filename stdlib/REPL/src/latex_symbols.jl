@@ -784,6 +784,7 @@ const latex_symbols = Dict(
     "\\lessdot" => "⋖",
     "\\gtrdot" => "⋗",
     "\\verymuchless" => "⋘",
+    "\\verymuchgreater" => "⋙",
     "\\lll" => "⋘",
     "\\ggg" => "⋙",
     "\\lesseqgtr" => "⋚",
@@ -2730,4 +2731,6 @@ const symbols_latex_canonical = Dict(
     "⊼" => "\\nand",
     "⊽" => "\\nor",
     "≠" => "\\ne",
+    "⋘" => "\\verymuchless",
+    "⋙" => "\\verymuchgreater",
 )
