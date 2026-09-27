@@ -1898,6 +1898,12 @@ end
     A = [1,2]
     @test append!(A, A) == [1,2,1,2]
     @test prepend!(A, A) == [1,2,1,2,1,2,1,2]
+    A = collect(1:5)
+    @test prepend!(A, view(A, 4:5)) == [4,5,1,2,3,4,5]
+    A = collect(1:5)
+    @test prepend!(A, view(A, 5:-1:1)) == [5,4,3,2,1,1,2,3,4,5]
+    A = Any[1,2,3]
+    @test prepend!(A, view(A, 2:3)) == Any[2,3,1,2,3]
 
     # iterators with length:
     @test append!([1,2], (9,8)) == [1,2,9,8] == push!([1,2], (9,8)...)
