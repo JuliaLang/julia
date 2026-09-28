@@ -221,7 +221,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                 let mut slot = obj + std::mem::size_of::<jl_cancel_source_t>();
                 for _ in 0..np {
                     process_slot(closure, slot);
-                    slot = slot + std::mem::size_of::<jl_cancel_parent_link_t>();
+                    slot += std::mem::size_of::<jl_cancel_parent_link_t>();
                 }
             } else if vtag_usize == ((jl_small_typeof_tags_jl_wait_entry_tag as usize) << 4) {
                 // Variable-sized wait entry: `nslots` {owner, next, aux} wait
@@ -234,7 +234,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                 for _ in 0..ns {
                     process_slot(closure, slot + offset_of!(jl_wait_slot_t, owner));
                     process_slot(closure, slot + offset_of!(jl_wait_slot_t, next));
-                    slot = slot + std::mem::size_of::<jl_wait_slot_t>();
+                    slot += std::mem::size_of::<jl_wait_slot_t>();
                 }
             } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4)
                 && PRINT_OBJ_TYPE
