@@ -5,7 +5,7 @@ DocTestSetup = :(using Dates; using Dates: Timestamp)
 ```
 
 The `Dates` module provides three types for working with dates: [`Date`](@ref) with day
-precision, [`DateTime`](@ref) with millisecond precision, and [`Timestamp`](@ref) with second,
+precision, [`DateTime`](@ref) with millisecond precision, and [`Timestamp`](@ref Dates.Timestamp) with second,
 millisecond, microsecond, or nanosecond precision. All three are subtypes of the abstract
 [`TimeType`](@ref).
 The motivation for distinct types is simple: some operations are much simpler, both in terms of
@@ -14,7 +14,7 @@ For example, since the [`Date`](@ref) type only resolves to the precision of a s
 no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer
 time, and leap seconds are unnecessary and avoided.
 
-[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) are immutable [`Int64`](@ref) wrappers.
+[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref Dates.Timestamp) are immutable [`Int64`](@ref) wrappers.
 The single `instant` field of each type is a `UTInstant{P}` type, which
 represents a continuously increasing machine timeline based on the UT second [^1]. The
 [`DateTime`](@ref) type is not aware of time zones (*naive*, in Python parlance),
@@ -60,14 +60,14 @@ resolutions use the finer one.
     = 1 day), the other based on the SI second (a fixed, constant value). These are radically different!
     Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different
     absolute length depending on the day! Anyway, the fact that [`Date`](@ref), [`DateTime`](@ref),
-    and [`Timestamp`](@ref) are based on UT seconds is a simplifying, yet honest assumption so that
+    and [`Timestamp`](@ref Dates.Timestamp) are based on UT seconds is a simplifying, yet honest assumption so that
     things like leap seconds and all their complexity can be avoided. This basis of time is formally called [UT](https://en.wikipedia.org/wiki/Universal_Time)
     or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every
     day has 24 hours and leads to more natural calculations when working with calendar dates.
 
 ## Constructors
 
-[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) types can be constructed by integer or
+[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref Dates.Timestamp) types can be constructed by integer or
 [`Period`](@ref) types, by parsing, or through adjusters (more on those later):
 
 ```jldoctest
@@ -114,10 +114,10 @@ julia> Timestamp(Date(2013,7,1), Time(12,30,59) + Dates.Nanosecond(42))
 2013-07-01T12:30:59.000000042
 ```
 
-[`Date`](@ref), [`DateTime`](@ref), or [`Timestamp`](@ref) parsing uses format strings. Format
+[`Date`](@ref), [`DateTime`](@ref), or [`Timestamp`](@ref Dates.Timestamp) parsing uses format strings. Format
 strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period
 to parse and passing the text to parse and format string to a [`Date`](@ref),
-[`DateTime`](@ref), or [`Timestamp`](@ref) constructor, of the form
+[`DateTime`](@ref), or [`Timestamp`](@ref Dates.Timestamp) constructor, of the form
 `Date("2015-01-01",dateformat"y-m-d")` or
 `DateTime("20150101",dateformat"yyyymmdd")`.
 
@@ -636,7 +636,7 @@ julia> canonicalize(t2-t1) # creates a CompoundPeriod
 
 ## Rounding
 
-[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) values can be rounded
+[`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref Dates.Timestamp) values can be rounded
 to a specified resolution (e.g., 1 month or 15 minutes) with [`floor`](@ref),
 [`ceil`](@ref), or [`round`](@ref):
 
@@ -675,7 +675,7 @@ That may seem confusing, given that the hour (12) is not divisible by 10. The re
 was chosen is that it is 17,676,660 hours after `0000-01-01T00:00:00`, and 17,676,660 is divisible
 by 10.
 
-As Julia [`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref) values are
+As Julia [`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref Dates.Timestamp) values are
 represented according to the ISO 8601 standard, `0000-01-01T00:00:00` was chosen
 as the base (or "rounding epoch") from which to begin the count of days and
 sub-day units used in rounding calculations. (Note that this differs slightly
