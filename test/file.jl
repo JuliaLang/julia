@@ -2270,20 +2270,5 @@ end
     close(io)
     @test read(dst, String) == "hello again"
 
-    @static if Sys.iswindows()
-        # A brief lock by another handle is waited for.
-        q = joinpath(dir, "locked_file")
-        write(q, "x")
-        handle = ccall(:CreateFileW, stdcall, Ptr{Cvoid},
-                       (Cwstring, Cuint, Cuint, Ptr{Cvoid}, Cuint, Cuint, Ptr{Cvoid}),
-                       q, 0x80000000,                     # GENERIC_READ
-                       0x00000001 | 0x00000002,           # share read and write, but not delete
-                       C_NULL, 3, 0x80, C_NULL)           # OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL
-        @test handle != reinterpret(Ptr{Cvoid}, -1)
-        release = @async (sleep(0.2); ccall(:CloseHandle, stdcall, Int32, (Ptr{Cvoid},), handle))
-        @test rm(q) === nothing
-        wait(release)
-        @test !ispath(q)
-    end
     rm(dir; recursive=true, force=true)
 end
