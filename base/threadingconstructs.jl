@@ -261,7 +261,7 @@ function _threadsfor(iter, lbody, schedule)
     end
 end
 
-function _threadsfor_multi_iterator(body, iterators, condition, schedule, dims, result_type)
+function _threadsfor_multi_iterator(body, iterators, condition, schedule, result_type, flatten)
     vars = [iter.args[1] for iter in iterators]
     ranges = [iter.args[2] for iter in iterators]
 
@@ -276,14 +276,22 @@ function _threadsfor_multi_iterator(body, iterators, condition, schedule, dims, 
         Expr(:let, Expr(:block, assignments...), condition)
     end
 
-    product_expr = :(Iterators.product($(ranges...)))
+    # The product has the shape of the serial comprehension, so the result takes its
+    # shape from it, and each iterator expression is evaluated once.
+    product_expr = Expr(:call, GlobalRef(Base.Iterators, :product), ranges...)
     synthetic_iter = :($(tuple_var) = $(product_expr))
 
-    return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule, dims; result_type)
+    return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule; result_type, flatten)
 end
 
 function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
-    @assert gen.head === :generator
+    # `[f(x, y) for x in a for y in b(x)]`: the outer generator's body is the inner iterator,
+    # whose elements are collected in order. The work is split over the outer iterator.
+    flatten = gen.head === :flatten
+    if flatten
+        gen = gen.args[1]
+    end
+    @assert gen.head === :generator "gen.head === :generator"
 
     body = gen.args[1]
 
@@ -292,181 +300,111 @@ function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
     if isa(iter_or_filter, Expr) && iter_or_filter.head === :filter
         condition = iter_or_filter.args[1]
         iterators = iter_or_filter.args[2:end]
-
-        if length(iterators) == 1
-            return _threadsfor_single_iterator(body, iterators[1], condition, schedule; result_type)
-        else
-            return _threadsfor_multi_iterator(body, iterators, condition, schedule, nothing, result_type)
-        end
-    elseif length(gen.args) > 2
-        iterators = gen.args[2:end]
-        ranges = [iter.args[2] for iter in iterators]
-        # Use axes to preserve offset index spaces (e.g. OffsetArrays)
-        dims_expr = :(tuple($([:(axes($(esc(r)), 1)) for r in ranges]...)))
-        return _threadsfor_multi_iterator(body, iterators, true, schedule, dims_expr, result_type)
     else
-        return _threadsfor_single_iterator(body, iter_or_filter, true, schedule; result_type)
+        condition = true
+        iterators = gen.args[2:end]
+    end
+    if length(iterators) == 1
+        return _threadsfor_single_iterator(body, iterators[1], condition, schedule; result_type, flatten)
+    else
+        return _threadsfor_multi_iterator(body, iterators, condition, schedule, result_type, flatten)
     end
 end
 
-function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=nothing; result_type=nothing)
+# A one-argument function computing the body, so that a destructuring loop variable such as
+# `(a, b)` becomes a destructuring argument rather than two arguments. It is all user code,
+# so it is escaped as a whole.
+_comprehension_body_func(lidx, body) = esc(Expr(:->, Expr(:tuple, lidx), Expr(:block, body)))
+
+# The element type inferred for the serial comprehension over `iter`, as `collect` infers it
+# before widening unions, so that every result fits and an empty result gets the serial type.
+# `pred` is the filter function, or `true` without a filter. The serial iterator is built as
+# lowering builds it, only for its type.
+function _comprehension_eltype_expr(lidx, body, pred, flatten, iter)
+    src = pred === true ? iter : :(Base.Filter($pred, $iter))
+    gen = :(Base.Generator($(_comprehension_body_func(lidx, body)), $src))
+    flatten && (gen = :(Base.Flatten($gen)))
+    return :(Base._return_type(Base._iterator_upper_bound, Tuple{typeof($gen)}))
+end
+
+# The filter as a separate function of the item, as in a serial comprehension, so that an
+# assignment to the loop variable in the condition does not reach the body.
+_comprehension_pred_expr(lidx, condition) =
+    condition === true ? nothing : :(local pred = $(_comprehension_body_func(lidx, condition)))
+_comprehension_test_expr(condition) = condition === true ? true : :(pred(item))
+
+# Add the results for one item to `dest` with `add!` (`push!` or `put!`).
+_comprehension_add_expr(add!, dest, esc_body, flatten) =
+    flatten ? :(for v in $esc_body; $add!($dest, v); end) : :($add!($dest, $esc_body))
+
+# Give an untyped comprehension result the element type a serial comprehension would have.
+# `ET` is the inferred element type the result was allocated with.
+function _comprehension_result(result::AbstractArray, @nospecialize(ET))
+    if isempty(result)
+        T = Base.promote_typejoin_union(ET)
+        return eltype(result) === T ? result : similar(result, T)
+    end
+    isconcretetype(ET) && return result
+    T = _comprehension_widened_eltype(result, typeof(first(result)), firstindex(result) + 1)
+    return eltype(result) === T ? result : copyto!(similar(result, T), result)
+end
+
+# Widen `T` over the elements from linear index `i` on, as a serial `collect` does. The scan
+# is specialized on `T`, so `el isa T` stays cheap, and restarts only when `T` widens.
+function _comprehension_widened_eltype(result::AbstractArray, ::Type{T}, i::Int) where T
+    for j in i:lastindex(result)
+        el = @inbounds result[j]
+        el isa T || return _comprehension_widened_eltype(result, Base.promote_typejoin(T, typeof(el)), j + 1)
+    end
+    return T
+end
+
+function _threadsfor_single_iterator(body, iterator, condition, schedule; result_type=nothing, flatten=false)
     lidx = iterator.args[1]
     range = iterator.args[2]
     esc_range = esc(range)
-    esc_lidx = esc(lidx)
-    esc_body = esc(body)
-    esc_condition = condition === true ? true : esc(condition)
 
-    # Fast path: no filter and not greedy — pre-allocate and write directly
-    if condition === true && schedule !== :greedy
-        return _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
-    end
-
-    func = if schedule === :greedy
-        greedy_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
+    if schedule === :greedy
+        return greedy_comprehension_expr(esc_range, lidx, body, condition, schedule, result_type, flatten)
+    elseif condition === true && !flatten
+        # One result per item: pre-allocate and write directly
+        return _threadsfor_comprehension_fast(esc_range, lidx, body, schedule, result_type)
     else
-        default_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition, result_type)
-    end
-
-    result_expr = if schedule === :greedy
-        # Greedy: collect values in arrival order (no ordering guarantee)
-        if result_type !== nothing
-            esc_result_type = esc(result_type)
-            quote
-                close(result_channel)
-                vals = collect(result_channel)
-                isempty(vals) ? $esc_result_type[] : $esc_result_type[v for v in vals]
-            end
-        else
-            quote
-                close(result_channel)
-                collect(result_channel)
-            end
-        end
-    else
-        # Default/static: thread-local buffers, vcat in tid order preserves iteration order.
-        # For the untyped case, we try vcat first (fast bulk copies). If the buffers have
-        # a Union or Any element type — indicating a type-unstable body — we fall back to
-        # grow_to! which replicates serial's promote_typejoin widening.
-        if result_type !== nothing
-            esc_result_type = esc(result_type)
-            quote
-                vcat(result_channel...)::Vector{$esc_result_type}
-            end
-        else
-            quote
-                let _bufs = result_channel
-                    _ET = eltype(eltype(_bufs))
-                    if isconcretetype(_ET)
-                        # All buffers have a concrete element type (from promote_op inference
-                        # or a uniform body). Use bulk vcat — same result as grow_to! here.
-                        vcat(_bufs...)
-                    else
-                        # Type-unstable body: grow_to! discovers the correct widened type,
-                        # matching the return type of the equivalent serial comprehension.
-                        Base.grow_to!(Any[], Iterators.flatten(_bufs))
-                    end
-                end
-            end
-        end
-    end
-
-    # If dims is provided, reshape the result to match original comprehension dimensions
-    if dims !== nothing
-        result_expr = quote
-            let flat_result = $result_expr
-                reshape(flat_result, $(dims))
-            end
-        end
-    end
-
-    quote
-        local threadsfor_fun
-        local result_channel = $func
-        $(_threading_run_expr(schedule))
-        $result_expr
+        return default_comprehension_expr(esc_range, lidx, body, condition, schedule, result_type, flatten)
     end
 end
 
 # Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly.
-# Non-AbstractArray iterators (e.g. Iterators.flatten) are collected into a Vector
+# Non-AbstractArray iterators (e.g. Iterators.flatten) are collected into an array
 # because the parallel work distribution indexes into items with r[i].
 # AbstractArrays and Tuples are used directly to preserve their index space (e.g. OffsetArrays).
-function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
+function _threadsfor_comprehension_fast(esc_range, lidx, body, schedule, result_type)
+    esc_lidx = esc(lidx)
+    esc_body = esc(body)
     work_dist = _work_distribution_code()
-    wrap_final = dims !== nothing ? (x -> :(reshape($x, $dims))) : identity
-
-    if result_type !== nothing
-        # Typed path: pre-allocate with known element type
-        esc_result_type = esc(result_type)
-        return quote
-            let iter = $esc_range
-            local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
-            local niter = length(items)
-            local result = similar(Vector{$esc_result_type}, axes(items))
-            if niter > 0
-                let items = items, result = result
-                local threadsfor_fun
-                function threadsfor_fun(tid = 1)
-                    # Reads: items, tid. Defines: r, loop_first, loop_last.
-                    $work_dist
-                    for i = loop_first:loop_last
-                        local $esc_lidx = @inbounds r[i]
-                        @inbounds result[i] = $esc_body
-                    end
-                end
-                $(_threading_run_expr(schedule))
+    ET_expr = result_type === nothing ?
+        _comprehension_eltype_expr(lidx, body, true, false, :iter) : esc(result_type)
+    final_expr = result_type === nothing ? :(_comprehension_result(result, _ET)) : :result
+    return quote
+        let iter = $esc_range
+        local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+        local _ET = $ET_expr
+        local result = similar(Vector{_ET}, axes(items))
+        if !isempty(items)
+            let items = items, result = result
+            local threadsfor_fun
+            function threadsfor_fun(tid = 1)
+                # Reads: items, tid. Defines: r, loop_first, loop_last.
+                $work_dist
+                for i = loop_first:loop_last
+                    local $esc_lidx = @inbounds r[i]
+                    @inbounds result[i] = $esc_body
                 end
             end
-            $(wrap_final(:(result)))
+            $(_threading_run_expr(schedule))
             end
         end
-    else
-        # Untyped path: evaluate first element to determine result type,
-        # then fill in parallel with the body expression inlined directly
-        # in the closure. This avoids boxing that occurs when calling a
-        # lambda whose return type is a Union across closure boundaries.
-        return quote
-            let iter = $esc_range
-            local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
-            local niter = length(items)
-            if niter == 0
-                $(wrap_final(:(similar(Vector{Any}, axes(items)))))
-            else
-                local _skip = firstindex(items)
-                local $esc_lidx = @inbounds items[_skip]
-                local _probe_val = $esc_body
-                local result = similar(Vector{typeof(_probe_val)}, axes(items))
-                @inbounds result[_skip] = _probe_val
-                if niter > 1
-                    local _npool = threadpoolsize()
-                    local _widen_buffers = [Pair{Int,Any}[] for _ in 1:_npool]
-                    let items = items, result = result, _widen_buffers = _widen_buffers,
-                        _skip = _skip
-                    local threadsfor_fun
-                    function threadsfor_fun(tid = 1)
-                        # Reads: items, tid. Defines: r, loop_first, loop_last.
-                        $work_dist
-                        local _T = eltype(result)
-                        local _my_widen = _widen_buffers[tid]
-                        for i = loop_first:loop_last
-                            i == _skip && continue
-                            local $esc_lidx = @inbounds r[i]
-                            local _val = $esc_body
-                            if _val isa _T
-                                @inbounds result[i] = _val
-                            else
-                                push!(_my_widen, i => _val)
-                            end
-                        end
-                    end
-                    $(_threading_run_expr(schedule))
-                    end
-                    result = Base.setindices_widen_up_to(result, _widen_buffers)
-                end
-                $(wrap_final(:(result)))
-            end
-            end
+        $final_expr
         end
     end
 end
@@ -489,24 +427,41 @@ function greedy_func(itr, lidx, lbody)
     end
 end
 
-function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
+function greedy_comprehension_expr(esc_range, lidx, body, condition, schedule, result_type, flatten)
+    esc_lidx = esc(lidx)
+    esc_body = esc(body)
+    pred = condition === true ? true : :pred
+    ET_expr = result_type === nothing ?
+        _comprehension_eltype_expr(lidx, body, pred, flatten, :iter) : esc(result_type)
+    vals_expr = result_type === nothing ?
+        :(_comprehension_result(collect(result_channel), _ET)) : :(collect(result_channel))
+    # With one result per item, the result has the shape of the iterator as in a serial
+    # comprehension, although the elements are in arrival order.
+    shape_expr = !flatten && condition === true ?
+        :(Base.IteratorSize(iter) isa Base.HasShape ? reshape(vals, axes(iter)) : vals) : :vals
     quote
-        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
-                for item in $itr
+        let iter = $esc_range
+            $(_comprehension_pred_expr(lidx, condition))
+            local _ET = $ET_expr
+            local c = Channel{eltype(iter)}(threadpoolsize(), spawn=true) do ch
+                for item in iter
                     put!(ch, item)
                 end
             end
-            result_channel = Channel{Any}(Inf)
-
+            local result_channel = Channel{_ET}(Inf)
+            local threadsfor_fun
             function threadsfor_fun(tid)
                 for item in c
-                    local $esc_lidx = item
-                    if $esc_condition
-                        put!(result_channel, $esc_body)
+                    if $(_comprehension_test_expr(condition))
+                        local $esc_lidx = item
+                        $(_comprehension_add_expr(:put!, :result_channel, esc_body, flatten))
                     end
                 end
             end
-            result_channel
+            $(_threading_run_expr(schedule))
+            close(result_channel)
+            local vals = $vals_expr
+            $shape_expr
         end
     end
 end
@@ -557,42 +512,40 @@ function default_func(itr, lidx, lbody)
     end
 end
 
-function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition, result_type=nothing)
+function default_comprehension_expr(esc_range, lidx, body, condition, schedule, result_type, flatten)
+    esc_lidx = esc(lidx)
+    esc_body = esc(body)
+    pred = condition === true ? true : :pred
     work_dist = _work_distribution_code()
-    if result_type !== nothing
-        # Typed comprehension: element type known at macro expansion time.
-        buf_init = :($(esc(result_type))[])
-        buf_type_setup = :()
-    else
-        # Untyped comprehension: use promote_op to pre-type the per-task buffers,
-        # avoiding boxing in the parallel phase for type-stable bodies.
-        # The result is flattened through grow_to! so the final element type matches
-        # serial's runtime promote_typejoin widening rather than the static promote_op type.
-        _ET = gensym(:ET)
-        buf_type_setup = :(local $_ET = Base.promote_op($esc_lidx -> $esc_body, eltype(items)))
-        buf_init = :($_ET[])
-    end
+    ET_expr = result_type === nothing ?
+        _comprehension_eltype_expr(lidx, body, pred, flatten, :iter) : esc(result_type)
+    final_expr = result_type === nothing ? :(_comprehension_result(result, _ET)) : :result
     quote
-        let iter = $itr
+        let iter = $esc_range
         local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
-        local _npool = threadpoolsize()
-        $buf_type_setup
+        $(_comprehension_pred_expr(lidx, condition))
+        local _ET = $ET_expr
         # One buffer per task-id; tasks process contiguous ranges so concatenating
         # in tid order preserves iteration order without a sort step.
-        local local_bufs = [$buf_init for _ in 1:_npool]
-
+        local local_bufs = [Vector{_ET}() for _ in 1:threadpoolsize()]
+        let items = items, local_bufs = local_bufs
+        local threadsfor_fun
         function threadsfor_fun(tid = 1)
             # Reads: items, tid. Defines: r, loop_first, loop_last.
             $work_dist
             local buf = local_bufs[tid]
             for i = loop_first:loop_last
-                local $esc_lidx = @inbounds r[i]
-                if $esc_condition
-                    push!(buf, $esc_body)
+                local item = @inbounds r[i]
+                if $(_comprehension_test_expr(condition))
+                    local $esc_lidx = item
+                    $(_comprehension_add_expr(:push!, :buf, esc_body, flatten))
                 end
             end
         end
-        local_bufs  # Return per-task buffers to be vcat'd after threading_run
+        $(_threading_run_expr(schedule))
+        end
+        local result = vcat(local_bufs...)::Vector{_ET}
+        $final_expr
         end
     end
 end
@@ -735,20 +688,23 @@ to run two of the 1-second iterations to complete the for loop.
 ### Array comprehensions
 
 The `@threads` macro also supports array comprehensions, which return the collected results.
-Array comprehensions preserve element order for `:static` and `:dynamic` (default) scheduling.
+The result has the same element type and shape as the serial comprehension. Array
+comprehensions preserve element order for `:static` and `:dynamic` (default) scheduling.
 The `:greedy` scheduler does not guarantee element order, since tasks consume work items as
 they become available. Multi-dimensional comprehensions preserve the dimensions of the
 original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]` returns an `n×m` matrix).
 Typed comprehensions (`T[expr for ...]`) are also supported and return an array with the
-specified element type.
+specified element type. In a comprehension with several `for` clauses, such as
+`[f(i,j) for i in 1:n for j in 1:i]`, the work is divided over the outermost iterator.
 
-For non-filtered comprehensions with non-`:greedy` scheduling, a fast path is used that
-pre-allocates the result array and writes directly by index, avoiding Channel overhead.
+A comprehension with one `for` clause and no filter, scheduled with `:static` or `:dynamic`,
+writes into a pre-allocated result, which is the fastest form.
 
 !!! tip "Performance tip"
     For best performance, use typed comprehensions (`T[expr for ...]`) when the element type
-    is known. Untyped comprehensions infer the type from the first result; if later results
-    have incompatible types, a type-widening path is used which may be slower.
+    is known. Untyped comprehensions use the compiler's inferred element type; if that is not
+    a concrete type, the results are copied to the element type a serial comprehension
+    would produce, which may be slower.
 
 !!! warning
     The body expression of a threaded comprehension may execute on any thread and may
