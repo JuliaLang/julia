@@ -802,8 +802,8 @@ JL_DLLEXPORT void APInt_sext(jl_datatype_t *ty, integerPart *pa,
     unsigned inumbits = jl_datatype_nbits(ty);
     unsigned onumbits = jl_datatype_nbits(otys);
     unsigned inumbytes = APINT_NBYTES(inumbits);
-    unsigned onumbytes_value = APINT_NBYTES(onumbits);
-    unsigned onumbytes = jl_datatype_size(otys);
+    unsigned onumbytes = APINT_NBYTES(onumbits);
+    unsigned opaddingbytes = jl_datatype_size(otys) - onumbytes;
     if (!(onumbits > inumbits))
         jl_error("SExt: output bitsize must be > input bitsize");
     unsigned bits = (8 - (inumbits % 8)) % 8;
@@ -817,10 +817,10 @@ JL_DLLEXPORT void APInt_sext(jl_datatype_t *ty, integerPart *pa,
             : (byte & (unsigned char)(0xFF >> bits));
     }
     // the sign fills the value bits only; the bits above them stay zero
-    memset((char *)pr + inumbytes, sign, onumbytes_value - inumbytes);
+    memset((char *)pr + inumbytes, sign, onumbytes - inumbytes);
     if (onumbits % 8)
-        ((unsigned char *)pr)[onumbytes_value - 1] &= (1 << (onumbits % 8)) - 1;
-    memset((char *)pr + onumbytes_value, 0, onumbytes - onumbytes_value);
+        ((unsigned char *)pr)[onumbytes - 1] &= (1 << (onumbits % 8)) - 1;
+    memset((char *)pr + onumbytes, 0, opaddingbytes);
 }
 
 JL_DLLEXPORT void APInt_zext(jl_datatype_t *ty, integerPart *pa,
