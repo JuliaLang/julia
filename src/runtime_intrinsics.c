@@ -706,8 +706,10 @@ JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
 
 static inline char signbitbyte(void *a, unsigned bytes, unsigned nbits) JL_NOTSAFEPOINT
 {
-    unsigned signbit = (nbits - 1) % host_char_bit;
-    return (((unsigned char*)a)[bytes - 1] & (1 << signbit)) ? ~0 : 0;
+    (void)bytes;
+    // the top value bit, which padding after it would push out of the last byte
+    unsigned signbit = nbits - 1;
+    return (((unsigned char*)a)[signbit / host_char_bit] & (1 << (signbit % host_char_bit))) ? ~0 : 0;
 }
 
 static inline char usignbitbyte(void *a, unsigned bytes, unsigned nbits) JL_NOTSAFEPOINT
