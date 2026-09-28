@@ -3344,8 +3344,9 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
     if (include_ambiguous && *has_ambiguity)
         return 0; // this can only compute *has_ambiguity, which is already known
     int result = 0;
+    jl_value_t *region = NULL;
     jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
-    JL_GC_PUSH1(&interferences);
+    JL_GC_PUSH2(&interferences, &region);
     for (size_t i = 0; i < interferences->length; i++) {
         jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
         if (m2 == NULL)
@@ -3355,7 +3356,26 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
             continue;
         if (!method_in_interferences(m, m2))
             continue;
-        *has_ambiguity = 1;
+        if (!*has_ambiguity) {
+            jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx);
+            region = jl_type_intersection(ti, (jl_value_t*)matc2->spec_types);
+            // A match's region can lose a constraint its signature imposes
+            // (the diagonal `T` of `(::Type{T}, ::T) where T`), so keep
+            // re-intersecting with the signatures to try to eliminate the
+            // intersection before setting the (potentially costly) ambiguity flag.
+            if (region != jl_bottom_type)
+                region = jl_type_intersection(region, (jl_value_t*)m->sig);
+            if (region != jl_bottom_type)
+                region = jl_type_intersection(region, (jl_value_t*)m2->sig);
+            if (region == jl_bottom_type) {
+                // The pair is recorded as overlapping, but not anywhere inside
+                // this query, so nothing here can dispatch ambiguously between
+                // them. Nor can `m2` cover `ti`, which it does not even
+                // intersect, so there is nothing else to do with this partner.
+                continue;
+            }
+            *has_ambiguity = 1;
+        }
         if (include_ambiguous)
             break; // the rest of the scan could only set *has_ambiguity again
         if (jl_subtype(ti, m2->sig)) {
