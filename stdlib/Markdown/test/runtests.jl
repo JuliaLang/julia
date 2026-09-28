@@ -1815,6 +1815,26 @@ end
 
 end
 
+@testset "only spaces and tabs separate thematic breaks and end HTML blocks" begin
+    # other Unicode whitespace is ordinary text in block structure, unlike `Base.isspace`
+    for sp in (" ", "\t")
+        @test only(Markdown.parse("*$(sp)*$(sp)*", flavor=:common).content) isa Markdown.HorizontalRule
+    end
+    for sp in ("\u00a0", "　", "\v")
+        @test only(Markdown.parse("*$(sp)*$(sp)*", flavor=:common).content) isa Markdown.Paragraph
+    end
+    for tag in ("div", "custom")
+        for sp in ("", " \t", "\r")
+            md = Markdown.parse("<$tag>\nfoo\n$sp\n*bar*\n</$tag>", flavor=:common)
+            @test length(md.content) == 2
+        end
+        for sp in ("\u00a0", "　")
+            md = Markdown.parse("<$tag>\nfoo\n$sp\n*bar*\n</$tag>", flavor=:common)
+            @test only(md.content) isa Markdown.HTMLBlock
+        end
+    end
+end
+
 include("test_spec_roundtrip_common.jl")
 include("test_spec_roundtrip_github.jl")
 include("test_spec_roundtrip_julia.jl")
