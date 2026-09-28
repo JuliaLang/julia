@@ -116,7 +116,7 @@ function ismalformed(c::Char)
     (((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0)
 end
 
-@inline is_overlong_enc(u::UInt32) = (u >> 24 == 0xc0) | (u >> 24 == 0xc1) | (u >> 21 == 0x0704) | (u >> 20 == 0x0f08)
+@inline is_overlong_enc(u::UInt32) = (u >> 25 == 0x60) | (u >> 21 == 0x0704) | (u >> 20 == 0x0f08)
 
 function isoverlong(c::Char)
     u = bitcast(UInt32, c)
