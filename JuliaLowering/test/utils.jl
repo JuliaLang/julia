@@ -17,7 +17,7 @@ import REPL
 
 using .JuliaSyntax: SourceAttrType, sourcetext, SyntaxList,
     JL_OLD_EDITION, JL_NEW_EDITION
-using Base: OLDEST_EDITION
+using Base: OLDEST_EDITION, VERSION_EDITION
 
 using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError,
     ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,

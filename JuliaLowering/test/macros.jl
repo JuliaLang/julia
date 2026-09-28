@@ -1458,7 +1458,7 @@ end
         @legacy_quote_to_syntax :(module $x end)
     end
     """) ≈ @ast_ [K"module"
-        VersionNumber(VERSION_EDITION)::K"Value"
+        VersionNumber(JL_NEW_EDITION)::K"Value"
         true::K"Value"
         "AA"::K"Identifier"
         [K"block"]

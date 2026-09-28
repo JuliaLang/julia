@@ -1004,11 +1004,11 @@ JuliaLowering.include_string(@__MODULE__, """
 end
 """)
 
-@testset "Base.@kwdef" for expr_compat_mode in (true, false)
+@testset "Base.@kwdef" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
     local test_mod = @newmod()
     @eval test_mod using Test
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     @kwdef struct Test27970Typed
         a::Int
         b::String = "hi"
@@ -1017,7 +1017,7 @@ end
         a
     end
     @kwdef struct Test27970Empty end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @testset "No default values" begin
         @test Test27970Typed(a=1) == Test27970Typed(1, "hi")
@@ -1032,12 +1032,12 @@ end
         @test Test27970Empty() == Test27970Empty()
     end
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     abstract type AbstractTest29307 end
     @kwdef struct Test29307{T<:Integer} <: AbstractTest29307
         a::T=2
     end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @testset "subtyped" begin
         @test Test29307() == Test29307{Int}(2)
@@ -1045,7 +1045,7 @@ end
         @test Test29307{UInt32}() == Test29307{UInt32}(2)
         @test Test29307{UInt32}(a=0x03) == Test29307{UInt32}(0x03)
     end
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     @kwdef struct TestInnerConstructor
         a = 1
         TestInnerConstructor(a::Int) = (@assert a>0; new(a))
@@ -1054,7 +1054,7 @@ end
             new(a)
         end
     end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @testset "inner constructor" begin
         @test TestInnerConstructor() == TestInnerConstructor(1)
@@ -1064,15 +1064,15 @@ end
         @test_throws AssertionError TestInnerConstructor(a="")
     end
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     const outsidevar = 7
     @kwdef struct TestOutsideVar
         a::Int=outsidevar
     end
-    """; expr_compat_mode)
+    """; edition)
     @eval test_mod @test TestOutsideVar() == TestOutsideVar(7)
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     @kwdef mutable struct Test_kwdef_const_atomic
         a
         b::Int
@@ -1083,7 +1083,7 @@ end
         const g::Int = 1
         @atomic h::Int
     end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @testset "const and @atomic fields" begin
         x = Test_kwdef_const_atomic(a = 1, b = 1, d = 1, e = 1, h = 1)
@@ -1106,7 +1106,7 @@ end
         end
     end
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     module KwdefWithEsc
         const Int1 = Int
         const val1 = 42
@@ -1143,16 +1143,16 @@ end
             end
         end
     end
-    """; expr_compat_mode=true)
+    """; edition=JL_OLD_EDITION)
 
-    JuliaLowering.include_string(test_mod, """
+    jl_eval(test_mod, """
     module KwdefWithEsc_TestModule
         using ..KwdefWithEsc
         const Bool1 = Bool
         const val2 = true
         KwdefWithEsc.@define_struct()
     end
-    """; expr_compat_mode)
+    """; edition)
 
     @eval test_mod @test isdefined(KwdefWithEsc_TestModule, :Struct)
     @eval test_mod @test fieldnames(KwdefWithEsc_TestModule.Struct) ==
