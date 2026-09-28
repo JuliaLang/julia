@@ -1030,8 +1030,8 @@ import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext
 
 function is_top_bit_set(x)
     @inline
-    # the top bit is set iff x is negative as a signed number; `xor_int(x, x)`
-    # is zero at any width
+    # the top bit is set iff x is negative as a signed number; Core has no
+    # `zero`, and `xor_int(x, x)` is a zero of any width
     slt_int(x, xor_int(x, x))
 end
 
