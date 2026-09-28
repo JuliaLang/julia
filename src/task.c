@@ -1807,7 +1807,9 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
     //    (sleep_check_state != not_sleeping): abandonment bypasses the
     //    JL_CATCH in jl_task_get_next that would restore the sleep state
     //    and running count, so the rescue task would re-enter the
-    //    scheduler with sleep bookkeeping still claimed by the victim.
+    //    scheduler with sleep bookkeeping still claimed by the victim;
+    //  - the victim is anywhere in jl_task_get_next (in_get_next): the same
+    //    JL_CATCH releases its searcher count.
     if (ct != t ||
         jl_atomic_load_relaxed(&ptls2->gc_state) != 0 ||
         ptls2->in_task_switch ||
@@ -1816,6 +1818,7 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
         ptls2->finalizers_inhibited != 0 ||
         ptls2->defer_signal != 0 ||
         jl_atomic_load_relaxed(&ptls2->sleep_check_state) != 0 || // 0 == not_sleeping
+        ptls2->in_get_next ||
         jl_atomic_load_relaxed(&jl_uv_mutex.owner) == ct) {
         // Ping before the terminal store: the requester consumes (and may
         // free its handle) the moment a terminal state is visible, so a

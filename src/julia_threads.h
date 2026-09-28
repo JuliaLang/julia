@@ -296,6 +296,10 @@ typedef struct _jl_tls_states_t {
     // currently-held locks, to be released when an exception is thrown
     small_arraylist_t locks;
     size_t engine_nqueued;
+    // whether this thread's last search found work (see jl_task_get_next)
+    int8_t search_useful;
+    // set while this thread runs jl_task_get_next
+    int8_t in_get_next;
 
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;
