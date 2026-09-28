@@ -237,6 +237,12 @@ end
         @test Base.invokelatest(Core.Intrinsics.shl_int, UInt64(1), one24) === UInt64(2)
         @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt64(4), one24) === UInt64(2)
     end
+    # an amount wider than the shifted value shifts it all out, as in codegen (#63460)
+    @test Base.invokelatest(Core.Intrinsics.shl_int, UInt8(1), UInt16(256)) === 0x00
+    @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt8(0x80), UInt16(257)) === 0x00
+    @test Base.invokelatest(Core.Intrinsics.ashr_int, Int8(-128), UInt16(256)) === Int8(-1)
+    @test Base.invokelatest(Core.Intrinsics.shl_int, Core.Intrinsics.trunc_int(TestUInt5, 0x01),
+                            UInt16(256)) === Core.Intrinsics.trunc_int(TestUInt5, 0x00)
 
     # a runtime replace compares values, not the bits above their width
     mutable struct AtomicTestUInt5
