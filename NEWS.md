@@ -238,6 +238,8 @@ Standard library changes
 * Many improvements and bugfixes for rendering Markdown lists in a terminal ([#55456], [#60519]).
 * Strikethrough text via `~strike~` or `~~through~~` is now supported by the Markdown parser ([#60537]).
 * Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502]).
+* Table columns whose delimiter cell has no `:` (such as `---`) are now left-aligned, as on
+  GitHub, instead of right-aligned.
 
 #### Profile
 

@@ -376,7 +376,8 @@ cannot span multiple rows or columns of the table.
 
     A `:` character on either end of a column's header separator (the row containing `-` characters)
     specifies whether the row is left-aligned, right-aligned, or (when `:` appears on both ends) center-aligned.
-    Providing no `:` characters will default to right-aligning the column.
+    Providing no `:` characters leaves the column without an alignment, which is rendered
+    left-aligned, as on GitHub.
 
 ### Admonitions
 
