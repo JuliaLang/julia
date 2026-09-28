@@ -72,12 +72,6 @@ dependencies = [
 
 [[package]]
 name = "atomic"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64f46ca51dca4837f1520754d1c8c36636356b81553d928dc9c177025369a06e"
-
-[[package]]
-name = "atomic"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89cbf775b137e9b968e67227ef7f775587cde3fd31b0d8599dbd0f598a48340"
@@ -684,7 +678,7 @@ name = "mmtk"
 version = "0.33.0"
 source = "git+https://github.com/wks/mmtk-core.git?rev=680729f0a9c9cceb73b41e77d8f468d5cc05726d#680729f0a9c9cceb73b41e77d8f468d5cc05726d"
 dependencies = [
- "atomic 0.6.1",
+ "atomic",
  "atomic-traits",
  "atomic_refcell",
  "built",
@@ -719,7 +713,7 @@ dependencies = [
 name = "mmtk-julia"
 version = "0.32.0"
 dependencies = [
- "atomic 0.4.6",
+ "atomic",
  "bindgen",
  "built",
  "cc",
