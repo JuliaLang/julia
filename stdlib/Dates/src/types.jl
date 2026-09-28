@@ -252,13 +252,18 @@ differ even when `ts == dt`.
 A package can add a resolution with its own `TimePeriod` type, such as a 128-bit count
 of picoseconds. The type needs methods for `Dates.value`, `typemin`, `typemax`, and
 `Dates.tons`, which returns the length of a period in nanoseconds (a `Rational` for a
-unit shorter than a nanosecond). For years whose day count overflows `Int64`, also add a
-method for `Dates.timestamp_totaldays(P, y, m, d)`. Printing and the `n` format code
+unit shorter than a nanosecond). The resolution must be a positive exact subdivision
+of a second. Equal resolutions promote to the wider count storage, or use period
+promotion when the storage widths match. For years whose day count overflows `Int64`,
+also add a method for `Dates.timestamp_totaldays(P, y, m, d)`. Printing and the `n` format code
 round digits finer than a nanosecond down.
 """
 struct Timestamp{P<:TimePeriod} <: AbstractDateTime
     instant::UTInstant{P}
-    Timestamp{P}(instant::UTInstant{P}) where {P} = new{P}(instant)
+    function Timestamp{P}(instant::UTInstant{P}) where {P}
+        timestamp_scale(P)
+        return new{P}(instant)
+    end
 end
 
 Timestamp(args...; kwargs...) = Timestamp{Nanosecond}(args...; kwargs...)
@@ -270,16 +275,28 @@ timestamp_count_type(::Type{P}) where {P} = typeof(value(zero(P)))
 # Rata Die day number of a date. A package period with a huge range can use a wider type.
 timestamp_totaldays(::Type{P}, y, m, d) where {P} = totaldays(y, m, d)
 # Nanoseconds per unit of P (a Rational below a nanosecond), and units of P per day
-timestamp_scale(::Type{P}) where {P<:Period} = tons(oneunit(P))
+function timestamp_scale(::Type{P}) where {P<:Period}
+    scale = tons(oneunit(P))
+    scale > 0 && iszero(rem(1000000000, scale)) ||
+        throw(ArgumentError("Timestamp resolution must be a positive exact subdivision of a second"))
+    return scale
+end
 timestamp_scale(::Type{Timestamp{P}}) where {P} = timestamp_scale(P)
 timestamp_ticks_per_day(::Type{P}) where {P} = NS_PER_DAY ÷ timestamp_scale(P)
-# The finer of two resolutions
-timestamp_finer(::Type{P}, ::Type{Q}) where {P,Q} =
-    timestamp_scale(P) <= timestamp_scale(Q) ? P : Q
+# Prefer the finer resolution, then wider count storage; otherwise use period promotion.
+function timestamp_finer(::Type{P}, ::Type{Q}) where {P,Q}
+    p, q = timestamp_scale(P), timestamp_scale(Q)
+    p != q && return p < q ? P : Q
+    psize, qsize = sizeof(timestamp_count_type(P)), sizeof(timestamp_count_type(Q))
+    psize != qsize && return psize > qsize ? P : Q
+    R = promote_type(P, Q)
+    R <: TimePeriod || throw(ArgumentError("equal-resolution Timestamp periods need a common promoted period type"))
+    return R
+end
 
 # `ns` nanoseconds as a count of P. Throws an InexactError if `ns` has more precision than P.
-function timestamp_ticks(::Type{P}, ns::Real) where {P}
-    ticks, remainder = divrem(ns, timestamp_scale(P))
+function timestamp_ticks(::Type{P}, ns::Real, scale=timestamp_scale(P)) where {P}
+    ticks, remainder = divrem(ns, scale)
     iszero(remainder) || throw(InexactError(:convert, Timestamp{P}, ns))
     return ticks
 end

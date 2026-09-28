@@ -230,10 +230,10 @@ end
 
 # Write a fraction of a second, given in units of 10^-precision seconds. Drop trailing
 # zeros, then pad with zeros to the width of the code: 500 milliseconds is "5" under `n`
-# and "500000000" under `nnnnnnnnn`. A fixed-width field keeps only its leading digits.
+# and "500000000" under `nnnnnnnnn`. A fixed-width `n` field keeps only its leading digits.
 function format_fraction(io, d::DatePart, frac, precision)
     str = rstrip(string(frac, pad = precision), '0')
-    if d.fixed && length(str) > d.width
+    if d isa DatePart{'n'} && d.fixed && length(str) > d.width
         str = SubString(str, 1, d.width)
     end
     print(io, rpad(str, d.width, '0'))

@@ -53,7 +53,7 @@ include("deprecated.jl")
 export Period, DatePeriod, TimePeriod,
        Year, Quarter, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
-       TimeZone, UTC, TimeType, DateTime, Date, Time, Timestamp,
+       TimeZone, UTC, TimeType, DateTime, Date, Time,
        # periods.jl
        canonicalize,
        # accessors.jl
@@ -84,6 +84,6 @@ export Period, DatePeriod, TimePeriod,
        ISODateTimeFormat, ISODateFormat, ISOTimeFormat, ISOTimestampFormat, DateFormat,
        RFC1123Format, @dateformat_str
 
-public format
+public format, Timestamp
 
 end # module

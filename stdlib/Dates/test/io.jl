@@ -46,6 +46,15 @@ end
     end
 end
 
+# Adjacent tokens preserve the existing millisecond field; only `n` truncates to width.
+@testset "Fixed-width fractional formatting" begin
+    dt = DateTime(2026, 1, 1, 0, 0, 0, 123)
+    @test Dates.format(dt, dateformat"sS") == "1230"
+    @test Dates.format(dt, dateformat"ssS") == "1230"
+    @test Dates.format(dt, dateformat"nS") == "10"
+    @test Dates.format(dt, dateformat"nnS") == "120"
+end
+
 @testset "DateTime parsing" begin
     # Useful reference for different locales: https://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
@@ -533,11 +542,11 @@ end
     @test Dates.format(Dates.Time(0, 0, 0, 0, 0, 1), "nnn") == "000000001"
     @test Dates.format(Dates.Time(0), "n") == "0"
     @test Dates.format(Dates.Time(0), "nnn") == "000"
-    # fixed-width fractional fields truncate to their declared precision
+    # fixed-width `n` fields truncate; `s` preserves its existing minimum-width behavior
     fixed_ms = Dates.DateFormat("sSS")
     fixed_ns = Dates.DateFormat("nnnSS")
     fixed_ns9 = Dates.DateFormat("nnnnnnnnnSS")
-    @test Dates.format(Dates.Time(0, 0, 45, 123), fixed_ms) == "145"
+    @test Dates.format(Dates.Time(0, 0, 45, 123), fixed_ms) == "12345"
     @test Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns) == "00045"
     @test Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns9) == "00000000145"
     @test Dates.Time(Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns9), fixed_ns9) ==

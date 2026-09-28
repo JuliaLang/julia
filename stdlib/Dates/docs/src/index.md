@@ -1,7 +1,7 @@
 # Dates
 
 ```@meta
-DocTestSetup = :(using Dates)
+DocTestSetup = :(using Dates; using Dates: Timestamp)
 ```
 
 The `Dates` module provides three types for working with dates: [`Date`](@ref) with day
@@ -27,6 +27,9 @@ day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year
 The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is the day before
 `0001-01-01`, and year `-0001` (yes, negative one for the year) is 2 BC/BCE, year `-0002` is 3
 BC/BCE, etc.
+
+`Timestamp` is public but not exported. Use `Dates.Timestamp`, or explicitly import it
+with `using Dates: Timestamp`, as in the examples below.
 
 A `Timestamp{P}` stores an `Int64` count of `P` since the Unix epoch, `1970-01-01T00:00:00`,
 where the resolution `P` is `Second`, `Millisecond`, `Microsecond`, or `Nanosecond`.
@@ -773,7 +776,7 @@ Dates.now()
 Dates.now(::Type{Dates.UTC})
 Dates.now(::Type{Dates.Timestamp})
 Dates.now(::Type{Dates.Timestamp}, ::Type{Dates.UTC})
-Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, Type{<:Timestamp}, TimeType})
+Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, Type{<:Dates.Timestamp}, TimeType})
 ```
 
 #### Accessor Functions

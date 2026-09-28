@@ -4,10 +4,13 @@ module TimestampTests
 
 using Test
 using Dates
+using Dates: Timestamp
 
 # The testsets before "Parameterized resolution" use the default Timestamp{Nanosecond}.
 
 @testset "Construction and validation" begin
+    @test Base.ispublic(Dates, :Timestamp)
+    @test !Base.isexported(Dates, :Timestamp)
     ts = Timestamp(2026, 8, 31, 13, 45, 30, 123, 456, 789)
     @test ts isa Timestamp
     @test Timestamp(2026) == Timestamp(2026, 1, 1)
@@ -572,6 +575,7 @@ end
 
 module TimestampPeriodExtensionTests
 using Dates, Test
+using Dates: Timestamp
 const TimestampHelpers = Dates
 
 # A package-defined 128-bit picosecond period with no period promotion rules
@@ -583,6 +587,40 @@ Base.typemax(::Type{TestPicosecond}) = TestPicosecond(typemax(Int128))
 TimestampHelpers.timestamp_scale(::Type{TestPicosecond}) = 1 // big(1000)
 TimestampHelpers.timestamp_totaldays(::Type{TestPicosecond}, y, m, d) = Dates.totaldays(big(y), m, d)
 Dates.tons(p::TestPicosecond) = Dates.value(p) // big(1000)
+
+# Equal-resolution promotion and invalid scales use the same package-defined period.
+primitive type TestNanosecond{Scale} <: Dates.TimePeriod 128 end
+TestNanosecond{S}(x::Real) where {S} = reinterpret(TestNanosecond{S}, Int128(x))
+Dates.value(x::TestNanosecond) = reinterpret(Int128, x)
+Base.typemin(::Type{TestNanosecond{S}}) where {S} = TestNanosecond{S}(typemin(Int128))
+Base.typemax(::Type{TestNanosecond{S}}) where {S} = TestNanosecond{S}(typemax(Int128))
+Dates.tons(x::TestNanosecond{S}) where {S} = Dates.value(x) * S
+
+@testset "Equal-resolution promotion and supported scales" begin
+    T = Timestamp{TestNanosecond{1}}
+    a, b = T(2026), Timestamp(2026)
+    @test promote(a, b) === (a, a)
+    @test promote(b, a) === (a, a)
+    @test a - b === TestNanosecond{1}(0)
+    @test [T(3000), b] == T[T(3000), a]
+    @test convert(Hour, Timestamp(1970, 1, 1, 1)) == Hour(1)
+    @test convert(Timestamp{Nanosecond}, Hour(1)) == Timestamp(1970, 1, 1, 1)
+    for P in (Hour, Minute, TestNanosecond{0}, TestNanosecond{-1}, TestNanosecond{3})
+        @test_throws ArgumentError Timestamp{P}(Dates.UTInstant(P(1)))
+        @test_throws ArgumentError unix2timestamp(Timestamp{P}, 1)
+        @test_throws ArgumentError now(Timestamp{P}, UTC)
+    end
+end
+
+@testset "Rational Unix conversion avoids intermediate overflow" begin
+    for P in (Microsecond, Nanosecond), sign in (-1, 1)
+        x = sign * (9007199254740991 // 999999999)
+        expected = trunc(Int64, big(x) * (1000000000 ÷ Dates.tons(P(1))))
+        @test Dates.value(unix2timestamp(Timestamp{P}, x)) == expected
+        @test unix2timestamp(Timestamp{P}, x) == unix2timestamp(Timestamp{P}, big(x))
+    end
+    @test_throws InexactError unix2timestamp(Timestamp, typemax(Int64) // 1)
+end
 
 @testset "Package-defined Timestamp period" begin
     T = Timestamp{TestPicosecond}

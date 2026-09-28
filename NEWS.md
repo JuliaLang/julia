@@ -292,7 +292,7 @@ Standard library changes
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
-* New `Timestamp{P}` type: a point in time stored as an `Int64` count of `P` (`Second`, `Millisecond`,
+* New public (unexported) `Dates.Timestamp{P}` type: a point in time stored as an `Int64` count of `P` (`Second`, `Millisecond`,
   `Microsecond`, or `Nanosecond`) since the Unix epoch. `Timestamp(...)` creates a
   `Timestamp{Nanosecond}`, which covers the years 1677 through 2262 ([#62994]).
 * Equal `Date`, `DateTime`, and `Timestamp` values now have equal hashes, as `==` requires ([#62994]).
