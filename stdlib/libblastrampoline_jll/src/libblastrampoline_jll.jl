@@ -58,6 +58,11 @@ get_libblastrampoline_path() = libblastrampoline_path
 
 function __init__()
     global libblastrampoline_path = string(libblastrampoline.path)
+    # LBT is forwarded to a BLAS backend only by `libblastrampoline_on_load_callback`,
+    # so make `ccall`s that name it by string load it through the `LazyLibrary` as well.
+    Libdl.register_lazy_library!(libblastrampoline, "libblastrampoline", Base.libblas_name,
+                                 "libblastrampoline." * Libdl.dlext,
+                                 basename(libblastrampoline_path), libblastrampoline_path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libblastrampoline_path)
     push!(LIBPATH_list, LIBPATH[])
