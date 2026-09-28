@@ -24,7 +24,7 @@ include("parse_stream.jl")
 include("parser.jl")
 include("green_node.jl")
 include("syntax_node.jl")
-if VERSION >= v"1.12"
+if isdefined(Base, :SyntaxTree)
     include("syntax.jl")
 end
 include("diagnostics.jl")

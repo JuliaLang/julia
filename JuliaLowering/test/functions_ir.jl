@@ -2140,7 +2140,7 @@ end
 6   latestworld
 7   TestMod.#f_only_generated@generator##0
 8   (call core.TypeEqOf %₇)
-9   (call core.svec %₈ JuliaSyntax.SyntaxContext core.Any core.Any core.Any)
+9   (call core.svec %₈ SyntaxContext core.Any core.Any core.Any)
 10  (call core.svec)
 11  SourceLocation::1:1
 12  (call core.svec %₉ %₁₀ %₁₁)
@@ -2192,7 +2192,7 @@ end
 6   latestworld
 7   TestMod.#f_partially_generated@generator##0
 8   (call core.TypeEqOf %₇)
-9   (call core.svec %₈ JuliaSyntax.SyntaxContext core.Any core.Any core.Any)
+9   (call core.svec %₈ SyntaxContext core.Any core.Any core.Any)
 10  (call core.svec)
 11  SourceLocation::1:1
 12  (call core.svec %₉ %₁₀ %₁₁)

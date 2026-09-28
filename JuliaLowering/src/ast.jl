@@ -55,7 +55,16 @@ end
 newleaf(prov::SyntaxTree, k::Symbol) =
     @mknode(;source=prov, context=prov.context, head=k)
 
-function mapindex(sl::SyntaxList, i::Int)
+# TODO: redundant, `map` should be fine
+function mapsyntax(f, exs::AbstractVector{SyntaxTree})
+    out = SyntaxList()
+    for ex in exs
+        push!(out, f(ex))
+    end
+    out
+end
+
+function mapindex(sl::Vector{SyntaxTree}, i::Int)
     out = SyntaxList()
     for st in sl
         push!(out, getindex(st, i))
@@ -91,7 +100,7 @@ function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
     var, assign_var
 end
 
-function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
+function emit_assign_tmp(stmts::Vector{SyntaxTree}, ctx, ex, name="tmp")
     if is_ssa(ctx, ex)
         return ex
     end
@@ -122,7 +131,7 @@ function _append_nodeids!(ids::Vector{SyntaxTree}, vals)
         _push_nodeid!(ids, v)
     end
 end
-function _append_nodeids!(ids::Vector{SyntaxTree}, vals::SyntaxList)
+function _append_nodeids!(ids::Vector{SyntaxTree}, vals::Vector{SyntaxTree})
     append!(ids, vals)
 end
 
@@ -284,10 +293,29 @@ macro ast(ctx, srcref, tree)
     end |> esc
 end
 
-name_hint(name) = JuliaSyntax.CompileHints(:name_hint, name)
+const SyntaxMeta = Base.ImmutableDict{Symbol,Any}
+function setmeta!(st::SyntaxTree, key::Symbol, @nospecialize(val))
+    meta = let m = st.meta
+        isnothing(m) ? SyntaxMeta(key, val) : SyntaxMeta(m, key, val)
+    end
+    setfield!(st, :meta, meta)
+    st
+end
+function setmeta(st::SyntaxTree, key::Symbol, @nospecialize(val))
+    setmeta!(is_leaf(st) ? @mknode(st; children=nothing) :
+        @mknode(st; children=children(st)), key, val)
+end
+function getmeta(st, name, @nospecialize(default))
+    meta = st.meta
+    isnothing(meta) ? default : get(meta, name, default)
+end
+name_hint(name) = SyntaxMeta(:name_hint, name)
 
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees
+
+is_flisp_compat(sc::SyntaxContext) = sc.edition < JL_NEW_EDITION
+is_flisp_compat(st::SyntaxTree) = is_flisp_compat(st.context)
 
 function is_quoted(ex)
     head(ex) in (:symbol, :quote, :top, :core, :globalref, :inert,
@@ -479,10 +507,9 @@ not `pattern`) can refer to outer variables.
 ## Example
 
 ```
-julia> st = JuliaSyntax.parsestmt(
-    JuliaSyntax.SyntaxTree, "function foo(x,y,z); x; end")
+julia> st = parsestmt(SyntaxTree, "function foo(x,y,z); x; end")
 
-julia> JuliaSyntax.@stm st begin
+julia> @stm st begin
     [:function [:call fname [:parameters kws...]] body] ->
         "no positional args, only kwargs: $(kws)"
     [:function fname] ->

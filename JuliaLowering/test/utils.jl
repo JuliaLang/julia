@@ -15,17 +15,33 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, sourcetext, SyntaxList,
-    JL_OLD_EDITION, JL_NEW_EDITION
-using Base: OLDEST_EDITION, VERSION_EDITION
+using Base: OLDEST_EDITION, JL_OLD_EDITION, JL_NEW_EDITION,
+    SyntaxContext, adopt_scope, remove_scope, syntax_module, fill_context,
+    assert_syntaxtree, @mknode
 
-using .JuliaLowering: @ast, Bindings, LoweringError, MacroExpansionError,
-    ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,
-    head, is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
+using .JuliaSyntax: sourcetext
+
+using .JuliaLowering: @ast, LoweringError, MacroExpansionError, SyntaxTree,
+    children, flattened_provenance, head, is_leaf, mapchildren, numchildren,
+    syntax_name, syntax_id
+
+function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
+    if head(ex1) != head(ex2) || is_leaf(ex1) != is_leaf(ex2)
+        return false
+    end
+    if is_leaf(ex1)
+        return ex1.value == ex2.value
+    else
+        if numchildren(ex1) != numchildren(ex2)
+            return false
+        end
+        return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
+    end
+end
 
 function _source_node(src)
     SyntaxTree(:tombstone, nothing, nothing, src,
-               JuliaSyntax.SyntaxContext(JuliaLowering, JL_NEW_EDITION))
+               SyntaxContext(JuliaLowering, JL_NEW_EDITION))
 end
 
 macro ast_(tree)
@@ -237,7 +253,7 @@ function watch_ir_tests(dir, delay=0.5)
 end
 
 function lower_str(mod::Module, s::AbstractString)
-    ex = parsestmt(JuliaLowering.SyntaxTree, s; version=VersionNumber(JL_NEW_EDITION))
+    ex = parsestmt(SyntaxTree, s; version=VersionNumber(JL_NEW_EDITION))
     return JuliaLowering.to_lowered_expr(JuliaLowering.lower(mod, ex))
 end
 
@@ -376,6 +392,10 @@ macro newmod(name="newmod_$(string(__source__))", parentmod=__module__,
         module $(Symbol(name))
         const JuliaLowering = $(JuliaLowering)
         const JuliaSyntax = $(JuliaSyntax)
+        const JL_NEW_EDITION = $(JL_NEW_EDITION)
+        const JL_OLD_EDITION = $(JL_OLD_EDITION)
+        const adopt_scope = $(adopt_scope)
+        const syntax_module = $(syntax_module)
         const var"@legacy_quote_to_syntax" = JuliaLowering.var"@legacy_quote_to_syntax"
         $(body...)
         end)
@@ -405,7 +425,7 @@ function _force_syntax(x, mod, edition::Tuple{Int, Int})
         JuliaSyntax.parseall(SyntaxTree, x; version=VersionNumber(edition), ignore_warnings=true)
     elseif x isa Expr
         JuliaLowering.expr_to_est(x, LineNumberNode(0),
-                                  JuliaSyntax.SyntaxContext(mod, edition))
+                                  SyntaxContext(mod, edition))
     else
         error("expected string or AST, got $x")
     end

@@ -15,27 +15,27 @@ fl_eval(test_mod, :(global mvar = "global mvar"))
 @testset "edition sanity-check" begin
     @test JuliaLowering.include_string(
         test_mod, "JuliaLowering.@edition") ==
-        JuliaSyntax.JL_NEW_EDITION
+        JL_NEW_EDITION
     @test jl_eval(
         test_mod, "JuliaLowering.@edition"; edition=JL_NEW_EDITION) ==
-        JuliaSyntax.JL_NEW_EDITION
+        JL_NEW_EDITION
     @test jl_eval(
         test_mod, "JuliaLowering.@edition"; edition=JL_OLD_EDITION) ==
-        JuliaSyntax.JL_OLD_EDITION
+        JL_OLD_EDITION
 
     # TODO: test the edition of returned syntax
     @test jl_eval(@newmod(), """
-    JuliaLowering.@edition JuliaSyntax.JL_NEW_EDITION macro m(); end
+    JuliaLowering.@edition JL_NEW_EDITION macro m(); end
     """; edition=JL_NEW_EDITION) isa Function
     @test jl_eval(@newmod(), """
-    JuliaLowering.@edition JuliaSyntax.JL_NEW_EDITION macro m(); end
+    JuliaLowering.@edition JL_NEW_EDITION macro m(); end
     """; edition=JL_OLD_EDITION) isa Function
 
     @test jl_eval(@newmod(), """
-    JuliaLowering.@edition JuliaSyntax.JL_OLD_EDITION macro m(); end
+    JuliaLowering.@edition JL_OLD_EDITION macro m(); end
     """; edition=JL_NEW_EDITION) isa Function
     @test jl_eval(@newmod(), """
-    JuliaLowering.@edition JuliaSyntax.JL_OLD_EDITION macro m(); end
+    JuliaLowering.@edition JL_OLD_EDITION macro m(); end
     """; edition=JL_OLD_EDITION) isa Function
 end
 
@@ -584,12 +584,13 @@ end
 
 JuliaLowering.include_string(test_mod, raw"""
 module M
-    using ..JuliaLowering: JuliaLowering, adopt_scope, @legacy_quote_to_syntax
+    using ..JuliaLowering: JuliaLowering, @legacy_quote_to_syntax
     using ..JuliaSyntax
+    import ..adopt_scope, ..syntax_module
 
     # Introspection
     macro __MODULE__()
-        JuliaLowering.syntax_module(__context__.macrocall)
+        syntax_module(__context__.macrocall)
     end
 
     macro __FILE__()
@@ -688,9 +689,9 @@ JuliaLowering.include_string(test_mod, "M.@set_other_global global_in_test_mod 1
 M.@recursive 3
 """) == (3, (2, (1, 0)))
 
-ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
+ex = JuliaLowering.parsestmt(SyntaxTree, "M.@outer()", filename="foo.jl")
 expanded = JuliaLowering.macroexpand(test_mod, ex)
-@test JuliaSyntax.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
+@test sourcetext.(flattened_provenance(expanded[2])) == [
     "M.@outer()"
     "@inner"
     "(y, z)"
@@ -743,7 +744,7 @@ end
 """)
 world2 = Base.get_world_counter()
 
-call_world_arg_test = JuliaLowering.rebase_layers(JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()"), test_mod)
+call_world_arg_test = JuliaLowering.rebase_layers(JuliaLowering.parsestmt(SyntaxTree, "@world_age_test()"), test_mod)
     @test JuliaLowering.expand_forms_1(call_world_arg_test, world1, true) ≈
         @ast_ 1::value
     @test JuliaLowering.expand_forms_1(call_world_arg_test, world2, true) ≈
@@ -987,7 +988,7 @@ catch exc
     @test exc isa LoadError
     mexc = exc.error.err
     @test mexc isa MethodError
-    @test mexc.args isa Tuple{JuliaLowering.MacroContext, JuliaLowering.SyntaxTree, JuliaLowering.SyntaxTree}
+    @test mexc.args isa Tuple{JuliaLowering.MacroContext, SyntaxTree, SyntaxTree}
 end
 
 @testset "calling with old/new macro signatures" begin
@@ -1163,7 +1164,7 @@ end
     jlower_e(s) = JuliaLowering.to_lowered_expr(
         jl_lower(
             test_mod, JuliaLowering.parsestmt(
-                JuliaLowering.SyntaxTree, s);
+                SyntaxTree, s);
             edition))
 
     prog = "Base.@assume_effects :foldable function foo(); end"
@@ -1269,7 +1270,7 @@ end
     jlower_e(s) = JuliaLowering.to_lowered_expr(
         jl_lower(
             test_mod, JuliaLowering.parsestmt(
-                JuliaLowering.SyntaxTree, s);
+                SyntaxTree, s);
             edition))
     our_ssaflags(prog) = find_method_ci(jlower_e(prog)).ssaflags
 
