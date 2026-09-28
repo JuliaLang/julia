@@ -704,22 +704,6 @@ JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
     return jl_cglobal(v, (jl_value_t*)jl_nothing_type);
 }
 
-static inline char signbitbyte(void *a, unsigned nbits) JL_NOTSAFEPOINT
-{
-    // the sign is the top value bit; padding may follow it, so only the
-    // width locates it
-    unsigned signbit = nbits - 1;
-    return (((unsigned char*)a)[signbit / host_char_bit] & (1 << (signbit % host_char_bit))) ? ~0 : 0;
-}
-
-static inline char usignbitbyte(void *a, unsigned nbits) JL_NOTSAFEPOINT
-{
-    (void)a;
-    (void)nbits;
-    // sign bit of an unsigned number
-    return 0;
-}
-
 static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
 {
     /* choose the right sized function specialization */
@@ -733,6 +717,9 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
     }
 }
 
+/* The C op for a size runs only when the width fills all of its bytes; any
+ * other width goes to the APInt op, list[0], which reads only the value
+ * bytes. So the ops take the operands as they are. */
 #define SELECTOR_FUNC(intrinsic) \
     typedef intrinsic##_t select_##intrinsic##_t[6]; \
     static inline intrinsic##_t select_##intrinsic(unsigned sz, unsigned runtime_nbits, const select_##intrinsic##_t list) JL_NOTSAFEPOINT \
@@ -939,10 +926,10 @@ static void jl_##name##bf16(unsigned runtime_nbits, void *pa, void *pb, void *pc
 
 typedef void (*intrinsic_1_t)(unsigned, void*, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_1)
-#define un_iintrinsic(name, u) \
+#define un_iintrinsic(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
-    return jl_iintrinsic_1(a, #name, u##signbitbyte, jl_intrinsiclambda_ty1, name##_list); \
+    return jl_iintrinsic_1(a, #name, jl_intrinsiclambda_ty1, name##_list); \
 }
 #define un_iintrinsic_fast(LLVMOP, OP, name, u) \
 un_iintrinsic_ctype(OP, name, 8, u##int##8_t) \
@@ -956,19 +943,19 @@ static const select_intrinsic_1_t name##_list = { \
     jl_##name##32, \
     jl_##name##64, \
 }; \
-un_iintrinsic(name, u)
-#define un_iintrinsic_slow(LLVMOP, name, u) \
+un_iintrinsic(name)
+#define un_iintrinsic_slow(LLVMOP, name) \
 static const select_intrinsic_1_t name##_list = { \
     LLVMOP \
 }; \
-un_iintrinsic(name, u)
+un_iintrinsic(name)
 
 typedef unsigned (*intrinsic_u1_t)(unsigned, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_u1)
-#define uu_iintrinsic(name, u) \
+#define uu_iintrinsic(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
-    return jl_iintrinsic_1(a, #name, u##signbitbyte, jl_intrinsiclambda_u1, name##_list); \
+    return jl_iintrinsic_1(a, #name, jl_intrinsiclambda_u1, name##_list); \
 }
 #define uu_iintrinsic_fast(LLVMOP, OP, name, u) \
 uu_iintrinsic_ctype(OP, name, 8, u##int##8_t) \
@@ -982,60 +969,41 @@ static const select_intrinsic_u1_t name##_list = { \
     jl_##name##32, \
     jl_##name##64, \
 }; \
-uu_iintrinsic(name, u)
-#define uu_iintrinsic_slow(LLVMOP, name, u) \
+uu_iintrinsic(name)
+#define uu_iintrinsic_slow(LLVMOP, name) \
 static const select_intrinsic_u1_t name##_list = { \
     LLVMOP \
 }; \
-uu_iintrinsic(name, u)
+uu_iintrinsic(name)
 
 static inline
 jl_value_t *jl_iintrinsic_1(jl_value_t *a, const char *name,
-                            char (*getsign)(void*, unsigned),
-                            jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, unsigned, const void*) JL_CANSAFEPOINT,
+                            jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, const void*) JL_CANSAFEPOINT,
                             const void *list) JL_CANSAFEPOINT
 {
     jl_value_t *ty = jl_typeof(a);
     if (!jl_is_primitivetype(ty))
         jl_errorf("%s: value is not a primitive type", name);
-    void *pa = jl_data_ptr(a);
-    unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
-    unsigned isize = jl_datatype_size((jl_datatype_t*)ty);
-    unsigned isize2 = next_power_of_two(isize);
-    unsigned osize = jl_datatype_size(ty);
-    unsigned osize2 = next_power_of_two(osize);
-    if (isize2 > osize2)
-        osize2 = isize2;
-    if (osize2 > isize || isize2 > isize) {
-        /* if needed, round type up to a real c-type and set/clear the unused bits */
-        void *pa2;
-        pa2 = alloca(osize2);
-        /* TODO: this memcpy assumes little-endian,
-         * for big-endian, need to align the copy to the other end */ \
-        memcpy(pa2, pa, isize);
-        memset((char*)pa2 + isize, getsign(pa, runtime_nbits), osize2 - isize);
-        pa = pa2;
-    }
-    jl_value_t *newv = lambda1(ty, pa, osize, osize2, list);
+    jl_value_t *newv = lambda1(ty, jl_data_ptr(a), jl_datatype_size(ty), list);
     if (ty == (jl_value_t*)jl_bool_type)
         return *(uint8_t*)jl_data_ptr(newv) & 1 ? jl_true : jl_false;
     return newv;
 }
 
-static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist) JL_CANSAFEPOINT
+static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsigned osize, const void *voidlist) JL_CANSAFEPOINT
 {
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
-    intrinsic_1_t op = select_intrinsic_1(osize2, runtime_nbits, (const intrinsic_1_t*)voidlist);
-    void *pr = alloca(osize2);
+    intrinsic_1_t op = select_intrinsic_1(osize, runtime_nbits, (const intrinsic_1_t*)voidlist);
+    void *pr = alloca(osize);
     op(runtime_nbits, pa, pr);
     return jl_new_bits(ty, pr);
 }
 
-static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist) JL_CANSAFEPOINT
+static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsigned osize, const void *voidlist) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
-    intrinsic_u1_t op = select_intrinsic_u1(osize2, runtime_nbits, (const intrinsic_u1_t*)voidlist);
+    intrinsic_u1_t op = select_intrinsic_u1(osize, runtime_nbits, (const intrinsic_u1_t*)voidlist);
     uint64_t cnt = op(runtime_nbits, pa);
     // TODO: the following assume little-endian
     // for big-endian, need to copy from the other end of cnt
@@ -1127,10 +1095,10 @@ static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const c
 
 typedef void (*intrinsic_2_t)(unsigned, void*, void*, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_2)
-#define bi_iintrinsic(name, u, cvtb) \
+#define bi_iintrinsic(name, cvtb) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
-    return jl_iintrinsic_2(a, b, #name, u##signbitbyte, jl_intrinsiclambda_2, name##_list, cvtb); \
+    return jl_iintrinsic_2(a, b, #name, jl_intrinsiclambda_2, name##_list, cvtb); \
 }
 #define bi_iintrinsic_cnvtb_fast(LLVMOP, OP, name, u, cvtb) \
 bi_intrinsic_ctype(OP, name, 8, u##int##8_t) \
@@ -1144,16 +1112,16 @@ static const select_intrinsic_2_t name##_list = { \
     jl_##name##32, \
     jl_##name##64, \
 }; \
-bi_iintrinsic(name, u, cvtb)
+bi_iintrinsic(name, cvtb)
 #define bi_iintrinsic_fast(LLVMOP, OP, name, u) \
     bi_iintrinsic_cnvtb_fast(LLVMOP, OP, name, u, 0)
 
 typedef int (*intrinsic_cmp_t)(unsigned, void*, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_cmp)
-#define cmp_iintrinsic(name, u) \
+#define cmp_iintrinsic(name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
-    return jl_iintrinsic_2(a, b, #name, u##signbitbyte, jl_intrinsiclambda_cmp, name##_list, 0); \
+    return jl_iintrinsic_2(a, b, #name, jl_intrinsiclambda_cmp, name##_list, 0); \
 }
 #define bool_iintrinsic_fast(LLVMOP, OP, name, u) \
 bool_intrinsic_ctype(OP, name, 8, u##int##8_t) \
@@ -1167,14 +1135,14 @@ static const select_intrinsic_cmp_t name##_list = { \
     jl_##name##32, \
     jl_##name##64, \
 }; \
-cmp_iintrinsic(name, u)
+cmp_iintrinsic(name)
 
 typedef int (*intrinsic_checked_t)(unsigned, void*, void*, void*) JL_NOTSAFEPOINT;
 SELECTOR_FUNC(intrinsic_checked)
-#define checked_iintrinsic(name, u, lambda_checked) \
+#define checked_iintrinsic(name, lambda_checked) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
-    return jl_iintrinsic_2(a, b, #name, u##signbitbyte, lambda_checked, name##_list, 0); \
+    return jl_iintrinsic_2(a, b, #name, lambda_checked, name##_list, 0); \
 }
 #define checked_iintrinsic_fast(LLVMOP, CHECK_OP, OP, name, u) \
 checked_intrinsic_ctype(CHECK_OP, OP, name, 8, u##int##8_t) \
@@ -1188,22 +1156,21 @@ static const select_intrinsic_checked_t name##_list = { \
     jl_##name##32, \
     jl_##name##64, \
 }; \
-checked_iintrinsic(name, u, jl_intrinsiclambda_checked)
-#define checked_iintrinsic_slow(LLVMOP, name, u) \
+checked_iintrinsic(name, jl_intrinsiclambda_checked)
+#define checked_iintrinsic_slow(LLVMOP, name) \
 static const select_intrinsic_checked_t name##_list = { \
     LLVMOP \
 }; \
-checked_iintrinsic(name, u, jl_intrinsiclambda_checked)
-#define checked_iintrinsic_div(LLVMOP, name, u) \
+checked_iintrinsic(name, jl_intrinsiclambda_checked)
+#define checked_iintrinsic_div(LLVMOP, name) \
 static const select_intrinsic_checked_t name##_list = { \
     LLVMOP \
 }; \
-checked_iintrinsic(name, u, jl_intrinsiclambda_checkeddiv)
+checked_iintrinsic(name, jl_intrinsiclambda_checkeddiv)
 
 static inline
 jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
-                            char (*getsign)(void*, unsigned),
-                            jl_value_t *(*lambda2)(jl_value_t*, void*, void*, unsigned, unsigned, const void*) JL_CANSAFEPOINT,
+                            jl_value_t *(*lambda2)(jl_value_t*, void*, void*, unsigned, const void*) JL_CANSAFEPOINT,
                             const void *list,
                             int cvtb) JL_CANSAFEPOINT
 {
@@ -1220,63 +1187,48 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b);
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
     unsigned sz = jl_datatype_size(ty);
-    unsigned sz2 = next_power_of_two(sz);
-    if (sz2 > sz) {
-        /* round type up to the appropriate c-type and set/clear the unused bits */
-        void *pa2 = alloca(sz2);
-        memcpy(pa2, pa, sz);
-        memset((char*)pa2 + sz, getsign(pa, runtime_nbits), sz2 - sz);
-        pa = pa2;
-    }
     if (cvtb) {
         /* b is an unsigned amount of its own type: take its value bits alone,
-         * zero-extended to the c-type of a. An amount of 2^runtime_nbits or
-         * more, which the ops would truncate to the c-type or to the width of
-         * a, saturates instead and shifts everything out, as in codegen. */
+         * zero-extended to the size of a. An amount of 2^runtime_nbits or
+         * more, which the ops would take modulo 2^runtime_nbits, saturates
+         * instead and shifts everything out, as in codegen. */
         unsigned nbitsb = jl_datatype_nbits((jl_datatype_t*)tyb);
         unsigned nbytesb = (nbitsb + 7) / 8;
-        uint8_t *pb2 = (uint8_t*)alloca(nbytesb > sz2 ? nbytesb : sz2);
-        memset(pb2, 0, sz2);
+        uint8_t *pb2 = (uint8_t*)alloca(nbytesb > sz ? nbytesb : sz);
+        memset(pb2, 0, sz);
         memcpy(pb2, pb, nbytesb);
         if (nbitsb % 8)
             pb2[nbytesb - 1] &= (1 << (nbitsb % 8)) - 1;
         for (unsigned i = runtime_nbits / 8; i < nbytesb; i++) {
             if (pb2[i] >> (i == runtime_nbits / 8 ? runtime_nbits % 8 : 0)) {
-                memset(pb2, 0xff, sz2);
+                memset(pb2, 0xff, sz);
                 break;
             }
         }
         pb = pb2;
     }
-    else if (sz2 > sz) {
-        /* b has the type of a; round it up the same way */
-        void *pb2 = alloca(sz2);
-        memcpy(pb2, pb, sz);
-        memset((char*)pb2 + sz, getsign(pb, runtime_nbits), sz2 - sz);
-        pb = pb2;
-    }
-    jl_value_t *newv = lambda2(ty, pa, pb, sz, sz2, list);
+    jl_value_t *newv = lambda2(ty, pa, pb, sz, list);
     return newv;
 }
 
-static inline jl_value_t *jl_intrinsiclambda_2(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist) JL_CANSAFEPOINT
+static inline jl_value_t *jl_intrinsiclambda_2(jl_value_t *ty, void *pa, void *pb, unsigned sz, const void *voidlist) JL_CANSAFEPOINT
 {
-    void *pr = alloca(sz2);
+    void *pr = alloca(sz);
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
-    intrinsic_2_t op = select_intrinsic_2(sz2, runtime_nbits, (const intrinsic_2_t*)voidlist);
+    intrinsic_2_t op = select_intrinsic_2(sz, runtime_nbits, (const intrinsic_2_t*)voidlist);
     op(runtime_nbits, pa, pb, pr);
     return jl_new_bits(ty, pr);
 }
 
-static inline jl_value_t *jl_intrinsiclambda_cmp(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
+static inline jl_value_t *jl_intrinsiclambda_cmp(jl_value_t *ty, void *pa, void *pb, unsigned sz, const void *voidlist)
 {
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
-    intrinsic_cmp_t op = select_intrinsic_cmp(sz2, runtime_nbits, (const intrinsic_cmp_t*)voidlist);
+    intrinsic_cmp_t op = select_intrinsic_cmp(sz, runtime_nbits, (const intrinsic_cmp_t*)voidlist);
     int cmp = op(runtime_nbits, pa, pb);
     return cmp ? jl_true : jl_false;
 }
 
-static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist) JL_CANSAFEPOINT
+static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, void *pb, unsigned sz, const void *voidlist) JL_CANSAFEPOINT
 {
     jl_value_t *params[2];
     params[0] = ty;
@@ -1287,18 +1239,18 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     jl_value_t *newv = jl_gc_alloc(ct->ptls, jl_datatype_size(tuptyp), tuptyp);
 
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
-    intrinsic_checked_t op = select_intrinsic_checked(sz2, runtime_nbits, (const intrinsic_checked_t*)voidlist);
+    intrinsic_checked_t op = select_intrinsic_checked(sz, runtime_nbits, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(runtime_nbits, pa, pb, jl_data_ptr(newv));
 
     char *ao = (char*)jl_data_ptr(newv) + jl_field_offset(tuptyp, 1);
     *ao = (char)ovflw;
     return newv;
 }
-static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist) JL_CANSAFEPOINT
+static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa, void *pb, unsigned sz, const void *voidlist) JL_CANSAFEPOINT
 {
-    void *pr = alloca(sz2);
+    void *pr = alloca(sz);
     unsigned runtime_nbits = jl_datatype_nbits((jl_datatype_t*)ty);
-    intrinsic_checked_t op = select_intrinsic_checked(sz2, runtime_nbits, (const intrinsic_checked_t*)voidlist);
+    intrinsic_checked_t op = select_intrinsic_checked(sz, runtime_nbits, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(runtime_nbits, pa, pb, pr);
     if (ovflw)
         jl_throw(jl_diverror_exception);
@@ -1637,18 +1589,17 @@ JL_DLLEXPORT jl_value_t *jl_bswap_int(jl_value_t *a)
         jl_error("bswap_int: value is not a primitive type");
     if (jl_datatype_nbits((jl_datatype_t*)ty) % 16 != 0)
         jl_error("bswap_int: argument bitsize must be a multiple of 16");
-    return jl_iintrinsic_1(a, "bswap_int", usignbitbyte,
-                          jl_intrinsiclambda_ty1, bswap_int_list);
+    return jl_iintrinsic_1(a, "bswap_int", jl_intrinsiclambda_ty1, bswap_int_list);
 }
 //#define ctpop_op(a) __builtin_ctpop(a)
 //uu_iintrinsic_fast(APInt_popcount, ctpop_op, ctpop_int, u)
-uu_iintrinsic_slow(APInt_popcount, ctpop_int, u)
+uu_iintrinsic_slow(APInt_popcount, ctpop_int)
 //#define ctlz_op(a) __builtin_ctlz(a)
 //uu_iintrinsic_fast(APInt_countl_zero, ctlz_op, ctlz_int, u)
-uu_iintrinsic_slow(APInt_countl_zero, ctlz_int, u)
+uu_iintrinsic_slow(APInt_countl_zero, ctlz_int)
 //#define cttz_op(a) __builtin_cttz(a)
 //uu_iintrinsic_fast(APInt_countr_zero, cttz_op, cttz_int, u)
-uu_iintrinsic_slow(APInt_countr_zero, cttz_int, u)
+uu_iintrinsic_slow(APInt_countr_zero, cttz_int)
 #define not_op(a) ~a
 un_iintrinsic_fast(APInt_not, not_op, not_int, u)
 
@@ -1763,13 +1714,13 @@ checked_iintrinsic_fast(APInt_sub_sov, check_ssub_int, sub, checked_ssub_int,  )
     /* this test checks for (a - b) < typemin ==> overflow */     \
     a < uTYPEMIN(t) + b
 checked_iintrinsic_fast(APInt_sub_uov, check_usub_int, sub, checked_usub_int, u)
-checked_iintrinsic_slow(APInt_mul_sov, checked_smul_int,  )
-checked_iintrinsic_slow(APInt_mul_uov, checked_umul_int, u)
+checked_iintrinsic_slow(APInt_mul_sov, checked_smul_int)
+checked_iintrinsic_slow(APInt_mul_uov, checked_umul_int)
 
-checked_iintrinsic_div(APInt_div_sov, checked_sdiv_int,  )
-checked_iintrinsic_div(APInt_div_uov, checked_udiv_int, u)
-checked_iintrinsic_div(APInt_rem_sov, checked_srem_int,  )
-checked_iintrinsic_div(APInt_rem_uov, checked_urem_int, u)
+checked_iintrinsic_div(APInt_div_sov, checked_sdiv_int)
+checked_iintrinsic_div(APInt_div_uov, checked_udiv_int)
+checked_iintrinsic_div(APInt_rem_sov, checked_srem_int)
+checked_iintrinsic_div(APInt_rem_uov, checked_urem_int)
 
 // functions
 #define flipsign(a, b) \
