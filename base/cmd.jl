@@ -183,8 +183,11 @@ function show_env(io::IO, env::Vector{String})
 end
 
 function show(io::IO, cmd::Cmd)
-    env_mode = cmd.env !== nothing ? get_show_env_mode(io) : nothing
-    print_env = cmd.env !== nothing && env_mode !== :none
+    env = cmd.env
+    if env !== nothing && get_show_env_mode(io) === :none
+        env = nothing
+    end
+    print_env = env !== nothing
     print_dir = !isempty(cmd.dir)
     print_uid = cmd.uid !== nothing
     print_gid = cmd.gid !== nothing
@@ -213,7 +216,7 @@ function show(io::IO, cmd::Cmd)
         print(io, ")")
     end
     if print_env || print_dir
-        print_env && (print(io, ","); show_env(io, cmd.env))
+        env === nothing || (print(io, ","); show_env(io, env))
         print_dir && (print(io, "; dir="); show(io, cmd.dir))
         print(io, ")")
     end

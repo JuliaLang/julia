@@ -823,6 +823,7 @@ end
         @test !contains(s, "secret123")
         @test contains(s, "PATH=/usr/bin")
     end
+    # JET.@test_call show(::IOBuffer, ::Cmd)
 end
 
 # test for interpolation of Cmd
