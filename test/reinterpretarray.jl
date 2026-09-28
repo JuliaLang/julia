@@ -720,3 +720,14 @@ end
     d = reinterpret(UInt8, zeros(Int32, 5))
     @test Base.elsize(d) == sizeof(UInt8)
 end
+
+@testset "pointer indexing with an offset axis" begin
+    M = collect(Int8.(reshape(1:16, 4, 4)))
+    R = reinterpret(reshape, Int32, view(M, :, Base.IdentityUnitRange(2:3)))
+    @test axes(R) == (Base.IdentityUnitRange(2:3),)
+    @test R[2] == reinterpret(Int32, M[:, 2])[1]
+    @test R[3] == reinterpret(Int32, M[:, 3])[1]
+    R[3] = 0
+    @test M[:, 3] == zeros(Int8, 4)
+    @test M[:, [1, 2, 4]] == reshape(Int8.([1:8; 13:16]), 4, 3)
+end
