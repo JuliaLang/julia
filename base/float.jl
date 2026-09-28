@@ -991,7 +991,7 @@ end
 
 """
     floatmin(T = Float64)
-    floatmin{::T)
+    floatmin(::T)
 
 Return the smallest positive normal number representable by the floating-point
 type `T`.  The argument can alternatively be an instance of `T`.
