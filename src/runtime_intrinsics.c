@@ -1231,8 +1231,9 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     }
     if (cvtb) {
         /* b is an unsigned amount of its own type: take its value bits alone,
-         * zero-extended to the c-type of a. An amount with bits beyond that
-         * saturates, which shifts everything out, as in codegen. */
+         * zero-extended to the c-type of a. An amount of 2^runtime_nbits or
+         * more, which the ops would truncate to the c-type or to the width of
+         * a, saturates instead and shifts everything out, as in codegen. */
         unsigned nbitsb = jl_datatype_nbits((jl_datatype_t*)tyb);
         unsigned nbytesb = (nbitsb + 7) / 8;
         uint8_t *pb2 = (uint8_t*)alloca(nbytesb > sz2 ? nbytesb : sz2);
@@ -1240,8 +1241,8 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
         memcpy(pb2, pb, nbytesb);
         if (nbitsb % 8)
             pb2[nbytesb - 1] &= (1 << (nbitsb % 8)) - 1;
-        for (unsigned i = sz2; i < nbytesb; i++) {
-            if (pb2[i]) {
+        for (unsigned i = runtime_nbits / 8; i < nbytesb; i++) {
+            if (pb2[i] >> (i == runtime_nbits / 8 ? runtime_nbits % 8 : 0)) {
                 memset(pb2, 0xff, sz2);
                 break;
             }

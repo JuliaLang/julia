@@ -243,6 +243,16 @@ end
     @test Base.invokelatest(Core.Intrinsics.ashr_int, Int8(-128), UInt16(256)) === Int8(-1)
     @test Base.invokelatest(Core.Intrinsics.shl_int, Core.Intrinsics.trunc_int(TestUInt5, 0x01),
                             UInt16(256)) === Core.Intrinsics.trunc_int(TestUInt5, 0x00)
+    # so does an amount of 2^width or more when the width is no C type's
+    shl(x, y) = Core.Intrinsics.shl_int(x, y)
+    lshr(x, y) = Core.Intrinsics.lshr_int(x, y)
+    ashr(x, y) = Core.Intrinsics.ashr_int(x, y)
+    for x in (Core.Intrinsics.trunc_int(TestUInt5, 0x01), Core.Intrinsics.trunc_int(TestUInt17, 0x0001ffff),
+              Core.Intrinsics.trunc_int(TestInt17, Int32(-4)), Core.Intrinsics.trunc_int(TestUInt24, 0x00000001)),
+        y in (UInt8(32), UInt8(33), UInt32(1 << 17 + 1), UInt32(1 << 24)),
+        (f, op) in ((shl, Core.Intrinsics.shl_int), (lshr, Core.Intrinsics.lshr_int), (ashr, Core.Intrinsics.ashr_int))
+        @test Base.invokelatest(op, x, y) === f(x, y)
+    end
 
     # a runtime replace compares values, not the bits above their width
     mutable struct AtomicTestUInt5
