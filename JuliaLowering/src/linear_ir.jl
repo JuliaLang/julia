@@ -1325,9 +1325,9 @@ function compile_lambda(outer_ctx, ex)
         end
     end
     code = renumber_body(ctx, ctx.code, slot_rewrites)
-    meta = CompileHints()
+    meta = SyntaxMeta()
     for (k, v) in ctx.meta
-        meta = CompileHints(meta, k, v)
+        meta = SyntaxMeta(meta, k, v)
     end
     out = @ast ctx ex [:code_info(;meta=meta)
         slots::slots

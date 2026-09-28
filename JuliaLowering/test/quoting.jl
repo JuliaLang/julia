@@ -166,7 +166,7 @@ end
                             Expr(:$, :a, :b)))))
         ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
-    @test JuliaSyntax.numchildren(st) == 3
+    @test numchildren(st) == 3
     st = jl_eval(
         test_mod,
         Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
@@ -178,7 +178,7 @@ end
                             Expr(:$, :a, Expr(:..., :b))))))
         ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
-    @test JuliaSyntax.numchildren(st) == 4
+    @test numchildren(st) == 4
     st = jl_eval(
         test_mod,
         Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
@@ -190,7 +190,7 @@ end
                             Expr(:$, :a, Expr(:..., Expr(:..., :b)))))))
         ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
-    @test JuliaSyntax.numchildren(st) == 5
+    @test numchildren(st) == 5
 end
 
 ex = jl_eval(test_mod, """

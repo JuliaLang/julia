@@ -100,7 +100,7 @@ end
     ]
 
     # TODO: `@ast_` escaping is broken
-    unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
+    unused = JuliaSyntax.parsestmt(SyntaxTree, "foo")
     local st_wrappers = Function[
         x->(@ast _ unused (x::value))
         x->(@ast _ unused [:inert x::value])

@@ -1,9 +1,8 @@
-using JuliaSyntax: @mknode
 using JuliaLowering: @stm
 
 @testset "assert_syntaxtree" begin
     st = parsestmt(SyntaxTree, "function foo end")
-    @test JuliaLowering.assert_syntaxtree(st) === nothing
+    @test assert_syntaxtree(st) === nothing
     @test_throws "needs value" @mknode(;source=st, context=st.context, head=:identifier)
     @test_throws "unrecognized leaf" @mknode(st; head=:code_info, children=nothing)
 end
@@ -199,8 +198,8 @@ end
         end
     end
 
-    @testset "SyntaxList splat matching" begin
-        # NB: a splat binds a view of the parent's children, not a SyntaxList
+    @testset "splat matching" begin
+        # NB: a splat binds a view of the parent's children, not a copy
         # trailing splat
         @test @stm st begin
             [:call f _...] -> true

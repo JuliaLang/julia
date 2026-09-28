@@ -1,5 +1,5 @@
 struct ValidationDiagnostic
-    sts::SyntaxList
+    sts::Vector{SyntaxTree}
     msgs::Vector{String}
     loc::LineNumberNode # for noting where failures come from in this file
 end

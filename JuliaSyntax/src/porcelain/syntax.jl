@@ -1,435 +1,6 @@
-# Data structures used by macro-expansion and lowering
+using Base: SyntaxContext, SyntaxTree, SourceRef, @mknode, sourceref
 
-mutable struct ScopeLayer
-    const mod::Module
-    const escaped::Union{Nothing, ScopeLayer}
-end
-
-"""
-Each node has a SyntaxContext describing its macro expansion and edition.
-`SyntaxContext` is shared between all nodes of a single macro expansion, and is
-one-to-one with ScopeLayer, with a few exceptions (contexts sharing same layer):
-- `escape` and adopt_scope
-- Desugaring creates internal contexts in its better version of `gensym`
-
-We may want to move layer out of this struct for easier adopt_scope and
-rebase_layer operations, but assuming mostly hygienic macros and few
-scope-changing functions, this is most compact.
-"""
-mutable struct SyntaxContext
-    const layer::Union{Nothing, ScopeLayer}
-    # For provenance; is not affected by escaping
-    const unexpanded::Any # Union{SyntaxTree, Nothing}
-    const edition::Tuple{Int, Int}
-    const internal::Bool
-end
-
-# Reference to bytes within a source file
-struct SourceRef
-    file::Base.RefValue{SourceFile}
-    first_byte::UInt32
-    last_byte::UInt32
-end
-
-mutable struct SyntaxTree
-    const head::Symbol
-    # Should be considered immutable
-    const children::Union{Nothing, Vector{SyntaxTree}}
-    const value::Any
-    const source::Union{SyntaxTree,SourceRef,LineNumberNode}
-    const context::SyntaxContext
-    const jl_source::Union{Nothing, LineNumberNode}
-    meta::Union{Nothing, Base.ImmutableDict{Symbol,Any}}
-    # TODO: this is rarely used, and should just be part of context
-    const mod::Union{Nothing, Module}
-    # TODO: this is almost never populated and semantically irrelevant after
-    # parsing
-    const syntax_flags::UInt16
-end
-
-# A default context corresponding to no expansion
-function SyntaxContext(mod::Module, edition::Tuple{Int, Int})
-    SyntaxContext(ScopeLayer(mod, nothing), nothing, edition, false)
-end
-
-const JL_NEW_EDITION = (1, 15)
-const JL_OLD_EDITION = (1, 14)
-
-const IdTag = Int
-
-function SyntaxTree(head::Symbol, children, @nospecialize(value), source, context)
-    SyntaxTree(head, children, value, source, context,
-               nothing, nothing, nothing, UInt16(0))
-end
-
-function with_context(st, sc)
-    SyntaxTree(st.head, st.children, st.value, st.source, sc,
-               st.jl_source, st.meta, st.mod, st.syntax_flags)
-end
-
-const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
-
-# fallback printing.  TODO: vulnerable to invalidations
-function node_string(ex::SyntaxTree, depth=2)
-    out = "(head="*string(head(ex))
-    for n in sort!(collect(fieldnames(typeof(ex))))
-        val = getproperty(ex, n)
-        if !isnothing(val) && n !== :head
-            val_str = if val isa SyntaxTree && depth > 1
-                node_string(val, depth-1)
-            elseif isbits(val) || val isa
-                Union{AbstractString, Symbol, Module, LineNumberNode}
-                repr(val)
-            else
-                repr(typeof(val))
-            end
-            out *= ", "*string(n)*"="*val_str
-        end
-    end
-    if is_leaf(ex)
-        out *= ", leaf"
-    elseif depth > 1
-        out *= ", children=["
-        for c in children(ex)
-            out *= "\n"*node_string(c, depth-1)
-        end
-        out *= "]"
-    end
-    out *= ")"
-    return out
-end
-
-function Base.getindex(ex::SyntaxTree, i::Integer)
-    ex.children[i]
-end
-
-function Base.getindex(ex::SyntaxTree, r::UnitRange)
-    @view ex.children[r]
-end
-
-Base.firstindex(::SyntaxTree) = 1
-Base.lastindex(ex::SyntaxTree) = numchildren(ex)
-
-function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
-    if head(ex1) != head(ex2) || is_leaf(ex1) != is_leaf(ex2)
-        return false
-    end
-    if is_leaf(ex1)
-        return ex1.value == ex2.value
-    else
-        if numchildren(ex1) != numchildren(ex2)
-            return false
-        end
-        return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
-    end
-end
-
-#-------------------------------------------------------------------------------
-# AST creation utilities
-
-# Tree invariants assumed everywhere, including `show`, so fallback printing
-# should be used on failure.  (These checks really belong in the type system.)
-# Failure should only be possible working on internals.
-function assert_syntaxtree(st::SyntaxTree, recursive=true)
-    vr = recursive ? _assert_syntaxtree(st, SyntaxTree[]) :
-        _assert_syntaxtree_node(st)
-    if vr !== nothing
-        err_st, err = vr
-        msg = string("assert_syntaxtree failed: ", node_string(st),
-                     "\n  failing node: ", node_string(err_st),
-                     "\n  reason: ", err)
-        error(msg)
-    end
-    nothing
-end
-
-function _assert_syntaxtree_node(st::SyntaxTree)
-    h = head(st)
-    if is_leaf(st)
-        if h === :globalref && st.mod === nothing
-            return (st, "leaf globalref requires module in .mod")
-        end
-        (needs_val, valtype) =
-            h === :identifier ? (true, String) :
-            h === :value ? (true, Any) :
-            h === :core ? (true, String) :
-            h === :top ? (true, String) :
-            h === :symbol ? (true, String) :
-            h === :globalref ? (true, String) :
-            h === :placeholder ? (false, Any) :
-            h === :bindingid ? (true, IdTag) :
-            h === :label ? (true, Int) :
-            h === :symboliclabel ? (true, String) :
-            h === :symbolicgoto ? (true, String) :
-            h === :slot ? (true, Int) :
-            h === :static_parameter ? (true, Int) :
-            h === :ssavalue ? (true, Int) :
-            h === :nothing ? (false, Any) :
-            h === :tombstone ? (false, Any) :
-            h === :error ? (false, Any) :
-            h === :sourcelocation ? (false, Any) :
-            h === :latestworld ? (false, Any) :
-            h === :latestworld_if_toplevel ? (false, Any) :
-            h === :strmacroname ? (true, String) :
-            h === :cmdmacroname ? (true, String) :
-            h === :lambdabindings ? (true, Any) : # JL.LambdaBindings
-            h === :slots ? (true, Vector) : # Vector{JL.Slot}
-            h === :version ? (true, VersionNumber) :
-            JuliaSyntax.is_trivia(st) ? (false, Any) : # green tree only
-            Base.isoperator(head(st)) ? (false, Any) : # green tree, TODO remove
-                (return (st, "unrecognized leaf $(h)"))
-        if needs_val && !(st.value isa valtype)
-            return (st, "needs value ::"*string(valtype))
-        end
-    else
-        # Note some kinds can show up as non-leaves too (mostly from Expr)
-        if h in (:identifier, :value, :placeholder, :bindingid, :label, :symbol,
-                 :nothing, :tombstone, :sourcelocation,
-                 :lambdabindings, :slots)
-            return (st, "Found leaf-only kind with children")
-        end
-    end
-    nothing
-end
-
-# Cyclic references are still possible with children (as they are stored in a
-# mutable vector), but other cycles (e.g. source) should be impossible by
-# construction
-function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree})
-    if st in parents
-        err = "cycle detected: ["
-        for p in parents
-            err *= "\n" * node_string(p)
-        end
-        return (st, err*"]")
-    end
-    vr = _assert_syntaxtree_node(st)
-    isnothing(vr) || return vr
-
-    push!(parents, st)
-    is_leaf(st) || for c in children(st)
-        vr = _assert_syntaxtree(c, parents)
-        isnothing(vr) || return vr
-    end
-    pop!(parents)
-    nothing
-end
-
-const _DEFAULT_NODE = SyntaxTree(
-    :none, nothing, nothing, LineNumberNode(0),
-    SyntaxContext(Core, (0, 0)))
-
-const DEBUG_LOWERING = true
-
-"""
-    @mknode(old; attr=val...)
-
-Create a node `new` that is an immutable update of `old`, but setting `old` as
-its provenance, and setting jl_source to macrocall's location.  `attrs` may
-override `old`'s fields (so if `old` is not provided, some attrs are required.)
-
-This is the main operation used by syntax transformations in lowering.
-"""
-macro mknode(attrs, old)
-    Base.remove_linenums!(old)
-    Base.remove_linenums!(attrs)
-    old_gs = gensym()
-    if !(isnothing(attrs) || attrs isa Expr && Meta.isexpr(attrs, :parameters))
-        throw(ArgumentError("usage: @mknode(old; attr=val...)"))
-    end
-    out_args = Vector(undef, fieldcount(SyntaxTree))
-    for (i, n) in enumerate(fieldnames(SyntaxTree))
-        out_args[i] = (DEBUG_LOWERING && n === :jl_source) ? __source__ :
-            n === :source ? old_gs :
-            Expr(:(.), old_gs, QuoteNode(n))
-    end
-    seen_attrs = Set{Symbol}()
-    attrs isa Expr && for a in attrs.args
-        (aname, aval) = if Meta.isexpr(a, :(kw), 2) && a.args[1] isa Symbol
-            (a.args[1]::Symbol, a.args[2])
-        elseif a isa Symbol
-            (a, a)
-        else
-            throw(ArgumentError("usage: @mknode(old; attr=val...)"))
-        end
-        aname in seen_attrs && throw(ArgumentError("duplicate attr provided $__source__"))
-        push!(seen_attrs, aname)
-        out_args[Base.fieldindex(SyntaxTree, aname)] = aval
-    end
-    old === _DEFAULT_NODE && !((:head, :source, :context) ⊆ seen_attrs) &&
-        throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
-
-    out = Expr(:let,
-               Expr(:block, Expr(:(=), old_gs, old)),
-               Expr(:block, Expr(:call, SyntaxTree, out_args...)))
-    DEBUG_LOWERING && (out.args[end] = Expr(:call, _debug_check_attrs, out.args[end]))
-    esc(out)
-end
-macro mknode(x)
-    (old, attrs) = Meta.isexpr(x, :parameters) ? (_DEFAULT_NODE, x) : (x, nothing)
-    esc(Expr(:macrocall, var"@mknode", __source__, attrs, old))
-end
-
-function _debug_check_attrs(x)
-    assert_syntaxtree(x, false)
-    x
-end
-
-const CompileHints = Base.ImmutableDict{Symbol,Any}
-function setmeta!(st::SyntaxTree, key::Symbol, @nospecialize(val))
-    meta = let m = st.meta
-        isnothing(m) ? CompileHints(key, val) : CompileHints(m, key, val)
-    end
-    setfield!(st, :meta, meta)
-    st
-end
-function setmeta(st::SyntaxTree, key::Symbol, @nospecialize(val))
-    setmeta!(is_leaf(st) ? @mknode(st; children=nothing) :
-        @mknode(st; children=children(st)), key, val)
-end
-function getmeta(st, name, @nospecialize(default))
-    meta = st.meta
-    isnothing(meta) ? default : get(meta, name, default)
-end
-
-Base.setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
-    error("SyntaxTree: this can't be mutated")
-
-# JuliaSyntax tree API
-
-function is_leaf(ex::SyntaxTree)
-    ex.children === nothing
-end
-
-function numchildren(ex::SyntaxTree)
-    cs = ex.children
-    isnothing(cs) ? 0 : length(cs)
-end
-
-# TODO: Better to make this an error, since it can cause nodes that were
-# intended to be leaves `SyntaxTree(head, children(old), ...)` to be non-leaves
-const NO_CHILDREN = SyntaxTree[]
-
-function children(ex::SyntaxTree)
-    cs = ex.children
-    cs === nothing ? NO_CHILDREN : cs
-end
-
-function head(ex::SyntaxTree)
-    ex.head
-end
-
-function flags(ex::SyntaxTree)
-    ex.syntax_flags
-end
-
-is_base_layer(sc::SyntaxContext) = (sc.layer::ScopeLayer).escaped === nothing
-
-# The scope corresponding to no macro expansion.  Use with caution: macros may
-# expand to top-level forms, so "base layer" !== "this top-level thunk's
-# pre-expansion context" (usually ctx.syntax_context).  Throws with no layer.
-function base_layer(sc::SyntaxContext)
-    l = sc.layer::ScopeLayer
-    while l.escaped !== nothing
-        l = l.escaped
-    end
-    return l
-end
-
-function escape_layer(sc::SyntaxContext, recursive::Bool)
-    l2 = recursive ? base_layer(sc) : (sc.layer::ScopeLayer).escaped
-    SyntaxContext(l2, sc.unexpanded, sc.edition, sc.internal)
-end
-
-syntax_module(sc::SyntaxContext) = (sc.layer::ScopeLayer).mod
-function syntax_module(st::SyntaxTree)
-    st_mod = st.mod
-    st_mod === nothing || return st_mod::Module
-    syntax_module(st.context)
-end
-
-edition(st::SyntaxTree) = st.context.edition
-edition(@nospecialize(st)) = JL_OLD_EDITION
-
-is_flisp_compat(sc::SyntaxContext) = sc.edition < JL_NEW_EDITION
-is_flisp_compat(st::SyntaxTree) = is_flisp_compat(st.context)
-
-# Unconditional; tramples existing scope, and includes quoted forms.  Only
-# changes layer where it needs changing.
-function adopt_scope(sc_in::SyntaxContext, st::SyntaxTree, scmap)
-    st_sc = st.context
-    sc2 = get(scmap, st_sc, nothing)
-    if isnothing(sc2)
-        sc2 = scmap[st_sc] = st_sc.layer === sc_in.layer ? st_sc :
-            SyntaxContext(
-                sc_in.layer, st_sc.unexpanded, st_sc.edition, st_sc.internal)
-    end
-    if is_leaf(st) || numchildren(st) == 0
-        sc2 === st_sc ? st : with_context(st, sc2)
-    else
-        mapchildren(c->adopt_scope(sc_in, c, scmap),
-                    sc2 === st_sc ? st : with_context(st, sc2))
-    end
-end
-function adopt_scope(reference::SyntaxTree, st::SyntaxTree)
-    adopt_scope(reference.context, st, Dict{SyntaxContext, SyntaxContext}())
-end
-
-function fill_context(st::SyntaxTree, sc::SyntaxContext)
-    mapchildren(c->fill_context(c, sc),
-                sc === st.context ? st : with_context(st, sc))
-end
-
-function remove_scope(st::SyntaxTree, scmap)
-    st_sc = st.context
-    sc2 = get(scmap, st.context, nothing)
-    if isnothing(sc2)
-        sc2 = scmap[st_sc] = st_sc.layer === nothing ? st_sc :
-            SyntaxContext(nothing, st_sc.unexpanded, st_sc.edition, st_sc.internal)
-    end
-    if is_leaf(st) || numchildren(st) == 0
-        sc2 === st_sc ? st : with_context(st, sc2)
-    else
-        mapchildren(c->remove_scope(c, scmap),
-                    sc2 === st_sc ? st : with_context(st, sc2))
-    end
-end
-remove_scope(st::SyntaxTree) =
-    remove_scope(st, Dict{SyntaxContext, SyntaxContext}())
-
-function Base.show(io::IO, ::MIME"text/plain", sl::ScopeLayer)
-    color = isnothing(sl.escaped) ? :normal : :cyan
-    printstyled(io, "SL("; color)
-    print(io, string(sl.mod))
-    print(io, ",")
-    !isnothing(sl.escaped) && print(io, sl.escaped)
-    print(io, ",")
-    printstyled(io, string(objectid(sl);base=62); color)
-    printstyled(io, ")"; color)
-end
-Base.show(io::IO, sl::ScopeLayer) = Base.show(io::IO, MIME"text/plain"(), sl)
-
-function Base.show(io::IO, ::MIME"text/plain", sc::SyntaxContext)
-    color = sc.internal ? :light_black :
-        sc.edition == JL_NEW_EDITION ? :normal : :blue
-    printstyled(io, "["; color)
-    if sc.edition != JL_NEW_EDITION
-        printstyled(io, "old,"; color)
-    end
-    if sc.internal
-        printstyled(io, "internal,"; color)
-    end
-    print(io, sc.layer)
-    print(io, ",")
-    if sc.unexpanded isa SyntaxTree
-        k = head(sc.unexpanded)
-        k === :macrocall ? print(io, sc.unexpanded[1]) : print(io, k)
-    end
-    printstyled(io, "]"; color)
-end
-Base.show(io::IO, sc::SyntaxContext) = Base.show(io::IO, MIME"text/plain"(), sc)
-
-sourcefile(src::SourceRef) = src.file[]
+sourcefile(src::SourceRef) = (src.file::Base.RefValue{SourceFile})[]
 first_byte(src::SourceRef) = Int(src.first_byte)
 last_byte(src::SourceRef) = Int(src.last_byte)
 byte_range(src::SourceRef) = first_byte(src):last_byte(src)
@@ -449,114 +20,6 @@ source_location(src::LineNumberNode, _byte_index::Integer) = (src.line, 0)
 source_location(::Type{LineNumberNode}, src::LineNumberNode, _byte_index::Integer) = src
 filename(src::LineNumberNode) = string(src.file)
 
-function highlight(io::IO, src::LineNumberNode; note="")
-    print(io, src, " - ", note)
-end
-
-function highlight(io::IO, src::SourceRef; kws...)
-    highlight(io, sourcefile(src), first_byte(src):last_byte(src); kws...)
-end
-
-function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
-    highlight(io, src; note="these are the bytes you're looking for 😊", context_lines_inner=20)
-end
-
-"""
-Provenance notes: A SyntaxTree `st` has `.source` equal to one of:
-- SyntaxTree (of the SyntaxTree `st` was transformed from)
-- a reference to source text (either SourceRef or LineNumberNode).
-
-Let "textref" refer to a SyntaxTree with non-SyntaxTree `.source`.  Every SyntaxTree
-is either a textref or has one at the end of its `.source` chain.
-
-All invariants noted in this section are awaiting the design of the "new macro"
-API.  As of writing this, the user has more freedom than they should have.
-"""
-
-"""
-SyntaxList of [st.source, st.source.source, ..., textref]
-"""
-function provenance(st::SyntaxTree)
-    prov = SyntaxTree[]
-    s = st.source
-    while s isa SyntaxTree
-        push!(prov, s)
-        s = s.source
-    end
-    return prov
-end
-
-"`provenance(st)[1]`, or `st` if that's empty"
-function prov(st::SyntaxTree)
-    source = st.source
-    source isa SyntaxTree ? source : st
-end
-
-"textref of st (possibly == st)"
-function prov_end(st::SyntaxTree)
-    out = st
-    while out.source isa SyntaxTree
-        out = prov(out)
-    end
-    return out
-end
-
-"`st`'s textref's `.source`, ignoring all expansions"
-function sourceref(st::SyntaxTree)
-    src = prov_end(st)
-    src.source::Union{LineNumberNode, SourceRef}
-end
-
-"The last macro expansion `st` was involved in, or nothing"
-function macro_prov(st::SyntaxTree)
-    msrc = st.context.unexpanded
-    isnothing(msrc) ? nothing : msrc::typeof(st)
-end
-
-"The first macro expansion `st` was involved in (chronologically), or nothing"
-function macro_prov_end(st::SyntaxTree)
-    lastmp = mp = macro_prov(st)
-    while !isnothing(mp)
-        lastmp, mp = mp, macro_prov(mp)
-    end
-    return lastmp
-end
-
-"The top-level location of `st`"
-function unexpanded_sourceref(st::SyntaxTree)
-    mp = macro_prov_end(st)
-    isnothing(mp) ? sourceref(st) : sourceref(mp)
-end
-
-"""
-A SyntaxList of textrefs associated with `st`.  The number of returned trees
-should equal one plus the number of macro expansions `st` "went through":
-
-- For new macros, this is the number of macro expansions `st` was both an input
-  and output of, so if `st` was created in a macro body, `flattened_provenance`
-  returns a list of length 1.
-
-- For old macros, we can't determine whether expanded syntax is from the
-  macrocall args or macro body (it will have LineNumberNode .source), so all
-  expanded syntax counts as having "went through" the macrocall.
-
-The resulting list should be in the order
-`[outermost_macrocall, innermost_macrocall, ..., expression_textref]`.
-"""
-function flattened_provenance(st::SyntaxTree)
-    _flattened_provenance(st, SyntaxList())
-end
-
-# Only recurse on the first macro source in any source chain
-function _flattened_provenance(st::SyntaxTree, out)
-    msrc = macro_prov(st)
-    # macro source === source means `st` is from the `msrc` macro body
-    !isnothing(msrc) && msrc != prov(st) &&
-        _flattened_provenance(msrc, out)
-    push!(out, prov_end(st))
-    out
-end
-
 sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
@@ -566,99 +29,29 @@ function sourcetext(ex::SyntaxTree)
     view(sf, byte_range(ex))
 end
 
-# TODO (refactoring): make SyntaxList an immutable wrapper around node children
-const SyntaxList = Vector{SyntaxTree}
+function highlight(io::IO, src::LineNumberNode; note="")
+    print(io, src, " - ", note)
+end
 
+function highlight(io::IO, src::SourceRef; kws...)
+    highlight(io, sourcefile(src), first_byte(src):last_byte(src); kws...)
+end
+
+# function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
+#     highlight(io, src; note="these are the bytes you're looking for 😊", context_lines_inner=20)
+# end
+
+function flags(ex::SyntaxTree)
+    ex.syntax_flags
+end
+
+children(ex::SyntaxTree) = Base.children(ex)
+numchildren(ex::SyntaxTree) = Base.numchildren(ex)
+is_leaf(ex::SyntaxTree) = Base.is_leaf(ex)
+head(ex::SyntaxTree) = Base.head(ex)
+
+# todo: remove
 SyntaxList(rest::SyntaxTree...) = SyntaxTree[rest...]
-
-function mapsyntax(f, exs::AbstractVector{SyntaxTree})
-    out = SyntaxList()
-    for ex in exs
-        push!(out, f(ex))
-    end
-    out
-end
-
-#-------------------------------------------------------------------------------
-# Mapping and copying of AST nodes
-
-# This function should be allocation-free if no children were changed
-function mapchildren(f::Function, ex::SyntaxTree)
-    if is_leaf(ex)
-        return ex
-    end
-    orig_children = children(ex)
-    cs = nothing
-    for (i,e) in enumerate(orig_children)
-        newchild = f(e)::SyntaxTree
-        if isnothing(cs)
-            if newchild == e
-                continue
-            else
-                cs = SyntaxList(undef, length(orig_children))
-                copyto!(cs, orig_children[1:i-1])
-            end
-        end
-        cs[i] = newchild
-    end
-    if isnothing(cs)
-        return ex
-    end
-    cs::SyntaxList
-    ex2 = @mknode(ex; children=cs)
-    return ex2
-end
-
-"""
-    unalias_nodes(st::SyntaxTree)
-
-Return a tree where each descendent of `st` has exactly one parent in `st`.  The
-returned tree is identical to `st` in all but underlying representation, where
-every additional parent to a subtree generates a copy of that subtree.  Apart
-from achieving this, `unalias_nodes` should not allocate new nodes.
-
-    unalias_nodes(sl::SyntaxList)
-
-If a `SyntaxList` is given, every resulting tree will be unique with respect to
-each other as well as internally.  A duplicate entry will produce a copied tree.
-"""
-unalias_nodes(st::SyntaxTree) = _unalias_nodes(st, Set{SyntaxTree}())
-
-function unalias_nodes(sl::SyntaxList)
-    seen = Set{SyntaxTree}()
-    mapsyntax(st->_unalias_nodes(st, seen), sl)
-end
-
-function _unalias_copy_tree(old::SyntaxTree)
-    # difference from mktree: don't add to provenance chain
-    out = if is_leaf(old)
-        @mknode(old; source=old.source, children=nothing)
-    else
-        cs = mapsyntax(_unalias_copy_tree, children(old))
-        @mknode(old; source=old.source, children=cs)
-    end
-end
-
-function _unalias_nodes(st::SyntaxTree, seen::Set{SyntaxTree})
-    if st in seen
-        return _unalias_copy_tree(st)
-    end
-    push!(seen, st)
-    mapchildren(c->_unalias_nodes(c, seen), st)
-end
-
-"""
-Give each descendent of `st` a `parent::SyntaxTree` attribute.
-"""
-function annotate_parent!(st::SyntaxTree)
-    st = unalias_nodes(st)
-    mapchildren(t->_annotate_parent!(t, st), st)
-end
-
-function _annotate_parent!(st::SyntaxTree, pid::SyntaxTree)
-    setmeta!(st, :parent, pid)
-    mapchildren(t->_annotate_parent!(t, st), st)
-end
 
 #-------------------------------------------------------------------------------
 # RawGreenNode->SyntaxTree1
@@ -716,7 +109,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     return id
 end
 
-function SyntaxTree(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor, context)
+function Base.SyntaxTree(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor, context)
     green_id = GC.@preserve sf begin
         raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
         offset = raw_offset - sf[].byte_offset
@@ -868,21 +261,21 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (op= a + b) => (+= a b)
         # (.op= a + b) => (.+= a b) below
         # TODO: worst Expr, defined in terms of isoperator, fix me pls
-        op_s = string(cs[2]) * '='
+        op_s = syntax_name(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
         return @mknode(;source=st, context, head=Symbol(op_s), children=SyntaxList(lhs, rhs))
     elseif k === :var".op=" && n_cs === 3
-        op_s = '.' * string(cs[2]) * '='
+        op_s = '.' * syntax_name(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
         return @mknode(;source=st, context, head=Symbol(op_s), children=SyntaxList(lhs, rhs))
     elseif k === :var"op=" && n_cs === 1
         # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
-        return symleaf(string(cs[1]) * '=')
+        return symleaf(syntax_name(cs[1]) * '=')
     elseif k === :var".op=" && n_cs === 1
         # (.op= +) => .+=
-        return symleaf('.' * string(cs[1]) * '=')
+        return symleaf('.' * syntax_name(cs[1]) * '=')
     elseif k === :dotsidentifier
         # `..`/`...` used as an ordinary identifier (eg the `..` operator)
         return symleaf(repeat('.', numeric_flags(st)))
@@ -1204,7 +597,7 @@ end
 
 # (call f a b (parameters c d) (parameters e)) =>
 # (call f (parameters (parameters e) c d) a b)
-function _reorder_parameters!(cs::SyntaxList, params_pos::Int)
+function _reorder_parameters!(cs::Vector{SyntaxTree}, params_pos::Int)
     (length(cs) > params_pos && head(cs[end]) === :parameters) || return cs
     local param_ball = pop!(cs)
     while length(cs) >= 1 && head(cs[end]) === :parameters
@@ -1221,7 +614,7 @@ end
 # (call args... (do _...)) -> (do (call args...) (-> _...))
 #
 # Expects preprocessed and rearranged `args`
-function _make_do_expression(st::SyntaxTree, args::SyntaxList, doex::SyntaxTree)
+function _make_do_expression(st::SyntaxTree, args::Vector{SyntaxTree}, doex::SyntaxTree)
     ret_doex = _green_to_est(st, 0, doex)
     ret_callex = @mknode(st; children=_map_green_to_est(st, args))
     return @mknode(;source=st, context=st.context, head=:do,
@@ -1239,7 +632,7 @@ end
 #
 # Converting children-first (as _string_to_Expr does) would make this much
 # harder by converting literal strings without the parent's knowledge
-function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
+function _string_to_est(st::SyntaxTree, cs::Vector{SyntaxTree}; unwrap_literal)
     ret_cs = SyntaxList()
     is_literal_str(c) = c.value isa String && head(c) == :value
     cur_str = false

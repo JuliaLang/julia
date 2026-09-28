@@ -23,10 +23,10 @@ function _value_string(ex)
           k == :symboliclabel ? "label:$(syntax_name(ex))" :
           k == :symbolicgoto ? "goto:$(syntax_name(ex))" :
           k == :sourcelocation ?
-              "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
+              "SourceLocation:$(filename(ex)):$(join(source_location(ex), ':'))" :
               k == :value ?
               (ex.value isa SourceRef ?
-              "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
+              "SourceRef:$(filename(ex)):$(join(source_location(ex), ':'))" :
               ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
               ex.value !== nothing ? repr(ex.value) : "::$k"
 
@@ -118,7 +118,7 @@ message per tree.  If `!internal`, caused by bad user code in `syntax` (flisp:
 `Expr(:error, msg)`).
 """
 struct LoweringError <: Exception
-    sts::SyntaxList
+    sts::Vector{SyntaxTree}
     msgs::Vector{String}
     internal::Bool
 end
@@ -163,7 +163,7 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, "\n")
 
     src = ex.source
-    msrc = JuliaSyntax.macro_prov(ex)
+    msrc = macro_prov(ex)
     printstyled(io, string(
         indent, msrc === nothing ? "└─ " : "├─ "); color=:light_black)
     if src isa SyntaxTree

@@ -1,29 +1,9 @@
-using .JuliaSyntax: SyntaxTree, SyntaxList, prov, prov_end, provenance,
-    macro_prov, macro_prov_end, flattened_provenance, sourceref,
-    unexpanded_sourceref, unalias_nodes, annotate_parent!, getmeta, SyntaxContext,
-    ScopeLayer, children, @mknode
+using Base: SyntaxTree, SyntaxContext, ScopeLayer, @mknode, prov, prov_end,
+    provenance, sourceref, macro_prov, macro_prov_end, flattened_provenance,
+    unexpanded_sourceref
+using .JuliaSyntax: children
 
 const DUMMY_CONTEXT = SyntaxContext(@__MODULE__, (0,0))
-
-"""
-Build a hand-made tree for the DAG-shaped tests below.  Each node carries a
-distinct integer in `.value` so nodes copied by `unalias_nodes` and friends can
-be traced back to the node they were copied from.
-"""
-function tnode(tag::Int, cs::SyntaxTree...)
-    isempty(cs) ?
-        SyntaxTree(:value, nothing, tag, LineNumberNode(tag), DUMMY_CONTEXT) :
-        SyntaxTree(:block, SyntaxList(cs...), tag, LineNumberNode(tag), DUMMY_CONTEXT)
-end
-
-"All nodes of `st` in preorder, with one entry per occurrence"
-function flat_nodes(st::SyntaxTree, out=SyntaxList())
-    push!(out, st)
-    for c in children(st)
-        flat_nodes(c, out)
-    end
-    out
-end
 
 @testset "SyntaxTree parsing" begin
     # Errors should fall through
@@ -46,10 +26,9 @@ end
 end
 
 @testset "SyntaxTree provenance accessors" begin
-
     @testset "prov, prov_end, provenance, sourceref" begin
         # st3 <- st2 <- st1, with st3 referring to source text
-        st3 = tnode(3)
+        st3 = @mknode(;head=:value, value=3, context=DUMMY_CONTEXT, source=LineNumberNode(3))
         st2 = @mknode(st3)
         st1 = @mknode(st2)
 
@@ -63,8 +42,8 @@ end
         @test sourceref(st1) == LineNumberNode(3)
         @test sourceref(prov_end(st1)) == LineNumberNode(3)
 
-        @test provenance(st1) == SyntaxList(st2, st3)
-        @test provenance(prov_end(st1)) == SyntaxList()
+        @test provenance(st1) == SyntaxTree[st2, st3]
+        @test provenance(prov_end(st1)) == SyntaxTree[]
     end
 
     @testset "flattened_provenance" begin
@@ -134,113 +113,14 @@ end
         @test unexpanded_sourceref(stmm3) == LineNumberNode(1, :mm)
         @test unexpanded_sourceref(stmm2) == LineNumberNode(1, :mm)
         @test unexpanded_sourceref(stmm1) == LineNumberNode(1, :mm)
-        @test flattened_provenance(st3) == SyntaxList(stmm1, stm1, st1)
-        @test flattened_provenance(st2) == SyntaxList(stm_unused, st1)
-        @test flattened_provenance(st1) == SyntaxList(stm_unused, st1)
-        @test flattened_provenance(stm3) == SyntaxList(stmm1, stm1)
-        @test flattened_provenance(stm2) == SyntaxList(stm1)
-        @test flattened_provenance(stm1) == SyntaxList(stm1)
-        @test flattened_provenance(stmm3) == SyntaxList(stmm1)
-        @test flattened_provenance(stmm2) == SyntaxList(stmm1)
-        @test flattened_provenance(stmm1) == SyntaxList(stmm1)
+        @test flattened_provenance(st3) == SyntaxTree[stmm1, stm1, st1]
+        @test flattened_provenance(st2) == SyntaxTree[stm_unused, st1]
+        @test flattened_provenance(st1) == SyntaxTree[stm_unused, st1]
+        @test flattened_provenance(stm3) == SyntaxTree[stmm1, stm1]
+        @test flattened_provenance(stm2) == SyntaxTree[stm1]
+        @test flattened_provenance(stm1) == SyntaxTree[stm1]
+        @test flattened_provenance(stmm3) == SyntaxTree[stmm1]
+        @test flattened_provenance(stmm2) == SyntaxTree[stmm1]
+        @test flattened_provenance(stmm1) == SyntaxTree[stmm1]
     end
-end
-
-@testset "SyntaxTree utils" begin
-    @testset "unalias_nodes" begin
-        # 1 -+-> 2 -+
-        #    |      +-> 4
-        #    +-> 3 -+
-        build1() = let n4 = tnode(4)
-            tnode(1, tnode(2, n4), tnode(3, n4))
-        end
-        ref = build1()
-        st = build1()
-        src4 = st[1][1].source
-        stu = unalias_nodes(st)
-        @test ref ≈ stu
-        @test length(flat_nodes(stu)) == 5  # node 4 copied once
-        @test allunique(flat_nodes(stu))
-        # the copy keeps node 4's attributes, and doesn't extend its provenance
-        @test 4 == stu[1][1].value == stu[2][1].value
-        @test src4 === stu[1][1].source === stu[2][1].source
-
-        #           +-> 5
-        #           |
-        # 1 -+-> 2 -+---->>>-> 6
-        #    |           |||
-        #    +-> 3 -> 7 -+||
-        #    |            ||
-        #    +-> 4 -+-----+|
-        #           |      |
-        #           +------+
-        build2() = let n6 = tnode(6)
-            tnode(1,
-                  tnode(2, tnode(5), n6),
-                  tnode(3, tnode(7, n6)),
-                  tnode(4, n6, n6))
-        end
-        ref = build2()
-        stu = unalias_nodes(build2())
-        @test ref ≈ stu
-        # node 6 occurs four times, so it should be copied three times
-        @test length(flat_nodes(stu)) == 10
-        @test allunique(flat_nodes(stu))
-        @test 6 == stu[1][2].value == stu[2][1][1].value ==
-            stu[3][1].value == stu[3][2].value
-
-        # 1 -+-> 2 ->-> 4 -+----> 5 ->-> 7
-        #    |      |      |         |
-        #    +-> 3 -+      +-->-> 6 -+
-        #        |            |
-        #        +------------+
-        build3() = let n7 = tnode(7),
-                       n5 = tnode(5, n7),
-                       n6 = tnode(6, n7),
-                       n4 = tnode(4, n5, n6)
-            tnode(1, tnode(2, n4), tnode(3, n4, n6))
-        end
-        ref = build3()
-        stu = unalias_nodes(build3())
-        @test ref ≈ stu
-        @test length(flat_nodes(stu)) == 15
-        @test allunique(flat_nodes(stu))
-        # attrs of nodes 4-7 survive copying
-        @test 4 == stu[1][1].value == stu[2][1].value
-        @test 5 == stu[1][1][1].value == stu[2][1][1].value
-        @test 6 == stu[1][1][2].value == stu[2][1][2].value == stu[2][2].value
-        @test 7 == stu[1][1][1][1].value == stu[1][1][2][1].value ==
-            stu[2][1][1][1].value == stu[2][1][2][1].value == stu[2][2][1].value
-    end
-
-    @testset "annotate_parent" begin
-        chk_parent(st, parent) = getmeta(st, :parent, nothing) === parent &&
-            all(c->chk_parent(c, st), children(st))
-        # 1 -+-> 2 ->-> 4 --> 5
-        #    |      |
-        #    +-> 3 -+
-        st = let n4 = tnode(4, tnode(5))
-            tnode(1, tnode(2, n4), tnode(3, n4))
-        end
-        st = annotate_parent!(st)
-        @test chk_parent(st, nothing)
-    end
-end
-
-@testset "SyntaxList" begin
-    st = parsestmt(SyntaxTree, "function foo end")
-
-    sl0 = SyntaxList()
-    @test sl0 isa SyntaxList
-    @test length(sl0) == 0
-
-    sl1 = SyntaxList(st)
-    @test sl1 isa SyntaxList
-    @test length(sl1) == 1
-    @test sl1[1] === st
-
-    sl2 = SyntaxList(st, st)
-    @test sl2 isa SyntaxList
-    @test length(sl2) == 2
-    @test sl2[2] === st
 end
