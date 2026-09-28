@@ -2285,6 +2285,19 @@ const warn28789 = "Assignment to `s28789` in soft scope is ambiguous because a g
     end
 end
 
+# a typed assignment in soft scope produces the same ambiguity warning as an
+# untyped one
+const warn62335 = "Assignment to `t62335` in soft scope is ambiguous because a global variable by the same name exists: "*
+    "`t62335` will be treated as a new local. Disambiguate by using `local t62335` to suppress this warning or "*
+    "`global t62335` to assign to the existing global variable."
+@test_logs (:warn, warn62335) @eval begin
+    t62335 = 0
+    for i = 1:10
+        t62335::Int = i
+    end
+end
+@test t62335 == 0
+
 # issue #38650, `struct` should always be a hard scope
 f38650() = 0
 @eval begin
@@ -3577,6 +3590,76 @@ end
     @test Core.get_binding_type(m, :bar) == Float64
     @test m.Foo.bar === 1
     @test Core.get_binding_type(m.Foo, :bar) == Any
+
+    # in `x::T = v` the declared type is evaluated exactly once, before
+    # the right-hand side, and the same result is used both for the conversion
+    # and the declaration
+    m = Module()
+    @eval m begin
+        counter = 0
+        order = Symbol[]
+    end
+    @eval m global g1::(push!(order, :T); global counter += 1; counter == 1 ? Int : error("type evaluated twice")) = (push!(order, :rhs); 3)
+    @test m.counter == 1
+    @test m.g1 === 3
+    @test m.order == [:T, :rhs]
+    @test Core.get_binding_type(m, :g1) == Int
+
+    # A mutable local used as the declared type is snapshotted before the RHS,
+    # so mutating that local while computing the value cannot change the type
+    # used for conversion or declaration.
+    m = Module()
+    @eval m let T = Int
+        global snapshotted_type::T = (T = Float64; 1)
+    end
+    @test m.snapshotted_type === 1
+    @test Core.get_binding_type(m, :snapshotted_type) == Int
+
+    # The declared type is validated before the RHS is evaluated.
+    m = Module()
+    @eval m invalid_type_rhs_ran = false
+    @test_throws TypeError @eval m global invalid_type_global::1 = (invalid_type_rhs_ran = true; 2)
+    @test !m.invalid_type_rhs_ran
+    @test !Base.isdefinedglobal(m, :invalid_type_global)
+
+    # An explicit `global` around a chained assignment still evaluates the
+    # outer declaration's type before any assignment on the RHS.
+    m = Module()
+    @eval m explicit_global_order = Symbol[]
+    @eval m global chain_outer::(push!(explicit_global_order, :T); Int) =
+        chain_inner = (push!(explicit_global_order, :rhs); 1)
+    @test m.explicit_global_order == [:T, :rhs]
+    @test m.chain_outer === m.chain_inner === 1
+    @test Core.get_binding_type(m, :chain_outer) == Int
+
+    # if evaluating the declared type throws, the binding is left untouched and
+    # the right-hand side is never evaluated
+    m = Module()
+    @eval m global h::Int = 1
+    @test_throws ErrorException @eval m global h::(error("boom")) = (global evaluated = true; 2.0)
+    @test m.h === 1
+    @test Core.get_binding_type(m, :h) == Int
+    @test !isdefined(m, :evaluated)
+
+    # an assignment inside the declared-type expression of a typed
+    # assignment must still be discovered by lowering (`y` is a local here,
+    # not a global of the enclosing module)
+    m = Module()
+    @eval m function ftypedlocal()
+        x::(y = Int) = 1
+        (x, y)
+    end
+    @test invokelatest(m.ftypedlocal) === (1, Int)
+    @test !isdefined(m, :y)
+
+    # the type expression is evaluated before the value, so a closure in the
+    # value can capture a local assigned in the type expression
+    m = Module()
+    @eval m let
+        global cap::(z = 5; Int) = (getz = () -> z; getz())
+    end
+    @test m.cap === 5
+    @test Core.get_binding_type(m, :cap) == Int
 end
 
 # issue 44723
