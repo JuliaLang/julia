@@ -1005,14 +1005,20 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
         set_io_wait_begin(1);
         // O_NOINHERIT should be covered by libuv passing NULL to the
         // security attributes of CreateFileW
-        fd = uv_fs_open(NULL, &req, fname, flags, mode, NULL);
+        uv_fs_open(NULL, &req, fname, flags, mode, NULL);
         set_io_wait_begin(0);
-        uv_fs_req_cleanup(&req);
 
-        if (fd < 0) {
-            errno = _uv_err_to_errno(fd);
+        if (req.result < 0) {
+            errno = _uv_err_to_errno((int)req.result);
             fd = -1;
         }
+        else {
+            // req.result is a HANDLE; ios_t owns CRT descriptors only
+            fd = _open_osfhandle((intptr_t)req.result, O_BINARY | (flags & O_APPEND));
+            if (fd == -1)
+                CloseHandle((HANDLE)(intptr_t)req.result); // _open_osfhandle did not take ownership
+        }
+        uv_fs_req_cleanup(&req);
 
         // The retry for windows should never trigger since CreateFileW doesn't generate those
         // errors.
