@@ -2779,15 +2779,19 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             }
             else {
                 if (!jl_is_datatype(values_tt)) {
-                    // should have been checked within `check_datatype_parameters`.
-                    jl_error("NamedTuple field type must be a tuple datatype");
-                }
-                if (jl_is_va_tuple((jl_datatype_t*)values_tt) || jl_nparams(values_tt) != nf) {
+                    // reachable for `NamedTuple{(), Union{}}`, e.g. from type intersection
                     if (!nothrow)
-                        jl_error("NamedTuple names and field types must have matching lengths");
+                        jl_error("NamedTuple field type must be a tuple datatype");
                     invalid = 1;
                 }
-                jl_gc_write(ndt, ndt->types, jl_svec_t, ((jl_datatype_t*)values_tt)->parameters);
+                else {
+                    if (jl_is_va_tuple((jl_datatype_t*)values_tt) || jl_nparams(values_tt) != nf) {
+                        if (!nothrow)
+                            jl_error("NamedTuple names and field types must have matching lengths");
+                        invalid = 1;
+                    }
+                    jl_gc_write(ndt, ndt->types, jl_svec_t, ((jl_datatype_t*)values_tt)->parameters);
+                }
             }
         }
         else {

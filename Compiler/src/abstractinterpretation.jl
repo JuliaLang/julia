@@ -3407,7 +3407,10 @@ function is_field_pointerfree(dt::DataType, fidx::Int)
     dt.layout::Ptr{Cvoid} == C_NULL && return false
     DataTypeFieldDesc(dt)[fidx].isptr && return false
     ft = fieldtype(dt, fidx)
-    return ft isa DataType && datatype_pointerfree(ft)
+    ft isa DataType || return false
+    # Without a field layout, conservatively treat the allocation as inconsistent.
+    ft.layout::Ptr{Cvoid} == C_NULL && return true
+    return datatype_pointerfree(ft)
 end
 
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
