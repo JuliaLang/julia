@@ -704,18 +704,17 @@ JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
     return jl_cglobal(v, (jl_value_t*)jl_nothing_type);
 }
 
-static inline char signbitbyte(void *a, unsigned bytes, unsigned nbits) JL_NOTSAFEPOINT
+static inline char signbitbyte(void *a, unsigned nbits) JL_NOTSAFEPOINT
 {
-    (void)bytes;
-    // the top value bit, which padding after it would push out of the last byte
+    // the sign is the top value bit; padding may follow it, so only the
+    // width locates it
     unsigned signbit = nbits - 1;
     return (((unsigned char*)a)[signbit / host_char_bit] & (1 << (signbit % host_char_bit))) ? ~0 : 0;
 }
 
-static inline char usignbitbyte(void *a, unsigned bytes, unsigned nbits) JL_NOTSAFEPOINT
+static inline char usignbitbyte(void *a, unsigned nbits) JL_NOTSAFEPOINT
 {
     (void)a;
-    (void)bytes;
     (void)nbits;
     // sign bit of an unsigned number
     return 0;
@@ -992,7 +991,7 @@ uu_iintrinsic(name, u)
 
 static inline
 jl_value_t *jl_iintrinsic_1(jl_value_t *a, const char *name,
-                            char (*getsign)(void*, unsigned, unsigned),
+                            char (*getsign)(void*, unsigned),
                             jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, unsigned, const void*) JL_CANSAFEPOINT,
                             const void *list) JL_CANSAFEPOINT
 {
@@ -1014,7 +1013,7 @@ jl_value_t *jl_iintrinsic_1(jl_value_t *a, const char *name,
         /* TODO: this memcpy assumes little-endian,
          * for big-endian, need to align the copy to the other end */ \
         memcpy(pa2, pa, isize);
-        memset((char*)pa2 + isize, getsign(pa, isize, runtime_nbits), osize2 - isize);
+        memset((char*)pa2 + isize, getsign(pa, runtime_nbits), osize2 - isize);
         pa = pa2;
     }
     jl_value_t *newv = lambda1(ty, pa, osize, osize2, list);
@@ -1203,7 +1202,7 @@ checked_iintrinsic(name, u, jl_intrinsiclambda_checkeddiv)
 
 static inline
 jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
-                            char (*getsign)(void*, unsigned, unsigned),
+                            char (*getsign)(void*, unsigned),
                             jl_value_t *(*lambda2)(jl_value_t*, void*, void*, unsigned, unsigned, const void*) JL_CANSAFEPOINT,
                             const void *list,
                             int cvtb) JL_CANSAFEPOINT
@@ -1226,7 +1225,7 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
         /* round type up to the appropriate c-type and set/clear the unused bits */
         void *pa2 = alloca(sz2);
         memcpy(pa2, pa, sz);
-        memset((char*)pa2 + sz, getsign(pa, sz, runtime_nbits), sz2 - sz);
+        memset((char*)pa2 + sz, getsign(pa, runtime_nbits), sz2 - sz);
         pa = pa2;
     }
     if (cvtb) {
@@ -1253,7 +1252,7 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
         /* b has the type of a; round it up the same way */
         void *pb2 = alloca(sz2);
         memcpy(pb2, pb, sz);
-        memset((char*)pb2 + sz, getsign(pb, sz, runtime_nbits), sz2 - sz);
+        memset((char*)pb2 + sz, getsign(pb, runtime_nbits), sz2 - sz);
         pb = pb2;
     }
     jl_value_t *newv = lambda2(ty, pa, pb, sz, sz2, list);
