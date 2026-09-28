@@ -294,7 +294,9 @@ Standard library changes
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 * New public (unexported) `Dates.Timestamp{P}` type: a point in time stored as an `Int64` count of `P` (`Second`, `Millisecond`,
   `Microsecond`, or `Nanosecond`) since the Unix epoch. `Timestamp(...)` creates a
-  `Timestamp{Nanosecond}`, which covers the years 1677 through 2262 ([#62994]).
+  `Timestamp{Nanosecond}`, which covers the years 1677 through 2262. The helpers
+  `Dates.unix2timestamp`, `Dates.timestamp2unix`, and `Dates.ISOTimestampFormat` are also public
+  but not exported ([#62994]).
 * Equal `Date`, `DateTime`, and `Timestamp` values now have equal hashes, as `==` requires ([#62994]).
 * New `n` format code for fractional seconds with up to nanosecond precision. A format that used `n`
   as a literal character must now escape it with a backslash. The default `Time` format,

@@ -72,7 +72,6 @@ export Period, DatePeriod, TimePeriod,
        Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec,
        # conversions.jl
        unix2datetime, datetime2unix, now, today,
-       unix2timestamp, timestamp2unix,
        rata2datetime, datetime2rata, julian2datetime, datetime2julian,
        # adjusters.jl
        firstdayofweek, lastdayofweek,
@@ -81,9 +80,9 @@ export Period, DatePeriod, TimePeriod,
        firstdayofquarter, lastdayofquarter,
        tonext, toprev, tofirst, tolast,
        # io.jl
-       ISODateTimeFormat, ISODateFormat, ISOTimeFormat, ISOTimestampFormat, DateFormat,
+       ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat,
        RFC1123Format, @dateformat_str
 
-public format, Timestamp
+public format, Timestamp, unix2timestamp, timestamp2unix, ISOTimestampFormat
 
 end # module

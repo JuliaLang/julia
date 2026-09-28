@@ -28,8 +28,9 @@ The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is
 `0001-01-01`, and year `-0001` (yes, negative one for the year) is 2 BC/BCE, year `-0002` is 3
 BC/BCE, etc.
 
-`Timestamp` is public but not exported. Use `Dates.Timestamp`, or explicitly import it
-with `using Dates: Timestamp`, as in the examples below.
+`Timestamp` and its helpers `unix2timestamp`, `timestamp2unix`, and `ISOTimestampFormat` are
+public but not exported. Use `Dates.Timestamp`, or import the names you need, as in
+`using Dates: Timestamp`. The examples below assume that import.
 
 A `Timestamp{P}` stores an `Int64` count of `P` since the Unix epoch, `1970-01-01T00:00:00`,
 where the resolution `P` is `Second`, `Millisecond`, `Microsecond`, or `Nanosecond`.
@@ -944,7 +945,7 @@ Months of the Year:
 
 ```@docs
 ISODateTimeFormat
-ISOTimestampFormat
+Dates.ISOTimestampFormat
 ISODateFormat
 ISOTimeFormat
 RFC1123Format

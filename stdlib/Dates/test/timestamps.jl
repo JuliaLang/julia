@@ -4,13 +4,15 @@ module TimestampTests
 
 using Test
 using Dates
-using Dates: Timestamp
+using Dates: Timestamp, ISOTimestampFormat, timestamp2unix, unix2timestamp
 
 # The testsets before "Parameterized resolution" use the default Timestamp{Nanosecond}.
 
 @testset "Construction and validation" begin
-    @test Base.ispublic(Dates, :Timestamp)
-    @test !Base.isexported(Dates, :Timestamp)
+    for name in (:Timestamp, :unix2timestamp, :timestamp2unix, :ISOTimestampFormat)
+        @test Base.ispublic(Dates, name)
+        @test !Base.isexported(Dates, name)
+    end
     ts = Timestamp(2026, 8, 31, 13, 45, 30, 123, 456, 789)
     @test ts isa Timestamp
     @test Timestamp(2026) == Timestamp(2026, 1, 1)
@@ -575,7 +577,7 @@ end
 
 module TimestampPeriodExtensionTests
 using Dates, Test
-using Dates: Timestamp
+using Dates: Timestamp, unix2timestamp
 const TimestampHelpers = Dates
 
 # A package-defined 128-bit picosecond period with no period promotion rules

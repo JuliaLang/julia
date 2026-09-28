@@ -534,10 +534,10 @@ This is the default value for `Dates.format` of a `Timestamp`.
 
 # Examples
 ```jldoctest
-julia> Dates.format(Timestamp(2018, 8, 8, 12, 0, 43, 1), ISOTimestampFormat)
+julia> Dates.format(Timestamp(2018, 8, 8, 12, 0, 43, 1), Dates.ISOTimestampFormat)
 "2018-08-08T12:00:43.001"
 
-julia> Dates.format(Timestamp(2018, 8, 8, 12, 0, 43, 0, 0, 1), ISOTimestampFormat)
+julia> Dates.format(Timestamp(2018, 8, 8, 12, 0, 43, 0, 0, 1), Dates.ISOTimestampFormat)
 "2018-08-08T12:00:43.000000001"
 ```
 
