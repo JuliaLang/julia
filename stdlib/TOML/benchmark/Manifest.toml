@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.13.1-DEV"
+julia_version = "1.13.2-DEV"
 manifest_format = "2.1"
-project_hash = "e004ccb9c815ef8d9aea64f24612ad5f67933e21"
+project_hash = "1cdaf841ee394d5a246a319054512fbeb972d4ff"
 
 [[deps.AbstractTrees]]
 deps = ["Markdown"]
@@ -252,7 +252,7 @@ version = "1.11.0"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.3.1+2"
+version = "1.3.2+0"
 
 [[deps.Zstd_jll]]
 deps = ["CompilerSupportLibraries_jll", "Libdl"]
