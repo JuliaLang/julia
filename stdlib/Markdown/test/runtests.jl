@@ -823,6 +823,25 @@ end
     ]))
 end
 
+@testset "code spans bind more tightly than emphasis" begin
+    # a delimiter inside a code span can't close emphasis (CommonMark 6.4, rule 17)
+    @test md"*a `*`*" == MD(Paragraph(Italic(["a ", Code("*")])))
+    @test md"*a `abc*` b*" == MD(Paragraph(Italic(["a ", Code("abc*"), " b"])))
+    @test md"**x `**` y**" == MD(Paragraph(Bold(["x ", Code("**"), " y"])))
+    @test md"_a `_` b_" == MD(Paragraph(Italic(["a ", Code("_"), " b"])))
+    @test md"~~a `~~` b~~" == MD(Paragraph(Strikethrough(["a ", Code("~~"), " b"])))
+    @test md"*a ``b*`` c*" == MD(Paragraph(Italic(["a ", LaTeX("b*"), " c"])))
+    @test md"*foo`*`" == MD(Paragraph(["*foo", Code("*")]))
+    # an unclosed backtick run is literal text and doesn't hide a delimiter
+    @test md"*a `b* c*" == MD(Paragraph([Italic("a `b"), " c*"]))
+    # nor does an escaped backtick, but an escaped backslash leaves it unescaped
+    @test Markdown.parse("*a\\`b* c`*") == MD(Paragraph([Italic("a`b"), " c`*"]))
+    @test Markdown.parse("*a \\\\`b* c`*") == MD(Paragraph(Italic(["a ", "\\", Code("b* c")])))
+    # code spans and emphasis on their own are unchanged
+    @test md"`*a*`" == MD(Paragraph(Code("*a*")))
+    @test md"*a* `b` *c*" == MD(Paragraph([Italic("a"), " ", Code("b"), " ", Italic("c")]))
+end
+
 @testset "Admonitions" begin
     t_1 =
         """
