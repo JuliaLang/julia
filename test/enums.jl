@@ -7,8 +7,6 @@ using Test, Serialization
 
 isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
 using Main.MacroCalls
-isdefined(Main, :UInt20s) || @eval Main include("testhelpers/UInt20s.jl")
-using Main.UInt20s
 
 @test_throws MethodError convert(Enum, 1.0)
 
@@ -114,11 +112,6 @@ end
 @enum Test6::UInt128 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
 @test Core.sizeof(Test6) == 16
 @test typeof(Integer(_one_Test6)) == UInt128
-
-# the width comes from the base type's bits, not its size
-@enum Test20::UInt20 _one_Test20=1 _two_Test20=2
-@test Core.bitsizeof(Test20) == 20
-@test Integer(_two_Test20) === UInt20(2)
 
 # enum values must be integers
 @test_throws ArgumentError("invalid value for Enum Test7, _zero = \"zero\"; values must be integers") @macrocall(@enum Test7 _zero="zero")

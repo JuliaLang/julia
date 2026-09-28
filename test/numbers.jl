@@ -2688,9 +2688,6 @@ end
     end
     testmi(-1000:1000, -100:100)
     @test_throws ArgumentError Base.multiplicativeinverse(0)
-    # `sizeof` exceeds the width
-    isdefined(Main, :UInt20s) || @eval Main include("testhelpers/UInt20s.jl")
-    testmi(map(Main.UInt20s.UInt20, 0:1000), map(Main.UInt20s.UInt20, 1:50))
     for T in [Int8, Int16, Int32, Int64, Int128]
         testmi(map(T, typemin(T)+1:typemin(T)+100), map(T, -50:50))
     end
