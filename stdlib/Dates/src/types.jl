@@ -252,11 +252,11 @@ differ even when `ts == dt`.
 A package can add a resolution with its own `TimePeriod` type, such as a 128-bit count
 of picoseconds. The type needs methods for `Dates.value`, `typemin`, `typemax`, and
 `Dates.tons`, which returns the length of a period in nanoseconds (a `Rational` for a
-unit shorter than a nanosecond). The resolution must be a positive exact subdivision
-of a second. Equal resolutions promote to the wider count storage, or use period
-promotion when the storage widths match. For years whose day count overflows `Int64`,
-also add a method for `Dates.timestamp_totaldays(P, y, m, d)`. Printing and the `n` format code
-round digits finer than a nanosecond down.
+unit shorter than a nanosecond). One unit must divide a second evenly. When two periods
+have the same unit, promotion picks the one with the wider count, or uses period
+promotion if both counts are the same width. For years whose day count overflows `Int64`,
+also add a method for `Dates.timestamp_totaldays(P, y, m, d)`. Printing and the `n`
+format code round digits finer than a nanosecond down.
 """
 struct Timestamp{P<:TimePeriod} <: AbstractDateTime
     instant::UTInstant{P}
