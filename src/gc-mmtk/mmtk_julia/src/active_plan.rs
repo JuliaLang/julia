@@ -82,12 +82,12 @@ pub extern "C" fn mmtk_new_mutator_iterator() -> *mut JuliaMutatorIterator<'stat
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mmtk_get_next_mutator_tls(
     iter: *mut JuliaMutatorIterator<'static>,
-) -> OpaquePointer {
+) -> OpaquePointer { unsafe {
     match { iter.as_mut() }.unwrap().next() {
         Some(m) => m.mutator_tls.0 .0,
         None => OpaquePointer::from_address(Address::ZERO),
     }
-}
+}}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mmtk_close_mutator_iterator(iter: *mut JuliaMutatorIterator<'static>) {

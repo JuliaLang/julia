@@ -11,9 +11,9 @@ pub(crate) struct PreserveErrno {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-unsafe fn errno_location() -> *mut libc::c_int {
+unsafe fn errno_location() -> *mut libc::c_int { unsafe {
     libc::__errno_location()
-}
+}}
 #[cfg(any(target_os = "macos", target_os = "freebsd"))]
 unsafe fn errno_location() -> *mut libc::c_int {
     libc::__error()

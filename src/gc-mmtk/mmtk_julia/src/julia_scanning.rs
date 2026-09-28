@@ -36,36 +36,36 @@ unsafe extern "C" {
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_typetagof(addr: Address) -> Address {
+pub unsafe fn mmtk_jl_typetagof(addr: Address) -> Address { unsafe {
     let as_tagged_value =
         addr.as_usize() - std::mem::size_of::<crate::julia_scanning::jl_taggedvalue_t>();
     let t_header = Address::from_usize(as_tagged_value).load::<Address>();
     let t = t_header.as_usize() & !0xf;
 
     Address::from_usize(t)
-}
+}}
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_typeof(addr: Address) -> *const jl_datatype_t {
+pub unsafe fn mmtk_jl_typeof(addr: Address) -> *const jl_datatype_t { unsafe {
     mmtk_jl_to_typeof(mmtk_jl_typetagof(addr))
-}
+}}
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_to_typeof(t: Address) -> *const jl_datatype_t {
+pub unsafe fn mmtk_jl_to_typeof(t: Address) -> *const jl_datatype_t { unsafe {
     let t_raw = t.as_usize();
     if t_raw < (JL_MAX_TAGS << 4) {
         let ty = jl_small_typeof[t_raw / std::mem::size_of::<Address>()];
         return ty;
     }
     t.to_ptr::<jl_datatype_t>()
-}
+}}
 
 const PRINT_OBJ_TYPE: bool = false;
 
 // This function is a rewrite of `gc_mark_outrefs()` in `gc.c`
 // INFO: *_custom() functions are accessors to bitfields that do not use bindgen generated code.
 #[inline(always)]
-pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, closure: &mut SV) {
+pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, closure: &mut SV) { unsafe {
     // get Julia object type
     let mut vtag = mmtk_jl_typetagof(obj);
     let mut vtag_usize = vtag.as_usize();
@@ -414,7 +414,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             unimplemented!();
         }
     }
-}
+}}
 
 #[inline(always)]
 unsafe fn mmtk_jl_genericmemory_data_owner_field_address(m: *const jl_genericmemory_t) -> Address {
@@ -431,7 +431,7 @@ unsafe fn mmtk_jl_genericmemory_data_owner_field_address(m: *const jl_genericmem
 pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
     ta: *const jl_task_t,
     closure: &mut EV,
-) {
+) { unsafe {
     // ConcurrentImmix may call this from the task-resume barrier. Callers must ensure the task
     // stack is stable before using this path during concurrent marking.
 
@@ -521,14 +521,14 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
             process_slot::<EV> as _,
         );
     }
-}
+}}
 
 #[inline(always)]
-unsafe fn read_stack(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
+unsafe fn read_stack(addr: Address, offset: isize, lb: u64, ub: u64) -> Address { unsafe {
     let real_addr = get_stack_addr(addr, offset, lb, ub);
 
     real_addr.load::<Address>()
-}
+}}
 
 #[inline(always)]
 fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
@@ -612,9 +612,9 @@ pub fn mmtk_jl_array_ndimwords(ndims: u32) -> usize {
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_svec_len(obj: Address) -> usize {
+pub unsafe fn mmtk_jl_svec_len(obj: Address) -> usize { unsafe {
     (*obj.to_ptr::<jl_svec_t>()).length
-}
+}}
 
 #[inline(always)]
 pub unsafe fn mmtk_jl_svec_data(obj: Address) -> Address {
@@ -622,12 +622,12 @@ pub unsafe fn mmtk_jl_svec_data(obj: Address) -> Address {
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_tparam0(vt: *const jl_datatype_t) -> *const jl_datatype_t {
+pub unsafe fn mmtk_jl_tparam0(vt: *const jl_datatype_t) -> *const jl_datatype_t { unsafe {
     mmtk_jl_svecref((*vt).parameters, 0)
-}
+}}
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_svecref(vt: *mut jl_svec_t, i: usize) -> *const jl_datatype_t {
+pub unsafe fn mmtk_jl_svecref(vt: *mut jl_svec_t, i: usize) -> *const jl_datatype_t { unsafe {
     debug_assert!(
         mmtk_jl_typetagof(Address::from_mut_ptr(vt)).as_usize()
             == (jl_small_typeof_tags_jl_simplevector_tag << 4) as usize
@@ -638,13 +638,13 @@ pub unsafe fn mmtk_jl_svecref(vt: *mut jl_svec_t, i: usize) -> *const jl_datatyp
     let result_ptr = svec_data + i;
     let result = result_ptr.atomic_load::<AtomicUsize>(Ordering::Relaxed);
     result as *const _jl_datatype_t
-}
+}}
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_dt_layout_ptrs(l: *const jl_datatype_layout_t) -> Address {
+pub unsafe fn mmtk_jl_dt_layout_ptrs(l: *const jl_datatype_layout_t) -> Address { unsafe {
     mmtk_jl_dt_layout_fields(l)
         + (mmtk_jl_fielddesc_size((*l).fielddesc_type_custom()) * (*l).nfields) as usize
-}
+}}
 
 #[inline(always)]
 pub unsafe fn mmtk_jl_dt_layout_fields(l: *const jl_datatype_layout_t) -> Address {
@@ -664,25 +664,25 @@ pub unsafe fn mmtk_jl_bt_is_native(bt_entry: *mut jl_bt_element_t) -> bool {
     entry != JL_BT_NON_PTR_ENTRY
 }
 
-pub unsafe fn mmtk_jl_bt_entry_size(bt_entry: *mut jl_bt_element_t) -> usize {
+pub unsafe fn mmtk_jl_bt_entry_size(bt_entry: *mut jl_bt_element_t) -> usize { unsafe {
     if mmtk_jl_bt_is_native(bt_entry) {
         1
     } else {
         2 + mmtk_jl_bt_num_jlvals(bt_entry) + mmtk_jl_bt_num_uintvals(bt_entry)
     }
-}
+}}
 
-pub unsafe fn mmtk_jl_bt_num_jlvals(bt_entry: *mut jl_bt_element_t) -> usize {
+pub unsafe fn mmtk_jl_bt_num_jlvals(bt_entry: *mut jl_bt_element_t) -> usize { unsafe {
     debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
     let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
     entry & 0x7
-}
+}}
 
-pub unsafe fn mmtk_jl_bt_num_uintvals(bt_entry: *mut jl_bt_element_t) -> usize {
+pub unsafe fn mmtk_jl_bt_num_uintvals(bt_entry: *mut jl_bt_element_t) -> usize { unsafe {
     debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
     let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
     (entry >> 3) & 0x7
-}
+}}
 
 pub unsafe fn mmtk_jl_bt_entry_jlvalue(
     bt_entry: *mut jl_bt_element_t,

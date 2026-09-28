@@ -206,7 +206,7 @@ pub fn is_object_in_los(object: &ObjectReference) -> bool {
 
 #[inline(always)]
 /// This function uses mutable static variables and requires unsafe annotation
-pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
+pub unsafe fn get_so_object_size(object: ObjectReference) -> usize { unsafe {
     let obj_address = object.to_raw_address();
     let mut vtag = mmtk_jl_typetagof(obj_address);
     let mut vtag_usize = vtag.as_usize();
@@ -348,10 +348,10 @@ pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
     );
 
     llt_align(dtsz + JULIA_HEADER_SIZE, 16)
-}
+}}
 
 #[inline(always)]
-pub unsafe fn get_object_start_ref(object: ObjectReference) -> Address {
+pub unsafe fn get_object_start_ref(object: ObjectReference) -> Address { unsafe {
     let obj_address = object.to_raw_address();
     let obj_type = mmtk_jl_typeof(obj_address);
 
@@ -360,7 +360,7 @@ pub unsafe fn get_object_start_ref(object: ObjectReference) -> Address {
     } else {
         obj_address - JULIA_HEADER_SIZE
     }
-}
+}}
 
 #[inline(always)]
 pub unsafe fn llt_align(size: usize, align: usize) -> usize {
@@ -368,10 +368,10 @@ pub unsafe fn llt_align(size: usize, align: usize) -> usize {
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_is_uniontype(t: *const jl_datatype_t) -> bool {
+pub unsafe fn mmtk_jl_is_uniontype(t: *const jl_datatype_t) -> bool { unsafe {
     mmtk_jl_typetagof(Address::from_ptr(t)).as_usize()
         == (jl_small_typeof_tags_jl_uniontype_tag << 4) as usize
-}
+}}
 
 #[inline(always)]
 pub fn is_small_typeof_tag_with_no_pointer(vtag: usize) -> bool {
