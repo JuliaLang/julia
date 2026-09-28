@@ -17,7 +17,7 @@ import REPL
 
 using Base: OLDEST_EDITION, JL_OLD_EDITION, JL_NEW_EDITION,
     SyntaxContext, adopt_scope, remove_scope, syntax_module, fill_context,
-    assert_syntaxtree, @mknode
+    assert_syntax, @mknode
 
 using .JuliaSyntax: sourcetext
 

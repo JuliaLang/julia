@@ -1,31 +1,31 @@
-using Base: SyntaxTree, SyntaxContext, ScopeLayer, @mknode, prov, prov_end,
+using Base: Syntax, SyntaxContext, ScopeLayer, @mknode, prov, prov_end,
     provenance, sourceref, macro_prov, macro_prov_end, flattened_provenance,
     unexpanded_sourceref
 using .JuliaSyntax: children
 
 const DUMMY_CONTEXT = SyntaxContext(@__MODULE__, (0,0))
 
-@testset "SyntaxTree parsing" begin
+@testset "Syntax parsing" begin
     # Errors should fall through
-    @test parsestmt(SyntaxTree, ""; ignore_errors=true) isa SyntaxTree
-    @test parsestmt(SyntaxTree, " "; ignore_errors=true) isa SyntaxTree
-    @test parsestmt(SyntaxTree, "@"; ignore_errors=true) isa SyntaxTree
-    @test parsestmt(SyntaxTree, "@@@"; ignore_errors=true) isa SyntaxTree
-    @test parsestmt(SyntaxTree, "(a b c)"; ignore_errors=true) isa SyntaxTree
-    @test parsestmt(SyntaxTree, "'a b c'"; ignore_errors=true) isa SyntaxTree
+    @test parsestmt(Syntax, ""; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, " "; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "@"; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "@@@"; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "(a b c)"; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "'a b c'"; ignore_errors=true) isa Syntax
     # Malformed literals become ErrorVal-valued leaves rather than identifiers
-    @test parsestmt(SyntaxTree, "1.e"; ignore_errors=true) isa SyntaxTree
-    @test parsestmt(SyntaxTree, "x = 1._"; ignore_errors=true) isa SyntaxTree
+    @test parsestmt(Syntax, "1.e"; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "x = 1._"; ignore_errors=true) isa Syntax
 end
 
-@testset "SyntaxTree type stability" begin
-    st0 = parsestmt(SyntaxTree, "f(::Int)")
+@testset "Syntax type stability" begin
+    st0 = parsestmt(Syntax, "f(::Int)")
     # `children` must not leak the `Union{Nothing}` of the raw field into inference.
-    @test @inferred(children(st0)) isa Vector{SyntaxTree}
-    @test @inferred(prov(st0)) isa SyntaxTree
+    @test @inferred(children(st0)) isa Vector{Syntax}
+    @test @inferred(prov(st0)) isa Syntax
 end
 
-@testset "SyntaxTree provenance accessors" begin
+@testset "Syntax provenance accessors" begin
     @testset "prov, prov_end, provenance, sourceref" begin
         # st3 <- st2 <- st1, with st3 referring to source text
         st3 = @mknode(;head=:value, value=3, context=DUMMY_CONTEXT, source=LineNumberNode(3))
@@ -42,8 +42,8 @@ end
         @test sourceref(st1) == LineNumberNode(3)
         @test sourceref(prov_end(st1)) == LineNumberNode(3)
 
-        @test provenance(st1) == SyntaxTree[st2, st3]
-        @test provenance(prov_end(st1)) == SyntaxTree[]
+        @test provenance(st1) == Syntax[st2, st3]
+        @test provenance(prov_end(st1)) == Syntax[]
     end
 
     @testset "flattened_provenance" begin
@@ -53,20 +53,20 @@ end
             (0, 0),
             false)
 
-        stm_unused = SyntaxTree(:identifier, nothing, "stm_unused", LineNumberNode(0), DUMMY_CONTEXT)
+        stm_unused = Syntax(:identifier, nothing, "stm_unused", LineNumberNode(0), DUMMY_CONTEXT)
 
-        stmm1 = SyntaxTree(:identifier, nothing, "stmm1", LineNumberNode(1, :mm), DUMMY_CONTEXT)
+        stmm1 = Syntax(:identifier, nothing, "stmm1", LineNumberNode(1, :mm), DUMMY_CONTEXT)
         stmm2 = @mknode(stmm1; value="stmm2")
         stmm3 = @mknode(stmm2; value="stmm3")
 
-        stm1 = SyntaxTree(:identifier, nothing, "stm1", LineNumberNode(1, :m), DUMMY_CONTEXT)
+        stm1 = Syntax(:identifier, nothing, "stm1", LineNumberNode(1, :m), DUMMY_CONTEXT)
         stm2 = @mknode(stm1; value="stm2")
-        stm3 = SyntaxTree(:identifier, nothing, "stm3", stm2, ctx_with_unexpanded(stmm3))
+        stm3 = Syntax(:identifier, nothing, "stm3", stm2, ctx_with_unexpanded(stmm3))
 
-        st1 = SyntaxTree(:identifier, nothing, "st1", LineNumberNode(1),
+        st1 = Syntax(:identifier, nothing, "st1", LineNumberNode(1),
                          ctx_with_unexpanded(stm_unused))
-        st2 = SyntaxTree(:identifier, nothing, "st2", st1, ctx_with_unexpanded(stm_unused))
-        st3 = SyntaxTree(:identifier, nothing, "st3", st2, ctx_with_unexpanded(stm3))
+        st2 = Syntax(:identifier, nothing, "st2", st1, ctx_with_unexpanded(stm_unused))
+        st3 = Syntax(:identifier, nothing, "st3", st2, ctx_with_unexpanded(stm3))
 
         # julia> JL._show_provtree(stdout, st3, "")
         # st3
@@ -113,14 +113,14 @@ end
         @test unexpanded_sourceref(stmm3) == LineNumberNode(1, :mm)
         @test unexpanded_sourceref(stmm2) == LineNumberNode(1, :mm)
         @test unexpanded_sourceref(stmm1) == LineNumberNode(1, :mm)
-        @test flattened_provenance(st3) == SyntaxTree[stmm1, stm1, st1]
-        @test flattened_provenance(st2) == SyntaxTree[stm_unused, st1]
-        @test flattened_provenance(st1) == SyntaxTree[stm_unused, st1]
-        @test flattened_provenance(stm3) == SyntaxTree[stmm1, stm1]
-        @test flattened_provenance(stm2) == SyntaxTree[stm1]
-        @test flattened_provenance(stm1) == SyntaxTree[stm1]
-        @test flattened_provenance(stmm3) == SyntaxTree[stmm1]
-        @test flattened_provenance(stmm2) == SyntaxTree[stmm1]
-        @test flattened_provenance(stmm1) == SyntaxTree[stmm1]
+        @test flattened_provenance(st3) == Syntax[stmm1, stm1, st1]
+        @test flattened_provenance(st2) == Syntax[stm_unused, st1]
+        @test flattened_provenance(st1) == Syntax[stm_unused, st1]
+        @test flattened_provenance(stm3) == Syntax[stmm1, stm1]
+        @test flattened_provenance(stm2) == Syntax[stm1]
+        @test flattened_provenance(stm1) == Syntax[stm1]
+        @test flattened_provenance(stmm3) == Syntax[stmm1]
+        @test flattened_provenance(stmm2) == Syntax[stmm1]
+        @test flattened_provenance(stmm1) == Syntax[stmm1]
     end
 end

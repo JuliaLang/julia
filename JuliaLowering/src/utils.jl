@@ -80,7 +80,7 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
-    assert_syntaxtree(ex)
+    assert_syntax(ex)
     _show_syntax_tree(io, ex, "", show_kinds, nothing)
 end
 function _show_syntax_tree_sexpr(io, ex)
@@ -97,12 +97,12 @@ function _show_syntax_tree_sexpr(io, ex)
 end
 
 function Base.show(io::IO, ::MIME"text/x.sexpression", node::SyntaxTree)
-    assert_syntaxtree(node)
+    assert_syntax(node)
     _show_syntax_tree_sexpr(io, node)
 end
 
 function Base.show(io::IO, node::SyntaxTree)
-    assert_syntaxtree(node)
+    assert_syntax(node)
     _show_syntax_tree_sexpr(io, node)
 end
 

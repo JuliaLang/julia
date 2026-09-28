@@ -12,15 +12,16 @@ else
     using JuliaSyntax
 end
 
-using Base: ScopeLayer, SyntaxContext, SourceRef, SyntaxTree, SourceAttrType,
+using Base: ScopeLayer, SyntaxContext, SourceRef, Syntax, SourceAttrType,
     head, flattened_provenance, sourceref, unexpanded_sourceref,
     mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
-    syntax_module, edition, adopt_scope, assert_syntaxtree, @mknode, macro_prov
+    syntax_module, edition, adopt_scope, assert_syntax, @mknode, macro_prov
 
 using .JuliaSyntax: children, filename, first_byte, highlight, is_leaf,
     last_byte, numchildren, source_location, sourcefile, source_line_range,
     source_line
+
 
 const DEBUG = DEBUG_LOWERING
 # const DEBUG = isdefinedglobal(Base, :DEBUG_LOWERING) ?
@@ -33,6 +34,7 @@ const MacroSource = isdefinedglobal(Core, :MacroSource) ? Core.MacroSource : Uni
 const TypeEqOf = isdefinedglobal(Core, :TypeEqOf) ? "TypeEqOf" : "Typeof"
 
 # todo: remove
+const SyntaxTree = Syntax
 const IdTag = Int
 SyntaxList(rest::SyntaxTree...) = SyntaxTree[rest...]
 
