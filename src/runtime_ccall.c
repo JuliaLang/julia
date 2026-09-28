@@ -49,12 +49,56 @@ void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT
     return hnd;
 }
 
+// map from user-specified lib names to `Libdl.LazyLibrary` objects that must be
+// loaded through `dlopen(::LazyLibrary)` so that their dependencies and
+// `on_load_callback` run, e.g. `libblastrampoline`, which is only forwarded to
+// a BLAS backend by its callback. The objects are kept alive by `Libdl`.
+static htable_t lazyLibMap;
+static _Atomic(int) n_lazy_libs = 0;
+
+JL_DLLEXPORT void jl_register_lazy_library(const char *f_lib, jl_value_t *lazy_lib) JL_CANSAFEPOINT
+{
+    JL_LOCK(&libmap_lock);
+    void **map_slot = strhash_bp(&lazyLibMap, (void*)f_lib);
+    if (*map_slot == HT_NOTFOUND)
+        jl_atomic_fetch_add_relaxed(&n_lazy_libs, 1);
+    *map_slot = (void*)lazy_lib;
+    JL_UNLOCK(&libmap_lock);
+}
+
+// Return the `LazyLibrary` registered under the name `f_lib`, or NULL.
+JL_DLLEXPORT jl_value_t *jl_get_lazy_library(const char *f_lib) JL_CANSAFEPOINT
+{
+    if (f_lib == NULL || f_lib == JL_EXE_LIBNAME || f_lib == JL_LIBJULIA_DL_LIBNAME ||
+        f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return NULL;
+    if (jl_atomic_load_relaxed(&n_lazy_libs) == 0)
+        return NULL;
+    JL_LOCK(&libmap_lock);
+    void *lazy_lib = strhash_get(&lazyLibMap, (void*)f_lib);
+    JL_UNLOCK(&libmap_lock);
+    return lazy_lib == HT_NOTFOUND ? NULL : (jl_value_t*)lazy_lib;
+}
+
+// jl_get_library, but going through `dlopen(::LazyLibrary)` for registered names
+static void *jl_get_library_or_lazy(const char *f_lib) JL_CANSAFEPOINT
+{
+    jl_value_t *lazy_lib = jl_get_lazy_library(f_lib);
+    if (lazy_lib == NULL || jl_libdl_dlopen_func == NULL)
+        return jl_get_library(f_lib);
+    void *hnd;
+    JL_GC_PUSH1(&lazy_lib);
+    hnd = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lazy_lib, 1));
+    JL_GC_POP();
+    return hnd;
+}
+
 JL_DLLEXPORT
 void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd)
 {
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
-        jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
+        jl_atomic_store_release(hnd, (handle = jl_get_library_or_lazy(f_lib)));
     void * ptr;
     jl_dlsym(handle, f_name, &ptr, 1, 1);
     return ptr;
@@ -76,9 +120,9 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
 
     if (lib_val) {
         if (jl_is_symbol(lib_val))
-            lib_ptr = jl_get_library(jl_symbol_name((jl_sym_t*)lib_val));
+            lib_ptr = jl_get_library_or_lazy(jl_symbol_name((jl_sym_t*)lib_val));
         else if (jl_is_string(lib_val))
-            lib_ptr = jl_get_library(jl_string_data(lib_val));
+            lib_ptr = jl_get_library_or_lazy(jl_string_data(lib_val));
         else if (jl_libdl_dlopen_func != NULL) {
             lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
         } else
@@ -478,5 +522,6 @@ void jl_init_runtime_ccall(void)
 {
     JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
     strhash_new(&libMap, 16);
+    strhash_new(&lazyLibMap, 4);
     uv_mutex_init(&trampoline_lock);
 }

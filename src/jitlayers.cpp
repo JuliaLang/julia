@@ -1744,7 +1744,9 @@ struct JuliaOJIT::DLSymOptimizer {
         if (uit == user_symbols.end()) {
             jl_task_t *ct = jl_current_task;
             int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
-            void *handle = jl_get_library_(libname, 0);
+            // Libraries registered as a `LazyLibrary` have to be loaded through
+            // `dlopen(::LazyLibrary)` at run time, so leave those to the runtime lookup.
+            void *handle = jl_get_lazy_library(libname) ? nullptr : jl_get_library_(libname, 0);
             jl_gc_unsafe_leave(ct->ptls, gc_state);
             if (!handle)
                 return nullptr;

@@ -346,6 +346,21 @@ end
     @test lclf_loaded
     close_libs()
 
+    # Test that a `ccall()` naming a registered `LazyLibrary` by string loads it
+    # through the `LazyLibrary`, with a constant or a run-time name (issue #63432)
+    Libdl.register_lazy_library!(libccalllazybar, lclb_path)
+    @eval compiled_bar_by_name() = ccall((:bar, $lclb_path), Cint, (Cint,), 2)
+    @test compiled_bar_by_name() == 6
+    @test lclf_loaded
+    @test lclb_loaded
+    close_libs()
+    global lclb_name = lclb_path
+    runtime_bar_by_name() = ccall((:bar, lclb_name), Cint, (Cint,), 2)
+    @test runtime_bar_by_name() == 6
+    @test lclf_loaded
+    @test lclb_loaded
+    close_libs()
+
     # Test that we can use lazily-evaluated library names:
     libname = LazyLibraryPath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
     lazy_name_lazy_lib = LazyLibrary(libname)

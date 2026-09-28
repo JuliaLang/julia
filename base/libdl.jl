@@ -458,6 +458,30 @@ function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
     end
 end
 
+# Keeps the libraries passed to `register_lazy_library!` alive for the runtime.
+const registered_lazy_libraries = LazyLibrary[]
+const registered_lazy_libraries_lock = Base.ReentrantLock()
+
+"""
+    register_lazy_library!(library::LazyLibrary, names::AbstractString...)
+
+Make a `ccall` or `cglobal` that names its library by one of the strings in `names`
+load it through `dlopen(library)`, so that the dependencies and the `on_load_callback`
+of `library` run as they would for a `ccall` through the `LazyLibrary` object itself.
+
+The registration is ephemeral to the current process, so call this from `__init__`.
+It only affects calls that have not yet looked up their library.
+"""
+function register_lazy_library!(ll::LazyLibrary, names::AbstractString...)
+    @lock registered_lazy_libraries_lock begin
+        ll in registered_lazy_libraries || push!(registered_lazy_libraries, ll)
+    end
+    for name in names
+        ccall(:jl_register_lazy_library, Cvoid, (Cstring, Any), name, ll)
+    end
+    return nothing
+end
+
 # Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows
 # how to call `dlopen()`.
 Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
