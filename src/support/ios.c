@@ -1014,7 +1014,7 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
         }
         else {
             // req.result is a HANDLE; ios_t owns CRT descriptors only
-            fd = _open_osfhandle((intptr_t)req.result, O_BINARY | (flags & O_APPEND));
+            fd = _open_osfhandle((intptr_t)req.result, O_BINARY);
             if (fd == -1)
                 CloseHandle((HANDLE)(intptr_t)req.result); // _open_osfhandle did not take ownership
         }
