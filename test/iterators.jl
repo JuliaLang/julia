@@ -549,6 +549,9 @@ end
 @test (@inferred length(flatten(1:6))) == 6
 @test collect(flatten(Any[])) == Any[]
 @test collect(flatten(())) == Union{}[]
+@test last(flatten([1:3, 5:4])) == 3
+@test_throws ArgumentError last(flatten([1:0, 5:4]))
+@test_throws ArgumentError last(flatten(UnitRange{Int}[]))
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 

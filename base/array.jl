@@ -1499,7 +1499,12 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 function prepend! end
 
 function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
-    items isa Tuple && (items = map(x -> convert(T, x), items))
+    if items isa Tuple
+        items = map(x -> convert(T, x), items)
+    elseif items !== a
+        # growing at the front moves the data of `a`, which a view of `a` would then misread
+        items = unalias(a, items)
+    end
     n = length(items)
     _growbeg!(a, n)
     # in case of aliasing, the _growbeg might have shifted our data, so copy

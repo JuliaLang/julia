@@ -601,6 +601,12 @@ end
         @test a == ["false"]
         @test f.([true, false]) == [true, "false"]
     end
+    # unsigned ranges have unsigned axes
+    for n in (5, 64, 65, 200)
+        r = UInt(1):UInt(n)
+        @test iseven.(r) == iseven.(1:n)
+        @test (r .> 0x02) == ((1:n) .> 2)
+    end
 end
 
 @testset "convert behavior of logical broadcast" begin
