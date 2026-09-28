@@ -991,9 +991,10 @@ end
 
 """
     floatmin(T = Float64)
+    floatmin{::T)
 
 Return the smallest positive normal number representable by the floating-point
-type `T`.
+type `T`.  The argument can alternatively be an instance of `T`.
 
 See also: [`typemin`](@ref), [`maxintfloat`](@ref), [`floatmax`](@ref), [`eps`](@ref).
 
@@ -1002,7 +1003,7 @@ See also: [`typemin`](@ref), [`maxintfloat`](@ref), [`floatmax`](@ref), [`eps`](
 julia> floatmin(Float16)
 Float16(6.104e-5)
 
-julia> floatmin(Float32)
+julia> floatmin(1.0f0) # a Float32 instance
 1.1754944f-38
 
 julia> floatmin()
@@ -1013,8 +1014,10 @@ floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
     floatmax(T = Float64)
+    floatmax(::T)
 
 Return the largest finite number representable by the floating-point type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`typemax`](@ref), [`maxintfloat`](@ref), [`floatmin`](@ref), [`eps`](@ref).
 
@@ -1023,7 +1026,7 @@ See also: [`typemax`](@ref), [`maxintfloat`](@ref), [`floatmin`](@ref), [`eps`](
 julia> floatmax(Float16)
 Float16(6.55e4)
 
-julia> floatmax(Float32)
+julia> floatmax(1.0f0) # a Float32 instance
 3.4028235f38
 
 julia> floatmax()
