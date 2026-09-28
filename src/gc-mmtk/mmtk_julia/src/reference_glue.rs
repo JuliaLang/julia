@@ -1,5 +1,5 @@
-use crate::julia_types::*;
 use crate::JuliaVM;
+use crate::julia_types::*;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::Finalizable;

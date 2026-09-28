@@ -6,11 +6,11 @@ extern crate mmtk;
 #[macro_use]
 extern crate lazy_static;
 
-use mmtk::util::opaque_pointer::*;
-use mmtk::util::Address;
-use mmtk::vm::VMBinding;
-use mmtk::MMTKBuilder;
 use mmtk::MMTK;
+use mmtk::MMTKBuilder;
+use mmtk::util::Address;
+use mmtk::util::opaque_pointer::*;
+use mmtk::vm::VMBinding;
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicIsize;

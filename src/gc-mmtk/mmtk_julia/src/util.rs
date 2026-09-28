@@ -11,9 +11,9 @@ pub(crate) struct PreserveErrno {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-unsafe fn errno_location() -> *mut libc::c_int { unsafe {
-    libc::__errno_location()
-}}
+unsafe fn errno_location() -> *mut libc::c_int {
+    unsafe { libc::__errno_location() }
+}
 #[cfg(any(target_os = "macos", target_os = "freebsd"))]
 unsafe fn errno_location() -> *mut libc::c_int {
     libc::__error()
@@ -120,10 +120,14 @@ impl jl_ucontext_t {
 pub extern "C" fn mmtk_julia_copy_stack_check(c_flag_is_defined: bool) {
     if c_flag_is_defined {
         #[cfg(not(feature = "julia_copy_stack"))]
-        panic!("COPY_STACK flag has been defined in C, but `julia_copy_stack` feature has not been set.")
+        panic!(
+            "COPY_STACK flag has been defined in C, but `julia_copy_stack` feature has not been set."
+        )
     } else {
         #[cfg(feature = "julia_copy_stack")]
-        panic!("COPY_STACK flag has not been defined in C, but `julia_copy_stack` feature has been set.")
+        panic!(
+            "COPY_STACK flag has not been defined in C, but `julia_copy_stack` feature has been set."
+        )
     }
 }
 

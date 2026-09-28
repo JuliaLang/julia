@@ -1,22 +1,22 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
-use crate::util::PreserveErrno;
-use crate::JuliaVM;
 use crate::JULIA_HEADER_SIZE;
+use crate::JuliaVM;
 use crate::MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 use crate::SINGLETON;
+use crate::util::PreserveErrno;
 use crate::{BUILDER, MUTATORS, USER_TRIGGERED_GC};
 
 use libc::c_char;
 use log::*;
+use mmtk::AllocationSemantics;
+use mmtk::Mutator;
 use mmtk::memory_manager;
 use mmtk::scheduler::GCWorker;
 use mmtk::util::alloc::AllocationOptions;
 use mmtk::util::api_util::NullableObjectReference;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference, OpaquePointer};
-use mmtk::AllocationSemantics;
-use mmtk::Mutator;
 use std::ffi::CStr;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -109,7 +109,10 @@ pub extern "C" fn mmtk_gc_init(
 
         // Set concurrent GC threads
         if n_concurrent_gcthreads > 0 {
-            let success = builder.options.concurrent_threads.set(n_concurrent_gcthreads);
+            let success = builder
+                .options
+                .concurrent_threads
+                .set(n_concurrent_gcthreads);
             assert!(
                 success,
                 "Failed to set concurrent GC threads to {}",
