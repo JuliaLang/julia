@@ -1386,6 +1386,9 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* NEW 
             uint8_t z8 = *(uint8_t*)src;
             while (1) {
                 success = jl_atomic_cmpswap((_Atomic(uint8_t)*)dst, y8, z8);
+                // A failure leaves the current bytes in `y`. If they differ from
+                // `expected` only in padding bits, the values are `===`: retry with
+                // them, here and for the larger sizes below.
                 if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt))
                     break;
             }
