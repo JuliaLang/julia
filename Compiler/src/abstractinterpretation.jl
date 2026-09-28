@@ -2974,7 +2974,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === Core.finalizer
             return abstract_finalizer(interp, argtypes, vtypes, sv)
         elseif f === applicable
-            return abstract_applicable(interp, argtypes, sv, max_methods)
+            return abstract_applicable(interp, argtypes, sv)
         elseif f === throw
             return abstract_throw(interp, argtypes, sv)
         elseif f === Core.throw_methoderror
