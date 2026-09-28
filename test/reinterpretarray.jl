@@ -896,7 +896,7 @@ end
     @test all(nextind(X, a) == b for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
     @test all(prevind(X, b) == a for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
 end
-                                                                        
+
 @testset "pointer indexing with an offset axis" begin
     M = collect(Int8.(reshape(1:16, 4, 4)))
     R = reinterpret(reshape, Int32, view(M, :, Base.IdentityUnitRange(2:3)))
