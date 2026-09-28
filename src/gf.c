@@ -3340,48 +3340,55 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
 }
 
 // `m` and `m2` are unordered with each other, but that only makes the query
-// ambiguous if some point where both apply has no other winner. Look for a
-// match that beats them both over the whole `region` they contest (`ti` ∩ `ti2`,
-// which the caller has checked is non-empty): dispatch selects that method
-// there, so the pair is resolved rather than ambiguous.
+// ambiguous at a point where both apply and no other match beats them both.
+// Look for matches that beat them both and jointly contain the whole `region`
+// they contest (`ti` ∩ `ti2`, which the caller has checked is non-empty): the
+// pair is then never the witness that a point of the query is ambiguous, so
+// it need not be reported.
 //
-// Only a cover with an empty interference set is admitted as that witness,
-// since such a method is strictly morespecific than every method it intersects,
-// and therefore
-//  - wins at every point of the contested region, whatever else applies there,
-//    so no further check of the rest of the match list is needed;
-//  - can never be dropped from the report (no method covers it, as a cover must
-//    beat it), so the resolution stays visible to the caller;
-//  - cannot sit on a specificity cycle, unlike a merely-morespecific cover,
-//    whose own selectability could depend on the ordering this sort is still
-//    computing (compare the admissibility rules in `check_interferences_covers`).
+// n.b. the covers do not have to win anywhere, nor be finalized by the sort, nor
+// take over any role from `m` or `m2`, since nothing is dropped here. Consider a
+// point `x` where no applicable match beats all the others. Either some
+// applicable match `w` is beaten by none of them, so it is unordered with
+// another applicable match `y`; or else every applicable match is beaten by
+// another, so they contain a specificity cycle, which the SCC pass in
+// `sort_mlmatches` reports independently of this check. In the first case, any
+// cover of a pair containing `w` would have to apply at `x` and beat `w` there,
+// so that pair is never resolved here, and so every point without a winner keeps
+// the same unresolved pair as a witness that it had without this check.
 // A cover that beats `m` is recorded in `m`'s interference set, so scanning that
 // set (the one the caller is already walking) finds every candidate.
-static int pair_resolved_by_empty_cover(jl_method_t *m, jl_method_t *m2, jl_value_t *region, jl_array_t *t) JL_CANSAFEPOINT
+static int pair_resolved_by_covers(jl_method_t *m, jl_method_t *m2, jl_value_t *region, jl_array_t *t) JL_CANSAFEPOINT
 {
     int result = 0;
+    arraylist_t covers;
+    arraylist_new(&covers, 0);
     jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
     JL_GC_PUSH1(&interferences);
     for (size_t i = 0; i < interferences->length; i++) {
         jl_method_t *r = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
-        if (r == NULL)
+        if (r == NULL || r == m2)
             continue;
-        // the emptiness test is the O(1) bail; it also implies `r` beats `m`,
-        // which recorded it here
-        if (jl_atomic_load_relaxed(&r->interferences)->length != 0)
-            continue;
-        if (find_method_in_matches(t, r) < 0)
-            continue; // not applicable to this query in this world
+        if (!method_morespecific_recorded(r, m))
+            continue; // `r` must beat `m`, not merely be unordered with it
         if (!method_morespecific_recorded(r, m2))
             continue; // `r` must beat the partner too
+        if (find_method_in_matches(t, r) < 0)
+            continue; // not applicable to this query in this world
         // An over-approximated `region` only makes this containment harder to
         // satisfy, so the imprecision costs acceptances, never soundness.
         if (jl_subtype(region, (jl_value_t*)r->sig)) {
             result = 1;
             break;
         }
+        arraylist_push(&covers, (void*)r);
     }
     JL_GC_POP();
+    // No single match beating both contains the region, but a union of them may
+    // (e.g. several methods each covering one component of a Union-typed argument).
+    if (!result && covers.len > 1)
+        result = union_of_sigs_covers(region, (jl_method_t**)covers.items, covers.len);
+    arraylist_free(&covers);
     return result;
 }
 
@@ -3420,7 +3427,7 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
                 // intersect, so there is nothing else to do with this partner.
                 continue;
             }
-            if (!pair_resolved_by_empty_cover(m, m2, region, t))
+            if (!pair_resolved_by_covers(m, m2, region, t))
                 *has_ambiguity = 1;
         }
         if (include_ambiguous) {
@@ -3428,11 +3435,14 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
                 break; // the rest of the scan could only set *has_ambiguity again
             continue; // a resolved pair reports nothing, but a later one may
         }
-        // Whether or not the pair was resolved, `m` is unselectable wherever the
-        // partner it cannot beat applies, so a partner covering all of `ti`
-        // removes it: for a resolved pair the empty-set cover contains `ti` too
-        // (and its blocker-transfer obligations are automatic), and otherwise the
-        // ambiguity is now recorded.
+        if (!*has_ambiguity)
+            continue; // a resolved pair reports nothing, but a later one may
+        // `m` is unselectable wherever the partner it cannot beat applies, so a
+        // partner covering all of `ti` removes it. This drop takes over none of
+        // the roles `m` had in the sort (compare `check_dominance_transfer`), so
+        // it is only silent because the ambiguity is already recorded: `m` may
+        // still be the last witness of a later partner in this scan, one that
+        // no other match has reported.
         if (jl_subtype(ti, m2->sig)) {
             result = 1;
             break;
