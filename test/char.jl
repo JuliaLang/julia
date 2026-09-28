@@ -397,6 +397,11 @@ end
     @test lowercase("..\xc0\xaf..\xc0\xafetc") == "..\xc0\xaf..\xc0\xafetc"
     @test uppercase("a\xc1\xa1b") == "A\xc1\xa1B"
     @test titlecase("a\xc1\x81B") == "A\xc1\x81b"
+    # a character that is both overlong and malformed still throws
+    @test Base.isoverlong('\xc0') && Base.ismalformed('\xc0')
+    for f in (uppercase, lowercase, titlecase)
+        @test_throws Base.InvalidCharError f('\xc0')
+    end
 end
 
 @testset "More fallback tests" begin
