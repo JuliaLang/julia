@@ -97,6 +97,7 @@ fn main() {
     }
 
     let mut builder = bindgen::Builder::default()
+        .wrap_unsafe_ops(true)
         .header(path_string(julia_dir.join("src/julia.h")))
         .header(path_string(julia_dir.join("src/julia_internal.h")))
         // Including the paths to depending .h files
