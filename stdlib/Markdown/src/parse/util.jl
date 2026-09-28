@@ -162,18 +162,54 @@ end
 # function.
 
 """
+Return the character immediately before the current position of `stream`, or
+`nothing` at the start of the stream. The position of `stream` is unchanged.
+"""
+function peekprev(stream::IO)
+    pos = position(stream)
+    pos == 0 && return nothing
+    # step back over UTF-8 continuation bytes so that we read a whole character
+    i = pos - 1
+    while i > 0
+        seek(stream, i)
+        (peek(stream) & 0xc0) == 0x80 || break
+        i -= 1
+    end
+    seek(stream, i)
+    c = read(stream, Char)
+    seek(stream, pos)
+    return c
+end
+
+"""
+Return true if `c` is a "word character" for the purpose of the CommonMark
+emphasis rules, which define it as neither unicode whitespace nor unicode
+punctuation (<https://spec.commonmark.org/0.31.2/#left-flanking-delimiter-run>,
+where "punctuation" includes the symbol categories). Letters and numbers are
+exactly that complement for every character the spec test suite exercises.
+"""
+isword(c::Char) = isletter(c) || isnumeric(c)
+
+"""
 Parse a symmetrical delimiter which wraps words.
 i.e. `*word word*` but not `*word * word`.
 `rep` specifies whether the delimiter can be repeated.
+`intraword` specifies whether the delimiter may appear inside a word: with it
+disabled a run touching a word character on its outer side can neither open nor
+close, so that `foo_bar_` is left alone while `_foo_bar_baz_` still emphasises
+across its inner underscores.
 Escaped delimiters are not yet supported.
 """
-function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep::Bool = false)
+function parse_inline_wrapper(stream::IO, delimiter::AbstractString;
+                              rep::Bool = false, intraword::Bool = true)
     delimiter, nmin = string(delimiter[1]), length(delimiter)
     withstream(stream) do
-        if position(stream) >= 1
-            # check the previous byte isn't a delimiter
-            skip(stream, -1)
-            (read(stream, Char) in delimiter) && return nothing
+        prev = peekprev(stream)
+        if prev !== nothing
+            # check the previous character isn't a delimiter
+            (prev in delimiter) && return nothing
+            # an intraword-forbidden delimiter can't open after a word character
+            !intraword && isword(prev) && return nothing
         end
         n = nmin
         startswith(stream, delimiter^n) || return nothing
@@ -187,8 +223,16 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep::Bool =
             if !(isspace(char) || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
-                trailing == 0 && return takestring!(buffer)
-                write(buffer, delimiter ^ (n + trailing))
+                if trailing == 0
+                    # an intraword-forbidden delimiter can't close before a word
+                    # character; keep scanning for a later run instead
+                    if intraword || eof(stream) || !isword(peek(stream, Char))
+                        return takestring!(buffer)
+                    end
+                    write(buffer, delimiter ^ n)
+                else
+                    write(buffer, delimiter ^ (n + trailing))
+                end
             end
         end
     end
