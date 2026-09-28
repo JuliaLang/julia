@@ -474,8 +474,8 @@ end
 
 function greedy_func(itr, lidx, lbody)
     quote
-        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
-            for item in $itr
+        let iter = $itr, c = Channel{eltype(iter)}(threadpoolsize(), spawn=true) do ch
+            for item in iter
                 put!(ch, item)
             end
         end

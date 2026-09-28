@@ -465,7 +465,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
     GC.@preserve ap return unsafe_load(p)
 end
 
@@ -614,7 +614,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
     GC.@preserve ap unsafe_store!(p, v)
     return a
 end

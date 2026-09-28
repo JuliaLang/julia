@@ -617,6 +617,13 @@ timesofar("constructors")
         @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
         @check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
     end
+
+    @testset "logical setindex! with an empty Cartesian-indexed value" begin
+        b = falses(4)
+        @test_throws DimensionMismatch b[BitVector([1, 1, 1, 0])] = PermutedDimsArray(Array{Bool}(undef, 2, 0), (2, 1))
+        e = falses(1, 2, 1, 0)
+        @test setindex!(e, view(zeros(3, 3, 3), 2:1, 2:2, 2:2), falses(1, 2, 1, 0)) === e
+    end
 end
 
 timesofar("indexing")
