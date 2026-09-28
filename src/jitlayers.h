@@ -412,6 +412,7 @@ public:
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;
     std::map<jl_datatype_t*, DIType*> ditypes;
+    DenseMap<std::pair<StringRef, StringRef>, DISubprogram*> inlined_subprograms;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
