@@ -74,8 +74,6 @@ LoweringError:
 #= line 1 =# - malformed `call`
 Expression:
   (call)
-Containing expressions:
-  (call)
 
 ########################################
 # Simple broadcast
@@ -117,57 +115,57 @@ x .&& y .|| z
 
 ########################################
 # Scalar comparison chain
-x < y < z
+x < y(1) < z
 #---------------------
 1   TestMod.<
 2   TestMod.x
 3   TestMod.y
-4   (call %₁ %₂ %₃)
-5   (gotoifnot %₄ label₁₁)
-6   TestMod.<
-7   TestMod.y
+4   (call %₃ 1)
+5   (call %₁ %₂ %₄)
+6   (gotoifnot %₅ label₁₁)
+7   TestMod.<
 8   TestMod.z
-9   (call %₆ %₇ %₈)
+9   (call %₇ %₄ %₈)
 10  (return %₉)
 11  (return false)
 
 ########################################
 # Broadcasted comparison chain
-x .< y .< z
+x .< y(1) .< z
 #---------------------
 1   TestMod.<
 2   TestMod.x
 3   TestMod.y
-4   (call top.broadcasted %₁ %₂ %₃)
-5   TestMod.<
-6   TestMod.y
+4   (call %₃ 1)
+5   (call top.broadcasted %₁ %₂ %₄)
+6   TestMod.<
 7   TestMod.z
-8   (call top.broadcasted %₅ %₆ %₇)
-9   (call top.broadcasted top.& %₄ %₈)
+8   (call top.broadcasted %₆ %₄ %₇)
+9   (call top.broadcasted top.& %₅ %₈)
 10  (call top.materialize %₉)
 11  (return %₁₀)
 
 ########################################
 # Mixed scalar / broadcasted comparison chain
-a < b < c .< d .< e
+a < b < c(1) .< d .< e
 #---------------------
-1   TestMod.<
-2   TestMod.a
-3   TestMod.b
-4   (call %₁ %₂ %₃)
-5   (gotoifnot %₄ label₁₁)
-6   TestMod.<
-7   TestMod.b
-8   TestMod.c
-9   (= slot₁/if_val (call %₆ %₇ %₈))
-10  (goto label₁₂)
-11  (= slot₁/if_val false)
-12  slot₁/if_val
-13  TestMod.<
-14  TestMod.c
+1   TestMod.c
+2   (call %₁ 1)
+3   TestMod.<
+4   TestMod.a
+5   TestMod.b
+6   (call %₃ %₄ %₅)
+7   (gotoifnot %₆ label₁₂)
+8   TestMod.<
+9   TestMod.b
+10  (= slot₁/if_val (call %₈ %₉ %₂))
+11  (goto label₁₃)
+12  (= slot₁/if_val false)
+13  slot₁/if_val
+14  TestMod.<
 15  TestMod.d
-16  (call top.broadcasted %₁₃ %₁₄ %₁₅)
-17  (call top.broadcasted top.& %₁₂ %₁₆)
+16  (call top.broadcasted %₁₄ %₂ %₁₅)
+17  (call top.broadcasted top.& %₁₃ %₁₆)
 18  TestMod.<
 19  TestMod.d
 20  TestMod.e
@@ -225,6 +223,29 @@ x .+ (a .< b .< c)
 14  (return %₁₃)
 
 ########################################
+# Dotted comparison chain after short circuiting scalar comparison (https://github.com/JuliaLang/julia/issues/62454)
+1 < 0 < 2 < identity(3) .< 4
+#---------------------
+1   TestMod.identity
+2   (call %₁ 3)
+3   TestMod.<
+4   (call %₃ 1 0)
+5   (gotoifnot %₄ label₁₂)
+6   TestMod.<
+7   (call %₆ 0 2)
+8   (gotoifnot %₇ label₁₂)
+9   TestMod.<
+10  (= slot₁/if_val (call %₉ 2 %₂))
+11  (goto label₁₃)
+12  (= slot₁/if_val false)
+13  slot₁/if_val
+14  TestMod.<
+15  (call top.broadcasted %₁₄ %₂ 4)
+16  (call top.broadcasted top.& %₁₃ %₁₅)
+17  (call top.materialize %₁₆)
+18  (return %₁₇)
+
+########################################
 # Broadcast with literal_pow
 x.^3
 #---------------------
@@ -271,7 +292,7 @@ x .= y
 2   TestMod.y
 3   (call top.broadcasted top.identity %₂)
 4   (call top.materialize! %₁ %₃)
-5   (return %₄)
+5   (return %₁)
 
 ########################################
 # Fused in-place broadcast update
@@ -283,7 +304,7 @@ x .= y .+ z
 4   TestMod.z
 5   (call top.broadcasted %₂ %₃ %₄)
 6   (call top.materialize! %₁ %₅)
-7   (return %₆)
+7   (return %₁)
 
 ########################################
 # In-place broadcast update with property assignment on left hand side
@@ -294,7 +315,7 @@ x.prop .= y
 3   TestMod.y
 4   (call top.broadcasted top.identity %₃)
 5   (call top.materialize! %₂ %₄)
-6   (return %₅)
+6   (return %₂)
 
 ########################################
 # In-place broadcast update with ref on left hand side
@@ -307,7 +328,7 @@ x[i,end] .= y
 5   TestMod.y
 6   (call top.broadcasted top.identity %₅)
 7   (call top.materialize! %₄ %₆)
-8   (return %₇)
+8   (return %₄)
 
 ########################################
 # <: as a function call
@@ -356,7 +377,7 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall (foreigncall_arg1 (tuple-p (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+4   (foreigncall (foreignsymbol (tuple (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
@@ -508,21 +529,23 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 # back before codegen generates code for `cglobal`
 cglobal((:sym, lib), Int)
 #---------------------
-1   TestMod.lib
-2   (call core.tuple :sym %₁)
-3   TestMod.Int
-4   (call (static_eval TestMod.cglobal) %₂ %₃)
+1   TestMod.Int
+2   (call core.apply_type top.Ptr %₁)
+3   (foreignglobal (foreignsymbol (tuple (inert sym) TestMod.lib)))
+4   (call top.bitcast %₂ %₃)
 5   (return %₄)
 
 ########################################
 # cglobal - non-tuple expressions in first arg are lowered as normal
 cglobal(f(), Int)
 #---------------------
-1   TestMod.f
-2   (call %₁)
-3   TestMod.Int
-4   (call (static_eval TestMod.cglobal) %₂ %₃)
-5   (return %₄)
+1   TestMod.Int
+2   (call core.apply_type top.Ptr %₁)
+3   TestMod.f
+4   (call %₃)
+5   (foreignglobal %₄)
+6   (call top.bitcast %₂ %₅)
+7   (return %₆)
 
 ########################################
 # Error: cglobal too many arguments

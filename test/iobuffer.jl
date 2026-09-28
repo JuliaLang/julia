@@ -6,7 +6,7 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : bytesavailable(io))
 
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
-# Julia Base's internals uses the PipeBuffer, which is an unseekable IOBuffer.
+# Julia Base's internals use the PipeBuffer, which is an unseekable IOBuffer.
 # There are no public constructors to build such a buffer, but we need to test
 # it anyway.
 # I make a new method here such that if the implementation of Base.PipeBuffer
@@ -409,7 +409,7 @@ end
 end
 
 @testset "Position of compactable buffer" begin
-    # Set maxsize, because otherwise compaction it too hard to reason about,
+    # Set maxsize, because otherwise compaction is too hard to reason about,
     # and this test will be brittle
     io = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, 100, false)
     write(io, "abcd")

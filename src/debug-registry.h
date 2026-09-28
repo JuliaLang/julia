@@ -77,7 +77,7 @@ public:
             return ConstLockT(mutex, resource);
         }
 
-        ~Locked() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
+        ~Locked() JL_NOTSAFEPOINT = default;
     };
 
     struct image_info_t {
@@ -145,7 +145,7 @@ public:
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;
-    Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT;
+    Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 
     std::shared_mutex symbol_mutex;
 };

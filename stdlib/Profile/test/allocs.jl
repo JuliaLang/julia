@@ -6,6 +6,8 @@ let iobuf = IOBuffer()
     for format in (:tree, :flat)
         Test.@test_logs (:warn, r"^There were no samples collected\.") Allocs.print(iobuf; format, C=true)
     end
+    # kwargs that allocation profiles don't support must error rather than be silently ignored
+    @test_throws MethodError Allocs.print(iobuf; groupby = :task)
 end
 
 # Issue #57103: This test does not work with MMTk because of fastpath

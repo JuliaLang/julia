@@ -38,6 +38,12 @@
 
 enum ArgClass { Integer, Sse, SseUp, X87, X87Up, ComplexX87, NoClass, Memory };
 
+static bool is_fp_scalar_type(jl_value_t *t)
+{
+    return t == (jl_value_t*)jl_float64_type || t == (jl_value_t*)jl_float32_type ||
+           t == (jl_value_t*)jl_float16_type || t == (jl_value_t*)jl_bfloat16_type;
+}
+
 struct ABI_x86_64Layout : AbiLayout {
 
 // used to track the state of the ABI generator during
@@ -115,11 +121,10 @@ struct Classification {
         // make sure other half knows about it too:
         accum.addField(offset+16, ComplexX87);
     } */
-void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const
+void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const JL_CANSAFEPOINT
 {
     // Floating point types
-    if (dt == jl_float64_type || dt == jl_float32_type || dt == jl_float16_type ||
-        dt == jl_bfloat16_type) {
+    if (is_fp_scalar_type((jl_value_t*)dt)) {
         accum.addField(offset, Sse);
     }
     // Misc types
@@ -147,7 +152,16 @@ void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) con
     else if (is_native_simd_type(dt)) {
         accum.addField(offset, Sse);
     }
-    // Other struct types
+    // GCC passes one-element floating-point vectors in memory.
+    else if (is_vector_type(dt) && jl_datatype_nfields(dt) == 1 &&
+             is_fp_scalar_type(jl_tparam0(jl_field_type(dt, 0)))) {
+        accum.addField(offset, Memory);
+    }
+    // Other 64-bit vectors use class SSE.
+    else if (is_vector_type(dt) && jl_datatype_size(dt) == 8) {
+        accum.addField(offset, Sse);
+    }
+    // Other aggregates, including GCC's smaller multi-element vectors.
     else if (jl_datatype_size(dt) <= 16 && dt->layout && !jl_is_layout_opaque(dt->layout)) {
         size_t i;
         for (i = 0; i < jl_datatype_nfields(dt); ++i) {
@@ -166,14 +180,14 @@ void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) con
     }
 }
 
-Classification classify(jl_datatype_t *dt) const
+Classification classify(jl_datatype_t *dt) const JL_CANSAFEPOINT
 {
     Classification cl;
     classifyType(cl, dt, 0);
     return cl;
 }
 
-bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     int sret = classify(dt).isMemory;
     if (sret) {
@@ -183,7 +197,7 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return sret;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override JL_CANSAFEPOINT
 {
     Classification cl = classify(dt);
     if (cl.isMemory) {
@@ -215,7 +229,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
 
 // Called on behalf of ccall to determine preferred LLVM representation
 // for an argument or return value.
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override JL_CANSAFEPOINT
 {
     (void) isret;
     // no need to rewrite these types (they are returned as pointers anyways)
@@ -223,7 +237,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
         return NULL;
 
     size_t size = jl_datatype_size(dt);
-    size_t nbits = jl_datatype_nbits(dt);
+    size_t nbits = size * 8;
     if (size > 16 || size == 0)
         return NULL;
 
@@ -255,6 +269,9 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
             return types[0];
         case Integer:
             assert(size > 8);
+            // Keep i128 intact so register exhaustion spills the whole argument.
+            if (size == 16 && jl_is_primitivetype(dt))
+                return Type::getInt128Ty(ctx);
             types[1] = Type::getIntNTy(ctx, (nbits-64));
             return StructType::get(ctx,ArrayRef<Type*>(&types[0],2));
         case Sse:

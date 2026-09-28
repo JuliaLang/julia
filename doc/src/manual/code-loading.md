@@ -19,7 +19,7 @@ These questions are answered by searching through the project environments liste
 
 ## Federation of packages
 
-Most of the time, a package is uniquely identifiable simply from its name. However, sometimes a project might encounter a situation where it needs to use two different packages that share the same name. While you might be able fix this by renaming one of the packages, being forced to do so can be highly disruptive in a large, shared code base. Instead, Julia's code loading mechanism allows the same package name to refer to different packages in different components of an application.
+Most of the time, a package is uniquely identifiable simply from its name. However, sometimes a project might encounter a situation where it needs to use two different packages that share the same name. While you might be able to fix this by renaming one of the packages, being forced to do so can be highly disruptive in a large, shared code base. Instead, Julia's code loading mechanism allows the same package name to refer to different packages in different components of an application.
 
 Julia supports federated package management, which means that multiple independent parties can maintain both public and private packages and registries of packages, and that projects can depend on a mix of public and private packages from different registries. Packages from various registries are installed and managed using a common set of tools and workflows. The `Pkg` package manager that ships with Julia lets you install and manage your projects' dependencies. It assists in creating and manipulating project files (which describe what other projects that your project depends on), and manifest files (which snapshot exact versions of your project's complete dependency graph).
 
@@ -179,7 +179,7 @@ If, on the other hand, Julia was loading the *other* `Priv` package—the one wi
 1. `/home/me/.julia/packages/Priv/HDkrT`
 2. `/usr/local/julia/packages/Priv/HDkrT`
 
-Julia uses the first of these that exists to try to load the public `Priv` package from the file `packages/Priv/HDKrT/src/Priv.jl` in the depot where it was found.
+Julia uses the first of these that exists to try to load the public `Priv` package from the file `packages/Priv/HDkrT/src/Priv.jl` in the depot where it was found.
 
 Here is a representation of a possible paths map for our example `App` project environment,
 as provided in the Manifest given above for the dependency graph,
@@ -471,8 +471,7 @@ Scripts and the REPL use the active project's syntax version. This determination
 1. At startup after processing `--project`
 2. Before parsing any REPL input, once for each prompt
 
-In particular, a manual `set_active_project` in a script will not change the syntax versioned used
-for the rest of the script. However, doing so at the REPL (explicitly or implicitly via the Pkg
+In particular, a manual `set_active_project` in a script will not change the syntax version used for the rest of the script. However, doing so at the REPL (explicitly or implicitly via the Pkg
 REPL mode) will affect the syntax version used to parse the *next* REPL input.
 
 ## Conclusion

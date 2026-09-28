@@ -369,6 +369,9 @@ end
         @test Base.Unicode.isassigned(c) isa Bool
         @test islowercase(c) isa Bool
         @test isuppercase(c) isa Bool
+        for f in (lowercase, uppercase, titlecase)
+            @test_throws Base.InvalidCharError f(c)
+        end
     end
 end
 
@@ -422,6 +425,11 @@ end
               Base.Unicode.isassigned, Base.Unicode.category_code,
               Base.Unicode.category_abbrev, Base.Unicode.category_string)
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (Char,)))
+    end
+    for f in (lowercase, uppercase, titlecase)
+        effects = Base.infer_effects(f, (Char,))
+        @test Core.Compiler.is_foldable(effects)
+        @test !Core.Compiler.is_nothrow(effects)
     end
     for f in (isascii, textwidth, lastindex)
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (String,)))

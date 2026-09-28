@@ -23,7 +23,7 @@ DateTime(dt::TimeType) = convert(DateTime, dt)
     Time(dt::DateTime)
 
 Convert a `DateTime` to a `Time`. The hour, minute, second, and millisecond parts of
-the `DateTime` are used to create the new `Time`. Microsecond and nanoseconds are zero by default.
+the `DateTime` are used to create the new `Time`. Microseconds and nanoseconds are zero by default.
 """
 Time(dt::DateTime) = convert(Time, dt)
 

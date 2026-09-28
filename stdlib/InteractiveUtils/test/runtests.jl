@@ -254,12 +254,15 @@ end
         ver = read(buf, String)
         @test startswith(ver, "Julia Version $VERSION")
         @test occursin("Environment:", ver)
-    end
-    let exename = `$(Base.julia_cmd()) --startup-file=no`
-        @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String[]), String))
-        @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String["JULIA_CPU_THREADS=1"]), String))
+
+        let exename = `$(Base.julia_cmd()) --startup-file=no`,
+            home = Sys.iswindows() ? "USERPROFILE=$dir" : "HOME=$dir"
+            @test !occursin("Environment:", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`, [home]), String))
+            @test occursin("Environment:", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`,
+                [home, "JULIA_CPU_THREADS=1"]), String))
+        end
     end
 end
 
@@ -270,6 +273,18 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
 @test (@which vcat(1...)).name === :vcat
+
+@testset "@methods" begin
+    ms = @methods sort(::AbstractVector)
+    @test ms isa Base.MethodList
+    @test ms == methods(sort, (AbstractVector,))
+    # arguments are interpreted as values, like `@which`
+    @test (@methods sort([1, 2, 3])) == methods(sort, (Vector{Int},))
+    # qualified callable
+    @test (@methods Base.sort(::AbstractVector)) == methods(sort, (AbstractVector,))
+    # unlike `@which`, lists every matching method when types are abstract
+    @test length(@methods +(::Integer, ::Integer)) > 1
+end
 
 # PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex
@@ -634,7 +649,7 @@ expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...)
 # Make sure broadcasts in nested arguments are not processed.
 v = Any[1]
 expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
-@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test contains(expansion, "Core.Typeof(rand.(Ref(1)))")
 @test !contains(expansion, "(x1) =")
 
 # Issue # 45889
@@ -1158,3 +1173,27 @@ var_line = @__LINE__()+1
 const _interactiveutils_some_var_ = 0
 
 @test InteractiveUtils.varloc(@__MODULE__, :_interactiveutils_some_var_) == (@__FILE__, var_line)
+
+@testset "world argument for varinfo and subtypes" begin
+    # varinfo: a non-const binding added after the recorded world should not
+    # appear when querying that older world (its partition does not yet exist
+    # at world_no_var, so `isdefined` in that world returns false).
+    M_varinfo = @eval module $(gensym()) end
+    world_no_var = Base.get_world_counter()
+    @eval M_varinfo begin
+        export tracked_var
+        tracked_var = 42
+    end
+    @test occursin("tracked_var", repr(varinfo(M_varinfo)))
+    @test !occursin("tracked_var", repr(varinfo(M_varinfo; world=world_no_var)))
+
+    # subtypes: subtype added after the recorded world should not appear when
+    # querying that older world.
+    M_sub = @eval module $(gensym())
+        abstract type MyAbstractParent end
+    end
+    world_no_subtype = Base.get_world_counter()
+    @eval M_sub struct MyConcreteChild <: MyAbstractParent end
+    @test length(subtypes(M_sub, M_sub.MyAbstractParent)) == 1
+    @test isempty(subtypes(M_sub, M_sub.MyAbstractParent; world=world_no_subtype))
+end

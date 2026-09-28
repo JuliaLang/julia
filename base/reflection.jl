@@ -34,7 +34,7 @@ function code_lowered(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); gener
                 code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
-                      "This can happen if the provided argument types (", t, ") are ",
+                      "This can happen if the provided argument types (", argtypes, ") are ",
                       "not concrete types, but the `generated` argument is `true`.")
             end
         else
@@ -103,7 +103,7 @@ struct CodegenParams
     If enabled, generate the necessary code to support the --code-coverage
     command line flag to julia itself. Note that the option itself does not enable
     code coverage. Rather, it merely generates the support code necessary
-    to code coverage if requested by the command line option.
+    to perform code coverage if requested by the command line option.
     """
     code_coverage::Cint
 
@@ -160,13 +160,13 @@ struct CodegenParams
     targets. The option may be disabled for use in environments where the julia
     runtime is unavailable, but is otherwise recommended to be enabled, even if
     lazy resolution is not required, as the Julia PLT mechanism may have superior
-    performance compared to the native platform mechanism. The options is enabled by default.
+    performance compared to the native platform mechanism. The option is enabled by default.
     """
     use_jlplt::Cint
 
     """
-        If enabled emit LLVM IR for all functions even if wouldn't be compiled
-        for some reason (i.e functions that return a constant value).
+        If enabled emit LLVM IR for all functions even if they wouldn't be compiled
+        for some reason (i.e. functions that return a constant value).
     """
     force_emit_all::Cint
 
@@ -661,7 +661,7 @@ julia> Base.return_types(checksym, (Union{Symbol,String},))
 ```
 
 It's important to note the difference here: `Base.return_types` gives back inferred results
-for each method that matches the given signature `checksum(::Union{Symbol,String})`.
+for each method that matches the given signature `checksym(::Union{Symbol,String})`.
 On the other hand `Base.infer_return_type` returns one collective result that sums up all those possibilities.
 
 !!! warning
@@ -868,7 +868,7 @@ Return the possible computation effects of the function call specified by `f` an
 julia> f1(x) = x * 2;
 
 julia> Base.infer_effects(f1, (Int,))
-(+c,+e,+n,+t,+s,+m,+i)
+(+c,+e,+re,+n,+t,+s,+m,+u,+o,+r)
 ```
 
 This function will return an `Effects` object with information about the computational
@@ -878,7 +878,7 @@ effects of the function `f1` when called with an `Int` argument.
 julia> f2(x::Int) = x * 2;
 
 julia> Base.infer_effects(f2, (Integer,))
-(+c,+e,!n,+t,+s,+m,+i)
+(+c,+e,+re,!n,+t,+s,+m,+u,+o,+r)
 ```
 
 This case is pretty much the same as with `f1`, but there's a key difference to note. For
@@ -1130,13 +1130,20 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
 end
 
 """
-    fbody = bodyfunction(basemethod::Method)
+    fbody = bodyfunction(basemethod::Method; world::UInt=Base.get_world_counter())
 
 Find the keyword "body function" (the function that contains the body of the method
 as written, called after all missing keyword-arguments have been assigned default values).
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
+
+The binding of the body function is looked up in the world age given by `world`, which
+defaults to the current world counter.
+
+!!! compat "Julia 1.14"
+    The `world` keyword argument requires Julia 1.14 or later. Before Julia 1.14,
+    the binding was looked up in the world age of the calling task.
 """
-function bodyfunction(basemethod::Method)
+function bodyfunction(basemethod::Method; world::UInt=get_world_counter())
     fmod = parentmodule(basemethod)
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
@@ -1149,7 +1156,7 @@ function bodyfunction(basemethod::Method)
             fsym = callexpr.args[1]
             while true
                 if isa(fsym, Symbol)
-                    return getfield(fmod, fsym)
+                    return invoke_in_world(world, getglobal, fmod, fsym)
                 elseif isa(fsym, GlobalRef)
                     if fsym.mod === Core && fsym.name === :_apply
                         fsym = callexpr.args[2]
@@ -1157,9 +1164,9 @@ function bodyfunction(basemethod::Method)
                         fsym = callexpr.args[3]
                     end
                     if isa(fsym, Symbol)
-                        return getfield(fmod, fsym)::Function
+                        return invoke_in_world(world, getglobal, fmod, fsym)::Function
                     elseif isa(fsym, GlobalRef)
-                        return getfield(fsym.mod, fsym.name)::Function
+                        return invoke_in_world(world, getglobal, fsym.mod, fsym.name)::Function
                     elseif isa(fsym, Core.SSAValue)
                         fsym = ast.code[fsym.id]
                     else

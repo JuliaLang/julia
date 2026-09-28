@@ -55,6 +55,10 @@ tests = [
         """ "x" a ; "y" b """ =>
             """(toplevel-; (doc (string "x") a) (doc (string "y") b))"""
         "x y"  =>  "(wrapper x (error-t y))"
+        # Newline-continued macro arguments apply only in bare parens, not in
+        # string interpolation or call/signature brackets
+        with_version(v"1.14", "\"\$(@foo x\n y)\"" => "(string (parens (macrocall (macro_name foo) x) (error-t y)))")
+        with_version(v"1.14", "function f(@nospecialize x\n y) end" => "(function (call f (macrocall (macro_name nospecialize) x) (error-t y)) (block))")
     ],
     JuliaSyntax.parse_eq => [
         # parse_assignment
@@ -62,6 +66,9 @@ tests = [
         "a .= b"      =>  "(.= a b)"
         "a += b"      =>  "(op= a + b)"
         "a .+= b"     =>  "(.op= a + b)"
+        with_version(v"1.14", "a +%= b" => "(op= a +% b)")
+        with_version(v"1.14", "a -%= b" => "(op= a -% b)")
+        with_version(v"1.14", "a *%= b" => "(op= a *% b)")
         "a, b = c, d" =>  "(= (tuple a b) (tuple c d))"
         "x, = xs"     =>  "(= (tuple x) xs)"
         "[a ~b]"      =>  "(hcat a (call-pre ~ b))"
@@ -76,6 +83,21 @@ tests = [
         "f(x) where S where U = 1" =>  "(function-= (where (where (call f x) S) U) 1)"
         "(f(x)::T) where S = 1" =>  "(function-= (where (parens (::-i (call f x) T)) S) 1)"
         "f(x) = 1 = 2"    =>  "(function-= (call f x) (= 1 2))" # Should be a warning!
+        # Suffixed operators don't form compound assignments (matching the
+        # reference parser): `+₁` is parsed as the operator, leaving a stray `=`
+        "a +₁= b" =>  "(call-i a +₁ (error =))"
+        # ... and likewise operators which simply have no compound-assignment
+        # form are parsed as an identifier being assigned to
+        "⋅ = 5" =>  "(= ⋅ 5)"
+        "⋅=5" =>  "(= ⋅ 5)"
+        # Operators followed by `==`, `===` or `=>` (rather than the single
+        # token `=`) are not compound assignments
+        "a +== b"   => "(call-i a + (call-pre (error ==) b))"
+        "a -=> b"   => "(call-i a - (call-pre (error =>) b))"
+        with_version(v"1.14", "a +%== b" => "(call-i a +% (call-pre (error ==) b))")
+        with_version(v"1.14", "a -%=> b" => "(call-i a -% (call-pre (error =>) b))")
+        "a >>>== b" => "(call-i a >>> (call-pre (error ==) b))"
+        "a .+== b"  => "(dotcall-i a + (call-pre (error ==) b))"
     ],
     JuliaSyntax.parse_pair => [
         "a => b"  =>  "(call-i a => b)"
@@ -119,6 +141,8 @@ tests = [
         "x < y"       => "(call-i x < y)"
         "x .< y"      => "(dotcall-i x < y)"
         "x .<: y"     => "(dotcall-i x <: y)"
+        # A dotted operator directly following a float literal
+        "1.1.∈a"      => "(dotcall-i 1.1 ∈ a)"
         ":. == :."    => "(call-i (quote-: .) == (quote-: .))"
         # Comparison chains
         "x < y < z"   => "(comparison x < y < z)"
@@ -141,14 +165,22 @@ tests = [
         "1:\n2"     => "(call-i 1 : (error))"
     ],
     JuliaSyntax.parse_range => [
-        "a..b"       => "(call-i a .. b)"
+        "a..b"       => "(call-i a (DotsIdentifier-2) b)"
+        "-1e10..2"   => "(call-i -1.0e10 (DotsIdentifier-2) 2)"
+        "0x1p3..2"   => "(call-i 8.0 (DotsIdentifier-2) 2)"
+        "a..+b"      => "(call-i a (DotsIdentifier-2) (error-t) (call-pre + b))"
+        # `..` may be directly followed by the operand-starting operators `: :: $ '`
+        "a..:b"      => "(call-i a (DotsIdentifier-2) (quote-: b))"
+        "'a'..'b'"   => "(call-i (char 'a') (DotsIdentifier-2) (char 'b'))"
+        "a..\$b"     => "(call-i a (DotsIdentifier-2) (\$ b))"
+        "a..::b"     => "(call-i a (DotsIdentifier-2) (::-pre b))"
         "a … b"      => "(call-i a … b)"
         "a .… b"     => "(dotcall-i a … b)"
         "[1 :a]"     => "(hcat 1 (quote-: a))"
         "[1 2:3 :a]" =>  "(hcat 1 (call-i 2 : 3) (quote-: a))"
         "x..."     => "(... x)"
         "x:y..."   => "(... (call-i x : y))"
-        "x..y..."  => "(... (call-i x .. y))"
+        "x..y..."  => "(... (call-i x (DotsIdentifier-2) y))"
     ],
     JuliaSyntax.parse_invalid_ops => [
         "a--b"  =>  "(call-i a (ErrorInvalidOperator) b)"
@@ -156,9 +188,11 @@ tests = [
     JuliaSyntax.parse_expr => [
         "a - b - c"  => "(call-i (call-i a - b) - c)"
         "a + b + c"  => "(call-i a + b c)"
+        with_version(v"1.14", "a +% b +% c" => "(call-i a +% b c)")
+        with_version(v"1.14", "a -% b -% c" => "(call-i (call-i a -% b) -% c)")
         "a + b .+ c" => "(dotcall-i (call-i a + b) + c)"
         # parse_with_chains:
-        # The following is two elements of a hcat
+        # The following are two elements of an hcat
         "[x +y]"     =>  "(hcat x (call-pre + y))"
         "[x+y +z]"   =>  "(hcat (call-i x + y) (call-pre + z))"
         # Conversely the following are infix calls
@@ -171,6 +205,7 @@ tests = [
     ],
     JuliaSyntax.parse_term => [
         "a * b * c"  => "(call-i a * b c)"
+        with_version(v"1.14", "a *% b *% c" => "(call-i a *% b c)")
         "a .* b"     => "(dotcall-i a * b)"
         "-2*x"       => "(call-i -2 * x)"
     ],
@@ -200,6 +235,9 @@ tests = [
         "x 'y"      =>  "x"
         "x@y"       =>  "x"
         "(begin end)x" => "(parens (block))"
+        # Invalid operators (`**`, `--`) are not juxtaposed
+        "2**2"      =>  "2"
+        "2--2"      =>  "2"
     ],
     JuliaSyntax.parse_unary => [
         ":T"       => "(quote-: T)"
@@ -364,6 +402,102 @@ tests = [
         "A.@var\"#\" a"=>  "(macrocall (. A (macro_name (var #))) a)"
         "@+x y"        =>  "(macrocall (macro_name +) x y)"
         "A.@.x"        =>  "(macrocall (. A (macro_name .)) x)"
+        # Newlines between macro arguments directly inside parentheses
+        ((v=v"1.14",), "(@foo a\n b)")         =>  "(parens (macrocall (macro_name foo) a b))"
+        # Leading trivia in the parentheses is ignored
+        ((v=v"1.14",), "( @foo a\n b)")        =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "(\n@foo a\n b)")       =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "(\n\n  @foo a\n b)")   =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "( # c\n @foo a\n b)")  =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "(#= c\n d =# @foo a\n b)") =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "(@foo a\n\n b)")       =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "(@foo a # c\n b)")     =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "(@foo a\n # c\n b)")   =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "(@foo\n # c\n a)")     =>  "(parens (macrocall (macro_name foo) a))"
+        ((v=v"1.14",), "(@foo a\r\n b)")       =>  "(parens (macrocall (macro_name foo) a b))"
+        ((v=v"1.14",), "(@foo\n)")             =>  "(parens (macrocall (macro_name foo)))"
+        ((v=v"1.14",), "(@foo\n a)")           =>  "(parens (macrocall (macro_name foo) a))"
+        ((v=v"1.14",), "(@foo a\n)")           =>  "(parens (macrocall (macro_name foo) a))"
+        ((v=v"1.14",), "(A.@foo a\n b)")       =>  "(parens (macrocall (. A (macro_name foo)) a b))"
+        ((v=v"1.14",), "(A.B.@foo a\n b)")     =>  "(parens (macrocall (. (. A B) (macro_name foo)) a b))"
+        ((v=v"1.14",), "(@A.B.foo a\n b)")     =>  "(parens (macrocall (macro_name (. (. A B) foo)) a b))"
+        ((v=v"1.14",), "(@var\"#\" a\n b)")   =>  "(parens (macrocall (macro_name (var #)) a b))"
+        # Any prefix expression is part of the macro call
+        ((v=v"1.14",), "(f(x).@foo a\n b)")    =>  "(parens (macrocall (. (call f x) (macro_name foo)) a b))"
+        ((v=v"1.14",), "(\$A.@foo a\n b)")     =>  "(parens (macrocall (. (\$ A) (macro_name foo)) a b))"
+        ((v=v"1.14",), "(@foo(a).@bar x\n y)") =>  "(parens (macrocall (. (macrocall-p (macro_name foo) a) (macro_name bar)) x y))"
+        ((v=v"1.14",), "(@(A) x\n y)")         =>  "(parens (macrocall (macro_name (parens A)) x y))"
+        ((v=v"1.14",), "(@[x] a\n b)")         =>  "(parens (macrocall (macro_name (error (vect x))) a b))"
+        ((v=v"1.14",), "(@foo a\n; b)")        =>  "(block-p (macrocall (macro_name foo) a) b)"
+        ((v=v"1.14",), "(@foo x\n y; b)")      =>  "(block-p (macrocall (macro_name foo) x y) b)"
+        ((v=v"1.14",), "(@foo x\n y, z)")      =>  "(parens (macrocall (macro_name foo) x (tuple y z)))"
+        # A comma at the start of the following line ends the call, as before
+        ((v=v"1.14",), "(@foo a\n, b)")        =>  "(tuple-p (macrocall (macro_name foo) a) b)"
+        ((v=v"1.13",), "(@foo a\n, b)")        =>  "(tuple-p (macrocall (macro_name foo) a) b)"
+        # Newline-insensitivity only happens for "useless" parens containing
+        # the macrocall and nothing else
+        ((v=v"1.14",), "(x, # c\n @foo a\n b)") =>  "(tuple-p x (macrocall (macro_name foo) a) (error-t b))"
+        ((v=v"1.14",), "(x;\n @foo a\n b)")    =>  "(block-p x (macrocall (macro_name foo) a) (error-t b))"
+        ((v=v"1.14",), "(x, @foo a\n b)")      =>  "(tuple-p x (macrocall (macro_name foo) a) (error-t b))"
+        ((v=v"1.14",), "(x, @foo a\n b, c)")   =>  "(tuple-p x (macrocall (macro_name foo) a) (error-t b ✘ c))"
+        ((v=v"1.14",), "(x,\n @foo a\n b)")    =>  "(tuple-p x (macrocall (macro_name foo) a) (error-t b))"
+        ((v=v"1.14",), "(; @foo a\n b)")       =>  "(tuple-p (parameters (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(@foo (x, @bar a\n b))") =>  "(parens (macrocall (macro_name foo) (tuple-p x (macrocall (macro_name bar) a) (error-t b))))"
+        ((v=v"1.14",), "(@foo \n (@bar \n x))")  =>  "(parens (macrocall (macro_name foo) (parens (macrocall (macro_name bar) x))))"
+        ((v=v"1.14",), "(@foo function bar()\n @baz \n x \n end)") =>  "(parens (macrocall (macro_name foo) (function (call bar) (block (macrocall (macro_name baz)) x))))"
+        ((v=v"1.14",), "(x = @foo a\n b)")     =>  "(parens (= x (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(x -> @foo a\n b)")    =>  "(parens (-> (tuple x) (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(x + @foo a\n b)")     =>  "(parens (call-i x + (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(1 : @foo x\n y)")     =>  "(parens (call-i 1 : (macrocall (macro_name foo) x)) (error-t y))"
+        ((v=v"1.14",), "(2@foo x\n y)")        =>  "(parens (juxtapose 2 (macrocall (macro_name foo) x)) (error-t y))"
+        # ... and the surrounding expression continues past the newline as before
+        ((v=v"1.14",), "(1 + @foo x\n + 2)")   =>  "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))"
+        ((v=v"1.14",), "(1 +\n @foo x\n + 2)")  =>  "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))"
+        ((v=v"1.14",), "(-@foo a\n b)")        =>  "(parens (call-pre - (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(@foo(a) = @bar b\n c)") =>  "(parens (= (macrocall-p (macro_name foo) a) (macrocall (macro_name bar) b)) (error-t c))"
+        ((v=v"1.14",), "(x ? y : @foo a\n b)") =>  "(parens (? x y (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(:@foo a\n b)")        =>  "(parens (quote-: (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(x where @foo a\n b)") =>  "(parens (where x (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(return @foo a\n b)")  =>  "(parens (return (macrocall (macro_name foo) a)) (error-t b))"
+        ((v=v"1.14",), "(@foo(a) + @bar b\n c)") =>  "(parens (call-i (macrocall-p (macro_name foo) a) + (macrocall (macro_name bar) b)) (error-t c))"
+        ((v=v"1.14",), "(@foo @bar x y\n z)")  =>  "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x y) z))"
+        ((v=v"1.14",), "(@foo x, @bar a\n b)") =>  "(parens (macrocall (macro_name foo) (tuple x (macrocall (macro_name bar) a)) b))"
+        ((v=v"1.14",), "(@foo x + @bar a\n b)") =>  "(parens (macrocall (macro_name foo) (call-i x + (macrocall (macro_name bar) a)) b))"
+        ((v=v"1.14",), "(@foo [x, @bar a\n b])") =>  "(parens (macrocall (macro_name foo) (vect x (macrocall (macro_name bar) a) (error-t b))))"
+        # Blocks inside parentheses use normal newline handling
+        ((v=v"1.14",), "(begin @foo a\n b end)") =>  "(parens (block (macrocall (macro_name foo) a) b))"
+        ((v=v"1.14",), "(f() do x\n @foo a\n b\n end)") =>  "(parens (call f (do (tuple x) (block (macrocall (macro_name foo) a) b))))"
+        # A following line which starts with an operator which could apply to
+        # the macro call ends the call, as before
+        ((v=v"1.14",), "(@foo x\n - y)")       =>  "(parens (call-i (macrocall (macro_name foo) x) - y))"
+        ((v=v"1.14",), "(@foo x\n -y)")        =>  "(parens (call-i (macrocall (macro_name foo) x) - y))"
+        ((v=v"1.14",), "(@foo x\n :y)")        =>  "(parens (call-i (macrocall (macro_name foo) x) : y))"
+        ((v=v"1.14",), "(@foo x\n \$y)")       =>  "(parens (call-i (macrocall (macro_name foo) x) \$ y))"
+        ((v=v"1.14",), "(@foo x\n &y)")        =>  "(parens (call-i (macrocall (macro_name foo) x) & y))"
+        ((v=v"1.14",), "(@foo x\n where T)")   =>  "(parens (where (macrocall (macro_name foo) x) T))"
+        ((v=v"1.14",), "(@foo x\n in y)")      =>  "(parens (call-i (macrocall (macro_name foo) x) in y))"
+        ((v=v"1.14",), "(@foo x\n ::T)")       =>  "(parens (::-i (macrocall (macro_name foo) x) T))"
+        ((v=v"1.14",), "(@foo x\n <: T)")      =>  "(parens (<: (macrocall (macro_name foo) x) T))"
+        ((v=v"1.14",), "(@foo x\n = y)")       =>  "(parens (= (macrocall (macro_name foo) x) y))"
+        ((v=v"1.14",), "(@foo x\n ? y : z)")   =>  "(parens (? (macrocall (macro_name foo) x) y z))"
+        ((v=v"1.14",), "(@foo x\n ...)")       =>  "(parens (... (macrocall (macro_name foo) x)))"
+        ((v=v"1.14",), "(@foo x\n .y)")        =>  "(parens (. (macrocall (macro_name foo) x) (error-t) y))"
+        ((v=v"1.14",), "(@foo 1:\n2)")         =>  "(parens (macrocall (macro_name foo) (call-i 1 : (error)) 2))"
+        # Only a token which can't continue an expression starts a new argument
+        ((v=v"1.14",), "(@foo x\n 'c')")       =>  "(parens (macrocall (macro_name foo) x (char 'c')))"
+        ((v=v"1.14",), "(@foo x\n @bar y)")    =>  "(parens (macrocall (macro_name foo) x (macrocall (macro_name bar) y)))"
+        ((v=v"1.14",), "(@foo x\n [1])")       =>  "(parens (macrocall (macro_name foo) x (vect 1)))"
+        ((v=v"1.14",), "(@foo x\n \"s\")")     =>  "(parens (macrocall (macro_name foo) x (string \"s\")))"
+        ((v=v"1.14",), "(@foo +\n x)")         =>  "(parens (macrocall (macro_name foo) + x))"
+        # `for` on the following line still forms a generator
+        ((v=v"1.14",), "(@foo x\n for i in xs)") =>  "(parens (generator (macrocall (macro_name foo) x) (iteration (in i xs))))"
+        ((v=v"1.14",), "(@doc x\n for i in xs)") =>  "(parens (macrocall (macro_name doc) x (for (iteration (in i xs)) (block (error)) (error-t))))"
+        ((v=v"1.14",), "(@doc x\n\ny)")         =>  "(parens (macrocall (macro_name doc) x y))"
+        ((v=v"1.14",), "(@time\n for i in 1:3 end)") =>  "(parens (generator (macrocall (macro_name time)) (iteration (in i (call-i 1 : 3)))) (error-t))"
+        # Before 1.14 a newline always ends the macro arguments
+        ((v=v"1.13",), "(@foo a\n b)")         =>  "(parens (macrocall (macro_name foo) a) (error-t b))"
+        ((v=v"1.13",), "(@foo a\n b\n c)")     =>  "(parens (macrocall (macro_name foo) a) (error-t b c))"
+        ((v=v"1.13",), "(@doc x\n y)")         =>  "(parens (macrocall (macro_name doc) x y))"
         # Macro names
         "@! x"  => "(macrocall (macro_name !) x)"
         "@.. x" => "(macrocall (macro_name ..) x)"
@@ -636,7 +770,7 @@ tests = [
         "function (\n        ::T\n        )(x, y) end" =>  "(function (call (parens (::-pre T)) x y) (block))"
         "function (\n        f::T{g(i)}\n        )() end" => "(function (call (parens (::-i f (curly T (call g i))))) (block))"
         "function (\n        x, y\n        ) x + y end" => "(function (tuple-p x y) (block (call-i x + y)))"
-        "function (:*=(f))() end" => "(function (call (parens (call (quote-: *=) f))) (block))"
+        "function (:*=(f))() end" => "(function (call (parens (call (quote-: (op= *)) f))) (block))"
         "function begin() end" =>  "(function (call (error begin)) (block))"
         "function f() end"     =>  "(function (call f) (block))"
         "function type() end"  =>  "(function (call type) (block))"
@@ -738,7 +872,7 @@ tests = [
         "import A.:(+)" =>  "(import (importpath A (quote-: (parens +))))"
         "import A.=="   =>  "(import (importpath A ==))"
         "import A.⋆.f"  =>  "(import (importpath A ⋆ f))"
-        "import A..."   =>  "(import (importpath A ..))"
+        "import A..."   =>  "(import (importpath A (DotsIdentifier-2)))"
         "import A; B"   =>  "(import (importpath A))"
         # Colons not allowed first in import paths
         # but are allowed in trailing components (#473)
@@ -835,35 +969,39 @@ tests = [
         "&&"  =>  "(error &&)"
         "||"  =>  "(error ||)"
         "."   =>  "(error .)"
-        "..." =>  "(error ...)"
-        "+="  =>  "(error +=)"
-        "-="  =>  "(error -=)"
-        "*="  =>  "(error *=)"
-        "/="  =>  "(error /=)"
-        "//=" =>  "(error //=)"
-        "|="  =>  "(error |=)"
-        "^="  =>  "(error ^=)"
-        "÷="  =>  "(error ÷=)"
-        "%="  =>  "(error %=)"
-        "<<=" =>  "(error <<=)"
-        ">>=" =>  "(error >>=)"
-        ">>>="=>  "(error >>>=)"
-        "\\=" =>  "(error \\=)"
-        "&="  =>  "(error &=)"
-        ":="  =>  "(error :=)"
-        "\$=" =>  "(error \$=)"
-        "⊻="  =>  "(error ⊻=)"
-        ".+=" =>  "(error (. +=))"
+        "..." =>  "(error (DotsIdentifier-3))"
+        "+="  =>  "(error (op= +))"
+        "-="  =>  "(error (op= -))"
+        "*="  =>  "(error (op= *))"
+        "/="  =>  "(error (op= /))"
+        "//=" =>  "(error (op= //))"
+        "|="  =>  "(error (op= |))"
+        "^="  =>  "(error (op= ^))"
+        "÷="  =>  "(error (op= ÷))"
+        "%="  =>  "(error (op= %))"
+        "<<=" =>  "(error (op= <<))"
+        ">>=" =>  "(error (op= >>))"
+        ">>>="=>  "(error (op= >>>))"
+        "\\=" =>  "(error (op= \\))"
+        "&="  =>  "(error (op= &))"
+        ":="  =>  "(error :=)" # Assignment operator, not `:`-update
+        "\$=" =>  "(error (op= \$))"
+        "⊻="  =>  "(error (op= ⊻))"
+        ".+=" =>  "(error (.op= +))"
+        with_version(v"1.14", "+%=" => "(error (op= +%))")
+        with_version(v"1.14", "-%=" => "(error (op= -%))")
+        with_version(v"1.14", "*%=" => "(error (op= *%))")
         # Normal operators
         "+"  =>  "+"
+        with_version(v"1.14", "+%" => "+%")
         # Assignment-precedence operators which can be used as identifiers
         "~"  =>  "~"
         "≔"  =>  "≔"
         "⩴"  =>  "⩴"
         "≕"  =>  "≕"
         # Quoted syntactic operators allowed
-        ":+="  =>  "(quote-: +=)"
-        ":.+=" =>  "(quote-: (. +=))"
+        ":+="  =>  "(quote-: (op= +))"
+        ":.+=" =>  "(quote-: (.op= +))"
         ":.="  =>  "(quote-: (. =))"
         ":.&&" =>  "(quote-: (. &&))"
         # Special symbols quoted
@@ -1220,13 +1358,16 @@ parsestmt_with_kind_tests = [
     # get the Kind K"Identifier"
     "+"      => "+::Identifier"
     "a + b"  => "(call-i a::Identifier +::Identifier b::Identifier)"
+    ((v=v"1.14",), "a +% b") => "(call-i a::Identifier +%::Identifier b::Identifier)"
+    ((v=v"1.14",), "a -% b") => "(call-i a::Identifier -%::Identifier b::Identifier)"
+    ((v=v"1.14",), "a *% b") => "(call-i a::Identifier *%::Identifier b::Identifier)"
     "a .+ b" => "(dotcall-i a::Identifier +::Identifier b::Identifier)"
     "a |> b" => "(call-i a::Identifier |>::Identifier b::Identifier)"
     "a => b" => "(call-i a::Identifier =>::Identifier b::Identifier)"
     "a →  b" => "(call-i a::Identifier →::Identifier b::Identifier)"
     "a < b < c" => "(comparison a::Identifier <::Identifier b::Identifier <::Identifier c::Identifier)"
     "a .<: b"=> "(dotcall-i a::Identifier <:::Identifier b::Identifier)"
-    "a .. b" => "(call-i a::Identifier ..::Identifier b::Identifier)"
+    "a .. b" => "(call-i a::Identifier (DotsIdentifier-2) b::Identifier)"
     "a : b"  => "(call-i a::Identifier :::Identifier b::Identifier)"
     "-2^x"   => "(call-pre -::Identifier (call-i 2::Integer ^::Identifier x::Identifier))"
     "-(2)"   => "(call-pre -::Identifier (parens 2::Integer))"
@@ -1251,10 +1392,14 @@ parsestmt_with_kind_tests = [
     ":(=)"   => "(quote-: (parens =::=))"
     "a := b" => "(:= a::Identifier b::Identifier)"
     "a += b" => "(op= a::Identifier +::Identifier b::Identifier)"
+    ((v=v"1.14",), "a +%= b") => "(op= a::Identifier +%::Identifier b::Identifier)"
     "a .+= b" => "(.op= a::Identifier +::Identifier b::Identifier)"
+    ((v=v"1.14",), "a .+%= b") => "(.op= a::Identifier +%::Identifier b::Identifier)"
     "a >>= b" => "(op= a::Identifier >>::Identifier b::Identifier)"
-    ":+="    => "(quote-: +=::op=)"
-    ":.+="   => "(quote-: (. +=::op=))"
+    ":+="    => "(quote-: (op= +::Identifier))"
+    ((v=v"1.14",), ":+%=") => "(quote-: (op= +%::Identifier))"
+    ":.+="   => "(quote-: (.op= +::Identifier))"
+    ((v=v"1.14",), ":.+%=") => "(quote-: (.op= +%::Identifier))"
     # str/cmd macro name kinds
     "x\"str\""   => """(macrocall x::StrMacroName (string-r "str"::String))"""
     "x`str`"     => """(macrocall x::CmdMacroName (cmdstring-r "str"::CmdString))"""

@@ -837,6 +837,18 @@ function test_cat(::Type{TestAbstractArray})
 
     #58866 - ensure proper dimension calculation for 0-dimension elements
     @test [zeros(1, 0) zeros(1,0); zeros(0,0) zeros(0, 0)] == Matrix{Float64}(undef, 1, 0)
+
+    # type stability on hvncat_fill! internal iteration (#61426)
+    let
+        a1 = Matrix{Float64}(undef, 2, 2)
+        Base.hvncat_fill!(a1, true, (1, 2.0, 3, 4.0))
+        @test @allocated(Base.hvncat_fill!(a1, true, (1, 2.0, 3, 4.0))) == 0
+
+        a2 = Array{Float64, 3}(undef, 2, 3, 2)
+        xs = (1, 2.0, 3, 4.0, 5, 6.0, 7, 8.0, 9, 10.0, 11, 12.0)
+        @test @allocated(Base.hvncat_fill!(a2, false, xs)) == 0
+        @test @allocated(Base.hvncat_fill!(a2, true, xs)) == 0
+    end
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -850,7 +862,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     end
 end
 
-# A custom linear slow array that insists upon Cartesian indexing
+# A custom slow array that insists upon Cartesian indexing
 mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
@@ -1183,6 +1195,15 @@ end
     @test Base.IndexStyle(rand(3, 3), [1; 2; 3]) == IndexLinear()
 end
 
+# The bottom-type fallback must not add IndexLinear to binary style inference.
+@testset "bottom-type IndexStyle inference" begin
+    @test Base.infer_return_type(IndexStyle, (Any, IndexCartesian)) === IndexCartesian
+    @test IndexStyle(IndexLinear(), IndexLinear()) === IndexLinear()
+    @test IndexStyle(IndexLinear(), IndexCartesian()) === IndexCartesian()
+    @test IndexStyle(IndexCartesian(), IndexLinear()) === IndexCartesian()
+    @test IndexStyle(IndexCartesian(), IndexCartesian()) === IndexCartesian()
+end
+
 @testset "promote_shape for Tuples and Dims" begin
     @test promote_shape((2, 1), (2,)) == (2, 1)
     @test_throws DimensionMismatch promote_shape((2, 3), (2,))
@@ -1508,6 +1529,13 @@ end
 
 using Base: typed_hvncat
 @testset "hvncat" begin
+    # Concatenation dimensions must not wrap before allocating and filling the result.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    overflow_array = reshape(1:overflow_dim, 1, overflow_dim)
+    @test_throws OverflowError hvncat((1, 3), false, overflow_array, overflow_array, overflow_array)
+    @test_throws OverflowError hvncat(((1, 1, 1), (3,)), false,
+                                      overflow_array, overflow_array, overflow_array)
+
     a = fill(1, (2,3,2,4,5))
     b = fill(2, (1,1,2,4,5))
     c = fill(3, (1,2,2,4,5))
@@ -2347,4 +2375,17 @@ end
             @test A - B - zeros() == A - B
         end
     end
+end
+
+@testset "map on ReshapedArray" begin
+    R = reshape(1:4, 2, 2)
+    for T in [Float64, BigInt]
+        S = @inferred map(T, R)
+        @test S == R
+        @test eltype(S) == T
+        @test parent(S) isa AbstractRange
+    end
+    P = PermutedDimsArray(collect(reshape(1:6, 2, 3)), (2, 1))
+    @test map(identity, reshape(P, 2, 3)) isa Matrix{Int}
+    @test map(identity, reshape(P, 6)) isa Vector{Int}
 end

@@ -6,7 +6,7 @@ include $(JULIAHOME)/Make.inc
 JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
 JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
 JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
-JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
+JLDFLAGS += $(LINK_LDFLAGS) $(JL_LDFLAGS)
 
 SRCS := hashing timefuncs ptrhash strhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod rle eytzinger
@@ -25,7 +25,7 @@ OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
 FLAGS_COMMON := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
-FLAGS_COMMON += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
+FLAGS_COMMON += -Wall -Wno-strict-aliasing $(JL_VISIBILITY_FLAGS) -Wpointer-arith -Wundef
 JCFLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 SHIPFLAGS_COMMON += $(FLAGS_COMMON)
@@ -115,6 +115,20 @@ regenerate-compile_commands:
 compile-database: regenerate-compile_commands
 	@echo "Compilation database created for src/support"
 
+# Standalone unit tests for support utilities. Built with assertions enabled
+# so the internal consistency checks in the tested code are exercised too.
+TEST_SRCS := rletest eytzingertest
+TEST_BINS := $(TEST_SRCS:%=$(BUILDDIR)/%$(EXE))
+
+$(TEST_BINS): $(BUILDDIR)/%$(EXE): $(SRCDIR)/test/%.c $(BUILDDIR)/libsupport-debug.a $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) $< \
+		$(BUILDDIR)/libsupport-debug.a $(LIBUV) -o $@ -lpthread -ldl -lm)
+
+test: $(TEST_BINS)
+	@for t in $(TEST_BINS); do echo "  RUN     $$t"; $$t || exit 1; done
+
+.PHONY: test
+
 clean:
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
@@ -125,5 +139,6 @@ clean:
 	rm -f $(BUILDDIR)/libsupport-debug.a
 	rm -f $(BUILDDIR)/compile_commands.json*
 	rm -f $(BUILDDIR)/host/*
+	rm -f $(TEST_BINS)
 
 .PHONY: compile-database

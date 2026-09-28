@@ -3,6 +3,8 @@
 
 static uint_t idset_hash(size_t idx, jl_value_t *data)
 {
+    if (idx >= ((jl_genericmemory_t*)data)->length)
+        return 0; // We got a OOB access, probably due to a data race
     jl_value_t *x = jl_genericmemory_ptr_ref(data, idx);
     // x should not be NULL, unless there was concurrent corruption
     return x == NULL ? 0 : jl_object_id(x);
@@ -10,6 +12,8 @@ static uint_t idset_hash(size_t idx, jl_value_t *data)
 
 static int idset_eq(size_t idx, const void *y, jl_value_t *data, uint_t hv)
 {
+    if (idx >= ((jl_genericmemory_t*)data)->length)
+        return 0; // We got a OOB access, probably due to a data race
     jl_value_t *x = jl_genericmemory_ptr_ref(data, idx);
     // x should not be NULL, unless there was concurrent corruption
     return x == NULL ? 0 : jl_egal(x, (jl_value_t*)y);

@@ -63,7 +63,7 @@ function treewalk(f, tree::GitTree, post::Bool = false)
     if err < 0
         err_class, _ = Error.last_error()
         if err_class != Error.Callback
-            # now we now the code is valid
+            # now we know the code is valid
             throw(GitError(err))
         end
     end

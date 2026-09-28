@@ -23,6 +23,7 @@ Base.ispunct
 Base.isspace
 Base.isuppercase
 Base.isxdigit
+Base.raw_substring
 ```
 
 ## String Basics
@@ -105,7 +106,7 @@ The list here is not exhaustive, for example there are also
 - [markdown string literals](@ref stdlib-markdown-literals) of the form `md"..."`,
 - [regular expressions and substitution string literals](@ref base-regex-literals), and
 - large integer literals for 128 bit constants of the form
-  [`int128"..."`](@ref Base.@int128_str) resp. [`uint128"..."`](@ref Base.@uint128_str).
+  [`int128"..."`](@ref Base.@int128_str) and [`uint128"..."`](@ref Base.@uint128_str).
 
 ```@docs
 Base.@lazy_str
@@ -237,4 +238,5 @@ Base.AnnotatedChar
 Base.annotatedstring
 Base.annotations
 Base.annotate!
+Base.unannotate
 ```

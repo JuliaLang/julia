@@ -104,7 +104,7 @@ function runtests(name, path, isolate=true; seed=nothing)
         ex isa TestSetException || rethrow()
         return Any[ex]
     end
-    end # TESET_PRINT_ENABLE
+    end # TESTSET_PRINT_ENABLE
 end
 
 # looking in . messes things up badly
@@ -112,7 +112,14 @@ filter!(x->x!=".", LOAD_PATH)
 
 # Support for Revise
 function revise_trackall()
-    Revise.track(Core.Compiler)
+    try
+        Revise.track(Core.Compiler)
+    catch err
+        # Revise cannot currently reparse the `typegroup` blocks in the
+        # Compiler sources; track everything else so `revise-*` targets keep
+        # working for Base and stdlib changes
+        @warn "Revise could not track Core.Compiler" err
+    end
     Revise.track(Base)
     for (id, mod) in Base.loaded_modules
         if id.name in STDLIBS

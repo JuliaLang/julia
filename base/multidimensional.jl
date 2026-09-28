@@ -468,7 +468,7 @@ module IteratorsMD
     __inc(::Tuple{}, ::Tuple{}) = false, ()
     @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
-        I = state[1] + step(rng)
+        I = state[1] +% step(rng)
         valid = state[1] != last(rng)
         return valid, (I,)
     end
@@ -592,13 +592,13 @@ module IteratorsMD
     @inline __dec(::Tuple{}, ::Tuple{}) = false, ()
     @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
-        I = state[1] - step(rng)
+        I = state[1] -% step(rng)
         valid = state[1] != first(rng)
         return valid, (I,)
     end
     @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
-        I = state[1] - step(rng)
+        I = state[1] -% step(rng)
         if state[1] != first(rng)
             return true, (I, tail(state)...)
         end
@@ -1401,7 +1401,7 @@ end
     end
 end
 
-# in the general multidimensional non-scalar case, can we do about 10% better
+# in the general multidimensional non-scalar case, we can do about 10% better
 # in most cases by manually hoisting the bitarray chunks access out of the loop
 # (This should really be handled by the compiler or with an immutable BitArray)
 @generated function _unsafe_getindex!(X::BitArray, B::BitArray, I::Union{Int,AbstractArray{Int}}...)
@@ -2048,7 +2048,7 @@ end
 """
     union_split(f, x, ts::Tuple{Vararg{Val}}, args...)
 
-call `f(x, args...)`, union-splitting on all the types specified by `ts`
+Call `f(x, args...)`, union-splitting on all the types specified by `ts`
 
 `union_split(f, x, (Val{T1}(), Val{T2}()), y, z)` is equivalent to
 

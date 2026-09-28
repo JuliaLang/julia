@@ -132,7 +132,7 @@ const DEPOT_PATH = String[]
 function append_bundled_depot_path!(DEPOT_PATH)
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
+    path = abspath(Sys.BINDIR, DATAROOTDIR, "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     return DEPOT_PATH
 end
@@ -200,8 +200,7 @@ the [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) environment variable if set;
 otherwise it defaults to `["@", "@v#.#", "@stdlib"]`. Entries starting with `@`
 have special meanings:
 
-- `@` refers to the "current active environment", the initial value of which is
-  initially determined by the [`JULIA_PROJECT`](@ref JULIA_PROJECT) environment
+- `@` refers to the "current active environment", whose value is determined by the [`JULIA_PROJECT`](@ref JULIA_PROJECT) environment
   variable or the `--project` command-line option.
 
 - `@stdlib` expands to the absolute path of the current Julia installation's
@@ -297,7 +296,7 @@ end
 
 function init_active_project()
     project = (JLOptions().project != C_NULL ?
-        unsafe_string(Base.JLOptions().project) :
+        unsafe_string(JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
     set_active_project(
         project === nothing ? nothing :
@@ -309,8 +308,11 @@ end
 function init_named_env!(path)
     try
         mkpath(dirname(path))
-        open(path, "w") do io
+        io = open(path, "w")
+        try
             print(io, "syntax.julia_version = \"",VERSION,"\"")
+        finally
+            close(io)
         end
         return path
     catch e
@@ -413,7 +415,7 @@ function set_active_project(projfile::Union{AbstractString,Nothing})
     ACTIVE_PROJECT[] = projfile
     for f in active_project_callbacks
         try
-            Base.invokelatest(f)
+            invokelatest(f)
         catch
             @error "active project callback $f failed" maxlog=1
         end
@@ -498,7 +500,9 @@ This situation may occur if you are registering exit hooks from background Tasks
 may still be executing concurrently during shutdown.
 """
 function atexit(f::Function)
-    Base.@lock _atexit_hooks_lock begin
+    # HACK: if generating output, hint that we might want to compile `f`, so that it is available for the no-codegen test
+    generating_output() && (precompile(f, (Cint,)) || precompile(f, ()))
+    @lock _atexit_hooks_lock begin
         _atexit_hooks_finished && error("cannot register new atexit hook; already exiting.")
         pushfirst!(atexit_hooks, f)
         return nothing
@@ -510,7 +514,25 @@ function _atexit(exitcode::Cint)
     # this exit came from a signal for example), then try to clear that state
     # to minimize scheduler issues later
     ct = current_task()
-    q = ct.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+    q = ct.queue
+    if q !== nothing
+        try
+            list_deletefirst!(q::StickyWorkqueue, ct)
+        catch
+            # best-effort cleanup on the way out
+        end
+    end
+    # If this task's wait registration is still armed (e.g. this exit came
+    # from a signal while parked), disarm it: the waitee-queue entry is
+    # stale and gets dropped by whoever pops it, and the sticky source
+    # registration is collected by a walk once this task is done.
+    @atomicswap ct.waiting_on = nothing
+    # We are exiting: any pending cancellation of this task's scope is moot
+    # and would only disrupt the atexit hooks - run them in a shielded scope.
+    return ScopedValues.@with(CANCEL_TOKEN => nothing, _run_atexit_hooks(exitcode))
+end
+
+function _run_atexit_hooks(exitcode::Cint)
     # Don't hold the lock around the iteration, just in case any other thread executing in
     # parallel tries to register a new atexit hook while this is running. We don't want to
     # block that thread from proceeding, and we can allow it to register its hook which we
@@ -570,7 +592,7 @@ library_threading_enabled::Bool = true
 
 # Base.OncePerProcess ensures that any registered hooks do not outlive the session.
 # (even if they are registered during the sysimage build process by top-level code)
-const disable_library_threading_hooks = Base.OncePerProcess(Vector{Any})
+const disable_library_threading_hooks = OncePerProcess(Vector{Any})
 
 function at_disable_library_threading(f)
     push!(disable_library_threading_hooks(), f)

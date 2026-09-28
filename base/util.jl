@@ -149,8 +149,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
 `--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
-`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
-command line arguments that are not at their default values.
+`--code-coverage`, `--code-coverage-mode`, `--track-allocation`, `--color`, `--startup-file`,
+and `--depwarn` command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
 
@@ -175,11 +175,11 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
-    let compile = if opts.compile_enabled == 0
+    let compile = if opts.compile_enabled == JL_OPTIONS_COMPILE_OFF
                       "no"
-                  elseif opts.compile_enabled == 2
+                  elseif opts.compile_enabled == JL_OPTIONS_COMPILE_ALL
                       "all"
-                  elseif opts.compile_enabled == 3
+                  elseif opts.compile_enabled == JL_OPTIONS_COMPILE_MIN
                       "min"
                   else
                       "" # default = "yes"
@@ -227,6 +227,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
     end
+    opts.code_coverage_mode == 1 && push!(addflags, "--code-coverage-mode=count")
     if opts.malloc_log == 1
         push!(addflags, "--track-allocation=user")
     elseif opts.malloc_log == 2
@@ -596,7 +597,7 @@ macro kwdef(expr)
         if isnothing(defval)
             return fieldname
         else
-            return Expr(:kw, fieldname, esc(defval))
+            return Expr(:kw, fieldname, defval)
         end
     end
 
@@ -605,9 +606,9 @@ macro kwdef(expr)
     if !isempty(parameters)
         T_no_esc = Meta.unescape(T)
         if T_no_esc isa Symbol
-            sig = Expr(:call, esc(T), Expr(:parameters, parameters...))
-            body = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
-            kwdefs = Expr(:function, sig, body)
+            sig = Expr(:call, T, Expr(:parameters, parameters...))
+            body = Expr(:block, __source__, Expr(:call, T, fieldnames...))
+            kwdefs = esc(Expr(:function, sig, body))
         elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
@@ -616,13 +617,13 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
-            sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
+            body1 = Expr(:block, __source__, Expr(:call, S, fieldnames...))
+            sig1 = Expr(:call, S, Expr(:parameters, parameters...))
             def1 = Expr(:function, sig1, body1)
-            body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
-            sig2 = :($(Expr(:call, esc(SQ), Expr(:parameters, parameters...))) where {$(esc.(P)...)})
+            body2 = Expr(:block, __source__, Expr(:call, SQ, fieldnames...))
+            sig2 = :($(Expr(:call, SQ, Expr(:parameters, parameters...))) where {$(P...)})
             def2 = Expr(:function, sig2, body2)
-            kwdefs = Expr(:block, def1, def2)
+            kwdefs = esc(Expr(:block, def1, def2))
         else
             error("Invalid usage of @kwdef")
         end

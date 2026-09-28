@@ -212,7 +212,7 @@ Adjusts the date in `start` until the `f::Function` passed using `df` returns `t
 The optional `step` parameter dictates the change in `start` on every iteration.
 If `limit` iterations occur, then an [`ArgumentError`](@ref) is thrown.
 
-The default values for parameters `start` and `limit` are 1 Day and 10,000 respectively.
+The default values for parameters `step` and `limit` are 1 Day and 10,000 respectively.
 
 # Examples
 ```jldoctest

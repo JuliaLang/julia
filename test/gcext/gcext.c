@@ -403,22 +403,23 @@ void stk_push(jl_value_t *s, jl_value_t *v)
     check_stack("push", s);
     dynstack_t *stk = *(dynstack_t **)s;
     if (stk->size < stk->capacity) {
+        jl_gc_wb((jl_value_t *)stk, (void *)&stk->data[stk->size], v);
         stk->data[stk->size++] = v;
-        jl_gc_wb((jl_value_t *)stk, v);
     }
     else {
         dynstack_t *newstk = allocate_stack_mem(stk->capacity * 3 / 2 + 1);
         newstk->size = stk->size;
+        jl_gc_wb_object((jl_value_t *)newstk);
         memcpy(newstk->data, stk->data, sizeof(jl_value_t *) * stk->size);
-        *(dynstack_t **)s = newstk;
         newstk->data[newstk->size++] = v;
         jl_gc_schedule_foreign_sweepfunc(ptls, (jl_value_t *)(newstk));
-        jl_gc_wb_back((jl_value_t *)newstk);
-        jl_gc_wb(s, (jl_value_t *)newstk);
+        // The replaced stack pointer is the field at offset 0 of `s`.
+        jl_gc_wb(s, (void *)s, (jl_value_t *)newstk);
+        *(dynstack_t **)s = newstk;
     }
 }
 
-// Return top value from `s`. Raise error if not empty.
+// Return top value from `s`. Raise error if empty.
 
 jl_value_t *stk_top(jl_value_t *s)
 {
@@ -427,7 +428,7 @@ jl_value_t *stk_top(jl_value_t *s)
     return stk->data[stk->size - 1];
 }
 
-// Pop a value from `s` and return it. Raise error if not empty.
+// Pop a value from `s` and return it. Raise error if empty.
 
 jl_value_t *stk_pop(jl_value_t *s)
 {

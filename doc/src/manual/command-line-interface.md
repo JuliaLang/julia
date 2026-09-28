@@ -207,9 +207,10 @@ The following is a complete list of command-line switches available when launchi
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee\|user*}`            |Always follow `ieee` floating point semantics or respect `@fastmath` declarations|
 |`--polly={yes*\|no}`                   |Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)|
-|`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
-|`--code-coverage=@<path>`              |Count executions but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
+|`--code-coverage[={none*\|user\|all}]` |Record coverage for source lines (omitting setting is equivalent to `user`). Full coverage of Base itself requires a system image built with coverage counters (`JULIA_COVERAGE_IMAGES=1`).|
+|`--code-coverage=@<path>`              |Record coverage only for files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
+|`--code-coverage-mode={hit*\|count}`   |Record whether each line ran (`hit`, the default) or its execution count (`count`, which may be approximate when code runs on multiple threads)|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
 |`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--task-metrics={yes\|no*}`             |Enable the collection of per-task metrics|
@@ -240,3 +241,10 @@ Note that options of the form `--option[=...]` can **not** be specified as `--op
     In Julia 1.0, the default `--project=@.` option did not search up from the root
     directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
     does.
+
+For `--code-coverage=@<path>`, the path filters the report. Package images carry
+instrumentation independently of the selected path, and newly compiled or
+interpreted code is instrumented as for `--code-coverage=user`. Compatible
+instrumented system images can also contribute Base and Core coverage under the
+path; an ordinary system image does not supply those counters. See
+[Coverage instrumentation](@ref) for building instrumented system images.

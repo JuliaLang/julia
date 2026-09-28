@@ -1,6 +1,6 @@
 name = "MPFR_jll"
 uuid = "3a97d323-0669-5f0c-9066-3539efd106a3"
-version = "4.2.2+0"
+version = "4.2.2+1"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"

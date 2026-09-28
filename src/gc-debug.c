@@ -18,8 +18,8 @@
 extern "C" {
 #endif
 
-// Useful function in debugger to find page metadata
-jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
+// Useful function in debugger to find page metadata.
+JL_DLLEXPORT jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 {
     return page_metadata(data);
 }
@@ -303,7 +303,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
         memset(freelist_map, 0, sizeof(freelist_map));
         freelist_zerod = 1;
     }
-    // check for p in new newpages list
+    // check for p in newpages list
     jl_taggedvalue_t *halfpages = p->newpages;
     if (halfpages) {
         char *cur_page = gc_page_data((char*)halfpages - 1);
@@ -516,6 +516,17 @@ JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
         if (osize <= sizeof(jl_taggedvalue_t) || !tag || gc_marked(tag->bits.gc))
             continue;
+        // Never scrub a cancellation source. A dead one is still linked into
+        // its parents' child lists (and a dead parent's `child_head` is still
+        // the back-pointer target of its children), and the collector walks
+        // those links after the sweep, in sweep_weak_processing. Overwriting
+        // the object would destroy the links, and marking it below would stop
+        // the sweep from ever queueing it for unlinking - leaving its
+        // neighbours' `pprev` dangling into this 0xff fill, which then
+        // corrupts the lists of still-live parents. These objects have their
+        // own use-after-free discipline; leave them to it.
+        if (gc_is_cancel_source(tag))
+            continue;
         jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
         pg->has_marked = 1;
@@ -694,6 +705,7 @@ void jl_print_gc_stats(JL_STREAM *s)
                    p2, p2 * 100.0 / REGION2_PG_COUNT,
                    p1, p1 * 100.0 / REGION1_PG_COUNT / p2,
                    p0, p0 * 100.0 / REGION0_PG_COUNT / p1);
+    jl_safe_printf("image remset\t%zu entries\n", image_remset.len);
 #ifdef _OS_LINUX_
     double gct = gc_num.total_time / 1e9;
     struct mallinfo mi = mallinfo();
@@ -743,13 +755,6 @@ void gc_time_pool_end(int sweep_full)
                    total_pages, total_pages - skipped_pages,
                    freed_pages,
                    sweep_full ? "full" : "quick");
-}
-
-void gc_time_sysimg_end(uint64_t t0)
-{
-    double sweep_pool_sec = (jl_hrtime() - t0) / 1e9;
-    jl_safe_printf("GC sweep sysimg end %.2f ms\n",
-                   sweep_pool_sec * 1000);
 }
 
 static int64_t big_total;
@@ -1086,7 +1091,8 @@ static void gc_count_pool_pagetable(void)
     }
 }
 
-void gc_count_pool(void)
+// Useful function in debugger to inspect memory-leak-like issues.
+JL_DLLEXPORT void gc_count_pool(void)
 {
     memset(&poolobj_sizes, 0, sizeof(poolobj_sizes));
     empty_pages = 0;

@@ -47,7 +47,7 @@ struct ABI_Win64Layout : AbiLayout {
 int nargs;
 ABI_Win64Layout() : nargs(0) { }
 
-bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     size_t size = jl_datatype_size(dt);
     if (win64_reg_size(size) || is_native_simd_type(dt))
@@ -72,7 +72,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
 {
     size_t size = jl_datatype_size(dt);
     if (size > 0 && win64_reg_size(size) && !jl_is_primitivetype(dt))
-        return Type::getIntNTy(ctx, jl_datatype_nbits(dt));
+        return Type::getIntNTy(ctx, jl_datatype_size(dt) * 8);
     return NULL;
 }
 

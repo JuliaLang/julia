@@ -54,6 +54,10 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessors
+get_libgmp_path() = libgmp_path
+get_libgmpxx_path() = libgmpxx_path
+
 function __init__()
     global libgmp_path = string(libgmp.path)
     global libgmpxx_path = string(libgmpxx.path)

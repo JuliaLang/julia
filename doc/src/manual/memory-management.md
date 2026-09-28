@@ -142,7 +142,7 @@ The best way to minimize GC impact is to reduce unnecessary allocations:
 
 ### Profiling Memory Usage
 
-For detailed guidance on profiling memory allocations and identifying performance bottlenecks, see the [Profiling](@ref man-profiling) section.
+For detailed guidance on profiling memory allocations and identifying performance bottlenecks, see the [Profiling](@ref lib-profiling) section.
 
 ## [Advanced Configuration](@id man-gc-advanced)
 

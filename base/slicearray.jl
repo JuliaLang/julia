@@ -48,15 +48,15 @@ function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
     Slices{P,SM,AX,S,N}(A, slicemap, ax)
 end
 
-_slice_check_dims(N) = nothing
-function _slice_check_dims(N, dim, dims...)
+_slice_check_dims() = nothing
+function _slice_check_dims(dim, dims...)
     1 <= dim || throw(DimensionMismatch("Invalid dimension $dim"))
     dim in dims && throw(DimensionMismatch("Dimensions $dims are not unique"))
-    _slice_check_dims(N,dims...)
+    _slice_check_dims(dims...)
 end
 
 @constprop :aggressive function _eachslice(A::AbstractArray{T,N}, dims::NTuple{M,Integer}, drop::Bool) where {T,N,M}
-    _slice_check_dims(N,dims...)
+    _slice_check_dims(dims...)
     N_ = foldl(max, dims; init=N)
 
     if drop

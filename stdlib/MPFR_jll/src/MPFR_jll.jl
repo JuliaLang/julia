@@ -43,6 +43,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libmpfr_path() = libmpfr_path
+
 function __init__()
     global libmpfr_path = string(libmpfr.path)
     global artifact_dir = dirname(Sys.BINDIR)

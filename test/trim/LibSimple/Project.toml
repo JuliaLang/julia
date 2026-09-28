@@ -1,0 +1,11 @@
+name = "LibSimple"
+uuid = "6e9b9060-3f1a-4864-a73d-9233ed020f16"
+version = "0.1.0"
+
+# `JSON` is used by `runtests.jl` to validate the exported ABI; the library
+# itself has no dependencies (so trimming excludes JSON from the image).
+[deps]
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+
+[compat]
+JSON = "1"

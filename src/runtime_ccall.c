@@ -25,7 +25,7 @@ jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 static htable_t libMap;
 static jl_mutex_t libmap_lock;
 
-void *jl_get_library_(const char *f_lib, int throw_err)
+void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT
 {
     if (f_lib == NULL)
         return jl_RTLD_DEFAULT_handle;
@@ -72,7 +72,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
     else if (jl_is_string(f_name))
         fname_str = jl_string_data(f_name);
     else
-        jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, f_name);
+        jl_type_error("cglobal/ccall function name", (jl_value_t*)jl_symbol_type, f_name);
 
     if (lib_val) {
         if (jl_is_symbol(lib_val))
@@ -82,7 +82,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
         else if (jl_libdl_dlopen_func != NULL) {
             lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
         } else
-            jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
+            jl_type_error("cglobal/ccall", (jl_value_t*)jl_symbol_type, lib_val);
     }
     else {
         // If the user didn't supply a library name, try to find it now from the runtime value of f_name
@@ -97,7 +97,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
 // miscellany
 
 JL_DLLEXPORT
-jl_value_t *jl_get_JIT(void)
+jl_value_t *jl_get_JIT(void) JL_CANSAFEPOINT
 {
     const char *JITName = "ORCJIT";
     return jl_pchar_to_string(JITName, strlen(JITName));
@@ -248,6 +248,16 @@ static void trampoline_deleter(void **f) JL_NOTSAFEPOINT
 
 typedef void *(*init_trampoline_t)(void *tramp, void **nval) JL_NOTSAFEPOINT;
 
+// `ty` still has free type variables after instantiation, so it uses a static parameter with no value
+static void JL_NORETURN cfunction_sparam_error(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals)
+{
+    for (size_t i = 0; jl_is_unionall(env); i++, env = (jl_unionall_t*)env->body) {
+        if (jl_sparam_defined_value(vals[i]) == NULL && jl_has_typevar(ty, env->var))
+            jl_undefined_var_error(env->var->name, (jl_value_t*)jl_static_parameter_sym);
+    }
+    jl_error("cfunction: could not resolve the static parameters of a callback argument type");
+}
+
 // Use of `cache` is not clobbered in JL_TRY
 JL_GCC_IGNORE_START("-Wclobbered")
 JL_DLLEXPORT
@@ -283,12 +293,23 @@ jl_value_t *jl_get_cfunction_trampoline(
 
     // not found, allocate a new one
     size_t n = jl_svec_len(fill);
+    size_t nenv = n > 0 ? jl_subtype_env_size((jl_value_t*)env) : 0;
+    jl_value_t **defvals;
+    JL_GC_PUSHARGS(defvals, nenv);
+    // read pinned markers as their representative, like `jl_sparam_slot_value`
+    for (size_t i = 0; i < nenv; i++) {
+        jl_value_t *v = jl_sparam_defined_value(vals[i]);
+        defvals[i] = v ? v : vals[i];
+    }
     void **nval = (void**)malloc_s(sizeof(void*) * (n + 1));
     nval[0] = (void*)fobj;
     jl_value_t *result;
     JL_TRY {
         for (size_t i = 0; i < n; i++) {
-            jl_value_t *sparam_val = jl_instantiate_type_in_env(jl_svecref(fill, i), env, vals);
+            jl_value_t *fill_type = jl_svecref(fill, i);
+            jl_value_t *sparam_val = jl_instantiate_type_in_env(fill_type, env, defvals);
+            if (jl_has_free_typevars(sparam_val))
+                cfunction_sparam_error(fill_type, env, vals);
             if (sparam_val != (jl_value_t*)jl_any_type)
                 if (!jl_is_concrete_type(sparam_val) || !jl_is_immutable(sparam_val))
                     sparam_val = NULL;
@@ -332,6 +353,7 @@ jl_value_t *jl_get_cfunction_trampoline(
     init_trampoline(tramp, nval);
     ptrhash_put(cache, (void*)fobj, result);
     uv_mutex_unlock(&trampoline_lock);
+    JL_GC_POP();
     return result;
 }
 JL_GCC_IGNORE_STOP
@@ -347,15 +369,6 @@ struct cfuncdata_t {
     size_t flags;
 };
 
-JL_DLLEXPORT
-void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
-                                    jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
-{
-    if (unspecialized)
-        return unspecialized;
-    jl_errorf("cfunction not available in this build of Julia");
-}
-
 static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL_NOTSAFEPOINT
 {
     assert(jl_is_method_instance(mi));
@@ -363,13 +376,21 @@ static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL
 }
 
 static jl_mutex_t cfun_lock;
+
+// (get_abi_converter / method table mutating thread)
 // release jl_world_counter
-// store theFptr
+// release theFptr
 // release last_world_v
 //
+// (dispatch site)
 // acquire last_world_v
-// read theFptr
-// acquire jl_world_counter
+// acquire theFptr
+// read jl_world_counter
+//
+// The above ordering requirements are intended to guarantee that if the
+// dispatch site observes last_world == jl_world_counter then the loaded
+// fptr is consistent with both of them, meaning it was published for
+// exactly that world.
 JL_DLLEXPORT
 void *jl_get_abi_converter(jl_task_t *ct, void *data)
 {
@@ -379,7 +400,6 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
     jl_value_t *declrt = *cfuncdata->declrt;
     JL_GC_PROMISE_ROOTED(declrt);
     int specsig = cfuncdata->flags & 1;
-    size_t nargs = jl_nparams(sigt);
     jl_value_t *mi;
     jl_code_instance_t *codeinst;
     size_t world;
@@ -389,13 +409,14 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
         void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
         jl_code_instance_t *last_ci = cfuncdata->plast_codeinst ? *cfuncdata->plast_codeinst : NULL;
+        JL_GC_PROMISE_ROOTED(last_ci); // cached CI is retained by the MI cache or by an image literal root slot
         world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (world == last_world_v) {
             JL_UNLOCK(&cfun_lock);
             return f;
         }
-        mi = jl_get_specialization1((jl_tupletype_t*)sigt, world, 0);
+        mi = jl_get_specialization1((jl_tupletype_t*)sigt, world);
         if (f != NULL) {
             if (last_ci == NULL) {
                 if (mi == jl_nothing) {
@@ -426,7 +447,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         return f; // another thread fixed this up while we were away
     }
     int is_opaque_closure = 0;
-    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
+    jl_abi_t from_abi = { sigt, declrt, specsig, is_opaque_closure };
     if (codeinst == NULL) {
         // Generate an adapter to a dynamic dispatch
         if (cfuncdata->unspecialized == NULL)
@@ -447,7 +468,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
 
     cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
     cfuncdata->last_codeinst = codeinst;
-    jl_atomic_store_relaxed(&cfuncdata->fptr, f);
+    jl_atomic_store_release(&cfuncdata->fptr, f);
     jl_atomic_store_release(&cfuncdata->last_world, world);
     JL_UNLOCK(&cfun_lock);
     return f;

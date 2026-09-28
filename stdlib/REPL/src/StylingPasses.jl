@@ -14,7 +14,7 @@ export StylingPass, StylingContext, SyntaxHighlightPass, RegionHighlightPass,
 
 # Context information passed to all styling passes
 struct StylingContext
-    cursor_pos::Int
+    cursor_pos::Int     # -1 when cursor is not shown (e.g. after hitting enter)
     region_start::Int
     region_stop::Int
 end
@@ -91,7 +91,7 @@ EnclosingParenHighlightPass() = EnclosingParenHighlightPass(Face(weight=:bold, u
 function (pass::EnclosingParenHighlightPass)(input::String, ast, context::StylingContext)
     result = AnnotatedString(input)
 
-    if isempty(input) || context.cursor_pos < 1
+    if isempty(input)
         return result
     end
 
@@ -137,7 +137,7 @@ function find_enclosing_parens(content::String, ast, cursor_pos::Int)
             elseif depthchange < 0 && !isempty(paren_stack)
                 # Closing paren - pop from stack and check if cursor is inside
                 open_pos, depth, open_ptype = pop!(paren_stack)
-                if open_ptype == ptype && open_pos <= cursor_pos <= pos
+                if open_ptype == ptype && open_pos <= cursor_pos <= nextind(content, pos)
                     # Cursor is inside this paren pair - keep only innermost per type
                     # Only update if this is the first pair or if it's smaller (more inner) than existing
                     if !haskey(innermost_pairs, ptype) || (pos - open_pos) < (innermost_pairs[ptype][2] - innermost_pairs[ptype][1])

@@ -77,6 +77,17 @@
 
     @test Bool === Base.infer_return_type(isvalid, Tuple{Base.AnnotatedString, Vararg})
     @test Int === Base.infer_return_type(ncodeunits, Tuple{Base.AnnotatedString})
+
+    @testset "unannotate" begin
+        s = "some string"
+        str = Base.AnnotatedString(s, [(2:5, :A, 3)])
+        @test Base.unannotate(str) === s
+
+        str2 = SubString(str, 2:9)
+        u = Base.unannotate(str2)
+        @test u isa SubString{String}
+        @test u == SubString(s, 2:9)
+    end
 end
 
 @testset "AnnotatedChar" begin

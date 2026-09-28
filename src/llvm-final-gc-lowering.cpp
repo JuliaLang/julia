@@ -19,14 +19,16 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     // Create the GC frame.
     IRBuilder<> builder(target);
     auto gcframe_alloca = builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
-    gcframe_alloca->setAlignment(Align(16));
+    // LateLowerGCFrame records any stronger alignment needed by moved allocas.
+    gcframe_alloca->setAlignment(std::max(Align(16), target->getRetAlign().valueOrOne()));
     // addrspacecast as needed for non-0 alloca addrspace
     auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
     gcframe->takeName(target);
 
     // Zero out the GC frame.
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
-    builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16), tbaa_gcframe);
+    auto memset_instr = builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16));
+    memset_instr->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 
     target->replaceAllUsesWith(gcframe);
     target->eraseFromParent();
@@ -103,7 +105,11 @@ void FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 {
     ++QueueGCRootCount;
     assert(target->arg_size() == 1);
-    target->setCalledFunction(queueRootFunc);
+    // The site may execute with a reset region published (metadata inherited
+    // from the write barrier CancellationLowering annotated).
+    target->setCalledFunction(target->hasMetadata("julia.reset_region")
+                                  ? queueRootResetSafeFunc
+                                  : queueRootFunc);
 }
 
 void FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
@@ -132,7 +138,9 @@ bool FinalLowerGC::shouldRunFinalGC()
     should_run |= hasUse(*this, jl_intrinsics::GCAllocBytes);
     should_run |= hasUse(*this, jl_intrinsics::queueGCRoot);
     should_run |= hasUse(*this, jl_intrinsics::safepoint);
-    should_run |= (write_barrier_func && !write_barrier_func->use_empty());
+    should_run |= (object_write_barrier_func && !object_write_barrier_func->use_empty());
+    should_run |= (field_write_barrier_p11_func && !field_write_barrier_p11_func->use_empty());
+    should_run |= (field_write_barrier_p13_func && !field_write_barrier_p13_func->use_empty());
     return should_run;
 }
 
@@ -153,6 +161,10 @@ bool FinalLowerGC::runOnFunction(Function &F)
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
+    queueRootResetSafeFunc = getOrDeclare(jl_well_known::GCQueueRootResetSafe);
+    smallAllocResetSafeFunc = getOrDeclare(jl_well_known::GCSmallAllocResetSafe);
+    bigAllocResetSafeFunc = getOrDeclare(jl_well_known::GCBigAllocResetSafe);
+    allocTypedResetSafeFunc = getOrDeclare(jl_well_known::GCAllocTypedResetSafe);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
 
 
@@ -167,7 +179,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
             Value *callee = CI->getCalledOperand();
 
-            if (write_barrier_func && callee == write_barrier_func) {
+            if (isWriteBarrierFunc(callee)) {
                 assert(CI->arg_size() >= 1);
                 write_barriers.push_back(CI);
             }
@@ -193,11 +205,9 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
     // Write barriers should always be processed beforehand
     // since they may insert julia.queue_gc_root intrinsics
-    if(write_barrier_func) {
-        for (auto CI : write_barriers) {
-            lowerWriteBarrier(CI, F);
-            CI->eraseFromParent();
-        }
+    for (auto CI : write_barriers) {
+        lowerWriteBarrier(CI, F);
+        CI->eraseFromParent();
     }
 
     // Lower all calls to supported intrinsics.
@@ -240,7 +250,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
             Value *callee = CI->getCalledOperand();
             assert(callee);
-            if (write_barrier_func == callee) {
+            if (isWriteBarrierFunc(callee)) {
                 errs() << "Final-GC-lowering didn't eliminate all write barriers from '" << F.getName() << "', dumping entire module!\n\n";
                 errs() << *F.getParent() << "\n";
                 abort();

@@ -103,7 +103,7 @@ The keyword arguments are:
     the repository. Not necessarily the same as `author`, for instance if `author` emailed a patch to
     `committer` who committed it.
   * `tree_id::GitHash = GitHash()` is a git tree to use to create the commit, showing its ancestry and relationship with
-    any other history. `tree` must belong to `repo`.
+    any other history. `tree_id` must belong to `repo`.
   * `parent_ids::Vector{GitHash}=GitHash[]` is a list of commits by [`GitHash`](@ref) to use as parent
     commits for the new one, and may be empty. A commit might have multiple parents if it is a merge commit, for example.
 """

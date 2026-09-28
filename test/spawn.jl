@@ -565,6 +565,15 @@ end
 @test `foo~` == Cmd(["foo~"])        # ~ end-word: no expansion
 @test `'~'` == Cmd(["~"])            # ~ in single quotes: no expansion
 @test `"~"` == Cmd(["~"])            # ~ in double quotes: no expansion
+@test `~'root'` == Cmd(["~root"])    # quoted user name: no expansion
+@test `~"x"/a` == Cmd(["~x/a"])
+@test `~\x` == Cmd(["~x"])
+@test `~x'y'` == Cmd(["~xy"])
+@test samepath(only(`~/'a b'`.exec), joinpath(homedir(), "a b"))  # quote after the slash
+@test samepath(only(`~\
+    /a`.exec), joinpath(homedir(), "a"))
+@test `~\
+    x'y'` == Cmd(["~xy"])
 @test Base.shell_split("~/foo") == ["~/foo"]  # shell_split does not expand ~
 if !Sys.iswindows()
     me = Sys.username()
@@ -625,6 +634,16 @@ mktempdir() do dir
     # Interpolated filename in redirect
     run(`$echocmd interp > $outfile`)
     @test read(outfile, String) == "interp\n"
+
+    buf = IOBuffer()
+    run(`$echocmd tobuf > $buf`)
+    @test String(take!(buf)) == "tobuf\n"
+    @test read(`$catcmd < $(IOBuffer("frombuf"))`, String) == "frombuf"
+    open(outfile, "w") do io
+        run(`$echocmd tofile > $io`)
+    end
+    @test read(outfile, String) == "tofile\n"
+    @test (`$echocmd hi > $devnull`).handle === devnull
 
     # Interpolated arg in pipe
     word = "interp_arg"
@@ -1098,7 +1117,7 @@ end
         cmd2 = addenv(cmd, "BAR" => "bar"; inherit=true)
         @test strip(String(read(cmd2))) == "foo bar"
 
-        # Changing the environment doesn't effect the command,
+        # Changing the environment doesn't affect the command,
         # because it was baked in at `addenv()` time
         withenv("FOO" => "baz") do
             @test strip(String(read(cmd2))) == "foo bar"
@@ -1215,7 +1234,7 @@ end
     @test Base.escape_microsoft_c_args("hello world\\") == "\"hello world\\\\\""
 
     # input : A\B
-    # output: A\B"
+    # output: A\B
     @test Base.escape_microsoft_c_args("A\\B") == "A\\B"
 
     # input : [A\, B]
@@ -1297,7 +1316,7 @@ let buf = IOBuffer()
     @test String(take!(buf)) == "Hello\n"
 end
 
-# Test passing a pipe server as an addition fd
+# Test passing a pipe server as an additional fd
 @testset "Pipe server as additional fd" begin
     if !Sys.iswindows()
         # Windows CRT does not support passing server sockets as stdio fds

@@ -35,6 +35,8 @@ public
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,
+    unsetindex!,
+    unsetindex_atomic!,
 
 # collections
     IteratorEltype,
@@ -59,6 +61,7 @@ public
     get_extension,
     isambiguous,
     isexpr,
+    isfieldatomic,
     isidentifier,
     issingletontype,
     identify_package,
@@ -87,6 +90,9 @@ public
     uabs,
     mul_hi,
 
+# Numbers
+    decompose,
+
 # C interface
     cconvert,
     unsafe_convert,
@@ -113,6 +119,8 @@ public
 
 # Strings
     escape_raw_string,
+    raw_substring,
+    unannotate,
 
 # Chars
     ismalformed,

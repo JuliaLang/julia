@@ -295,7 +295,19 @@ types exist in lowered form:
 
   * `GlobalRef`
 
-    Refers to global variable `name` in module `mod`.
+    Refers to global variable `name` in module `mod`. A `GlobalRef` appears in the IR as a
+    reference to a binding that has not (yet) been resolved to any particular binding partition.
+
+  * `Core.BindingPartition`
+
+    Refers to a specific binding partition of a `GlobalRef`. A `BindingPartition` in the IR encodes
+    an optimized access to a `GlobalRef`. A `BindingPartition` can recover its owning `Core.Binding`
+    (and thus its `name`/`mod` and current value) by walking the circular partition chain to its end.
+    This form is used only where that owner is the binding the source named; a read through an
+    import is emitted as a `Core.getglobal_partition` call instead, which carries the access as a
+    `GlobalRef` so an `UndefVarError` names what the source asked for rather than the import target.
+    A `BindingPartition` may also appear nested inside a `foreigncall`/`foreignglobal` target
+    tuple, in place of the `GlobalRef` naming the library.
 
   * `SSAValue`
 
@@ -321,13 +333,21 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Function call (static dispatch). `args[1]` is the MethodInstance to call, `args[2:end]` are the
     arguments (including the function that is being called, at `args[2]`).
 
+  * `invoke_modify`
+
+    Read-modify-write call (`modifyfield!`, `modifyglobal!` or its resolved form
+    `Core.modifyglobal_partition`, `Core.memoryrefmodify!`, or the `atomic_pointermodify`
+    intrinsic) whose reduce function is statically dispatched. `args[1]`
+    is the CodeInstance for that function, `args[2:end]` are as for the `call`.
+
   * `static_parameter`
 
     Reference a static parameter by index.
 
   * `=`
 
-    Assignment. In the IR, the first argument is always a `SlotNumber` or a `GlobalRef`.
+    Assignment. In the IR, the first argument must be a `SlotNumber`, a `GlobalRef`, or a
+    `Core.BindingPartition`. For the latter two, equivalent to a call to `setglobal!` or `Core.setglobal_partition`, respectively.
 
   * `method`
 
@@ -492,7 +512,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[1]` : name
 
-        The expression that'll be parsed for the foreign function.
+        The expression that'll be parsed for the foreign function. When it names a library as
+        well as a symbol, it is an `Expr(:tuple, name, library)`. That tuple is not an operand
+        position, and it has special semantics (it accepts non-constant `GlobalRef`, as well as
+        `Core.BindingPartition` after optimizations run, and evaluates it an unspecified number of
+        times in at least one world encountered at runtime).
 
       * `args[2]::Type` : RT
 
@@ -619,7 +643,7 @@ for important details on how to modify these fields safely.
 
   * `backedges`
 
-    We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after a new method definitions.
+    We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after new method definitions.
     This works by keeping a list of the other `MethodInstance` that have been inferred or optimized to contain a possible call to this `MethodInstance`.
     Those optimization results might be stored somewhere in the `cache`, or it might have been the result of something we didn't want to cache, such as constant propagation.
     Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinel value for max_world anyways).
@@ -627,6 +651,10 @@ for important details on how to modify these fields safely.
   * `cache`
 
     Cache of `CodeInstance` objects that share this template instantiation.
+
+  * `precompile`
+
+    If set, this `MethodInstance` will be compiled and added to the output system image.
 
 ### CodeInstance
 
@@ -649,7 +677,7 @@ for important details on how to modify these fields safely.
     May contain a cache of the inferred source for this function,
     or it could be set to `nothing` to just indicate `rettype` is inferred.
 
-  * `ftpr`
+  * `fptr`
 
     The generic jlcall entry point.
 

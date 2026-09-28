@@ -1,0 +1,118 @@
+From cb6acd394ee3d852b94ccd5e6236c15168992c96 Mon Sep 17 00:00:00 2001
+From: Keno Fischer <Keno@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 02:26:43 +0000
+Subject: [PATCH] Fix MinGW Windows type errors
+
+Access LARGE_INTEGER through QuadPart, use SIZE_T for mapped view sizes, and pass the address type required by NtMapViewOfSection so the Windows remapping and incremental-copy code compiles as C with MinGW.
+
+Co-authored-by: Codex <codex@openai.com>
+---
+ libraries/liblmdb/mdb.c | 30 ++++++++++++++++++++++++------
+ 1 file changed, 24 insertions(+), 6 deletions(-)
+
+diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
+index 6802cc7..4da2542 100644
+--- a/libraries/liblmdb/mdb.c
++++ b/libraries/liblmdb/mdb.c
+@@ -66,7 +66,7 @@ typedef enum _SECTION_INHERIT {
+ } SECTION_INHERIT;
+ 
+ typedef NTSTATUS (WINAPI NtMapViewOfSectionFunc)
+-  (IN PHANDLE sh, IN HANDLE ph,
++  (IN HANDLE sh, IN HANDLE ph,
+   IN OUT PVOID *addr, IN ULONG_PTR zbits,
+   IN SIZE_T cs, IN OUT PLARGE_INTEGER off OPTIONAL,
+   IN OUT PSIZE_T vs, IN SECTION_INHERIT ih,
+@@ -6928,7 +6928,7 @@ mdb_rpage_get(MDB_txn *txn, pgno_t pg0, int numpgs, MDB_page **ret, MDB_page **e
+ #define SET_OFF(off,val)	off.QuadPart = val
+ #define MAP(rc,env,addr,len,off)	\
+ 	addr = NULL; \
+-	rc = NtMapViewOfSection(env->me_fmh, GetCurrentProcess(), &addr, 0, \
++	rc = NtMapViewOfSection(env->me_fmh, GetCurrentProcess(), (PVOID *)&(addr), 0, \
+ 		len, &off, &len, ViewUnmap, (env->me_flags & MDB_RDONLY) ? 0 : MEM_RESERVE, PAGE_READONLY); \
+ 	if (rc) rc = mdb_nt2win32(rc)
+ #else
+@@ -11608,13 +11608,16 @@ mdb_env_copyfd0(MDB_env *env, HANDLE fd)
+ 	char *ptr;
+ #ifdef _WIN32
+ 	DWORD len, w2;
++#if MDB_RPAGE_CACHE
++	SIZE_T mlen;
++#endif
+ #else
+ 	ssize_t len;
+ 	size_t w2;
+ #endif
+ #if MDB_RPAGE_CACHE
+ #ifdef _WIN32
+-	LARGE_INTEGER	off = 0;
++	LARGE_INTEGER	off;
+ #else
+ 	off_t	off = 0;
+ #endif
+@@ -11678,7 +11681,7 @@ mdb_env_copyfd0(MDB_env *env, HANDLE fd)
+ 	}
+ #if MDB_RPAGE_CACHE
+ 	if (MDB_REMAPPING(env->me_flags)) {
+-		off = wsize;
++		SET_OFF(off, wsize);
+ 	}
+ #endif
+ 	wsize = w3 - wsize;
+@@ -11686,7 +11689,12 @@ mdb_env_copyfd0(MDB_env *env, HANDLE fd)
+ 		w2 = (wsize > MAX_WRITE) ? MAX_WRITE : wsize;
+ #if MDB_RPAGE_CACHE
+ 		if (MDB_REMAPPING(env->me_flags)) {
++#ifdef _WIN32
++			mlen = w2;
++			MAP(rc, env, ptr, mlen, off);
++#else
+ 			MAP(rc, env, ptr, w2, off);
++#endif
+ 		}
+ #endif
+ 		DO_WRITE(rc, fd, ptr, w2, len);
+@@ -11704,7 +11712,11 @@ mdb_env_copyfd0(MDB_env *env, HANDLE fd)
+ 			wsize -= len;
+ #if MDB_RPAGE_CACHE
+ 			if (MDB_REMAPPING(env->me_flags)) {
++#ifdef _WIN32
++				off.QuadPart += len;
++#else
+ 				off += len;
++#endif
+ 			}
+ #endif
+ 			continue;
+@@ -11946,7 +11958,8 @@ mdb_env_incr_loadfd(MDB_env *env, HANDLE fd)
+ 		return ENOMEM;
+ 
+ #ifdef _WIN32
+-		SetFilePointerEx(env->me_fd, 0, NULL, FILE_BEGIN);
++		off.QuadPart = 0;
++		SetFilePointerEx(env->me_fd, off, NULL, FILE_BEGIN);
+ #else
+ 		lseek(env->me_fd, 0, SEEK_SET);
+ #endif
+@@ -12011,12 +12024,17 @@ mdb_env_incr_loadfd(MDB_env *env, HANDLE fd)
+ 			ptr += rlen;
+ 			rsize -= rlen;
+ 		}
++#ifdef _WIN32
++		off.QuadPart = (LONGLONG)(pg-prevpg-numprev) * env->me_psize;
++#else
+ 		off = (pg-prevpg-numprev) * env->me_psize;
++#endif
+ 		rsize = numpgs * env->me_psize;
+-		if (off) {
+ #ifdef _WIN32
++		if (off.QuadPart) {
+ 			SetFilePointerEx(env->me_fd, off, NULL, FILE_CURRENT);
+ #else
++		if (off) {
+ 			lseek(env->me_fd, off, SEEK_CUR);
+ #endif
+ 		}
+-- 
+2.54.0
+

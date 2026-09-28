@@ -271,8 +271,6 @@ LoweringError:
 #= line 1 =# - invalid syntax: unknown form `nrow` or number of arguments 2
 Expression:
   (nrow 1 1)
-Containing expressions:
-  (ncat 3 (nrow 1 (nrow 1 1)))
 
 ########################################
 # Error: bad nrow nesting
@@ -290,8 +288,6 @@ LoweringError:
 #= line 1 =# - 2D `nrow` cannot be mixed with `row` in `ncat`
 Expression:
   (nrow 2 (row 1))
-Containing expressions:
-  (ncat 3 (nrow 2 (row 1)))
 
 ########################################
 # Error: bad nrow nesting
@@ -308,8 +304,6 @@ LoweringError:
 #= line 1 =# - Badly nested rows in `ncat`
 Expression:
   (row 1)
-Containing expressions:
-  (ncat 3 (row (row 1)))
 
 ########################################
 # Simple getindex

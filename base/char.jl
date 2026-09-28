@@ -263,7 +263,7 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 ==(x::Char, y::Char) = bitcast(UInt32, x) == bitcast(UInt32, y)
 isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_finalizer(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
+    hash_finalizer(((bitcast(UInt32, x) +% UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x)::Char, Char(y)::Char)
@@ -271,8 +271,9 @@ isless(x::AbstractChar, y::AbstractChar) = isless(Char(x)::Char, Char(y)::Char)
 hash(x::AbstractChar, h::UInt) = hash(Char(x)::Char, h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
+@inline -%(x::AbstractChar, y::AbstractChar) = Int(x) -% Int(y)
 @inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
-@inline function -(x::T, y::Integer) where {T<:AbstractChar}
+@inline function -%(x::T, y::Integer) where {T<:AbstractChar}
     if x isa Char
         u = Int32((bitcast(UInt32, x) >> 24) % Int8)
         if u >= 0 # inline the runtime fast path
@@ -282,7 +283,7 @@ widen(::Type{T}) where {T<:AbstractChar} = T
     end
     return T(Int32(x) - Int32(y))
 end
-@inline function +(x::T, y::Integer) where {T<:AbstractChar}
+@inline function +%(x::T, y::Integer) where {T<:AbstractChar}
     if x isa Char
         u = Int32((bitcast(UInt32, x) >> 24) % Int8)
         if u >= 0 # inline the runtime fast path
@@ -292,7 +293,11 @@ end
     end
     return T(Int32(x) + Int32(y))
 end
-@inline +(x::Integer, y::AbstractChar) = y + x
+@inline +%(x::Integer, y::AbstractChar) = y + x
+
+-(x::AbstractChar, y::Integer) = x -% y
++(x::AbstractChar, y::Integer) = x +% y
++(x::Integer, y::AbstractChar) = x +% y
 
 # `print` should output UTF-8 by default for all AbstractChar types.
 # (Packages may implement other IO subtypes to specify different encodings.)

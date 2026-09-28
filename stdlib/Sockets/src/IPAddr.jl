@@ -139,7 +139,7 @@ function ipv6_field(ip::IPv6,i)
 end
 
 show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
-# RFC 5952 compliant show function
+# RFC 5952 compliant print function
 # https://tools.ietf.org/html/rfc5952
 function print(io::IO,ip::IPv6)
     i = 8

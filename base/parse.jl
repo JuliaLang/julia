@@ -81,7 +81,7 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
             c, i = iterate(s,i)::Tuple{Char, Int}
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
-                c, i, j = parseint_iterate(s,i,endpos)
+                _c, _i, j = parseint_iterate(s,i,endpos)
             end
         else
             base = 10
@@ -106,6 +106,7 @@ end
         _A <= _c <= _Z ? _c-_A+ UInt32(10) :
         _a <= _c <= _z ? _c-_a+a           :
         base
+    return d
 end
 
 

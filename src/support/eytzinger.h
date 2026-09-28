@@ -14,29 +14,49 @@
 extern "C" {
 #endif
 
-// Search an Eytzinger tree for the predecessor boundary of `addr`.
-// Returns the tree index (0-based) of the predecessor, or `n`
-// (the sentinel) if `addr` is outside all ranges.
-// `items` has `n + 1` entries (n boundaries + 1 sentinel).
-static inline size_t _eyt_obj_idx(uintptr_t addr, uintptr_t *tree, size_t n,
+// Search an Eytzinger tree for the largest boundary strictly less than the
+// query value `q`. Returns the tree index (0-based) of that boundary, or `n`
+// (the sentinel) if there is none.
+// `tree` has `n + 1` entries (n boundaries + 1 sentinel).
+//
+// The boundaries are encoded by rebuild_tree (see there): a start boundary `s`
+// is stored as `s + 2` and an end boundary `e` as `e + 1`. Querying with
+// `q = addr + 1` (see _eyt_addr_query) makes the strictly-less-than
+// predecessor the range's start boundary exactly when `start < addr <= end`.
+//
+// Containment is start-exclusive, end-inclusive because queries are object
+// pointers into heap-image blobs (the convention staticdata.c asserts as
+// `base < obj && obj <= base + size`): a blob's base is its first object's
+// *tag* word, never an object — but it can equal the one-past-tag value
+// pointer of a zero-size singleton bump-allocated just before the blob
+// (#62521). Symmetrically, a trailing zero-size singleton's value pointer
+// equals the blob's end.
+static inline size_t _eyt_obj_idx(uintptr_t q, uintptr_t *tree, size_t n,
                                   uintptr_t min_addr, uintptr_t max_addr) JL_NOTSAFEPOINT
 {
     if (n == 0)
         return n;
     assert(n % 2 == 0 && "Eytzinger tree not even length!");
-    if (addr <= min_addr || addr > max_addr)
+    if (q <= min_addr || q > max_addr)
         return n;
     size_t k = 1;
     while (k <= n) {
-        int greater = (addr > tree[k - 1]);
+        int greater = (q > tree[k - 1]);
         k <<= 1;
         k |= greater;
     }
     k >>= (__builtin_ctzll(k) + 1);
     assert(k != 0);
     assert(k <= n && "Eytzinger tree index out of bounds!");
-    assert(tree[k - 1] < addr && "Failed to find lower bound for object!");
+    assert(tree[k - 1] < q && "Failed to find lower bound for object!");
     return k - 1;
+}
+
+// Map a 4-byte-aligned address to the query value used to test containment in
+// the encoded tree. See _eyt_obj_idx and rebuild_tree for the encoding.
+static inline uintptr_t _eyt_addr_query(uintptr_t addr) JL_NOTSAFEPOINT
+{
+    return addr + 1;
 }
 
 typedef struct {
@@ -63,16 +83,17 @@ typedef struct eyt_tree_t {
 
 JL_DLLEXPORT void eyt_tree_init(eyt_tree_t *t) JL_NOTSAFEPOINT;
 
-// Add a [start, end) range with caller-defined data and rebuild the tree.
-// Thread-safe for concurrent access.
+// Add a range covering the object pointers in (start, end] with caller-defined
+// data and rebuild the tree. Thread-safe for concurrent access.
 JL_DLLEXPORT void eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end, void *data) JL_NOTSAFEPOINT;
 
-// Returns whether `addr` is inside any registered range.
+// Returns whether `addr` is inside any registered range (start-exclusive,
+// end-inclusive; see _eyt_addr_query).
 // Thread-safe for concurrent readers and writers.
 static inline int eyt_tree_is_in_range(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFEPOINT
 {
     uv_rwlock_rdlock(&t->rwlock);
-    size_t idx = _eyt_obj_idx(addr, (uintptr_t*)t->tree.items, t->n, t->min_addr, t->max_addr);
+    size_t idx = _eyt_obj_idx(_eyt_addr_query(addr), (uintptr_t*)t->tree.items, t->n, t->min_addr, t->max_addr);
     int result = ((uintptr_t)t->tree.items[idx] & 1) == 0;
     uv_rwlock_rdunlock(&t->rwlock);
     return result;
@@ -83,7 +104,7 @@ static inline int eyt_tree_is_in_range(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFE
 static inline void *eyt_tree_find_data(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFEPOINT
 {
     uv_rwlock_rdlock(&t->rwlock);
-    size_t idx = _eyt_obj_idx(addr, (uintptr_t*)t->tree.items, t->n, t->min_addr, t->max_addr);
+    size_t idx = _eyt_obj_idx(_eyt_addr_query(addr), (uintptr_t*)t->tree.items, t->n, t->min_addr, t->max_addr);
     void *result = t->idxs.items[idx];
     uv_rwlock_rdunlock(&t->rwlock);
     return result;

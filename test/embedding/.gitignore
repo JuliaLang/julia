@@ -1,2 +1,6 @@
+/asan-embedding
+/asan-embedding-plain
 /embedding
 /embedding-debug
+/libdl-embedding
+/libdl-embedding-debug

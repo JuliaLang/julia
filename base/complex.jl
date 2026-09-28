@@ -105,7 +105,7 @@ reim(z) = (real(z), imag(z))
     real(T::Type)
 
 Return the type that represents the real part of a value of type `T`.
-e.g: for `T == Complex{R}`, returns `R`.
+e.g., for `T == Complex{R}`, returns `R`.
 Equivalent to `typeof(real(zero(T)))`.
 
 # Examples
@@ -120,7 +120,8 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
-real(::Type{Union{}}, slurp...) = Union{}
+real(::Type{Union{}}) = Union{}
+real(::Type{Union{}}, slurp...) = throw(MethodError(real, (Union{}, slurp...)))
 
 """
     isreal(x)::Bool
@@ -188,7 +189,10 @@ Union{Missing, Complex{Int64}}
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
-complex(::Type{Union{}}, slurp...) = Union{}
+complex(::Type{Union{}}) = Union{}
+# Keep the slurp signature for bottom-type dispatch pruning (typemap_slurp_search),
+# but do not let invalid arities contribute a successful result to inference.
+complex(::Type{Union{}}, slurp...) = throw(MethodError(complex, (Union{}, slurp...)))
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
@@ -843,15 +847,23 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
         else
             r = -zᵣ
             θ = copysign(Tf(π),imag(z))
-            rᵖ = r^pᵣ * exp(-pᵢ*θ)
-            ϕ = pᵣ*θ + pᵢ*log(r)
+            logr = log(r)
+            re_log, im_phase = pᵣ*logr, pᵢ*θ
+            lim = log(floatmax(Tf)) - one(Tf)
+            rᵖ = (abs(re_log) < lim && abs(im_phase) < lim) ?
+                r^pᵣ * exp(-im_phase) : exp(re_log - im_phase)
+            ϕ = pᵣ*θ + pᵢ*logr
         end
     else
         pᵣ, pᵢ = reim(p)
         r = abs(z)
         θ = angle(z)
-        rᵖ = r^pᵣ * exp(-pᵢ*θ)
-        ϕ = pᵣ*θ + pᵢ*log(r)
+        logr = log(r)
+        re_log, im_phase = pᵣ*logr, pᵢ*θ
+        lim = log(floatmax(Tf)) - one(Tf)
+        rᵖ = (abs(re_log) < lim && abs(im_phase) < lim) ?
+            r^pᵣ * exp(-im_phase) : exp(re_log - im_phase)
+        ϕ = pᵣ*θ + pᵢ*logr
     end
 
     if isfinite(ϕ)

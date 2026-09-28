@@ -48,7 +48,7 @@ function _nloops(N::Int, itersym::Symbol, esc_rng::Bool, rangeexpr::Expr, args::
         throw(ArgumentError("second argument must be an anonymous function expression to compute the range"))
     end
     if !(1 <= length(args) <= 3)
-        throw(ArgumentError("number of arguments must be 1 ≤ length(args) ≤ 3, got $nargs"))
+        throw(ArgumentError("number of arguments must be 1 ≤ length(args) ≤ 3, got $(length(args))"))
     end
     body = args[end]
     ex = Expr(:escape, body)
@@ -236,7 +236,7 @@ end
 
 Generates a sequence of `if ... elseif ... else ... end` statements. For example:
 
-    @nif 3 d->(i_d >= size(A,d)) d->(error("Dimension ", d, " too big")) d->println("All OK")
+    @nif 3 d->(i_d > size(A,d)) d->(error("Dimension ", d, " too big")) d->println("All OK")
 
 would generate:
 

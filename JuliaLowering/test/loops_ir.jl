@@ -41,7 +41,7 @@ end
 13  (return %₁₂)
 
 ########################################
-# While loop with with break and continue
+# While loop with break and continue
 while cond
     body1
     break

@@ -77,7 +77,7 @@ LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs) {
             if (backslashes % 2)
                 *(out - 1) = '"'; // replace \ with "
             else
-                in_quotes = !in_quotes; // treat as quote delimater
+                in_quotes = !in_quotes; // treat as quote delimiter
             empty = 0;
             break;
         case '\t':

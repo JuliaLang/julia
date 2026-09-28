@@ -1,16 +1,22 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(loop-mssa(JuliaLICM)),verify' -verify-memoryssa -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 @tag = external addrspace(10) global {}, align 16
 
-declare void @julia.write_barrier({}*, ...)
+declare void @julia.object_write_barrier({} addrspace(10)*, ...)
+declare void @julia.field_write_barrier.p11({} addrspace(10)*, {} addrspace(11)*, {} addrspace(10)*, ...)
+declare void @julia.field_write_barrier.p13({} addrspace(10)*, {} addrspace(13)*, {} addrspace(10)*, ...)
+declare {} addrspace(13)* @julia.gc_loaded({} addrspace(10)*, i8*)
 
 declare {}*** @julia.get_pgcstack()
 
 declare token @llvm.julia.gc_preserve_begin(...)
 
 declare void @llvm.julia.gc_preserve_end(token)
+
+declare void @use({} addrspace(10)*)
 
 ; COM: check basic preserve hoist/sink functionality
 ; CHECK-LABEL: @hoist_sink_preserves
@@ -74,6 +80,87 @@ return:
 return2:
 ; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %preserve_token)
 ; CHECK-NEXT: ret void
+  ret void
+}
+
+; COM: a loop-varying slot must not block hoisting; the hoisted barrier becomes an object barrier
+; CHECK-LABEL: @hoist_write_barrier_varying_slot
+define void @hoist_write_barrier_varying_slot({} addrspace(10)* %obj, {} addrspace(10)* %child, i1 %ret) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %derived = addrspacecast {} addrspace(10)* %obj to {} addrspace(11)*
+; CHECK: br label %preheader
+  br label %preheader
+; CHECK: preheader:
+preheader:
+; CHECK-NEXT: call void {{.*}}@julia.object_write_barrier(ptr addrspace(10) %obj, ptr addrspace(10) %child)
+; CHECK-NEXT: br label %loop
+  br label %loop
+; CHECK: loop:
+loop:
+; CHECK-NOT: write_barrier
+  %i = phi i64 [ 0, %preheader ], [ %inext, %loop ]
+  %slot = getelementptr inbounds {} addrspace(10)*, {} addrspace(11)* %derived, i64 %i
+  call void ({} addrspace(10)*, {} addrspace(11)*, {} addrspace(10)*, ...) @julia.field_write_barrier.p11({} addrspace(10)* %obj, {} addrspace(11)* %slot, {} addrspace(10)* %child)
+  %inext = add i64 %i, 1
+  br i1 %ret, label %return, label %loop
+return:
+; CHECK: ret void
+  ret void
+}
+
+; COM: Loaded slots into Memory data hoist the same way
+; CHECK-LABEL: @hoist_write_barrier_varying_slot_loaded
+define void @hoist_write_barrier_varying_slot_loaded({} addrspace(10)* %obj, {} addrspace(10)* %child, i8* %data, i1 %ret) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %ldata = call {} addrspace(13)* @julia.gc_loaded({} addrspace(10)* %obj, i8* %data)
+; CHECK: br label %preheader
+  br label %preheader
+; CHECK: preheader:
+preheader:
+; CHECK-NEXT: call void {{.*}}@julia.object_write_barrier(ptr addrspace(10) %obj, ptr addrspace(10) %child)
+; CHECK-NEXT: br label %loop
+  br label %loop
+; CHECK: loop:
+loop:
+; CHECK-NOT: write_barrier
+  %i = phi i64 [ 0, %preheader ], [ %inext, %loop ]
+  %slot = getelementptr inbounds {} addrspace(10)*, {} addrspace(13)* %ldata, i64 %i
+  call void ({} addrspace(10)*, {} addrspace(13)*, {} addrspace(10)*, ...) @julia.field_write_barrier.p13({} addrspace(10)* %obj, {} addrspace(13)* %slot, {} addrspace(10)* %child)
+  %inext = add i64 %i, 1
+  br i1 %ret, label %return, label %loop
+return:
+; CHECK: ret void
+  ret void
+}
+
+; COM: a multi-pair field barrier with varying slots demotes to one object barrier
+; COM: carrying all of its children
+; CHECK-LABEL: @hoist_write_barrier_varying_slot_pairs
+define void @hoist_write_barrier_varying_slot_pairs({} addrspace(10)* %obj, {} addrspace(10)* %c1, {} addrspace(10)* %c2, i1 %ret) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %derived = addrspacecast {} addrspace(10)* %obj to {} addrspace(11)*
+; CHECK: br label %preheader
+  br label %preheader
+; CHECK: preheader:
+preheader:
+; CHECK-NEXT: call void {{.*}}@julia.object_write_barrier(ptr addrspace(10) %obj, ptr addrspace(10) %c1, ptr addrspace(10) %c2)
+; CHECK-NEXT: br label %loop
+  br label %loop
+; CHECK: loop:
+loop:
+; CHECK-NOT: write_barrier
+  %i = phi i64 [ 0, %preheader ], [ %inext, %loop ]
+  %ioff = add i64 %i, 8
+  %s1 = getelementptr inbounds i8, {} addrspace(11)* %derived, i64 %i
+  %s2 = getelementptr inbounds i8, {} addrspace(11)* %derived, i64 %ioff
+  call void ({} addrspace(10)*, {} addrspace(11)*, {} addrspace(10)*, ...) @julia.field_write_barrier.p11({} addrspace(10)* %obj, {} addrspace(11)* %s1, {} addrspace(10)* %c1, {} addrspace(11)* %s2, {} addrspace(10)* %c2)
+  %inext = add i64 %i, 1
+  br i1 %ret, label %return, label %loop
+return:
+; CHECK: ret void
   ret void
 }
 
@@ -172,3 +259,95 @@ attributes #3 = { inaccessiblemem_or_argmemonly }
 !5 = !{!"jtbaa_data", !6, i64 0}
 !6 = !{!"jtbaa", !7, i64 0}
 !7 = !{!"jtbaa"}
+
+; COM: Keep loop-local preserve tokens inside their defining loop, while still
+; COM: sinking ends for tokens defined outside all loops to every exit.
+; CHECK-LABEL: @nested_loop_preserves
+define void @nested_loop_preserves({} addrspace(10)* %obj1, {} addrspace(10)* %obj2, i1 %inner_exit, i1 %outer_exit, i1 %err) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %current_task = bitcast {}*** %pgcstack to {}**
+  %global_token = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %obj1)
+  br label %outer
+; CHECK: outer:
+outer:
+  %obj = phi {} addrspace(10)* [ %obj1, %top ], [ %obj2, %outer.latch ]
+  br label %inner.preheader
+; CHECK: inner.preheader:
+; CHECK-NEXT: %preserve_token = call token (...) @llvm.julia.gc_preserve_begin
+; CHECK-NEXT: br label %inner
+inner.preheader:
+  br label %inner
+; CHECK: inner:
+inner:
+; CHECK-NOT: call token (...) @llvm.julia.gc_preserve_begin
+  %preserve_token = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %obj)
+; CHECK-NEXT: call void @use(ptr addrspace(10) %obj)
+; CHECK-NEXT: call void @use(ptr addrspace(10) %obj1)
+  call void @use({} addrspace(10)* %obj)
+  call void @use({} addrspace(10)* %obj1)
+; CHECK-NOT: call void @llvm.julia.gc_preserve_end
+  call void @llvm.julia.gc_preserve_end(token %preserve_token)
+  call void @llvm.julia.gc_preserve_end(token %global_token)
+; CHECK-NEXT: br i1 %err
+  br i1 %err, label %fail, label %inner.latch
+; CHECK: inner.latch:
+inner.latch:
+  br i1 %inner_exit, label %outer.latch, label %inner
+; CHECK: outer.latch:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK-NEXT: br i1 %outer_exit
+outer.latch:
+  br i1 %outer_exit, label %return, label %outer
+; CHECK: fail:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %global_token)
+; CHECK-NOT: @llvm.julia.gc_preserve_end(token %preserve_token)
+; CHECK: ret void
+fail:
+  ret void
+; CHECK: return:
+; CHECK-NEXT: call void @llvm.julia.gc_preserve_end(token %global_token)
+; CHECK-NEXT: ret void
+return:
+  ret void
+}
+
+; Invariant slots retain the field barrier when hoisted.
+; CHECK-LABEL: @hoist_write_barrier_invariant_slot
+; CHECK: preheader:
+; CHECK: call void {{.*}}@julia.field_write_barrier.p11
+; CHECK: br label %loop
+; CHECK: loop:
+; CHECK-NOT: call void {{.*}}write_barrier
+; CHECK: ret void
+define void @hoist_write_barrier_invariant_slot(ptr addrspace(10) %parent, ptr addrspace(10) %child, i1 %done) {
+  %slot = addrspacecast ptr addrspace(10) %parent to ptr addrspace(11)
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  call void (ptr addrspace(10), ptr addrspace(11), ptr addrspace(10), ...) @julia.field_write_barrier.p11(ptr addrspace(10) %parent, ptr addrspace(11) %slot, ptr addrspace(10) %child)
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; Every child must be invariant, including children in variadic pairs.
+; CHECK-LABEL: @keep_write_barrier_varying_child
+; CHECK: preheader:
+; CHECK-NOT: call void {{.*}}write_barrier
+; CHECK: loop:
+; CHECK: call void {{.*}}@julia.field_write_barrier.p11
+; CHECK: ret void
+define void @keep_write_barrier_varying_child(ptr addrspace(10) %parent, ptr addrspace(10) %child, i1 %done) {
+  %slot = addrspacecast ptr addrspace(10) %parent to ptr addrspace(11)
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  %other = load ptr addrspace(10), ptr addrspace(11) %slot
+  call void (ptr addrspace(10), ptr addrspace(11), ptr addrspace(10), ...) @julia.field_write_barrier.p11(ptr addrspace(10) %parent, ptr addrspace(11) %slot, ptr addrspace(10) %child, ptr addrspace(11) %slot, ptr addrspace(10) %other)
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}

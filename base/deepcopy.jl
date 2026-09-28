@@ -34,7 +34,8 @@ function deepcopy(@nospecialize x)
     return deepcopy_internal(x, IdDict())::typeof(x)
 end
 
-deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex},
+deepcopy_internal(x::Union{Symbol,Core.MethodInstance,Method,GlobalRef,DataType,Union,UnionAll,Task,Regex,
+                           Core.CancellationTokenSource},
                   stackdict::IdDict) = x
 deepcopy_internal(x::Tuple, stackdict::IdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
@@ -177,6 +178,24 @@ function deepcopy_internal(x::GenericCondition, stackdict::IdDict)
         return stackdict[x]::typeof(x)
     end
     y = typeof(x)(deepcopy_internal(x.lock, stackdict))
+    stackdict[x] = y
+    return y
+end
+
+# Core.WaitEntryN has a hidden variable-length slot tail that the generic
+# path above - which allocates only the fixed datatype size - cannot
+# reproduce (the GC would then scan a nonexistent tail). Allocate through
+# the runtime allocator instead. The slots are transient registration
+# state, meaningless outside the live wait registries (a copy is not
+# enqueued anywhere), so the copy gets fresh, free slots
+# (owner = nothing, next = nothing, aux = 0) rather than copies of the
+# originals; the `task` reference is kept as-is (`deepcopy` of a Task is
+# the identity, see above).
+function deepcopy_internal(x::Core.WaitEntryN, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    y = WaitEntryN((@atomic :monotonic x.task), _nslots(x))
     stackdict[x] = y
     return y
 end

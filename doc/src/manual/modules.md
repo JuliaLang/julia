@@ -391,7 +391,7 @@ WARNING: import of M1.x into Main conflicts with an existing identifier; ignored
 ```
 
 The resolution of an implicit binding depends on the set of all `using`'d modules visible
-in the current world age. See [the manual chapter on world age](@ref man-worldage) for more
+in the current world age. See [the manual chapter on world age](@ref man-world-age) for more
 details.
 
 ### Default top-level definitions and bare modules

@@ -213,7 +213,7 @@ end
 8   (return %₇)
 
 ########################################
-# Destructuring with with non-trailing rhs `...` does not use tuple elimination
+# Destructuring with non-trailing rhs `...` does not use tuple elimination
 # (though we could do it for the `x = a` part here)
 let
     (x, y, z) = (a, rhs..., b)

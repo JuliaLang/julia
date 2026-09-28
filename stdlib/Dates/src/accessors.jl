@@ -86,10 +86,10 @@ function isoyear(dt::DateTime)
     thismonth = Month(dt)
     weeknumber = week(dt)
     if weeknumber >= 52 && thismonth.value == 1
-        # If it is january, then its the iso year from before
+        # If it is january, then it's the iso year from before
         return Year(thisyear.value - 1)
     elseif weeknumber == 1 && thismonth.value == 12
-        # If it is december, then its the next year
+        # If it is december, then it's the next year
         return Year(thisyear.value + 1)
     else
         return thisyear

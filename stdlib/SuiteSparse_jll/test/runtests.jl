@@ -8,4 +8,24 @@ using Test, SuiteSparse_jll
 # This should be safe and unnecessary since we specify exact version of the BB JLL.
 @testset "SuiteSparse_jll" begin
     @test ccall((:SuiteSparse_version, libsuitesparseconfig), Cint, (Ptr{Cint},), C_NULL) > 7000
+
+    # Preserve the JLLWrappers path compatibility accessors used by packages.
+    for product in (
+        :libamd,
+        :libbtf,
+        :libcamd,
+        :libccolamd,
+        :libcholmod,
+        :libcolamd,
+        :libklu,
+        :libldl,
+        :librbio,
+        :libspqr,
+        :libsuitesparseconfig,
+        :libumfpack,
+    )
+        path = getfield(SuiteSparse_jll, Symbol(product, "_path"))
+        get_path = getfield(SuiteSparse_jll, Symbol("get_", product, "_path"))
+        @test get_path() == path
+    end
 end

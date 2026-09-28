@@ -25,7 +25,7 @@ include("parser.jl")
 include("green_node.jl")
 include("syntax_node.jl")
 if VERSION >= v"1.12"
-    include("syntax_graph.jl")
+    include("syntax.jl")
 end
 include("diagnostics.jl")
 include("parser_api.jl")

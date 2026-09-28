@@ -447,7 +447,7 @@ function match(re::Regex, str::DenseUTF8String, idx::Integer,
     cap = Union{Nothing,T}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
                                         SubString(str, unsafe_load(p,2i+1)+1,
                                                   prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
-    off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
+    off = Int[ unsafe_load(p,2i+1) == PCRE.UNSET ? 0 : unsafe_load(p,2i+1)+1 for i=1:n ]
     result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
     PCRE.free_match_data(data)
     return result
@@ -455,12 +455,10 @@ end
 
 function _annotatedmatch(m::RegexMatch{S}, str::AnnotatedString{S}) where {S<:AbstractString}
     RegexMatch{AnnotatedString{S}}(
-        (@inbounds SubString{AnnotatedString{S}}(
-            str, m.match.offset, m.match.ncodeunits, Val(:noshift))),
+        (@inbounds raw_substring(str, m.match.offset + 1, m.match.ncodeunits)),
         Union{Nothing,SubString{AnnotatedString{S}}}[
             if !isnothing(cap)
-                (@inbounds SubString{AnnotatedString{S}}(
-                    str, cap.offset, cap.ncodeunits, Val(:noshift)))
+                (@inbounds raw_substring(str, cap.offset + 1, cap.ncodeunits))
             end for cap in m.captures],
         m.offset, m.offsets, m.regex)
 end
