@@ -182,13 +182,24 @@ function peekprev(stream::IO)
 end
 
 """
-Return true if `c` is a "word character" for the purpose of the CommonMark
-emphasis rules, which define it as neither unicode whitespace nor unicode
-punctuation (<https://spec.commonmark.org/0.31.2/#left-flanking-delimiter-run>,
-where "punctuation" includes the symbol categories). Letters and numbers are
-exactly that complement for every character the spec test suite exercises.
+Return true if `c` is a Unicode whitespace character as defined by CommonMark.
 """
-isword(c::Char) = isletter(c) || isnumeric(c)
+ismarkdownspace(c::Char) =
+    c in ('\t', '\n', '\f', '\r') || Base.Unicode.category_code(c) == Base.Unicode.UTF8PROC_CATEGORY_ZS
+
+"""
+Return true if `c` is neither a Unicode whitespace character nor a Unicode
+punctuation character, as those terms are defined by CommonMark.
+"""
+function isword(c::Char)
+    # the spec replaces NUL with U+FFFD (So), so it counts as punctuation
+    (c == '\0' || ismarkdownspace(c)) && return false
+    cat = Base.Unicode.category_code(c)
+    # PC..SO are the P and S categories; above CO are malformed or out-of-range characters,
+    # treated like NUL
+    return !(Base.Unicode.UTF8PROC_CATEGORY_PC <= cat <= Base.Unicode.UTF8PROC_CATEGORY_SO ||
+             cat > Base.Unicode.UTF8PROC_CATEGORY_CO)
+end
 
 """
 Parse a symmetrical delimiter which wraps words.
@@ -215,12 +226,12 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString;
         startswith(stream, delimiter^n) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
-        !eof(stream) && isspace(peek(stream, Char)) && return nothing
+        !eof(stream) && ismarkdownspace(peek(stream, Char)) && return nothing
 
         buffer = IOBuffer()
         for char in readeach(stream, Char)
             write(buffer, char)
-            if !(isspace(char) || char in delimiter) && startswith(stream, delimiter^n)
+            if !(ismarkdownspace(char) || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
                 if trailing == 0
