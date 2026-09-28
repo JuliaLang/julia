@@ -1,4 +1,4 @@
-using Base: SyntaxContext, SyntaxTree, SourceRef, @mknode, sourceref
+using Base: SyntaxContext, Syntax, SourceRef, @mknode, sourceref
 
 sourcefile(src::SourceRef) = (src.file::Base.RefValue{SourceFile})[]
 first_byte(src::SourceRef) = Int(src.first_byte)
@@ -20,10 +20,10 @@ source_location(src::LineNumberNode, _byte_index::Integer) = (src.line, 0)
 source_location(::Type{LineNumberNode}, src::LineNumberNode, _byte_index::Integer) = src
 filename(src::LineNumberNode) = string(src.file)
 
-sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
-byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
+sourcefile(ex::Syntax) = sourcefile(sourceref(ex))
+byte_range(ex::Syntax) = byte_range(sourceref(ex))
 
-function sourcetext(ex::SyntaxTree)
+function sourcetext(ex::Syntax)
     sf = sourcefile(ex)
     sf isa LineNumberNode && return SubString("")
     view(sf, byte_range(ex))
@@ -41,20 +41,20 @@ end
 #     highlight(io, src; note="these are the bytes you're looking for 😊", context_lines_inner=20)
 # end
 
-function flags(ex::SyntaxTree)
+function flags(ex::Syntax)
     ex.syntax_flags
 end
 
-children(ex::SyntaxTree) = Base.children(ex)
-numchildren(ex::SyntaxTree) = Base.numchildren(ex)
-is_leaf(ex::SyntaxTree) = Base.is_leaf(ex)
-head(ex::SyntaxTree) = Base.head(ex)
+children(ex::Syntax) = Base.children(ex)
+numchildren(ex::Syntax) = Base.numchildren(ex)
+is_leaf(ex::Syntax) = Base.is_leaf(ex)
+head(ex::Syntax) = Base.head(ex)
 
 # todo: remove
-SyntaxList(rest::SyntaxTree...) = SyntaxTree[rest...]
+SyntaxList(rest::Syntax...) = Syntax[rest...]
 
 #-------------------------------------------------------------------------------
-# RawGreenNode->SyntaxTree1
+# RawGreenNode->Syntax1
 
 # We assume all literal kinds, with their literal value loaded into the tree,
 # are discernible by `typeof(value)` where needed.
@@ -84,15 +84,15 @@ function lower_identifier_name(name::AbstractString, h::Symbol)
     name
 end
 
-should_include_node(st::SyntaxTree) = !is_trivia(st) || head(st) === :error
+should_include_node(st::Syntax) = !is_trivia(st) || head(st) === :error
 
-function version_to_expr(ex::SyntaxTree)
+function version_to_expr(ex::Syntax)
     @assert head(ex) === :version
     nv = numeric_flags(flags(ex))
     return VersionNumber(1, nv ÷ 10, nv % 10)
 end
 
-function build_tree(::Type{SyntaxTree}, stream::ParseStream;
+function build_tree(::Type{Syntax}, stream::ParseStream;
                     filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
     sf = Ref(SourceFile(stream; filename, first_line))
@@ -101,15 +101,15 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     context = SyntaxContext(nothing, nothing, stream.version, false)
     for c in reverse_toplevel_siblings(cursor)
         is_trivia(c) && !is_error(kind(c)) && continue
-        push!(cs, SyntaxTree(sf, c, context))
+        push!(cs, Syntax(sf, c, context))
     end
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
-    id = SyntaxTree(:wrapper, reverse(cs), nothing, source, context)
+    id = Syntax(:wrapper, reverse(cs), nothing, source, context)
     return id
 end
 
-function Base.SyntaxTree(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor, context)
+function Base.Syntax(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor, context)
     green_id = GC.@preserve sf begin
         raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
         offset = raw_offset - sf[].byte_offset
@@ -117,7 +117,7 @@ function Base.SyntaxTree(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor, c
     end
     gst = green_id
     out = _green_to_est(gst, 0, gst)
-    @assert !isnothing(out) "SyntaxTree requires >0 nontrivia nodes"
+    @assert !isnothing(out) "Syntax requires >0 nontrivia nodes"
     return out
 end
 
@@ -132,7 +132,7 @@ function _insert_green(sf::Base.RefValue{SourceFile},
         # the parser leaves unspecified junk in here, so we can't insert the
         # green tree without making the tree impossible to validate
         text = sourcefile(source)[byte_range(source)]
-        return @mknode(;head=h, source, context, children=SyntaxTree[
+        return @mknode(;head=h, source, context, children=Syntax[
             @mknode(;head=:value, source, context,
                     value="$(_token_error_descriptions[k]): `$text`")])
     elseif !is_leaf(cursor)
@@ -157,7 +157,7 @@ function _insert_green(sf::Base.RefValue{SourceFile},
 end
 
 """
-Convert green `st` to a SyntaxTree with Expr structure.  `parent_i` is the final
+Convert green `st` to a Syntax with Expr structure.  `parent_i` is the final
 position of `convert(st)` (our return value) within `convert(parent)`.  If
 `parent_i == 0`, neither it nor our `parent` are known or relevant to this
 conversion.
@@ -178,8 +178,8 @@ example, deleting a child is easy in (2), but new non-leaf children we insert
 should be added to `ret_cs` rather than `cs` (unless the new child has
 pre-transformation structure and we're OK with step 3 creating it again).
 """
-function _green_to_est(parent::SyntaxTree, parent_i::Int,
-                       st::SyntaxTree; kw_in_params=false)
+function _green_to_est(parent::Syntax, parent_i::Int,
+                       st::Syntax; kw_in_params=false)
     if !should_include_node(st)
         @assert head(parent) === :none && parent_i === 0
         return nothing
@@ -221,7 +221,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     end
 
     # Non-leaf cases: each branch should either set `ret_k` and `cs` or recurse
-    # manually and return a finished SyntaxTree
+    # manually and return a finished Syntax
     ret_k::Symbol = k
     cs = preprocessed_green_children(st)
     n_cs = length(cs)
@@ -567,7 +567,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         st : @mknode(;source=st, head=ret_k, children=ret_cs, context)
 end
 
-function _map_green_to_est(parent::SyntaxTree, cs;
+function _map_green_to_est(parent::Syntax, cs;
                            kw_in_params=false, undef_parent=false)
     ret_cs = SyntaxList()
     for (i, c) in enumerate(cs)
@@ -580,7 +580,7 @@ end
 
 # When converting, first delete trivia and wrapper nodes in children so we can
 # observe child kinds before recursing, thus creating fewer "temporary" nodes
-function preprocessed_green_children(st::SyntaxTree)
+function preprocessed_green_children(st::Syntax)
     cs = filter(should_include_node, children(st))
     for i in eachindex(cs)
         while !is_leaf(cs[i]) && head(cs[i]) in (:var, :char, :parens)
@@ -597,7 +597,7 @@ end
 
 # (call f a b (parameters c d) (parameters e)) =>
 # (call f (parameters (parameters e) c d) a b)
-function _reorder_parameters!(cs::Vector{SyntaxTree}, params_pos::Int)
+function _reorder_parameters!(cs::Vector{Syntax}, params_pos::Int)
     (length(cs) > params_pos && head(cs[end]) === :parameters) || return cs
     local param_ball = pop!(cs)
     while length(cs) >= 1 && head(cs[end]) === :parameters
@@ -614,7 +614,7 @@ end
 # (call args... (do _...)) -> (do (call args...) (-> _...))
 #
 # Expects preprocessed and rearranged `args`
-function _make_do_expression(st::SyntaxTree, args::Vector{SyntaxTree}, doex::SyntaxTree)
+function _make_do_expression(st::Syntax, args::Vector{Syntax}, doex::Syntax)
     ret_doex = _green_to_est(st, 0, doex)
     ret_callex = @mknode(st; children=_map_green_to_est(st, args))
     return @mknode(;source=st, context=st.context, head=:do,
@@ -632,7 +632,7 @@ end
 #
 # Converting children-first (as _string_to_Expr does) would make this much
 # harder by converting literal strings without the parent's knowledge
-function _string_to_est(st::SyntaxTree, cs::Vector{SyntaxTree}; unwrap_literal)
+function _string_to_est(st::Syntax, cs::Vector{Syntax}; unwrap_literal)
     ret_cs = SyntaxList()
     is_literal_str(c) = c.value isa String && head(c) == :value
     cur_str = false

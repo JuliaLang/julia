@@ -1,8 +1,8 @@
 using JuliaLowering: @stm
 
-@testset "assert_syntaxtree" begin
+@testset "assert_syntax" begin
     st = parsestmt(SyntaxTree, "function foo end")
-    @test assert_syntaxtree(st) === nothing
+    @test assert_syntax(st) === nothing
     @test_throws "needs value" @mknode(;source=st, context=st.context, head=:identifier)
     @test_throws "unrecognized leaf" @mknode(st; head=:code_info, children=nothing)
 end

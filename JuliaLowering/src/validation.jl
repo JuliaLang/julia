@@ -121,14 +121,14 @@ Validation1Context.
 
 We don't check some other things:
 - This pass assumes that required attributes exist, that leaf-only (or not)
-  kinds are leaves (or not).  See `assert_syntaxtree`.
+  kinds are leaves (or not).  See `assert_syntax`.
 - Scope issues are caught later in lowering, e.g. declaring something local and
   global.
 - Checking that certain forms don't appear in value position is also handled
   later in lowering.
 """
 function valid_st1(st::SyntaxTree)
-    DEBUG && assert_syntaxtree(st)
+    DEBUG && assert_syntax(st)
     vr = vst1(Validation1Context(), st)
     @jl_assert is_known(vr) st
     return vr
@@ -1082,7 +1082,7 @@ end
 Assumes `st` is parsed from surface syntax, and not a partially-expanded tree.
 """
 function valid_st0(st::SyntaxTree)
-    DEBUG && assert_syntaxtree(st)
+    DEBUG && assert_syntax(st)
     vr = vst1(with(Validation1Context(), unexpanded=true), st)
     # hack: A macrocall can show up almost anywhere, so filter errors pointing
     # at macrocalls instead of adding cases to every function above.
@@ -1135,7 +1135,7 @@ function with(vcx::Validation2Context;
 end
 
 function valid_st2(st::SyntaxTree)
-    assert_syntaxtree(st)
+    assert_syntax(st)
     vr = vst2(Validation2Context(), st)
     @jl_assert is_known(vr) st
     return vr
